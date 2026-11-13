@@ -1,6 +1,6 @@
 ---
 title: 컬렉션과 팩토리
-description: 컬렉션 주소 지정, 팩토리 두 모양, 폼 행 번호, 그리드, 팩토리 종합과 StarLibV2 키 배치(COL-01~46).
+description: 컬렉션 주소 지정, 팩토리 두 모양, 폼 행 번호, 그리드, 팩토리 종합과 StarLibV2 키 배치(COL-01~50).
 sidebar_position: 6
 sources:
   - repo-guide
@@ -430,7 +430,7 @@ Cinnabar(`CN`)는 26.30 네이티브 클라이언트의 JSON UI 해석기를 재
 - **[COL-37]** 줄마다 버튼 전체를 걷는 스택을 두면(48칸 격자 + 재료 줄) 화면이 여는 데 4~5초 걸렸고, 칸마다 `collection_index`로 버튼 하나만 읽는 고정 배치(COL-06)로 바꾸니 1초쯤이 됐다. 칸마다 버튼도 하나만 둔다(누르는 것·안 누르는 것을 둘 다 두면 컨트롤이 두 배다). `&#123;실측&#125;` (출처: DF)
 - **[COL-38]** `collection_index`는 `collection_name`을 가진 `stack_panel`의 바로 아래 자식에서만 먹었다. 그 자리를 `panel`로 두면 콘텐츠 로그에 `Unknown property [collection_index]`·`[collection_name]`이 찍히고 비었다(COL-01, COL-02와 같은 결론, 상자 화면 `container_items`도 같다). `&#123;실측&#125;` (출처: DF)
 - **[COL-39]** 사전 조회 라우팅(HOST-06)은 동작했다: `stack_panel`에 `"property_bag": { "#df_layout_1": [ "on" ], "#df_layout_0": [] }`, `"factory": { "control_ids": { "on": "…" } }`, `#collection_length` ← `(('#df_layout_' + (조건 * 1)))`이면 조건이 맞을 때만 레이아웃이 만들어졌다. 멈춤·종료는 없었다(DBG-19와 다른 결과). `&#123;실측&#125;` (출처: DF)
-- **[COL-40]** 그런데 우리 팩토리가 만든 레이아웃 **안에서는** 액션 폼 데이터가 격자(`grid` + `collection_name`)의 칸에만 닿았다. 고정 `collection_index` 칸은 비었고, `#form_button_contents`로 버튼을 만드는 안쪽 팩토리는 아무것도 만들지 않았다. `collection_panel`(`collection_name` 유무)·`stack_panel`·`control_name`·`control_ids` 모두 같았고, 칸 바인딩에 `always`를 줘도(BND-07) 그대로였다. `panel` + `factory`는 아무것도 만들지 않았다. 그래서 레이아웃이 버튼을 격자로만 읽을 때만 게이트를 쓸 수 있다. `&#123;실측&#125;` (출처: DF)
+- **[COL-40]** 그런데 우리 팩토리가 만든 레이아웃 **안에서는** 액션 폼 데이터가 격자(`grid` + `collection_name`)의 칸에만 닿았다. 고정 `collection_index` 칸은 비었고, `#form_button_contents`로 버튼을 만드는 안쪽 팩토리는 아무것도 만들지 않았다. `collection_panel`(`collection_name` 유무)·`stack_panel`·`control_name`·`control_ids` 모두 같았고, 칸 바인딩에 `always`를 줘도(BND-07) 그대로였다. `panel` + `factory`는 아무것도 만들지 않았다. 그래서 레이아웃이 버튼을 격자로만 읽을 때만 게이트를 쓸 수 있다. 화면 맨 위 라우터에서는 다른 결과가 나왔다(COL-47, C-65). `&#123;실측&#125;` (출처: DF)
 
 ## 6.8 엔진 동작 분석으로 더한 규칙
 
@@ -442,3 +442,12 @@ Android 1.26.52.3 클라이언트의 네이티브 라이브러리를 분석해 �
 - **[COL-44]** 컨트롤을 만들 때 **부모에 컬렉션 이름이 있는 컬렉션 컴포넌트가 있으면** 그 컨트롤은 자동으로 컬렉션 항목이 된다. `collection_index`는 이때만 읽혀(기본 -1) 인덱스를 고정한다. 그래서 `collection_index`는 컬렉션 부모의 직속 자식에서만 의미가 있다(COL-02, COL-38과 같은 결론). 직속 자식이지만 항목이 되면 안 되는 컨트롤(장식 패널 등)에는 `"ignoreCollectionItem": true`를 준다. `&#123;코드&#125;` (출처: NB-07)
 - **[COL-45]** 팩토리 해석 경로: `"type": "factory"`이면서 `control_name`·`control_ids`를 직접 가지면 이름 없이 해석하고, 그 밖에는 타입과 상관없이 `factory`가 **객체일 때만** 해석해 `name`을 읽는다(`type: factory`에 `factory` 객체를 써도 된다). 컨트롤 하나에는 팩토리가 하나만 붙는다. `control_name`은 해석할 때 선언한 컨트롤의 변수 스코프로 바로 원형을 만들고, `control_ids`는 종류와 정의 문자열만 저장한다(COL-29의 차이). `max_children_size`는 생략하면 0이다. `&#123;코드&#125;` (출처: NB-13)
 - **[COL-46]** 바닐라에 없는 `tags_factory_first_hidden_child_index`·`languages_factory_first_hidden_child_index`·`<접두어>_first_hidden_child_index`는 **상점 상세 화면 설명 컴포넌트 전용**이다. 속성 주머니의 이 정수로 몇 번째 태그·언어부터 숨기거나 다음 줄로 넘길지 정하고, 그 개수만큼 `"tag"`·`"language"`를 반복한 배열을 길이 바인딩 값으로 준다. 일반 팩토리 기능이 아니므로 서버 폼·HUD 팩토리에는 쓰지 않는다. 이 값을 누가 쓰는지는 확인하지 않았다. `&#123;코드&#125;` (출처: NB-14)
+
+## 6.11 서버 폼 시험 애드온 실측으로 더한 규칙
+
+서버 폼 팩토리·렉 시험 애드온(`FFR`)을 모바일에서 실측한 것이다(2026-11-14). 6.9~6.10절은 [팩토리 종합](./factory-synthesis.mdx)에 있다. 애드온 구성은 [서버 폼 연구 화면](../design/server-form-research-screen.mdx)에 있다.
+
+- **[COL-47]** `third_party_server_screen`의 `$screen_content`에 둔 사전 조회 라우터(HOST-06)가 만든 창 안에서는 고정 `collection_index` 칸, 라디오 토글 칸, `#form_button_contents` 길이의 스택 팩토리가 모두 액션 폼 데이터를 받았다. 다만 칸의 컬렉션·`collection_details`·본문 바인딩이 기본 조건이면 처음 열 때 비고 탭을 한 번 바꾸면 채워졌고, 모두 `binding_condition: "always"`로 두자 열자마자 채워졌다. COL-40(같은 칸이 `always`로도 빔)과 다른 결과이며(C-65), 차이는 라우터가 화면 맨 위에 있다는 점으로 본다. `&#123;실측, 충돌&#125;` (출처: FFR)
+- **[COL-48]** 팩토리가 만든 칸 안에 둔 팩토리는 `#title_text`·길이 바인딩이 기본 조건이면 처음에 아무것도 만들지 않았다. 그 두 바인딩에 `always`를 주면 열자마자 만들어졌다. 안쪽을 grid로 바꿔도 됐다. 크기 애니메이션으로 레이아웃을 다시 계산하게 하거나, 길이를 바깥 데이터 소스에서 읽는 방법은 효과가 없었다. `&#123;실측&#125;` (출처: FFR)
+- **[COL-49]** 2열 grid(칸 높이 30px)에 버튼을 그리면 2000개(약 30000px)까지는 정상이고, 3000개(약 45000px) 이상에서는 스크롤 범위만 길게 잡히고 칸들이 맨 위 약 200px 안에 겹쳐 그려졌다. 원인은 확인하지 못했다. 같은 수를 `#form_button_contents` 길이의 세로 스택 팩토리 1열로 그리면 그려지지만 렉이 심했다. `&#123;실측&#125;` (출처: FFR)
+- **[COL-50]** 고정 `collection_index` 칸의 2차원 배치는 세로 `stack_panel` 안에 `collection_name`을 가진 가로 `stack_panel` 줄을 두고, 칸을 줄의 바로 아래 자식으로 둔다(COL-38, LAY-56). 칸 부모가 `panel`이면 칸마다 다른 인덱스를 줘도 모두 같은 버튼(인덱스 0)을 그렸고, 칸에 `collection_details` 바인딩이나 `toggle_grid_collection_name`을 더해도 바뀌지 않았다. `&#123;실측&#125;` (출처: FFR)

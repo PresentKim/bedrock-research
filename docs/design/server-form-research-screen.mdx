@@ -1,0 +1,303 @@
+---
+title: 서버 폼 하나로 탭과 선택이 있는 연구 화면 만들기
+description: Script API 액션 폼 하나로 탭, 아이템 목록, 상세가 있는 연구 화면을 그리고, 탭 전환과 아이템 선택을 서버 왕복 없이 클라이언트에서 처리하는 방법. 화면 라우터, 버튼 순서, 라디오 토글 배치, 늦게 그려지는 글자와 같은 함정, 버튼 수 시험 결과.
+sidebar_position: 3
+sources:
+  - repo-guide
+  - private-research
+  - bedrock-samples
+---
+
+# 서버 폼 하나로 탭과 선택이 있는 연구 화면 만들기
+
+연구 화면은 왼쪽에 아이템 칸 격자, 위쪽에 "연구 필요 / 연구 완료" 탭, 오른쪽에 고른 아이템의 상세(이름, 상태, 설명, 재료, 보상, 진행 버튼)를 둔 창이다. 탭이나 아이템을 누를 때마다 서버가 폼을 다시 보내면 폼이 닫혔다 열리며 깜빡이고 왕복 시간만큼 늦다. 이 페이지는 Script API `ActionFormData` 하나로 이 화면을 그리고, **탭 전환과 아이템 선택은 클라이언트가 처리하고 "연구 진행"만 서버로 보내는** 구성을 정리한다.
+
+내용은 서버 폼 팩토리·렉 시험 애드온(`FFR`)을 모바일에서 실측한 결과(2026-11-14)다. 규칙 ID는 [JSON UI](../json-ui/index.mdx) 장의 원문을 가리킨다.
+
+<video controls preload="metadata" width="100%" src={require('@site/static/video/server-form-research-screen.mp4').default} />
+
+연구 화면 실측 영상(모바일, 2026-11-14).
+
+결론:
+
+1. 화면은 `third_party_server_screen`의 `$screen_content`에 둔 라우터 하나가 폼 제목으로 골라 만든다(HOST-06, COL-47). 바닐라 폼 내용은 같은 화면에 두고 `#visible`로만 끈다.
+2. 탭과 아이템 칸은 모두 라디오 토글이다. 칸 토글의 `checked` 상태 컨트롤 안에 그 아이템의 상세를 넣으면, 칸을 누를 때 상세가 바뀌고 폼은 닫히지 않는다(INP-36).
+3. 상세에 필요한 글자와 아이콘은 서버가 폼 버튼으로 미리 다 보낸다. 칸은 고정 `collection_index`로 버튼 하나씩 읽는다. 이 칸들의 바인딩은 모두 `binding_condition: "always"`다.
+4. 서버로 보낼 동작(진행 버튼, 페이지 화살표)만 폼 버튼(`button.form_button_click`)이다. 누르면 폼이 닫히고 서버가 다음 폼을 보낸다.
+
+## 1. 화면 구성
+
+리소스 팩 파일은 셋이다.
+
+| 파일 | 내용 |
+| --- | --- |
+| `ui/server_form.json` | `third_party_server_screen`의 `$screen_content`를 우리 루트로 바꾸고, 우리 폼에서는 바닐라 버튼 목록을 만들지 않게 한다 |
+| `ui/ffr.json` | 루트, 화면 라우터, 창, 탭, 칸, 상세의 공통 정의 |
+| `ui/ffr_items.json` | 아이템 칸 96개의 상세 정의. `collection_index`는 정적 값이라 칸마다 정의가 따로 필요해서 스크립트로 만든다 |
+
+```json title="ui/server_form.json"
+{
+  "namespace": "server_form",
+  "third_party_server_screen": { "$screen_content": "ffr.root" },
+  "long_form_dynamic_buttons_panel": {
+    "bindings": [
+      { "binding_name": "#form_button_contents", "binding_name_override": "#collection_length", "binding_condition": "visible" }
+    ]
+  }
+}
+```
+
+바닐라 버튼 목록의 길이 바인딩을 `visible` 조건으로 바꾸면, 목록이 숨은 우리 폼에서는 버튼 칸을 만들지 않는다(BND-32). 바닐라 `long_form_scrolling_content/wrapping_panel`도 같은 조건식의 `#visible`로 숨긴다.
+
+### 1.1 루트와 화면 라우터
+
+루트는 바닐라 폼 내용과 라우터를 나란히 둔다. 바닐라 내용은 제목이 우리 접두어(`ffr:`)가 아닐 때만 보인다.
+
+```json title="ffr.root"
+{
+  "type": "panel",
+  "size": ["100%", "100%"],
+  "controls": [
+    { "vanilla": {
+        "type": "panel", "size": ["100%", "100%"],
+        "bindings": [
+          { "binding_name": "#title_text" },
+          { "binding_type": "view",
+            "source_property_name": "(not (('%.4s' * #title_text) = 'ffr:'))",
+            "target_property_name": "#visible" }
+        ],
+        "controls": [ { "content@server_form.main_screen_content": {} } ] } },
+    { "screen_router@ffr.screen_router": {} }
+  ]
+}
+```
+
+라우터는 `collection_panel` 하나다. 제목 앞 6바이트(`ffr:Ea` 같은 꼴)를 `property_bag` 키로 조회해 만들 화면의 종류 이름 배열을 `#collection_length`에 넣는다(HOST-06, COL-22, COL-27). 키가 없으면 아무것도 만들지 않는다.
+
+```json title="ffr.screen_router"
+{
+  "type": "collection_panel",
+  "size": ["100%", "100%"],
+  "factory": {
+    "name": "ffr_screen",
+    "control_ids": { "ea": "@ffr.research_ea", "eb": "@ffr.research_eb" }
+  },
+  "property_bag": { "#ffr:Ea": ["ea"], "#ffr:Eb": ["eb"] },
+  "bindings": [
+    { "binding_name": "#title_text" },
+    { "binding_type": "view",
+      "source_property_name": "('#' + ('%.6s' * #title_text))",
+      "target_property_name": "#collection_length" }
+  ]
+}
+```
+
+이 구성은 `visible`로 숨긴 화면을 모든 폼에서 만들어 두는 방식과 달리, 고른 화면 하나만 만든다([JSON UI 최적화](./json-ui-performance.mdx) 2절).
+
+### 1.2 창
+
+창은 바닐라 인벤토리 크기(326x166)의 고정 픽셀 크기다. 휴대폰은 UI를 크게 그려 이보다 큰 창은 화면에 들어가지 않는다(LAY-53). 탭은 창 위쪽 가장자리 밖(`offset` [8, -22])에, 왼쪽 판(152x136)과 오른쪽 판(158x136)은 `panel` 안에 왼쪽 위 기준 `offset`으로 둔다(LAY-52).
+
+## 2. 버튼 순서
+
+서버는 화면에 필요한 모든 값을 폼 버튼 하나하나로 보낸다. 버튼 수는 아이템이 몇 개든 2022개로 고정이다.
+
+| 번호 | 내용 |
+| --- | --- |
+| 0~47 | 첫 탭의 현재 페이지 아이템 48개(글 `§r`, 아이콘 텍스처) |
+| 48~95 | 둘째 탭의 현재 페이지 아이템 48개 |
+| 96, 97 | 탭 두 개(글에 개수, 아이콘) |
+| 98, 99 | 첫 탭의 이전·다음 페이지 화살표 |
+| 100, 101 | 둘째 탭의 이전·다음 페이지 화살표 |
+| 102 + 20k ~ 121 + 20k | 아이템 칸 k(0~95)의 상세 20칸: 이름(아이콘), 상태, 설명, 재료 8, 보상 8, 진행 버튼 |
+
+- 연구마다 재료 종류 수, 설명 길이, 보상 수가 다르므로 상세 칸은 최대치로 고정한다. 쓰지 않는 재료·보상 칸에는 보이지 않는 서식 코드 `§0§e§r`를 글로 보내고, 칸은 그 표식을 포함하면 숨긴다. 포함 검사는 빼기 결과와 원문을 비교한다(EXP-07): `((#form_button_text - '§0§e§r') = #form_button_text)`.
+- 재료 개수는 `§f16`처럼 글자로 시작하게 보낸다. 숫자만 든 문자열은 식에서 숫자로 바뀐다(EXP-15).
+- 표식 문자열에 `*`, `@`를 넣지 않는다. 따옴표 안의 `*`도 식을 깨뜨린다(EXP-36).
+- 서버는 고른 버튼 번호로 동작을 가른다. 98~101은 페이지 이동, `102 + 20k + 19`는 아이템 k의 진행이다.
+
+```js title="서버 스크립트(요약)"
+form.show(player).then((res) => {
+  if (res.canceled || res.selection === undefined) return;
+  const s = res.selection;
+  if (s >= 98 && s <= 101) movePage(s);
+  else if (s >= 102 && (s - 102) % 20 === 19) startResearch(itemAt(Math.floor((s - 102) / 20)));
+  reopen(player);
+});
+```
+
+탭은 폼 버튼(96, 97)이지만 누를 수 있는 버튼이 아니라 라디오 토글로 그리므로 서버로 가지 않는다(3절). 제목 끝 글자(`a`, `b`)는 처음 열 탭이다. `toggle_group_default_selected`는 정적 값이라 탭마다 레이아웃을 따로 두고 라우터가 제목으로 고른다.
+
+## 3. 탭 전환 방식 비교
+
+탭 전환을 네 가지로 만들어 비교했다. 모두 열자마자 칸, 탭, 상세가 정상으로 그려졌다(모든 컬렉션 바인딩 `always` 기준).
+
+| 방식 | 구성 | 폼을 닫는가 |
+| --- | --- | --- |
+| A | 탭이 폼 버튼. 누르면 서버가 다른 탭으로 폼을 다시 보낸다 | 닫힘 |
+| B | 탭이 라디오 토글이고, 탭 내용이 토글의 `checked` 상태 컨트롤 안에 있다(INP-13) | 안 닫힘 |
+| C | 탭이 라디오 토글이고, 두 탭 내용을 모두 만든 뒤 `source_control_name`으로 읽은 `#toggle_state`를 `#visible`에 건다 | 안 닫힘 |
+| D | C와 같고, 처음 열린 탭만 미리 만들고 다른 탭은 그 탭을 처음 누를 때 팩토리로 만든다 | 안 닫힘 |
+
+- D에서 처음 열린 탭까지 `#toggle_state`로 길이를 정한 팩토리로 만들면, 처음 열 때 그 탭이 비었다. 처음 탭은 미리 만든다.
+- 여는 시간이나 탭 전환 시간은 재지 않았다. 네 방식의 차이는 "폼이 닫히는가"와 "숨긴 탭을 미리 만드는가"뿐이다.
+
+탭 토글은 바닐라 템플릿 대신 원시 `toggle`로 정의했다. 8개 상태 컨트롤을 모두 채우고(INP-10), `toggle_on_button`과 `button_mappings`를 준다(INP-11).
+
+```json title="ffr.tab_toggle (일부)"
+{
+  "type": "toggle",
+  "size": [96, 22],
+  "toggle_name": "ffr_tabs",
+  "radio_toggle_group": true,
+  "toggle_group_forced_index": "$tab_index",
+  "toggle_group_default_selected": "$tab",
+  "toggle_on_button": "toggle.toggle_on",
+  "toggle_off_button": "toggle.toggle_off",
+  "button_mappings": [
+    { "from_button_id": "button.menu_select", "to_button_id": "button.menu_select", "mapping_type": "pressed" },
+    { "from_button_id": "button.menu_ok", "to_button_id": "button.menu_ok", "mapping_type": "focused" }
+  ],
+  "checked_control": "on", "checked_hover_control": "on",
+  "checked_locked_control": "on", "checked_locked_hover_control": "on",
+  "unchecked_control": "off", "unchecked_hover_control": "off_hover",
+  "unchecked_locked_control": "off", "unchecked_locked_hover_control": "off",
+  "controls": [ { "on@ffr.tab_face_on": {} }, { "off@ffr.tab_face": {} }, { "off_hover@ffr.tab_face_hover": {} } ]
+}
+```
+
+탭 토글 둘은 `collection_name: "form_buttons"`를 가진 가로 `stack_panel`의 직속 자식으로 두고 `collection_index` 96, 97을 준다. 그래야 탭 글과 아이콘을 버튼에서 읽는다(COL-38).
+
+## 4. 아이템 선택까지 클라이언트에서
+
+아이템 칸 96개도 라디오 토글이다(그룹 `ffr_items`, `toggle_group_default_selected: -1`로 처음엔 아무것도 고르지 않음). 칸 토글의 `on` 상태 컨트롤에 선택 테두리와 그 아이템의 상세 패널이 함께 들어 있다. 상세 패널은 칸 위치에서 오른쪽 판 자리로 `offset`을 계산해 옮기고, 높은 `layer`로 다른 칸 위에 그린다. 아무것도 고르지 않았을 때 오른쪽 판에는 "연구를 고르세요." 글만 있다.
+
+```json title="ffr.item_chosen (칸 토글의 on 상태)"
+{
+  "type": "panel",
+  "size": ["100%", "100%"],
+  "controls": [
+    { "face@ffr.item_face": { "$slot_bg": "textures/ui/ffr/slot_chosen" } },
+    { "sel": { "type": "image", "layer": 4, "texture": "textures/ui/focus_border_white",
+               "size": ["100%", "100%"], "color": [1, 0.85, 0.1] } },
+    { "detail@$detail_def": { "layer": 20, "anchor_from": "top_left", "anchor_to": "top_left",
+                              "offset": "$detail_offset" } }
+  ]
+}
+```
+
+### 4.1 칸 배치: 줄 스택
+
+칸이 자기 버튼을 읽으려면 `collection_name`을 가진 `stack_panel`의 직속 자식이어야 한다(COL-38). 그래서 탭마다 세로 스택 안에 가로 스택 6줄을 두고, 줄마다 칸 토글 8개를 둔다(COL-50).
+
+```json title="탭 0의 칸 격자 (첫 줄만)"
+{
+  "grid0": {
+    "type": "stack_panel", "orientation": "vertical", "size": [144, 108],
+    "bindings": [
+      { "binding_type": "view", "binding_condition": "always",
+        "source_control_name": "ffr_t0", "source_property_name": "#toggle_state",
+        "target_property_name": "#visible" }
+    ],
+    "controls": [
+      { "r0": {
+          "type": "stack_panel", "orientation": "horizontal", "size": [144, 18],
+          "collection_name": "form_buttons",
+          "controls": [
+            { "i0@ffr.item_toggle": { "collection_index": 0, "$k": 0,
+                "$detail_offset": [152, -4], "$detail_def": "ffri.detail_0" } },
+            { "i1@ffr.item_toggle": { "collection_index": 1, "$k": 1,
+                "$detail_offset": [134, -4], "$detail_def": "ffri.detail_1" } }
+          ] } }
+    ]
+  }
+}
+```
+
+이 배치를 찾기까지 막힌 것:
+
+| 시도 | 결과 | 규칙 |
+| --- | --- | --- |
+| 칸 부모를 `panel`로 두고 칸마다 `offset`으로 배치 | 칸마다 다른 인덱스를 줘도 모두 0번 버튼의 아이콘 | COL-38, COL-50 |
+| 위에 더해 칸에 `collection_details` 바인딩, `toggle_grid_collection_name` | 그대로 0번 | COL-50 |
+| 가로 스택 하나에 48칸을 두고 줄마다 `offset`으로 접기 | 아이콘은 맞지만 한 줄로 이어져 창 밖까지 | LAY-56 |
+| 세로 스택 안에 가로 스택 6줄 | 정상. 줄이 달라도 한 칸만 선택됨 | INP-35 |
+
+### 4.2 상세를 미리 만들까, 고를 때 만들까
+
+| 방식 | 구성 | 결과 |
+| --- | --- | --- |
+| E | 칸 96개의 상세를 처음에 모두 만든다 | 정상 |
+| F | 상세를 팩토리로 감싸, 그 칸을 처음 고를 때 만든다 | 정상 |
+
+F의 팩토리는 길이를 `#form_button_length > 0`으로 정하고 바인딩 조건을 `visible`로 둔다. `on` 상태 컨트롤은 칸이 선택될 때만 보이므로, 그때 처음으로 길이가 1이 되어 상세를 만든다(BND-32).
+
+```json title="ffr.lazy_detail"
+{
+  "type": "stack_panel",
+  "size": [158, 136],
+  "bindings": [
+    { "binding_name": "#form_button_length", "binding_condition": "visible" },
+    { "binding_type": "view", "binding_condition": "visible",
+      "source_property_name": "((#form_button_length > 0) * 1)",
+      "target_property_name": "#collection_length" }
+  ]
+}
+```
+
+아이템마다 `factory: { "name": "ffr_lazy_<k>", "control_name": "ffri.detail_<k>" }`를 붙여 쓴다. 두 방식의 여는 시간 차이는 재지 않았다.
+
+### 4.3 상세 패널
+
+상세는 고정 칸 20개를 `collection_index`로 읽는다. 설명은 길이가 다르므로 상세 안의 작은 스크롤 영역에 넣고, 진행 버튼은 판 아래쪽에 고정한다. 글자 라벨은 버튼 글을 식 없이 그대로 그리고(`text: "#form_button_text"`), 라벨은 반드시 `collection_index`를 받는 참조 정의(`name@ffr.text_item`)에 둔다. 라벨에 직접 준 인덱스는 무시된다(COL-02).
+
+진행 버튼은 바닐라 버튼처럼 `$pressed_button_name: "button.form_button_click"`과 `collection_details` 바인딩(`always`)을 가진 버튼이다. 누르면 그 칸의 버튼 번호가 서버로 간다.
+
+## 5. 함정
+
+| 증상 | 원인 | 해결 | 규칙 |
+| --- | --- | --- | --- |
+| 처음 열 때 칸 아이콘과 글자가 비고, 탭을 한 번 바꾸면 채워진다 | 라우터가 만든 창 안 칸의 컬렉션 바인딩이 기본 조건 | 컬렉션·`collection_details`·본문 바인딩 모두 `always` | COL-47 |
+| 스크롤 목록의 글자가 무언가를 건드리기 전까지 빈다 | 라벨이 배경 이미지와 같은 레이어 | 아이콘 `layer: 2`, 라벨 `layer: 3` | LAY-55 |
+| 메뉴 폼의 버튼과 닫기 버튼이 눌리지 않고 스크롤만 된다 | 화면 전체 스크롤 영역을 모든 폼에 늘 둠 | 스크롤 영역은 그 폼에서만 만든다 | LAY-57 |
+| 처음 열린 탭이 비었다 | 그 탭을 `#toggle_state` 길이 팩토리로 만듦 | 처음 탭은 미리 만든다 | 3절 D |
+| 연구 이름·설명이 비었다 | 식 안의 `'*'`, 숫자로 바뀐 문자열, 라벨에 직접 준 `collection_index` | 원문 라벨, 글자 표식, 참조 정의에 인덱스 | EXP-36, EXP-15, COL-02 |
+| 모든 아이템 칸이 같은 아이콘 | 칸 부모가 `panel` | 줄 스택 | COL-38, COL-50 |
+| 다른 폼에서도 연구 화면 레이아웃이 그려졌다 | 제목 게이트를 `or` 식이나 `always`로 둠 | 라우터는 `property_bag` 사전 조회, 화면 맨 위 게이트는 기본 조건 | COL-39 |
+
+## 6. 버튼 수 시험
+
+같은 팩에 버튼 목록만 그리는 모드를 두어 버튼 수에 따른 동작을 봤다. 버튼 하나는 배경, 아이콘, 이름, 설명, 진행 막대로 이루어진다.
+
+| 모드 | 구성 |
+| --- | --- |
+| S | 바닐라 버튼 목록 |
+| J | 화면 라우터가 창, 스크롤 영역, 2열 grid를 함께 만든다 |
+| K | 창을 처음부터 두되 `#visible`로 숨기고, 스크롤 안의 라우터가 grid를 만든다 |
+| L | J와 같은 창, 목록은 `#form_button_contents` 길이의 세로 스택 팩토리 1열 |
+
+| 버튼 수 | J, K (2열 grid) | L (1열 스택) |
+| --- | --- | --- |
+| 100~2000 | 정상 | 그려지지만 렉이 심하다 |
+| 3000 이상 | 스크롤 범위만 길고 칸이 맨 위 약 200px에 겹친다 | 시험하지 않음(렉 때문에 제외) |
+
+- 2열 grid의 한계는 버튼 수인지 내용 높이(3000개에 약 45000px)인지 가리지 못했다(COL-49).
+- 3000개가 넘는 목록은 드물어 더 파지 않았다. 필요하면 서버에서 페이지로 나눈다.
+- 연구 화면은 버튼 수가 2022개로 고정이고 화면에 칸 96개와 상세만 만들므로 아이템 수와 상관없다(1만 개 시험에서도 같은 화면).
+
+## 7. 남은 것
+
+- 아이템 목록을 페이지 대신 스크롤로 보여 주면서 선택은 클라이언트에서 하는 방법은 만들지 않았다. 칸 안에 둔 상세는 스크롤 영역에 잘리고, grid는 늘 버튼 0번부터 그려 한 폼에 탭별 목록 둘을 둘 수 없으며, 아이템마다 고정 인덱스의 상세를 둘 수 없기 때문이다.
+- 방식 A~F의 여는 시간과 탭 전환 시간은 재지 않았다.
+- grid와 팩토리로 만든 칸 안의 라디오 토글이 배타적인지는 이 시험에서 보지 않았다(C-66).
+
+## 관련 규칙
+
+| ID | 페이지 | 내용 |
+| --- | --- | --- |
+| COL-02, COL-38, COL-47 ~ COL-50 | [컬렉션과 팩토리](../json-ui/collections-and-factory.mdx) | 고정 인덱스 칸, 라우터 창 안의 데이터, 줄 스택, grid 한계 |
+| LAY-52, LAY-53, LAY-55 ~ LAY-57 | [컨트롤과 레이아웃](../json-ui/controls-and-layout.mdx) | 창 크기, 글자 레이어, 스택 안 `offset`, 스크롤 영역의 터치 |
+| INP-10, INP-11, INP-13, INP-35, INP-36 | [입력, 버튼, 토글](../json-ui/input-buttons-toggles.mdx) | 토글 상태, 라디오 그룹, 클라이언트 탭과 선택 |
+| BND-32 | [바인딩](../json-ui/bindings.mdx) | 보일 때 만드는 팩토리 |
+| EXP-07, EXP-15, EXP-36 | [식과 연산자](../json-ui/expressions.mdx) | 포함 검사, 숫자 변환, 식을 깨는 글자 |
+| HOST-06 | [화면 호스트와 데이터 채널](../json-ui/screen-hosts-and-data.mdx) | 사전 조회 라우팅 |
