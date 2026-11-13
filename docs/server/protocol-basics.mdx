@@ -81,9 +81,9 @@ for {
 - **라이브러리**: PrismarineJS bedrock-protocol(Node.js 24+, 3.60.0에서 NetherNet 전송 추가, 3.60.1(2026-09-25)이 1.26.51 지원. 클라이언트, 봇, 서버, Relay(`version`, `host`, `port`, `destination`, `offline`, `relay.listen()`)를 만들고 인증은 prismarine-auth를 쓴다. 지원 버전은 HISTORY.md를 보고, 릴리스와 Preview 지원은 따로다), gophertunnel(Go), go-raknet, cloudburst, bedrock-portal(https://github.com/LucienHH/bedrock-portal, NetherNet 예제). NetherNet과 RakNet을 잇는 프록시: GameParrot/netherconnect(gophertunnel 기반). Rust NetherNet 라이브러리는 없다.
 - **최신 프로토콜 지원의 부담**: NetherNet 변경과 프로토콜 업그레이드 때문에 일부 서버는 일부러 옛 버전을 겨냥한다. 프로토콜은 릴리스마다 조금씩 바뀐다.
 - **실제 클라이언트 버전 분포**: 한 한국 서버(2026-09)에는 1.20.80, 1.21.40, 1.21.50, 1.21.114, 1.21.132, 1.26.3 클라이언트가 접속했다. 외국 플레이어는 다운그레이드한 버전을 쓰고 한국 플레이어는 최신을 유지해서 다중 버전 지원을 한다.
-- **다중 버전 라이브러리**: go-multiversion(`https://github.com/shawtymarco/go-multiversion`)은 gophertunnel/Dragonfly용 다중 프로토콜 라이브러리다(1.16과 1.18 지원이라는 기록, *unverified*).
+- **다중 버전 라이브러리**: go-multiversion(`https://github.com/shawtymarco/go-multiversion`)은 gophertunnel/Dragonfly용 다중 프로토콜 라이브러리다.
 - **NetworkSettings(0x8F) 구조**: `compressionThreshold` uint16 LE, `compressionAlgorithm` uint16 LE(Zlib=0, Snappy=1, None=0xFFFF), `clientThrottleEnabled` u8, `clientThrottleThreshold` u8, `clientThrottleScalar` float32 LE. 이 뒤의 배치는 압축된 바이트로 처리한다. 0x00FF는 유효한 알고리즘 값이 아니다.
-- **커스텀 서버에서 이동 구현(Pumpkin, 1.21.130)**: 이동 속도는 SetActorMotion이나 속성(`minecraft:movement` 0.1, `minecraft:underwater_movement` 0.02)으로 준다. 청크가 로드돼야 움직이고, abilities, actor data, attributes를 모두 보내야 한다. 공기 방울이 보이면 actor data 플래그가 틀린 것이다. 중력은 actor data로 정해진다는 추정이 있다(*unverified*). `NetworkChunkPublisherUpdate` 반복 전송을 멈추면 끊김이 고쳐진다는 AI 제안은 반박됐다.
+- **커스텀 서버에서 이동 구현(Pumpkin, 1.21.130)**: 이동 속도는 SetActorMotion이나 속성(`minecraft:movement` 0.1, `minecraft:underwater_movement` 0.02)으로 준다. 청크가 로드돼야 움직이고, abilities, actor data, attributes를 모두 보내야 한다. 공기 방울이 보이면 actor data 플래그가 틀린 것이다. `NetworkChunkPublisherUpdate` 반복 전송을 멈추면 끊김이 고쳐진다는 AI 제안은 반박됐다.
 
 ## NetherNet
 
@@ -118,7 +118,7 @@ Fragment 3:  [0x00] [payload chunk 3]   ← 마지막
 
 ### BDS에서의 NetherNet (26.50 / 26.51)
 
-- **도입과 RakNet 차단**: 26.50에서 `server.properties`에 `transport=nethernet`이 생겼다. 26.50까지는 `transport` 항목이 없으면 예제 파일에 nethernet이라고 적혀 있어도 실제 기본값은 raknet이었다. 26.60부터 RakNet으로 BDS에 접속하면 클라이언트가 "terracotta" 또는 "door" 오류를 내고, 1.26.61.1에서는 `transport=raknet` 자체가 오류가 되므로 `transport=nethernet`으로 바꾼다. 26.70에서 RakNet이 완전히 제거된다는 말은 *unverified*다. Geyser는 대응을 마쳤고 IP 서버와 dragonfly도 NetherNet 대응 중이라는 보고가 있다(*unverified*). 26.50에서는 NetherNet 서버 목록 핑이 망가졌다(mcping.me 무응답). LAN 직접 접속은 됐다. 공식 가이드: https://mojang.github.io/bedrock-protocol-docs/guides/nether-net-onboarding-guide/ (https://github.com/Mojang/bedrock-protocol-docs/blob/main/NetherNetOnboardingGuide.md).
+- **도입과 RakNet 차단**: 26.50에서 `server.properties`에 `transport=nethernet`이 생겼다. 26.50까지는 `transport` 항목이 없으면 예제 파일에 nethernet이라고 적혀 있어도 실제 기본값은 raknet이었다. 26.60부터 RakNet으로 BDS에 접속하면 클라이언트가 "terracotta" 또는 "door" 오류를 내고, 1.26.61.1에서는 `transport=raknet` 자체가 오류가 되므로 `transport=nethernet`으로 바꾼다. 26.50에서는 NetherNet 서버 목록 핑이 망가졌다(mcping.me 무응답). LAN 직접 접속은 됐다. 공식 가이드: https://mojang.github.io/bedrock-protocol-docs/guides/nether-net-onboarding-guide/ (https://github.com/Mojang/bedrock-protocol-docs/blob/main/NetherNetOnboardingGuide.md).
 - **포트 구조**: 시그널링은 TCP `server-port`(19132)의 HTTP(S)이고, 게임 트래픽은 UDP(WebRTC/ICE)로 접속한 플레이어마다 `server-udp-ports` 범위에서 포트 하나를 쓴다. 방화벽, Docker, Pterodactyl(추가 allocation)에 TCP 19132와 최대 인원만큼의 UDP 범위를 연다. 플레이어 쪽 오류는 "NetherNet / InitialConnection"이다. Cloudflare 같은 앞단 프록시는 이를 깨뜨릴 수 있다. *(확인됨)*
 - **동작하는 예(클라우드 VM, Caddy 뒤)**: `transport=nethernet`, `server-port=19132`, `server-udp-ports=<public-ip>:32000-32100:32000-32100`. 그냥 `32000-32100`으로 두면 NetherNet 오류가 났다. 도메인이 아니라 공인 IP를 쓴다. Docker는 `ports: "32000-32100:32000-32100/udp"`, 방화벽은 `32000-32100/udp`와 `19132/tcp`, Caddy는 `reverse_proxy bedrock-service:19132`. 간단한 형태는 `server-ip=<public ip>`, `server-udp-ports=19150-19169`.
 - **door 오류 우회**: NetherNet은 UDP 위의 WebRTC이므로 UDP 포트를 연다(itzg Docker 이미지를 19140 이상 포트로 돌릴 때 door 오류가 났다). 그래도 남으면 `server-udp-ports`를 서버 포트와 같게 둔다(예: `server-udp-ports=29321`). playit.gg 터널에서는 `ip:port:port` 형태 전체를 적어야 했다(파서 버그로 추정). nethernet 설정 뒤에도 남는 door 오류의 원인은 아직 답이 없다.
@@ -205,7 +205,7 @@ server-authoritative-block-breaking-pick-range-scalar=1.5
 - **스팸 봇과 프록시 클라이언트(Lumine 등)**: op로 접속해 `/clear`를 실행하거나 외부 명령 패킷을 보낸다. `chatSend`로는 보이지 않으므로 `config/commands.json`으로 명령을 끈다. 일부 봇은 `playerSpawn`을 발생시키지 않는다. 신고 말고는 근본 대책이 없다. Bedrock OSS에 anti-crash 글이 있다. Lumine 같은 프록시 기반 안티치트는 BDS 전용이다.
   - "external access" 봇 계정이 명령으로 채팅을 도배하는 경우 셀렉터로는 잡히지 않아 플레이어 목록에서 킥한다. "친구의 친구" 참여를 허용한 월드에 스팸 봇이 들어오므로 초대 전용을 권한다. 한국 서버에서도 밴으로 막히지 않는 광고 봇이 보고됐다.
 - **공격 보고(한 한국 커뮤니티, single report)**: join-flood가 새 플레이어를 로딩 화면에 묶었고 packet limit과 프록시 차단으로 버텼다. 프록시 도구로 보낸 `/me`식 채팅(`*`와 이름으로 시작)이 렉과 크래시를 내서 `* `로 시작하는 줄을 거르는 애드온으로 막았다. 작정한 패킷 flood는 BDS/Endstone limiter로 막지 못했다는 보고가 있고, DDoS가 흔해졌다는 말이 있다.
-- **안티치트와 dupe 방지 팩**: 기존 팩(Safeguard 등)을 권한다. Realm용 dupe 방지 팩으로 mcpedl.com/anti-dupe-bp/ , mcpedl.com/dupeguard/ 가 언급됐다(*unverified*). Script API로 서버 쪽에서 재현하는 안티치트는 Realms에서도 가능하다.
+- **안티치트와 dupe 방지 팩**: 기존 팩(Safeguard 등)을 권한다. Script API로 서버 쪽에서 재현하는 안티치트는 Realms에서도 가능하다.
 - **이름이 비었거나 잘못된 플레이어(LAN 파일 편집)**: `/kick`이 실패한다. 대응책:
   - BDS에서 명령/텍스트 패킷을 거부한다.
   - `sender.name.length < 3`이면 `chatSend`를 취소한다.
