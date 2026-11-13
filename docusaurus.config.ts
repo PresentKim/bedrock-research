@@ -1,6 +1,7 @@
 import { themes as prismThemes } from 'prism-react-renderer';
 import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import remarkDoubleTildeOnly from './src/plugins/remark-double-tilde-only.mjs';
 
 const config: Config = {
   title: 'Bedrock 개발 위키',
@@ -20,6 +21,7 @@ const config: Config = {
           path: 'docs',
           routeBasePath: '/',
           sidebarPath: './sidebars.ts',
+          remarkPlugins: [remarkDoubleTildeOnly],
         },
         blog: false,
         pages: false,
