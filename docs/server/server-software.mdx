@@ -69,7 +69,7 @@ server-authoritative-block-breaking=false
 | `block-network-ids-are-hashes` | true면 순번 대신 해시 블록 네트워크 ID를 보낸다(안정적) |
 | `disable-custom-skins` | 스토어·게임 자산이 아닌 커스텀 스킨을 끈다 |
 
-## 설정 파일과 규칙 (커뮤니티 2025-10 ~ 2026-10)
+## 설정 파일과 규칙 (커뮤니티 2025-10 ~ 2026-11)
 
 ### 14.1 설정 파일
 - **xKingDark gist**: `server.properties` https://gist.github.com/xKingDark/0e87c3fb30151e9f3315476d70a45ee2 , `test_config.json` https://gist.github.com/xKingDark/271dbd969345169c45915a19953ff578 , `cdn_config.json` https://gist.github.com/xKingDark/e80569d688e692ee11e161b427f6e49f . 공식 문서: https://learn.microsoft.com/en-us/minecraft/creator/documents/bedrockserver/getting-started?view=minecraft-bedrock-stable (server-properties, scripting 페이지 포함). 속성 목록: https://www.minebbs.com/threads/bedrock-dedicated-server-server-properties.32021/ . BDS 전용 문서나 채널이 없다는 불만이 많았고, BDS 채널은 2026-03-06경 생겼다.
@@ -83,6 +83,11 @@ server-authoritative-block-breaking=false
   - `default` 폴더에 넣지 않는다. `default_permission_level: admin`으로 두면 관리자 명령까지 모두 사라진다.
   - Endstone 0.10에서는 동작하지 않았다(버그).
   - 스크립트로 바닐라 명령의 동작은 바꿀 수 없고, 누가 실행할지만 정할 수 있다.
+  - `"internal"`은 콘솔, 플레이어, 명령 블록 모두에서 명령을 막는다. `/script`는 숨길 수 없다.
+  - `/list`를 숨기면 `/tag <selector> list`도 겉으로 숨겨지지만 등록이 해제되지는 않는다.
+  - 스크립트 커스텀 명령은 `prefix:`가 필요하고 `/test`와 `/prefix:test`가 둘 다 보이며, 하나를 숨기는 옵션은 없다.
+- **`op-permission-level=4`**: 게임 안에서 `/reload`, `/stop`, `/listd`가 보인다.
+- **allowlist**: `allowlist.json` 항목에는 `name`, `xuid`, `ignoresPlayerLimit`가 있다. 1.26.10의 allow-list 무시 버그(MCPE-237527)는 1.26.12 핫픽스(2026-04-01경)에서 고쳐졌다.
 - **`packetratelimitconfig`**: rate-limit 유형을 하나만 지원한다. 어느 패킷 ID에 걸리는지는 리버스 엔지니어링으로 알아냈다. 명령 패킷 크래시는 완화하지만, 스크립트에서 이벤트로 받을 수는 없다(로더가 프로세스 출력을 읽어 scriptevent로 넘겨야 한다).
 - **기타 속성**
   - `msa-gamertags-only=true`: `Player.name`이 Xbox gamertag가 된다.
@@ -102,9 +107,10 @@ server-authoritative-block-breaking=false
 
 ## 호스팅과 배포
 
-- **호스트 의견**: OVH(가장 싸다), Hetzner(새 CPU), Bisect(약 14유로 플랜으로 동시 50명, RAM은 빠듯), Ionos, Bloom.host(비싸지만 지원이 좋다). 싼 전용 서버는 DDoS 방어를 확인한다. Aternos는 커스텀 스크립트 애드온을 지원하지 않는다(Xbox로 Aternos에 접속하면 RP 로드 실패, LAN은 동작한 사례도 있다).
+- **호스트 의견**: OVH(가장 싸다), Hetzner(새 CPU), Bisect(약 14유로 플랜으로 동시 50명, RAM은 빠듯), Ionos, Bloom.host(비싸지만 지원이 좋다), Google Cloud. 직접 호스팅이 더 싸다는 의견도 있다. 작은 Go 봇은 싼 VPS로 충분하다. 장애는 업체가 고치게 하고 안 되면 환불받고 옮긴다. 싼 전용 서버는 DDoS 방어를 확인한다. Aternos는 커스텀 스크립트 애드온을 지원하지 않는다(Xbox로 Aternos에 접속하면 RP 로드 실패, LAN은 동작한 사례도 있다).
 - **Docker**: Linux 배포에 권한다(Windows Docker는 느리거나 쓸 수 없다). 바닐라 이미지: https://github.com/m0lc14kk/docker-vanilla . Endstone venv와 PM2 조합은 설정이 어려웠다.
-- **ARM64**: Endstone Docker를 에뮬레이션으로 돌린다.
+- **설치 도구**: npm `@bedrock-apis/bds-utils`, BDSAddonManager(`https://github.com/DragonTech26/BDSAddonManager`, BDS에 애드온 설치).
+- **ARM64**: 공식 ARM64 BDS 빌드는 없다. Endstone Docker를 에뮬레이션으로 돌린다(속도는 하드웨어에 달렸다).
   ```
   docker pull --platform linux/amd64 endstone/endstone
   docker run --platform linux/amd64 -p 19132:19132 -it -v ${PWD}:/home/endstone/bedrock_server --name endstone-server endstone/endstone
@@ -121,12 +127,16 @@ server-authoritative-block-breaking=false
 - **Realms는 BDS로 돈다**: 새 블록 기능은 Realm 버전이 맞기 전에는 동작하지 않을 수 있다. 버전이 맞으면 스크립트도 돈다. Realms는 업데이트 관리가 번거로우니 팩 버전이 적용됐는지 확인한다. 다시 올릴 때는 팩 UUID를 바꾼다. 팩이 적용되지 않으면 월드 폴더에 복사하고 `world_behavior_packs.json`을 지운다.
 - **Realms 디버깅**: content log가 없다. `/reload`는 일부 Realm에서 동작한다. beta API 월드를 올리면 동작한다.
 - **권한**: Realm 소유자가 최고 권한이고, 스크립트 명령에서 `op`를 쓸 수 없다. 스크립트로 등록한 커스텀 슬래시 명령은 Realms에서 동작하지만 `CommandPermissionLevel.Admin` 이상은 실패하니 `GameDirectors`(Operator)를 쓴다(서버에서도 같을 수 있다). `cheatsRequired`의 기본값이 true라 cheats가 꺼진 Realm이나 월드에서는 안 보인다. 셀렉터 인자도 cheats가 필요했다(오래된 버그).
-- **Realms에서 못 하는 것**: server-net과 server-admin(16절), 패킷 rate limit, 스크립트 메모리 watchdog 변경.
+- **Realms에서 못 하는 것**: server-net과 server-admin, 패킷 rate limit, 스크립트 메모리 watchdog 변경. `@minecraft/server-admin`은 2026-02-24에 Realms에서 꺼졌고, manifest에 의존성으로 남겨 두면 그 팩의 모든 스크립트 모듈이 깨진다. 그 전에는 외부 서버 전송이 된다는 답(2025-11)과 다른 IP로는 안 된다는 답(2025-12)이 엇갈렸다.
+- **Realms 팩 사본**: Realm은 지울 수 없는 옛 팩 사본을 남긴다. Realm에서만 "missing dependencies"가 나면 팩 UUID를 새로 만들고 이름을 바꾼다. 스크립트가 돌지 않으면 manifest UUID부터 확인한다. Marketplace Realms 애드온은 업데이트가 적용되지 않을 수 있다.
+- **인원과 Realms Pro**: 2026-10에는 Realm에 40명은 불가하다는 답이 있었다. 2026-11-10에 나온 Realms Pro는 최대 50명, 다른 서버와 공유하지 않는 자원, Minecraft.net 자원 대시보드, PC 통합 Editor 도구(구조물 복제, 지형 칠하기, 실시간 공동 편집)를 준다. 2026-11-11에는 구독으로 Realms에 공유할 수 있는 Sound Effects Packs가 나왔다.
+- **Realms 몹 캡 측정**: 호스트는 몹 캡(11슬롯)에서 빠진다. sim distance 12에서 최대 194마리, sim 4에서 평균 약 24마리였고, sim 4에서 10명이면 캡에 걸릴 확률이 약 99.9%라 실용 최대는 4~6명이다. 측정은 +/-1만 범위 무작위 텔레포트 뒤 20초 동안 128블록 안을 셌다.
+- **Realms 기타(single report)**: VV 모드가 꺼져 있다. 나이 인증으로 채팅이 제한되면 애드온으로 풀 수 없고 명령이나 `sendMessage`가 대안이다. 명령 블록이 든 월드는 백업을 Amulet이나 NBT 편집기로 고친다. 전송 애드온으로 여러 Realm을 차원처럼 잇는 구성이 있다.
 - **Realms에서 겪는 문제**: 모드팩의 `chatSend`로 모든 명령이 오류를 냈다(원인 미해결). 색 코드가 든 `/title` 텍스트가 일관되지 않다. 폼 입력 비교 실패는 대소문자나 오타 문제였다. 채팅이 안 보이면 Xbox 계정 개인정보/커뮤니케이션 설정을 확인한다.
 - **업적**: cheats를 켜거나, 크리에이티브 월드이거나, BP에 업적 호환 manifest 설정이 없으면 잃는다. level.db를 편집해 되살릴 수 있다. pack uuid를 바꾸거나 월드에서 빼지 않고 팩을 지우면 "pack missing/uuid changed" 오류가 난다. RP를 BP 폴더에 넣어도 마찬가지다.
 - **Realm PvP 팁**: /home과 /tpa에 쿨다운을 두고, 데미지 처리 전부(mace, spear, 투사체)를 구현한다.
 - **멀티플레이 동기화**: 많은 엔티티에 계속 `tp`를 쓰면 호스트가 아닌 플레이어에게 렉으로 보인다. 텔레포트를 줄이거나 애니메이션 기반 이동을 쓴다. 셀렉터와 fork는 플레이어 수만큼 늘어나므로 명령 비용이 커진다. 명령 블록은 ticking area로 청크를 붙잡아 둬야 한다(`/tickingarea add circle ~ ~ ~ 4 name`). BDS의 `/transfer`는 서버 콘솔에서 동작하고, 게임 안에서는 op(권한 4)가 필요하며 셀렉터를 받지 않는다.
-- **콘솔과 iOS**: PS5 같은 콘솔은 파일 접근 해킹이 없으면 마켓플레이스 애드온만 쓸 수 있다. "external server connect" 팩(zip)이 공유됐다. iOS에서 서버 폼이 HUD만 숨기고 뜨지 않을 때가 있는데, ESC로 복구된다.
+- **콘솔과 iOS**: PS5 같은 콘솔은 파일 접근 해킹이 없으면 마켓플레이스 애드온만 쓸 수 있다. Marketplace 애드온은 서버에서 쓸 수 없고, 비 Marketplace 애드온은 Xbox만 우회할 수 있다(PlayStation은 불가). 콘솔 플레이어에게 애드온을 쓰게 하려면 BDS에 애드온을 올리고 friend-hub식 호스트로 접속시킨다. "external server connect" 팩(zip)이 공유됐다. iOS에서 서버 폼이 HUD만 숨기고 뜨지 않을 때가 있는데, ESC로 복구된다.
 - **DDUI 소프트락**: 연결이 끊기거나 서버가 watchdog/무한 루프에 걸리면 클라이언트가 폼에 갇히던 문제는 2026-03-10에 Mojang이 고쳤다.
 - **업데이트 요일**: Minecraft 업데이트는 화요일에 나온다.
 
@@ -139,19 +149,33 @@ server-authoritative-block-breaking=false
   - 플러그인 없이 XUID, OS, IP, 보스바, 클라이언트 측 이름표, ping, 기기 모델 정보를 준다.
   - 패킷 차단, 크래셔 패치, 팩 암호화 기능이 있다(암호화 팩에서 "resource pack failed to load" 보고가 있다).
   - 진짜 명령 트리(서브커맨드)를 만들 수 있다(caveats: 한 보고자의 서브커맨드 주장은 약한 근거, unverified).
-  - 약 30~40명 이하에 적합하다는 의견이 있다.
+  - 약 30~40명 이하에 적합하다는 의견이 있다. 수용 인원 보고는 [서버 성능](performance.mdx)에 있다.
+  - 2026-10 기준 0.11.12가 26.51을 지원하고, cross-version 플러그인은 26.40~26.60을 다룬다. 목표는 "Paper for Bedrock"이다. 폭발 이벤트에 위치 속성이 있다. `status` 명령이 권한 오류를 내는 것으로 바닐라 BDS와 구분할 수 있다. API 버그가 많다는 평도 있다.
+  - shawtymarco 포크(`https://github.com/shawtymarco/Endstone`)는 BDS 훅으로 AABB 충돌, random tick, fire tick, chunkLoad/Unload 처리를 설정에서 끈다.
   - BDS 파일은 Endstone의 `bedrock_server` 폴더에 복사한다.
   - Endweave 플러그인(https://github.com/EndstoneMC/endweave)은 패킷을 번역해 새 클라이언트가 옛 서버에 접속하게 한다. BDS보다 업데이트가 늦고 camera 명령이 불완전하며, dev Endweave와 함께 쓰다 인벤토리 아이템이 무작위로 사라졌다는 보고가 있다.
   - URL 이미지 폼 플러그인: https://github.com/zelisce/URL-Image-Fix
   - friend-connect 플러그인: https://github.com/TheNINJALLO/endstone-broadcaster
 - **LeviLamina**: BDS 모드 로더이자 API다(클라이언트는 나중에). 헤더를 제공하고, 서버 측에서 높이 제한을 바꾸는 플러그인이 있다. BDS 업데이트보다 늦다. Android 런처가 있는 Fabric 같은 클라이언트 모딩 프레임워크로도 언급되며, 엔진 수준 모드에 권한다. LeviLauncher는 런처이자 인젝터일 뿐이다.
+  - 설치: `lip init`, `lip install github.com/LiteLDev/LeviLamina`(버전 고정은 `@x.y.z`), `.\bedrock_server_mod.exe`로 실행하고 `stop`으로 멈춘다. 모드는 서버 `plugins/`, 클라이언트 `mods/`에 둔다. 버전을 맞추고, 새 폴더에 설치하고, 모드는 하나씩 넣고, 백업하고, BDS 버전을 바꿀 때는 새 환경을 만든다. 문서: lamina.levimc.org, lip.levimc.org(모드 템플릿 저장소도 있다). C++ 모드 개발에는 VS Code, Git, xmake, Visual Studio C++ 도구, LLVM/Clang을 쓴다.
+  - 애드온을 지원하고 LegacyScriptEngine(`https://lse.levimc.org/`)으로 JS/Node/Lua/Python 플러그인을 돌린다. 네이티브 Linux 빌드는 없다(Docker + Wine). endweave의 "levistone"이 Endstone Python 플러그인을 불러온다. Glacie는 2025-11에 중단됐다.
+  - 사례: Java 모드 TACZ를 이틀 만에 포팅해 BDS에서 돌렸다는 보고, BarelyEnoughItems(`https://github.com/LiteLDev/BarelyEnoughItems`), 서버 쪽 Voxy/DH식 LOD 실험.
 - **기타**
   - SerenityJS: Node 기반이고(QuickJS 아님) 무거운 계산에 쓰였다.
   - Rust: bedrock-crustaceans `chorus`(https://github.com/bedrock-crustaceans/chorus), `pyrite` beta 1.7.3 월드젠 플러그인(https://github.com/bedrock-crustaceans/pyrite). 조명 엔진은 아직 없다.
   - PocketMine: 애드온과 attachable을 지원하지 않고 RP만 된다. JSON UI는 RP로 동작하고 폼은 FormAPI 플러그인이 필요하다(제목 텍스트 바인딩으로 표시 위치를 제한한다). 커스텀 아이템은 Customies 플러그인.
-  - Dragonfly: 커스텀 검 공격 데미지 표시를 upstream PR로 고쳤다.
+  - Dragonfly: 커스텀 검 공격 데미지 표시를 upstream PR로 고쳤다. 한 프로세스에서 여러 월드를 돌리고, 월 5,000원 호스트에서 70명을 받았다는 보고와 BDS식 넉백을 구현한 사례가 있다. 기본 명령과 게임모드가 없고 "돌아가지만 정확하지 않다"는 평이다. Cobblemon풍 dragonfly 서버가 100명을 받았는데(커스텀 모델과 RP), 팩을 받지 못한 클라이언트는 캐시를 지워 해결했고, Cobblemon 에셋을 Python으로 변환한 뒤 모델 약 300개를 손으로 고쳤다. 서버 코어 라이브러리 BRB: `https://github.com/shawtymarco/BRB` (single report)
+  - Quark(`https://github.com/Bedrock-Phanatics/Quark`): PMMP API5 호환을 내세운 고성능 서버.
+  - featured 서버 구성(*unverified*): Lifeboat는 PocketMine 포크, CubeCraft는 Java 기반이라는 말이 있고, "그 밖은 모두 BDS"라는 주장과 새 공식 서버가 BDS 기반이라는 말은 확인되지 않았다.
 - **BDS 자체**: 플러그인 시스템이 없고 애드온만 돈다. BDS 래퍼(Node나 Python)는 콘솔 출력을 읽고 scriptevent를 넣어 줄 수 있다. 그 밖에 BDS → 외부로 명령을 보내려면 server-net HTTP나 로그 tailing 헬퍼를 쓴다.
 - **Friend connect**: MCXboxBroadcast(https://github.com/MCXboxBroadcast/Broadcaster, 독립 jar 또는 Geyser 확장)는 Xbox로 방송하고 플레이어를 실제 서버로 전송한다. `bedrock-portal`과 `bedrock-protocol` npm으로 직접 만들 수도 있다. 콘솔 플레이어에게는 friend connect가 가장 좋은 방법이다(2026-05).
+- **Geyser**: 2026-09-25 기준 Bedrock 26.30~26.51과 Java 26.2를 지원한다. Spigot에서는 `plugins/`에 넣고 `plugins/Geyser-Spigot/config.yml`을 고친다. UDP 19132를 연다. Standalone은 Java 21 이상이 필요하고 `bedrock.port`, `java.address`, `java.port`를 설정한다. Floodgate를 쓰면 Java 계정 없이 들어온다. Geyser가 낡으면 "Outdated client"가 뜬다. 이동과 블록 끼임은 GeyserMovementFix 플러그인으로 고친다. Geyser와 Hydraulic식 번역 계층으로 Java 모드를 Bedrock에서 돌리는 실험이 있다(2026-11).
 - **투표**: 서버 리스트 사이트의 API를 쓴다(예: https://github.com/ItzCandra23/BedrockVote).
 - **VoiceCraft 근접 음성 채팅** (github.com/AvionBlock/VoiceCraft): v1.1.0(2025-12-18), v1.3.0(2026-01-04). 전면 재작성됐고 API 시스템이 있다. 30명 이상을 쉽게 처리하며 TPS가 떨어지기 전까지 500명 이상을 주장한다. 모바일 호스팅도 된다.
 - **채팅 브리지**: BedrockBridge(MCPEDL). 같은 Node 앱으로 BDS와 외부 채팅 서비스를 잇기도 한다.
+
+## 한국 서버 커뮤니티
+
+- **서버 목록**: 별누리(byulnuri.com, 한국 Bedrock 서버 호스팅과 접속 플랫폼, 서버 하나에 약 30명), Minelist, Mineplatform이 쓰인다. 한국 서버는 목록 사이트보다 큰 커뮤니티의 초대로 플레이어를 모은다. 한국 Bedrock 호스팅 앱이던 Omelet Arcade는 문을 닫았다. "일섭"(일반서버)은 IP 서버가 아니라 친구나 Realms식 초대로 들어가는 Xbox Live 기반 서버를 뜻한다.
+- **동향(*unverified*)**: 한국 최대 서바이벌 서버의 동접이 약 400명에서 100명 아래로 줄었다는 말이 있고, 1인 운영 구조와 MS 로그인 진입 장벽이 원인으로 거론됐다.
+- **서버 설계 사례(single report)**: 갑옷 거치대와 스코어보드로 25블록 간격 플롯을 배정하고 구조물 블록 템플릿을 깐다. 평균 잔액을 기준으로 인플레이션을 조절하고, 전투 로그아웃을 막고, 사이드바 HUD를 쓴다. 프록시로 Hive식 넉백을 분석한 사례도 있다.

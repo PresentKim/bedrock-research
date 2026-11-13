@@ -11,7 +11,7 @@ sources:
 
 # 블록
 
-커스텀 블록을 만드는 방법과 알려진 제한을 정리한다. 근거는 커뮤니티 조사(2025-10~2026-10)와 Bedrock Wiki(0930b39)의 blocks 문서, bedrock-samples(15701fa9)의 바닐라 블록 JSON이다(출처: 비공개 조사). 검증 수준은 `(confirmed)`, `(conflicting)`, `(single report)`, `(unverified)`로 적는다.
+커스텀 블록을 만드는 방법과 알려진 제한을 정리한다. 근거는 커뮤니티 조사(2025-10~2026-11)와 Bedrock Wiki(0930b39)의 blocks 문서, bedrock-samples(15701fa9)의 바닐라 블록 JSON이다(출처: 비공개 조사). 검증 수준은 `(confirmed)`, `(conflicting)`, `(single report)`, `(unverified)`로 적는다.
 
 ## 핵심 요약
 
@@ -223,7 +223,7 @@ part.setPermutation(BlockPermutation.resolve(part.typeId, {
 
 ## 6. 블록 엔티티, 컨테이너, 동적 속성
 
-- `minecraft:block_entity`는 프리뷰 26.30.28에 들어왔다. 26.40에서 실험, 26.50에서 블록 엔티티 자체(동적 속성 저장)는 실험이 아니게 됐고 `container {slot_count}`는 여전히 실험이다. UI는 통(barrel)식뿐이며(JSON UI로 수정 가능) 상자 렌더링과 호퍼 흡입은 없다.
+- `minecraft:block_entity`는 프리뷰 26.30.28에 들어왔다. 26.40에서 실험, 26.50에서 블록 엔티티 자체(동적 속성 저장)는 실험이 아니게 됐고 `container {slot_count}`는 2026-11에도 실험이다(Upcoming Creator Features와 format 1.26.20 이상 필요, 토글 없이 만든 월드에서는 크리에이티브에서 사라짐). UI는 통(barrel)식뿐이며(JSON UI로 수정 가능) 상자 렌더링과 호퍼 흡입은 없다. 컨테이너 제목은 container 안의 `title`(로컬라이즈 키 또는 테스트용 문자열)이다.
 - 할 수 없는 것: 낙하 블록(하드코딩된 `minecraft:falling_block` 엔티티)과 애니메이션. 상자 열림 애니메이션은 상태와 퍼뮤테이션으로 지오메트리를 단계별로 바꿔 흉내 낸다. 멀티블록이 블록 엔티티 하나를 공유하는 것도 아직 안 된다.
 - 버그: 레드스톤 업데이트 뒤 스크립트로 컨테이너 아이템을 바꾸면 열린 UI가 닫힌다(26.50). 눈에 묻힌 컨테이너 블록 엔티티는 아이템을 떨어뜨린다.
 - 루트 함수 `carry_over_block_entity_data`에 `dynamic_properties:true`를 주면 블록 동적 속성이 아이템으로 넘어간다(26.40).
@@ -405,7 +405,7 @@ blocks.json의 `sound`는 여전히 유효하다. `default`는 음높이만 다�
 - `minecraft:map_color`는 블록 지도 색을 지정한다(바닐라 블록 지도 색은 바꿀 수 없음). `BlockMapColorComponent`는 바닐라 블록에서 동작하지 않는다(MCPE-240722).
 - `minecraft:flower_pottable` + `minecraft:embedded_visual`은 format 1.21.124 이상이 필요하다. 모든 퍼뮤테이션에 지오메트리 + material_instances가 있어도 root에 따로 있어야 하고(MCPE-237910) 1.26.20부터 퍼뮤테이션에서는 금지된다.
 - `minecraft:chest_obstruction`은 상자, 엔더, 덫, 구리 상자에 적용되고 셜커에는 아니다. `"shape"` 모드는 충돌 박스를 쓰며 origin [-7,0,-7] size [14,8,14]와 겹치면 실패한다.
-- 태그(conflicting): 이전 형식은 블록 태그를 `"tag:ns:name": {}` 컴포넌트로 쓴다. format 1.26.20부터는 `"minecraft:tags": ["ns:tag"]` 배열이 대체한다고 하지만 1.26.20 무렵 배열이 로드되지 않고 `tag:` 형식이 필요했다는 보고가 있다. `query.block_neighbor_has_any_tag`/`block_has_any_tag`는 더 쓸 수 없다.
+- 태그(conflicting): 이전 형식은 블록 태그를 `"tag:ns:name": {}` 컴포넌트로 쓴다. format 1.26.20부터는 `"minecraft:tags": ["ns:tag"]` 배열이 대체한다고 하지만 1.26.20 무렵 배열이 로드되지 않고 `tag:` 형식이 필요했다는 보고가 있다. 2026-08~09의 더 최근 보고는 1.26.20 이상에서 배열이 맞고 옛 `tag:` 키는 스키마 오류라고 확인한다. `query.block_neighbor_has_any_tag`/`block_has_any_tag`는 더 쓸 수 없다.
 - 몹 스폰: 오래된 형식의 커스텀 풀블록 위에는 몹이 스폰되지 않았지만 format 1.21.90 이상에서 고쳐졌다(한 사용자는 1.26.0 필요). 블록이 고체/불투명이어야 한다. 커스텀 블록을 바이옴 `top_material`로 쓰면 엔티티가 스폰되지 않는다는 보고가 있다.
 - trial spawner는 자연 몹 스폰 규칙이 켜져 있어야 스폰한다. 우회법은 BP spawn_rules로 자연 적대 몹 스폰을 막는 것이다(format 1.8.0 `minecraft:spawns_on_block_filter: ["minecraft:deny"]` 또는 weight 0).
 - 컴포넌트 정리 순서(ciosciaa 제안): METADATA(display name, loot, transformation, random offset, tags) → PRESENTATION(geometry, material instances, item visuals, embedded visuals, destruction particles, map color) → PHYSICS(selection/collision box, friction, light dampening/emission, precipitation, destructible by mining/explosion, liquid detection, flammable, movable) → RELATIONS(placement filter, replaceable, support, connection rule) → FEATURES(redstone, crafting table, leashable, flower pottable) → EVENTS(tick, fall-on).

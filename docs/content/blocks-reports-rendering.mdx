@@ -8,12 +8,15 @@ sources:
 
 # 블록 커뮤니티 보고 - 지오메트리, 렌더링, 채굴, 배치
 
-커뮤니티 조사(2025-10-22 ~ 2026-10-23)에서 본 페이지의 앞 문서가 요약하지 못한 개별 보고를 모았다. 각 항목 끝의 `[uNNN 날짜]`는 조사 노트 번호와 보고 날짜이고, `(single report)`는 한 사람만 보고한 내용이다.
+커뮤니티 조사(2025-10-22 ~ 2026-11-13)에서 본 페이지의 앞 문서가 요약하지 못한 개별 보고를 모았다. 각 항목 끝의 `[uNNN 날짜]`는 조사 노트 번호와 보고 날짜이고, `(single report)`는 한 사람만 보고한 내용이다.
 
 #### 모델 크기와 형식
 
-- **크기 한도**: 회전을 포함해 약 30x30x30px다(축당 "1 + 14/16ths", 즉 16 큐브 밖으로 14px). 오류는 "Total length of parts for schematic ... greater than 1 + 14/16ths"다. 약 30px(1.8블록)보다 높은 모델은 게임에서 사라진다. 큐브만 허용되며 poly_mesh와 locator는 "is not included within the unit cube" 오류를 낸다. 복잡한 회전 큐브는 피한다. 더 큰 모양은 여러 블록, 멀티블록, 엔티티로 만든다. 크기는 transformation 적용 전에 검사된다(MCPE-236317).
+- **크기 한도**: 회전을 포함해 약 30x30x30px다(축당 "1 + 14/16ths", 즉 16 큐브 밖으로 14px). 오류는 "Total length of parts for schematic ... greater than 1 + 14/16ths"다. 약 30px(1.8블록)보다 높은 모델은 게임에서 사라진다. 큐브만 허용되며 poly_mesh와 locator는 "is not included within the unit cube" 오류를 낸다. 복잡한 회전 큐브는 피한다. 더 큰 모양은 여러 블록, 멀티블록, 엔티티로 만든다. 크기는 transformation 적용 전에 검사된다(MCPE-236317). 크기 초과는 "contains N boxes outside the error bounds of (-0.875..1.875)"로도 나오며, 축마다 1px 이상은 단위 칸 안에 있어야 하고 transformation scale 2가 같은 오류를 낸 사례가 있다.
+- **옛 format과 그림자**: 옛 format(1.21.0)으로 한도를 넘긴 블록은 26.0 계열의 그림자 렌더링 변경 뒤 어둡거나 깨져 보이니 format_version을 올린다. scale이 1이 아닐 때 깨진 지오메트리는 format 1.21.0 이상으로 고쳤다. 지오메트리 파일 format_version이 1.12 같은 옛 값이면 블록이 보이지 않을 수 있다. (single report)
+- **회전 각도**: transformation 회전은 90도 배수만 된다. 45도는 돌린 뼈를 복제해 상태로 켜고 끈다.
 - **잘못된 지오메트리의 파급**: 서브청크 하나에 잘못된 지오메트리 블록이 있으면 그 서브청크의 지오메트리 기반 블록 전부(거미줄 포함)가 렌더링되지 않는다("A block must have baked material data in order to tessellate"). 콘텐츠 로그에서 원인(너무 큰 모델, 16x16이 아닌 텍스처 등)을 찾는다.
+- **z-fighting 오프셋(conflicting)**: 0.001 정도 옮기라는 답과, 블록 inflate는 0.05 미만이면 z-fighting이 남는다는 답이 엇갈린다. 수련잎식 평면은 Y로 0.1~0.2 띄우고, 방향별 z-fighting은 방향별 지오메트리로 피한다.
 - **소수점**: 좌표는 소수 첫째 자리로 반올림된다(15.98/7.99 → 반올림). z-fighting은 7.9나 `inflate`로 고친다. 둘째 자리를 쓰면 틈과 렌더 오류가 생긴다.
 - **UV**: Bedrock은 명시적 UV가 없는 면을 버린다. Blockbench에서는 멀쩡한데 게임에서 구멍이 나면 박스 UV `[0,0]` 대신 면별 UV(`north/south/east/west/up/down`에 `uv`, `uv_size`)를 쓴다. 안 보일 면은 구석에 몰지 말고 끈다(https://wiki.bedrock.dev/blocks/block-models#removing-faces). 두께 0인 평면도 지원된다. 패딩을 없앤 프리뷰 이후 텍스처 밖 UV가 이웃 아틀라스 타일로 번지며 경고는 없다(크기가 너무 크거나 0인 UV를 지우는 스크립트로 우회).
 - **한 모델엔 한 PNG**: 한 모델에 PNG 여러 장을 쓰면 실패했다.
@@ -35,6 +38,7 @@ sources:
 
 - **다중 충돌 박스**: `minecraft:collision_box`는 박스 배열을 받는다(박스만, 곡면 없음). 1.21.130 프리뷰(1.21.130.26, 2025-11)에서 Upcoming Creator Features 실험으로 나왔고 26.0에서 안정됐다. 확장된 충돌 높이는 실험에서 나와 1.21.130+ 형식이 더는 필요 없다. 1.20.80에서도 동작했다는 보고가 있다. 박스 16개 한도라는 단일 보고가 있다(unverified). 계단 예: `[{"origin":[-8,0,-8],"size":[16,8,16]},{"origin":[-8,8,0],"size":[16,8,8]}]`. 1.21.130 전에는 꽉 차지 않은 지오메트리에서 플레이어가 밀려났다.
 - **충돌 크기**: 대략 16x30x16(위로 약 8px)까지다. `random_offset` 버그로 충돌이 한 블록 밀린 사례가 있다. `collision_box: []`는 충돌 없음이 아니라 꽉 찬 충돌이다. transformation으로 박스가 블록 공간을 벗어날 수 있다(MCPE-236325, 고치지 않음). 높이 24로 늘었다는 보고도 있다(unverified).
+- **형식**: `minecraft:selection_box`는 `true`(꽉 찬 블록)나 `{"origin":[-8,0,-8],"size":[16,8,16]}`를 받고 collision_box도 같은 형식이다. Molang으로 상태별 박스를 바꿀 수 없어 퍼뮤테이션을 쓴다. Blockbench의 bounding box 설정은 게임에 효과가 없다. `collision_box: false`면 엔티티가 통과하고, 엔티티는 서 있고 아이템만 떨어지는 블록은 만들 수 없다. 충돌 박스가 다른 커스텀 블록 두 개 사이를 넘어갈 때 막힌다는 보고가 있다(unverified).
 - **선택 박스**: 하나뿐이다(배열 미지원). 24 모델 단위까지 정의할 수 있지만 엔진이 블록 경계로 자르며 시각적으로만 밖으로 나간다(Mojang 조사 중). 외곽선은 감싸는 큐브다. 투사체는 선택 박스를 쓰므로 화살이 맞게 하려면 `selection_box`를 끄지 말아야 한다. 반대로 충돌만 두면 "투사체가 통과하는 방벽"을 만들 수 있다. 외곽선을 전역으로 숨기는 방법은 모험 모드뿐이다.
 - **밟기 판정**: 충돌 높이가 약 3.2px(0.2블록) 이하면 "얇은" 블록이라 서 있을 수 없고(아래 블록의 발소리와 파티클이 남) `onStepOn`/`onEntityFallOn`이 발생하지 않는다(위키 3.2, 측정 약 3.25, 실무 4px 권장). 한 보고자는 약 0.4블록 이상이어야 한다고 보고해 **conflicting**이다. 가시 블록은 4px 바닥 큐브 위에 가시를 올리거나, `onEntityFallOn`(낙하 거리 제공, 걷기에는 발생 안 함)이나 스크립트를 쓴다. `GetBlocksStandingOnOptions` 참고.
 - **스폰**: 엔티티는 꽉 찬 충돌 블록 위에서 스폰된다.
@@ -53,16 +57,19 @@ sources:
 - **블록을 아이템처럼**: 블록과 같은 식별자의 아이템에 `minecraft:block_placer {block, replace_block_item:true}`를 둔다. 같은 ID여야 픽블록이 되며(아니면 `<ns>:item.<id>`가 나옴), 평면 2D 아이콘, `max_stack_size`, 머리 착용 `minecraft:wearable`, `minecraft:glint`를 쓸 수 있다. 아이콘을 생략하면 블록으로 렌더링된다. 커스텀 블록은 블록 아이템 없이 존재할 수 없다. 문서: https://wiki.bedrock.dev/blocks/blocks-as-items(#replacing-block-items).
 - **아이템 오버라이드의 부작용**: 블록 태그를 상속한다(MCPE-235805). `move_to_block`, `lay_egg` 같은 블록 지향 AI가 실패하고(MCPE-240457), `lay_egg`는 크래시한다. `move_to_block` target_blocks에 `tile.ns:block` 접두사를 쓰면 아이템과 ID를 공유하는 블록은 고쳐지지만 replace_block_item 블록은 아니다. 같은 ID 아이템을 쓰면 몹 스폰과 `avoid_block`이 블록을 무시한다는 버그도 있다. 아이템 오버라이드는 빠른 브리징을 끈다(MCPE-234686). 화로 레시피북 "items" 분류에 나오던 문제(MCPE-236444)는 수정됐다.
 - **`aligned_placement`**: `minecraft:block_placer`의 이 값은 `block_face` 상태에 영향을 준다.
+- **`block_placer`의 상태 지정**: `block: {name, states}` 형식은 최신 format과 유효한 아이콘이 필요했고, 없으면 "Missing icon for data-driven item"으로 아이템이 보이지 않았다(미해결).
 - **3D 블록 모델**: 3D 블록 모델을 얻는 방법은 커스텀 블록뿐이다(바닐라는 폐기된 blockshape에 묶임).
 
 #### material_instances
 
 - **기본**: 지오메트리를 쓰는 블록은 반드시 `minecraft:material_instances`를 쓴다. 키는 면 이름(`up`, `down`, `north` ... top/bottom 아님, `*`가 기본, Blockbench의 커스텀 면 이름도 가능)이다. 각 인스턴스의 필드는 `texture`(`textures` 아님), `render_method`, `face_dimming`(bool), `ambient_occlusion`(1.26.20+ 숫자, 모래식 부분 어둡힘 `0.55`), `tint_method`, `isotropic`이다. `eau_occlusion`/`brightness_gamma`는 없다. 텍스처 이름은 `terrain_texture.json`의 키다(경로 아님). 바닐라 텍스처도 terrain_texture에 정의해야 하며 짧은 이름(`diamond_ore`)만으로는 안 된다(blocks.json에도 있으면 된다는 단일 보고).
+- **합쳐지지 않음**: material instance는 합쳐지지 않는다. 모든 면을 정의하면 `*`는 쓰이지 않고, AO/face_dimming은 면마다 반복한다. light_emission은 별도 컴포넌트다. 여러 뼈에 면별 텍스처를 줄 때는 per-face UV와 면별 인스턴스 이름을 쓴다. 터레인 키 오타는 조용히 누락 텍스처가 된다.
 - **render_method 혼용 금지**: 한 블록의 인스턴스끼리 render_method를 섞을 수 없다("MaterialInstances can't mix and match"). 불투명과 반투명이 섞인 블록은 불가능하다고 여겨진다. 비콘식은 둘 다 blend로 둔다.
-- **render method 선택**: `alpha_test_to_opaque`는 멀리서 사라지는 문제를 고치며 잎에 쓴다. `alpha_test`는 컷아웃용이다. `blend`는 순서 문제가 있어 반투명 큐브를 마지막에 두거나 `alpha_test_single_sided`/`double_sided`를 쓴다. 복잡한 지오메트리에서 blend는 앞 블록 위에 그려진다. `double_sided` 블록은 렌더 거리 절반에서 사라진다. 투명 픽셀이 있는 opaque는 검게 보인다. 거미줄/외곽선 스타일은 `alpha_test_single_sided`. 애드온 메이커 앱으로 만들면 `blend`/`alpha_test`가 무시되니 JSON을 손으로 쓴다. `render_method`는 blocks.json이 아니라 material instance 필드다.
+- **render method 선택**: `alpha_test_to_opaque`는 멀리서 사라지는 문제를 고치며 잎에 쓴다. `alpha_test`는 컷아웃용이다. `blend`는 순서 문제가 있어 반투명 큐브를 마지막에 두거나 `alpha_test_single_sided`/`double_sided`를 쓴다. 복잡한 지오메트리에서 blend는 앞 블록 위에 그려진다. `double_sided` 블록은 렌더 거리 절반에서 사라진다. 투명 픽셀이 있는 opaque는 검게 보인다. 거미줄/외곽선 스타일은 `alpha_test_single_sided`. 애드온 메이커 앱으로 만들면 `blend`/`alpha_test`가 무시되니 JSON을 손으로 쓴다. `render_method`는 blocks.json이 아니라 material instance 필드다. 커스텀 잎은 불투명 픽셀의 알파를 1로 두고 `alpha_test_to_opaque`를 써서 멀리서 사라지지 않게 하며, 거리별 텍스처를 따로 둘 수는 없다. 투명 렌더 방식은 그림자를 깬다. 흙 같은 블록은 opaque를 쓴다. 거리 기반 render method 문서: https://wiki.bedrock.dev/blocks/block-visuals-intro#distance-based-render-methods.
 - **emissive/shaded**: `emissive`는 `shaded`(face_dimming/ambient_occlusion 별칭)로 이름이 바뀌었다. 진짜 발광은 Vibrant Visuals에서만 되며, format 1.21.120+와 Upcoming Creator Features에서 `"emissive": true`가 있었다(잠깐 존재). VV/RTX 없이 빛나는 텍스처는 불가능하므로 플립북으로 빛나는 착시를 만든다(https://wiki.bedrock.dev/blocks/flipbook-textures).
 - **틴트**: `tint_method: grass`는 알파가 아닌 모든 픽셀을 물들인다(바닐라 grass_side를 쓰면 흙 부분까지). `alpha_masked_tint`는 1.21.120+와 토글이 필요하며, 프리뷰에서 다시 실험이 되고 26.0 전까지 투명 픽셀을 물들이는 문제가 있었다. 투명 블록에는 `overlay_color`가 아니라 `tint_color`를 쓴다(https://wiki.bedrock.dev/blocks/block-tinting#texture-tinting). 틴트된 바닐라 잎 위에 커스텀 텍스처를 덮어도 틴트는 막을 수 없었다.
 - **텍스처 크기**: 16x16이 아니어도 되지만 일반 큐브 UV는 16을 가정하므로, 다른 크기는 커스텀 지오메트리가 필요하다. 텍스처는 정사각이어야 한다(아니면 애니메이션 프레임으로 읽히거나 잘림). 8x8은 16x16으로 늘어난다. 64x64 전체 모델 아틀라스는 거대한 균열과 파괴 파티클을 만드니 면별 16x16 텍스처 여러 장을 쓴다(Blockbench에서 "blank" 텍스처 생성). 카펫(1px 모델)도 16x16 하나를 쓴다.
+- **1.26의 텍스처 크기 문제**: 1.26부터 2의 거듭제곱이나 8의 배수가 아닌 텍스처(66x66, 18x18)는 블록 사이 선과 빠진 면을 만든다. 64x64나 32x32로 바꾸고 UV를 맞춰 해결한다.
 - **RP 편집 후 8x8로 줄어드는 현상**: RP를 복사해 사본을 수정한 뒤 원본을 덮어쓰는 우회법이 있다. `contents.json`은 두지 않는다. 텍스처가 정의되지 않았다는 오류는 이름 앞 공백이 의심됐고 캐시를 비워 해결됐다.
 - **"Invalid or incomplete texture list" 경고**: 동작은 하는데 뜨는 경고가 있다.
 
@@ -73,7 +80,8 @@ sources:
 - **벽에 붙은 검은 면**: 평면을 더하거나 면을 0.1 앞으로 옮기거나 커스텀 컬링을 쓴다(또는 감수한다). 머리 그림자는 바닥 위 0.125에 위쪽 UV 평면을 하나 더 둔다. 작물 밑 그림자는 모델을 위로 올려 줄인다.
 - **조명 아티팩트**: 커스텀 반블록/계단의 조명 아티팩트는 `minecraft:light_dampening`과 지오메트리 컬링 규칙으로 줄인다. `light_dampening`이 1 이상이면 그 아래 몹이 햇빛에 타지 않고, 15면 빛 번짐도 막는다. 풀블록에는 빛이 새지 않게 넣는다. dampening이 높으면 아래 잔디가 흙으로 바뀌고 길 블록이 되돌아간다(고체성과 연관, dampening을 낮추는 것 외엔 방법 없음).
 - **26.0 / VV 문제**: 26.0에서 일부 커스텀 블록이 핫픽스 전까지 검게 나왔다. VV의 밝기 불일치는 MER/subsurface scattering 경로를 점검해 고쳤다. VV에서만 텍스처 레이어링이 깨진다. VV는 엔티티의 face dimming을 끄지만 블록은 끄지 않는다. VV의 블록 동적 아틀라스 합성(MCPE-237912)은 수정됐지만 아이템은 아직이다. 들고 있는 블록의 자동 attachable은 MER을 무시한다(MCPE-237517). `blend`와 반사 MER의 조합은 미해결이다.
-- **PBR/MER**: `*.texture_set.json` + `_mer`와 팩 capability "pbr"로 동작한다. 한 사용자의 실패 원인은 terrain_texture 경로의 `.png`뿐이었다.
+- **PBR/MER**: `*.texture_set.json` + `_mer`와 팩 capability "pbr"로 동작한다. 한 사용자의 실패 원인은 terrain_texture 경로의 `.png`뿐이었다. Blockbench Bedrock 블록 프로젝트의 "create material" 버튼으로 만든 파일을 텍스처 옆에 두면 texture-set 없이도 적용된다는 보고와 `.texture_set` 파일을 함께 설정하라는 답이 **conflicting**이다. 커스텀 블록의 발광 부분은 Vibrant Visuals에서만 된다.
+- **그림자와 인벤토리 표시**: 바닥으로 파고든 모델 옆면의 그림자는 1.26.10에서 수정됐다. random offset이나 이웃 칸으로 튀어나온 지오메트리는 어둡게 그려진다. 26.50 뒤 인벤토리에서만 안 보이는 블록은 재설치나 Vibrant Visuals 밝기 100%로 해결됐다(MCPE-241108).
 
 #### 텍스처 변형과 플립북
 
@@ -81,10 +89,10 @@ sources:
   ```json
   {"textures": {"variations": [{"path": "textures/blocks/x", "weight": 50}, {"path": "textures/blocks/x2", "weight": 50}]}}
   ```
-- **바닐라 블록에 변형 추가**: 바닐라 키의 terrain_texture 항목을 `variations`로 바꾼다(예 stone_bricks). blocks.json으로 바닐라 면을 바꾸려면 `"textures": {"up","side","down"}`.
+- **바닐라 블록에 변형 추가**: 바닐라 키의 terrain_texture 항목을 `variations`로 바꾼다(예 stone_bricks). blocks.json으로 바닐라 면을 바꾸려면 `"textures": {"up","side","down"}`. 짧은 풀 덮어쓰기 키는 `short_grass`(`tallgrass` 아님)다. 바닐라 블록 텍스처는 데이터로 회전시킬 수 없어 미리 돌린 PNG를 쓴다. 가중치 없는 변형 배열은 항상 첫 항목을 쓴다.
 - **플립북**: `flipbook_textures.json` 항목(`flipbook_texture`, `atlas_tile`, `ticks_per_frame`)을 쓰고 atlas_tile을 terrain_texture에도 등록한다. 밉매핑 때문에 멀리서 terrain_texture의 텍스처로 돌아가므로 거기에 정의하지 않으면 검정/보라 텍스처가 된다. `minecraft:geometry.full_block`과 `blend`를 쓰는 플립북 예가 있다. 얇은 줄무늬도 밉매핑으로 흐려지므로 얇은 별도 블록을 쓴다.
 - **파괴 파티클**: `minecraft:destruction_particles {texture}`(format 1.21.90+)로 부술 때 텍스처를 정한다. 균열은 텍스처 전체에 걸쳐 커진다. 파티클 텍스처 버그(MCPE-234708)는 수정됐다.
-- **blocks.json**: 데이터 드리븐 테셀레이션을 쓰는 블록에서는 `sound`만 유효하다. 지오메트리 블록에 `textures`를 두면 "trying to override the Geometry component with blocks.json settings" / "override geometry ... not supported" 오류가 난다. blocks.json은 바닐라 블록을 terrain 이름에 매핑한다. 상태별 텍스처를 blocks.json으로 하려던 시도는 상태가 둘이면 실패했다.
+- **blocks.json**: 데이터 드리븐 테셀레이션을 쓰는 블록에서는 `sound`만 유효하다. 지오메트리 블록에 `textures`를 두면 "trying to override the Geometry component with blocks.json settings" / "override geometry ... not supported" 오류가 난다. blocks.json은 바닐라 블록을 terrain 이름에 매핑한다. 상태별 텍스처를 blocks.json으로 하려던 시도는 상태가 둘이면 실패했다. blocks.json의 `format_version`은 문자열(`"1.1.0"`)이고 1.21.40을 넘기면 unsupported 경고가 난다. 2026-08~10 기준 blocks.json은 소리와 무작위 텍스처 정도에만 필요하다. bridge. 기본 네임스페이스 잔재가 텍스처를 잃게 한 사례가 있다.
 - **하드코딩된 바닐라 렌더링**: 상자, 침대, 깃발은 블록 엔티티로 렌더링된다. 구리 골렘 석상 텍스처는 하드코딩이고 blocks.json은 파괴 파티클만 바꾼다(Mojang 언급). 침대에는 색 상태가 없다(블록 엔티티에 저장, 모두 `minecraft:bed`). 색은 `block.getItemStack().localizationKey`("item.bed.red.name")로 얻지만 흰색이 나온다는 보고가 있다.
 
 ### 컬링 규칙
@@ -98,15 +106,17 @@ sources:
 - **연결 텍스처**: 유리식 모델의 컬링(같은 블록 옆의 면/뼈 숨기기)이나 모드(https://www.curseforge.com/minecraft-bedrock/addons/connecting-textures)로만 가능하다. 스크립트로 4방향 이웃을 검사하는 연결 유리 템플릿도 있다. 연결 테이블은 뼈별 컬링 `"condition": "same_block"`, `cull_against_full_and_opaque: false`로 만들 수 있지만 T자 교차에서 실패한다. 그 외에는 onPlace/onBreak 스크립트로 다리별 상태를 설정한다. "동굴 블록"(아래가 비쳐 보이는 블록)도 컬링으로 만든다.
 - **voxel shape**: BP `shapes` 폴더의 voxel shape는 새 기능이며 현재 다른 블록에 가려진 면을 컬링하는 데만 쓰인다. 26.40 프리뷰에서 실험에서 기본 바닐라 BP로 옮겨졌지만, regex 검증 때문에 바닐라 voxel shape를 커스텀 블록이 쓸 수 없다(MCPE-240758, "당분간" 의도된 동작). 바닐라 블록 shape ID는 위키 값에서 밀렸다: sculk_sensor 125, azalea/flowering_azalea 132, glow_frame 133, glow_lichen 134, 문서에 없는 sculk_shrieker와 sculk_vein(발광이끼처럼 64상태 값 필요)이 있다. voxel shape 경계 검사는 2026-02-17에 수정됐다.
 - **voxel shape 실험과 잎**: 잎이 비쳐 보이게 됐을 때 voxel shapes 실험을 끄자 해결됐다.
+- **voxel shape의 현재 역할**: voxel shape는 현재 컬링에만 영향을 주므로 퍼뮤테이션별 모양에는 지오메트리와 컬링을 매번 다시 정의해야 한다. 문서: https://learn.microsoft.com/en-us/minecraft/creator/documents/voxelshapes?view=minecraft-bedrock-stable.
 
 ### 사운드
 
 - **blocks.json `sound`**: 여전히 유효하다. `default`는 음높이만 다른 돌 소리다(https://wiki.bedrock.dev/blocks/block-sounds). blocks.json 사운드는 그 이름의 블록 모두를 바꾸고, 전역으로 바꾸려면 같은 이름의 오디오 파일을 교체한다. 엔드 이끼 소리는 `moss_block`, `moss_carpet`, 나무 설치 소리는 `use.wood`다. 금 블록은 돌과 같은 "metal" 소리를 쓰고 철/구리는 자기 ID가 있다. 물속에 놓을 때 설치 소리가 나지 않는다(바닐라도 같은 버그). 1.26.30에 instrument sound 컴포넌트가 추가됐다.
+- **커스텀 블록 소리 등록**: RP `sounds.json`의 `block_sounds`에 `sand` 항목을 복사해 `namespace:block`으로 등록할 수 있다. 체인지로그의 `minecraft:sound` 블록 컴포넌트는 문서에 없으니 체인지로그와 스키마를 본다. 주변 소리를 내는 블록 컴포넌트는 없다.
 
 #### 채굴 속도
 
 - **도구 태그**: `destructible_by_mining` 밖에 `"tag:minecraft:is_pickaxe_item_destructible": {}`(또는 axe/shovel/hoe)를 컴포넌트로 두면 바닐라 도구가 빠르게 캐고 효율 인챈트도 자동 적용된다. 태그는 경도(hardness)에 비례해 조정되므로 도끼는 `item_specific_speeds`보다 `tag:minecraft:is_axe_item_destructible`이 낫고, `<material>_tier` 태그는 등급을 잠글 때만 쓴다. 커스텀 곡괭이는 digger 컴포넌트에서 이 태그를 확인해야 한다. `tag:stone`은 알려진 효과가 없다. 문서: https://wiki.bedrock.dev/blocks/tool-based-destruction(루트 테이블 절과 채굴 페널티 포함).
-- **`item_specific_speeds`**: `minecraft:destructible_by_mining`의 `{item, destroy_speed}` 배열이며 item은 `{"tags": "q.all_tags('minecraft:is_pickaxe','minecraft:stone_tier')"}`처럼 쓴다. 등급 태그 `minecraft:wooden_tier` 등은 있지만 `minecraft:is_wooden_pickaxe`는 없다. 바닐라 곡괭이 태그는 `minecraft:digger`, `is_pickaxe`, `is_tool`, `<tier>_tier`다. format 1.21.30 미만에서는 경고 없이 실패한다(1.20.60에서 안 된 보고도 있음). 도구 항목별 지정이 Efficiency를 덮는지는 논란이다.
+- **`item_specific_speeds`**: `minecraft:destructible_by_mining`의 `{item, destroy_speed}` 배열이며 item은 `{"tags": "q.all_tags('minecraft:is_pickaxe','minecraft:stone_tier')"}`처럼 쓴다. 등급 태그 `minecraft:wooden_tier` 등은 있지만 `minecraft:is_wooden_pickaxe`는 없다. 바닐라 곡괭이 태그는 `minecraft:digger`, `is_pickaxe`, `is_tool`, `<tier>_tier`다. format 1.21.30 미만에서는 경고 없이 실패한다(1.20.60에서 안 된 보고도 있음). 도구 항목별 지정이 Efficiency를 덮는지는 논란이다. `item_specific_speeds`는 Efficiency를 무시하니 digger(`use_efficiency: true`) + 블록 태그를 쓰라는 의견이 있다. 특정 도구로만 캐는 블록 패턴은 `seconds_to_destroy: 999`, `q.all_tags(...) && q.any_tag(...)` 항목에 `destroy_speed: 1`, 루트 조건에도 같은 태그를 둔다. destroy_speed가 seconds_to_destroy보다 크면 dev 팩 검증 오류가 난다.
 - **바닐라 속도 맞추기**: `seconds_to_destroy`는 실제 초가 아니며, 기본적으로 실제 시간은 값의 1.5배다. 바닐라는 틀린 도구로 캘 때 3.33배 느리지만 커스텀 블록은 그렇지 않으니 직접 곱한다. 방법: `seconds_to_destroy` = 바닐라 경도 x 3.33(맨손), `item_specific_speeds[].destroy_speed` = 경도(예 벽돌 6.66과 `q.any_tag('minecraft:is_pickaxe')`에 2) + 곡괭이 태그. 다른 공식은 위키 기본값 x 2/3이다. 위키 페널티 공식: 맞는 도구 경도 x 1.5, 틀린 도구 x 5인데 Bedrock은 1.5를 항상 적용하므로 틀린 도구 = H x 5/1.5, 맞는 도구 = H. 참고값: 통나무식 도끼 1.975, 돌식 6.63에 도구별 약 1.9.
 - **동작하지 않는 태그**: 등급 파괴 태그(`minecraft:iron_tier_destructible`), 검/철퇴 태그(`is_sword_item_destructible`)는 커스텀 블록의 드롭과 페널티에 아무 영향이 없다(MCPE-189586). `minecraft:is_shears_item_destructible`은 2026-08쯤 수정됐다. "맞는 도구일 때만 드롭" 옵션은 없다. 블록 태그(`is_pickaxe_item_destructible`, 등급)는 채굴 속도용, 아이템 태그(`minecraft:is_pickaxe`, `minecraft:diamond_tier`, 아이템 `minecraft:tags`의 커스텀 태그)는 루트 조건/레시피용이다. 드롭 여부는 루트 테이블만이 결정한다.
 - **`minecraft:digger` 한계(2026-02 기준)**: digger가 있는 커스텀 아이템은 바닐라 블록에 대해 항상 맞는 도구로 취급되어(커스텀 검이 돌을 더 빨리 캠) 등급과 무관하게 드롭한다. 내구도를 깎지 않고 정수 속도만 지원하며(바닐라 검 속도 불가), `sword_efficient` 블록 태그나 커스텀 등급은 없다. 1인칭 도구 애니메이션도 깨져 있다. 스크립트로 내구도를 깎을 수 있지만 API 호출이 10회 넘게 들고 즉시 파괴 블록을 거를 수 없다. `use_efficiency`는 1.20.30부터 동작한다. 커스텀 블록에서 도구 내구도 감소는 스크립트로 해야 한다.
@@ -121,9 +131,10 @@ sources:
 - **기본**: `"minecraft:loot": "loot_tables/..."`로 지정한다. 커스텀 테이블을 쓰면 직접 나열하지 않는 한 블록 자신이 떨어지지 않으며, 아이템과 블록을 둘 다 떨구려면 풀을 두 개 쓴다. 퍼뮤테이션 안의 루트 테이블도 동작한다. 엔트리 이름은 실제 아이템 ID여야 한다(`item:xyz` 형식이 됐다는 보고와 네임스페이스 문제라는 의견이 있어 미해결). `set_data` 함수와 `count {min,max}`로 데이터 값 드롭(예 눈덩이 data 2)을 만든다.
 - **`match_tool`**: `minecraft:match_tool_filter_all/any/none`에 아이템 태그(예 `["minecraft:is_shears"]`)를 준다. `"count": 1`이 없으면 빈손도 매칭된다. 들고 있는 아이템이 필요하므로 잎 루트는 재현할 수 없다. 등급 전용 드롭은 허용 곡괭이를 `items` 목록에 나열한다. 26.30부터(사용자 보고) match_tool 때문에 광석이 폭발이나 빈손으로 떨어지지 않고, `match_tool_filter_none`으로 "빈손" 조건을 더는 표현할 수 없으니 스크립트를 쓴다. Count 1 드롭은 폭발을 무시하며, 피스톤이나 지지 상실은 두 풀을 모두 떨굴 수 있으니 정확히 제어하려면 onBreak를 쓴다.
 - **실크터치**: 하드코딩되어 루트 테이블을 무시하고, 빈 루트 테이블로도 막을 수 없다. 우회법은 `world.beforeEvents.playerBreakBlock`을 취소하고 `system.run`에서 `block.setType("minecraft:air")`와 소리 재생, 기본 드롭을 없애고 실크터치를 확인하는 스크립트로 아이템 생성, 또는 `onBreak`에서 공기로 교체다. 위키: https://wiki.bedrock.dev/meta/blocks-items-qna#disabling-silk-touch.
-- **포춘**: 루트 테이블로 바닐라 포춘 공식을 재현하거나 확실하게 너프할 수 없으니 스크립트를 권한다. 위키의 인챈트 매칭은 레벨 2까지만 된다.
+- **루트 테이블 없음과 빈 테이블**: 루트 테이블을 지정하지 않은 블록은 자신을 떨어뜨리고, 아무것도 떨어뜨리지 않으려면 빈 루트 테이블을 쓴다.
+- **포춘**: 루트 테이블로 바닐라 포춘 공식을 재현하거나 확실하게 너프할 수 없으니 스크립트를 권한다. 위키의 인챈트 매칭은 레벨 2까지만 된다. 블록용 포춘 루트 함수는 없고(몹용 looting만 있음) 인챈트 레벨별 풀이나 포춘 조건을 단 `set_count` 여러 개로 근사한다.
 - **광석 XP**: XP는 루트로 못 주므로, `onPlayerBreak`에서 실크터치가 아니면 `minecraft:xp_orb`를 생성하는 스크립트를 쓴다(https://wiki.bedrock.dev/blocks/ore-loot-tables#xp-reward-script). 합의안은 아이템은 루트 테이블, XP만 스크립트다. 스크립트에서는 `getLootTableManager()`로 블록 + 도구 루트를 읽을 수 있다(https://stirante.com/script/server/2.10.0/classes/LootItemCondition.html).
-- **바닐라 루트 변경 불가**: 바닐라 블록 드롭은 26.50의 새 "데이터 드리븐" 바닐라 블록 외에는 바꿀 수 없다. 드롭을 지우고 스크립트로 생성하는 방식만 있다. 묘목 확률도 잎 파괴 스크립트로 바꾼다. 조각된 책장 루트는 간접적으로만 된다.
+- **바닐라 루트 변경 불가**: 바닐라 블록 드롭은 26.50의 새 "데이터 드리븐" 바닐라 블록 외에는 바꿀 수 없다. 드롭을 지우고 스크립트로 생성하는 방식만 있다. 묘목 확률도 잎 파괴 스크립트로 바꾼다. 조각된 책장 루트는 간접적으로만 된다. 2026-10-24에도 바닐라 블록 루트는 덮어쓸 수 없어 스크립트로 드롭한다는 답이 나왔다. Poplar 업데이트의 새 블록은 데이터 드리븐이 아니라는 보고가 있고(single report), 바닐라 블록 정의는 게임의 바닐라 BP에도 없다.
 - **상태별 드롭**: 떨어진 아이템 텍스처는 상태별로 바뀌지 않으니 별도 아이템이 필요하다. 낙엽 더미식 블록은 상태마다 루트 테이블을 두는 것이 스크립트보다 쉽다.
 - **업적**: 행동 팩이 있어도 업적을 유지하려면 매니페스트에 `"metadata": {"product_type": "addon"}`를 둔다.
 
@@ -136,7 +147,7 @@ sources:
 #### support와 connection_rule
 
 - **`minecraft:support`**: `{"shape": "fence"|"stair"}`. 블록에 무엇이 붙을 수 있는지만 정하고 충돌과는 무관하다. 횃불, 레버, 버튼, 레드스톤 가루가 면에 붙는 것을 막는다. `stair`에 cardinal_direction/vertical_half가 없으면 어떤 면도 꽉 찬 것으로 치지 않는다. fence는 측면을 막고 윗면만 허용한다. 트레이트가 없으면 횃불을 붙일 수 없다. 퍼뮤테이션에는 쓸 수 없다. 커스텀 울타리에서 `{shape:"fence"}`는 자기 연결을 깨뜨린다. 바닐라 면 지지 유형은 none, center, edges, both다(압력판은 윗면 center, 버튼 both, 문 edges, edges는 퇴비통과 가마솥 윗면에만 있음).
-- **`minecraft:connection_rule`**: 1.21.130 베타 실험에서 26.0 안정이 됐고 format 1.26.0+가 필요하다. 이 블록에 무엇이 연결되어 오는지를 정하며, 이 블록이 무엇에 연결되는지가 아니다. `accepts_connections_from`: `"none"`(울타리/벽/판유리/창살 연결 차단, 자기 타입 연결도 막음, 커스텀 식물 등에 유용), `"only_fences"`(나무 울타리 + 트레이트/태그가 있는 커스텀만, 판유리·벽·창살·네더벽돌 울타리 제외), `"all"`(모든 울타리, 벽, 판유리, 창살, 커스텀). "같은 블록" 옵션이 없어 자기끼리 연결하려면 스크립트나 컬링이 필요하다. `enabled_directions`는 퍼뮤테이션의 울타리 문에 쓸 수 있지만 크래시(MCPE-236302)도 있었고 무시하라는 조언도 있다. 퍼뮤테이션별 필터는 안 되며 스크립트로 읽을 수 없다. 문서: https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/traits/connection?view=minecraft-bedrock-stable.
+- **`minecraft:connection_rule`**: 1.21.130 베타 실험에서 26.0 안정이 됐고 format 1.26.0+가 필요하다(1.26.0 미만 블록에서는 "experimental"로 실패하니 1.26.10 같은 값으로 올린다). 이 블록에 무엇이 연결되어 오는지를 정하며, 이 블록이 무엇에 연결되는지가 아니다. `accepts_connections_from`: `"none"`(울타리/벽/판유리/창살 연결 차단, 자기 타입 연결도 막음, 커스텀 식물 등에 유용), `"only_fences"`(나무 울타리 + 트레이트/태그가 있는 커스텀만, 판유리·벽·창살·네더벽돌 울타리 제외), `"all"`(모든 울타리, 벽, 판유리, 창살, 커스텀). "같은 블록" 옵션이 없어 자기끼리 연결하려면 스크립트나 컬링이 필요하다. `enabled_directions`는 퍼뮤테이션의 울타리 문에 쓸 수 있지만 크래시(MCPE-236302)도 있었고 무시하라는 조언도 있다. 퍼뮤테이션별 필터는 안 되며 스크립트로 읽을 수 없다. 문서: https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/traits/connection?view=minecraft-bedrock-stable.
 - **connection_rule과 회전 버그**: Mojang 우회법은 `enabled_directions`에 transformation 후 방향을 넣는 것이다(예 rotation [0,180,0]에 `"enabled_directions":["north"]`). `minecraft:cardinal_connections` 트레이트를 더해도 됐다. base components의 connection_rule에서 `minecraft:connection_north` 등을 조회하면 모두 false가 나오고 업데이트 루프로 크래시할 수 있다. 연결은 회전을 무시한다(MCPE-235806). 새 트레이트로 멀티플레이가 깨지던 문제(울타리 연결 MCPE-235104)는 26.0 릴리스에서 수정됐다.
 - **커스텀 울타리와 바닐라**: 커스텀 울타리가 바닐라 네더벽돌 울타리와 연결되려면 `minecraft:has_fence_connections` 태그가 필요하다(바닐라 네더 울타리는 나무 울타리와 연결되지 않음). 판유리/벽이 커스텀 블록에 연결되는 것을 막는 태그는 26.0 전에는 없었다. 바닐라 `minecraft:connection_up/down`은 프리뷰에서 일부 바닐라 블록에 나타났지만 커스텀 블록은 쓸 수 없다.
 - **`tag:one_way_collidable`**: 블록 안의 플레이어를 밀어내지 않게 한다(https://wiki.bedrock.dev/blocks/vanilla-block-tags).
@@ -167,6 +178,7 @@ sources:
 - **producer 버그**: 퍼뮤테이션이 바뀌어도 출력 방향이 갱신되지 않고(MCPE-242205), 인접 가루를 제대로 향하지 않는다(MCPE-242204). 강한 출력 요구 조건(MCPE-234635)과 방출 갱신(MCPE-234647)은 2026-03 프리뷰에서 수정됐다. 퍼뮤테이션에서 신호 세기를 바꿔도 적용되지 않는다는 보고가 있었다.
 - **`minecraft:redstone_consumer`**: `min_power`, `propagates_power`. format 1.26.0+와 `onRedstoneUpdate`(`e.powerLevel`) 커스텀 컴포넌트를 함께 쓰며, 매 틱 검사보다 싸다(26.0 안정). `propagates_power`를 켜지 않으면 꽉 찬 지오메트리여도 전도하지 않는다(`redstone_conductor`로 기본값이 바뀌지 않음, MCPE-232715 의도된 동작). 측면 가루가 연결되려면 `redstone_conductivity.redstone_conductor`가 필요하다. consumer는 방향성이 없어 리피터를 만들 수 없고, 가루를 꺾거나 끌어당길 수 없다. 옆에 놓인 레드스톤 횃불로도 켜진다(바닐라 레드스톤 램프와 다름). consumer이기도 한 블록은 비교기 출력을 낼 수 없다.
 - **onRedstoneUpdate 주의**: 첫 설치와 청크 로드에도 발생하므로 문/뚜껑문 같은 토글 블록은 변화를 감지할 별도의 전원 상태가 필요하다. 베타의 `firstUpdate` boolean이 초기 로드 이벤트를 거른다(2026-07에도 베타). `previousPowerLevel`은 consumer의 `min_power`보다 작을 수 있고(문서 오류), 청크가 틱을 시작할 때 첫 업데이트에서는 0이다. 레드스톤 동작에 onTick을 쓰지 않는다.
+- **전원 상실과 전도**: 전원 상실 감지는 consumer `min_power` 0으로 한다. 레드스톤 업데이트는 전원 변화 외에도 발생한다(https://wiki.bedrock.dev/blocks/block-events#redstone-update). 전도하지 않는 커스텀 블록은 반대편 버튼 신호를 막는다(redstone-conductivity 문서). conductor 설정이 전도를 보장하지 않는다는 불만도 있다.
 - **켜짐/꺼짐 광석**: `pro:lit` 상태와 `query.block_state('pro:lit') == true` 퍼뮤테이션으로 light_emission과 텍스처를 바꾸고, random tick이나 tick으로 되돌린다.
 
 ### 기타 컴포넌트
@@ -177,11 +189,13 @@ sources:
 - **`minecraft:crafting_table`**: 커스텀 조합 UI를 준다(https://wiki.bedrock.dev/blocks/block-components#crafting-table). 화로 컴포넌트는 없다. 화로가 양동이를 돌려주는 것은 인벤토리 변경 스크립트로 한다.
 - **`minecraft:map_color`, `minecraft:display_name`**: 블록 지도 색을 지정한다(바닐라 블록 지도 색은 바꿀 수 없음). `BlockMapColorComponent`는 바닐라 블록에서 동작하지 않는다(MCPE-240722). 이름 조합은 localization 쪽이 아니라 display_name 컴포넌트 안에서 한다. `Block#localizationKey`가 display_name을 무시하던 문제(MCPE-235802)는 수정됐다.
 - **`minecraft:flower_pottable` + `minecraft:embedded_visual`**: format 1.21.124+가 필요하다(이전엔 식물이 화분 위에 얹힘). 모든 퍼뮤테이션에 지오메트리 + material_instances가 있어도 root에 따로 있어야 한다(MCPE-237910). 1.26.20부터 퍼뮤테이션에서는 금지된다. 화분 고정/픽블록/투명 버그(234585/234586/234599)는 수정됐다.
-- **`minecraft:chest_obstruction`**: 상자, 엔더, 덫, 구리 상자에 적용되고 셜커에는 아니다. `"shape"` 모드는 충돌 박스를 쓰며 origin [-7,0,-7] size [14,8,14]와 겹치면 실패한다. 여러 박스는 하나의 AABB로 합쳐지고 transformation을 따른다. 1.26 이전 형식에서는 퍼뮤테이션 차이를 무시한다. Kaioga 계단은 never로 둔다.
-- **태그(conflicting)**: 이전 형식은 블록 태그를 `"tag:ns:name": {}` 컴포넌트로 쓴다(아이템/바이옴은 `minecraft:tags`). format 1.26.20부터는 `"minecraft:tags": ["ns:tag"]` 배열이 대체하고 새 형식에서는 `tag:*`를 못 쓰며, 1.21.130에는 `minecraft:tags`가 없다. 다만 1.26.20 무렵 반대로 배열이 로드되지 않고 `tag:` 형식이 필요했다는 보고가 있어 **conflicting**이다(block-format-history 확인). 태그 이름의 슬래시 허용은 확인되지 않았다. 레시피용 판자 태그는 planks 태그를 가진 블록 아이템이 필요하다. `query.block_neighbor_has_any_tag`/`block_has_any_tag`는 더 쓸 수 없다.
+- **`minecraft:chest_obstruction`**: 상자, 엔더, 덫, 구리 상자에 적용되고 셜커에는 아니다. `"shape"` 모드는 충돌 박스를 쓰며 origin [-7,0,-7] size [14,8,14]와 겹치면 실패한다. 여러 박스는 하나의 AABB로 합쳐지고 transformation을 따른다. 1.26 이전 형식에서는 퍼뮤테이션 차이를 무시한다. Kaioga 계단은 never로 둔다. format 1.26.20에서 `minecraft:chest_obstruction`이 블록을 깨뜨렸다는 보고가 있다(미해결, single report).
+- **태그(conflicting)**: 이전 형식은 블록 태그를 `"tag:ns:name": {}` 컴포넌트로 쓴다(아이템/바이옴은 `minecraft:tags`). format 1.26.20부터는 `"minecraft:tags": ["ns:tag"]` 배열이 대체하고 새 형식에서는 `tag:*`를 못 쓰며, 1.21.130에는 `minecraft:tags`가 없다. 다만 1.26.20 무렵 반대로 배열이 로드되지 않고 `tag:` 형식이 필요했다는 보고가 있어 **conflicting**이다(block-format-history 확인). 더 최근인 2026-08~09 보고는 1.26.20+에서 `"minecraft:tags": [...]` 배열이 맞고 옛 `tag:` 키는 스키마 오류이며, `minecraft:tags` 파싱 오류는 format 1.26.20 이상으로 올려 해결된다고 확인한다. 태그에는 네임스페이스를 붙인다(`Block.getTag`). 태그 이름의 슬래시 허용은 확인되지 않았다. 레시피용 판자 태그는 planks 태그를 가진 블록 아이템이 필요하다. `query.block_neighbor_has_any_tag`/`block_has_any_tag`는 더 쓸 수 없다.
 - **leashable**: 기본 `[0,0,0]`은 블록 중심이어야 한다. 채굴 파괴 속성 이름은 잘못 지어져 있다. 걸 곳(hook)이 없는데도 스케줄 틱이 발생할 수 있다.
 - **술퍼 큐브(26.20 프리뷰)**: `minecraft:sulfur_cube_archetype_bouncy` 태그를 준 커스텀 블록을 집는다(https://wiki.bedrock.dev/items/vanilla-item-tags). material_instances 블록이 아주 작게 그려지던 문제(MCPE-238028)는 2026-05-14에 수정됐다.
 - **쿠션**: 꽃/잎 쿠션은 커스텀 블록을 고체로 취급한다.
+- **식물과 아래 잔디**: 커스텀 식물의 `light_dampening`이 0이 아니면 아래 잔디가 흙이 된다(기본 0이면 안전). 2026-05에는 `collision_box: false`여도 흙이 됐다(고체성 변경 대기).
+- **inside_block_notifier**: 엔티티의 `minecraft:inside_block_notifier`는 커스텀 블록 상태를 조건으로 쓸 수 없다.
 - **몹 스폰**: 오래된 형식의 커스텀 풀블록 위에는 몹(커스텀 포함)이 스폰되지 않았지만 format 1.21.90+에서 고쳐졌다(한 사용자는 1.26.0 필요). 블록이 고체/불투명이어야 한다. 한 보고자는 커스텀 블록을 바이옴 `top_material`로 쓰면 엔티티가 스폰되지 않는다고 했다(2026-06).
 - **trial spawner**: 자연 몹 스폰 규칙이 켜져 있어야 스폰한다. 우회법은 BP spawn_rules로 자연 적대 몹 스폰을 막는 것이다(format 1.8.0 `minecraft:spawns_on_block_filter: ["minecraft:deny"]` / weight 0). 볼트의 ominous setblock과 루트는 위치로 시드가 정해진다.
 - **컴포넌트 정리 순서(ciosciaa 제안)**: METADATA(display name, loot, transformation, random offset, tags) → PRESENTATION(geometry, material instances, item visuals, embedded visuals, destruction particles, map color) → PHYSICS(selection/collision box, friction, light dampening/emission, precipitation, destructible by mining/explosion, liquid detection, flammable, movable) → RELATIONS(placement filter, replaceable, support, connection rule) → FEATURES(redstone, crafting table, leashable, flower pottable) → EVENTS(tick, fall-on).
@@ -213,4 +227,5 @@ sources:
 - **불가능(엔티티나 스크립트로 대체)**: 낙하/중력 블록(같은 텍스처의 커스텀 낙하 엔티티), 애니메이션 컨트롤러와 연속 애니메이션, 상자/컨테이너(26.50 block_entity 이전), 표지판/텍스트(뼈 기반 "Primitive Shapes" 텍스트가 임시 대안), 커스텀 유체, 방벽 가시성, 엔드 관문 효과, 벽 너머로 보이는 블록, 붙을 수 없는(사다리/버튼식) 비고체, 몹 경로 차단(엔티티 쪽 `behavior.avoid_block`이 결정), 바닐라 지도 색 설정, 바닐라 블록 수정/교체(상자 등, 같은 ID로 바꿀 수 없음), 디스펜서 감지와 디스펜서식 동작(커스텀 디스펜서를 다시 만드는 것 외), 블록에서 XP 드롭(스크립트 필요), 보이지 않는 호박(텍스처가 검게 됨), 이웃 변화 이벤트(onNeighbourUpdate, ".60/.70쯤" 예상).
 - **엔티티 대안 패턴**: 상호작용 가구, 아이템 진열대, 수납 서랍, 받침대는 보이지 않는 엔티티로 만든다(설치 시 소환, 파괴 시 제거, 충돌은 엔티티 컴포넌트). 인벤토리 블록 = 인벤토리 엔티티이며 `player.openInventory`는 없고, 상호작용 경로에서 엔티티가 죽지 않게 해야 한다. 엔티티 상자는 닫을 때 디스폰하고 인벤토리를 스크립트로 저장할 수 있지만 엔티티가 많으면 렉이 생긴다. 상태 전환 트릭은 블록을 숨기고 상호작용 불가 엔티티를 소환한 뒤 지우고 새 상태를 설정하는 것이다. `/kill @e`에서 지키려면 최소 체력 1을 주고, `/tp`는 좌표를 저장해 다시 텔레포트하는 스크립트로만 막을 수 있다. 가구 엔티티를 한 번 더 클릭해야 하는 것은 히트박스가 작아서이니 히트박스를 키우거나 엔티티 상호작용을 추적한다. 통(barrel) 템플릿은 엔티티 컨테이너 + 블록 상태다(https://github.com/Alien-Edds/Barrel).
 - **커스텀 머리**: 16방향, 착용 가능. 충전된 크리퍼 드롭은 하드코딩이고 위더 해골 루트만 데이터 드리븐(`chance` 조건)이다. 블록 지오메트리에 Molang이 없어 머리 뼈는 4개뿐이다. N-way 회전이 스크립트를 줄인다.
-- **커스텀 나무 세트에 빠진 것(2026-02)**: 표지판 텍스트, 겹반블록 픽블록, 선반 아이템 표시/비교기, 소리 블록 소리, 용암 가연성(이후 1.26.20에서 추가).
+- **커스텀 나무 세트에 빠진 것(2026-02)**: 표지판 텍스트, 겹반블록 픽블록, 선반 아이템 표시/비교기, 소리 블록 소리, 용암 가연성(이후 1.26.20에서 추가). 2026-07에는 선반 불가, 보트 어색, 표지판 글쓰기 불가라는 평가였고, 2026-09-08에는 압력판 외 전부(계단, 울타리, 문, 버튼, 뚜껑문) 가능하다는 평가가 나왔다. 벗긴 통나무를 만드는 도끼 애니메이션은 바닐라 전용이다.
+- **그 밖의 불가능**: 빌보드형 블록(파티클 + 보이지 않는 지오메트리로 흉내), 솔질 블록, 바닐라 식물을 위한 흙 역할, 엔더 진주식 청크 로딩, 셜커 상자 동작, 블록 엔티티 이전의 새 저장 블록 타입.

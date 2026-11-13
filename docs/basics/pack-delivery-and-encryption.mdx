@@ -27,15 +27,19 @@ sources:
 ]
 ```
 
-`/packstack`으로 활성 팩을 확인하고 클라이언트 쪽은 `/packstack client`다. `server.properties`의 `texturepack-required=true`만으로는 팩이 강제되지 않는다.
+`/packstack`으로 활성 팩을 확인하고 클라이언트 쪽은 `/packstack client`다. `server.properties`의 `texturepack-required=true`만으로는 팩이 강제되지 않는다. 로그의 "Pack Stack - None"(모드 BDS 포함)은 팩이 world_behavior_packs.json/world_resource_packs.json에 등록되지 않았다는 뜻이다.
+
+- **Marketplace 팩과 서버**: Marketplace 팩은 BDS로 옮길 수 없고 Marketplace 애드온은 서버에서 쓸 수 없다. Realm에는 직접 설치한 애드온을 Realm 설정에서 추가한다. 콘솔에서 비 Marketplace 애드온을 쓰는 우회법은 Xbox에만 있고 PlayStation에는 없다.
 
 - **System packs (Preview 26.30.28 / Stable 26.30)**: BDS 폴더에 `system_behavior_packs`, `system_resource_packs`를 직접 만들면 안의 팩이 모든 월드에 자동 적용되고, 그 ID는 다른 팩이 재사용할 수 없다. 월드별 팩이 아니면 world_*_packs.json이 필요 없다. 로드 순서는 폴더명이 아니라 `pack.name` 순(테스트: "Resource Pack 1"이 "2"보다 먼저). 변경 로그 문구: "Added new pack folder to dedicated server for system packs".
 - **호스팅 서버**: `development_behavior_packs`의 팩은 월드에 복사되지 않는다. 팩을 포함한 월드를 업로드하거나 world_behavior_packs.json에 수동 추가.
 - **Windows 파일 권한 함정**: 다른 PC에서 복사한 월드 팩 json이 원본 ACL을 유지해 BDS(1.26.10.4/13.1/14.1)가 `Pack Stack - None`을 표시. bedrock_server 실행 사용자에게 팩과 json 읽기/쓰기 권한이 필요하다.
 - **BP `structures/` 폴더의 구조물을 BDS가 인식하지 못한** 사례는 Script API로 구조물을 만들어 회피. *(단일 보고)*
 - **Realm에서 팩이 동작하지 않을 때**: 재적용, manifest 버전 상향, 캐시 정리, 또는 팩을 `minecraftWorlds/<world>/behavior_packs/1`에 복사하고 `world_behavior_packs.json`을 지운 뒤 재업로드. level.dat의 `hasLockedBehaviorPack` 확인.
+- **Realm 팩 업데이트** *(상충)*: manifest `version`만 함께 올리고 UUID는 유지하라는 답변, 버전만 바꾸면 업로드 때 팩이 사라질 수 있고 Realm의 개발 애드온은 월드를 교체하지 않으면 갱신되지 않는다는 보고, UUID를 바꾸라는 짧은 답변이 엇갈린다. 1.21.13x 이후 베타 API 팩이 Realm/서버에서 로드되지 않는 문제와 제거한 팩의 등록이 월드에 남는 문제는 미해결이다. 로그 오류가 많은 팩은 Realm이 거부한다. PS5 월드 다운로드 실패에 대한 우회법이 공유됐다. *(미검증)*
 - **Aternos는 커스텀 스크립트 애드온을 받지 않는다.**
-- **개발 RP는 접속자에게 오래된 캐시**를 남기므로 RP 버전을 올려 재다운로드시킨다.
+- **접속자 RP 캐시**: 개발 RP는 접속자에게 오래된 캐시를 남긴다. 강제 다운로드 설정이어도 RP 버전을 올리고, 클라이언트는 설정 > 저장소에서 캐시를 지운다. 낡은 캐시는 아이템을 투명하게 만들고, 콘솔에서 커스텀 블록이 안 보일 때도 낡은 RP가 원인일 수 있다.
+- **BDS 전송 방식**: 26.60 이후 RakNet으로 BDS에 접속하면 "terracotta"/"door" 오류가 나고, 1.26.61.1에서는 `transport=raknet`이 오류이므로 `transport=nethernet`으로 설정한다. RakNet이 26.70에서 완전히 제거된다는 말은 *(미검증)*이다.
 - **피처드 서버만 리소스팩 수락 화면을 건너뛸 수 있다**(모든 피처드 서버가 쓰는 것은 아님).
 - **26.30 BDS에서 스크립트가 BDS 재시작 전까지 로드되지 않는** 보고.
 
@@ -49,7 +53,7 @@ sources:
 - **`/save`는 BDS 내장 백업 명령**으로 콘솔에서 사용 가능.
 - **채팅 소음 제거**: `enable-player-connection-text=false`, `enable-player-sleeping-text=false`, `enable-player-changed-skin-text=false`(게임 내 채팅만, 로그 아님). `disable-persona`는 "Internal use only"로 일부 클라이언트에서 동작하지 않는다.
 - **BDS에서 VV가 Fancy로 떨어질 때**: 클라이언트 VV를 끄는 server.properties 속성을 확인하고, 적용된 모든 RP가 manifest에 PBR capability를 선언했는지 확인.
-- **pack optimization (BDS)**: 26.40.27 프리뷰부터 JSON minify + brarchive CLI 플래그가 있고, JSON 설정의 `"unpack": true`로 언팩도 가능. 문서: https://learn.microsoft.com/en-us/minecraft/creator/documents/bedrockserver/pack-optimization?view=minecraft-bedrock-experimental
+- **pack optimization (BDS)**: 26.40.27 프리뷰부터 JSON minify + brarchive CLI 플래그가 있고, JSON 설정의 `"unpack": true`로 언팩도 가능. 문서: https://learn.microsoft.com/en-us/minecraft/creator/documents/bedrockserver/pack-optimization?view=minecraft-bedrock-stable (experimental 판도 있음)
 
 ### cdn_config.json 예
 
@@ -85,8 +89,22 @@ BDS를 팩 최적화 모드로 돌려 느슨한 파일을 아카이브로 묶고
 - **별도 RP에 의존하지 말고 자산을 번들**하라. JSON UI에서 `#form_button_texture`에 `%`(모듈로)를 쓰면 인증에 실패한다.
 - **실험적/베타 API 사용 불가**(DDUI 베타 폼 포함), Marketplace는 안정 API를 요구한다.
 - **.mcaddon에 여러 BP 금지.**
-- **1.26.50부터 업적 친화 `product_type: addon`은 Marketplace 팩 전용.**
+- **업적 친화 `product_type: addon`**: 1.26.50부터 Marketplace 팩 전용이 됐다는 답변과 26.52에서 다시 풀렸다는 보고가 *(상충)*한다([manifest.mdx](manifest.mdx)).
 - **비 Marketplace 애드온과 VV**: 위의 `pbr` 규칙 참조.
+- **UI와 플레이어 파일**: 정식 Marketplace 애드온은 UI 수정(JSON UI 포함)과 `player.entity.json` 편집을 담을 수 없다. 리소스팩, 맵, 동적 월드 상품은 가능하다(2025-10 ~ 2026-10 답변). Ore UI도 월드 템플릿 밖에서는 Marketplace UI 수정을 허용하지 않을 것이라는 2025-12 답변이 있다.
+- **총기와 군용 무기**: 총과 탱크는 Marketplace에서 명시적으로 금지됐고(2020), 2026-01에도 TOS상 불가라는 답변이 있었다. 2025-10에 사실적 총기 정책에 대한 모더레이터 설명이 공유됐다. *(미검증)*
+- **커스텀 디멘션**은 Marketplace 애드온에서 허용된다(2026-10, Marketplace 담당자 확인).
+- **출시 경로**: 개인에게는 사실상 닫혀 있어 퍼블리셔/스튜디오를 거친다. associate 가입 방식 언급은 정리되지 않았다. 파트너 프로그램: https://www.minecraft.net/en-us/partner . 게임 버전이 안정판이 되기 전에는 그 버전 기능으로 출시할 수 없다(2026-04).
+- **심사 사례**: 치트 같지 않은 기술 리소스팩은 통과 가능성이 있다. 미래 거래를 보여 주는 주민 UI 조정은 콘텐츠 부족으로 거절됐다(2026-06). 다른 팩의 확장팩은 원작자 허락이 필요하다(2025-10).
+- **유출**: Marketplace 개발 버전을 유출해 밴된 사례가 있다(2026-03). 콘텐츠 유출은 허용되지 않는다.
+- **2026 소식**: SFX 팩 콘텐츠 유형(2026-09 언급, 2026-11-11 공지), Creator Pages(2026-11-04), 2026-09-16 PS5/PC Marketplace 상품 미표시 장애.
+- **외주 관행**: 커뮤니티는 가격 조언을 하지 않는다(담합 우려, 2023). 계약 없는 선불 요구는 사기 패턴이다(2026). 옛 계약 관행으로 NDA와 수익 배분 20 ~ 85%가 보고됐다(2019 ~ 2022).
+
+### 비 Marketplace 배포 (2025-10 ~ 2026-07)
+
+- MCPEDL은 MCPEDL x CurseForge Rewards만 허용하고 Linkvertise 같은 링크 수익화를 금지한다. mcpedl은 CurseForge 연결로 파일을 가져온다.
+- 기부는 허용되고 페이월과 광고 게이트는 권장되지 않는다.
+- MIT 라이선스 팩은 출처를 표시하면 재배포할 수 있고, 라이선스가 없는 팩은 재사용할 수 없다. 팩을 무단 재게시한 앱은 Google Play 신고로 내려간 사례가 있다.
 
 ### 팩 보호와 난독화
 
@@ -100,7 +118,9 @@ BDS를 팩 최적화 모드로 돌려 느슨한 파일을 아카이브로 묶고
 - **`pack_optimization_version`은 JSON이 .brarchive로 변환되고 manifest format 3일 때만** 적용.
 - **로드되지 않는 폴더**: font, loot_tables, materials, scripts, sounds, subpacks, texts, textures(JSON 계열 폴더만 가능). 루트 테이블은 아카이브에서 동작하지 않아 Regolith 필터 v1.0.2에서 금지. 바닐라 팩에서는 원본 옆의 `.brarchive`가 우선하지만 애드온의 사용은 제한적(월드젠/레시피 류)이라는 2025-12 의견. brarchive만 있는 애드온이 콘솔에서 텍스처를 로드하지 못한 보고.
 - **26.50부터 바닐라 RP가 `.brarchive`로 배포**되고, 26.50.x부터 brarchive 안에 MCB로 인코딩된 데이터 파일이 들어가 패치 워크플로에 영향. JSONTE는 `x.brarchive#/dir/file.txt` 의사 경로로 지원 추가. 설치된 바닐라 팩에 fogs 폴더가 더는 없으므로 bedrock-samples 사용.
-- **도구**: Regolith 필터 `github.com/SprightGamesMC/regolith-filters/brarchive`(설정 `mode` replace/keep_both, `minify`, config.json에 `"url": "github.com/SprightGamesMC/regolith-filters", "version": "1.0.1"`), CLI https://github.com/Torrekie/br-ar (theaddonn 도구와 비교), BDS pack optimization(`"unpack": true`).
+- **도구**: Regolith 필터 `github.com/SprightGamesMC/regolith-filters/brarchive`(설정 `mode` replace/keep_both, `minify`, config.json에 `"url": "github.com/SprightGamesMC/regolith-filters", "version": "1.0.1"`), CLI https://github.com/Torrekie/br-ar (theaddonn 도구와 비교), 컴파일러 https://github.com/iamorimm/brarchive-compiler , BDS pack optimization(`"unpack": true`, MS 문서 stable 판 있음). 26.50 이후 바닐라 텍스처를 꺼내기가 어려워졌다.
+- **brpak과 MCB**: 게임 파일은 .brarchive, MCB, brpak 형태로만 배포된다. brpak은 압축하지 않고 엄격하게 검증하는 zip 변형이고, MCB는 스키마에 의존하는 인코딩이다. 제3자 팩도 쓸 수 있으나 Marketplace에서는 아마 불가하다. brarchive 안에는 파티클용 바이너리 형식도 있다. 2025-12 명세 gist: https://gist.github.com/tryashtar/4e62280c1611d744b6aa5d752ab69c15
+- **pack treatment 태그 (26.70.20 프리뷰)**: `mc-pack-optimization-enable-marketplace-download`, `mc-pack-optimization-purge-premium-on-startup`. Marketplace 콘텐츠를 풀지 않고 아카이브 상태로 읽게 하는 설정으로 보인다.
 
 ## Ore UI와 암호화 팩의 신뢰 판정 (실측)
 

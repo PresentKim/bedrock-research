@@ -12,7 +12,7 @@ sources:
 
 # 레시피, 스미딩, 아이템 태그
 
-레시피는 제작대, 화로류, 양조대 등에서 일어나는 아이템 변환을 정의한다. 레시피 사용에는 실험 기능 토글이 필요 없다. 모루 상호작용은 레시피 파일이 아니라 [아이템 정의](./items.mdx)가 다루고 베틀 변환은 현재 지원되지 않는다. 근거는 MS Learn 레시피 문서(a9fd1c0), Bedrock Wiki(0930b39)의 loot/recipes, bedrock-samples(15701fa9)의 바닐라 레시피, 커뮤니티 조사(2025-10~2026-10), 한 Dragonfly 기반 서버 기술 문서다.
+레시피는 제작대, 화로류, 양조대 등에서 일어나는 아이템 변환을 정의한다. 레시피 사용에는 실험 기능 토글이 필요 없다. 모루 상호작용은 레시피 파일이 아니라 [아이템 정의](./items.mdx)가 다루고 베틀 변환은 현재 지원되지 않는다. 근거는 MS Learn 레시피 문서(a9fd1c0), Bedrock Wiki(0930b39)의 loot/recipes, bedrock-samples(15701fa9)의 바닐라 레시피, 커뮤니티 조사(2025-10~2026-11), 한 Dragonfly 기반 서버 기술 문서다.
 
 ## 1. 구조와 최소 예제
 
@@ -63,7 +63,7 @@ sources:
 
 ### 레시피 해금
 
-1.20.10 이후 플레이어가 레시피를 해금한다. manifest의 `min_engine_version`이 1.20.11 이상(1.20.30 권장)이어야 한다. `unlock` 배열은 `{ "item": ..., "data": ...}`(인벤토리에 그 아이템이 있으면 해금)와 `{ "context": ... }`(`AlwaysUnlocked`, `PlayerInWater`: 처음 물에 들어갈 때, `PlayerHasManyItems`: 인벤토리에 10개 넘는 아이템)를 쓴다. 제작대는 `"unlock": {"context": "AlwaysUnlocked"}`다.
+1.20.10 이후 플레이어가 레시피를 해금한다. manifest의 `min_engine_version`이 1.20.11 이상(1.20.30 권장)이어야 한다. 레시피가 보이지 않으면 `"unlock": { "context": "AlwaysUnlocked" }`를 넣는다. `unlock`을 빼서 레시피 책에서 숨기려 하면 레시피가 크래시한다. 태그로 해금하는 기능은 폐기됐다는 보고가 있다(2026-10). `unlock` 배열은 `{ "item": ..., "data": ...}`(인벤토리에 그 아이템이 있으면 해금)와 `{ "context": ... }`(`AlwaysUnlocked`, `PlayerInWater`: 처음 물에 들어갈 때, `PlayerHasManyItems`: 인벤토리에 10개 넘는 아이템)를 쓴다. 제작대는 `"unlock": {"context": "AlwaysUnlocked"}`다.
 
 ## 3. 규칙과 제한 (커뮤니티 보고)
 
@@ -71,12 +71,20 @@ sources:
 - 문제가 되는 바닐라 아이템 ID(재료 위치에서 변형까지 매칭됨): anvil, bucket(우유, 용암, 가루눈, 물고기, 물 양동이), coal(목탄), cobblestone_wall(모든 벽), dirt(거친 흙), prismarine, purpur_block, quartz_block, red_sandstone, sand(붉은 모래), sandstone, sponge(젖은 스펀지), stone(화강암/섬록암/안산암과 매끄러운 것), tnt(수중 TNT). `"minecraft:stone:0"`처럼 `:0`을 붙인다. 점검용 정규식은 `"(?:minecraft:)?(?:anvil|bucket|coal|cobblestone_wall|dirt|prismarine|purpur_block|quartz_block|red_sandstone|sand|sandstone|sponge|stone|tnt)(?!:0)"`다.
 - 바닐라 레시피 덮어쓰기는 같은 `description.identifier`(예 `minecraft:bread`)와 유효한 내용이 필요하고 빈 파일은 아무 일도 하지 않는다. 결과를 `minecraft:air` count 0으로 두라는 제안이 있었다. 한 사용자는 다른 애드온에서만 빵을 덮어쓸 수 있었다(캐시 의심, manifest 버전을 올리거나 새 월드). 근본 원인은 밝혀지지 않았다.
 - 레시피 책에서 숨기되 제작은 가능하게 하는 방법은 찾지 못했다(아이디어는 해금 아이템이나 커스텀 제작대 태그). 커스텀 제작 블록에서 제작 태그 여러 개를 쓰면 레시피가 보이지 않을 수 있다(MCPE-240719).
+- 커스텀 제작대는 블록의 `"minecraft:crafting_table": {"crafting_tags": ["ns:tag"], "table_name": "..."}`와 레시피의 `"tags": ["ns:tag"]`를 맞춘다. 잠겨 보이는 레시피는 `AlwaysUnlocked` unlock context로 해결하며 이 컴포넌트는 2026-08 기준 안정판이다.
+- 바닐라 레시피는 같은 파일 이름(예: `torch.json`)과 같은 식별자로 덮어쓴다. 같은 레시피가 중복되면 바닐라가 먼저 등록되어 이긴다는 보고가 있다.
+- 미리 채운 책은 레시피 결과가 될 수 없어 루트 테이블로 지급한다. 모든 슬랩을 묶는 범용 태그는 없다. 해금 규칙은 [MS Learn 레시피 소개](https://learn.microsoft.com/en-us/minecraft/creator/documents/recipeintroduction?view=minecraft-bedrock-stable#recipe-unlocking)에 있다.
 - 레시피 결과 이름: `set_name`은 동작하지 않고 제작 결과 스크립트 이벤트도 없다.
 - 폴더 이름 오타(`recepies`)는 레시피를 조용히 무시한다.
+- 한 파일에 같은 결과의 레시피 두 개를 두면 하나가 다른 것을 덮어쓰고 crafter와 빠른 제작이 이상하게 동작할 수 있다는 보고가 있다(위의 "여러 레시피가 같은 아이템을 출력할 수 있다"와 비교). 레시피 `tags`에 `crafting_table`이 없으면 제작되지 않고, 태그를 `"null"`로 바꿔 그 레시피를 끈 사례도 있다. 다른 애드온의 레시피는 팩 순서로 덮어쓴다.
+- 태그 재료는 `"B": { "tag": "minecraft:egg" }`처럼 쓴다. `"item": {"tag": ...}` 객체는 "Recipe ingredient is invalid: Must contain either a valid item name or item tag"를 낸다. 커스텀 태그는 `namespace:id`로 쓴다. 블록 태그는 레시피 재료로 쓸 수 없고 변형마다 항목이 필요하다. 커스텀 블록 태그 문제가 26.10에서 고쳐졌다는 말이 있다.
+- 염료로 다시 칠하는 레시피는 모든 대상 아이템에 `"minecraft:tags": {"tags": ["ns:tag"]}`를 주고 shapeless 재료와 `unlock`에 `{"tag": "ns:tag"}`를 쓴다(바닐라 예 bedrock-samples `behavior_pack/recipes/bowl.json`).
+- 양조 레시피는 format 1.20.10 `minecraft:recipe_brewing_mix`, tags `["brewing_stand"]`, input/reagent/output으로 쓴다(예: `minecraft:potion_type:awkward` + `minecraft:speckled_melon`, 결과 `minecraft:potion_type:healing`). 입출력은 겹치지 않는 아이템이어야 하고 출력은 항상 하나이며 데이터 값을 쓸 수 없다.
+- 자체 레시피와 연료를 가진 커스텀 화로 컴포넌트는 없다. 자체 레시피 태그를 가진 커스텀 제작대나 스크립트를 쓰고, "Better Smelters" 애드온이 템플릿을 제공한다. 제련 후 남는 커스텀 양동이는 명령/스크립트로 처리한다.
 
 ## 4. 스미딩
 
-- 업그레이드 레시피는 `minecraft:recipe_smithing_transform`(`tags:["smithing_table"]`, template/base/addition/result)이다. base 아이템에 태그 `minecraft:transformable_items`(다이아→네더라이트), 커스텀 템플릿 태그 `minecraft:transform_template`를 쓴다. `addition`은 `minecraft:netherite_ingot`이어야 하고(하드코딩) `{"tag": ...}` 형태는 동작하지 않는다(format 1.26.50 시험). 바닐라 아이템에는 태그를 붙일 수 없다. 아이템 파일이 없는 블록에는 아이템 태그가 없다. 예전 커스텀 스미딩 레시피는 두 번째 슬롯에 `<ns>:netherite_ingot`이 필요했고 이것은 1.18.30 이후 동작하지 않는다.
+- 업그레이드 레시피는 `minecraft:recipe_smithing_transform`(`tags:["smithing_table"]`, template/base/addition/result)이다. base 아이템에 태그 `minecraft:transformable_items`(다이아→네더라이트), 커스텀 템플릿 태그 `minecraft:transform_template`를 쓴다. `addition`은 `minecraft:netherite_ingot`이어야 하고(하드코딩) `{"tag": ...}` 형태는 동작하지 않는다(format 1.26.50 시험). 다만 26.40부터 커스텀 템플릿을 쓴 변환이 지원되고 `addition`이 태그 `minecraft:transform_materials`를 받는다는 2026-08-27 보고가 있어 **conflicting**이다. 2026-01-09에는 커스텀 base 아이템 스미딩이 동작하지 않았다. 바닐라 아이템에는 태그를 붙일 수 없다. 아이템 파일이 없는 블록에는 아이템 태그가 없다. 예전 커스텀 스미딩 레시피는 두 번째 슬롯에 `<ns>:netherite_ingot`이 필요했고 이것은 1.18.30 이후 동작하지 않는다.
 - 1.26.40의 base 아이템 제한: base가 방어구/장비가 아니면 `base item is not a piece of armor or equipment`가 나고 `minecraft:durability`가 없는 아이템은 실패한다(MCPE-242206, 2026-08-30 등록). 우회:
 
 ```json
@@ -84,12 +92,13 @@ sources:
 "minecraft:wearable": { "slot": "slot.armor.body" }
 ```
 
-  wearable이 있으면 몹을 때려도 내구도가 줄지 않는다. (confirmed)
+  wearable이 있으면 몹을 때려도 내구도가 줄지 않는다. (confirmed) 결과 아이템의 `minecraft:transformable_items` 태그도 그 아이템에 durability, enchantable, wearable 중 하나가 없으면 동작하지 않는다는 보고가 있다.
 
 ## 5. 아이템 태그
 
 - 바닐라 태그 목록은 Bedrock Wiki의 item-tags 페이지(ItemTypes를 도는 스크립트로 자동 생성)에 있고 바닐라 아이템 그룹은 vanilla-item-groups 페이지로 옮겨졌다. Mojang은 바닐라에 필요할 때만 태그를 추가한다. 동적 태그는 없으니 겹치지 않는 아이템 + 다이나믹 프로퍼티를 쓴다. 외부 모드의 액세서리 호환은 아이템 태그 하나인 경우가 있다.
 - 염소 뿔 변형은 전리품 `set_data`(무작위 `{min,max}` 또는 고정 `data`)로 정한다.
+- 커스텀 책을 조각된 책장에 넣으려면 맞는 아이템 태그를 준다. 바닐라 물고기에 없는 `minecraft:is_meat` 태그는 커스텀 물고기에 붙이지 않는다.
 
 ## 6. 사례: 레시피 잠금과 실시간 개방 (한 Dragonfly 기반 서버)
 

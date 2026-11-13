@@ -115,6 +115,7 @@ BP 컨트롤러는 `on_entry`와 `on_exit`에 슬래시 명령(`/say hi`), 엔�
 - 숨쉬기 대기: `math.cos(query.life_time * 120) * 10`(속도 120, 진폭 10)을 별도 루프 애니메이션으로 두고 팔다리 애니메이션과 분리한다.
 - 애니메이션 속도: `anim_time_update: "query.anim_time + query.delta_time * 1.05"`(상수 대신 `query.ground_speed`도 가능).
 - Molang에는 `%`가 없다("unrecognized token %"). `math.mod(a, b)`를 쓴다.
+- 끊김 없는 회전: Y 회전 키프레임 하나에 `math.mod(query.anim_time * 360, 360)`을 쓴다(빠르게 하려면 720). 0에서 360으로 가는 키프레임 루프는 끝과 시작 각도가 달라 튄다.
 - property 기반 부드러운 본 회전: pre-animation에서 `q.bone_orientation_trs(bone)`(`queryable_geometry` 필요, 특수 좌표계)로 `t.old_rotation`을 얻고 `v.rotation = math.lerprotate(t.old_rotation, q.property('pack:rotation_y'), q.delta_time)`로 한다. property 범위는 0~360이다. `q.bone_orientation_trs().r.y`는 -90~90(오일러)으로 제한되므로 완전한 360도 회전에는 z도 바꿔야 한다.
 - 랜덤 `loop_delay`: 랜덤 변수를 쓴 `loop_delay`는 업데이트 후 한 번만 무작위가 된다. 대안은 `override_previous_animation`과 더 긴 `animation_length`, 또는 비헤이비어의 랜덤 루프 타이머로 깜빡임을 일으키는 것이다.
 - 이징과 스냅: 한 본 채널 안의 축별 이징은 지원되지 않는다. Blockbench 키프레임이 0.833 등에 스냅되면 애니메이션 스냅 설정을 바꾼다(애니메이션 더블클릭). 인간형 애니메이션에서 머리·팔에 위치 키프레임을 두면 자세가 깨지니 위치 키를 지운다.
@@ -138,9 +139,17 @@ BP 컨트롤러는 `on_entry`와 `on_exit`에 슬래시 명령(`/say hi`), 엔�
 ## 회전
 
 - 목표를 향하기(투사체 pitch, yaw): 본에 `"rotation": ["query.target_x_rotation","query.target_y_rotation",0]`(화살은 `arrow.animation.json` 복사). `target_y_rotation`이 일부 경우 안 됐다는 보고가 있고, 플레이어 회전에 맞추려 애니메이션으로 돌리는 것은 잘못이니 BP에서 엔티티 회전을 설정한다.
+- `q.target_y_rotation`은 대략 `q.head_y_rotation(0) - q.body_y_rotation`이다. 플레이어 1인칭에서는 `query.camera_rotation`과 `target_x_rotation`, `target_y_rotation`이 0이다(MCPE-219473). `variable.player_x_rotation`은 pitch만 동작한다. 우회책은 일시정지 메뉴 페이퍼돌이 카메라 쿼리를 읽어 temp 변수 누수로 넘기는 것이다. 투사체 기울기에는 `query.vertical_speed*-12`도 대안이다.
 - 탈것의 시각 회전 고정은 `-q.body_y_rotation` 애니메이션 후 `query.movement_direction`, `q.position`, 삼각함수로 직접 계산한다(좌석이 회전 원점이 아니면 문제). `rotation.y = -q.body_y_rotation`으로 몸 일부를 독립적으로 돌리는 것은 불안정했다.
 - 컷신에서 머리가 돌지 않으면 루트와 같은 회전을 머리 본에도 적용한다. `playanimation`으로 몸 루트에 준 스케일은 머리에 영향을 주지 않으니 머리에 따로 설정한다.
 - 돌고래식 수영 방향은 컴포넌트가 아니라 애니메이션 수식이다(bedrock-samples의 `dolphin.animation.json`).
+
+## 표현 기법
+
+- Bedrock 엔티티 애니메이션에는 카메라 애니메이션이 없다.
+- 날개 막 늘이기: 곡면 메시를 만들고 원점을 끝점에 둔 뒤 본 스케일로 늘인다.
+- 표정은 텍스처 교체나 스케일 0으로 숨기는 표정 모델로 만든다.
+- 긴 Molang 키프레임과 플립북 애니메이션은 Blockbench 편집기를 느리게 한다. Blockbench 애니메이션 작업 요령은 [모델링과 텍스처 도구](../tools/modeling.mdx)를 본다.
 
 ## 1인칭 애니메이션
 

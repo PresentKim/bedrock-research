@@ -8,7 +8,7 @@ sources:
 
 # 바이옴·차원·제한·버전 커뮤니티 보고
 
-커뮤니티 조사(2025-10-22 ~ 2026-10-23)에서 본 페이지의 앞 문서가 요약하지 못한 개별 보고를 모았다. 각 항목 끝의 `[uNNN 날짜]`는 조사 노트 번호와 보고 날짜이고, `(single report)`는 한 사람만 보고한 내용이다.
+커뮤니티 조사(2025-10-22 ~ 2026-11-13)에서 본 페이지의 앞 문서가 요약하지 못한 개별 보고를 모았다. 각 항목 끝의 `[uNNN 날짜]`는 조사 노트 번호와 보고 날짜이고, `(single report)`는 한 사람만 보고한 내용이다.
 
 ### 바이옴
 
@@ -18,13 +18,17 @@ sources:
   "minecraft:replace_biomes": {"replacements":[{"dimension":"minecraft:overworld","targets":["minecraft:plains"],"amount":1,"noise_frequency_scale":25}]}
   ```
 - **패치 모양**: 정사각형이거나 듬성듬성한 대체는 `noise_frequency_scale`(MS 예 25)을 올리고 `amount`를 낮추고 대상을 늘려 해결한다. "청크 경계" 정사각형은 디스크에 저장된 오래된 청크 때문이니 월드를 다시 만든다. 많은 바닐라 바이옴을 대체하면 월드 로딩이 느려진다. `/locate biome`은 반경이 약 500블록으로 제한되니 테스트할 땐 `amount`를 올리거나 멀리 텔레포트하고, 콘텐츠 로그에서 실제 로드 실패를 확인한다. 완전히 대체된 바닐라 바이옴은 `/locate biome`이 실패하므로 커스텀 바이옴을 찾는다.
+- **대체 동작 세부**: 같은 바닐라 바이옴을 대체하는 바이옴이 여럿이면 각 확률을 제어할 수 없다(기본 ocean 확률이 남음). 바닐라 ID로 BP 바이옴을 정의하면 덮어쓰기가 되지만 서버 쪽에는 블록 재료만 적용된다. 세계 전체를 한 바이옴으로 하려면 월드 템플릿에서 한 바이옴만 쓴다. 대체 후 바닐라 나무가 나오면 바이옴 파일 실수다. 높은 곳에 나오는 바이옴은 높이 나오는 바닐라 바이옴을 대체해야 하며 눈은 바이옴이 결정한다.
 - **차원(시기별)**: 2025-11에는 오버월드만 지원했다(네더/엔드 대체 없음). 2026-01에는 커스텀 네더 바이옴이 프리뷰에만 있었다. 문서상 네더 대체(`"dimension": "minecraft:nether"`, targets `soul_valley`, `basalt_deltas` 등)는 버그가 있다가 2026-05 프리뷰/핫픽스에서 수정됐다(MCPE-236399, 2026-05-21경). 커스텀 네더 바이옴에는 스크립트나 베타 모듈이 필요 없다. 엔드 커스텀 바이옴은 불가능하다. 비VV 조명에서 엔드 커스텀 바이옴은 오버월드 하늘을 보여준다(미해결).
 - **컴포넌트(1.21.110에서 동작 확인)**: `minecraft:climate`, `minecraft:overworld_height {noise_type}`, `minecraft:surface_builder {builder:{type:"minecraft:overworld", sea_floor_depth, sea_floor_material, foundation_material, mid_material, top_material, sea_material}}`(옛 `minecraft:surface_parameters` 대체). 네더는 `type: "minecraft:capped"`에 `floor_materials`, `ceiling_materials`, `beach_material`, `foundation_material`. `minecraft:surface_material_adjustments`는 피처가 아니라 바이옴 컴포넌트다(`minecraft:hell` 등 약 17개 바이옴이 피처 없이 표면 장식에 사용). 유효한 `noise_type` 프리셋(1.21.110 샘플): default, default_mutated, river, ocean, deep_ocean, lowlands, taiga, mountains, highlands, extreme, less_extreme, beach, stone_beach, mushroom, swamp(`forest`는 무효).
-- **지형 영향 없음**: `overworld_generation_rules`는 레거시/비동작이고, `minecraft:overworld_height`는 효과가 거의 없으며(카브 앤 클리프 이전 높이 파라미터는 사라짐), `sea_floor_depth`는 표면 층 두께만 바꾸거나 아무 효과도 없어 보인다(미해결). 바이옴 높이는 최대 약 128(noise 파라미터 정체)이다. foundation material은 심층암 층을 덮어쓰지 못하므로 "기반암까지" 블록은 실패한다. `multinoise_generation_rules`는 바닐라 바이옴에 대해 덮어쓸 수 있지만 커스텀 바이옴 배치에는 못 쓴다. 바닐라 바이옴 분포/noisemap은 노출되지 않는다. 바다 커스텀 바이옴은 `multinoise_generation_rules`, `overworld_height` `noise_type: ocean`, `generate_for_climates` 등이 필요하다는 조언이 있었지만 /locate로 못 찾았다(미해결).
+- **지형 영향 없음**: `overworld_generation_rules`는 레거시/비동작이고, `minecraft:overworld_height`는 효과가 거의 없으며(카브 앤 클리프 이전 높이 파라미터는 사라짐), `sea_floor_depth`는 표면 층 두께만 바꾸거나 아무 효과도 없어 보인다(미해결). 바이옴 높이는 최대 약 128(noise 파라미터 정체)이다. foundation material은 심층암 층을 덮어쓰지 못하므로 "기반암까지" 블록은 실패한다(그 아래는 동굴 바이옴이 맡으며, 피처로 돌을 교체하는 것만 된다). `multinoise_generation_rules`는 바닐라 바이옴에 대해 덮어쓸 수 있지만 커스텀 바이옴 배치에는 못 쓴다. 바닐라 바이옴 분포/noisemap은 노출되지 않는다. 바다 커스텀 바이옴은 `multinoise_generation_rules`, `overworld_height` `noise_type: ocean`, `generate_for_climates` 등이 필요하다는 조언이 있었지만 /locate로 못 찾았다(미해결).
 - **`minecraft:noise_gradient` 표면 빌더(1.26.30 신규)**: `noise_descriptor`(`name`, `first_octave`, `amplitudes`)와 `noise_block_specifiers`(`range` min/max)를 쓴다. 문서상 지형 아래 높이 범위용이다. 여러 블록 깊이의 층을 교체했고 diamond_block 범위 -1..-0.9는 나타나지 않았다. 옥타브와 범위의 의미는 미해결이다.
 - **태그와 바닐라 구조물**: 태그 자체는 아무 일도 하지 않고 스폰 규칙, 피처 룰, 지그소에 쓰인다. 바닐라 바이옴을 대체하면 마을, 신전, 난파선, 트라이얼 챔버를 잃는다(바닐라 ID/태그를 찾기 때문). 대체된 바이옴의 태그를 더하면 바닐라 구조물이 나온다(예 `plains` 태그는 평원 마을, 얼음 평원은 `ice_plains`와 `mutated` 둘 다). 바닐라 ID와 태그를 유지하면 구조물은 나오지만 커스텀 효과(비 등)를 잃는다. 대체 바이옴 태그를 자동 추가하는 Python 스크립트가 있다(마켓플레이스 비호환). 마을 생성은 바이옴 JSON으로 켜고 끌 수 있다(변형 선택 포함). 위키 태그 페이지는 의미 없이 나열만 하며, `tags.json` / `tags_per_biome.json`에서 생성되어 pale_garden이 재생성 전까지 빠져 있었다.
 - **동굴 바이옴**: 무성한 동굴/점적석/깊은 어둠을 대체하거나 표면에 맞춘 커스텀 "X-동굴" 바이옴을 만든다. 동굴 바이옴은 영역에 태그만 달므로 피처(cave_carver, snap_to_surface, ore, growing_plant, vegetation_patch)로 직접 꾸민다. 커스텀 피처로 동굴을 생성하는 것은 무겁다.
-- **풀 측면 색**: 커스텀 바이옴의 풀 윗면은 컬러맵을 쓰지만 측면은 terrain_textures에 고정돼 있어 색이 맞지 않는다(오래된 버그). `terrain_texture.json` `grass_side`에 `overlay_color`(`{"textures":[{"overlay_color":"#2eabf9","path":"textures/blocks/grass_side"}]}`)를 주는 우회법은 한 사람에겐 되고 다른 사람에겐 안 됐다. 커스텀 블록을 쓰는 우회도 있다.
+- **풀 측면 색**: 커스텀 바이옴의 풀 윗면은 컬러맵을 쓰지만 측면은 terrain_textures에 고정돼 있어 색이 맞지 않는다(오래된 버그). `terrain_texture.json` `grass_side`에 `overlay_color`(`{"textures":[{"overlay_color":"#2eabf9","path":"textures/blocks/grass_side"}]}`)를 주는 우회법은 한 사람에겐 되고 다른 사람에겐 안 됐다. 커스텀 블록을 쓰는 우회도 있다. 원인은 바닐라 grass_side 틴트가 최신 측면 틴트(dappled forest)를 쓰기 때문이며, 자기 terrain_texture 항목이나 grass side overlay 수정으로 해결된다(새 색은 기존 색 옆에 더해진다).
+- **클라이언트 바이옴 색**: 풀/잎/물/안개 색은 RP `biomes/<name>.client_biome.json`(`grass_color` 등)에서 정한다. 틴트는 grass, default_foliage, dry_foliage, water에만 적용되고 자작/가문비 잎은 컬러맵을 쓴다. `minecraft:map_tints`는 지도용이다.
+- **강수, 눈, 안개**: `"minecraft:precipitation": {"white_ash": 2.0}`는 climate 밖에 두며 바이옴 format 1.21.110 이상이 필요하다. `snow_accumulation [0,0]`이 안 먹었다는 2025-12 보고와 26.50 예제의 사용이 있다. 물 안개와 VV 색 안개는 클라이언트 바이옴이 안개 파일을 참조해 정한다(VV 안개 색은 하늘 지평선 색).
+- **실험 해제와 몹**: Custom Biomes는 2026-08-30 기준 실험 토글이 아니다. 유황 동굴 ID는 `sulfur_caves`다. 바이옴에 몹을 스폰하려면 엔티티마다 spawn_rules가 필요하다. 위키의 월드젠 바이옴 스키마는 MS Learn보다 낡았다.
 - **날씨와 대기**: 날씨는 전역이라 항상 비 오는 바이옴은 불가능하다(스크립트 검사나 충돌 파티클로 가짜 비). 음수 fog 값은 화면을 물들인다(바이옴 대기 트릭). 대체된 얼음 평원의 눈 레이어를 없애려면 temperature/downfall을 바꾼다. Realms에서는 수정한 늪 바이옴이 안 됐다(미해결).
 - **자료**: biomes 위키 개편 https://github.com/Supernova3695/nova_bedrock_wiki(patch-9), 바이옴 문서 https://bedrock.dev/docs/stable/Biomes. 옛 바이옴 템플릿 대신 현재 기술을 쓰고, 추가 바이옴은 파일을 모두 복제해 이름을 바꾼다. 슈퍼플랫 + 바이옴 스레드는 2026년에도 나무 문제를 빼면 동작한다.
 
@@ -32,13 +36,14 @@ sources:
 
 - **등록과 상태**: 스크립트 `system.beforeEvents.startup`에서 `event.dimensionRegistry.registerCustomDimension(id)`로 등록한다(startup 전용, `/reload`로 재실행 불가). 튜토리얼: https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/custom-dimension-api-tutorial?view=minecraft-bedrock-stable. 26.30에 실험에서 나왔고 2026-06-23에는 안정판/릴리스에 있었다(초기엔 불안정하고 렉).
 - **생성**: `void` 생성기("generator_type": "void")뿐이고 기본 바이옴은 `minecraft:ocean`이다(바다 몹이 스폰된다). 오버월드 지형/바이옴을 상속하지 않고, 오버월드 메커니즘을 가진 공허일 뿐이다. 구조물 세트와 피처 룰은 자연적으로 돌지 않는다. ocean 바이옴 태그 룰도 놓이지 않았다. 명령/스크립트로만 배치하며(지그소 + 스크립트 월드젠, 작은 추가물은 피처), 지형은 스크립트로 흉내 낸다. 이는 느리다: QuickJS noise와 큰 볼륨의 `Dimension.fillBlocks`가 병목이니 볼륨을 나누고 `system.runJob`으로 스케줄하며 네이티브 호출을 묶는다. 차원 바이옴은 런타임에 바꿀 수 없다(Editor 모드, 오프라인 Amulet API, Java→Bedrock Chunker 사용). 커스텀 바이옴으로 바꾸려다 게임 오류가 났다.
-- **JSON 차원 정의(26.50+)**: 프리뷰 26.50.25에 `BP/dimensions/<name>.json`이 추가됐다. 스크립트와 JSON 등록이 모두 동작하며 JSON이 스크립트 등록을 덮는다. 높이 범위와 기본 바이옴을 정하려면 JSON이 낫다. 스크립트 등록은 "당분간" 유지된다. 차원 경계가 오버월드 -64..320으로 묶이던 버그(MCPE-241528)는 고쳐져 -512..512가 돌아왔다(2026-08-18 체인지로그). 컴포넌트는 min_y/max_y 대신 `minecraft:dimension_height {min_y, height_range}`(Java 대응, 커뮤니티는 min/max 선호)로 바뀌었다. `minecraft:default_biome {biome}`는 확장을 위한 객체다. 26.45에서는 높이 한도를 설정할 수 없었다. 1.26.60 동작 예(스키마에서 도출, 스키마 검증기가 format_version을 잘못 표시할 수 있음):
+- **JSON 차원 정의(26.50+)**: 프리뷰 26.50.25에 `BP/dimensions/<name>.json`이 추가됐다. 스크립트와 JSON 등록이 모두 동작하며 JSON이 스크립트 등록을 덮는다. 높이 범위와 기본 바이옴을 정하려면 JSON이 낫다. 스크립트 등록은 "당분간" 유지된다. 차원 경계가 오버월드 -64..320으로 묶이던 버그(MCPE-241528)는 고쳐져 -512..512가 돌아왔다(2026-08-18 체인지로그). 컴포넌트는 min_y/max_y 대신 `minecraft:dimension_height {min_y, height_range}`(Java 대응, 커뮤니티는 min/max 선호)로 바뀌었다. `minecraft:default_biome {biome}`는 확장을 위한 객체다. 26.45에서는 높이 한도를 설정할 수 없었다. `minecraft:default_biome`은 26.50에 나왔고 JSON 차원 전용이며 커스텀 바이옴도 된다. 공허 차원에서도 바이옴이 안개/몹/색을 바꾸고 오버월드 낮밤과 동기화된다. format 1.26.50 예는 dimension_height -32/224, default_biome warm_ocean을 썼다. 1.26.60 동작 예(스키마에서 도출, 스키마 검증기가 format_version을 잘못 표시할 수 있음):
   ```json
   {"format_version":"1.26.60","minecraft:dimension":{"description":{"identifier":"ns:dimension"},"components":{"minecraft:clouds":{"height":-64},"minecraft:dimension_height":{"min_y":-512,"height_range":1024},"minecraft:generation":{"generator_type":"void"},"minecraft:default_biome":{"biome":"minecraft:forest"}}}}
   ```
-- **이전의 데이터 드리븐 차원 파일**: `minecraft:dimension`에 `minecraft:dimension_bounds`(min/max)와 `minecraft:generation`(void)를 쓴 format 1.18.0 파일은 vanilla 차원의 void 생성 등에 쓰였다(https://learn.microsoft.com/en-us/minecraft/creator/documents/datadrivenoverworldheight?view=minecraft-bedrock-stable). 1.26.20에서 여러 개 있으면 팩 로드가 크래시했고(MCPE-238456, 1.26.13에선 동작, 2026-05-14경 수정) 바닐라 차원에 커스텀 경계를 주면 오류가 났다. 공허 생성과 커스텀 생성을 겹치는 것은 불가능하다.
+- **이전의 데이터 드리븐 차원 파일**: `minecraft:dimension`에 `minecraft:dimension_bounds`(min/max)와 `minecraft:generation`(void)를 쓴 format 1.18.0 파일은 vanilla 차원의 void 생성 등에 쓰였다(https://learn.microsoft.com/en-us/minecraft/creator/documents/datadrivenoverworldheight?view=minecraft-bedrock-stable). 1.26.20에서 여러 개 있으면 팩 로드가 크래시했고(MCPE-238456, 1.26.13에선 동작, 2026-05-14경 수정) 바닐라 차원에 커스텀 경계를 주면 오류가 났다. 공허 생성과 커스텀 생성을 겹치는 것은 불가능하다. 데이터 드리븐 오버월드 높이는 최대 512블록이지만 void 생성기 월드에서만 되고, 오버월드 경계를 바꾸면 바닐라 생성이 꺼진다. 네더를 void로 해도 포털은 발판을 만든다.
+- **하늘**: 커스텀 차원의 해/달 숨기기와 스카이박스 변경은 2026-11에도 지원 방법이 없다. 기본 바이옴의 클라이언트 속성은 안개만 적용됐다는 보고가 있다(다른 회원은 동작). 큰 클라이언트 엔티티로 가짜 하늘을 만든다.
 - **ID**: 26.10 월드 NBT에 차원 ID 맵이 있다. 커스텀 차원 숫자 ID는 1000부터 최대 57089(58079/65376을 봤다는 말도 있음)이고, 총 한도는 디스크에 저장된다. 차원 3은 미사용이다. 네임스페이스 ID에 유니코드를 대부분 쓸 수 있다.
-- **월드 편집과 이전**: Chunker(https://github.com/HiveGamesOSS/Chunker/releases/tag/1.17.0)로 leveldb에 청크를 넣어 커스텀 차원에 미리 지은 월드를 넣을 수 있다(Sky Dimensions by Starfish, 여러 차원 성공, Mojang이 1.18에 기여한 권장 방식이지만 문서 없음). Amulet은 커스텀 차원을 지원하지 않는다. Bedrock World Editor(https://github.com/8Crafter-Studios/Bedrock-World-Editor)는 지원한다(DimensionNameIdTable 지원 추가 중). 암호화된 마켓플레이스 월드는 편집할 수 없다.
+- **월드 편집과 이전**: Chunker(https://github.com/HiveGamesOSS/Chunker/releases/tag/1.17.0)로 leveldb에 청크를 넣어 커스텀 차원에 미리 지은 월드를 넣을 수 있다(Sky Dimensions by Starfish, 여러 차원 성공, Mojang이 1.18에 기여한 권장 방식이지만 문서 없음). Amulet은 커스텀 차원을 지원하지 않는다. Bedrock World Editor(https://github.com/8Crafter-Studios/Bedrock-World-Editor)는 지원한다(DimensionNameIdTable 지원 추가 중). 암호화된 마켓플레이스 월드는 편집할 수 없다. Chunker는 Java 커스텀 차원 변환도 지원한다(설치형). 그 밖의 변환 도구는 je2be, WorldPainter(Java 전용)이고, AmuletMC가 유료화된 뒤 무료 대안으로 WorldEdit, Amulet-Core, Amulet-Map-Editor 0.10 소스, unmined.net이 언급됐다.
 - **요청(미출시)**: 차원별 시간/월드 시계(월드 데이터에 WorldClocks 있음), 중력, 게임룰, 날씨, 하늘, 포털 API(우회: 히트박스 없는 커스텀 블록 + step/inside 감지, player.json `inside_block_notifier`, `onInside`/선택 박스 교차 커스텀 컴포넌트 요청), 차원 초기화/임시 차원, dimension_types 템플릿, Java 같은 월드젠 JSON(noise settings, 바이옴 분포), RP의 클라이언트 측 차원 정의. 구조물 세트 파라미터는 바이옴 JSON으로 마을을 켜고 끌 수 있어 불필요하다는 의견이 있다.
 - **기타 참고**: Hytale worldgen v2와 큐빅 청크가 모델로 언급됐다. Bedrock은 서브청크를 아래부터 저장하다 공기만 남으면 멈춘다. 피처 패턴 추상화, 공간 인식 피처, noise 옵션 확대가 요청됐다. 스크립트로 바이옴/구조물 알고리즘을 재구현해 locate 기능을 만든 사례가 있다.
 
@@ -69,6 +74,9 @@ sources:
 - **커스텀 바이옴이 바닐라 구조물을 잃음** → 대체된 바이옴의 태그를 커스텀 바이옴에 추가.
 - **엔드 커스텀 바이옴 불가** → 저주파 noise 구역을 모든 관련 룰에서 공유.
 - **스크립트로 동적 블록 데이터 유지(26.50 이전)** → 월드 동적 속성(위치 키).
+- **1.26 이후 텍스처 사이 선/빠진 면**: 2의 거듭제곱 크기로 바꾸고 UV를 맞춘다.
+- **바닐라 마을/구조물 빈도**: structure set을 덮어 spacing/separation을 바꾸거나 마을을 교체한다.
+- **커스텀 블록 위 눈 레이어**: 고체 블록 아래에 두거나 추운 바이옴을 피한다(final_pass 무효).
 
 ### 버전별 변화
 
@@ -85,18 +93,24 @@ sources:
 - **1.21.120**: 클라이언트 바이옴 형식, `alpha_masked_tint`, UCF `emissive`. 지그소 예제 갱신(Jigsaw_dev_resource.mcaddon).
 - **1.21.124**: flower_pottable + embedded_visual.
 - **1.21.12x (2025-11~12)**: 두 구조물 애드온 조합 크래시(MCPE-232661). 블록 보호 processor(`protected_blocks`, `block_ignore`, `capped`) 추가.
-- **1.21.130 (2025-11/12)**: 다중 충돌 박스, `onBreak`, `connection_rule`이 실험으로 등장. 충돌 높이 확장.
+- **2025-11 말 핫픽스**: 랜덤 틱 블록이 틱하지 않는다는 보고(single report).
+- **1.21.130 (2025-11/12)**: 다중 충돌 박스, `onBreak`, `connection_rule`이 실험으로 등장. 충돌 높이 확장. 지그소 worldgen 폴더가 있는 애드온으로 Editor 도구가 사라짐. connection 트레이트 팩의 접속 차단(오류 코드 Boat).
+- **1.21.131 / 1.21.132**: 높은 scatter와 지그소 근처 크래시, Android 구조물 내보내기 실패(1.21.132부터).
 - **26.0 (2026-02)**: `connection_rule`, 다중 충돌, 계단 트레이트, 레드스톤 커스텀 컴포넌트 이벤트가 안정. 새 트레이트에는 format 1.26.0+ 필요. `use_liquid_clipping` 등장(미동작). 트레이트로 인한 멀티플레이 문제 수정. 일부 블록이 검게 나오다 핫픽스. 프리뷰 26.0.27의 퍼뮤테이션 검증(geometry + material_instances 짝)은 되돌렸다가 1.26.20에 재등장(MCPE-238086, 2026-05-01 수정).
 - **2026-02-11 프리뷰**: 선형 건축 모드 수정. **2026-02-17**: voxel shape 경계 검사 수정.
 - **2026-03-10/11 프리뷰**: 블록 버그 다수 수정(234635, 236314, 235787, 234585, 236308, 234647, 234708, 236362, 235802), 멀티블록 비기본 부품 setblock 실패 수정. `minecraft:feature_pool_element` 추가(2026-03-11 무렵). 2026-03 블록 스키마 변경으로 "Cannot downgrade from modern slice" 오류(MCPE-237057).
-- **26.10**: 블록 아이템 `liquid_clipped` 의미 변경(물 위에만 설치). `ambient_occlusion` false가 완전히 끔. 계단 corner 버그 수정. 피처에서 `get_level_seed_based_fraction` 실패(1.26.10).
+- **26.10**: 블록 아이템 `liquid_clipped` 의미 변경(물 위에만 설치). `ambient_occlusion` false가 완전히 끔. 계단 corner 버그 수정. 피처에서 `get_level_seed_based_fraction` 실패(1.26.10). 묻힌 모델 옆면 그림자 수정, 색 조명 안정(single report), 1.26.10 블록의 무해한 "Unexpected version" 로그.
+- **1.26 이후**: 2의 거듭제곱/8의 배수가 아닌 텍스처가 블록 사이 선과 빠진 면을 만든다.
+- **1.26.20**: `minecraft:tags` 배열 확인(옛 `tag:`는 스키마 오류), 26.20 프리뷰 엄격 파서가 옛 형식 블록에도 오류, `chest_obstruction` 파손 보고.
 - **26.20.20~23 프리뷰**: 멀티블록 + placement filter 수정, menu_category 생략 재허용(26.20.23). 술퍼 큐브 태그(26.20).
 - **2026-05**: 네더 바이옴 대체 수정(MCPE-236399). height difference filter 피처 등장. beforeOnPlayerPlace 예측 수정(MCPE-238017). snowlogging 이름 수정.
 - **26.30 (2026-06)**: 커스텀 차원이 실험에서 나옴. `minecraft:geometry` 객체 형식. 광석이 빈손/폭발로 드롭하지 않게 됨(사용자 보고). `noise_gradient` 표면 빌더, instrument sound, `rotate_around_center` 수정. snowlogging은 1.26.30까지 실험. 멀티블록 precipitation_interactions가 root 전용(26.30.25). 프리뷰 26.30.28에 `minecraft:block_entity`.
 - **26.40**: `minecraft:multi_block_feature`, voxel shape가 기본 바닐라 BP로, `carry_over_block_entity_data`, block_entity 실험. 수직 멀티블록 안정 계획은 빠짐. Kaioga 템플릿 1차 대상.
-- **26.50 (2026-08/09)**: 멀티블록(수직, 수평) 안정. block_entity 동적 속성 안정(컨테이너는 실험). 일부 바닐라 블록이 데이터 드리븐이 됨(루트 변경 가능). JSON 차원 정의(프리뷰 26.50.25), `minecraft:dimension_height`, 경계 -512..512 복원.
+- **26.50 (2026-08/09)**: 멀티블록(수직, 수평) 안정. block_entity 동적 속성 안정(컨테이너는 실험). 일부 바닐라 블록이 데이터 드리븐이 됨(루트 변경 가능). JSON 차원 정의(프리뷰 26.50.25), `minecraft:dimension_height`, `minecraft:default_biome`, 경계 -512..512 복원. 인벤토리에서만 안 보이는 블록(MCPE-241108), 멀티블록 비루트 부품 컨테이너 파손, BDS 피처 파일의 `.brarchive` 묶음.
+- **2026-08-30**: Custom Biomes가 실험 토글이 아님을 확인.
 - **2026-09-15**: conditional list 피처 안정.
-- **26.60**: `minecraft:clouds` 컴포넌트. n_way_visual_rotation 호스트→클라이언트 동기화(26.60.28/29, Realms 문제 보고는 계속).
+- **26.60**: `minecraft:clouds` 컴포넌트. n_way_visual_rotation 호스트→클라이언트 동기화(26.60.28/29, Realms 문제 보고는 계속). 블록 컨테이너는 안정판과 프리뷰 모두 여전히 실험.
+- **26.70 프리뷰 / 2026-10**: Preview에서 내보낸 .mcstructure v2(새 압축, 안정판에서 로드 안 됨). 26.70에서는 멀티블록 비루트 컨테이너 파손이 없음.
 
 #### 문서
 
@@ -113,6 +127,8 @@ sources:
 - wiki.bedrock.dev/world-generation/jigsaw-structures(#processors, #protected-blocks-processor), MS jigsaw 예제 https://learn.microsoft.com/ja-jp/minecraft/creator/reference/content/worldgenreference/examples/jigsawjigsawstructures?view=minecraft-bedrock-stable , wiki.bedrock.dev/loot/randomized-structure-loot(#jigsaw-processors, #example) , wiki.bedrock.dev/meta/world-gen-qna(Mojang과의 월드젠 Q&A).
 - https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/custom-dimension-api-tutorial?view=minecraft-bedrock-stable , https://learn.microsoft.com/en-us/minecraft/creator/documents/datadrivenoverworldheight?view=minecraft-bedrock-stable : 차원.
 - https://stirante.com/script/server/2.10.0/classes/LootItemCondition.html : 스크립트 루트 API 문서.
+- 추가 블록 문서: https://wiki.bedrock.dev/blocks/troubleshooting-blocks , https://wiki.bedrock.dev/blocks/block-visuals-intro#distance-based-render-methods , https://wiki.bedrock.dev/blocks/block-events#redstone-update , https://learn.microsoft.com/en-us/minecraft/creator/documents/voxelshapes?view=minecraft-bedrock-stable . 그 밖에 참고된 페이지 이름: blocks-intro(#per-face-textures), intercardinal-orientation, block-tags, custom-trapdoors, meta/blocks-items-qna#block-polymesh-model-support, nbt/mcstructure, MS intrinsicblockstateslist, MS vanillalistingsreference/blocks.
+- 추가 월드젠 문서: https://wiki.bedrock.dev/world-generation/feature-types#tree-features . 그 밖에 참고된 페이지 이름: MS featuresintroduction, wiki biome-tags, wiki heightmap-noise, wiki structure-features, MS custompartialbiomereplacement, MS introductiontojigsawstructures, MS datadrivenoverworldheight.
 
 #### 바닐라 데이터와 샘플
 
@@ -120,10 +136,11 @@ sources:
 - https://github.com/microsoft/minecraft-samples/tree/main/custom_features/example_feature_set/behavior_packs/example_feature_set/features : MS 피처 예제.
 - https://github.com/llgava/mcbedrock-features : 커뮤니티 바닐라 피처 사본(최신 아님).
 - https://mcasset.cloud : 에셋 자료.
+- https://github.com/Mojang/bedrock-samples/tree/main/behavior_pack/biomes : 바닐라 바이옴(맞는 버전 태그에서 가져온다). https://github.com/microsoft/minecraft-samples/tree/main/chill_oasis_blocks_and_features : 커스텀 바이옴 예제.
 
 #### 템플릿
 
-- https://github.com/Kaioga5/Kaioga-s-Block-Templates : 바닐라 블록 템플릿 71-80개(울타리 1.20.80, 통나무 `templates/1.20.80/logs` 포함).
+- https://github.com/Kaioga5/Kaioga-s-Block-Templates : 바닐라 블록 템플릿 71-80개(울타리 1.20.80, 통나무 `templates/1.20.80/logs`, 사다리 `templates/1.26.50/ladder` 포함).
 - https://www.curseforge.com/minecraft-bedrock/addons/blocks-with-traits-stairs-slabs-fences-and-more : 트레이트만 쓴 계단/반블록/세로 반블록/기둥/유약 테라코타/울타리 팩.
 - https://www.curseforge.com/minecraft-bedrock/addons/connecting-textures : 연결 텍스처.
 - https://scriptlabsmc.vercel.app/templates/stackable-block : 쌓이는 블록.
@@ -141,6 +158,8 @@ sources:
 - Perlin Fiddle 2.0 https://thepixelmancer.github.io/perlin-fiddle/ : Molang noise/지형 프로토타이핑(시드 입력, 무한 생성, 최대 5000x5000 미리보기).
 - Jigsaw Structure Builder https://jsonjigsawb.onrender.com/ : template pool, 커넥터, 스폰 설정 JSON 마법사(AI 제작, `name:name_pool` 같은 전체 식별자 필요).
 - MCBE Essentials 구조 편집기 https://mcbe-essentials.github.io/structure-editor/ : 구조물 NBT(스포너, 볼트, 루트).
+- 구조물 내보내기와 변환: StructureLimitRemoverPC(github.com/JORICK404/StructureLimitRemoverPC), mcstructure-table-editor https://ludwigbooysen.github.io/mcstructure-table-editor/ , 체인지로그 검색 https://searchlog.beyondbedrock.org/?q=Mcstructure , Bloxelizer https://bloxelizer.com/converter , HoloPrint https://holoprint-mc.github.io/wiki/creating-packs , Levi Launcher. NBT 편집기: NBT Studio, 8crafter NBT editor, Universal Minecraft Editor, VS Code NBT 뷰어.
+- 월드젠 도구: Misode https://misode.github.io/worldgen/structure-set/ , MCBE Essentials 월드 생성기 https://mcbe-essentials.github.io/world-generator/ (sulfur_caves 미반영), je2be, WorldPainter, unmined.net.
 - mcstructure 미리보기/편집 https://github.com/tomocraft/mcstructure-preview , 형식 문서 https://github.com/UohMyGod/mcstructureFileFormat , 변환 https://github.com/JaylyDev/nbt-to-mcstructure .
 - Chunker https://github.com/HiveGamesOSS/Chunker/releases/tag/1.17.0 , Bedrock World Editor https://github.com/8Crafter-Studios/Bedrock-World-Editor , Amulet API(오프라인), Editor 모드, LeviLamina(C++ 모드 로더, 높이 한도 변경).
 - 상태 수집 스크립트 `everyperm.js`(script-api 채널), Code Neon 유튜브 지그소 튜토리얼, 지그소 문서 개편 PR(supernova3695yt).
@@ -169,5 +188,12 @@ sources:
 - `Dimension.placeFeatureRule()`의 성능 오버헤드, 스크립트/명령으로 놓은 피처에도 3x3 청크 한도가 있는지.
 - 차원 변경이 BDS를 크래시시킬 때 BDS에서 커스텀 차원이 동작하는지.
 - 업데이트된 커스텀 나무 생성 예제(위키 페이지 낡음).
-- 마을을 제거하거나 바닐라 마을을 생성 규칙 그대로 덮어쓰는 공식 방법.
+- 바닐라 마을을 생성 규칙 그대로 덮어쓰는 공식 방법. 제거와 교체는 2026-11-01 structure set 덮어쓰기로 평원 마을을 바꾼 사례가 있어 부분적으로 풀렸다.
+- 충돌 박스가 다른 커스텀 블록 두 개 사이를 넘어갈 때 막히는 원인.
+- 지그소 배치가 상태 기반 회전 블록을 다시 돌리는 문제, 퍼뮤테이션으로 회전한 모델이 인벤토리에서 뒤집히는 문제.
+- 파티클 이미터로 낸 연속 파티클을 블록 파괴/상태 변경 때 끄는 방법.
+- processor list의 블록 인식 누락이 버그인지.
+- 커스텀 차원 개수 한도, 커스텀 차원의 해/달/하늘 변경.
+- 바닐라 구조물에 vault/trial spawner 추가, 공유 태그를 유지한 채 바이옴에서 특정 몹 제외.
+- 연속되지 않은 값 목록을 가진 정수 상태의 "1 증가".
 - 기존 .mcaddon에 MC Block Wizard로 만든 여러 블록을 합치는 작업 흐름.

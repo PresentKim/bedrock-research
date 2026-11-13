@@ -48,12 +48,21 @@ Editor 모드는 Mojang의 월드 편집 환경으로, `@minecraft/server-editor
   - MCBE Essentials 구조물 편집기(`https://mcbe-essentials.github.io/structure-editor/`, trial spawner/vault/suspicious sand NBT, 루트 테이블)
   - .andexter NBT 편집기(beta). Universal Minecraft Tool은 구독제다. Amulet은 유료가 됐다.
   - 모바일 Toolbox와 MCC Tool Chest PE는 낡았다.
+  - VS Code NBT viewer는 mcstructure와 월드 설정 탭을 연다. NBT Studio는 trial spawner에서 실패한다. bedrocktoolchest.com의 level.dat 표시는 제한적이다. Dovetail도 언급된다.
+  - Bedrock-World-Editor는 PE v0.1.0 Alpha 월드까지 지원을 넓히는 중이다. 위키: `https://wiki.8crafter.com/bwe/`
+- **format_version 2 `.mcstructure`**: 압축된 형식이라 NBT Studio에서는 byte array로 보인다. Bedrock-World-Editor 최신판은 연다(2026-11).
   - 가이드: `https://rentry.co/mcbenbteditingtutorial`
 - **라이브러리**
   - JS: NBTify(`https://github.com/Offroaders123/NBTify`, SNBT), readonly fork. prismarine-nbt는 rolldown에서 direct-eval 경고를 낸다. Rust napi 바인딩은 객체 전달 비용 때문에 순수 JS보다 느렸다.
   - Python: PyNBT, nbtx(`https://github.com/phoenixr-codes/nbtx`, 의존성 없음, CLI 포함, 서버 프로토콜 NBT 변형은 미지원일 수 있음)
   - Go: Dragonfly의 LevelDB 라이브러리
   - Amulet API(Python, 오프라인 월드 편집)
+
+#### LevelDB와 옛 월드 포맷
+- **구조**: 월드 `db`는 `.ldb` 파일로 나뉜 key-value 저장소이고 `~local_player`, `player_<id>` 같은 키를 가진다. `level.dat`은 따로 있다. 쓰기 로그(WAL)는 CRC32를 쓰고, SST는 원자적 rename으로 바꾸고, MANIFEST는 덧붙여 쓴다. 손상은 대부분 compaction에서 생기며, `.ldb` 하나를 지워 70GB 월드를 살린 사례가 있다. `.mcworld`는 zip이다. 창을 닫아 월드가 손상된다는 주장은 결론이 나지 않았다. (single report)
+- **바닐라 LevelDB로는 열 수 없다**: Bedrock은 압축 방식이 달라 바닐라 LevelDB 라이브러리로 열지 못한다. 게임의 `.ldb` 블록은 `0x78 0x9C 0xED`로 시작한다. JS 라이브러리: `@8crafter/leveldb-zlib`, npm `mcbe-leveldb`. Bedrock은 크래시 로그를 남기지 않는다.
+- **구조물 저장**: 월드에 저장한 구조물은 LevelDB 키로 들어간다.
+- **옛 월드 포맷**: 마을 데이터 키는 v0.12.0.1 `villages`, v0.15.0 `mVillages`, 지금은 `VILLAGE_<dimension>_<uuid>_<type>`이다(`_PLAYERS`는 평판). v0.12.0.1은 `SizeOnDisk`가 없으면 크래시한다. PE 0.9.0 alpha부터 beta 1.2.0.11까지 "fragile LevelDB" 버그가 있었다. 지도 데이터는 서드파티 도구 없이는 지울 수 없다.
 
 #### 구조물 export (특히 모바일)
 - **크기와 내용 제한**: 구조물 블록 하나는 64x64x64까지다. Amulet은 엔티티가 든 구조물을 export하지 못한다. 마켓플레이스/템플릿 월드는 보호돼 있어 구조물 import/export가 안 되고, NBT를 편집하면 월드가 깨진다.
@@ -64,14 +73,17 @@ Editor 모드는 Mojang의 월드 편집 환경으로, `@minecraft/server-editor
   - LeviLauncher 메뉴
   - extract-mcstructure(`https://github.com/destruc7i0n/extract-mcstructure`, amulet-nbt 2.x와 leveldb-mcpe 필요)
   - Bloxelizer(`https://bloxelizer.com/converter`, 결과가 깨졌다는 보고 하나)
-  - ModelExtractor(`https://structuralab.com/ModelExtractor.html`)
+  - ModelExtractor(`https://structuralab.com/ModelExtractor.html`, 로그인이 필요하고 올린 파일은 24시간 뒤 지워진다. amulet core 사본을 쓴다. 월드 전체 export 옵션은 없다)
+  - PC 도구: Amulet Editor의 `.mcstructure` export(Amulet은 2026-01 유료화. 소스에서 빌드할 수는 있지만 상업 사용에는 라이선스가 필요하다), VS Code `jeanmajid.mcstructure-editor`, mcstructure-converter.vercel.app, Amulet-Core
   - 구버전 설치 유지, PC나 Realms 사용
   - 일부 기기에서는 `android/data/com.mojang.minecraftpe/files/games/com.mojang/minecraftWorlds`에서 월드를 직접 복사할 수 있다.
 - **변환**
   - Java .nbt → mcstructure Python 도구(`python .`, `--namespace`, `MC_VERSION` 상수), JaylyDev nbt-to-mcstructure, Bloxelizer(대량 처리 불가)
   - 1.21.131 바닐라 구조물 전체를 mcstructure로 바꾼 zip(지그소 파일 없음)
   - 바닐라 feature 샘플: `https://github.com/llgava/mcbedrock-features`
-- **큰 구조물**: 64를 넘으면 지그소 조각으로 나눈다. `/fill ~~~ ~~~ structure_void replace air`로 공기를 structure void로 바꾼다. void를 유지한 채 로드하려면 NBT를 편집해야 한다.
+- **큰 구조물**: 64를 넘으면 지그소 조각으로 나눈다. `/fill ~~~ ~~~ structure_void replace air`로 공기를 structure void로 바꾼다. void를 유지한 채 로드하려면 NBT를 편집해야 한다. 큰 `.mcstructure`는 게임 밖에서 만든 구조물 블록으로 불러온다. 구조물 크기를 NBT로 고쳐 1.21.120에서 import하면 원래 크기로 되돌아간다.
+- **structure-to-function** (`https://jeanmajid.github.io/commands/structure-to-function/`): 명령 블록 건축을 `.mcfunction`으로 바꾼다. conditional과 impulse 블록은 손으로 옮긴다(tick.json, `/execute`).
+- **블록 geometry 데이터베이스**: Structura, HoloPrint, Bedrock ASI, Scaffold가 블록 형태를 각자 손으로 관리한다. 공용 DB(BedrockBlockBuster) 제안과, GLB export를 큐브로 분해하는 `glb2bedrock.py` 시험이 있었다. Structura는 낡았고 Structura Lab은 월 약 20만 조회다.
 - **mcstructure 미리보기**
   - Structures Studio(`https://olivaresstudios.eu/studio`, `.mcstructure`/`.schem`/`.litematic` 3D, Java/Bedrock 충돌 검사, 홀로그램 .mcpack, 64 초과 지원, 로컬 전용)
   - mcstructure-preview(`https://github.com/tomocraft/mcstructure-preview`)
@@ -80,6 +92,10 @@ Editor 모드는 Mojang의 월드 편집 환경으로, `@minecraft/server-editor
 
 #### 월드 변환과 생성
 - **월드 변환**: Chunker(`https://github.com/HiveGamesOSS/Chunker`, Chunker.app)로 Java와 Bedrock 사이를 변환하고, 미리 만든 월드를 leveldb에 넣는다. 크래시와 Editor 브러시 손상 보고가 있고, 변환 중 pending tick을 잃는다. 기존 청크에는 새 feature/지그소/바이옴이 적용되지 않는다. 다시 생성하려면 Editor Chunk Management나 스크립트를 쓴다.
+  - 웹판은 `https://www.chunker.app/` 이고, 새 차원 포맷도 변환한다. 엔티티, 마을, 인벤토리는 변환되지 않을 수 있다.
+  - Chunker CLI로 `java -> chunker cli -> bedrock -> deploy` 파이프라인을 만들 수 있다.
+  - WorldPainter에는 Bedrock export가 없으므로 Java로 짓고 Chunker로 변환한다.
+- **바이옴 수정**: 바이옴을 바꾸는 Script API가 없어 WorldEdit-BE와 Bedrock World Editor가 함께 작업한다(2026-04).
 - **featurelab (stirante)**: Bedrock feature 생성을 재현하는 엔진이다(바이트 단위 일치가 목표).
   - 저장소 `https://github.com/stirante/featurelab` , 문서 `https://stirante.github.io/featurelab/` , 플레이그라운드 `https://stirante.github.io/featurelab/playground` (2026-09-26)
   - 노드 편집기: 명령 팔레트에서 "node" 또는 `Open Feature Graph`.
@@ -98,6 +114,8 @@ Editor 모드는 Mojang의 월드 편집 환경으로, `@minecraft/server-editor
   - 클라이언트 스키마 exporter(LeviLamina 모드, 1.26.20.04 클라이언트의 mcb 501개 전부 복원): `https://github.com/LPaicen/ll-client-schema-exporter`
   - Rust 라이브러리 `https://github.com/bedrock-crustaceans/brarchive-rs` , 컴파일러 `https://github.com/iamorimm/brarchive-compiler`
   - JSONTE도 `brarchive`를 지원한다.
+  - `.brarchive`, `.brpak`, `MCB` 명세: `https://github.com/bedrock-crustaceans/brarchive/blob/main/FORMAT.md` . 같은 쪽에서 brpak, MCB, 애드온 전체를 진단하는 Rust 파서를 계획한다. `.brpak`의 목적과 성능 이득은 답이 없다.
+- **BDS zip의 바닐라 팩**: BDS zip에는 루트 테이블을 포함한 바닐라 BP/RP와 `.brarchive`가 들어 있다.
 - **BDS 팩 최적화 모드(Preview 26.40.27)**: CLI 플래그로 JSON을 minify하고 `.brarchive`를 만든다. 플래그 정리: `https://gist.github.com/xKingDark/2c53dc924111428bfe854dc4e66a04e4`
   - Windows BDS에서만 동작한다(Linux는 wine).
   - brarchive에는 유효한 UTF-8 텍스트 파일만 들어간다(스크립트는 안 된다). 모든 것이 brarchive에서 동작하지는 않으니 JSON 원본을 보관한다.
@@ -125,6 +143,7 @@ Editor 모드는 Mojang의 월드 편집 환경으로, `@minecraft/server-editor
 - **v1.2.8**: Tag Container 컨트롤.
 - **v1.3.9(2026-05-19)**: mesh 도구, Custom Dimensions, Biome Data Assignment(재배정 로그, 선택 영역 바이옴 교체).
 - **26.40.20(2026-06-02)**: Biome Data Assignment가 재시작 없이 청크 정보를 보여 주고, VV 도구가 Vibrant Visuals RP를 생성한다.
+- **26.60 이후**: Editor 26.60이 리테일에 나갔고 Preview는 26.70.23(2026-11-04), 26.70.24(2026-11-10)다. changelog는 discussions #353, #354, #355에 있다. Editor 모드에서 DDUI 메뉴에 갇히는(softlock) 보고가 있다.
 
 #### 도구별 동작과 함정
 - **Flood**: 위젯 블록에서 아래로 탐색하므로 위젯을 지면보다 한 칸 위에 둔다. BFS 상한은 12만 블록이다. "apply flood"가 필요하고, 액체 원천은 필요 없다.
@@ -141,7 +160,7 @@ Editor 모드는 Mojang의 월드 편집 환경으로, `@minecraft/server-editor
 - **지그소**: 팩에서 읽은 세트는 수정할 수 없다. import하면 월드 안에 로컬 사본을 만들고 그 사본만 편집하므로 BP로 직접 다시 복사해야 한다. 초기화 중에 크래시한 애드온이 있으면 뒤의 애드온이 로드되지 않아 지그소 메뉴가 사라질 수 있다.
 - **선택과 편집 제약**: marquee 선택과 complex 선택이 있고, Trim으로 바꾼다. Block Inspector는 한 블록씩 편집한다. 커스텀 블록 컴포넌트 지원은 새 API를 기다리며 보류 중이다. 엔티티 필드는 읽기 전용이다. Ore UI 텍스트 필드는 클릭하면 전체 선택이 되지만 입력은 뒤에 붙는다(MCPE-237219).
 - **크래시 사례**: Chunker로 손상된 영역에서 Ellipsoid 브러시, manifest에 `raytraced` capability가 있는 팩. 블록 안에 놓은 커스텀 엔티티는 export나 playtest 때 사라진다.
-- **아직 없는 기능**: Y축 미러, 수동 waterlogging, block manifest 다중 선택. structure void 복사도 깨졌을 수 있다. 가이드 평면은 API만 있고 UI는 없다. Cinematics는 카메라 스플라인이 아니라 스크립트 코드를 export한다. 테스트 월드는 싱글플레이 전용이다. Editor는 위험해서 leveldb 쓰기를 피한다.
+- **아직 없는 기능**: Y축 미러, 수동 waterlogging, block manifest 다중 선택, 월드 사이 복사/붙여넣기. 지형 다듬기 도구는 약하다는 평이고(2026-01), 큰 구조물 작업에는 유용하다. structure void 복사도 깨졌을 수 있다. 가이드 평면은 API만 있고 UI는 없다. Cinematics는 카메라 스플라인이 아니라 스크립트 코드를 export한다. 테스트 월드는 싱글플레이 전용이다. Editor는 위험해서 leveldb 쓰기를 피한다.
 - **차원**: 월드 파일에 저장되고 다른 월드로 복사할 수 없다. 월드를 Editor 프로젝트로 바꿔 차원을 추가한 뒤 다시 export하는 방법이 있다. 포털은 스크립트가 필요하다. 커스텀 차원의 바이옴 데이터 배정은 Editor 모드(preview)에서 한다.
 - **Editor UI 팬**: `direction` 속성은 자식의 flex 방향이고, "horizontal"이면 나란히 놓는다.
 - **관련 도구**: Nudge(`https://github.com/ForestOfLight/Nudge`).

@@ -57,6 +57,8 @@ sources: [private-research, bedrock-wiki, ms-learn]
 ## 텍스처 배열과 변형
 
 - `"arrays":{"textures":{"Array.skins":["Texture.default","Texture.blue",...]}}`와 `"textures":["Array.skins[query.property('your_skins_property')]"]`(int property, `client_sync: true`)를 쓴다. `minecraft:variant`와 `q.variant`, `query.skin_id`도 된다. 컴포넌트 그룹으로 값을 지정하고 같은 방식이 머티리얼과 지오메트리에도 통한다.
+- 보는 플레이어마다 다른 텍스처: 스크립트 `setPropertyOverrideForEntity`로 property를 덮어쓰면 그 플레이어에게만 즉시 다른 텍스처가 적용된다(엔티티 전용, 어태처블은 temp 변수 방식). 예제: https://github.com/abrightmoore/calm-add-on/blob/main/source/resource_packs/twf_calm/render_controllers/twf_calm_poster.render_controllers.json
+- 변형별 모델은 `array.geos[v.x]`처럼 지오메트리 배열로 고른다. Molang에는 `query.has_tag`가 없어 엔티티 태그로 고를 수 없다.
 - 이벤트에는 "set_variant"가 없으니 property를 설정하거나 `minecraft:variant` 컴포넌트 그룹을 추가한다.
 - 렌더 컨트롤러의 `math.random`, `math.random_integer`는 매 프레임(틱) 다시 굴려져 깜빡인다. `scripts.initialize`나 `pre_animation`에서 한 번만 정한다(예: `"variable.Xvar = query.anim_time>0 ? variable.Xvar : Math.random(0,999);"`를 인덱스로 감싼다). 클라이언트 재로드 때 리셋되므로 재접속하면 바뀐다. 지속적인 변형은 BP property(`query.property`)를 쓴다.
 - 레이어 텍스처(말 스타일): `Array.base`, `Array.overlay`에 `v.base = q.variant; v.overlay = q.mark_variant`를 쓰고 `textures`에 두 항목을 둔다. 정의되지 않은 `v.index`는 분홍 머리가 떠다니게 만들었다. 말 갑옷 같은 동적 배열은 `Array.armor[variable.armor_texture_slot]`. 첫 텍스처만 읽혀 쌓이지 않았다는 보고도 있고, 안장 레이어 `query.is_saddled ? Texture.saddle : Texture.empty`는 스레드에서 미해결이었다.
@@ -99,7 +101,7 @@ sources: [private-research, bedrock-wiki, ms-learn]
 
 ## 여러 렌더 컨트롤러
 
-- 엔티티와 어태처블 모두 `render_controllers`에 여러 개를 나열할 수 있고 한 엔티티에서 두 지오메트리를 동시에 그릴 수 있다. 렌더 컨트롤러는 여러 번 쌓을 수 있다.
+- 엔티티와 어태처블 모두 `render_controllers`에 여러 개를 나열할 수 있고 한 엔티티에서 두 지오메트리를 동시에 그릴 수 있다. 렌더 컨트롤러는 여러 번 쌓을 수 있다. 렌더 컨트롤러는 레이어처럼 동작하고 목록 위쪽이 먼저 그려진다. 한 지오메트리에 컨트롤러 2개를 쓰는 것도 되지만 공유 본이 두 번 존재해 약간 느리다는 반론이 있다.
 - 바닐라 지오메트리를 숨기려면 모든 본을 숨기는 part_visibility를 가진 렌더 컨트롤러 사본을 앞에 둔다.
 - 플레이어 모델을 다른 것(예: T-Rex)으로 바꾸려면 플레이어 렌더 컨트롤러를 고쳐 지오메트리 하나만 쓰게 한다(플레이어를 여전히 그리는 추가 컨트롤러는 안 된다). property로 플레이어 지오메트리를 바꾸려면 쿼리로 새 렌더 컨트롤러를 켜고 바닐라 것에는 `&& !query...`를 붙인다.
 - 코스메틱: BP 플레이어 정의에 슬롯별 enum property(예: head는 none, hat1, hat2)를 `client_sync`로 만들고 `{ "controller.render.cosmetic_1": "v.cosmetic_1" }` 같은 조건으로 추가 렌더 컨트롤러를 나열한다.
@@ -113,7 +115,8 @@ sources: [private-research, bedrock-wiki, ms-learn]
 - `overlay_color`(rgba)는 위에 블렌드되며 알파에 영향을 주지 않는다. `color`는 알파를 포함한 곱셈이고, 특정 runtime-id 엔티티(warden, player 등)나 이를 지원하는 머티리얼에서만 동작한다(염색 파트는 `entity_alpha_color_change` 머티리얼).
 - 엔티티별 틴트: `overlay_color`를 `q.property('ct:r')` 등(r, g, b, a)으로 구동하고 엔티티 JSON에 property를 정의한 뒤 스크립트 `entity.setProperty("ct:r", 0.5)`로 설정한다(`player.json` 수정으로 플레이어에도 동작). `"overlay_color": {"r": "array.red[query.property('x')]", ...}`처럼 property 배열도 된다. `Math.sin`을 쓴 overlay 식은 깜빡이는 알파를 준다(`a`는 Molang 문자열).
 - 1.21.130 쇼케이스에서는 overlay가 아니라 텍스처 교체로 색을 바꿨다. 크리퍼 깜빡임도 렌더 컨트롤러 오버레이 색이다. 염색 목걸이 틴트가 낮은 불투명도 기본 텍스처로 번지는 문제는 미해결이다.
-- 피격 색 제거: `"is_hurt_color": {"r":"1.0","g":"1.0","b":"1.0","a":"0.0"}`. 죽을 때 기울어지는 것은 이 방법으로 없앨 수 없다.
+- 피격 색 제거: `"is_hurt_color": {"r":"1.0","g":"1.0","b":"1.0","a":"0.0"}`. 죽을 때 기울어지는 것은 이 방법으로 없앨 수 없다. 불타는 오버레이 틴트는 `"on_fire_color": {"r": ..., "g": ..., "b": ..., "a": ...}`로 없애거나 바꾼다(불 텍스처 자체는 별개다).
+- `overlay_color`를 페이드시키는 temp 변수는 `pre_animation`에서 설정한다.
 - 참고 문서: Microsoft Learn의 animation render controller 문서.
 
 ## 액터 없는 쿼리 문제

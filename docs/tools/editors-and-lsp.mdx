@@ -114,6 +114,8 @@ VS Code에서 F5로 시작한 뒤 게임에서 `/script debugger connect`를 실
 - **Bedrock JSON은 주석을 허용한다**: 편집기 언어 모드를 `jsonc`로 바꾸면 경고 밑줄이 사라진다.
 - **bridge.식 아이템/블록 JSON 자동완성을 그대로 주는 VS Code 확장은 없다**(2026-05-22 기준).
 - **Zed 편집기**: helix 모드와 multibuffer가 있어 VS Code 대체로 거론된다. 확장은 아직 빈약하다. Bedrock JSON 스키마를 쓰려면 Blockception VS Code 플러그인 `package.json`의 스키마 목록을 복사해 `lsp.json-language-server.settings.json.schemas`에 넣고, 예를 들어 `https://raw.githubusercontent.com/Blockception/Minecraft-bedrock-json-schemas/refs/heads/main//behavior/animation_controllers/animation_controller.json`을 가리키게 한다. JSON UI 편집 환경으로도 언급됐다. (single report)
+- **VS Code 작업 공간 구성**: RP와 BP를 multi-root workspace 하나에 넣고 Minecraft Bedrock Debugger, Blockception, Snowstorm 확장을 함께 쓰는 구성이 권해진다. 붙여 넣은 코드는 Prettier로 정리하고, 여러 JSON의 문법 오류는 JSON validator로 잡는다.
+- **다른 편집기 의견**: IntelliJ/WebStorm과 Windsurf 확장도 거론된다. 자주 도움을 주는 사람들의 선호 순서는 VS Code, bridge. v2, 텍스트 편집기, 생성기 앱이었다. (single report)
 - **VS Code 팁**: 예전 기본 테마는 "Preferences: Color Theme"에서 Dark Modern을 고르면 돌아온다. 터미널 sticky scroll은 Terminal > Integrated > Sticky Scroll Enabled에서 끈다.
 
 #### Blockception VS Code 확장 (Minecraft Bedrock Development)
@@ -131,6 +133,7 @@ VS Code에서 F5로 시작한 뒤 게임에서 `/script debugger connect`를 실
   - `minecraft:geometry.full_block`을 잘못 오류로 표시한다.
   - format_version `1.26.0`에서 custom component 검사가 오탐했다(스키마 PR #551에서 수정). 엔티티 `all_of`/`none_of`/`any_of` 배열에 제안이 안 뜬다(issue #599).
   - 가끔 재시작이 필요하고, 엉뚱한 줄을 강조할 때가 있다.
+  - format_version 1.26.60 아이템의 BP 식별자에 잘못된 오류를 표시한다(2026-11-01, 미해결). Molang 색칠과 intellisense가 사라진 보고(2026-03), Bedrock Definitions 확장과 함께 켜면 자동완성이 멈춘 보고(2025-11)도 있다. bridge. v2에서 오류가 없던 프로젝트에 오류를 많이 표시할 수 있다. (single report)
   - Hytale manifest가 같은 워크스페이스에 있으면 Minecraft manifest로 인식한다. 워크스페이스별로 확장을 끄거나 VS Code 프로필을 쓴다.
 - **스키마 정확도 메모**
   - `load_on_low_memory`는 1.16부터 sound_definitions에서 제거됐다.
@@ -156,6 +159,15 @@ VS Code에서 F5로 시작한 뒤 게임에서 `/script debugger connect`를 실
 - **암호화 팩**: bridge.가 암호화 팩을 자동 복호화한다는 주장은 반박됐다(**conflicting**).
 - **플러그인 생태계의 한계**: 외부 라이브러리(예: Vue Flow)를 번들한 플러그인은 배포하기 어렵다. plugins 저장소와 문서가 `.vue` 소스 형태 게시를 전제하기 때문이다. iframe API(`https://bridge-core.app/extensions/iframe-api/index.html`)가 가장 가까운 대안이다.
 - **bridge-core Molang 라이브러리**: `lib/env/math.ts`의 `dieRoll`/`dieRollInt`는 2026-09-09 기준 미완성이다.
+- **저장 방식과 백업**: v2는 프로젝트를 브라우저 IndexedDB(PWA)에 저장하므로 파일을 손으로 옮기면 bridge.에 보이지 않고 복구도 어렵다. bridge.에서 지운 파일은 휴지통 없이 영구 삭제된다. 업데이트 뒤 프로젝트를 잃거나 웹판에서 저장하지 않은 파일을 잃은 보고가 있고, 자동 백업으로 팩을 살린 사례도 있다. 내보내기는 점 3개 메뉴의 "export as .mcaddon"이다.
+- **GDK 동기화**: 1.21.120 뒤에는 프로젝트의 com.mojang 경로를 Shared development 폴더로 다시 연결하고 재시작한다. 2.7.52에서 동기화가 멈추거나 새 파일이 반영되지 않은 사례가 있다. 웹판은 export한 뒤 사이트의 쿠키와 데이터를 지우면 풀리기도 한다. 프로젝트 밖에서 만든 엔티티는 파일 트리에 보이지 않는다.
+- **기타 제약**
+  - iOS 26.1에서 DataCloneError가 난다. v2.8은 버그가 많다는 평이다.
+  - 기본 네임스페이스는 프로젝트 설정에서 바꾼다.
+  - 아이템 event를 편집기에서 설정할 수 없고, `player.entity.json`과 새 biome 파일은 자동완성이 없다. `enchantable`은 늦게 추가됐다.
+  - `queue_command` 값에 "/"를 넣던 자동 수정은 패치됐다.
+  - tree editor 템플릿은 있지만 저장이 불안정하다(2026-11).
+  - 모바일에서 폴더 권한 요청이 반복되고 프로젝트 생성이 실패하는 문제(2026-11)는 GitHub issue로 신고하도록 안내됐다.
 - **import 문제 문의처**: bridge. 서버로 간다.
 
 #### 기타 VS Code 확장
@@ -182,7 +194,8 @@ VS Code에서 F5로 시작한 뒤 게임에서 `/script debugger connect`를 실
 - **파일 접근 제한**
   - Android 11+: SAF 선택기로는 `Android/data` 권한을 줄 수 없다.
   - Android 13: Shizuku 없이는 접근이 막힌다.
-  - Android 15/16: 게임 데이터 폴더 편집이 막힌다. ZArchiver+Shizuku 우회는 불안정하다.
+  - Android 15/16: 게임 데이터 폴더 편집이 막힌다. ZArchiver+Shizuku 우회는 불안정하다. `com.mojang` 안에 새 폴더를 만들 수 없고, MT Manager나 Shizuku 기반 파일 관리자도 기존 파일 수정과 복사만 된다. 안전한 경로는 .mcpack/.mcaddon import나 USB로 PC에 연결하는 것이다.
+  - iOS는 Files 앱으로 `com.mojang`에 직접 접근한다.
 - **LeviLauncher** (`https://github.com/LiteLDev/LeviLaunchroid`): 별도 com.mojang을 써서 `development_*_packs`를 직접 편집할 수 있게 해 준다. 일반 데이터 폴더에서는 import한 팩이 non-development 폴더로 가서 갱신되지 않는다.
   - 1.5.x부터 저장 위치는 `/storage/emulated/0/Android/media/org.levimc.launcher/minecraft/com.mojang.minecraftpe/internal/games/com.mojang`이다(`_shared/external|internal/...`도 있다).
   - 버전 격리를 켜면 파일이 안 보일 수 있다.
@@ -195,9 +208,12 @@ VS Code에서 F5로 시작한 뒤 게임에서 `/script debugger connect`를 실
   - JSON 자동완성: `npm i @minecraft/bedrock-schemas`를 설치하고 `"$schema": "../node_modules/@minecraft/bedrock-schemas/schemas/bp/entities/index.schema.json"`을 지정한다.
   - Minecraft Autocomplete 플러그인도 있다.
 - **Termux**: `pkg i neovim nodejs`, typescript-language-server, LazyVim을 쓴다. Shizuku가 실행 중일 때 `rish -c "<cmd>"`로 Android/data에 접근한다.
-- **기타 편집기**: Acode, QuickEdit(Android/data를 파일 단위로 열 수 있다), SPCK, kodex, Pocket Editor, MiXplorer와 ZArchiver(파일 관리)가 쓰인다.
+- **기타 편집기**: Acode, QuickEdit(Android/data를 파일 단위로 열 수 있다), SPCK, Rhmsoft Code Editor(Android), Kodex(iOS), Pocket Editor, GitHub Codespaces, MiXplorer와 ZArchiver(파일 관리)가 쓰인다. Acode는 중복 JSON 오류를 많이 표시한다는 보고가 있다. 설정 가이드: `https://wiki.bedrock.dev/guide/project-setup-android`
 - **서드파티 편집기의 부작용**: manifest.json을 비우는 편집기가 있다. 팩은 `development_behavior_packs`에 두어야 자동으로 다시 로드된다.
 - **모바일 애드온 메이커 앱**: Minecraft Addon Maker(MAM), Crafty Craft 등은 광고가 많고, 16이 아닌 텍스처에서 UV가 틀리는 등 결과가 이상하다. manifest에 `generated_with`를 넣어 오류를 일으키기도 한다(지우면 된다). 일반적으로 권하지 않는다(초보자에게 권한 의견도 있다).
+  - MAM 함정: 한 애드온에 편집을 많이 저장하면 파일 생성이 깨지므로 새 애드온으로 다시 시작한다. `min_engine_version`은 최신으로 둔다. 엔티티 JSON이나 `on_use` 아이템 저장 실패, 거대한 lang 파일, 새 기능 지원 지연(spear는 약 한 달)이 보고됐다.
+  - Blockbench 미리보기와 게임 결과가 다르면 geometry와 애니메이션을 하나씩 확인한다(enderman에서 파생한 엔티티는 머리 위치 애니메이션을 지운다). 3D 손 모델은 "High Resolution"과 attachable 설정이 필요하다.
+  - 다음 단계로는 bridge.를 권하고, M.A.P 앱도 권하지 않는다.
 - **Bedrock Tweaks 생성 팩**: Android에서 재설치 전까지 보이지 않았다. 메타데이터에 `product_type`이 있었다.
 - **반복 개발**: com.mojang이 읽기 전용이라 변경할 때마다 .mcpack을 다시 import해야 한다. USB 테더링이나 데스크톱 환경을 권한다. 웹소켓 `/connect`로 `reload`/`reload all`을 보내는 Node 컴파일러, 또는 manifest 버전 올리기 + `tsc` + zip을 하는 Python 스크립트로 자동화하기도 한다. [ui/한 보고자]
 - **모바일 친화 웹 도구**: Bridge, Blockbench, Snowstorm. 다만 Blockbench 웹은 모바일 Chrome에서 paint 메뉴를 열면 크래시가 나서 다른 브라우저로는 동작했다. Termux용 Blockbench는 Electron 빌드가 필요하고, 웹 버전은 플러그인을 지원하지 않는다.
@@ -237,6 +253,16 @@ VS Code에서 F5로 시작한 뒤 게임에서 `/script debugger connect`를 실
   - 2026-05 npm 공급망 공격(TanStack postmortem `https://tanstack.com/blog/npm-supply-chain-compromise-postmortem`)에서는 `pull_request_target` 워크플로가 즉시 닫힌 PR로도 실행되어 Actions 캐시를 오염시켰다. 비슷한 사례: `https://github.com/nrwl/nx/security/advisories/GHSA-cxm3-wv7p-598c`
   - 게시 파이프라인에서는 캐시를 쓰는 `pull_request_target`을 피한다. nx는 Trusted Providers 게시를 필수로 바꿨다(`https://docs.npmjs.com/trusted-publishers#supported-cicd-providers`).
 - **로컬 GitHub Actions 테스트**: `nektos/act` (`https://github.com/nektos/act`).
+
+### 문서와 레퍼런스
+
+- **자주 인용되는 MS Learn 페이지**: latestplatformversion, guidelinesforbuildingcooperativeaddons, Blockbench 문서, 카메라 시스템, entityreference의 componentlist와 filterlist. MS 문서에는 preview와 stable 내용이 섞인다는 지적이 있다.
+- **커뮤니티 자료**
+  - bedrock-tools.dev: Search Samples, geometry 뷰어(암호화 모델은 열 수 없다)
+  - Bedrock Technical Resource Pack 위키: `https://github.com/RavinMaddHatter/Bedrock-Technical-Resource-Pack/wiki`
+  - SmokeyStack parity: `https://github.com/SmokeyStack/parity`
+  - Bedrock Wiki의 useful-links와 software-preparation 페이지, Bedrock-OSS add-on-registry
+  - Bedrock Wiki 기여 안내: `https://wiki.bedrock.dev/contribute`
 
 ---
 

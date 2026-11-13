@@ -29,6 +29,9 @@ PBR은 색 텍스처에 더해 픽셀마다 금속성, 발광, 거칠기, 노멀
 (출처: 비공개 조사)
 
 - **pbr capability 필수**: 위 예처럼 최상위 키여야 한다. `header` 안에 두면 VV가 계속 비활성이다. RTX도 쓰려면 RTX capability를 추가하고, RTX가 필요 없으면 `pbr`만으로 충분하다. manifest `format_version` 2에서 동작하고 `min_engine_version`도 필요하다. "VV가 갑자기 꺼졌다·아무 변화가 없다"의 대표 원인이며 `min_engine_version`만 올려서는 해결되지 않는다. `confirmed`
+- **min_engine_version과 옛 팩**: VV용 리소스 팩은 pbr capability와 함께 `min_engine_version` 1.21.120 이상이 필요하다는 보고가 두 번 있었고, 옛 manifest 팩과 VV 이전 Marketplace 콘텐츠는 호환으로 표시되지 않을 수 있다. format version 3은 실패하고 2는 동작했다는 보고는 대상이 manifest인지 texture set인지 불분명하다. `single report`
+- **옛 월드 템플릿**: 옛 월드 템플릿에 pbr 팩을 넣으면서 manifest 게임 버전을 올리면 월드가 어두워졌다. 팩을 넣기 전에 level data(NBT)의 base game version을 먼저 올린다. `single report`
+- **설정 리셋 버그**: VV 설정과 매크로가 리셋되는 버그는 MCPE-235907(https://mojira.dev/MCPE-235907 )이고, 설정 파일을 읽기 전용으로 하면 막힌다는 보고가 있다.
 - **애드온 하나가 VV를 끔**: 리소스 팩에 pbr capability가 없는 애드온 하나가 월드 전체의 VV를 끈다. 그 팩의 manifest에 추가하면 된다(MCPE-240476 관련). 애드온을 넣었더니 그래픽 모드가 조용히 Fancy로 바뀐 사례도 같은 원인이다.
 - **pbr이 있어도 안 켜지는 경우**: 팩에 다른 문제가 있으면 pbr이 있어도 VV가 켜지지 않을 수 있다(원인 미해결). 암호화된 팩의 VV 활성화 방법은 답이 없었고, 팩에서 VV를 강제로 끄는(Simple/Fancy만 허용) 방법은 없다.
 - **VV 감지**: VV의 원래 이름은 "deferred" 렌더링이며, 그래픽 모드·디퍼드 여부를 알려 주는 Molang 쿼리가 있어서 모드별로 머티리얼을 바꿀 수 있다. raytraced는 별도 설정이다. RTX 감지 쿼리도 있다.
@@ -37,7 +40,7 @@ PBR은 색 텍스처에 더해 픽셀마다 금속성, 발광, 거칠기, 노멀
 - **팩 여러 개 쌓기**: "Defined PBR" 계열 팩은 PBR을 더하는 것이 아니라 앞선 팩의 PBR, fog 등 설정을 덮어쓴다. 그래서 fog/PBR 팩을 여러 개 쌓는 것은 의미가 없다.
 - **모드 전환 글리치**: 월드 안에서 Fancy에서 VV로 바꾸면 물이 우윳빛·회색으로 깨진다. 메인 메뉴에서 VV를 먼저 켠다. 월드 안 모드 전환은 VV 글리치나 RTX 검은 스킨을 남긴다. Nether/End에서 반사를 끄거나 월드를 다시 불러오면 반사가 깨지므로 Overworld에서 한다. education 토글도 VV를 깨뜨린다.
 - **"Adjust Brightness" 수정**: 업데이트 후 월드가 전체적으로 어두워졌다면 VV를 켜고 Adjust Brightness(예: 100%)를 적용한 다음 VV를 끈다.
-- **하드웨어**: PC는 DirectX 12급 GPU가 필요하다. Mali-G76(Exynos S10+), Pixel 10(PowerVR), Snapdragon 695급은 미지원으로 보고됐고 Mali-G68/G77 이상은 지원된다고 한다. iPhone XR(3 GB RAM)은 돌아간다. 미지원 기기는 VV 옵션이 회색이다.
+- **하드웨어**: PC는 DirectX 12급 GPU가 필요하다. Mali-G76(Exynos S10+), Pixel 10(PowerVR), Snapdragon 695급은 미지원으로 보고됐고 Mali-G68/G77 이상은 지원된다고 한다. iPhone XR(3 GB RAM)은 돌아간다. 미지원 기기는 VV 옵션이 회색이다. 그 밖의 단일 보고: 내장 GPU는 최소 설정에서도 VV가 깨져 보였고, Snapdragon 8s Gen 4 휴대폰은 약 30 fps였다. PS5에서는 VV 비호환 팩이 텍스처를 숨겼고(VV를 끄면 해결) 분할 화면에서는 VV를 꺼도 일부 모델이 사라졌다. 그래픽 모드 전환 키는 `;`다. `single report`
 - **VV 팩은 셰이더가 아님**: VV "그래픽 팩"은 설정 파일(톤매핑, atmosphere, 컬러 그레이딩)만 바꾸고 효과를 추가할 수 없다. 하늘을 바꾸는 기존 팩(커스텀 End/Overworld 하늘 서브팩)은 VV에서 깨지므로 VV atmosphere·fog 설정으로 다시 만들어야 한다.
 - **Editor 모드**: VV 설정을 실시간으로 편집할 수 있는 곳은 Editor 모드뿐이다(톤매퍼 전환, 바이옴별 VV 설정은 2026-01-14 프리뷰부터). "toggle biomes by location"은 현재 바이옴만 보여 준다. Editor는 fog나 물을 미리 보여 주지 않는다. 게임 내 설정 UI는 DDUI와 스크립팅으로 만들 수 있지만 DDUI는 서버 측이라 비헤이비어 팩이 필요하고 manifest 팩 설정·서브팩은 바꿀 수 없다.
 - **팩 설정**: 서브팩이나 Molang 같은 팩 설정은 VV 설정을 제어할 수 없다. 톤매퍼와 그림자 타입 조합마다 서브팩이 하나씩 필요하다.
@@ -116,7 +119,9 @@ PBR은 색 텍스처에 더해 픽셀마다 금속성, 발광, 거칠기, 노멀
 
 MERS는 `"metalness_emissive_roughness_subsurface"` 키를 쓴다(예: format 1.26.10). MER만 쓰면 subsurface 키를 뺀다. 값은 인라인 배열(`[255,0,0,0]`)로도 줄 수 있다. 하이트맵 키는 `"heightmap"`이다(`height_map`이 아니다).
 - **폴더 오타**: 블록 texture set이 안 먹은 원인이 `/block` 폴더(올바른 이름은 `blocks`)였던 사례가 있다.
-- **파일 형식**: MER/PBR 파일은 PNG나 TGA다. TGA는 알파 편집이 쉽고 값이 정확하며 PNG는 보기 편하다. GIMP는 MER TGA를 열 수 있지만 Paint.NET에서는 빈 이미지로 보인다. 한 보고에서는 하이트맵을 `.png`, MERS를 `.tga`로 썼다. Blockbench에서 PBR을 미리 보거나 편집할 수 있다(텍스처 우클릭, "Add material").
+- **파일 형식**: MER/PBR 파일은 PNG나 TGA다. TGA는 알파 편집이 쉽고 값이 정확하며 PNG는 보기 편하다. GIMP는 MER TGA를 열 수 있지만 Paint.NET에서는 빈 이미지로 보인다. 한 보고에서는 하이트맵을 `.png`, MERS를 `.tga`로 썼다. Blockbench에서 PBR을 미리 보거나 편집할 수 있다(텍스처 우클릭, "Add material"). MERS 편집도 Blockbench 기본 기능이다.
+- **바닐라가 TGA를 쓰는 이유**: PNG 압축이 빈 알파 채널을 바꿔 SSS 채널을 깨뜨리기 때문이다. Paint.NET에서 알파가 낮은 픽셀이 숨겨져 보이는 것도 알파에 SSS 데이터가 있어서다.
+- **애니메이션 엔티티 텍스처**: 여러 PNG로 된 애니메이션 엔티티 텍스처는 PNG마다 `<name>.texture_set.json`과 MER이 필요하다. Blockbench "create material"이 만들어 준다.
 - **폴백 값**: `minecraft:pbr_fallback_settings`(format 1.21.40)의 `global_metalness_emissive_roughness_subsurface: [0,0,255,0]`(blocks, actors, particles, items)는 PBR 텍스처가 없는 대상에만 쓰인다. `pbr.json` 스타일 값 항목으로 텍스처 대신 균일 값을 줄 수도 있다.
 - **플립북과 MER**: MER은 `flipbook_textures.json`이 아니라 `texture_set.json`에서 참조하고 파일 이름은 texture set 항목과 정확히 일치해야 한다.
 
@@ -127,6 +132,7 @@ MERS는 `"metalness_emissive_roughness_subsurface"` 키를 쓴다(예: format 1.
 - **발광 범위**: VV MER의 발광(G)은 0~255가 아니라 0~15로 클램프된다는 보고가 있으니 약한 발광에는 낮은 값을 쓴다. `single report`
 - **투명 픽셀**: MER의 투명 픽셀이 흰색으로 저장되면 그 부분이 빛난다("Export as"를 쓰고 quick export는 피한다). 무손실 이미지 최적화 도구가 알파 0 픽셀의 색을 지우면 MERS의 SSS가 깨진다(TesserPack 사례).
 - **반사 잔디 예시**: 16x `grass_top_mer`에 밝은 빨강(metalness)을 칠하고 그 이름으로 내보낸다. 진한 파랑과 빨강을 섞으면 유리처럼 보이지 않으면서 반사가 생긴다. MER 반사가 너무 강하면 albedo가 유리처럼 바랜다.
+- **반사가 보이는 조건**: MER 금속 반사는 해·달빛을 받고 반사 품질이 높을 때만 보인다. VV 블록 머티리얼(하이트맵·PBR)은 태양·달 빛에만 반응하고 블록 라이트로는 드러나지 않으므로 Nether에서는 보이지 않는다.
 - **SSS 그라데이션(잔디)**: texture set이나 Blockbench로 SSS를 켜고 위쪽 최대에서 아래쪽 0으로 가는 그라데이션을 MER 마스크 위에 칠한다. VV SSS는 스카이라이트의 영향을 받아서 스카이라이트가 낮고 햇빛이 강하면 2D 식물·몹에서 지나치게 강해 보일 수 있다. 잎 SSS/MER 생성기가 SSS 대신 금속 맵을 만들기도 한다.
 - **VV 채널**: metalness, emissive, roughness, SSS다. 폴더 구성은 Height 또는 Normal, MER, Albedo, `texture_set.json`이다. 바닐라 VV 팩의 MER은 roughness만 쓴다. 바닐라 블록·몹·아이템의 MER 세트는 바닐라 팩에서 복사할 수 있다.
 
@@ -142,7 +148,7 @@ MERS는 `"metalness_emissive_roughness_subsurface"` 키를 쓴다(예: format 1.
 
 ### PBR이 적용되지 않는 대상
 
-- **플레이어**: 플레이어 엔티티 PBR/MER은 VV에서 동작하지 않는다는 보고(하드코딩)가 있고, 반대로 steve 텍스처가 PBR을 받는다는 2025-11 보고도 있다. `conflicting`
+- **플레이어**: 플레이어 엔티티 PBR/MER은 VV에서 동작하지 않는다(하드코딩). 2026-03 테스트에서 블록과 엔티티는 되고 플레이어는 안 됐고, 2026-10에도 플레이어 엔티티는 MER을 지원하지 않으니 빛나는 부분을 어태처블로 옮기라는 답이 나왔다. steve 텍스처가 PBR을 받는다는 2025-11 보고 하나만 반대다.
 - **손에 든 블록**: 손에 든 블록 지오메트리에는 PBR/MER이 적용되지 않는다(기본값 metal 0, emissive 0, roughness 255). 아이콘이 있는 item override를 써야 하고(MCPE-237517) `blocks.json`으로 정의한 블록은 괜찮다. `light_emission`은 인벤토리에서도 빛난다.
 - **반투명 발광 엔티티**: VV에서 지원되지 않는다. 엔티티는 엔티티 텍스처마다 texture_set을 따로 설정해야 동작했다.
 

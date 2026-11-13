@@ -91,7 +91,8 @@ sources: [private-research, bedrock-wiki, ms-learn, particle-jester, bedrock-sam
 - UV의 `texture_width`와 `texture_height`는 좌표계일 뿐 PNG 픽셀 수와 같을 필요가 없다. 픽셀로 바꿀 때 가로는 `PNG 너비 / 선언 너비`, 세로는 `PNG 높이 / 선언 높이`를 곱한다.
 - 직선 `step_UV`는 다음 줄로 넘어가지 않는다. 격자 아틀라스는 식으로 칸을 고르거나 띠를 여러 개 쓴다. 칸 번호 `i`에서 `u = (i % 열수) * 칸너비`, `v = floor(i / 열수) * 칸높이`다.
 - 틴트는 텍스처 RGB에 곱해진다. 빨간 그림에 파란 틴트를 주면 거의 검게 된다. 색을 바꿔 쓸 텍스처는 흰색으로 그린다.
-- 재질: `particles_alpha`는 투명을 잘라 내고(컷아웃), 부드러운 반투명은 `particles_blend`, 빛나는 겹침은 가산 재질(`particles_add`)이다. 왜곡 효과에는 블렌드 모드 "exclusion"이 있다. 파티클 머티리얼은 매우 제한적이고 평평한(언릿) 파티클 머티리얼이 없다. 필요하면 엔티티를 쓰거나, fog가 고르게 적용되도록 큐브 대신 파티클 구를 만든다.
+- 재질: `particles_alpha`는 투명을 잘라 내고(컷아웃), 부드러운 반투명은 `particles_blend`, 빛나는 겹침은 가산 재질(`particles_add`)이다. 왜곡 효과에는 블렌드 모드 "exclusion"이 있다. 파티클 머티리얼은 매우 제한적이고 평평한(언릿) 파티클 머티리얼이 없다. 필요하면 엔티티를 쓰거나, fog가 고르게 적용되도록 큐브 대신 파티클 구를 만든다. `particles_add`는 `entity_beam_additive`의 파티클판이다. 글로우는 가산 머티리얼에서 나오고 주변을 밝히지 않으며, 반투명 텍스처에서는 스프라이트 안에서만 빛난다. 파티클 커스텀 머티리얼은 블렌드 모드와 컬링만 부분적으로 먹는다.
+- 양면 파티클: 머티리얼 파일 이름은 정확히 `particles.material`이어야 하고(아니면 "material invalid"), `"particles_twoface_alpha:particles_alpha": {"+states":["DisableCulling"]}`처럼 정의해 `basic_render_parameters.material`에서 참조한다. `particles_blend`도 같은 방식이다. `emitter_transform_xz` 파티클이 아래에서 안 보인 원인도 뒷면 컬링이었다.
 - 예제 충격파는 링을 텍스처 반지름의 0.85 지점에 그렸기 때문에 크기 식을 `0.85`로 나눴다. 나누지 않으면 8블록이어야 할 링이 6.8블록으로 보였다.
 
 ## 문서끼리 어긋나는 곳 (Particle Jester 대조)
@@ -110,10 +111,13 @@ sources: [private-research, bedrock-wiki, ms-learn, particle-jester, bedrock-sam
 (출처: 비공개 조사)
 
 - 빛나는 VFX에는 `particles_alpha`나 `particles_add`, 고품질 PNG 텍스처, 크기·페이드 곡선을 쓴다. `particles_alpha`는 알파 테스트라 반투명에는 `particles_blend`를 쓴다. 원점이 블록 안일 때의 어두움은 fog 때문일 가능성이 크다. 파티클 effect `format_version: 1.26.0`이 허용된다.
-- 파티클 텍스처는 2의 거듭제곱(4~16 px)이어야 하고, 아니면 Snowstorm·Blockbench에서는 괜찮아도 게임에서 깨진다. 분홍-검정 사각형은 잘못된 텍스처 이름이나 `uv`다. `particle_appearance_billboard`의 `uv`는 `texture_width`, `texture_height`, `uv`, `uv_size`를 쓰고, 텍스처 없음 표시는 최근 분홍과 검정으로 바뀌었다. 폴더의 중복 파티클 파일은 로그 경고 없이 텍스처를 빠뜨렸고, offset이 있는데도 요구한다는 오류는 파티클 식별자 중복일 가능성이 크다. 파티클은 텍스처를 반복할 수 없으니 1024x1 점선 텍스처를 쓴다.
+- 파티클 텍스처는 2의 거듭제곱(4~16 px)이어야 하고, 아니면 Snowstorm·Blockbench에서는 괜찮아도 게임에서 깨진다. 분홍-검정 사각형은 잘못된 텍스처 이름이나 `uv`다. `particle_appearance_billboard`의 `uv`는 `texture_width`, `texture_height`, `uv`, `uv_size`를 쓰고, 텍스처 없음 표시는 최근 분홍과 검정으로 바뀌었다. 폴더의 중복 파티클 파일은 로그 경고 없이 텍스처를 빠뜨렸고, offset이 있는데도 요구한다는 오류는 파티클 식별자 중복일 가능성이 크다. 파티클은 텍스처를 반복할 수 없으니 1024x1 점선 텍스처를 쓴다. `texture_width`와 `texture_height`가 실제 시트 크기와 같아야 한다는 커뮤니티 보고는 위 "크기, 좌표, UV 계산" 절의 설명(좌표계일 뿐)과 어긋난다(`conflicting`). `uv_size`가 맞지 않으면 늘어난다. 텍스처 밖을 샘플링하거나 조건에 따라 텍스처를 바꿀 수 없으니 UV 오프셋을 쓴다. 바닐라 시트 `textures/particle/particles`는 경로로 참조하고 UV로 칸을 고른다. `particle_appearance_tinting`에는 `[r,g,b,a]` 단색도 쓸 수 있다.
 - 방향: 빌보드 `direction`의 유효한 모드는 `"custom"`(`custom_direction: [x,y,z]`)이다. 모드로 `"custom_direction"`을 쓰면 "The 'direction' sub section is not using a valid mode!"가 난다. `direction`은 `particle_appearance_billboard` 안에 있어야 한다. `custom_direction`의 `direction_z`는 정규화된 y의 절댓값이 0.999보다 크면(약 2.5625도) 수평면으로 스냅된다. 플레이어 움직임에 따라 파티클이 회전하지 않게 하려면 `facing_camera_mode`를 `lookat_*`에서 `direction_x`, `direction_y`, `direction_z`로 바꾼다. `facing_camera_mode: direction_x` 단일 빔이 안 보인 예시(JSON 1.10.0, `particles_alpha`)는 미해결이다.
 - 수명과 단위: 충돌 시 사라지는 파티클은 `particle_motion_collision`의 `expire_on_contact`, 또는 공기를 지정한 `expire_if_not_in_blocks`다. 로컬 공간은 `"minecraft:emitter_local_space": {"position": true}`다(Snowstorm 토글). 로케이터 지오메트리에 남은 16x16 평면이 파티클을 깨뜨린 사례가 있다.
 - 궤도와 구: `particle_motion_parametric`(방출기 기준 Molang 오프셋)으로 궤도를 돌리고, 구 방출기는 `emitter_shape_sphere`를 쓴다. 바닐라 파티클은 bedrock-samples `resource_pack/particles`에 있다(TNT: `large_explosion_level`, `huge_explosion_level`). TNT·폭발 파티클 정의는 samples에 없다는 보고(하드코딩일 수 있음, 스크립트 API로 생성 가능)도 있다. 잔류 포션 구름은 `minecraft:mobspell_lingering`이다.
+- 바닐라 파티클 id에는 네임스페이스가 필요하다(`minecraft:basic_smoke_particle`). 예: `minecraft:water_splash_particle_manual`, `water_evaporation_manual`, `magical_critical_hit_emitter`, `heart_particle`(번식 하트와 구분할 수 없음). 바닐라 파티클은 덮어쓸 수 있고 `num_particles` 0으로 끌 수 있다(폭발, 토템). 거품처럼 동작을 바꾸려면 같은 모양의 커스텀 파티클을 만든다.
+- 블록 파괴 파티클 템플릿: `emitter_rate_instant`에 `Math.random(15,30)`, `emitter_lifetime_once`, `particle_motion_dynamic`(가속 -9.8과 drag), `particle_motion_collision`, 16x16 안의 무작위 UV, `particle_appearance_lighting`.
+- 이벤트 타이밍: `minecraft:emitter_lifetime_events`의 `creation_event`가 불안정했고 `minecraft:particle_lifetime_events`의 `"timeline": {"0.0": "ring"}`으로 해결했다. 팩 설정 토글은 `"num_particles": "(1) * q.is_pack_setting_enabled('hooked:ding')"`와 manifest `settings`로 만든다. `sound_effect.event_name`은 individual_event_sounds에 있는 이름이어야 한다.
 
 ## 엔티티와 파티클 연결
 
@@ -142,24 +146,28 @@ sources: [private-research, bedrock-wiki, ms-learn, particle-jester, bedrock-sam
 - 예제 BP는 `/scriptevent pm:vfx` 뒤에 `portal`, `blizzard`, `explosion`, `boss` 중 하나를 받아 시작 위치를 복사해 두고, 단계마다 `system.runTimeout`을 건 다음 실행 직전에 엔티티 유효성·차원·`isChunkLoaded`를 다시 확인한다. 플레이어가 나가거나 엔티티가 죽으면 남은 예약을 지운다. 이미 뿌린 입자는 자기 수명대로 사라진다.
 - 품질 입력 `variable.quality`(0.4~1.5)를 `setFloat`로 넘기고 파티클 JSON은 `rate * (variable.quality ?? 1)`로 받는다. `/particle`로 띄우면 값이 없어서 1이 된다. `??` 연산자를 엔진이 받는지는 저장소도 대상 버전에서 확인하라고만 적는다 `{실측 필요}`.
 - 이벤트로 변수 전달("temp leaking"): `event: { sequence: [ {expression: "t.a=v.some_var;"}, {particle_effect: {..., pre_effect_script: "v.some_var=t.a;"}} ] }`. 이것은 의도치 않은 버그라 깨질 수 있다. 반면 파티클 수 쿼리로 방출 후 파티클을 제어하는 것은 안정적이고 의도된 기능이다(veka). 파티클 수 쿼리는 데이터 사이드 채널로 쓸 수 있다.
+- 하위 이미터로 변수 넘기기: 부모의 expression 이벤트로 `variable`을 `temp`에 담고, 자식의 `pre_effect_expression`에서 `t.x`를 `v.x`로 옮긴다. `t.vec1.x` 같은 점 이름은 "temp variables only on their own" 오류를 내니 `t.vec1x`를 쓴다. 자식 변수도 자식 안에서 초기화하고, 변수는 이미터별 지역 변수다.
+- Molang JIT: 무거운 파티클은 처음 생성될 때 멈칫한다. temp 변수로 구조체를 만들 수 없어서 16항목 temp 변수 256개와 삼항식 이진 탐색으로 배열을 흉내 낸 사례가 있다. `single report`
 - `t.`와 `v.`: 프레임을 넘어 유지돼야 하는 데이터에 `t.`를 쓰지 않는다. `t.last_offset_index`를 `v.`로 바꾸자 `spawnParticle`과 `MolangVariableMap`으로 그린 다중 파티클 블록 외곽선이 고쳐졌다.
 - 파티클별 값: 방출기 하나에서 파티클마다 다른 값(크기)은 파티클 수명에 데이터를 인코딩한다(veka 제안). 오프셋 트릭: `emitter_initialization.creation_expression "v.i = 0;"`과 `v.i`를 증가시키는 `emitter_shape_point.offset` 식. `creation_expression` 카운터나 `particle_initialization.per_render_expression`으로 `emitter_shape_point.offset`을 파티클별로 주는 것은 예상대로 되지 않았다(미해결).
 - 강제 만료: `particle_lifetime_expression.expiration_expression`에서 수를 비교한다. 예: `MolangVariableMap`으로 `variable.particle_count = 2`를 주고 생성하면 `q.effect_emitter_count < q.effect_particle_count`가 참이 된다. 같은 조건으로 `emitter_lifetime_expression.expiration_expression`도 추가해야 이미터가 파티클과 함께 끝난다. 플레이어별 파티클(`player.spawnParticle`)이면 만료가 단순하다. `query.any_tag`는 엔티티 `/tag`가 아니라 아이템·블록 태그를 조회하므로 만료 트리거로 쓸 수 없다.
-- 카메라·LOD 쿼리: 파티클에서 `q.distance_to_camera`는 되지만 `q.rotation_to_camera(...)`는 안 된다. 만료식으로 `q.lod_index(10,20) == 1`은 됐지만 `q.lod_index(10) >= 1`은 안 됐고 `q.distance_from_camera > 50`은 즉시 만료됐다.
+- 카메라·LOD 쿼리: 파티클에서 `q.distance_to_camera`는 되지만 `q.rotation_to_camera(...)`는 안 된다. 만료식으로 `q.lod_index(10,20) == 1`은 됐지만 `q.lod_index(10) >= 1`은 안 됐고 `q.distance_from_camera > 50`은 즉시 만료됐다. 파티클의 `query.position`은 FPS와 관계없이 40 Hz로 갱신되고 `query.log`는 개발 빌드 전용이다. `q.camera_rotation`이 1인칭에서 0이라는 보고도 있다(결론 없음).
 - **메모리 누수**: `emitter_rate_manual`에 `max_particles`가 없으면 크게 새서 FPS가 회복되지 않으니 항상 지정한다(최대 1000). 커스텀 트레일 파티클이 RAM을 새게 한 것처럼 보인 사례(이미터 미삭제 의심)는 미해결이다.
-- 사운드: Snowstorm 문서에는 파티클 이벤트가 바닐라 사운드 이벤트만 쓸 수 있다고 되어 있는데(버그), 서버 측에서 사운드를 재생하는 문제는 열린 질문이다. 클라이언트 측 틱당 생성 확률, 변수로 정하는 파티클 수명 질문은 답이 없었다.
+- 사운드: 파티클 이벤트는 바닐라 사운드 이벤트만 쓸 수 있고, 파티클에서 새(커스텀) 사운드를 재생하는 것은 지원되지 않는다(MCPE-101714). 커스텀 사운드가 필요하면 스크립트로 재생한다. 클라이언트 측 틱당 생성 확률, 변수로 정하는 파티클 수명 질문은 답이 없었다.
 
 ## 렌더링 특성과 기법
 
-- 깊이: `particles_blend` 파티클은 뒤 파티클이 앞 파티클 위에 그려질 수 있다. 깊이는 한 방출기(또는 그것이 생성한 방출기) 안에서만 동작하고 별개 방출기 사이에서는 안 된다. alpha_test 파티클은 이 문제가 없지만 블렌딩이 없다. 복셀·3D 큐브 파티클에서 알파 테스트는 단면이니 블렌드 머티리얼을 쓴다. blend(fog)와 add(반딧불이) 파티클 사이의 깜빡임은 미해결이다.
-- 한계: 파티클은 벽 너머로 보일 수 없고, 시뮬레이션 거리 밖에서 렌더링되지 않으며, 텍스트를 넣을 수 없다(이름이 있는 엔티티나 떠 있는 텍스트를 쓴다). 카메라를 향하지 않는 떠 있는 텍스트·빌보드는 미해결이다. 파티클 머티리얼에서 `"-defines": ["ENABLE_FOG"]`로 fog를 없애는 것은 안 됐다.
-- VV: 디퍼드 렌더링 비용은 [VV 설정 파일](./vv-settings.mdx)의 성능 절을 본다. VV에서 파티클은 조명을 무시할 수 없고 조명 컴포넌트를 빼거나 발광 PBR 텍스처를 쓰면 부분적으로 해결된다. "빛 강화" 파티클 머티리얼은 VV에서 반대로 동작한다. 파티클 텍스처에 MER 파일을 주면 VV에서 빛난다(2026-03). VV의 바닐라 파티클 글로우(불꽃 등)는 하드코딩이고 커스텀 파티클용 문서화된 방법이 없다고 했다. 발광 파티클은 VV에서 빛을 내지 않고 블룸만 낸다. `particle_appearance_tinting`에 `query.spellcolor`를 쓰면 색상이 틀어진다(빨강이 자홍, 답 없음).
+- 깊이: `particles_blend` 파티클은 뒤 파티클이 앞 파티클 위에 그려질 수 있다. 깊이는 한 방출기(또는 그것이 생성한 방출기) 안에서만 동작하고 별개 방출기 사이에서는 안 된다. alpha_test 파티클은 이 문제가 없지만 블렌딩이 없다. 복셀·3D 큐브 파티클에서 알파 테스트는 단면이니 블렌드 머티리얼을 쓴다. blend(fog)와 add(반딧불이) 파티클 사이의 깜빡임은 미해결이다. 같은 위치에 겹친 파티클의 그리기 순서는 지정할 수 없으니 Molang으로 위치를 조금 어긋나게 한다.
+- 한계: 파티클은 벽 너머로 보일 수 없고, 시뮬레이션 거리 밖에서 렌더링되지 않으며, 텍스트를 넣을 수 없다(이름이 있는 엔티티나 떠 있는 텍스트를 쓴다). 카메라를 향하지 않는 떠 있는 텍스트·빌보드는 미해결이다. 파티클 머티리얼에서 `"-defines": ["ENABLE_FOG"]`로 fog를 없애는 것은 안 됐고 fog는 파티클도 물들인다. 파티클 렌더 거리는 엔티티의 약 두 배다. 파티클은 월드에 영향을 줄 수 없으니 로직은 엔티티가 맡는다. 벽 너머로 보여야 하면 엔티티를 쓴다(Mojang 맵도 같은 방식).
+- 3D 모양 파티클: 파티클은 3D 지오메트리를 쓸 수 없어 면마다 파티클 하나가 필요하다는 답(2026-03, 2026-06)이 있었고, 2026-10에는 Molang 변수로 회전·크기가 바뀌는 큐브를 파티클 하나로 그려 먼 3D 모델에 쓰는 시연이 나왔다. Molang만으로 블록 텍스처 파티클(엔티티 1개, 한 면)을 그린 예도 있고 성능은 이미터 수에 좌우된다. 엔티티를 로케이터 없이 로컬 위치와 수식으로 따라가게 할 수도 있다.
+- 비와 날씨: 비는 파티클이고 바닐라 비 파티클은 samples에 없으며 감지할 수 없다. 커스텀 비는 충돌로 땅 높이에서 튀길 수 있다(엔티티 위는 제외). 빗줄기와 튀김을 두 파티클로 나누거나 바닐라 튀김 이벤트로 물결을 만든다. Wildlifecraft의 비 렉은 8틱마다 650개와 이중 땅 검사(클라이언트) 때문이었다. 가짜 날씨는 스크립트로 플레이어 근처에 바이옴별 큰 파티클을 띄운다.
+- VV: 디퍼드 렌더링 비용은 [VV 설정 파일](./vv-settings.mdx)의 성능 절을 본다. VV에서 파티클은 조명을 무시할 수 없고 조명 컴포넌트를 빼거나 발광 PBR 텍스처를 쓰면 부분적으로 해결된다. "빛 강화" 파티클 머티리얼은 VV에서 반대로 동작한다. 파티클 텍스처에 MER 파일을 주면 VV에서 빛난다(2026-03). VV의 바닐라 파티클 글로우(불꽃 등)는 하드코딩이고 커스텀 파티클용 문서화된 방법이 없다고 했다. 발광 파티클은 VV에서 빛을 내지 않고 블룸만 낸다. `particle_appearance_tinting`에 `query.spellcolor`를 쓰면 색상이 틀어진다(빨강이 자홍, 답 없음). VV에서 커스텀 파티클 머티리얼이 가까이서만 보였다는 보고와, 로케이터에서 생성한 파티클이 VV에서 Fancy와 다른 위치에 나온다는 보고가 있다(미해결, `single report`).
 - 빔: 텍스처가 긴 아주 긴 2D 파티클 하나, +45/-45도로 돌리고 늘린 교차 파티클 두 개, 또는 모델을 쓴다. 방향 있는 빔 파티클은 `v.dir_x/y/z`로 `emitter_shape_point` 오프셋을 주고 `facing_camera_mode: direction_z`, `custom_direction [v.dir_z, 0, -v.dir_x]`를 쓴다. `emitter_local_space` rotation true는 빔을 비틀고, 스크립트로 생성하면서 MolangVariableMap으로 회전을 넘길 수도 있다. x와 z에 같은 랜덤 값을 쓰자 3중 빔 아티팩트가 사라졌다. 블록 외곽선 같은 단일 파티클 선 렌더러로는 `gfx:line`이 있다.
 - 트레일: 초당 파티클을 더 많이 만들고 더 천천히 줄여 틈을 메우거나(성능 비용) 애니메이션 루프에서 프레임마다 생성한다.
 - 가짜 그림자: 아래로 아주 빠르게 움직이고 충돌을 켠 파티클로 땅에 붙는 클라이언트 그림자를 흉내 낸다(가장자리가 어색하다).
-- 파티클 하늘·천문(리소스 팩만으로): 플레이어 엔티티에 (큐브 없이 로케이터만 있는) 지오메트리를 붙여 약 6개 파티클을 방출하고, 자체 렌더 컨트롤러와 애니메이션 컨트롤러로 본을 태양계 모형처럼 회전한다. 지오메트리는 몸 회전을 상쇄하는 루트의 자식이고 VV에서만 동작한다. `query.time_of_day`, `query.day`를 쓰고, Realms에서 낮 주기가 끊기면 `query.delta_time`과 lerp를 쓴다. 파티클 파일의 오프셋은 블록 단위이고 지오메트리 로케이터 오프셋이 아니다. 하늘 물체를 파티클로 그릴 때 오프셋 256은 렌더 거리에 따라 블록 앞에 그려지고, 1024는 항상 뒤에 그려지지만 불투명도·색이 깨지며, 512는 색이 나쁘다. 바이옴 강수는 바꿀 수 있지만 Nether식 파티클로만 가능하고 1인칭 그림자가 이상해진다.
+- 파티클 하늘·천문(리소스 팩만으로): 플레이어 엔티티에 (큐브 없이 로케이터만 있는) 지오메트리를 붙여 약 6개 파티클을 방출하고, 자체 렌더 컨트롤러와 애니메이션 컨트롤러로 본을 태양계 모형처럼 회전한다. 지오메트리는 몸 회전을 상쇄하는 루트의 자식이고 VV에서만 동작한다(VV에서는 지오메트리를 몸에 고정하고 몸 회전을 상쇄할 수 있지만 non-VV에서는 머리에만 붙는다). 리소스 팩만으로 혜성, 행성, 일식을 그린 시연(2026-11)과 Better Clouds를 파티클만으로 옮기는 작업이 있다. 클라이언트 파티클은 생성 지점 근처에서만 로드되므로 서버 측에서 천체 파티클을 내는 우회도 쓰인다. `query.time_of_day`, `query.day`를 쓰고, Realms에서 낮 주기가 끊기면 `query.delta_time`과 lerp를 쓴다. 파티클 파일의 오프셋은 블록 단위이고 지오메트리 로케이터 오프셋이 아니다. 하늘 물체를 파티클로 그릴 때 오프셋 256은 렌더 거리에 따라 블록 앞에 그려지고, 1024는 항상 뒤에 그려지지만 불투명도·색이 깨지며, 512는 색이 나쁘다. 바이옴 강수는 바꿀 수 있지만 Nether식 파티클로만 가능하고 1인칭 그림자가 이상해진다.
 - 오픈소스 예: 입김 파티클(Apache 2.0, whynotoss/cold-breath).
-- Snowstorm: 표준 파티클 편집기다(snowstorm.app). 미리보기는 게임이 거부하는 것도 받아들이고, 스크립트로 정의한 변수는 해석하지 못하며, JSON에 주석이 있으면 로드에 실패할 수 있다.
+- Snowstorm: 표준 파티클 편집기다(snowstorm.app). 미리보기는 게임이 거부하는 것도 받아들이고, 스크립트로 정의한 변수는 해석하지 못하며, JSON에 주석이 있으면 로드에 실패할 수 있다. 3.3(2026-11-04)에서 blend·additive 그리기 순서와 update expression 평가 순서가 고쳐졌다. 일부 Blockbench 버전에서는 Snowstorm 파티클이 깨지고 로케이터 방향이 뒤집혔다. Blockbench는 파티클을 미리 보여 줄 뿐 파티클 편집기가 아니다. 편집기 목록은 [모델링과 텍스처 도구](../tools/modeling.mdx)를 본다.
 - 블록 파티클: 블록은 바닐라가 이미 내는 것 외의 파티클을 리소스 팩만으로 낼 수 없다. 생존 모드에서 방벽을 보이게 하려면 방벽 블록 안에서만 보이는 파티클로 흉내 낸다.
 
 ## Particle Jester 저장소 (도구와 검증)

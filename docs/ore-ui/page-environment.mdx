@@ -144,3 +144,19 @@ DDUI 시험 화면의 "미디어" 탭이 인터넷(https, http)과 팩(`/hbui/me
 - 인터넷 주소는 모두 실패했다. `<img>`는 `error`, `<video>`는 `error=2`(네트워크)였다. 팩의 GIF(`/hbui/media/spin.gif`)는 그려졌다.
 - Gameface의 `<img>`에는 `naturalWidth`가 없다(`undefined`).
 - 영상은 WebM(VP8·VP9, 소리 Vorbis 하나)만 지원하고 `<audio>`는 지원하지 않는다는 앞의 문서와 맞춰, 팩에 MDN 예제 `flower.webm`(CC0, VP8 + Vorbis)을 넣고 음소거 자동재생과 소리 켜고 재생 버튼 두 칸을 두었다. 이 두 칸은 아직 게임에서 돌리지 않았다.
+
+## 11. 커뮤니티 노트
+
+커뮤니티 대화(2025-10 ~ 2026-11-13)의 보고다. 이 저장소에서 시험하지 않았다. 신뢰 표시는 [커뮤니티 보고와 대조](../json-ui/community-reports.mdx)와 같다. (출처: private-research)
+
+- **CSS**: `display`는 flex, inline, block만 되고 `inline-block`은 안 된다는 보고가 있다. `inline`은 0장의 Gameface 문서와 엇갈린다. **conflicting** `<br>`이 꺼져 있어서 서식 있는 `span`과 줄바꿈 글을 섞기 어렵다.
+- **페이지 JS에서 DDUI 버튼 누르기**: hbui에는 Script API가 없어서 스크립트와 HTML 사이를 DDUI 폼으로 잇는다(스크립트, DDUI 폼, HTML 순). 페이지 JS에서 DDUI 버튼을 누르는 호출로 다음 형태가 보고됐다. 3장의 `dataStoreButtonPress`를 쓰고, 이 저장소에서는 시험하지 않았다.
+
+  ```js
+  window.__commands__.vanillaDduiDataStoreSetCommandGroup.dataStoreButtonPress.callable("minecraft", "custom_form_data_{instanceId}", "layout[" + index + "[.onClick")
+  ```
+
+- **드래그 앤 드롭 오버레이**: 커스텀 DDUI 폼을 띄우고 그 위에 Ore UI HTML을 덮어 JS에서 입력을 가로챈 뒤, 결과만(예: `{type:'move',from,to}`) JSON 명령으로 서버에 보낸다. `mouseup` 안에서 바로 보내면 연결이 끊겨 약 120 ms 뒤에 보낸다. 중복 클릭 방지는 400 ms, 클릭과 드래그 구분은 3 px(터치 6 px)이다. Shift는 `keydown` keyCode 16이나 `event.shiftKey`로 읽고, 터치에서는 길게 누르기를 Shift로 쓴다.
+- **DDUI 입력으로 HUD 흉내**: DDUI로 마우스 움직임을 받아 화면을 움직이는 방식이 시도됐다. DDUI는 Shift와 Space를 감지한다. 렉이 심해서 HUD 버전을 지운 사례가 있다.
+- **외부 콘텐츠**: 엔진이 UI의 외부 네트워크 접근을 막으므로(1장 실측과 같음) 외부 콘텐츠는 서버가 중계해야 한다. 서버 프록시로 외부 웹 페이지를 띄운 사례가 있다.
+- **기기별 속도와 판**: iOS와 콘솔은 JIT를 허용하지 않아 JS가 느리고 Google Play판은 허용한다는 의견이 있다. *unverified* Switch 2는 26.60부터 따로 빌드된 판을 받았다. Switch 1에서는 페이지가 입력을 가로채면 화면을 빠져나오지 못하므로 닫기 처리기를 둔다.

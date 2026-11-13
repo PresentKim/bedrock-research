@@ -66,6 +66,11 @@ playsound random.glass @a ~ ~ ~
 - 피처 배치: `/place feature`, `/place featurerule`, `/place jigsaw <pool> <target> <depth> ~~~ true`는 명령 블록이나 함수에서 실행할 수 없다. 구조물은 `/structure load ns:name`, 삭제는 `/structure delete <name>`이다.
 - 시야를 확인하는 명령 조건 예: `if block ^ ^ ^0.25 air`로 장애물을 확인하며 facing 텔레포트로 조종할 수 있다.
 - 명령 블록에서의 `/event entity` 여러 개는 각각 이벤트를 발동한다.
+- 블록 중앙 정렬은 `execute align xz positioned ~0.5 ~0.5 ~0.5 run ...`, 디멘션 이동은 `/execute in nether run tp <target> ~ ~ ~`다. `/tp @e ^^^+3 true`의 마지막 `true`는 이동 경로의 블록을 검사한다.
+- `/fill`이 "world not loaded"로 실패하면 시뮬레이션 거리가 낮아 fill 영역 전체가 틱킹 영역 안에 들어오지 않은 것이다.
+- `/camera @s fade ...`로 화면을 단색으로 덮을 수 있다. 매 틱 `/camera`를 갱신하면 호스트가 아닌 플레이어에게 끊겨 보이고, 곡선 이동은 spline 모드뿐이다. `camera ... facing @s`를 `execute at @s`와 함께 쓰면 화면이 깜빡인 사례가 있다(미해결).
+- 게임룰 사실: `dofiretick`을 끄면 번개가 만드는 불도 막고, `showtags`를 끄면 잠긴 아이템 표시가 숨겨진다. 하루는 24000틱이다.
+- `/spreadplayers`로 안전한 무작위 텔레포트를 만든다. `/place feature minecraft:coal_ore_feature`로 놓은 결과는 월드를 다시 열기 전까지 보이지 않는 경우가 있다. 명령만으로는 플레이어별로 다르게 보이는 파티클을 만들 수 없다.
 
 ## 4. 사례: 데미지 숫자를 파티클로 그리기
 
@@ -92,7 +97,7 @@ attacker.spawnParticle("pdi:damage_glyph", pos, vars);
 - BP manifest/format이 1.17.0을 넘으면 `#` 주석이 동작하지 않으며 로드에 실패한 함수는 목록에 나오지 않는다. (본문 1절의 주석 예는 위키 관례이고, 이 보고와 충돌하면 주석을 지운다.)
 - `Unexpected @a / @e` 오류나 `execute` 파싱 실패는 manifest가 1.19.50 이전 문법으로 파싱되기 때문이다. `"format_version": 2` + `"min_engine_version": [1,19,50]` 이상으로 고치거나 옛 문법을 쓴다. 변환: `execute @a ~ ~ ~ <cmd>` = `execute as @a at @s positioned ~ ~ ~ run <cmd>`, `detect ~ ~ ~ air` = `if block ~ ~ ~ air`.
 - `tick.json`은 `functions/`에 두고 매 틱 실행할 함수를 나열한다. 여러 애드온의 tick.json 함수는 동시에 실행된다. 점수 보유자 플래그로 다른 함수를 조건부 호출하는 `main.mcfunction` 하나를 두는 구성이 권장된다(`execute if score map_1 wiki:q.is_active matches 1 run function maps/map_1/on`). tick.json 대 엔티티 `environment_sensor` 러너의 성능은 보고가 엇갈린다. tick.json 폴링은 이벤트 기반 스크립트보다 느리다.
-- 조건부 체인은 없으니 `execute if/unless`나 스코어보드로 대신한다. `/schedule`은 함수 안에서 쓸 수 있고 `/schedule on_area_loaded`는 청크 로드를 기다린다.
+- 조건부 체인은 없으니 `execute if/unless`나 스코어보드로 대신한다. `/schedule`은 함수 안에서 쓸 수 있고 `/schedule on_area_loaded`는 청크 로드를 기다린다. 다만 tick 함수에서 부른 mcfunction 안의 `/schedule delay add <function> 60`이 실행되지 않고 같은 명령이 커맨드 블록에서는 동작한 사례가 있다(원인 미확인, 2026-11).
 - 스크립트에서 함수 호출은 `player.runCommand('function name')`이다. 스크립트에서 허용되지 않는 명령(`/place`)을 담은 함수는 스크립트로 실행해도 돌지 않는다. `/op`, `/connect`는 스크립트 엔진에서 실패한다.
 - NPC/대화 JSON의 명령 문자열은 내부 따옴표를 이스케이프한다: `"on_open_commands": ["/tellraw @a {\"rawtext\":[{\"text\":\"hi\"}]}"]`. 2026-01에 NPC 대화 텍스트의 `selector` `@initiator`/`score` rawtext가 동작하지 않는다는 보고가 있다. 아이템 사용 트리거 함수가 조용히 실패한 원인은 잘못된 `execute` 문법이었다.
 - 권한 수준: 함수는 권한 레벨 1로 파싱되고 `/place`는 레벨 2라서 명령 블록·함수·tick.json에서 `/place`(jigsaw, feature)를 실행할 수 없다. 스크립트의 `runCommand`로 우회한다. `/reload`도 명령 블록/함수/NPC에서 불가하다.
@@ -100,6 +105,7 @@ attacker.spawnParticle("pdi:damage_glyph", pos, vars);
 - 셀렉터: `r`/`rm`은 엔티티 발 위치 기준이고 볼륨 `x,y,z,dx,dy,dz`는 히트박스 접촉 검사다(웅크리면 히트박스가 작아져 웅크림 감지 가능). 볼륨 셀렉터는 `~` 상대 좌표를 받고 최소 1x1x1이다. 링 검사: `execute as @a at @s if entity @e[type=!player,r=6,rm=5]`, `rm=0.001`(또는 0.01)로 자신을 제외한다.
 - 타이머는 체인 지연이나 레드스톤보다 스코어보드 타이머를 권장한다. `tp`의 `^^^`는 실행 위치 기준이므로 각 대상을 옮기려면 `execute as <targets> at @s run tp @s ^..`를 쓴다. `/execute facing`은 텔레포트 전, `tp ... facing`은 후 회전한다. 뒤로 10블록은 `execute as @a at @s rotated ~ 0 run tp @s ^^^-10`이다. 블록 비교는 `execute if blocks <ref> <ref> <target> all|masked`(`all`은 공기 포함, `masked`는 무시)이며 오프셋은 목적지 모서리 기준이고 서명된 책·이름까지 비교해 불안정할 수 있다. 물 잠김은 블록 상태로 검사할 수 없다.
 - 커스텀 명령(`namespace:name`, 이름이 유일하면 네임스페이스 없이 호출 가능)을 선호하는 합의가 있다. `/scriptevent`는 명령 이름을 소비하지 않고 사용자에게 숨겨지며 재로드 없이 바뀌어 팩 내부/팩 간 호출에 적합하지만 사용자가 실행할 수 있으니 deop이나 권한 제한이 필요하다. 커스텀 명령은 Realms에서 동작하고(beta `chatSend`보다 이식성 높음) `runCommand`로 실행할 수 있으나 결과 텍스트는 반환되지 않는다. 커스텀 명령 실행은 채팅창을 닫으므로 그 직후 폼을 띄우기 좋다.
+- 커스텀 명령의 권한 수준: 커맨드 블록에서는 쓰이지만 채팅에서는 op가 필요한 명령(예: `/effect`)은 낮은 단계의 권한 수준을 준다. 기준은 [Bedrock Wiki custom-commands](https://wiki.bedrock.dev/scripting/custom-commands#command-permission-level)에 있다. 스크립트 커스텀 명령이 커맨드 블록에서 실행되지 않았다는 보고는 해결되지 않았다.
 
 ## 6. 스크립트·도구 관련 요약 (scripting / tooling-server 병합)
 
@@ -111,6 +117,13 @@ attacker.spawnParticle("pdi:damage_glyph", pos, vars);
 - 도구: bridge.(웹 편집기)는 mcfunction 생성을 지원하고, VS Code 확장 MCBE Command Checker가 mcfunction을 검증하며, `MCDevKit.jsonte-vscode`는 .mcfunction 안의 injection을 지원한다. 위키의 긴 `/execute` 체인 글은 스크립팅이 있는 Bedrock에서는 쓸모가 제한적이라는 평이 있다. AI 답변은 Bedrock 명령과 Script API에서 믿기 어렵다.
 - 멀티플레이 동기화: 많은 엔티티에 계속 `tp`를 쓰면 호스트가 아닌 플레이어에게 렉으로 보인다. 셀렉터와 fork는 플레이어 수만큼 늘어나므로 명령 비용이 커진다.
 - BP 애니메이션 컨트롤러는 트리거 기반이라 싸고 스크립트는 상한이 높고 조합이 쉽다. 우클릭 함수 실행은 player.json 컨트롤러(`query.is_using_item && query.is_item_name_any('slot.weapon.mainhand', 'ns:item')` → `on_entry` `/function`)로도 가능하다.
+
+### Molang 사용 규칙
+
+- Molang은 왼쪽에서 오른쪽으로 단락 평가한다. `!q.is_in_ui && ...`처럼 검사를 앞에 두면 "called on an entity with no actor" 오류를 피한다. 불리언 쿼리는 `q.is_sprinting == true` 대신 `q.is_sprinting`, `!q.is_sprinting`으로 쓴다.
+- `q.scoreboard`는 BP에서만, `q.is_local_player`는 RP에서만 쓸 수 있다.
+- `math.clamp(value, min, max)`는 인자가 3개다. 삼항 안에서 대입하는 대신 `q.in_range(v, lo, hi)`를 쓴다.
+- RP만으로는 플레이어 사이의 거리를 얻을 수 없다.
 
 ## 7. 전체 레퍼런스
 

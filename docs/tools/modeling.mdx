@@ -68,8 +68,34 @@ Nusiq의 Blender 애드온으로, Blender에서 만든 모델과 애니메이션
   - asset browser 플러그인에 바닐라 파일이 있다(엔티티 애니메이션은 빠졌을 때가 있으니 bedrock-samples에서 받는다).
   - PBR(MER) 미리보기와 texture_set 정리, attachable용 Bedrock Entity 포맷
   - 좌석 위치 시각화 도구
-- **플러그인**: "meshy"(메시를 geo.json/poly_mesh로 직접 export), clipping mask, Medibang blend mode, UV face painter(.js로 공유), 블록 생성 플러그인.
-- **가이드**: `https://www.blockbench.net/wiki/guides/bedrock-modeling#animations`
+  - 참조 이미지, Toggle Graph Editor(Bezier), 이미지를 끌어다 놓아 평면 모델 만들기, Convert Project, animation controller 편집기, GIF export
+  - glTF 플러그인으로 구조물 `.glb`를 불러온다.
+  - 1인칭 애니메이션은 카메라 프리셋 플러그인의 FOV 70 고정 프리셋으로 맞춘다(2026-11).
+  - Wizard는 File > Plugins에서 설치하고 모바일에서도 된다. sand 같은 falling block 템플릿은 없다.
+  - 2025-11에 재생 버튼 자리가 자물쇠 토글로 바뀌었다.
+  - 모바일에서 erase-model이나 실수로 누른 discard로 작업을 잃은 보고가 있으니 자주 저장한다.
+- **모델링 요령**
+  - 크기를 바꿀 때는 per-face UV를 쓰거나 프로젝트 텍스처 해상도를 바꾼다. 소수 크기는 피한다.
+  - UV 체인 토글, 그룹 선택, 미러 페인팅을 쓴다. Mirror X/Y 도구 결과가 게임에 반영되지 않았다는 보고가 있다.
+  - Bedrock 엔티티 형식은 모델당 텍스처가 하나라서 부위를 나누고 렌더 컨트롤러로 조합한다.
+  - Generic model로 변환할 수 있지만 Generic model에는 Bedrock .json 내보내기가 없다.
+  - 스냅: Shift로 0.25, Shift+Ctrl로 0.025 단위로 움직이고 vertex snap도 있다.
+  - .obj 임포트와 glTF(.glb) 내보내기를 지원한다.
+  - 뷰포트나 GIF 내보내기에 보이는 아티팩트는 게임에는 없다.
+  - 휴대폰에서는 웹 앱 `https://web.blockbench.net/` 을 데스크톱 모드로 연다.
+  - 큰 모델은 자동 백업을 끄고 프록시 텍스처로 작업한다.
+- **애니메이션 요령**
+  - 미지원 키프레임의 노란 경고는 smooth로 변환해 없앤다.
+  - step 키프레임으로 자세를 잡은 뒤 linear/smooth로 다듬는다. 그래프 편집기의 스플라인과 어니언 스키닝을 쓴다.
+  - IK는 불안정했고 2026-09에 IK 업데이트가 있었다.
+  - 긴 Molang 키프레임과 플립북 애니메이션은 편집기를 느리게 한다.
+  - FBX/glTF로 Blender에 넘기면 키프레임이 깨진다.
+  - Blockbench는 본 이름으로 애니메이션을 연결하므로 다른 폴더에 같은 이름의 본이 있으면 충돌한다.
+  - 새 Blockbench는 애니메이션에 연결된 파티클을 자동으로 불러온다. 일부 버전에서는 Snowstorm 파티클이 깨지고 로케이터 방향이 뒤집혔다. Blockbench는 파티클을 미리 볼 뿐 파티클 편집기가 아니다.
+- **플러그인**: "meshy"(메시를 geo.json/poly_mesh로 직접 export), clipping mask, Medibang blend mode, UV face painter(.js로 공유), 블록 생성 플러그인, Outline Creator, lightflow, Title Generator, animated_platforms, 커스텀 픽셀 브러시.
+- **가이드**: `https://www.blockbench.net/wiki/guides/bedrock-modeling#animations` . 한국어 Blockbench 강좌 재생목록(`https://youtube.com/playlist?list=PLvULVkjBtg2SezfUA8kHcPUGpxIS26uJR`)도 있다. 한국어 고급 강좌는 드물다.
+- **Anim2Cam** (`https://rey-debida.github.io/mcanim-to-cam/`): Blockbench 카메라 애니메이션(bone 이름 `camera`)을 `/camera` 명령으로 바꾼다. deprecated 상태다.
+- **영상과 렌더**: 트레일러는 Blender, Mine-imator(데스크톱 전용), Cinema4D로 만든다. 조명이 들어간 렌더는 Blender나 Nomad Sculpt를 쓴다.
 - **Kaioga의 충돌 박스 도구와 블록 템플릿**: `https://github.com/Kaioga5/Kaioga-s-Block-Templates` (slab, bed, concrete powder falling-block entity, glass connections).
 - **Java 도구 작성자 메모**: `visible_bounds_*` 필드는 렌더 컬링 힌트이므로 무시해도 된다.
 - **Bendables** (`https://www.diamondproduction.net/bendables`): 관절이 휘는 플레이어/엔티티 모델.
@@ -81,6 +107,7 @@ Nusiq의 Blender 애드온으로, Blender에서 만든 모델과 애니메이션
   - v13.0.0(2026-08-30): Blender 5.2 LTS
   - Blender 5.0에서는 export 오류, 물리 애니메이션 실패, 잘못된 모델이 나왔다. 4.5로 돌아가면 해결된다.
   - 4.2는 미검증이다.
+  - Blender는 내장 Python 버전을 고정한다(Blender 4.5는 Python 3.11).
   - 4.5.2에서 `ImportError: cannot import name 'get_mcblend_events'`가 나면 재시작한다.
   - 새 기능 개발은 거의 멈췄다(2026-02). Blender 파티클을 Bedrock 파티클로 굽는 기능은 불가능하다고 판단됐다.
 - **"number of edges is incorrect"**: 메시가 올바른 직육면체(면 6, 모서리 12, 꼭짓점 8)가 아니라는 뜻이다. 삼각형을 사각형으로 바꾸고, merge by distance를 하고, 떨어진 꼭짓점을 찾아 지운다(꼭짓점 인덱스 표시, Ctrl+I로 선택 반전).
@@ -90,7 +117,7 @@ Nusiq의 Blender 애드온으로, Blender에서 만든 모델과 애니메이션
   - "Separate and Align Cubes"를 쓴다.
   - 큐브 하나부터 export되게 만든 뒤 넓혀 간다.
 - **부모 지정**: Parent -> Bone(Ctrl+P)을 쓴다. "With Automatic Weights"는 지원하지 않는다(Minecraft에는 메시 변형이 없다). Armature modifier나 vertex group이 있으면 잘못된 설정이다. 증상은 Blockbench에 빈 bone만 보이는 것이다. Alt+P로 부모를 해제한다.
-- **cube와 polymesh**: 객체마다 cube 또는 polymesh로 표시한다. 문서: `https://mcblend.readthedocs.io/en/stable/modeling/cubes_vs_polymeshes/` . polymesh는 게임에서는 보이지만 Blockbench에서는 안 보일 수 있다. 메인테이너는 polymesh 지원이 제한적이라고 본다. 모든 면을 quad(4 꼭짓점)로 export하므로 삼각형을 기대하는 머티리얼에서는 깨질 수 있다. 뒷면은 Normals > Recalculate Outside로 고친다.
+- **cube와 polymesh**: 객체마다 cube 또는 polymesh로 표시한다. 문서: `https://mcblend.readthedocs.io/en/stable/modeling/cubes_vs_polymeshes/` . polymesh는 게임에서는 보이지만 Blockbench에서는 안 보일 수 있다. 메인테이너는 polymesh 지원이 제한적이라고 본다. 모든 면을 quad(4 꼭짓점)로 export하므로 삼각형을 기대하는 머티리얼에서는 깨질 수 있다. 뒷면은 Normals > Recalculate Outside로 고친다. polymesh JSON을 Blender로 임포트하면 `custom_normals`(와 `sharp_edge`) 속성이 생겨 셰이딩이 뒤집혀 보이는데, 이때는 Recalculate Outside가 효과가 없다. Attributes에서 `position`, `sharp_face`, `UVMap`만 남기고 `custom_normals`를 지운다(Blender 4.5에서 관찰).
 - **병합**: Ctrl+J 후 merge by distance. Merge Models 연산자에는 제한이 있다(`https://mcblend.readthedocs.io/en/stable/modeling/merging_models/#merging-models`).
 - **가져오기**
   - RP에서: `https://mcblend.readthedocs.io/en/stable/modeling/importing_models_from_rp/#importing-models-from-resource-packs`
@@ -113,12 +140,15 @@ Nusiq의 Blender 애드온으로, Blender에서 만든 모델과 애니메이션
 
 #### 파티클
 - **Snowstorm**: 웹 파티클 편집기다. 게임에서의 동작은 다를 수 있다. 플러그인 API는 없다.
+  - 3.3(2026-11-04): blend/additive 그리기 순서와 update expression 평가 순서 수정, 플레이어 모델 기준(player model reference), 그라데이션 정지점에 Molang, 음수 크기 경고, VS Code "Switch to Snowstorm", 여러 줄 벡터 내보내기, 접히는 이벤트, 곡선 복제. 릴리스: `https://github.com/JannisX11/snowstorm/releases/tag/v3.3.0`
 - **Oxygen 파티클 IDE** (`https://oxygen.hydrogen.exposed` , `https://github.com/dev-hydrogen/oxygen`)
   - Snowstorm을 다시 만든 것으로, Molang 에뮬레이션이 더 정확하고 Vibrant Visuals를 지원한다.
   - VS Code 확장(`hydrogen.oxygen-particle-editor`), 데스크톱 앱, MCP를 제공한다.
   - 게임 연결: 웹소켓을 켜고 `/connect localhost:19131`.
   - 0.2.0 키바인드, 0.2.1 자동 업데이트와 `t.x`/`c.x` 컨텍스트 값, 0.2.2 쿼리 샘플 일괄 설정.
   - pre-effect 스크립트에서 설정한 temp 변수가 동작한다.
+  - 0.3.0: 기즈모, GIF/MP4 내보내기, 커스텀 com.mojang 경로. Linux와 macOS에서는 웹 앱만 쓸 수 있다.
+- **ORE**: 웹 노드 기반 파티클 편집기다(`https://blank2092.github.io/ORE`, 소스 `https://github.com/blank2092/ORE`). JSON과 mcpack으로 내보낸다.
 - **미공개 파티클 경로 도구**: `minecraft:particle_motion_parametric`을 생성한다.
 
 ---
@@ -146,6 +176,8 @@ Nusiq의 Blender 애드온으로, Blender에서 만든 모델과 애니메이션
   - Shutter Encoder나 DaVinci Resolve(영상 H.264 재인코딩)
   - looptile(`https://github.com/3merillon/looptile`, 타일링 텍스처와 caustics)
   - GIMP(MER TGA), Krita, Ibispaint(모바일 MER)
+  - 픽셀 아트 편집기: Aseprite(직접 컴파일하면 무료), LibreSprite, Pixel Studio, ibisPaint X(최대 256x256), Pixel Station, isopix, Resprite(무료판은 하루 한 번 내보내기), Piskel, PixiEditor, paint.net, Photopea, Windows 11 그림판.
+  - 오디오: wav를 ogg로 바꿀 때는 Audacity나 freeconvert.com을 쓴다. Blockbench 스타일 가이드도 참고한다. 음영과 팔레트 조언은 [텍스처와 아틀라스](../rendering/textures-and-atlases.mdx)에 있다.
   - PC 성능: NVIDIA Threaded Optimization과 Prefer Maximum Performance를 켜고 dGPU를 쓰는지 확인한다.
 - **학습 자료**: The Book of Shaders, learnopengl, Bedrock Graphics 서버, poggy deferred table(`https://poggy.org/Main/Wiki/deferred_table.html`), smokey-pbr(`https://smokeystack.dev/projects/smokey-pbr`).
 - **VV 설정 검증**: JSONLint 같은 범용 검증기는 통과해도 VV 스키마에서 실패할 수 있다("unknown child schema type"). content log를 본다.
@@ -158,6 +190,9 @@ Nusiq의 Blender 애드온으로, Blender에서 만든 모델과 애니메이션
   - 레시피 생성기(`https://crafting.thedestruc7i0n.ca/`, BP export, 태그, 모바일 지원)
   - Perlin Fiddle 2.0(`https://thepixelmancer.github.io/perlin-fiddle/`)
   - superflat 생성기(`https://superflat.crackedmagnet.com/`)
+  - 루트 테이블 생성기(`https://bedrock-oss.github.io/bedrock-loot-gen/`), 스킨 팩 생성기(`https://unun.app/skin-pack`), Windows 98 아이콘 모음(`https://win98icons.alexmeub.com/`)
+  - abrightmoore의 itch.io 도구(`https://abrightmoore.itch.io/`): texture-pack blocks world, museum generator, skin statues, skin UV transformer
+  - gitresource.com(GitHub URL의 "hub"를 "resource"로 바꿔 저장소의 리소스를 훑어본다), sprite-tools(`https://github.com/PresentKim/sprite-tools`), AI 픽셀 아트 모음(`https://gitresource.com/PresentKim/ai-generated-pixelart/main`, Unlicense, 16px 아이템 약 2.5만 개)
 - **블록 아이콘 렌더러**: npm `block-model-renderer`(`prepareAssets`, `renderBlock`, Node 22). 아이템 아이콘 정보: `https://github.com/Broccoli-Gang-Studios/Minecraft-Bedrock-Item-Info/` . Bedrock 블록 렌더가 어려운 이유는 바닐라 RP에 lectern 같은 블록의 모델이 없어 형태를 렌더러에 하드코딩해야 하기 때문이다.
 
 ---
