@@ -1,536 +1,584 @@
 ---
-title: 엔티티 컴포넌트 레퍼런스(주요 항목) (11/15)
-description: MS Learn 엔티티 컴포넌트·이벤트·필터 목록과 주요 컴포넌트.
-sidebar_position: 100
+title: 엔티티 컴포넌트 레퍼런스 (11/23)
+description: MS Learn 컴포넌트 문서 20개(minecraft:managed_wandering_trader ~ minecraft:navigation.fly). 속성 표와 예시 JSON을 원문대로 담았다.
+sidebar_position: 110
 sources:
   - ms-learn
 ---
 
-# 엔티티 컴포넌트 레퍼런스(주요 항목) (11/15)
+# 엔티티 컴포넌트 레퍼런스 (11/23)
 
-MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 레퍼런스를 발췌한 쪽이다. 원문의 상대 링크는 제거했다.
+MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 컴포넌트 문서를 옮긴 쪽이다. 설명은 한국어로 옮기고 ID, 속성 이름, 유형, 기본값, JSON은 원문 그대로 두었다. 전체 목록은 [색인](./entity-index.mdx)에 있다.
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_environment_sensor.md`)
+## minecraft&#58;managed_wandering_trader
 
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_managed_wandering_trader.md`)
 
-### Entity Documentation - minecraft:environment_sensor
+엔티티의 거래 능력을 관리한다. 떠돌이 상인(`minecraft:wandering_trader`)에만 쓸 수 있다.
 
-Creates a trigger based on environment conditions.
-
-
-#### Environment Sensor Properties
-
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| triggers | *not set* | Array of objects | The list of triggers that fire when the environment conditions match the given filter criteria. Can be an array of trigger objects or a single trigger object. | Breeze: `[{"event":"minecraft:stop_playing_idle_ground_sound","filters":{"all_of":[{"subject":"self","test":"on_ground","value":true},{"subject":"self","test":"has_target","value":true},{"domain":"minecraft:is_playing_idle_ground_sound","operator":"==","test":"bool_property"}]}},{"event":"minecraft:start_playing_idle_ground_sound","filters":{"all_of":[{"domain":"minecraft:is_playing_idle_ground_sound","operator":"!=","test":"bool_property"},{"any_of":[{"subject":"self","test":"on_ground","value":false},{"subject":"self","test":"has_target","value":false}]}]}}]`, Cave Spider: `{"event":"minecraft:become_neutral","filters":{"operator":">","test":"is_brightness","value":0.49}}`, `{"event":"minecraft:become_hostile","filters":{"operator":"<","test":"is_brightness","value":0.49}}` | 
-| triggers (as Object) | *not set* | Object |  |  | 
-
-#### Samples
-
-#### Breeze
-
-
-```json
-"minecraft:environment_sensor": {
-  "triggers": [
-    {
-      "event": "minecraft:stop_playing_idle_ground_sound",
-      "filters": {
-        "all_of": [
-          {
-            "subject": "self",
-            "test": "on_ground",
-            "value": true
-          },
-          {
-            "subject": "self",
-            "test": "has_target",
-            "value": true
-          },
-          {
-            "domain": "minecraft:is_playing_idle_ground_sound",
-            "operator": "==",
-            "test": "bool_property"
-          }
-        ]
-      }
-    },
-    {
-      "event": "minecraft:start_playing_idle_ground_sound",
-      "filters": {
-        "all_of": [
-          {
-            "domain": "minecraft:is_playing_idle_ground_sound",
-            "operator": "!=",
-            "test": "bool_property"
-          },
-          {
-            "any_of": [
-              {
-                "subject": "self",
-                "test": "on_ground",
-                "value": false
-              },
-              {
-                "subject": "self",
-                "test": "has_target",
-                "value": false
-              }
-            ]
-          }
-        ]
-      }
-    }
-  ]
-}
-```
-
-#### Cave Spider
-
-At /minecraft:entity/component_groups/minecraft:spider_hostile/minecraft:environment_sensor/: 
-
-```json
-"minecraft:environment_sensor": {
-  "triggers": {
-    "event": "minecraft:become_neutral",
-    "filters": {
-      "operator": ">",
-      "test": "is_brightness",
-      "value": 0.49
-    }
-  }
-}
-```
-
-At /minecraft:entity/component_groups/minecraft:spider_neutral/minecraft:environment_sensor/: 
-
-```json
-"minecraft:environment_sensor": {
-  "triggers": {
-    "event": "minecraft:become_hostile",
-    "filters": {
-      "operator": "<",
-      "test": "is_brightness",
-      "value": 0.49
-    }
-  }
-}
-```
-
-#### Dolphin
-
-At /minecraft:entity/component_groups/dolphin_swimming_navigation/minecraft:environment_sensor/: 
-
-```json
-"minecraft:environment_sensor": {
-  "triggers": [
-    {
-      "filters": {
-        "all_of": [
-          {
-            "test": "on_ground",
-            "operator": "==",
-            "value": true
-          },
-          {
-            "test": "in_water",
-            "operator": "!=",
-            "value": true
-          }
-        ]
-      },
-      "event": "navigation_on_land"
-    }
-  ]
-}
-```
-
-At /minecraft:entity/component_groups/dolphin_on_land_in_rain/minecraft:environment_sensor/: 
-
-```json
-"minecraft:environment_sensor": {
-  "triggers": [
-    {
-      "filters": {
-        "test": "in_water",
-        "operator": "==",
-        "value": true
-      },
-      "event": "navigation_off_land"
-    },
-    {
-      "filters": {
-        "test": "in_water_or_rain",
-        "operator": "!=",
-        "value": true
-      },
-      "event": "start_dryingout"
-    }
-  ]
-}
-```
-
-#### Drowned
-
-At /minecraft:entity/component_groups/minecraft:look_to_start_transformations/minecraft:environment_sensor/: 
-
-```json
-"minecraft:environment_sensor": {
-  "triggers": [
-    {
-      "event": "minecraft:start_transforming_into_zombie",
-      "filters": {
-        "all_of": [
-          {
-            "test": "in_block",
-            "value": "minecraft:powder_snow"
-          },
-          {
-            "test": "has_equipment_tag",
-            "domain": "armor",
-            "operator": "not",
-            "value": "minecraft:leather_tier"
-          }
-        ]
-      }
-    }
-  ]
-}
-```
-
-At /minecraft:entity/component_groups/minecraft:start_zombie_transformation/minecraft:environment_sensor/: 
-
-```json
-"minecraft:environment_sensor": {
-  "triggers": [
-    {
-      "event": "minecraft:stop_transforming",
-      "filters": {
-        "any_of": [
-          {
-            "test": "in_block",
-            "operator": "not",
-            "value": "minecraft:powder_snow"
-          },
-          {
-            "test": "has_equipment_tag",
-            "domain": "armor",
-            "value": "minecraft:leather_tier"
-          }
-        ]
-      }
-    }
-  ]
-}
-```
-
-#### Player
-
-
-```json
-"minecraft:environment_sensor": {
-  "triggers": {
-    "event": "minecraft:gain_raid_omen",
-    "filters": {
-      "all_of": [
-        {
-          "subject": "self",
-          "test": "has_mob_effect",
-          "value": "bad_omen"
-        },
-        {
-          "subject": "self",
-          "test": "is_in_village",
-          "value": true
-        }
-      ]
-    }
-  }
-}
-```
-
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_knockback_resistance.md`)
-
-
-### Entity Documentation - minecraft:knockback_resistance
-
-Determines an entity's resistance to knockback from melee attacks. A value of 0.0 means no resistance, while 1.0 provides full immunity to knockback (like iron golems).
+Manages the entity's ability to trade.
 
 > [!Note]
-> In format version 1.26.20, `value` now accepts negative numbers down to a minimum of `-2`. Negative values amplify knockback applied to the entity instead of diminishing it.
+> Can only be used on the following type of entity:
+> 
+> * Wandering Trader (minecraft:wandering_trader)
+> 
 
-#### Alternate Simple Representations
+### 예시
 
-This item can also be represented as a `Decimal number`.
+## minecraft&#58;mark_variant
 
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_mark_variant.md`)
 
-#### Knockback Resistance Properties
+`variant`와 별개로 같은 몹의 다른 외형을 나타내는 추가 방법이다.
 
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| max | *not set* | Decimal number | Maximum potential knockback resistance for this entity. | Ender Dragon: `100` | 
-| value | *not set* | Decimal number | The amount of knockback resistance, from 0.0 (none) to 1.0 (full immunity). | Armor Stand: `1`, Ender Dragon: `100` | 
+Mark Variant is typically used as an additional per-type way (besides `variant`) to express a different visual form of the same mob.
 
-#### Samples
+### Mark Variant Properties
 
-#### Armor Stand
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| value | 0 | Integer number | mark_variant의 ID. 관례상 0이 기본 엔티티의 ID다. | Trader Llama: `1` |
 
+### 예시
 
-```json
-"minecraft:knockback_resistance": {
-  "value": 1
-}
-```
-
-#### Breeze
+##### [Llama](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/llama.json)
 
 
 ```json
-"minecraft:knockback_resistance": {
+"minecraft:mark_variant": {
   "value": 0
 }
 ```
 
-#### Ender Dragon
+##### [Trader Llama](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/trader_llama.json)
 
 
 ```json
-"minecraft:knockback_resistance": {
-  "max": 100,
-  "value": 100
+"minecraft:mark_variant": {
+  "value": 1
 }
 ```
 
+## minecraft&#58;mob_effect
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_breedable.md`)
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_mob_effect.md`)
 
+범위 안에 들어온 엔티티에게 몹 효과를 적용하는 컴포넌트다.
 
-### Entity Documentation - minecraft:breedable
+A component that applies a mob effect to entities that get within range.
 
-Allows an entity to establish a way to get into the love state used for breeding.
+### Mob Effect Properties
 
-> [!Note]
-> This component is commonly used in conjunction with the 'minecraft:behavior.breed' component.
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| ambient | false | Boolean true/false | true이면 효과가 (신호기나 컨듀잇처럼) 주변 효과 배경으로 렌더링되고 만료가 가까워져도 깜박이지 않는다. 형식 버전 1.21.130 이상이 필요하다. |
+| cooldown_time | 0 | Integer number | 효과를 적용하는 간격(초). |
+| effect_range | 0.2 | Decimal number | 몹 효과가 적용되려면 적대적인 엔티티가 얼마나 가까이 있어야 하는지. |
+| effect_time | 10 | Integer number | 적용된 몹 효과가 지속되는 시간(초). "infinite"로도 설정할 수 있다. |
+| entity_filter | *not set* | Minecraft filter | 몹 효과를 적용할 수 있는 유효한 엔티티 집합. |
+| mob_effect | *not set* | String | 이 엔티티의 효과 범위에 들어온 엔티티에게 적용되는 몹 효과. |
 
-> [!Note]
-> In 1.21.130 the `transform_to_item` field on each entry of `breed_items` was renamed to `result_item`. The new field is defined per-item, so different breed items can transform into different result items on use.
+### 예시
 
-> [!Note]
-> In 1.26.0 the offspring-related fields were split out into the separate `minecraft:offspring_data` component. `minecraft:breedable` now contains only love-state, taming/health requirements, and pregnancy-flow data; the new `minecraft:offspring_data` component is required to actually spawn the child entity.
+## minecraft&#58;mob_effect_immunity
 
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_mob_effect_immunity.md`)
 
-#### Breedable Properties
+지정한 몹 효과에 면역을 갖게 한다.
 
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| allow_sitting | false | Boolean true/false | If true, entities can breed while sitting |  | 
-| blend_attributes | true | Boolean true/false | If true, the entities will blend their attributes in the offspring after they breed. For example, horses blend their health, movement, and jump_strength in their offspring. |  | 
-| breed_cooldown | 60 | Decimal number | Time in seconds before the Entity can breed again. |  | 
-| breed_items | *not set* | Array of strings | The list of items that can be used to get the entity into the 'love' state. Can be a single item or an array. | Chicken: `["wheat_seeds","beetroot_seeds","melon_seeds","pumpkin_seeds","pitcher_pod","torchflower_seeds"]`, Cow: `["wheat"]`, Frog: `["slime_ball"]` | 
-| breed_items (as String) | *not set* | String |  |  | 
-| breeds_with | *not set* | Array of Breeds With items | The entity definitions that this entity can breed with. Can be a single object or an array. | Chicken: `{"minecraft:chicken":{}}`, Cow: `{"minecraft:cow":{}}`, Frog: `{"minecraft:frog":{"event":"become_pregnant","target":"self"}}` | 
-| breeds_with (as Object) | *not set* | Breeds With (Breed With Single) item |  |  | 
-| causes_pregnancy | false | Boolean true/false | If true, the entity will become pregnant instead of spawning a baby. | Frog: `true` | 
-| combine_parent_colors | false | Boolean true/false | If true and no color mutation occurs, the baby's `minecraft:color` is set to a blend of the parents' colors (following DyeItem combination rules). |  | 
-| deny_parents_variant | *not set* | Deny Parents Variant item | Determines how likely the baby of parents with the same variant will deny that variant and take a random variant within the given range instead. |  | 
-| environment_requirements | *not set* | Array of Environment Requirements items | The list of nearby block requirements to get the entity into the 'love' state. |  | 
-| extra_baby_chance | 0 | Percent Range | Chance that up to 16 babies will spawn. |  | 
-| inherit_tamed | *not set* | Boolean true/false | If true, the babies will be automatically tamed if its parents are. |  | 
-| love_filters | *not set* | Minecraft filter | The filters to run when attempting to fall in love. |  | 
-| mutation_factor | *not set* | Mutation Factor item | Determines how likely the babies are to NOT inherit one of their parent's variances. |  | 
-| require_full_health | false | Boolean true/false | If true, the entity needs to be at full health before it can breed. |  | 
-| require_tame | true | Boolean true/false | If true, the entities need to be tamed first before they can breed. | Llama: `true` | 
+Entities with this component will have an immunity to the provided mob effects.
 
-##### combine_parent_colors
+### Mob Effect Immunity Properties
 
-If true and no color mutation occurs, the baby's `minecraft:color` is set to a blend of the parents' colors (following DyeItem combination rules). If the parents' colors aren't compatible, the baby inherits one parent's color at random. This item requires a format version of at least 1.21.60.
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| mob_effects | *not set* | Array of strings | 엔티티가 면역인 효과 이름 목록. | Parched: `["weakness"]`, Polar Bear: `["freezing"]`, Silverfish: `["infested"]` |
 
+### 예시
 
-##### Breeds With
-
-#### Breeds With Properties
-
-**JSON path:** `breeds_with`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| baby_type | *not set* | String | The entity definition of this entity's babies. | 
-| breed_event | *not set* | String | Event to run when this entity breeds. Can be a simple event name string or a trigger object with event and optional filters. | 
-| breed_event (as Object) | *not set* | Object |  | 
-| mate_type | *not set* | String from a list of choices | The entity definition that this entity can mate with. | 
-
-##### Breeds With (Breed With Single)
-
-Same structure as Breeds With.
-
-
-##### Deny Parents Variant
-
-#### Deny Parents Variant Properties
-
-**JSON path:** `deny_parents_variant`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| chance | *not set* | Decimal number | The percentage chance of denying the parents' variant. | 
-| max_variant | *not set* | String | The inclusive maximum of the variant range. | 
-| min_variant | *not set* | String | The inclusive minimum of the variant range. | 
-
-##### Environment Requirements
-
-#### Environment Requirements Properties
-
-**JSON path:** `environment_requirements`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| block_types | *not set* | Array of strings | The block types required nearby for the entity to breed. | 
-| count | *not set* | Integer number | The number of the required block types nearby for the entity to breed. | 
-| radius | *not set* | Decimal number | How many blocks radius from the mob's center to search in for the required blocks. Bounded between 0 and 16. | 
-
-##### Mutation Factor
-
-#### Mutation Factor Properties
-
-**JSON path:** `mutation_factor`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| color | *not set* | Percent Range | The percentage chance of denying the parents' variant. | 
-| color (as Decimal number) | *not set* | Decimal number |  | 
-| extra_variant | *not set* | Percent Range | The percentage chance of a mutation on the entity's extra variant type. | 
-| extra_variant (as Decimal number) | *not set* | Decimal number |  | 
-| variant | *not set* | Percent Range | The percentage chance of a mutation on the entity's variant type. | 
-| variant (as Decimal number) | *not set* | Decimal number |  | 
-
-#### Samples
-
-#### Chicken
+##### [Parched](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/parched.json)
 
 
 ```json
-"minecraft:breedable": {
-  "require_tame": false,
-  "breeds_with": {
-    "minecraft:chicken": {}
-  },
-  "breed_items": [
-    "wheat_seeds",
-    "beetroot_seeds",
-    "melon_seeds",
-    "pumpkin_seeds",
-    "pitcher_pod",
-    "torchflower_seeds"
+"minecraft:mob_effect_immunity": {
+  "mob_effects": [
+    "weakness"
   ]
 }
 ```
 
-#### Cow
+##### [Polar Bear](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/polar_bear.json)
 
 
 ```json
-"minecraft:breedable": {
-  "require_tame": false,
-  "breed_items": [
-    "wheat"
-  ],
-  "breeds_with": {
-    "minecraft:cow": {}
-  }
-}
-```
-
-#### Frog
-
-
-```json
-"minecraft:breedable": {
-  "breed_items": [
-    "slime_ball"
-  ],
-  "breeds_with": {
-    "minecraft:frog": {
-      "event": "become_pregnant",
-      "target": "self"
-    }
-  },
-  "causes_pregnancy": true,
-  "require_tame": false
-}
-```
-
-#### Goat
-
-
-```json
-"minecraft:breedable": {
-  "require_tame": false,
-  "breed_items": [
-    "wheat"
-  ],
-  "breeds_with": {
-    "minecraft:goat": {}
-  }
-}
-```
-
-#### Llama
-
-
-```json
-"minecraft:breedable": {
-  "require_tame": true,
-  "breeds_with": {
-    "minecraft:llama": {}
-  },
-  "breed_items": [
-    "hay_block"
+"minecraft:mob_effect_immunity": {
+  "mob_effects": [
+    "freezing"
   ]
 }
 ```
 
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_pushable.md`)
-
-
-### Entity Documentation - minecraft:pushable
-
-Defines what can push an entity between other entities and pistons.
-
-> [!Note]
-> In 1.26.10 this component was split into `minecraft:pushable_by_block` (pistons and Shulker Boxes, equivalent to `is_pushable_by_piston: true`) and `minecraft:pushable_by_entity` (other entities, equivalent to `is_pushable: true`). The original `minecraft:pushable` component is no longer parsed.
-
-> [!Note]
-> This item no longer works after format versions of at least 1.26.10.
-
-
-#### Pushable Properties
-
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| is_pushable | true | Boolean true/false | Whether the entity can be pushed by other entities. | Allay: `true` | 
-| is_pushable_by_piston | true | Boolean true/false | Whether the entity can be pushed by pistons safely. | Allay: `true` | 
-
-#### Samples
-
-#### Allay
+##### [Silverfish](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/silverfish.json)
 
 
 ```json
-"minecraft:pushable": {
-  "is_pushable": true,
-  "is_pushable_by_piston": true
+"minecraft:mob_effect_immunity": {
+  "mob_effects": [
+    "infested"
+  ]
 }
 ```
 
-#### Armor Stand
+##### [Slime](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/slime.json)
 
 
 ```json
-"minecraft:pushable": {
-  "is_pushable": false,
-  "is_pushable_by_piston": true
+"minecraft:mob_effect_immunity": {
+  "mob_effects": [
+    "oozing"
+  ]
 }
 ```
 
+## minecraft&#58;movement
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_movement.md`)
+
+엔티티의 기본 이동 속도를 정의한다.
+
+Defines the base movement speed of an entity. Typical values: creeper (0.2), cow (0.25), zombie baby (0.35).
+
+### Movement Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max | *not set* | Decimal number | 이 엔티티가 가질 수 있는 최대 이동 속도. |
+| value | *not set* | Decimal number | 기본 이동 속도 값. 높을수록 빠르게 움직인다. 숫자 하나 또는 range_min과 range_max를 가진 범위 객체를 쓸 수 있다. |
+| value (as Object) | *not set* | Value item |  |
+
+#### Value
+
+##### Value Properties
+
+**JSON path:** `value`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| range_max | *not set* | Decimal number | 최대 이동 속도. |
+| range_min | *not set* | Decimal number | 최소 이동 속도. |
+
+### 예시
+
+## minecraft&#58;movement.amphibious
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_movement.amphibious.md`)
+
+물에서는 헤엄치고 땅에서는 걷는 이동 제어다.
+
+This move control allows the mob to swim in water and walk on land.
+
+### Entity Amphibious Movement Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max_turn | 30 | Decimal number | 틱당 몹이 돌 수 있는 최대 각도(도). |
+
+### 예시
+
+##### [Frog](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/frog.json)
+
+
+```json
+"minecraft:movement.amphibious": {}
+```
+
+## minecraft&#58;movement.basic
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_movement.basic.md`)
+
+엔티티의 기본 이동을 담당하는 컴포넌트다.
+
+This component accents the movement of an entity.
+
+### Entity Basic Movement Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max_turn | 30 | Decimal number | 틱당 몹이 돌 수 있는 최대 각도(도). |
+
+### 예시
+
+##### [Bat](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/bat.json)
+
+
+```json
+"minecraft:movement.basic": {}
+```
+
+## minecraft&#58;movement.dolphin
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_movement.dolphin.md`)
+
+돌고래처럼 움직이게 하는 이동 제어다. 현재 게임에서 쓰이지 않는다.
+
+This component can control how dolphins move, in a dolphin-esque style.
+
+> [!Note]
+> This movement is not currently being used in game.
+
+## minecraft&#58;movement.fly
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_movement.fly.md`)
+
+몹이 날아서 움직이게 하는 이동 제어다.
+
+This move control causes the mob to fly.
+
+### Entity Fly Movement Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max_turn | 30 | Decimal number | 틱당 몹이 돌 수 있는 최대 각도(도). |
+| speed_when_turning | 0.2 | Decimal number | 급하게 방향을 틀어야 할 때 몹이 맞추는 속도. |
+| start_speed | 0.1 | Decimal number | 몹이 활공을 시작할 때의 초기 속도. |
+
+### 예시
+
+##### [Parrot](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/parrot.json)
+
+
+```json
+"minecraft:movement.fly": {}
+```
+
+## minecraft&#58;movement.generic
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_movement.generic.md`)
+
+몹이 날고, 헤엄치고, 오르는 등 다양하게 움직이게 하는 이동 제어다.
+
+This move control allows a mob to fly, swim, climb, etc.
+
+### Entity Generic Movement Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max_turn | 30 | Decimal number | 틱당 몹이 돌 수 있는 최대 각도(도). |
+
+### 예시
+
+##### [Drowned](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/drowned.json)
+
+
+```json
+"minecraft:movement.generic": {}
+```
+
+## minecraft&#58;movement.glide
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_movement.glide.md`)
+
+활공하며 나는 몹의 이동 제어다.
+
+Move control for a flying mob that has a gliding movement.
+
+### Entity Glide Movement Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| max_turn | 30 | Decimal number | 틱당 몹이 돌 수 있는 최대 각도(도). |  |
+| speed_when_turning | 0.2 | Decimal number | 급하게 방향을 틀어야 할 때 몹이 맞추는 속도. | Phantom: `0.2` |
+| start_speed | 0.10000000149011612 | Decimal number | 몹이 활공을 시작할 때의 초기 속도. | Phantom: `0.1` |
+
+### 예시
+
+##### [Phantom](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/phantom.json)
+
+
+```json
+"minecraft:movement.glide": {
+  "speed_when_turning": 0.2,
+  "start_speed": 0.1
+}
+```
+
+## minecraft&#58;movement.hover
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_movement.hover.md`)
+
+몹이 공중에 떠 있게 하는 이동 제어다.
+
+This move control causes the mob to hover.
+
+### Entity Hover Movement Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max_turn | 30 | Decimal number | 틱당 몹이 돌 수 있는 최대 각도(도). |
+
+### 예시
+
+##### [Allay](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/allay.json)
+
+
+```json
+"minecraft:movement.hover": {}
+```
+
+## minecraft&#58;movement.jump
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_movement.jump.md`)
+
+몹이 점프 사이에 지연을 두고 뛰며 움직이게 하는 이동 제어다.
+
+Move control that causes the mob to jump as it moves with a specified delay between jumps.
+
+> [!Note]
+> In order to follow targets, this entity must have the `minecraft:behavior.slime_attack` component, otherwise the entity will jump in the direction it's looking in.
+
+### Entity Jump Movement Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| jump_delay | &#123;"max":0,"min":0&#125; | Jump Delay item | 슬라임 이동 제어를 쓸 때 착지 후 지연 시간(초). 숫자 하나, [min, max] 배열, range_min과 range_max를 가진 객체를 쓸 수 있다. |
+| max_turn | 30 | Decimal number | 틱당 몹이 돌 수 있는 최대 각도(도). |
+
+#### Legacy FloatRange
+
+##### Legacy FloatRange Properties
+
+**JSON path:** `jump_delay`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max | 0 | Decimal number |  |
+| min | 0 | Decimal number |  |
+
+### 예시
+
+## minecraft&#58;movement.skip
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_movement.skip.md`)
+
+몹이 깡충깡충 뛰며 움직이게 하는 이동 제어다.
+
+This move control causes the mob to hop as it moves.
+
+### Entity Skip Movement Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max_turn | 30 | Decimal number | 틱당 몹이 돌 수 있는 최대 각도(도). |
+
+### 예시
+
+## minecraft&#58;movement.sound_distance_offset
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_movement.sound_distance_offset.md`)
+
+이동 소리를 낼 다음 걸음 거리를 정하는 오프셋을 설정한다.
+
+Sets the offset used to determine the next step distance for playing a movement sound.
+
+### Movement Sound Distance Offset Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| value | 1 | Decimal number | 값이 클수록 이동 소리가 덜 자주 재생된다. |
+
+## minecraft&#58;movement.sway
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_movement.sway.md`)
+
+몹이 좌우로 흔들리며 헤엄치는 듯 움직이게 하는 이동 제어다.
+
+This move control causes the mob to sway side to side giving the impression it is swimming.
+
+### Entity Sway Movement Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max_turn | 30 | Decimal number | 틱당 몹이 돌 수 있는 최대 각도(도). |
+| sway_amplitude | 0.05000000074505806 | Decimal number | 흔들림 이동의 세기. |
+| sway_frequency | 0.5 | Decimal number | 흔들림 이동의 빈도에 곱하는 배수. |
+
+### 예시
+
+##### [Elder Guardian](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/elder_guardian.json)
+
+
+```json
+"minecraft:movement.sway": {}
+```
+
+## minecraft&#58;nameable
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_nameable.md`)
+
+이름표 등으로 엔티티에 이름을 붙일 수 있게 한다.
+
+Allows this entity to be named (e.g. using a name tag).
+
+### Nameable Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| allow_name_tag_renaming | true | Boolean true/false | true이면 이름표로 이 엔티티의 이름을 바꿀 수 있다. |
+| always_show | false | Boolean true/false | true이면 이름이 항상 표시된다. |
+| default_trigger | *not set* | String | 엔티티가 이름을 얻을 때 실행할 트리거. |
+| name_actions | *not set* | Array of Name Actions items | 이 엔티티의 특별한 이름과, 엔티티가 그 이름을 얻었을 때 호출할 이벤트를 설명한다. |
+
+#### Name Actions
+Describes the special names for this entity and the events to call when the entity acquires those names.
+
+
+##### Name Actions Properties
+
+**JSON path:** `name_actions`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| name_filter | *not set* | String | 'on_named'에 정의한 이벤트를 발생시키는 특별한 이름 목록. |
+| on_named | *not set* | Minecraft Event Trigger | 엔티티가 'name_filter'에 지정한 이름을 얻었을 때 호출할 이벤트. |
+
+### 예시
+
+##### [Allay](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/allay.json)
+
+
+```json
+"minecraft:nameable": {}
+```
+
+## minecraft&#58;navigation.climb
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_navigation.climb.md`)
+
+거미처럼 수직 벽을 포함한 경로를 만들게 한다.
+
+Allows this entity to generate paths that include vertical walls like the vanilla Spiders do.
+
+### Climb Navigation Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| avoid_damage_blocks | false | Boolean true/false | 경로를 찾을 때 피해를 주는 블록을 피하도록 길 찾기에 알린다. |  |
+| avoid_portals | false | Boolean true/false | 경로를 찾을 때 (네더 포털 같은) 포털을 피하도록 길 찾기에 알린다. |  |
+| avoid_sun | false | Boolean true/false | 경로를 만들 때 햇빛에 노출된 칸을 피할지 정한다. |  |
+| avoid_water | false | Boolean true/false | 경로를 만들 때 물을 피하도록 길 찾기에 알린다. |  |
+| blocks_to_avoid | *not set* | Array of strings | 경로를 만들 때 피할 블록을 길 찾기에 알린다. |  |
+| can_breach | false | Boolean true/false | (돌고래처럼) 물 밖으로 뛰어오를 수 있는지 길 찾기에 알린다. |  |
+| can_break_doors | false | Boolean true/false | 닫힌 문을 부수고 지나가는 경로를 만들 수 있다고 길 찾기에 알린다. |  |
+| can_jump | true | Boolean true/false | 블록 위로 뛰어오를 수 있는지 길 찾기에 알린다. |  |
+| can_open_doors | false | Boolean true/false | AI가 문을 열 것이라 가정하고 닫힌 문을 지나는 경로를 만들 수 있다고 길 찾기에 알린다. |  |
+| can_open_iron_doors | false | Boolean true/false | AI가 문을 열 것이라 가정하고 닫힌 철문을 지나는 경로를 만들 수 있다고 길 찾기에 알린다. |  |
+| can_pass_doors | true | Boolean true/false | 문을 지나는 경로를 만들 수 있는지 여부. |  |
+| can_path_from_air | false | Boolean true/false | 공중에 있을 때도 경로 탐색을 시작할 수 있다고 길 찾기에 알린다. |  |
+| can_path_over_lava | false | Boolean true/false | 용암 표면 위를 이동할 수 있는지 길 찾기에 알린다. |  |
+| can_path_over_water | false | Boolean true/false | 물 표면 위를 이동할 수 있는지 길 찾기에 알린다. | Cave Spider: `true` |
+| can_sink | true | Boolean true/false | 물속에서 중력에 끌려 내려가는지 길 찾기에 알린다. |  |
+| can_swim | false | Boolean true/false | 물속 어디든 경로를 만들 수 있는지, 그 경로에서 수영 애니메이션을 재생하는지 길 찾기에 알린다. |  |
+| can_walk | true | Boolean true/false | 물 밖 지면 위를 걸을 수 있는지 길 찾기에 알린다. |  |
+| can_walk_in_lava | false | Boolean true/false | 지면을 걷듯 용암 속을 이동할 수 있는지 길 찾기에 알린다. |  |
+| is_amphibious | false | Boolean true/false | 물속 바닥 위를 걸을 수 있는지 길 찾기에 알린다. |  |
+
+### 예시
+
+##### [Cave Spider](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/cave_spider.json)
+
+
+```json
+"minecraft:navigation.climb": {
+  "can_path_over_water": true
+}
+```
+
+## minecraft&#58;navigation.float
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_navigation.float.md`)
+
+가스트처럼 공중을 떠다니며 경로를 만들게 한다.
+
+Allows this entity to generate paths by flying around the air like the regular Ghast.
+
+### Float Navigation Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| avoid_damage_blocks | false | Boolean true/false | 경로를 찾을 때 피해를 주는 블록을 피하도록 길 찾기에 알린다. |  |
+| avoid_portals | false | Boolean true/false | 경로를 찾을 때 (네더 포털 같은) 포털을 피하도록 길 찾기에 알린다. |  |
+| avoid_sun | false | Boolean true/false | 경로를 만들 때 햇빛에 노출된 칸을 피할지 정한다. |  |
+| avoid_water | false | Boolean true/false | 경로를 만들 때 물을 피하도록 길 찾기에 알린다. |  |
+| blocks_to_avoid | *not set* | Array of strings | 경로를 만들 때 피할 블록을 길 찾기에 알린다. |  |
+| can_breach | false | Boolean true/false | (돌고래처럼) 물 밖으로 뛰어오를 수 있는지 길 찾기에 알린다. |  |
+| can_break_doors | false | Boolean true/false | 닫힌 문을 부수고 지나가는 경로를 만들 수 있다고 길 찾기에 알린다. |  |
+| can_jump | true | Boolean true/false | 블록 위로 뛰어오를 수 있는지 길 찾기에 알린다. |  |
+| can_open_doors | false | Boolean true/false | AI가 문을 열 것이라 가정하고 닫힌 문을 지나는 경로를 만들 수 있다고 길 찾기에 알린다. |  |
+| can_open_iron_doors | false | Boolean true/false | AI가 문을 열 것이라 가정하고 닫힌 철문을 지나는 경로를 만들 수 있다고 길 찾기에 알린다. |  |
+| can_pass_doors | true | Boolean true/false | 문을 지나는 경로를 만들 수 있는지 여부. |  |
+| can_path_from_air | false | Boolean true/false | 공중에 있을 때도 경로 탐색을 시작할 수 있다고 길 찾기에 알린다. |  |
+| can_path_over_lava | false | Boolean true/false | 용암 표면 위를 이동할 수 있는지 길 찾기에 알린다. |  |
+| can_path_over_water | false | Boolean true/false | 물 표면 위를 이동할 수 있는지 길 찾기에 알린다. | Bat: `true` |
+| can_sink | true | Boolean true/false | 물속에서 중력에 끌려 내려가는지 길 찾기에 알린다. |  |
+| can_swim | false | Boolean true/false | 물속 어디든 경로를 만들 수 있는지, 그 경로에서 수영 애니메이션을 재생하는지 길 찾기에 알린다. |  |
+| can_walk | true | Boolean true/false | 물 밖 지면 위를 걸을 수 있는지 길 찾기에 알린다. |  |
+| can_walk_in_lava | false | Boolean true/false | 지면을 걷듯 용암 속을 이동할 수 있는지 길 찾기에 알린다. |  |
+| is_amphibious | false | Boolean true/false | 물속 바닥 위를 걸을 수 있는지 길 찾기에 알린다. |  |
+| using_door_annotation | *not set* | String |  | Bat: `true` |
+
+### 예시
+
+##### [Bat](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/bat.json)
+
+
+```json
+"minecraft:navigation.float": {
+  "can_path_over_water": true,
+  "using_door_annotation": true
+}
+```
+
+## minecraft&#58;navigation.fly
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_navigation.fly.md`)
+
+앵무새처럼 공중에서 경로를 만들게 한다.
+
+Allows this entity to generate paths in the air like the vanilla Parrots do.
+
+### Fly Navigation Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| avoid_damage_blocks | false | Boolean true/false | 경로를 찾을 때 피해를 주는 블록을 피하도록 길 찾기에 알린다. |  |
+| avoid_portals | false | Boolean true/false | 경로를 찾을 때 (네더 포털 같은) 포털을 피하도록 길 찾기에 알린다. |  |
+| avoid_sun | false | Boolean true/false | 경로를 만들 때 햇빛에 노출된 칸을 피할지 정한다. |  |
+| avoid_water | false | Boolean true/false | 경로를 만들 때 물을 피하도록 길 찾기에 알린다. |  |
+| blocks_to_avoid | *not set* | Array of strings | 경로를 만들 때 피할 블록을 길 찾기에 알린다. |  |
+| can_breach | false | Boolean true/false | (돌고래처럼) 물 밖으로 뛰어오를 수 있는지 길 찾기에 알린다. |  |
+| can_break_doors | false | Boolean true/false | 닫힌 문을 부수고 지나가는 경로를 만들 수 있다고 길 찾기에 알린다. |  |
+| can_jump | true | Boolean true/false | 블록 위로 뛰어오를 수 있는지 길 찾기에 알린다. |  |
+| can_open_doors | false | Boolean true/false | AI가 문을 열 것이라 가정하고 닫힌 문을 지나는 경로를 만들 수 있다고 길 찾기에 알린다. |  |
+| can_open_iron_doors | false | Boolean true/false | AI가 문을 열 것이라 가정하고 닫힌 철문을 지나는 경로를 만들 수 있다고 길 찾기에 알린다. |  |
+| can_pass_doors | true | Boolean true/false | 문을 지나는 경로를 만들 수 있는지 여부. |  |
+| can_path_from_air | false | Boolean true/false | 공중에 있을 때도 경로 탐색을 시작할 수 있다고 길 찾기에 알린다. | Parrot: `true` |
+| can_path_over_lava | false | Boolean true/false | 용암 표면 위를 이동할 수 있는지 길 찾기에 알린다. |  |
+| can_path_over_water | false | Boolean true/false | 물 표면 위를 이동할 수 있는지 길 찾기에 알린다. | Parrot: `true` |
+| can_sink | true | Boolean true/false | 물속에서 중력에 끌려 내려가는지 길 찾기에 알린다. |  |
+| can_swim | false | Boolean true/false | 물속 어디든 경로를 만들 수 있는지, 그 경로에서 수영 애니메이션을 재생하는지 길 찾기에 알린다. |  |
+| can_walk | true | Boolean true/false | 물 밖 지면 위를 걸을 수 있는지 길 찾기에 알린다. |  |
+| can_walk_in_lava | false | Boolean true/false | 지면을 걷듯 용암 속을 이동할 수 있는지 길 찾기에 알린다. |  |
+| is_amphibious | false | Boolean true/false | 물속 바닥 위를 걸을 수 있는지 길 찾기에 알린다. |  |
+
+### 예시
+
+##### [Parrot](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/parrot.json)
+
+
+```json
+"minecraft:navigation.fly": {
+  "can_path_from_air": true,
+  "can_path_over_water": true
+}
+```

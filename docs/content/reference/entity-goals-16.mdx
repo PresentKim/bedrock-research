@@ -1,0 +1,434 @@
+---
+title: 엔티티 AI 목표 레퍼런스 (16/41)
+description: MS Learn AI 목표(behavior) 문서 7개(minecraft:behavior.float_wander ~ minecraft:behavior.follow_target_leader). 속성 표와 예시 JSON을 원문대로 담았다.
+sidebar_position: 215
+sources:
+  - ms-learn
+---
+
+# 엔티티 AI 목표 레퍼런스 (16/41)
+
+MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 AI 목표(behavior) 문서를 옮긴 쪽이다. 설명은 한국어로 옮기고 ID, 속성 이름, 유형, 기본값, JSON은 원문 그대로 두었다. 전체 목록은 [색인](./entity-index.mdx)에 있다.
+
+## minecraft&#58;behavior.float_wander
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityGoals/minecraftBehavior_float_wander.md`)
+
+가스트처럼 떠다니며 돌아다니게 한다.
+
+Allows the mob to float around like the Ghast.
+
+### Entity Float Wander Behavior Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| additional_collision_buffer | false | Boolean true/false | true이면 걸어갈 위치를 고를 때 블록과의 충돌을 피하기 위해 몹 주위에 추가 완충 구역을 둔다. |  |
+| allow_navigating_through_liquids | false | Boolean true/false | true이면 목표 위치로 가는 길에 몹이 액체 속을 지날 수 있다. |  |
+| control_flags | [] | Control Flags choices |  |  |
+| float_duration (Legacy FloatRange) | &#123;"max":0,"min":0&#125; | Float Duration item | 몹이 착지해 다른 일을 고르기 전까지 떠다니는 시간 범위(초). | Bat: `[0.1,0.35]` |
+| float_duration (as Decimal number) | *not set* | Decimal number |  |  |
+| float_wander_has_move_control | true | Boolean true/false | true이면 행동에 MoveControl 플래그가 추가되어 MoveControl이 있는 다른 행동과 동시에 활성일 수 없다. |  |
+| must_reach | false | Boolean true/false | true이면 그 지점에 도달할 수 있어야 유효한 대상이 된다. |  |
+| navigate_around_surface | false | Boolean true/false | true이면 공기나 액체가 아닌 블록, 즉 표면 근처의 무작위 위치를 우선 찾는다. |  |
+| priority | 0 | Integer number | 0에 가까울수록 우선순위가 높아진다. 우선순위가 높을수록 이 행동(목표)이 더 먼저 실행된다. |  |
+| random_reselect | false | Boolean true/false | true이면 이전에 고른 지점으로 이동하는 동안 몹이 무작위로 새 지점을 고른다. | Bat: `true` |
+| surface_xz_dist | 8 | Integer number | 후보 위치에서 표면을 확인하는 수평 거리(블록). `navigate_around_surface`가 true일 때만 유효하다. |  |
+| surface_y_dist | 8 | Integer number | 후보 위치에서 표면을 확인하는 수직 거리(블록). `navigate_around_surface`가 true일 때만 유효하다. |  |
+| use_home_position_restriction | true | Boolean true/false | true이면 새 목표 위치를 고를 때 몹이 집 위치 제한을 지킨다. false이면 집 제한을 고려하지 않고 목표 위치를 고른다. |  |
+| xz_dist | 10 | Integer number | 새로 이동할 지점을 지면에서 찾는 블록 거리. 1 이상이어야 한다. | Bat: `10` |
+| y_dist | 7 | Integer number | 새로 이동할 지점을 위아래로 찾는 블록 거리. 1 이상이어야 한다. | Bat: `7` |
+| y_offset | 0 | Decimal number | 선택한 대상 위치에 더할 높이(블록). | Bat: `-2` |
+
+#### Control Flags choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| jump | Jump |  |
+| look | Look |  |
+| move | Move |  |
+
+#### Legacy FloatRange
+
+##### Legacy FloatRange Properties
+
+**JSON path:** `float_duration`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max | 0 | Decimal number |  |
+| min | 0 | Decimal number |  |
+
+### 예시
+
+##### [Bat](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/bat.json)
+
+
+```json
+"minecraft:behavior.float_wander": {
+  "float_duration": [
+    0.1,
+    0.35
+  ],
+  "float_wander_has_move_control": false,
+  "random_reselect": true,
+  "y_offset": -2,
+  "use_home_position_restriction": false,
+  "xz_dist": 10,
+  "y_dist": 7
+}
+```
+
+## minecraft&#58;behavior.follow_caravan
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityGoals/minecraftBehavior_follow_caravan.md`)
+
+행렬(캐러밴)을 이룬 몹을 따라가게 한다.
+
+Allows the mob to follow mobs that are in a caravan.
+
+### Entity Follow Caravan Behavior Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| control_flags | [] | Control Flags choices |  |  |
+| entity_count | 1 | Integer number | 캐러밴에 있을 수 있는 엔티티 수. | Llama: `10` |
+| entity_types | [] | Entity Types item | 이 몹이 캐러밴에서 따라갈 수 있는 엔티티 종류 목록. 필터 객체 하나 또는 필터 객체 배열을 쓸 수 있다. | Llama: `{"filters":{"test":"is_family","subject":"other","value":"llama"}}` |
+| entity_types (as Array of objects) | *not set* | Array of objects |  |  |
+| priority | 0 | Integer number | 0에 가까울수록 우선순위가 높아진다. 우선순위가 높을수록 이 행동(목표)이 더 먼저 실행된다. | Llama: `3` |
+| speed_multiplier | 1 | Decimal number | 이 AI 목표를 쓸 때의 몹 이동 속도 배율. | Llama: `2.1` |
+
+#### Control Flags choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| jump | Jump |  |
+| look | Look |  |
+| move | Move |  |
+
+#### Entity Types
+List of entity types that this mob can follow in a caravan.
+
+
+##### Entity Types Properties
+
+**JSON path:** `entity_types`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| cooldown | 0 | Decimal number | 같은 종류의 대상을 다시 고르기 전에 몹이 기다려야 하는 시간(초). |
+| filters | *not set* | Minecraft filter | 목록의 이 항목이 유효하기 위한 조건. |
+| max_dist | 16 | Decimal number | 유효한 대상이 되기 위해 이 몹과 떨어질 수 있는 최대 거리. |
+| must_see | false | Boolean true/false | true이면 몹이 보여야 유효한 대상이 된다. |
+| must_see_forget_duration | 3 | Decimal number | 대상이 더 이상 보이지 않을 때 이 몹이 대상을 잊고 새 대상을 찾기까지 기다리는 시간(초). |
+| reevaluate_description | false | Boolean true/false | true이면 조건을 하나라도 만족하지 못하게 될 때 대상에서 해제된다. |
+| sprint_speed_multiplier | 1 | Decimal number | 뛰는 속도 배율. 1.0이면 속도가 그대로다. |
+| walk_speed_multiplier | 1 | Decimal number | 걷기 속도 배율. 1.0이면 속도가 그대로다. |
+
+### 예시
+
+##### [Llama](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/llama.json)
+
+
+```json
+"minecraft:behavior.follow_caravan": {
+  "priority": 3,
+  "speed_multiplier": 2.1,
+  "entity_count": 10,
+  "entity_types": {
+    "filters": {
+      "test": "is_family",
+      "subject": "other",
+      "value": "llama"
+    }
+  }
+}
+```
+
+## minecraft&#58;behavior.follow_mob
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityGoals/minecraftBehavior_follow_mob.md`)
+
+다른 몹을 따라가게 한다.
+
+Allows the mob to follow other mobs.
+
+### Entity Follow Mob Behavior Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| control_flags | [] | Control Flags choices |  |  |
+| filters (Filters) | &#123;"AND":null,"NOT":null,"OR":null,"all":null,"all_of":null,"any":null,"any_of":null,"none_of":null&#125; | Filters item | 비어 있지 않으면 따라갈 수 있는 근처 몹을 거르는 기준을 제공한다. |  |
+| filters (Alternate 1) | *not set* | Object |  |  |
+| preferred_actor_type |  | String | 우선 따라갈 액터의 종류. 지정하지 않으면 범위 안의 액터 중 무작위로 고른다. |  |
+| priority | 0 | Integer number | 0에 가까울수록 우선순위가 높아진다. 우선순위가 높을수록 이 행동(목표)이 더 먼저 실행된다. | Parrot: `4` |
+| search_range | 0 | Integer number | 따라갈 몹을 찾는 블록 거리. | Parrot: `20` |
+| speed_multiplier | 1 | Decimal number | 이 AI 목표를 쓸 때의 몹 이동 속도 배율. | Parrot: `1` |
+| stop_distance | 2 | Decimal number | 따라가는 몹으로부터 이 몹이 멈추는 블록 거리. | Parrot: `3` |
+| use_home_position_restriction | false | Boolean true/false | true이면 따라갈 대상을 고를 때 'minecraft:home' 컴포넌트의 'restriction_radius' 필드를 지킨다. |  |
+
+#### filters
+
+If non-empty, provides criteria for filtering which nearby Mobs can be followed. If empty default criteria will be used, which will exclude Players, Squid variants, Fish variants, Tadpoles, Dolphins, and mobs of the same type as the owner of the Goal.
+
+#### use_home_position_restriction
+
+If true, the mob will respect the 'minecraft:home' component's 'restriction_radius' field when choosing a target to follow. If false, it will choose target position without considering home restrictions.
+
+
+#### Control Flags choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| jump | Jump |  |
+| look | Look |  |
+| move | Move |  |
+
+#### Filters
+
+##### Filters Properties
+
+**JSON path:** `filters`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| domain | *not set* | Object | 테스트를 수행할 도메인. |
+| operator | *not set* | Object | 'value'와 함께 적용할 비교 방식. |
+| subject | *not set* | Object | 이 필터 테스트의 대상(subject). |
+| test | *not set* | String | 적용할 테스트의 이름. |
+| value | *not set* | Object | 테스트에서 비교할 값. |
+
+### 예시
+
+##### [Parrot](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/parrot.json)
+
+
+```json
+"minecraft:behavior.follow_mob": {
+  "priority": 4,
+  "search_range": 20,
+  "speed_multiplier": 1,
+  "stop_distance": 3
+}
+```
+
+## minecraft&#58;behavior.follow_owner
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityGoals/minecraftBehavior_follow_owner.md`)
+
+자신을 길들인 플레이어를 따라가게 한다. 길들여 주인이 있어야 한다.
+
+Allows a mob to follow the player that owns it.
+
+> [!Note]
+> Requires the entity to be marked as an owner through taming.
+
+### Entity Follow Owner Behavior Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| can_teleport | true | Boolean true/false | 주인이 너무 멀리 있을 때 몹이 주인에게 순간이동할지 정의한다. |  |
+| control_flags | [] | Control Flags choices |  |  |
+| ignore_vibration | false | Boolean true/false | 최근 진동을 감지한 뒤 몹이 주인 따라가기를 무시할지 정의한다. |  |
+| max_distance | 60 | Decimal number | 몹이 주인을 따라가기 시작할 수 있는 주인과의 최대 거리. "can_teleport"가 false일 때만 적용된다. |  |
+| post_teleport_distance | 3 | Integer number | 순간이동한 뒤 엔티티가 주인에게서 떨어져 있을 거리(블록)를 정의한다. 지정하지 않으면 "stop_distance" + 1이어서 내비게이션을 매끄럽게 이어 갈 수 있다. |  |
+| priority | 0 | Integer number | 0에 가까울수록 우선순위가 높아진다. 우선순위가 높을수록 이 행동(목표)이 더 먼저 실행된다. | Allay: `6`, Parrot: `3` |
+| speed_multiplier | 1 | Decimal number | 이 AI 목표를 쓸 때의 몹 이동 속도 배율. | Allay: `8`, Parrot: `1` |
+| start_distance | 10 | Decimal number | 몹이 주인을 따라가기 시작하려면 주인과 떨어져 있어야 하는 최소 거리. | Allay: `16`, Parrot: `5` |
+| stop_distance | 2 | Decimal number | 몹이 주인 따라가기를 멈추는 거리. | Allay: `4`, Parrot: `1` |
+
+#### Control Flags choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| jump | Jump |  |
+| look | Look |  |
+| move | Move |  |
+
+### 예시
+
+##### [Allay](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/allay.json)
+
+
+```json
+"minecraft:behavior.follow_owner": {
+  "can_teleport": false,
+  "priority": 6,
+  "ignore_vibration": false,
+  "speed_multiplier": 8,
+  "start_distance": 16,
+  "stop_distance": 4
+}
+```
+
+##### [Parrot](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/parrot.json)
+
+
+```json
+"minecraft:behavior.follow_owner": {
+  "priority": 3,
+  "speed_multiplier": 1,
+  "start_distance": 5,
+  "stop_distance": 1
+}
+```
+
+## minecraft&#58;behavior.follow_parent
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityGoals/minecraftBehavior_follow_parent.md`)
+
+부모를 따라다니게 한다. `is_baby` 컴포넌트가 필요하다.
+
+Allows the mob to follow their parent around.
+
+> [!Note]
+> Requires the following component in order to work properly:
+> 
+> * Is Baby (minecraft:is_baby)
+> Requires the `minecraft:is_baby` component in order to have an adult mob tagged as a parent for the entity.
+
+### Entity Follow Parent Behavior Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| control_flags | [] | Control Flags choices |  |  |
+| priority | 0 | Integer number | 0에 가까울수록 우선순위가 높아진다. 우선순위가 높을수록 이 행동(목표)이 더 먼저 실행된다. | Chicken: `5`, Dolphin: `4`, Goat: `6` |
+| speed_multiplier | 1 | Decimal number | 이 AI 목표를 쓸 때의 몹 이동 속도 배율. | Chicken: `1.1`, Goat: `1` |
+
+#### Control Flags choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| jump | Jump |  |
+| look | Look |  |
+| move | Move |  |
+
+### 예시
+
+##### [Chicken](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/chicken.json)
+
+
+```json
+"minecraft:behavior.follow_parent": {
+  "priority": 5,
+  "speed_multiplier": 1.1
+}
+```
+
+##### [Dolphin](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/dolphin.json)
+
+
+```json
+"minecraft:behavior.follow_parent": {
+  "priority": 4,
+  "speed_multiplier": 1.1
+}
+```
+
+##### [Goat](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/goat.json)
+
+
+```json
+"minecraft:behavior.follow_parent": {
+  "priority": 6,
+  "speed_multiplier": 1
+}
+```
+
+##### [Llama](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/llama.json)
+
+
+```json
+"minecraft:behavior.follow_parent": {
+  "priority": 5,
+  "speed_multiplier": 1
+}
+```
+
+##### [Pig](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/pig.json)
+
+
+```json
+"minecraft:behavior.follow_parent": {
+  "priority": 6,
+  "speed_multiplier": 1.1
+}
+```
+
+## minecraft&#58;behavior.follow_target_captain
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityGoals/minecraftBehavior_follow_target_captain.md`)
+
+현재 대상인 대장에게 다가가게 한다. 무리에서 대장으로 표시된 엔티티가 필요하다.
+
+Allows mob to move towards its current target captain.
+
+> [!Note]
+> Requires a entity to be labeled as a captain in a group. An example of this is the `minecraft:is_illager_captain` component used in the `pillager.json` entity definition.
+
+> [!Note]
+> Refactored in format version 1.26.20 to the more general `minecraft:behavior.follow_target_leader`, which uses configurable `leader_filters` and `search_cooldown` instead of hard-coded captain logic. Existing content that uses `follow_target_captain` continues to load, but new content should prefer `follow_target_leader`.
+
+> [!Note]
+> This item no longer works after format versions of at least 1.26.20.
+
+### Follow Target Captain Behavior Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| follow_distance | 0 | Decimal number | 따라가는 동안 몹이 대상과 유지하는 블록 거리를 정의한다. |
+| priority | *not set* | Integer number | 0에 가까울수록 우선순위가 높아진다. 우선순위가 높을수록 이 행동(목표)이 더 먼저 실행된다. |
+| within_radius | 0 | Decimal number | 몹이 대상 대장을 따라가기를 포기하기 전에 대장에게서 멀어질 수 있는 최대 거리(블록)를 정의한다. |
+
+### 예시
+
+## minecraft&#58;behavior.follow_target_leader
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityGoals/minecraftBehavior_follow_target_leader.md`)
+
+대상 리더에게 다가가게 한다. 1.26.20에서 `follow_target_captain`을 일반화해 대체했다.
+
+Allows mob to move towards its target leader.
+
+> [!Note]
+> Added in 1.26.20 as the generalized replacement for `minecraft:behavior.follow_target_captain`. Use `leader_filters` (required) to define which entities qualify as leaders, `search_cooldown` (default 20 ticks) to throttle leader searches, and `always_look_for_leader` (default false) to keep searching even after a leader has been found.
+
+> [!Note]
+> This item requires a format version of at least 1.26.20.
+
+### Entity Follow Target Leader Behavior Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| always_look_for_leader | false | Boolean true/false | true이면 따라갈 유효한 리더가 없거나 현재 리더가 더 이상 유효하지 않을 때 몹이 항상 유효한 리더를 찾는다. |
+| control_flags | [] | Control Flags choices |  |
+| follow_distance | 0 | Decimal number | 따라가는 동안 몹이 대상과 유지하는 블록 거리를 정의한다. |
+| leader_filters (Leader Filters) | &#123;"AND":null,"NOT":null,"OR":null,"all":null,"all_of":null,"any":null,"any_of":null,"none_of":null&#125; | Leader Filters item | 몹이 알맞은 리더인지 판단할 때 쓰는 필터. |
+| leader_filters (Alternate 1) | *not set* | Object |  |
+| priority | 0 | Integer number | 0에 가까울수록 우선순위가 높아진다. 우선순위가 높을수록 이 행동(목표)이 더 먼저 실행된다. |
+| search_cooldown | 20 | Integer number | 대상을 찾지 못하거나 놓치거나 무효가 된 뒤 새 검색을 시작하기까지 지나야 하는 틱 수. |
+| speed_multiplier | 1 | Decimal number | 이 AI 목표를 쓸 때의 몹 이동 속도 배율. |
+| within_radius | 0 | Decimal number | 몹이 대상 리더를 따라가기를 포기하기 전에 리더에게서 멀어질 수 있는 최대 거리(블록)를 정의한다. |
+
+#### Control Flags choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| jump | Jump |  |
+| look | Look |  |
+| move | Move |  |
+
+#### Leader Filters
+
+##### Leader Filters Properties
+
+**JSON path:** `leader_filters`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| domain | *not set* | Object | 테스트를 수행할 도메인. |
+| operator | *not set* | Object | 'value'와 함께 적용할 비교 방식. |
+| subject | *not set* | Object | 이 필터 테스트의 대상(subject). |
+| test | *not set* | String | 적용할 테스트의 이름. |
+| value | *not set* | Object | 테스트에서 비교할 값. |
+
+### 예시

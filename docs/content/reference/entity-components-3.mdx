@@ -1,517 +1,542 @@
 ---
-title: 엔티티 컴포넌트 레퍼런스(주요 항목) (3/15)
-description: MS Learn 엔티티 컴포넌트·이벤트·필터 목록과 주요 컴포넌트.
-sidebar_position: 92
+title: 엔티티 컴포넌트 레퍼런스 (3/23)
+description: MS Learn 컴포넌트 문서 16개(minecraft:area_attack ~ minecraft:break_blocks). 속성 표와 예시 JSON을 원문대로 담았다.
+sidebar_position: 102
 sources:
   - ms-learn
 ---
 
-# 엔티티 컴포넌트 레퍼런스(주요 항목) (3/15)
+# 엔티티 컴포넌트 레퍼런스 (3/23)
 
-MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 레퍼런스를 발췌한 쪽이다. 원문의 상대 링크는 제거했다.
+MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 컴포넌트 문서를 옮긴 쪽이다. 설명은 한국어로 옮기고 ID, 속성 이름, 유형, 기본값, JSON은 원문 그대로 두었다. 전체 목록은 [색인](./entity-index.mdx)에 있다.
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_damage_sensor.md`)
+## minecraft&#58;area_attack
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_area_attack.md`)
+
+범위 안에 들어온 엔티티에게 피해를 주는 컴포넌트다.
+
+A component that does damage to entities that get within range.
+
+### Area Attack Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| cause | *not set* | String from a list of choices | 피해 범위에 들어온 엔티티에게 주는 피해의 종류. | Magma Cube: `"entity_attack"` |
+| damage_cooldown | 0 | Decimal number | 이 엔티티가 대상을 공격할 수 있는 간격의 쿨다운(초). | Magma Cube: `0.5` |
+| damage_per_tick | 2 | Integer number | 피해 범위에 들어온 엔티티에게 틱마다 주는 피해량. | Magma Cube: `6`, `4`, `3` |
+| damage_range | 0.2 | Decimal number | 피해를 적용하려면 적대적인 엔티티가 얼마나 가까이 있어야 하는지. | Magma Cube: `0.15` |
+| death_message_override | *not set* | String | 범위 공격으로 엔티티가 죽을 때 사망 메시지로 쓸 번역 키. 비어 있으면 피해 원인의 기본 사망 메시지를 쓴다. |  |
+| entity_filter | *not set* | Minecraft filter | 범위 안에 있을 때 피해를 줄 수 있는 유효한 엔티티 집합. | Magma Cube: `{"any_of":[{"subject":"other","test":"is_family","value":"player"},{"subject":"other","test":"is_family","value":"irongolem"}]}`, Slime: `{"any_of":[{"subject":"other","test":"is_family","value":"player"},{"subject":"other","test":"is_family","value":"irongolem"},{"subject":"other","test":"is_family","value":"snowgolem"}]}` |
+| play_attack_sound | true | Boolean true/false | 엔티티가 대상을 공격할 때 공격 소리를 재생할지 여부. |  |
+| use_self_as_damage_source | true | Boolean true/false | 엔티티를 범위 피해의 가해자로 볼지 여부. |  |
+
+#### cause
+
+The type of damage that is applied to entities that enter the damage range. A list of available damage sources can be found at Entity Damage Sources located in the Vanilla Listings Documentation.
+
+#### use_self_as_damage_source
+
+Whether the entity is treated as the source of the area damage. When true (default), other entities can retaliate against the attacking entity. Set to false to apply damage without making the attacker a valid retaliation target. This item requires a format version of at least 1.26.30.
 
 
-### Entity Documentation - minecraft:damage_sensor
+### 예시
 
-Defines what events to call when this entity is damaged by specific entities or items.
+##### [Magma Cube](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/magma_cube.json)
 
-
-#### Damage Sensor Properties
-
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| deals_damage | false | Deals Damage choices | Defines how received damage affects the entity. |  | 
-| deals_damage (Alternate 1) | false | Boolean true/false |  |  | 
-| triggers (Damage Sensor Trigger) | *not set* | Triggers item | List of triggers with the events to call when taking specific kinds of damage. | Allay: `[{"deals_damage":"no","on_damage":{"filters":{"all_of":[{"subject":"other","test":"is_family","value":"player"},{"subject":"other","test":"is_owner"}]}}}]`, Bat: `{"cause":"fall","deals_damage":"no"}`, Breeze: `[{"cause":"fall","deals_damage":"no"},{"cause":"projectile","on_damage":{"filters":{"operator":"!=","test":"is_family","subject":"damager","value":"wind_charge"}},"deals_damage":"no"}]` | 
-| triggers (as Object) | *not set* | Object |  |  | 
-
-##### Deals Damage choices
-
-|Value       |Title |Description |
-|:-----------|:-----|:-----------|
-| yes | Yes | Received damage is applied to the entity.|
-| no | No | Received damage is not applied to the entity.|
-| no_but_side_effects_apply | No But Side Effects Apply | Received damage is not applied to the entity, but the side effects of the attack are. This means that the attacker's weapon loses durability, enchantment side effects are applied, and so on.|
-| no_but_entity_effects_apply | No But Entity Effects Apply | Damage is not applied to the entity, but knockback and enchantments are still applied and the attacker's weapon is used as normal. The entity does not flash red.|
-
-##### Triggers
-
-#### Damage Sensor Trigger Properties
-
-**JSON path:** `triggers`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| cause | none | String | Type of damage that triggers the events. | 
-| damage_modifier | 0 | Decimal number | A modifier that adds/removes to the base damage received from the specified damage cause. | 
-| damage_multiplier | 1 | Decimal number | A multiplier that modifies the base damage received from the specified damage cause. | 
-| deals_damage | false | Boolean true/false | Defines how received damage affects the entity. | 
-| deals_damage (as String) | *not set* | String |  | 
-| event | *not set* | String | Event to emit when the trigger conditions are met. | 
-| filters | *not set* | Minecraft filter | Filter conditions for when this trigger applies. | 
-| on_damage | *not set* | Minecraft Event Trigger | Defines which entities the trigger applies to, and which event to emit when damaged. | 
-| on_damage_sound_event | *not set* | Minecraft Event Reference | Defines what sound to play when the on_damage filters are met. | 
-
-#### Samples
-
-#### Allay
-
+At /minecraft:entity/component_groups/minecraft:slime_large/minecraft:area_attack/: 
 
 ```json
-"minecraft:damage_sensor": {
-  "triggers": [
-    {
-      "deals_damage": "no",
-      "on_damage": {
-        "filters": {
-          "all_of": [
-            {
-              "subject": "other",
-              "test": "is_family",
-              "value": "player"
-            },
-            {
-              "subject": "other",
-              "test": "is_owner"
-            }
-          ]
-        }
-      }
-    }
-  ]
-}
-```
-
-#### Bat
-
-
-```json
-"minecraft:damage_sensor": {
-  "triggers": {
-    "cause": "fall",
-    "deals_damage": "no"
-  }
-}
-```
-
-#### Breeze
-
-
-```json
-"minecraft:damage_sensor": {
-  "triggers": [
-    {
-      "cause": "fall",
-      "deals_damage": "no"
-    },
-    {
-      "cause": "projectile",
-      "on_damage": {
-        "filters": {
-          "operator": "!=",
-          "test": "is_family",
-          "subject": "damager",
-          "value": "wind_charge"
-        }
+"minecraft:area_attack": {
+  "cause": "entity_attack",
+  "damage_cooldown": 0.5,
+  "damage_per_tick": 6,
+  "damage_range": 0.15,
+  "entity_filter": {
+    "any_of": [
+      {
+        "subject": "other",
+        "test": "is_family",
+        "value": "player"
       },
-      "deals_damage": "no"
-    }
-  ]
-}
-```
-
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_despawn.md`)
-
-
-### Entity Documentation - minecraft:despawn
-
-Despawns the Actor when the despawn rules or optional filters evaluate to true.
-
-
-#### Despawn Properties
-
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| despawn_from_chance | true | Boolean true/false | Determines if "min_range_random_chance" is used in the standard despawn rules |  | 
-| despawn_from_distance | *not set* | Despawn From Distance item | Specifies if the 'min_distance' and 'max_distance' are used in the standard despawn rules. | Bat: `{}` | 
-| despawn_from_inactivity | true | Boolean true/false | Determines if the "min_range_inactivity_timer" is used in the standard despawn rules. |  | 
-| despawn_from_simulation_edge | true | Boolean true/false | Determines if the mob is instantly despawned at the edge of simulation distance in the standard despawn rules. |  | 
-| filters | *not set* | Minecraft filter | The list of conditions that must be satisfied before the Actor is despawned. If a filter is defined then standard despawn rules are ignored. |  | 
-| min_range_inactivity_timer | 30 | Integer number | The amount of time in seconds that the mob must be inactive. |  | 
-| min_range_random_chance | 800 | Integer number | A random chance between 1 and the given value. |  | 
-| remove_child_entities | false | Boolean true/false | If true, all entities linked to this entity in a child relationship (eg. leashed) will also be despawned. |  | 
-
-##### Despawn From Distance
-
-#### Despawn From Distance Properties
-
-**JSON path:** `despawn_from_distance`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| max_distance | 128 | Integer number | Maximum distance for standard despawn rules to instantly despawn the mob. | 
-| min_distance | 32 | Integer number | Minimum distance for standard despawn rules to try to despawn the mob. | 
-
-#### Samples
-
-#### Bat
-
-
-```json
-"minecraft:despawn": {
-  "despawn_from_distance": {}
-}
-```
-
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_equippable.md`)
-
-
-### Entity Documentation - minecraft:equippable
-
-Defines an entity's behavior for having items equipped to it.
-
-> [!Note]
-> In 1.26.0, `on_equip` and `on_unequip` events on each slot no longer fire on world load; they now run only as a result of an in-game equip or unequip interaction.
-
-
-#### Equippable Properties
-
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| slots | *not set* | Array of Slots items | List of slots and the item that can be equipped. | Llama: `[{"slot":1,"item":"carpet","accepted_items":["carpet"]}]` | 
-
-##### Slots
-List of slots and the item that can be equipped.
-
-
-#### Slots Properties
-
-**JSON path:** `slots`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| accepted_items | *not set* | Array of strings | The list of items that can go in this slot. | 
-| interact_text | *not set* | String | Text to be displayed when the entity can be equipped with this item when playing with Touch-screen controls. | 
-| item | *not set* | String | Identifier of the item that can be equipped for this slot. | 
-| on_equip | *not set* | Minecraft Event Trigger | Event to trigger when this entity is equipped with this item. | 
-| on_unequip | *not set* | Minecraft Event Trigger | Event to trigger when this item is removed from this entity. | 
-| slot | 0 | Integer number | The slot number of this slot. | 
-
-#### Samples
-
-#### Llama
-
-
-```json
-"minecraft:equippable": {
-  "slots": [
-    {
-      "slot": 1,
-      "item": "carpet",
-      "accepted_items": [
-        "carpet"
-      ]
-    }
-  ]
-}
-```
-
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_experience_reward.md`)
-
-
-### Entity Documentation - minecraft:experience_reward
-
-.
-
-
-#### Entity Experience Reward Properties
-
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| on_bred |  | Molang | A Molang expression defining the amount of experience rewarded when this entity is successfully bred. | Breeze: `"Math.Random(1,7)"` | 
-| on_bred (as Named set of objects) | *not set* | Key/item pairs of Bred (Legacy Molang Expression) items |  |  | 
-| on_bred (as Decimal number) | *not set* | Decimal number |  |  | 
-| on_death |  | Molang | A Molang expression defining the amount of experience rewarded when this entity dies. | Blaze: `"query.last_hit_by_player ? 10 : 0"`, Bogged: `"query.last_hit_by_player ? 5 + (query.equipment_count * Math.Random(1,3)) : 0"`, Cave Spider: `"query.last_hit_by_player ? 5 : 0"` | 
-| on_death (as Named set of objects) | *not set* | Key/item pairs of Death (Legacy Molang Expression) items |  |  | 
-| on_death (as Decimal number) | *not set* | Decimal number |  |  | 
-
-##### Legacy Molang Expression
-
-#### Legacy Molang Expression Properties
-
-**JSON path:** `on_bred`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| expression | *not set* | String |  | 
-| version | *not set* | Integer number |  | 
-
-#### Samples
-
-#### Blaze
-
-
-```json
-"minecraft:experience_reward": {
-  "on_death": "query.last_hit_by_player ? 10 : 0"
-}
-```
-
-#### Bogged
-
-
-```json
-"minecraft:experience_reward": {
-  "on_death": "query.last_hit_by_player ? 5 + (query.equipment_count * Math.Random(1,3)) : 0"
-}
-```
-
-#### Breeze
-
-
-```json
-"minecraft:experience_reward": {
-  "on_bred": "Math.Random(1,7)",
-  "on_death": "query.last_hit_by_player ? 10 : 0"
-}
-```
-
-#### Cave Spider
-
-
-```json
-"minecraft:experience_reward": {
-  "on_death": "query.last_hit_by_player ? 5 : 0"
-}
-```
-
-#### Chicken
-
-
-```json
-"minecraft:experience_reward": {
-  "on_bred": "Math.Random(1,7)",
-  "on_death": "query.last_hit_by_player ? Math.Random(1,3) : 0"
-}
-```
-
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_explode.md`)
-
-
-### Entity Documentation - minecraft:explode
-
-Defines how the entity explodes.
-
-
-#### Explode Properties
-
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| add | *not set* | Add item |  | Fireball: `{"component_groups":["minecraft:exploding"]}` | 
-| allow_underwater | false | Boolean true/false | If true, the explosion will affect blocks and entities under water. This item requires a format version of at least 1.21.40. | Breeze Wind Charge Projectile: `true` | 
-| breaks_blocks | true | Boolean true/false | If true, the explosion will destroy blocks in the explosion radius. |  | 
-| causes_fire | false | Boolean true/false | If true, blocks in the explosion radius will be set on fire. | Fireball: `true` | 
-| damage_scaling | 1 | Decimal number | A scale factor applied to the explosion's damage to entities. |  | 
-| destroy_affected_by_griefing | false | Boolean true/false | If true, whether the explosion breaks blocks is affected by the mob griefing game rule. | Ender Crystal: `true` | 
-| fire_affected_by_griefing | false | Boolean true/false | If true, whether the explosion causes fire is affected by the mob griefing game rule. | Fireball: `true` | 
-| fuse_length | *not set* | Range of integers | The range for the random amount of time the fuse will be lit before exploding, a negative value means the explosion will be immediate. | Tnt Minecart: `4` | 
-| fuse_lit | false | Boolean true/false | If true, the fuse is already lit when this component is added to the entity. | Ender Crystal: `true` | 
-| knockback_scaling | 1 | Decimal number | A scale factor applied to the knockback force caused by the explosion. This item requires a format version of at least 1.21.40. | Breeze Wind Charge Projectile: `0.6`, Wind Charge Projectile: `1.22` | 
-| max_resistance | 3.40282e+38 | Decimal number | A blocks explosion resistance will be capped at this value when an explosion occurs. |  | 
-| negates_fall_damage | false | Boolean true/false | Defines whether the explosion should apply fall damage negation to Players above the point of collision. This item requires a format version of at least 1.21.40. | Wind Charge Projectile: `true` | 
-| particle_effect | explosion | String | The name of the particle effect to use. The accepted strings are 'explosion', 'wind_burst', or 'breeze_wind_burst'. This item requires a format version of at least 1.21.40. | Breeze Wind Charge Projectile: `"breeze_wind_burst"`, Wind Charge Projectile: `"wind_burst"` | 
-| power | 3 | Decimal number | The radius of the explosion in blocks and the amount of damage the explosion deals. | Breeze Wind Charge Projectile: `3`, Ender Crystal: `6`, Fireball: `1` | 
-| sound_effect | explode | String | The name of the sound effect played when the explosion triggers. This item requires a format version of at least 1.21.40. | Breeze Wind Charge Projectile: `"breeze_wind_charge.burst"`, Wind Charge Projectile: `"wind_charge.burst"` | 
-| toggles_blocks | false | Boolean true/false | If true, the explosion will toggle blocks in the explosion radius. This item requires a format version of at least 1.21.40. | Breeze Wind Charge Projectile: `true` | 
-
-##### damage_scaling
-
-A scale factor applied to the explosion's damage to entities. A value of 0 prevents the explosion from dealing any damage. Negative values cause the explosion to heal entities instead. This item requires a format version of at least 1.21.40.
-
-
-##### Add
-
-#### Add Properties
-
-**JSON path:** `add`
-
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| component_groups | *not set* | String |  | Fireball: `["minecraft:exploding"]` | 
-
-#### Samples
-
-#### Breeze Wind Charge Projectile
-
-
-```json
-"minecraft:explode": {
-  "knockback_scaling": 0.6,
-  "damage_scaling": 0,
-  "allow_underwater": true,
-  "breaks_blocks": false,
-  "causes_fire": false,
-  "max_resistance": 0,
-  "negates_fall_damage": false,
-  "particle_effect": "breeze_wind_burst",
-  "toggles_blocks": true,
-  "power": 3,
-  "sound_effect": "breeze_wind_charge.burst"
-}
-```
-
-#### Ender Crystal
-
-
-```json
-"minecraft:explode": {
-  "causes_fire": false,
-  "fuse_lit": true,
-  "power": 6,
-  "destroy_affected_by_griefing": true,
-  "fuse_length": 0
-}
-```
-
-#### Fireball
-
-At /minecraft:entity/component_groups/minecraft:exploding/minecraft:explode/: 
-
-```json
-"minecraft:explode": {
-  "causes_fire": true,
-  "fire_affected_by_griefing": true,
-  "fuse_lit": true,
-  "power": 1,
-  "destroy_affected_by_griefing": true,
-  "fuse_length": 0
-}
-```
-
-At /minecraft:entity/events/minecraft:explode/: 
-
-```json
-"minecraft:explode": {
-  "add": {
-    "component_groups": [
-      "minecraft:exploding"
+      {
+        "subject": "other",
+        "test": "is_family",
+        "value": "irongolem"
+      }
     ]
   }
 }
 ```
 
-#### Tnt Minecart
-
-At /minecraft:entity/component_groups/minecraft:instant_explode_tnt/minecraft:explode/: 
+At /minecraft:entity/component_groups/minecraft:slime_medium/minecraft:area_attack/: 
 
 ```json
-"minecraft:explode": {
-  "causes_fire": false,
-  "fuse_lit": true,
-  "power": 3,
-  "fuse_length": 0
+"minecraft:area_attack": {
+  "cause": "entity_attack",
+  "damage_cooldown": 0.5,
+  "damage_per_tick": 4,
+  "damage_range": 0.15,
+  "entity_filter": {
+    "any_of": [
+      {
+        "subject": "other",
+        "test": "is_family",
+        "value": "player"
+      },
+      {
+        "subject": "other",
+        "test": "is_family",
+        "value": "irongolem"
+      }
+    ]
+  }
 }
 ```
 
-At /minecraft:entity/component_groups/minecraft:primed_tnt/minecraft:explode/: 
+At /minecraft:entity/component_groups/minecraft:slime_small/minecraft:area_attack/: 
 
 ```json
-"minecraft:explode": {
-  "causes_fire": false,
-  "fuse_lit": true,
-  "power": 3,
-  "fuse_length": 4
+"minecraft:area_attack": {
+  "cause": "entity_attack",
+  "damage_cooldown": 0.5,
+  "damage_per_tick": 3,
+  "damage_range": 0.15,
+  "entity_filter": {
+    "any_of": [
+      {
+        "subject": "other",
+        "test": "is_family",
+        "value": "player"
+      },
+      {
+        "subject": "other",
+        "test": "is_family",
+        "value": "irongolem"
+      }
+    ]
+  }
 }
 ```
 
-#### Wind Charge Projectile
+##### [Slime](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/slime.json)
 
+At /minecraft:entity/component_groups/minecraft:slime_large/minecraft:area_attack/: 
 
 ```json
-"minecraft:explode": {
-  "knockback_scaling": 1.22,
-  "damage_scaling": 0,
-  "allow_underwater": true,
-  "breaks_blocks": false,
-  "causes_fire": false,
-  "max_resistance": 0,
-  "negates_fall_damage": true,
-  "particle_effect": "wind_burst",
-  "toggles_blocks": true,
-  "power": 1.2,
-  "sound_effect": "wind_charge.burst"
+"minecraft:area_attack": {
+  "cause": "entity_attack",
+  "damage_cooldown": 0.5,
+  "damage_per_tick": 4,
+  "damage_range": 0.15,
+  "entity_filter": {
+    "any_of": [
+      {
+        "subject": "other",
+        "test": "is_family",
+        "value": "player"
+      },
+      {
+        "subject": "other",
+        "test": "is_family",
+        "value": "irongolem"
+      },
+      {
+        "subject": "other",
+        "test": "is_family",
+        "value": "snowgolem"
+      }
+    ]
+  }
 }
 ```
 
+At /minecraft:entity/component_groups/minecraft:slime_medium/minecraft:area_attack/: 
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_health.md`)
+```json
+"minecraft:area_attack": {
+  "cause": "entity_attack",
+  "damage_cooldown": 0.5,
+  "damage_per_tick": 2,
+  "damage_range": 0.15,
+  "entity_filter": {
+    "any_of": [
+      {
+        "subject": "other",
+        "test": "is_family",
+        "value": "player"
+      },
+      {
+        "subject": "other",
+        "test": "is_family",
+        "value": "irongolem"
+      },
+      {
+        "subject": "other",
+        "test": "is_family",
+        "value": "snowgolem"
+      }
+    ]
+  }
+}
+```
+
+## minecraft&#58;attack
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_attack.md`)
+
+엔티티의 근접 공격 피해량과 적중 시 부여할 상태 효과를 정의한다.
+
+Defines an entity's melee attack damage and any additional status effects applied on hit. Typical damage values range from 3 (zombie, creeper) to 7-21 (iron golem).
+
+### Entity Attack Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| damage | &#123;"max":0,"min":0&#125; | Range of floats | 근접 공격이 주는 무작위 피해량의 범위. |
+| damage (Damage) | *not set* | Damage (Damage) item |  |
+| effect_amplifier | 0 | Integer number | 피해를 입은 엔티티에게 적용되는 상태 이상의 증폭 수준(포션 단계). |
+| effect_duration | 0 | Decimal number | 피해를 입은 엔티티에게 적용되는 상태 이상의 지속 시간(초). |
+| effect_name |  | String | 이 엔티티의 근접 공격을 받은 엔티티에게 적용할 상태 이상의 식별자. |
+
+#### damage
+
+Range of the random amount of damage the melee attack deals. A negative value can heal the entity instead of hurting it. Can be a number, an array [min, max], or an object with range_min and range_max properties.
+
+#### effect_amplifier
+
+Amplifier level (potion tier) of the status ailment applied to the damaged entity. Higher values increase the strength of the effect. Fixed in format version 1.26.30: `effect_amplifier` is now actually applied to the inflicted status effect, so amplifier-sensitive effects such as Hunger now scale correctly when triggered by a mob's melee attack. Prior versions silently ignored this value.
 
 
-### Entity Documentation - minecraft:health
+#### Damage (Damage)
 
-Defines the health pool for an entity, measured in health points (1 point = half a heart). Typical values: cow (10), zombie (20), iron golem (100), wither (600).
+##### Damage Properties
+
+**JSON path:** `damage`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max | 0 | Decimal number |  |
+| min | 0 | Decimal number |  |
+
+### 예시
+
+## minecraft&#58;attack_cooldown
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_attack_cooldown.md`)
+
+엔티티에 쿨다운을 추가한다. 새 공격 대상을 찾으려는 시도를 막는 데 쓴다.
+
+Adds a cooldown to an entity. The intention of this cooldown is to be used to prevent the entity from attempting to acquire new attack targets.
+
+### Attack Cooldown Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| attack_cooldown_complete_event | *not set* | Object | 쿨다운이 끝났을 때 실행할 이벤트. event와 target 속성을 가진 객체 또는 단순한 이벤트 문자열을 쓸 수 있다. |
+| attack_cooldown_complete_event (as String) | *not set* | String |  |
+| attack_cooldown_time | *not set* | Range of floats | 쿨다운 시간(초). 숫자 하나 또는 (최소, 최대) 숫자 쌍으로 지정할 수 있다. |
+| attack_cooldown_time (as Decimal number) | *not set* | Decimal number |  |
+
+### 예시
+
+## minecraft&#58;attack_damage
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_attack_damage.md`)
+
+엔티티가 공격할 때 주는 피해량을 정한다.
+
+Specifies how much damage is dealt by the entity when it attacks.
+
+### Attack Damage Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| value | *not set* | Range of integers | 공격이 대상에게 입힐 피해량. |
+
+## minecraft&#58;balloonable
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_balloonable.md`)
+
+엔티티에 풍선을 달 수 있게 하고, 풍선이 달렸을 때의 조건과 이벤트를 정의한다.
+
+Allows this entity to have a balloon attached and defines the conditions and events for this entity when is ballooned.
+
+### Balloonable Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| mass | 1 | Decimal number | 풍선 당김 힘을 계산할 때 이 엔티티가 가지는 질량. |
+| max_distance | 10 | Decimal number | 풍선이 터지는 블록 거리. |
+| on_balloon | *not set* | Minecraft Event Trigger | 이 엔티티에 풍선이 달렸을 때 호출할 이벤트. |
+| on_unballoon | *not set* | Minecraft Event Trigger | 이 엔티티의 풍선이 풀렸을 때 호출할 이벤트. |
+| soft_distance | 2 | Decimal number | 엔티티를 들어 올리는 '스프링' 효과가 작동하는 블록 거리. |
+
+## minecraft&#58;barter
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_barter.md`)
+
+물물교환 결과로 아이템을 떨어뜨리게 한다.
+
+Enables the component to drop an item as a barter exchange.
+
+### Entity Barter Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| barter_table |  | String from a list of choices | 무작위 아이템을 떨어뜨리는 데 쓰는 루트 테이블. |
+| cooldown_after_being_attacked | 10 | Range of integers | 몹이 피해를 입었다면 아이템을 거래하지 않는 시간(초). |
+
+### 예시
+
+## minecraft&#58;block_climber
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_block_climber.md`)
+
+플레이어가 비계 블록을 감지하고 그 위에서 움직일 수 있게 한다.
+
+Allows the player to detect and manuever on the scaffolding block.
+
+### 예시
+
+##### [Endermite](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/endermite.json)
 
 
-#### Health Properties
+```json
+"minecraft:block_climber": {}
+```
 
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| max | 20 | Integer number | Maximum health this entity can have. Can be higher than the starting value to allow healing beyond initial health. | 
-| value | 20 | Integer number | Starting health for this entity in health points (1 point = half a heart). | 
-| value (as Object) | *not set* | Value item |  | 
+## minecraft&#58;block_movement_slowdown_immunity
 
-##### Value
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_block_movement.slowdown_immunity.md`)
 
-#### Value Properties
+지정한 블록이 이 엔티티의 이동 감속에 영향을 주지 않게 한다.
 
-**JSON path:** `value`
+Prevents specified blocks from contributing to this entity's block movement slowdown. It does not cause other blocks to apply slowdown.
 
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| range_max | *not set* | Integer number |  | 
-| range_min | *not set* | Integer number |  | 
+### Entity Block Movement Slowdown Immunity Properties
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_inventory.md`)
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| blocks (Blocks) | [] | Array of Blocks items | 기존 이동 감속 영향을 무시할 블록 설명자 목록. 생략하거나 비어 있으면 아무것도 무시하지 않는다. | Cave Spider: `["minecraft:web"]` |
+| blocks (as String) | *not set* | String |  |  |
+| blocks (as Object) | *not set* | Object |  |  |
 
+#### Blocks
 
-### Entity Documentation - minecraft:inventory
+##### Blocks Properties
 
-Defines this entity's inventory properties.
+**JSON path:** `blocks`
 
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| name |  | String |  |
+| states | &#123;&#125; | Integer number |  |
+| states (as String) | *not set* | String |  |
+| states (as Boolean true/false) | *not set* | Boolean true/false |  |
+| tags |  | String |  |
 
-#### Entity Inventory Properties
+### 예시
 
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| additional_slots_per_strength | 0 | Integer number | Number of slots that this entity can gain per extra strength. | 
-| can_be_siphoned_from | false | Boolean true/false | If true, the contents of this inventory can be removed by a hopper. | 
-| container_type | none | String | Type of container this entity has. Can be horse, minecart_chest, chest_boat, minecart_hopper, inventory, container or hopper. | 
-| inventory_size | 5 | Integer number | Number of slots the container has. | 
-| private | false | Boolean true/false | If true, the entity will not drop its inventory on death. | 
-| restrict_to_owner | false | Boolean true/false | If true, the entity's inventory can only be accessed by its owner or itself. | 
-
-#### Samples
+##### [Cave Spider](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/cave_spider.json)
 
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_instant_despawn.md`)
+```json
+"minecraft:block_movement_slowdown_immunity": {
+  "blocks": [
+    "minecraft:web"
+  ]
+}
+```
+
+## minecraft&#58;block_sensor
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_block_sensor.md`)
+
+감지 범위 안에서 목록의 블록이 부서지면 지정한 이벤트를 발생시킨다.
+
+Fires off a specified event when a block in the block list is broken within the sensor range.
+
+### Block Sensor Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| on_break | *not set* | Array of Break items | 부서지는지 감시할 블록 목록. 블록이 여러 목록에 있으면 이벤트가 여러 번 발생한다. |
+| sensor_radius | 16 | Decimal number | 지정한 블록을 감지할 수 있는 최대 반경 거리. 가장 큰 반경은 32.0이다. |
+| sources | *not set* | Minecraft filter | 감시할 블록을 부수는 원인 목록. 지정하지 않으면 모든 블록 파괴를 감지한다. |
+
+#### Break
+
+##### Block Break Entry Properties
+
+**JSON path:** `on_break`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| block_list | *not set* | Array of strings | on_block_broken 이벤트를 일으키는 블록 목록. |
+| on_block_broken | *not set* | String | block_list의 블록이 부서질 때 호출할 이벤트. |
+
+### 예시
+
+## minecraft&#58;body_rotation_always_follows_head
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_body_rotation_always_follows_head.md`)
+
+몸 회전이 항상 머리 회전과 일치하게 한다.
+
+Causes the entity's body rotation to match the one of their head.
+Does not override the "minecraft:body_rotation_blocked" component.
+
+> [!Note]
+> This item requires a format version of at least 1.21.90.
+
+### 예시
+
+## minecraft&#58;body_rotation_axis_aligned
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_body_rotation_axis_aligned.md`)
+
+몸이 현재 방향에서 가장 가까운 기준 방향(동서남북)에 맞게 자동으로 회전하게 한다.
+
+Causes the entity's body to automatically rotate to align with the nearest cardinal direction based on its current facing direction.
+Combining this with the "minecraft:body_rotation_blocked" component will cause the entity to align to the nearest cardinal direction and remain fixed in that orientation, regardless of future changes in its facing direction.
+
+### 예시
+
+##### [Happy Ghast](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/happy_ghast.json)
 
 
-### Entity Documentation - minecraft:instant_despawn
+```json
+"minecraft:body_rotation_axis_aligned": {}
+```
 
-Despawns the Actor immediately.
+## minecraft&#58;body_rotation_blocked
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_body_rotation_blocked.md`)
+
+엔티티가 바라보는 방향에 맞춰 몸을 시각적으로 돌리지 않게 한다.
+
+When set, the entity will no longer visually rotate their body to match their facing direction.
+
+> [!Note]
+> This item requires a format version of at least 1.20.80.
+
+### 예시
+
+## minecraft&#58;body_rotation_locked_to_vehicle
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_body_rotation_locked_to_vehicle.md`)
+
+몸 회전을 탈것이 향한 방향에 맞춘다. 1.21.130에서 `rotation_locked_to_vehicle`로 이름이 바뀌었다.
+
+Causes the entity's body rotation to match their vehicle's facing direction.
+
+> [!Note]
+> In 1.21.130 this component was renamed to `minecraft:rotation_locked_to_vehicle`, which now locks both body and overall entity rotation to the vehicle. Existing usages should migrate to the new identifier.
+
+### 예시
+
+##### [Drowned](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/drowned.json)
 
 
-#### Entity Instant Despawn Properties
+```json
+"minecraft:body_rotation_locked_to_vehicle": {}
+```
 
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| remove_child_entities | false | Boolean true/false | If true, all entities linked to this entity in a child relationship (eg. leashed) will also be despawned. | 
+## minecraft&#58;boostable
 
-#### Samples
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_boostable.md`)
 
+탑승 가능한 엔티티의 가속(부스트) 조건과 동작을 정의한다.
+
+Defines the conditions and behavior of a rideable entity's boost.
+
+### Boostable Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| boost_items | *not set* | Array of Boost Items items | 이 엔티티를 탄 채로 부스트에 쓸 수 있는 아이템 목록. | Pig: `[{"item":"carrotOnAStick","damage":2,"replace_item":"fishing_rod"}]`, Strider: `[{"item":"warped_fungus_on_a_stick","damage":1,"replace_item":"fishing_rod"}]` |
+| duration | 3 | Decimal number | 부스트 지속 시간(초). | Pig: `3`, Strider: `16` |
+| speed_multiplier | 1 | Decimal number | 엔티티의 평소 속도에 곱해지는 배수. 예를 들어 2.0이면 두 배 빠르다. | Pig: `1.35` |
+
+#### Boost Items
+
+##### Boost Items Properties
+
+**JSON path:** `boost_items`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| damage | *not set* | Integer number | 아이템을 한 번 쓸 때마다 입는 피해량. |
+| item | *not set* | String | 부스트에 쓸 수 있는 아이템의 이름. |
+| replace_item | *not set* | String | 부스트에 쓴 아이템이 다 소모되면 이 아이템이 된다. |
+
+### 예시
+
+##### [Pig](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/pig.json)
+
+
+```json
+"minecraft:boostable": {
+  "speed_multiplier": 1.35,
+  "duration": 3,
+  "boost_items": [
+    {
+      "item": "carrotOnAStick",
+      "damage": 2,
+      "replace_item": "fishing_rod"
+    }
+  ]
+}
+```
+
+##### [Strider](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/strider.json)
+
+
+```json
+"minecraft:boostable": {
+  "speed_multiplier": 1.35,
+  "duration": 16,
+  "boost_items": [
+    {
+      "item": "warped_fungus_on_a_stick",
+      "damage": 1,
+      "replace_item": "fishing_rod"
+    }
+  ]
+}
+```
+
+## minecraft&#58;boss
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_boss.md`)
+
+보스 HUD를 갱신하기 위한 보스의 현재 상태를 정의한다.
+
+Defines the current state of the boss for updating the boss HUD.
+
+### Entity Boss Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| hud_range | 55 | Integer number | 보스의 체력 바가 플레이어 화면에 표시되는, 보스로부터의 최대 거리. |
+| name | 55 | String | 보스 체력 바 위에 표시할 이름. |
+| should_darken_sky | false | Boolean true/false | 보스가 있을 때 하늘을 어둡게 할지 여부. |
+
+### 예시
+
+## minecraft&#58;break_blocks
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_break_blocks.md`)
+
+엔티티가 이동하며 부술 수 있는 블록을 지정한다.
+
+Specifies the blocks that the entity can break as it moves around.
+
+### Break Blocks Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| breakable_blocks | *not set* | Array of strings | 이 엔티티가 이동하면서 부술 수 있는 블록 목록. |
+
+### 예시

@@ -1,0 +1,504 @@
+---
+title: 엔티티 컴포넌트 레퍼런스 (18/23)
+description: MS Learn 컴포넌트 문서 11개(minecraft:shooter ~ minecraft:tameable). 속성 표와 예시 JSON을 원문대로 담았다.
+sidebar_position: 117
+sources:
+  - ms-learn
+---
+
+# 엔티티 컴포넌트 레퍼런스 (18/23)
+
+MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 컴포넌트 문서를 옮긴 쪽이다. 설명은 한국어로 옮기고 ID, 속성 이름, 유형, 기본값, JSON은 원문 그대로 두었다. 전체 목록은 [색인](./entity-index.mdx)에 있다.
+
+## minecraft&#58;shooter
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_shooter.md`)
+
+엔티티의 원거리 공격 동작을 정의한다. `behavior.ranged_attack`이 쏠 투사체를 이 컴포넌트에서 정한다.
+
+Defines the entity's ranged attack behavior. The "minecraft:behavior.ranged_attack" goal uses this component to determine which projectiles to shoot.
+
+> [!Note]
+> Ammunition used by minecraft:shooter must have the minecraft:projectile component in order to function properly.
+
+> [!Note]
+> Expanded in 1.19.60: the `projectiles` list can now specify multiple projectile definitions with condition filters, and `power`, `magic`, and `sound` are exposed for per-shooter customization.
+
+### Shooter Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| aux_val | -1 | Integer number | 기본 투사체가 적중 시 적용할 포션 효과의 ID. | Bogged: `26` |
+| def | *not set* | String | 원거리 공격의 기본 투사체로 쓸 액터 정의. 투사체로 쏘려면 액터 정의에 projectile 컴포넌트가 있어야 한다. | Blaze: `"minecraft:small_fireball"`, Bogged: `"minecraft:arrow"`, Drowned: `"minecraft:thrown_trident"` |
+| magic | false | Boolean true/false | 설정하면 투사체가 마법으로 표시되고, 원거리 공격 목표가 다른 마법 목표(예: drink_potion)와 동시에 실행되지 않는다. |  |
+| power | 0 | Decimal number | 투사체가 발사되는 속도. 위력이 0이면 기본 투사체 투척 위력으로 대체된다. 형식 버전 1.19.60 이상이 필요하다. |  |
+| projectiles | *not set* | Array of objects | 발사자가 쓸 수 있는 투사체 목록. |  |
+| sound | *not set* | String | 발사자가 투사체를 쏠 때 재생되는 소리. | Bogged: `"bow"`, Drowned: `"item.trident.throw"` |
+
+#### magic
+
+If set, the projectiles are flagged as magic and the ranged attack goal will not run at the same time as other magic goals (for example, drink_potion). This item requires a format version of at least 1.19.60.
+
+#### projectiles
+
+List of projectiles that can be used by the shooter. Each entry can specify its own projectile definition and condition filters; entries are evaluated in order and the first match is used. This item requires a format version of at least 1.19.60.
+
+
+### 예시
+
+##### [Blaze](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/blaze.json)
+
+
+```json
+"minecraft:shooter": {
+  "def": "minecraft:small_fireball"
+}
+```
+
+##### [Bogged](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/bogged.json)
+
+At /minecraft:entity/component_groups/minecraft:ranged_attack/minecraft:shooter/: 
+
+```json
+"minecraft:shooter": {
+  "aux_val": 26,
+  "def": "minecraft:arrow",
+  "sound": "bow"
+}
+```
+
+##### [Drowned](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/drowned.json)
+
+
+```json
+"minecraft:shooter": {
+  "def": "minecraft:thrown_trident",
+  "sound": "item.trident.throw"
+}
+```
+
+##### [Ender Dragon](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/ender_dragon.json)
+
+
+```json
+"minecraft:shooter": {
+  "def": "minecraft:dragon_fireball"
+}
+```
+
+##### [Llama](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/llama.json)
+
+
+```json
+"minecraft:shooter": {
+  "def": "minecraft:llama_spit"
+}
+```
+
+## minecraft&#58;sittable
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_sittable.md`)
+
+엔티티의 '앉기' 상태를 정의한다.
+
+Defines the entity's 'sit' state.
+
+### Sittable Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| sit_event | *not set* | Object | 엔티티가 'sit' 상태에 들어갈 때 실행할 이벤트. event와 target 속성을 가진 객체 또는 단순한 이벤트 문자열을 쓸 수 있다. |
+| sit_event (as String) | *not set* | String |  |
+| stand_event | *not set* | Object | 엔티티가 'sit' 상태에서 나갈 때 실행할 이벤트. event와 target 속성을 가진 객체 또는 단순한 이벤트 문자열을 쓸 수 있다. |
+| stand_event (as String) | *not set* | String |  |
+
+### 예시
+
+##### [Parrot](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/parrot.json)
+
+
+```json
+"minecraft:sittable": {}
+```
+
+## minecraft&#58;skin_id
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_skin_id.md`)
+
+스킨 ID 값이다. 주민의 기본 스킨 등 스킨을 구분하는 데 쓴다.
+
+Skin ID value. Can be used to differentiate skins, such as base skins for villagers.
+
+> [!Note]
+> Requires multiple texture sets to be set up for the entity.
+
+### Skin Id Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| value | 0 | Integer number | 스킨의 ID. 관례상 0이 기본 스킨의 ID다. |
+
+### 예시
+
+## minecraft&#58;sound_volume
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_sound_volume.md`)
+
+엔티티 효과음의 기본 음량을 정한다.
+
+Sets the entity's base volume for sound effects.
+
+### Sound Volume Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| value | 1 | Decimal number | 엔티티가 효과음에 쓰는 음량 값. |
+
+## minecraft&#58;spawn_egg_interaction
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_spawn_egg_interaction.md`)
+
+자신의 스폰 알로 상호작용해 새끼를 스폰하게 한다.
+
+Enables interacting with this entity using its own spawn egg to spawn a born child. Runs the "minecraft:entity_born" event on the created entity as well as the defined "on_spawn" event.
+
+### 예시
+
+##### [Chicken](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/chicken.json)
+
+
+```json
+"minecraft:spawn_egg_interaction": {}
+```
+
+## minecraft&#58;spawn_entity
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_spawn_entity.md`)
+
+타이머가 끝나면 다른 엔티티나 아이템을 스폰하게 한다. 닭의 알 낳기와 비슷하다.
+
+Adds a timer after which this entity will spawn another entity or item (similar to vanilla's chicken's egg-laying behavior).
+
+### Spawn Entity Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| entities (Entities) | *not set* | Array of Entities items | 엔티티 스폰 정의 목록. 객체 하나 또는 객체 배열을 쓸 수 있다. | Chicken: `[{"min_wait_time":300,"max_wait_time":600,"spawn_sound":"plop","spawn_item":"egg","filters":[{"test":"rider_count","subject":"self","operator":"==","value":0},{"test":"enum_property","subject":"self","domain":"minecraft:climate_variant","value":"temperate"}]},{"min_wait_time":300,"max_wait_time":600,"spawn_sound":"plop","spawn_item":"brown_egg","filters":[{"test":"rider_count","subject":"self","operator":"==","value":0},{"test":"enum_property","subject":"self","domain":"minecraft:climate_variant","value":"warm"}]},{"min_wait_time":300,"max_wait_time":600,"spawn_sound":"plop","spawn_item":"blue_egg","filters":[{"test":"rider_count","subject":"self","operator":"==","value":0},{"test":"enum_property","subject":"self","domain":"minecraft:climate_variant","value":"cold"}]}]`, Drowned: `{"max_wait_time":0,"min_wait_time":0,"num_to_spawn":1,"single_use":true,"spawn_entity":"minecraft:zombie_nautilus","spawn_event":"minecraft:entity_spawned"}`, Sniffer: `{"min_wait_time":0,"max_wait_time":0,"spawn_sound":"plop","spawn_item":"sniffer_egg","spawn_item_event":{"event":"on_egg_spawned","target":"self"},"single_use":true}` |
+| entities (as Object) | *not set* | Object |  |  |
+| filters | *not set* | Minecraft filter | 있으면 필터가 true로 평가될 때만 지정한 엔티티가 스폰된다. |  |
+| max_wait_time | 600 | Integer number | 다른 엔티티를 스폰하기 전에 무작위로 기다리는 최대 시간(초). |  |
+| min_wait_time | 300 | Integer number | 다른 엔티티를 스폰하기 전에 무작위로 기다리는 최소 시간(초). |  |
+| num_to_spawn | 1 | Integer number | 이것이 발동할 때마다 스폰할 이 종류의 엔티티 수. |  |
+| should_leash | false | Boolean true/false | true이면 스폰된 엔티티가 부모에 묶인다. |  |
+| single_use | false | Boolean true/false | true이면 이 컴포넌트가 지정한 엔티티를 단 한 번만 스폰한다. |  |
+| spawn_entity | *not set* | String | 스폰할 엔티티의 식별자. 비워 두면 "spawn_item"에 정의한 아이템을 대신 스폰한다. |  |
+| spawn_event | minecraft:entity_born | Minecraft Event Trigger | 스폰된 엔티티가 스폰될 때 그 엔티티에서 호출할 이벤트. |  |
+| spawn_item | egg | String | 스폰할 아이템의 식별자. |  |
+| spawn_item_event | *not set* | Minecraft Event Trigger | 아이템이 스폰될 때 이 엔티티에서 호출할 이벤트. |  |
+| spawn_method | born | String | 엔티티를 스폰하는 방법. |  |
+| spawn_sound | plop | String | 엔티티가 스폰될 때 재생할 효과음의 식별자. |  |
+
+#### Entities
+
+##### Entities Properties
+
+**JSON path:** `entities`
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| filters | *not set* | Minecraft filter | 있으면 필터가 true로 평가될 때만 지정한 엔티티가 스폰된다. | Chicken: `[{"test":"rider_count","subject":"self","operator":"==","value":0},{"test":"enum_property","subject":"self","domain":"minecraft:climate_variant","value":"temperate"}]` |
+| max_wait_time | *not set* | Decimal number |  | Chicken: `600` |
+| min_wait_time | *not set* | Decimal number |  | Chicken: `300` |
+| spawn_item | *not set* | String |  | Chicken: `"egg"` |
+| spawn_sound | *not set* | String |  | Chicken: `"plop"` |
+
+### 예시
+
+##### [Chicken](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/chicken.json)
+
+
+```json
+"minecraft:spawn_entity": {
+  "entities": [
+    {
+      "min_wait_time": 300,
+      "max_wait_time": 600,
+      "spawn_sound": "plop",
+      "spawn_item": "egg",
+      "filters": [
+        {
+          "test": "rider_count",
+          "subject": "self",
+          "operator": "==",
+          "value": 0
+        },
+        {
+          "test": "enum_property",
+          "subject": "self",
+          "domain": "minecraft:climate_variant",
+          "value": "temperate"
+        }
+      ]
+    },
+    {
+      "min_wait_time": 300,
+      "max_wait_time": 600,
+      "spawn_sound": "plop",
+      "spawn_item": "brown_egg",
+      "filters": [
+        {
+          "test": "rider_count",
+          "subject": "self",
+          "operator": "==",
+          "value": 0
+        },
+        {
+          "test": "enum_property",
+          "subject": "self",
+          "domain": "minecraft:climate_variant",
+          "value": "warm"
+        }
+      ]
+    },
+    {
+      "min_wait_time": 300,
+      "max_wait_time": 600,
+      "spawn_sound": "plop",
+      "spawn_item": "blue_egg",
+      "filters": [
+        {
+          "test": "rider_count",
+          "subject": "self",
+          "operator": "==",
+          "value": 0
+        },
+        {
+          "test": "enum_property",
+          "subject": "self",
+          "domain": "minecraft:climate_variant",
+          "value": "cold"
+        }
+      ]
+    }
+  ]
+}
+```
+
+##### [Drowned](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/drowned.json)
+
+
+```json
+"minecraft:spawn_entity": {
+  "entities": {
+    "max_wait_time": 0,
+    "min_wait_time": 0,
+    "num_to_spawn": 1,
+    "single_use": true,
+    "spawn_entity": "minecraft:zombie_nautilus",
+    "spawn_event": "minecraft:entity_spawned"
+  }
+}
+```
+
+##### [Sniffer](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/sniffer.json)
+
+
+```json
+"minecraft:spawn_entity": {
+  "entities": {
+    "min_wait_time": 0,
+    "max_wait_time": 0,
+    "spawn_sound": "plop",
+    "spawn_item": "sniffer_egg",
+    "spawn_item_event": {
+      "event": "on_egg_spawned",
+      "target": "self"
+    },
+    "single_use": true
+  }
+}
+```
+
+## minecraft&#58;spawn_on_death
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_spawn_on_death.md`)
+
+엔티티가 죽을 때 엔티티를 스폰하는 컴포넌트다. 1.26.20에서 추가되었다.
+
+Component for spawning entities when an entity perishes.
+
+> [!Note]
+> Added in 1.26.20. Spawns one or more entities when the owning entity perishes. `entity_to_spawn` defaults to the owning entity, `spawn_method` defaults to `spawned` (also accepts `born` and `summoned`), `spawn_amount` defaults to 1, `inherit_parent_name` defaults to true, and `additional_spawn_range` adds optional random offset. `filters` gates whether the spawn is triggered at all.
+
+> [!Note]
+> This item requires a format version of at least 1.26.20.
+
+### Entity Spawn On Death Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| additional_spawn_range | &#123;"max":0,"min":0&#125; | Additional Spawn Range item | 추가로 스폰할 엔티티 수의 무작위 범위. 설정하지 않으면 0, 0이다. |
+| entity_to_spawn | self | String | 스폰할 엔티티. 설정하지 않으면 소유 엔티티다. |
+| filters (Filters) | &#123;"AND":null,"NOT":null,"OR":null,"all":null,"all_of":null,"any":null,"any_of":null,"none_of":null&#125; | Filters item | 행동이 시작되기 위해 충족해야 하는 조건. |
+| filters (Alternate 1) | *not set* | Object |  |
+| inherit_parent_name | true | Boolean true/false | true이면 엔티티가 부모 엔티티의 이름을 물려받는다. 설정하지 않으면 true다. |
+| spawn_amount | 1 | Integer number | 스폰할 엔티티 수. 설정하지 않으면 1이다. 값은 0보다 커야 한다. |
+| spawn_method | spawned | String | 스폰 방법. born, spawned, summoned 중 하나이며 설정하지 않으면 spawned다. |
+
+#### Block IntRange
+
+##### Block IntRange Properties
+
+**JSON path:** `additional_spawn_range`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max | 0 | Integer number |  |
+| min | 0 | Integer number |  |
+
+#### Filters
+
+##### Filters Properties
+
+**JSON path:** `filters`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| domain | *not set* | Object | 테스트를 수행할 도메인. |
+| operator | *not set* | Object | 'value'와 함께 적용할 비교 방식. |
+| subject | *not set* | Object | 이 필터 테스트의 대상(subject). |
+| test | *not set* | String | 적용할 테스트의 이름. |
+| value | *not set* | Object | 테스트에서 비교할 값. |
+
+## minecraft&#58;spell_effects
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_spell_effects.md`)
+
+엔티티가 자신에게 상태 효과를 추가하거나 제거하게 한다.
+
+Allows an entity to add or remove status effects from itself. Similarly to `addrider`, this component performs a one-time operation on the entity when added. Removing the component will not change the entity's current effects. Adding different versions of the component multiple times will perform each one in turn. Once the component has been added, it will not provide any further functionality. There is one exception to this behavior: if this component is present on a player, its effects will be re-applied every time the player enters the world. To avoid this, remove the component shortly after adding it, or add an empty component to replace it.
+
+### Entity Spell Effects Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| add_effects | [] | Array of Add Effects items | 이 엔티티에 추가할 효과 목록. | Player: `[{"display_on_screen_animation":true,"duration":30,"effect":"raid_omen"}]` |
+| remove_effects | [] | Array of strings | 이 컴포넌트를 추가한 뒤 엔티티에서 제거할 효과의 식별자. | Player: `"bad_omen"` |
+
+#### Entity MobEffectChangeComponentEffect
+
+##### Entity MobEffectChangeComponentEffect Properties
+
+**JSON path:** `add_effects`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| ambient | false | Boolean true/false | 효과가 주변 효과(ambient)인지 여부. |
+| amplifier | 0 | Integer number | 효과의 증폭 수준. |
+| display_on_screen_animation | false | Boolean true/false | 효과가 화면 애니메이션을 표시하는지 여부. |
+| duration | 0 | Object | 효과 지속 시간(초) 또는 "infinite". |
+| effect |  | String | 적용할 효과의 이름. |
+| visible | true | Boolean true/false | 효과가 보이는지 여부. |
+
+### 예시
+
+##### [Player](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/player.json)
+
+At /minecraft:entity/component_groups/minecraft:add_raid_omen/minecraft:spell_effects/: 
+
+```json
+"minecraft:spell_effects": {
+  "add_effects": [
+    {
+      "display_on_screen_animation": true,
+      "duration": 30,
+      "effect": "raid_omen"
+    }
+  ],
+  "remove_effects": "bad_omen"
+}
+```
+
+At /minecraft:entity/component_groups/minecraft:clear_raid_omen_spell_effect/minecraft:spell_effects/: 
+
+```json
+"minecraft:spell_effects": {}
+```
+
+## minecraft&#58;strength
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_strength.md`)
+
+엔티티의 힘을 정의한다.
+
+Defines the strength of this entity.
+
+### Entity Strength Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max | 5 | Integer number | 이 엔티티의 최대 힘. |
+| value | 1 | Integer number | 힘의 초기값. |
+
+### 예시
+
+## minecraft&#58;suspect_tracking
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_suspect_tracking.md`)
+
+엔티티가 수상한 위치를 기억하게 한다.
+
+Allows this entity to remember suspicious locations.
+
+### 예시
+
+##### [Warden](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/warden.json)
+
+
+```json
+"minecraft:suspect_tracking": {}
+```
+
+## minecraft&#58;tameable
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_tameable.md`)
+
+엔티티를 길들일 수 있게 한다.
+
+This entity can be tamed.
+
+> [!Note]
+> From 1.21.130, each entry in `tame_items` accepts an optional `result_item` field. On a successful tame interaction, the consumed item is replaced in the player's inventory with the specified item.
+
+### Tameable Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| probability | 1 | Decimal number | 아이템을 쓸 때마다 엔티티를 길들일 확률(0.0~1.0). 1.0이 100%다. | Parrot: `0.33` |
+| tame_event | *not set* | Object | 엔티티가 길들여졌을 때 발생시킬 이벤트. event와 target 속성을 가진 객체 또는 단순한 이벤트 문자열을 쓸 수 있다. | Parrot: `{"event":"minecraft:on_tame","target":"self"}` |
+| tame_event (as String) | *not set* | String |  |  |
+| tame_items | *not set* | Array of strings | 이 엔티티를 길들이는 데 쓸 수 있는 아이템 목록. | Parrot: `["wheat_seeds","pumpkin_seeds","melon_seeds","beetroot_seeds","pitcher_pod","torchflower_seeds"]` |
+| tameItems | *not set* | String |  |  |
+
+### 예시
+
+##### [Parrot](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/parrot.json)
+
+
+```json
+"minecraft:tameable": {
+  "probability": 0.33,
+  "tame_items": [
+    "wheat_seeds",
+    "pumpkin_seeds",
+    "melon_seeds",
+    "beetroot_seeds",
+    "pitcher_pod",
+    "torchflower_seeds"
+  ],
+  "tame_event": {
+    "event": "minecraft:on_tame",
+    "target": "self"
+  }
+}
+```

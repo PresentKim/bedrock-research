@@ -1,661 +1,570 @@
 ---
-title: 엔티티 컴포넌트 레퍼런스(주요 항목) (14/15)
-description: MS Learn 엔티티 컴포넌트·이벤트·필터 목록과 주요 컴포넌트.
-sidebar_position: 103
+title: 엔티티 컴포넌트 레퍼런스 (14/23)
+description: MS Learn 컴포넌트 문서 2개(minecraft:projectile ~ minecraft:push_through). 속성 표와 예시 JSON을 원문대로 담았다.
+sidebar_position: 113
 sources:
   - ms-learn
 ---
 
-# 엔티티 컴포넌트 레퍼런스(주요 항목) (14/15)
+# 엔티티 컴포넌트 레퍼런스 (14/23)
 
-MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 레퍼런스를 발췌한 쪽이다. 원문의 상대 링크는 제거했다.
+MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 컴포넌트 문서를 옮긴 쪽이다. 설명은 한국어로 옮기고 ID, 속성 이름, 유형, 기본값, JSON은 원문 그대로 두었다. 전체 목록은 [색인](./entity-index.mdx)에 있다.
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_teleport.md`)
+## minecraft&#58;projectile
 
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_projectile.md`)
 
-### Entity Documentation - minecraft:teleport
+엔티티를 투사체로 만든다. 포물선을 그리며 날아가 블록, 액체, 엔티티에 맞으면 반응한다.
 
-Defines an entity's teleporting behavior.
+Turns the entity into a projectile: a thrown or shot entity that flies along a ballistic arc and reacts when it impacts a block, a fluid, or another entity.
 
+### Entity Projectile Properties
 
-#### Entity Teleport Properties
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| anchor | origin | Anchor choices | 발사 시 투사체를 배치하는 기준이 되는 발사자의 기준점: `0` = 원점(발), `1` = 눈 높이, `2` = 경계 상자 중앙. |
+| angle_offset | 0 | Decimal number | 발사 시 발사자의 조준 방향에 더하는 추가 위쪽 피치(도). 음수는 아래를 향한다. |
+| catch_fire | false | Boolean true/false | 맞은 엔티티에 불을 붙일지 정한다. |
+| crit_particle_on_hurt | false | Boolean true/false | `true`이면 투사체가 맞았을 때 크리티컬 파티클이 생성된다. |
+| destroy_on_hurt | false | Boolean true/false | `true`이면 투사체가 맞았을 때 월드에서 제거된다. |
+| gravity | 0.05000000074505806 | Decimal number | 비행 중 틱마다 적용되는 아래쪽 가속도(블록/틱²). 클수록 투사체가 빨리 떨어진다. |
+| hit_ground_sound |  | String | 투사체가 블록에 맞았을 때 재생할 소리의 식별자. 비어 있으면 `hit_sound`를 쓴다. |
+| hit_nearest_passenger | false | Boolean true/false | `true`이면 투사체가 탑승자가 있는 탈것에 맞았을 때 탈것 대신 충돌 지점에서 가장 가까운 탑승자에게 적중 동작을 적용한다. |
+| hit_sound |  | String | 투사체가 엔티티에 맞았을 때 재생할 소리의 식별자. `hit_ground_sound`가 없으면 블록에 맞을 때도 쓴다. |
+| hit_water | false | Boolean true/false | `true`이면 투사체가 물을 충돌 표면으로 취급해 닿으면 멈춘다(교육 에디션 화학 기능). |
+| homing | false | Boolean true/false | `true`이면 투사체가 비행 중 활성 대상을 향해 방향을 튼다. |
+| ignored_entities | [] | Array of strings | 맞아도 충돌로 처리하지 않고 통과할 엔티티 식별자 배열. |
+| inertia | 0.9900000095367432 | Decimal number | 공기 중을 날 때 틱마다 유지되는 투사체 속도의 비율. `1.0`보다 작으면 시간이 지나며 느려진다. |
+| is_dangerous | false | Boolean true/false | `true`이면 투사체가 위험한 것으로 표시되어 AI 반응과 일부 클라이언트 동작에 영향을 준다. |
+| isolated_physics | true | Boolean true/false | true이면 이 투사체는 마찰이나 항력 같은 외부 힘의 영향을 받지 않는다. |
+| lightning | false | Boolean true/false | `true`이면 천둥 치는 동안 투사체가 엔티티에 맞았을 때 번개를 끌어올 수 있다. |
+| liquid_inertia | 0.6000000238418579 | Decimal number | 액체 속을 지날 때 틱마다 유지되는 투사체 속도의 비율. |
+| multiple_targets | false | Boolean true/false | `true`이면 투사체가 비행하는 동안 둘 이상의 엔티티를 맞힐 수 있고, `false`이면 처음 맞힌 엔티티에서 멈춘다. |
+| offset | [0, 0, 0] | Array of numbers | 발사자가 쐈을 때 투사체가 생성되는 `anchor` 기준 오프셋. |
+| offset (Offset) | *not set* | Offset (Offset) item |  |
+| on_fire_time | 5 | Decimal number | 이 투사체로 불이 붙은 엔티티가 계속 타는 시간(초). 레거시 최상위 `catch_fire` 플래그와 적중 시 `catch_fire` 하위 컴포넌트 모두에 적용된다. |
+| on_hit | *not set* | Hit item | 투사체가 블록, 액체, 엔티티에 부딪쳤을 때 일어나는 일을 정하는 적중 하위 컴포넌트 맵. 각 키는 하위 컴포넌트 이름이고 값은 그 설정이다. |
+| owner_launch_immunity_ticks | 5 | Integer number | 발사 직후 투사체가 자기 발사자를 맞힐 수 없는 틱 수. |
+| particle | iconcrack | Particle choices | 투사체가 무언가에 맞았을 때 충돌 위치에서 내보내는 파티클 효과. |
+| potion_effect | -1 | Integer number | 투사체에 연결된 기본 포션 보조 값. |
+| power | 1.2999999523162842 | Decimal number | 투사체가 발사되는 초기 속도(블록/틱). |
+| reflect_immunity | 0 | Decimal number | 발사 후 투사체를 쳐서 반사할 수 없는 시간(초). |
+| reflect_on_hurt | false | Boolean true/false | true이면 다른 투사체에 맞거나 피해를 입을 때 이 투사체가 반사된다. |
+| shoot_sound |  | String | 투사체가 발사될 때 재생할 소리의 식별자. |
+| shoot_target | true | Boolean true/false | `true`이면 투사체가 곧장 앞이 아니라 (있다면) 발사자의 현재 대상을 향해 조준된다. |
+| should_bounce | no | Should Bounce choices | 투사체가 충돌할 때 엔티티에서 튕겨 나오는지 제어한다. |
+| splash_range | 4 | Decimal number | 투척/잔류 포션 코드 경로로 포션 효과를 적용할 때 쓰는 튀는 반경(블록). |
+| spread_fire | true | Boolean true/false | `true`이면 불이 붙은 투사체가 엔티티에 맞았을 때 엔티티에 불을 옮긴다. |
+| stop_on_hurt | false | Boolean true/false | `true`이면 투사체가 맞았을 때 속도가 0이 된다. |
+| uncertainty_base | 0 | Decimal number | 발사 방향에 더해지는 기본 부정확도. 전체 부정확도는 `uncertainty_base - difficultyLevel * uncertainty_multiplier`다. |
+| uncertainty_multiplier | 0 | Decimal number | 난이도 단계별 부정확도 감소량. 전체 공식은 `uncertainty_base`를 본다. |
 
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| can_teleport_into_liquid | false | Boolean true/false | If set to true, the entity can teleport into blocks that contain liquids, such as water. | 
-| dark_teleport_chance | 0.009999999776482582 | Decimal number | Modifies the chance that the entity will teleport if the entity is in darkness. | 
-| light_teleport_chance | 0.009999999776482582 | Decimal number | Modifies the chance that the entity will teleport if the entity is in daylight. | 
-| max_random_teleport_time | 20 | Decimal number | Maximum amount of time in seconds between random teleports. | 
-| min_random_teleport_time | 0 | Decimal number | Minimum amount of time in seconds between random teleports. | 
-| on_teleport_sound | teleport | Teleport Sound choices | The level sound event which is played after a successful teleportation. Entities without a sound bound to this event play the default teleport sound. | 
-| projectile_filter | *not set* | Object | Conditions that determine which projectiles cause the entity to attempt to teleport. If omitted, all projectiles cause a teleport attempt. | 
-| random_teleport_cube | [32, 16, 32] | Array of numbers | Entity will teleport to a random position within the area defined by this cube. | 
-| random_teleport_cube (Random Teleport Cube) | *not set* | Random Teleport Cube (Random Teleport Cube) item |  | 
-| random_teleports | true | Boolean true/false | If true, the entity will teleport randomly. | 
-| target_distance | 16 | Decimal number | Minimum distance the entity needs to be from the target to start teleporting towards it. | 
-| target_teleport_chance | 1 | Decimal number | The chance that the entity will teleport between 0.0 and 1.0. 1.0 means 100%. | 
-| target_teleport_distance | &#123;"max":16,"min":16&#125; | Target Teleport Distance item | The minimum and maximum distance the entity can teleport toward the target. | 
-| target_teleport_offset | [4, 8, 4] | Array of numbers | The maximum random offset, on each axis and in either direction, added to the teleport directional vector. | 
-| target_teleport_offset (Target Teleport Offset) | *not set* | Target Teleport Offset (Target Teleport Offset) item |  | 
-| teleports_on_projectile_hit | false | Boolean true/false | If true, the entity will attempt to teleport away from projectiles about to hit it. | 
+#### catch_fire
 
-##### target_teleport_distance
+Determines whether the entity hit will be set on fire. Note: the presence of this field in the component definition causes targets to catch fire regardless of the value set. To prevent fire, remove this field entirely from the component.
 
-The minimum and maximum distance the entity can teleport toward the target. Negative values teleport away from the target. Values need to be between -32 and 32.  Check that the limits imposed on the range (minimum, maximum and maximum distance between values) are respected.
+#### isolated_physics
 
-##### target_teleport_offset
+If true, this projectile is not affected by outside forces such as friction and drag. This item requires a format version of at least 1.26.20. Available under the Custom Projectiles experimental toggle starting in format version 1.26.20.
 
-The maximum random offset, on each axis and in either direction, added to the teleport directional vector. The y offset is rounded down to whole blocks. Values need to be between 0 and 32. Value must be &lt;= 32.
+#### multiple_targets
 
+If `true`, the projectile can hit more than one entity over the course of its flight; if `false`, it stops at the first entity it hits. Projectiles launched with the Piercing enchantment have this value set to `true`.
 
-##### Teleport Sound choices
+#### potion_effect
 
-|Value       |Title |Description |
-|:-----------|:-----|:-----------|
-| absorb_block | Absorb block | |
-| activate | Activate | |
-| add.chest | Add.chest | |
-| admire | Admire | |
-| agitated | Agitated | |
-| ambient | Ambient | |
-| ambient.aggressive | Ambient.aggressive | |
-| ambient.baby | Ambient.baby | |
-| ambient.basalt_deltas.additions | Ambient.basalt deltas.additions | |
-| ambient.basalt_deltas.loop | Ambient.basalt deltas.loop | |
-| ambient.basalt_deltas.mood | Ambient.basalt deltas.mood | |
-| ambient.candle | Ambient.candle | |
-| ambient.cave | Ambient.cave | |
-| ambient.crimson_forest.additions | Ambient.crimson forest.additions | |
-| ambient.crimson_forest.loop | Ambient.crimson forest.loop | |
-| ambient.crimson_forest.mood | Ambient.crimson forest.mood | |
-| ambient.in.air | Ambient.in.air | |
-| ambient.in.raid | Ambient.in.raid | |
-| ambient.in.water | Ambient.in.water | |
-| ambient.nether_wastes.additions | Ambient.nether wastes.additions | |
-| ambient.nether_wastes.loop | Ambient.nether wastes.loop | |
-| ambient.nether_wastes.mood | Ambient.nether wastes.mood | |
-| ambient.pollinate | Ambient.pollinate | |
-| ambient.screamer | Ambient.screamer | |
-| ambient.soulsand_valley.additions | Ambient.soulsand valley.additions | |
-| ambient.soulsand_valley.loop | Ambient.soulsand valley.loop | |
-| ambient.soulsand_valley.mood | Ambient.soulsand valley.mood | |
-| ambient.tame | Ambient.tame | |
-| ambient.underwater.enter | Ambient.underwater.enter | |
-| ambient.underwater.exit | Ambient.underwater.exit | |
-| ambient.warped_forest.additions | Ambient.warped forest.additions | |
-| ambient.warped_forest.loop | Ambient.warped forest.loop | |
-| ambient.warped_forest.mood | Ambient.warped forest.mood | |
-| ambient.weather.the_end_light_flash | Ambient.weather.the end light flash | |
-| ambient.worried | Ambient.worried | |
-| angry | Angry | |
-| apply_effect.bad_omen | Apply effect.bad omen | |
-| apply_effect.raid_omen | Apply effect.raid omen | |
-| apply_effect.trial_omen | Apply effect.trial omen | |
-| armor | Armor | |
-| armor.break_wolf | Armor.break wolf | |
-| armor.crack_wolf | Armor.crack wolf | |
-| armor.equip_chain | Armor.equip chain | |
-| armor.equip_copper | Armor.equip copper | |
-| armor.equip_diamond | Armor.equip diamond | |
-| armor.equip_elytra | Armor.equip elytra | |
-| armor.equip_generic | Armor.equip generic | |
-| armor.equip_gold | Armor.equip gold | |
-| armor.equip_iron | Armor.equip iron | |
-| armor.equip_leather | Armor.equip leather | |
-| armor.equip_netherite | Armor.equip netherite | |
-| armor.equip_wolf | Armor.equip wolf | |
-| armor.repair_wolf | Armor.repair wolf | |
-| armor.unequip_generic | Armor.unequip generic | |
-| armor.unequip_wolf | Armor.unequip wolf | |
-| attach | Attach | |
-| attack | Attack | |
-| attack.critical | Attack.critical | |
-| attack.nodamage | Attack.nodamage | |
-| attack.strong | Attack.strong | |
-| balloonpop | Balloonpop | |
-| beacon.activate | Beacon.activate | |
-| beacon.ambient | Beacon.ambient | |
-| beacon.deactivate | Beacon.deactivate | |
-| beacon.power | Beacon.power | |
-| blast | Blast | |
-| block.bamboo_sapling.place | Block.bamboo sapling.place | |
-| block.barrel.close | Block.barrel.close | |
-| block.barrel.open | Block.barrel.open | |
-| block.beehive.drip | Block.beehive.drip | |
-| block.beehive.enter | Block.beehive.enter | |
-| block.beehive.exit | Block.beehive.exit | |
-| block.beehive.shear | Block.beehive.shear | |
-| block.beehive.work | Block.beehive.work | |
-| block.bell.hit | Block.bell.hit | |
-| block.blastfurnace.fire_crackle | Block.blastfurnace.fire crackle | |
-| block.campfire.crackle | Block.campfire.crackle | |
-| block.cartography_table.use | Block.cartography table.use | |
-| block.click | Block.click | |
-| block.click.fail | Block.click.fail | |
-| block.composter.empty | Block.composter.empty | |
-| block.composter.fill | Block.composter.fill | |
-| block.composter.fill_success | Block.composter.fill success | |
-| block.composter.ready | Block.composter.ready | |
-| block.copper_bulb.turn_off | Block.copper bulb.turn off | |
-| block.copper_bulb.turn_on | Block.copper bulb.turn on | |
-| block.creaking_heart.trail | Block.creaking heart.trail | |
-| block.decorated_pot.insert | Block.decorated pot.insert | |
-| block.decorated_pot.insert_fail | Block.decorated pot.insert fail | |
-| block.enchanting_table.use | Block.enchanting table.use | |
-| block.end_portal.spawn | Block.end portal.spawn | |
-| block.end_portal_frame.fill | Block.end portal frame.fill | |
-| block.fletching_table.use | Block.fletching table.use | |
-| block.frog_spawn.break | Block.frog spawn.break | |
-| block.frog_spawn.hatch | Block.frog spawn.hatch | |
-| block.furnace.lit | Block.furnace.lit | |
-| block.grindstone.use | Block.grindstone.use | |
-| block.loom.use | Block.loom.use | |
-| block.scaffolding.climb | Block.scaffolding.climb | |
-| block.sculk.spread | Block.sculk.spread | |
-| block.sculk_catalyst.bloom | Block.sculk catalyst.bloom | |
-| block.sculk_sensor.place | Block.sculk sensor.place | |
-| block.sculk_shrieker.place | Block.sculk shrieker.place | |
-| block.sculk_shrieker.shriek | Block.sculk shrieker.shriek | |
-| block.sign.waxed_interact_fail | Block.sign.waxed interact fail | |
-| block.smithing_table.use | Block.smithing table.use | |
-| block.smoker.smoke | Block.smoker.smoke | |
-| block.sniffer_egg.crack | Block.sniffer egg.crack | |
-| block.sniffer_egg.hatch | Block.sniffer egg.hatch | |
-| block.stonecutter.use | Block.stonecutter.use | |
-| block.sweet_berry_bush.hurt | Block.sweet berry bush.hurt | |
-| block.sweet_berry_bush.pick | Block.sweet berry bush.pick | |
-| block.turtle_egg.attack | Block.turtle egg.attack | |
-| block.turtle_egg.break | Block.turtle egg.break | |
-| block.turtle_egg.crack | Block.turtle egg.crack | |
-| block.turtle_egg.hatch | Block.turtle egg.hatch | |
-| boost | Boost | |
-| born | Born | |
-| bottle.dragonbreath | Bottle.dragonbreath | |
-| bottle.empty | Bottle.empty | |
-| bottle.fill | Bottle.fill | |
-| bounce | Bounce | |
-| bow | Bow | |
-| bow.hit | Bow.hit | |
-| break | Break | |
-| break.block | Break.block | |
-| break_pot | Break pot | |
-| breathe | Breathe | |
-| breeze_wind_charge.burst | Breeze wind charge.burst | |
-| brush | Brush | |
-| brush_completed | Brush completed | |
-| bubble.down | Bubble.down | |
-| bubble.downinside | Bubble.downinside | |
-| bubble.pop | Bubble.pop | |
-| bubble.up | Bubble.up | |
-| bubble.upinside | Bubble.upinside | |
-| bucket.empty.fish | Bucket.empty.fish | |
-| bucket.empty.land_animal | Bucket.empty.land animal | |
-| bucket.empty.lava | Bucket.empty.lava | |
-| bucket.empty.powder_snow | Bucket.empty.powder snow | |
-| bucket.empty.water | Bucket.empty.water | |
-| bucket.fill.fish | Bucket.fill.fish | |
-| bucket.fill.land_animal | Bucket.fill.land animal | |
-| bucket.fill.lava | Bucket.fill.lava | |
-| bucket.fill.powder_snow | Bucket.fill.powder snow | |
-| bucket.fill.water | Bucket.fill.water | |
-| bullet.hit | Bullet.hit | |
-| bundle.drop_contents | Bundle.drop contents | |
-| bundle.insert | Bundle.insert | |
-| bundle.insert_fail | Bundle.insert fail | |
-| bundle.remove_one | Bundle.remove one | |
-| burp | Burp | |
-| button.click_off | Button.click off | |
-| button.click_on | Button.click on | |
-| cake.add_candle | Cake.add candle | |
-| camera.take_picture | Camera.take picture | |
-| cant_breed | Cant breed | |
-| cast.spell | Cast.spell | |
-| cauldron_drip.lava.pointed_dripstone | Cauldron drip.lava.pointed dripstone | |
-| cauldron_drip.water.pointed_dripstone | Cauldron drip.water.pointed dripstone | |
-| celebrate | Celebrate | |
-| charge | Charge | |
-| charge.sculk | Charge.sculk | |
-| chest.closed | Chest.closed | |
-| chest.open | Chest.open | |
-| chime.amethyst_block | Chime.amethyst block | |
-| chorusdeath | Chorusdeath | |
-| chorusgrow | Chorusgrow | |
-| close | Close | |
-| close_long | Close long | |
-| conduit.activate | Conduit.activate | |
-| conduit.ambient | Conduit.ambient | |
-| conduit.attack | Conduit.attack | |
-| conduit.deactivate | Conduit.deactivate | |
-| conduit.short | Conduit.short | |
-| convert_mooshroom | Convert mooshroom | |
-| convert_to_drowned | Convert to drowned | |
-| convert_to_frog | Convert to frog | |
-| convert_to_frostbite | Convert to frostbite | |
-| convert_to_stray | Convert to stray | |
-| convert_to_zombie | Convert to zombie | |
-| converted_to_zombified | Converted to zombified | |
-| copper.wax.off | Copper.wax.off | |
-| copper.wax.on | Copper.wax.on | |
-| crack | Crack | |
-| crafter.craft | Crafter.craft | |
-| crafter.disable_slot | Crafter.disable slot | |
-| crafter.fail | Crafter.fail | |
-| creaking_heart_spawn | Creaking heart spawn | |
-| crossbow.loading.end | Crossbow.loading.end | |
-| crossbow.loading.middle | Crossbow.loading.middle | |
-| crossbow.loading.start | Crossbow.loading.start | |
-| crossbow.quick_charge.end | Crossbow.quick charge.end | |
-| crossbow.quick_charge.middle | Crossbow.quick charge.middle | |
-| crossbow.quick_charge.start | Crossbow.quick charge.start | |
-| crossbow.shoot | Crossbow.shoot | |
-| dash_ready | Dash ready | |
-| deactivate | Deactivate | |
-| death | Death | |
-| death.baby | Death.baby | |
-| death.in.water | Death.in.water | |
-| death.mid.volume | Death.mid.volume | |
-| death.min.volume | Death.min.volume | |
-| death.screamer | Death.screamer | |
-| death.to.zombie | Death.to.zombie | |
-| default | Default | |
-| deny | Deny | |
-| detach | Detach | |
-| disappeared | Disappeared | |
-| dismount | Dismount | |
-| door.close | Door.close | |
-| door.open | Door.open | |
-| drink | Drink | |
-| drink.honey | Drink.honey | |
-| drink.milk | Drink.milk | |
-| drip.lava.pointed_dripstone | Drip.lava.pointed dripstone | |
-| drip.water.pointed_dripstone | Drip.water.pointed dripstone | |
-| drop.slot | Drop.slot | |
-| eat | Eat | |
-| eject_block | Eject block | |
-| elderguardian.curse | Elderguardian.curse | |
-| elemconstruct.open | Elemconstruct.open | |
-| enderchest.closed | Enderchest.closed | |
-| enderchest.open | Enderchest.open | |
-| explode | Explode | |
-| extinguish.candle | Extinguish.candle | |
-| extinguish.fire | Extinguish.fire | |
-| fall | Fall | |
-| fall.big | Fall.big | |
-| fall.small | Fall.small | |
-| fang | Fang | |
-| fence_gate.close | Fence gate.close | |
-| fence_gate.open | Fence gate.open | |
-| fire | Fire | |
-| fizz | Fizz | |
-| flap | Flap | |
-| flop | Flop | |
-| fly | Fly | |
-| freeze | Freeze | |
-| fuse | Fuse | |
-| gallop | Gallop | |
-| geyser_continuous_eruption_active | Geyser continuous eruption active | |
-| geyser_continuous_eruption_start | Geyser continuous eruption start | |
-| geyser_eruption_active | Geyser eruption active | |
-| geyser_eruption_start | Geyser eruption start | |
-| glass | Glass | |
-| glow_squid.ink_squirt | Glow squid.ink squirt | |
-| glowstick.use | Glowstick.use | |
-| growl | Growl | |
-| haggle | Haggle | |
-| haggle.idle | Haggle.idle | |
-| haggle.no | Haggle.no | |
-| haggle.yes | Haggle.yes | |
-| heartbeat | Heartbeat | |
-| heavy.step | Heavy.step | |
-| hit | Hit | |
-| horn_break | Horn break | |
-| horn_call0 | Horn call0 | |
-| horn_call1 | Horn call1 | |
-| horn_call2 | Horn call2 | |
-| horn_call3 | Horn call3 | |
-| horn_call4 | Horn call4 | |
-| horn_call5 | Horn call5 | |
-| horn_call6 | Horn call6 | |
-| horn_call7 | Horn call7 | |
-| hurt | Hurt | |
-| hurt.baby | Hurt.baby | |
-| hurt.in.water | Hurt.in.water | |
-| hurt.reduced | Hurt.reduced | |
-| hurt.screamer | Hurt.screamer | |
-| ice_ball.throw | Ice ball.throw | |
-| icebomb.hit | Icebomb.hit | |
-| ignite | Ignite | |
-| imitate.blaze | Imitate.blaze | |
-| imitate.bogged | Imitate.bogged | |
-| imitate.breeze | Imitate.breeze | |
-| imitate.camel_husk | Imitate.camel husk | |
-| imitate.cave_spider | Imitate.cave spider | |
-| imitate.creaking | Imitate.creaking | |
-| imitate.creeper | Imitate.creeper | |
-| imitate.drowned | Imitate.drowned | |
-| imitate.elder_guardian | Imitate.elder guardian | |
-| imitate.ender_dragon | Imitate.ender dragon | |
-| imitate.enderman | Imitate.enderman | |
-| imitate.endermite | Imitate.endermite | |
-| imitate.evocation_illager | Imitate.evocation illager | |
-| imitate.frostbite | Imitate.frostbite | |
-| imitate.ghast | Imitate.ghast | |
-| imitate.guardian | Imitate.guardian | |
-| imitate.happy_ghast | Imitate.happy ghast | |
-| imitate.husk | Imitate.husk | |
-| imitate.magma_cube | Imitate.magma cube | |
-| imitate.parched | Imitate.parched | |
-| imitate.phantom | Imitate.phantom | |
-| imitate.pillager | Imitate.pillager | |
-| imitate.polar_bear | Imitate.polar bear | |
-| imitate.ravager | Imitate.ravager | |
-| imitate.shulker | Imitate.shulker | |
-| imitate.silverfish | Imitate.silverfish | |
-| imitate.skeleton | Imitate.skeleton | |
-| imitate.slime | Imitate.slime | |
-| imitate.spider | Imitate.spider | |
-| imitate.stray | Imitate.stray | |
-| imitate.vex | Imitate.vex | |
-| imitate.vindication_illager | Imitate.vindication illager | |
-| imitate.warden | Imitate.warden | |
-| imitate.witch | Imitate.witch | |
-| imitate.wither | Imitate.wither | |
-| imitate.wither_skeleton | Imitate.wither skeleton | |
-| imitate.wolf | Imitate.wolf | |
-| imitate.zoglin | Imitate.zoglin | |
-| imitate.zombie | Imitate.zombie | |
-| imitate.zombie_pigman | Imitate.zombie pigman | |
-| imitate.zombie_villager | Imitate.zombie villager | |
-| insert | Insert | |
-| insert_enchanted | Insert enchanted | |
-| irongolem.crack | Irongolem.crack | |
-| irongolem.repair | Irongolem.repair | |
-| item.book.put | Item.book.put | |
-| item.copper_spear.attack_hit | Item.copper spear.attack hit | |
-| item.copper_spear.attack_miss | Item.copper spear.attack miss | |
-| item.copper_spear.use | Item.copper spear.use | |
-| item.diamond_spear.attack_hit | Item.diamond spear.attack hit | |
-| item.diamond_spear.attack_miss | Item.diamond spear.attack miss | |
-| item.diamond_spear.use | Item.diamond spear.use | |
-| item.enchant.lunge1 | Item.enchant.lunge1 | |
-| item.enchant.lunge2 | Item.enchant.lunge2 | |
-| item.enchant.lunge3 | Item.enchant.lunge3 | |
-| item.fizz | Item.fizz | |
-| Dragonfly 서버 패치 | Item.golden spear.attack hit | |
-| Dragonfly 서버 패치 | Item.golden spear.attack miss | |
-| Dragonfly 서버 패치 | Item.golden spear.use | |
-| item.iron_spear.attack_hit | Item.iron spear.attack hit | |
-| item.iron_spear.attack_miss | Item.iron spear.attack miss | |
-| item.iron_spear.use | Item.iron spear.use | |
-| item.netherite_spear.attack_hit | Item.netherite spear.attack hit | |
-| item.netherite_spear.attack_miss | Item.netherite spear.attack miss | |
-| item.netherite_spear.use | Item.netherite spear.use | |
-| item.shield.block | Item.shield.block | |
-| item.spear.attack_hit | Item.spear.attack hit | |
-| item.spear.attack_miss | Item.spear.attack miss | |
-| item.spear.use | Item.spear.use | |
-| item.spyglass.stop_using | Item.spyglass.stop using | |
-| item.spyglass.use | Item.spyglass.use | |
-| item.stone_spear.attack_hit | Item.stone spear.attack hit | |
-| item.stone_spear.attack_miss | Item.stone spear.attack miss | |
-| item.stone_spear.use | Item.stone spear.use | |
-| item.trident.hit | Item.trident.hit | |
-| item.trident.hit_ground | Item.trident.hit ground | |
-| item.trident.return | Item.trident.return | |
-| item.trident.riptide_1 | Item.trident.riptide 1 | |
-| item.trident.riptide_2 | Item.trident.riptide 2 | |
-| item.trident.riptide_3 | Item.trident.riptide 3 | |
-| item.trident.throw | Item.trident.throw | |
-| item.trident.thunder | Item.trident.thunder | |
-| item.use.on | Item.use.on | |
-| item.wooden_spear.attack_hit | Item.wooden spear.attack hit | |
-| item.wooden_spear.attack_miss | Item.wooden spear.attack miss | |
-| item.wooden_spear.use | Item.wooden spear.use | |
-| item_given | Item given | |
-| item_taken | Item taken | |
-| item_thrown | Item thrown | |
-| jump | Jump | |
-| jump.prevent | Jump.prevent | |
-| jump_to_block | Jump to block | |
-| land | Land | |
-| large.blast | Large.blast | |
-| launch | Launch | |
-| lava | Lava | |
-| lava.pop | Lava.pop | |
-| lay_egg | Lay egg | |
-| lay_spawn | Lay spawn | |
-| lead.break | Lead.break | |
-| lead.leash | Lead.leash | |
-| lead.unleash | Lead.unleash | |
-| leashknot.break | Leashknot.break | |
-| leashknot.place | Leashknot.place | |
-| levelup | Levelup | |
-| listening | Listening | |
-| listening_angry | Listening angry | |
-| lodestone_compass.link_compass_to_lodestone | Lodestone compass.link compass to lodestone | |
-| lt.reaction.bleach | Lt.reaction.bleach | |
-| lt.reaction.epaste | Lt.reaction.epaste | |
-| lt.reaction.epaste2 | Lt.reaction.epaste2 | |
-| lt.reaction.fertilizer | Lt.reaction.fertilizer | |
-| lt.reaction.fire | Lt.reaction.fire | |
-| lt.reaction.fireball | Lt.reaction.fireball | |
-| lt.reaction.icebomb | Lt.reaction.icebomb | |
-| lt.reaction.mgsalt | Lt.reaction.mgsalt | |
-| lt.reaction.miscexplosion | Lt.reaction.miscexplosion | |
-| lt.reaction.miscfire | Lt.reaction.miscfire | |
-| lt.reaction.miscmystical | Lt.reaction.miscmystical | |
-| lt.reaction.miscmystical2 | Lt.reaction.miscmystical2 | |
-| lt.reaction.product | Lt.reaction.product | |
-| mace.heavy_smash_ground | Mace.heavy smash ground | |
-| mace.smash_air | Mace.smash air | |
-| mace.smash_ground | Mace.smash ground | |
-| mad | Mad | |
-| milk | Milk | |
-| milk.screamer | Milk.screamer | |
-| milk_suspiciously | Milk suspiciously | |
-| mob.armadillo.brush | Mob.armadillo.brush | |
-| mob.armadillo.scute_drop | Mob.armadillo.scute drop | |
-| mob.armor_stand.place | Mob.armor stand.place | |
-| mob.hoglin.converted_to_zombified | Mob.hoglin.converted to zombified | |
-| mob.husk.convert_to_zombie | Mob.husk.convert to zombie | |
-| mob.pig.death | Mob.pig.death | |
-| mob.player.hurt_drown | Mob.player.hurt drown | |
-| mob.player.hurt_freeze | Mob.player.hurt freeze | |
-| mob.player.hurt_on_fire | Mob.player.hurt on fire | |
-| mob.warning | Mob.warning | |
-| mob.warning.baby | Mob.warning.baby | |
-| mount | Mount | |
-| multi_swap | Multi swap | |
-| nearby_close | Nearby close | |
-| nearby_closer | Nearby closer | |
-| nearby_closest | Nearby closest | |
-| note | Note | |
-| note.bass | Note.bass | |
-| ominous_bottle.end_use | Ominous bottle.end use | |
-| ominous_item_spawner.about_to_spawn_item | Ominous item spawner.about to spawn item | |
-| ominous_item_spawner.spawn_item | Ominous item spawner.spawn item | |
-| ominous_item_spawner.spawn_item_begin | Ominous item spawner.spawn item begin | |
-| open | Open | |
-| open_long | Open long | |
-| panic | Panic | |
-| pant | Pant | |
-| particle.soul_escape.loud | Particle.soul escape.loud | |
-| particle.soul_escape.quiet | Particle.soul escape.quiet | |
-| pause_growth | Pause growth | |
-| pick_berries.cave_vines | Pick berries.cave vines | |
-| pickup | Pickup | |
-| pickup_enchanted | Pickup enchanted | |
-| piston.in | Piston.in | |
-| piston.out | Piston.out | |
-| place | Place | |
-| place_in_water | Place in water | |
-| place_item | Place item | |
-| plop | Plop | |
-| pop | Pop | |
-| portal | Portal | |
-| portal.travel | Portal.travel | |
-| potion.brewed | Potion.brewed | |
-| power.off | Power.off | |
-| power.off.sculk_sensor | Power.off.sculk sensor | |
-| power.on | Power.on | |
-| power.on.sculk_sensor | Power.on.sculk sensor | |
-| pre_ram | Pre ram | |
-| pre_ram.screamer | Pre ram.screamer | |
-| prepare.attack | Prepare.attack | |
-| prepare.summon | Prepare.summon | |
-| prepare.wololo | Prepare.wololo | |
-| presneeze | Presneeze | |
-| pressure_plate.click_off | Pressure plate.click off | |
-| pressure_plate.click_on | Pressure plate.click on | |
-| pumpkin.carve | Pumpkin.carve | |
-| purr | Purr | |
-| purreow | Purreow | |
-| pushed_by_player | Pushed by player | |
-| raid.horn | Raid.horn | |
-| ram_impact | Ram impact | |
-| ram_impact.screamer | Ram impact.screamer | |
-| random.anvil_use | Random.anvil use | |
-| reappeared | Reappeared | |
-| record.11 | Record.11 | |
-| record.13 | Record.13 | |
-| record.5 | Record.5 | |
-| record.blocks | Record.blocks | |
-| record.bounce | Record.bounce | |
-| record.cat | Record.cat | |
-| record.chirp | Record.chirp | |
-| record.creator | Record.creator | |
-| record.creator_music_box | Record.creator music box | |
-| record.far | Record.far | |
-| record.flurry | Record.flurry | |
-| record.lava_chicken | Record.lava chicken | |
-| record.mall | Record.mall | |
-| record.mellohi | Record.mellohi | |
-| record.null | Record.null | |
-| record.otherside | Record.otherside | |
-| record.pigstep | Record.pigstep | |
-| record.precipice | Record.precipice | |
-| record.relic | Record.relic | |
-| record.stal | Record.stal | |
-| record.strad | Record.strad | |
-| record.tears | Record.tears | |
-| record.wait | Record.wait | |
-| record.ward | Record.ward | |
-| reflect | Reflect | |
-| remedy | Remedy | |
-| reset_growth | Reset growth | |
-| respawn_anchor.ambient | Respawn anchor.ambient | |
-| respawn_anchor.charge | Respawn anchor.charge | |
-| respawn_anchor.deplete | Respawn anchor.deplete | |
-| respawn_anchor.set_spawn | Respawn anchor.set spawn | |
-| retreat | Retreat | |
-| roar | Roar | |
-| saddle | Saddle | |
-| saddle_in_water | Saddle in water | |
-| scared | Scared | |
-| scrape | Scrape | |
-| screech | Screech | |
-| shake | Shake | |
-| shatter_pot | Shatter pot | |
-| shear | Shear | |
-| shoot | Shoot | |
-| shulker.close | Shulker.close | |
-| shulker.open | Shulker.open | |
-| shulkerbox.closed | Shulkerbox.closed | |
-| shulkerbox.open | Shulkerbox.open | |
-| single_swap | Single swap | |
-| sleep | Sleep | |
-| slime_landing | Slime landing | |
-| smithing_table.use | Smithing table.use | |
-| sneeze | Sneeze | |
-| sonic_boom | Sonic boom | |
-| sonic_charge | Sonic charge | |
-| sparkler.active | Sparkler.active | |
-| sparkler.use | Sparkler.use | |
-| spawn | Spawn | |
-| splash | Splash | |
-| sponge.absorb | Sponge.absorb | |
-| squid.ink_squirt | Squid.ink squirt | |
-| squish.big | Squish.big | |
-| squish.small | Squish.small | |
-| stare | Stare | |
-| state_change | State change | |
-| step | Step | |
-| step.baby | Step.baby | |
-| step_lava | Step lava | |
-| step_sand | Step sand | |
-| straw_bed.break_leave | Straw bed.break leave | |
-| stun | Stun | |
-| swim | Swim | |
-| swoop | Swoop | |
-| takeoff | Takeoff | |
-| teleport | Teleport | |
-| tempt | Tempt | |
-| thorns | Thorns | |
-| throw | Throw | |
-| thunder | Thunder | |
-| tilt_down.big_dripleaf | Tilt down.big dripleaf | |
-| tilt_up.big_dripleaf | Tilt up.big dripleaf | |
-| tongue | Tongue | |
-| trapdoor.close | Trapdoor.close | |
-| trapdoor.open | Trapdoor.open | |
-| trial_spawner.ambient | Trial spawner.ambient | |
-| trial_spawner.ambient_ominous | Trial spawner.ambient ominous | |
-| trial_spawner.charge_activate | Trial spawner.charge activate | |
-| trial_spawner.close_shutter | Trial spawner.close shutter | |
-| trial_spawner.detect_player | Trial spawner.detect player | |
-| trial_spawner.eject_item | Trial spawner.eject item | |
-| trial_spawner.open_shutter | Trial spawner.open shutter | |
-| trial_spawner.spawn_mob | Trial spawner.spawn mob | |
-| tripod | Tripod | |
-| twinkle | Twinkle | |
-| ui.cartography_table.take_result | Ui.cartography table.take result | |
-| ui.loom.take_result | Ui.loom.take result | |
-| ui.stonecutter.take_result | Ui.stonecutter.take result | |
-| undefined | Undefined | |
-| unfect | Unfect | |
-| unfreeze | Unfreeze | |
-| unsaddle | Unsaddle | |
-| vault.activate | Vault.activate | |
-| vault.ambient | Vault.ambient | |
-| vault.close_shutter | Vault.close shutter | |
-| vault.deactivate | Vault.deactivate | |
-| vault.eject_item | Vault.eject item | |
-| vault.insert_item | Vault.insert item | |
-| vault.insert_item_fail | Vault.insert item fail | |
-| vault.open_shutter | Vault.open shutter | |
-| vault.reject_rewarded_player | Vault.reject rewarded player | |
-| warn | Warn | |
-| water | Water | |
-| whine | Whine | |
-| wind_charge.burst | Wind charge.burst | |
+Default potion aux value associated with the projectile. Normally set programmatically by potion items; rarely useful at authoring time. A value matching the water potion is required for the `douse_fire` on-hit subcomponent to extinguish fires.
 
-##### Random Teleport Cube (Random Teleport Cube)
+#### reflect_on_hurt
 
-#### Random Teleport Cube Properties
+If true, this projectile will be reflected back when hit by another projectile or by taking damage. From 1.26.0, every projectile reflects projectiles that have `reflect_on_hurt: true` on hit, in addition to the existing damage-based reflection.
 
-**JSON path:** `random_teleport_cube`
+#### should_bounce
 
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| x | 0 | Decimal number |  | 
-| y | 0 | Decimal number |  | 
-| z | 0 | Decimal number |  | 
-
-##### Legacy FloatRange
-
-#### Legacy FloatRange Properties
-
-**JSON path:** `target_teleport_distance`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| max | 0 | Decimal number |  | 
-| min | 0 | Decimal number |  | 
-
-##### Target Teleport Offset (Target Teleport Offset)
-
-Same structure as Random Teleport Cube (Random Teleport Cube).
+Controls whether the projectile bounces off entities on impact. `no` disables bouncing, `if_invulnerable` bounces only off invulnerable entities, and `if_no_damage_dealt` bounces whenever no damage is dealt to the target.
 
 
-#### Samples
+#### Anchor choices
 
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| eye_height | Eye height |  |
+| middle | Middle |  |
+| origin | Origin |  |
+
+#### Offset (Offset)
+
+##### Offset Properties
+
+**JSON path:** `offset`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| x | 0 | Decimal number |  |
+| y | 0 | Decimal number |  |
+| z | 0 | Decimal number |  |
+
+#### Entity OnHitCommandsStorage
+
+##### Entity OnHitCommandsStorage Properties
+
+**JSON path:** `on_hit`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| arrow_effect | *not set* | Arrow Effect item | 화살의 약효 포션 데이터에서 효과를 가져오고 표준 8개 화살 묶음에 맞춰 지속 시간을 나누는 `mob_effect`의 변형. |
+| catch_fire | *not set* | Catch Fire item | 투사체가 맞은 블록에 박히게 한다. |
+| definition_event | *not set* | Definition Event item | 발사자, 투사체, 맞은 엔티티, 그리고/또는 튀는 반경 안의 모든 엔티티에 엔티티 이벤트를 발생시킨다. |
+| douse_fire | *not set* | Object | 투사체가 물 효과 포션일 때 맞은 블록과 그 주변의 불과 모닥불을 끈다. |
+| freeze_on_hit | *not set* | Freeze On Hit item | 충돌 지점 주변의 설정 가능한 영역에서 근처 물 블록을 얼음으로 얼린다(교육 에디션 화학 기능). |
+| grant_xp | *not set* | Grant Xp item | 충돌 위치에 경험치 구슬을 떨어뜨린다. |
+| hurt_owner | *not set* | Hurt Owner item | 투사체가 떨어질 때 투사체의 주인에게 피해를 준다. |
+| ignite | *not set* | Object | 투사체가 맞으면 엔티티의 `on_ignite` 정의를 실행한다. |
+| impact_damage | *not set* | Impact Damage item |  |
+| mob_effect | *not set* | Mob Effect item | 맞은 엔티티에 몹 효과를 하나 이상 적용한다. 효과는 효과 객체의 `effects` 배열로 설명한다. |
+| particle_on_hit | *not set* | Particle On Hit item | 충돌 위치에서 파티클 효과를 내보낸다. 엔티티 적중이나 비엔티티 적중에만 한정할 수도 있다. |
+| remove_on_hit | *not set* | Object | 투사체가 블록, 엔티티, (`hit_water`가 설정되면) 물에 맞을 때 월드에서 제거한다. |
+| spawn_aoe_cloud | *not set* | Spawn Aoe Cloud item | 충돌 지점에 시간이 지나며 안에 있는 엔티티에게 포션 효과를 적용하는 효과 구름을 생성한다. |
+| spawn_chance | *not set* | Spawn Chance item | 충돌 위치에 한두 그룹의 엔티티를 조건부로 스폰하고, 스폰된 각 엔티티에 선택적으로 이벤트를 발생시킨다. |
+| stick_in_ground | *not set* | Stick In Ground item | 투사체가 맞은 블록에 박히게 한다. |
+| teleport_owner | *not set* | Object | 투사체의 주인을 충돌 위치로 순간이동시킨다. |
+| thrown_potion_effect | *not set* | Thrown Potion Effect item | 충돌 지점 근처 엔티티에게 던진 포션의 투척 효과를 적용한다. |
+| wind_burst_on_hit | *not set* | Object | 충돌 지점에서 바깥으로 돌풍을 일으켜 근처 엔티티를 밀어낸다. |
+
+##### Entity ArrowEffectSubcomponentDefinition
+Variant of `mob_effect` that derives the effects from the arrow's tipped-potion data and splits durations across the standard eight-arrow stack.
+
+
+###### Entity ArrowEffectSubcomponentDefinition Properties
+
+**JSON path:** `on_hit > arrow_effect`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| apply_effect_to_blocking_targets | true | Boolean true/false | `true`이면 투사체를 막은 대상에게도 효과가 적용된다. |
+
+##### Entity CatchFireSubcomponentDefinition
+Causes the projectile to embed itself in the block it hits.
+
+
+###### Entity CatchFireSubcomponentDefinition Properties
+
+**JSON path:** `on_hit > catch_fire`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| fire_affected_by_griefing | false | Boolean true/false | `true`이면 발사자가 몹이고 `mobGriefing` 게임 규칙이 꺼져 있을 때 블록 점화 동작이 억제된다. |
+| on_fire_time | 0 | Decimal number | 엔티티가 계속 불타는 시간(초). |
+
+##### Entity ActorDefinitionEventSubcomponentDefinition
+Fires an entity event on the shooter, the projectile, the entity hit, and/or all entities in a splash radius.
+
+
+###### Entity ActorDefinitionEventSubcomponentDefinition Properties
+
+**JSON path:** `on_hit > definition_event`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| affect_projectile | false | Boolean true/false | `true`이면 투사체 엔티티 자신에게 이벤트가 발생한다. |
+| affect_shooter | false | Boolean true/false | `true`이면 투사체의 발사자에게 이벤트가 발생한다. |
+| affect_splash_area | false | Boolean true/false | `true`이면 충돌 지점에서 `splash_area` 블록 안의 모든 엔티티에게 이벤트가 발생한다. |
+| affect_target | false | Boolean true/false | `true`이면 투사체에 맞은 엔티티에게 이벤트가 발생한다. |
+| event_trigger | &#123;"event":"","filters":&#123;"AND":null,"NOT":null,"OR":null,"all":null,"all_of":null,"any":null,"any_of":null,"none_of":null&#125;,"target":"self"&#125; | Event Trigger item | 선택된 대상에게 발생시킬 이벤트 트리거(선택적 필터 포함). |
+| splash_area | 0 | Decimal number | `affect_splash_area`가 쓰는 반경(블록). |
+
+###### Entity ActorDefinitionTrigger
+Triggers an entity event when specified conditions are met. Events activate component groups that change entity behavior—transforming villagers into zombie villagers, switching mobs to aggressive mode, or triggering growth stages. Combine with filters to create conditional state machines that respond to gameplay.
+
+
+###### Entity ActorDefinitionTrigger Properties
+
+**JSON path:** `on_hit > definition_event > event_trigger`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| event |  | String |  |
+| filters (Filters) | &#123;"AND":null,"NOT":null,"OR":null,"all":null,"all_of":null,"any":null,"any_of":null,"none_of":null&#125; | Filters item | 필터는 데이터 객체가 사용 조건이 되는 테스트 기준을 지정할 수 있게 한다. |
+| filters (Alternate 1) | *not set* | Object |  |
+| target | self | Target choices |  |
+
+###### filters
+
+Filters allow data objects to specify test criteria which allows their use. Filters can be defined by a single object of type (Filter Test), an array of tests, collection groups, or a combination of these objects.
+
+
+###### Filters
+
+###### Filters Properties
+
+**JSON path:** `on_hit > definition_event > event_trigger > filters`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| domain | *not set* | Object | 테스트를 수행할 도메인. |
+| operator | *not set* | Object | 'value'와 함께 적용할 비교 방식. |
+| subject | *not set* | Object | 이 필터 테스트의 대상(subject). |
+| test | *not set* | String | 적용할 테스트의 이름. |
+| value | *not set* | Object | 테스트에서 비교할 값. |
+
+#### Target choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| baby | Baby |  |
+| block | Block |  |
+| damager | Damager |  |
+| holder | Holder |  |
+| item | Item |  |
+| other | Other |  |
+| parent | Parent |  |
+| player | Player |  |
+| self | Self |  |
+| target | Target |  |
+
+##### Entity FreezeOnHitSubcomponentDefinition
+Freezes nearby water blocks to ice in a configurable volume around the impact (Education Edition chemistry feature).
+
+
+###### Entity FreezeOnHitSubcomponentDefinition Properties
+
+**JSON path:** `on_hit > freeze_on_hit`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| shape | cube | Shape choices | 얼리는 영역의 모양. 허용 값: `cube`, `sphere`. |
+| size | 1 | Decimal number | 얼리는 영역의 절반 크기(블록). |
+| snap_to_block | false | Boolean true/false | `true`이면 정확한 충돌 지점 대신 맞은 블록의 중심을 기준으로 얼리는 영역을 잡는다. |
+
+#### Shape choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| cube | Cube |  |
+| sphere | Sphere |  |
+
+##### Entity GrantXPSubcomponentDefinition
+Drops experience orbs at the impact location.
+
+
+###### Entity GrantXPSubcomponentDefinition Properties
+
+**JSON path:** `on_hit > grant_xp`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| maxXP | 0 | Integer number | 떨어뜨리는 경험치의 최대량. |
+| minXP | 0 | Integer number | 떨어뜨리는 경험치의 최소량. |
+
+##### Entity HurtOwnerSubcomponentDefinition
+Damages the projectile's owner when the projectile lands.
+
+
+###### Entity HurtOwnerSubcomponentDefinition Properties
+
+**JSON path:** `on_hit > hurt_owner`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| ignite | false | Boolean true/false | `true`이면 피해로 주인에게 불이 붙는다. |
+| knockback | false | Boolean true/false | `true`이면 피해가 주인에게 넉백을 준다. |
+| owner_damage | 0 | Decimal number | 주인에게 줄 피해량. |
+
+##### Entity ImpactDamageSubcomponentDefinition
+
+###### Entity ImpactDamageSubcomponentDefinition Properties
+
+**JSON path:** `on_hit > impact_damage`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| apply_knockback_to_blocking_targets | false | Boolean true/false | `true`이면 공격을 막아 낸 대상에게도 넉백이 적용된다. |
+| catch_fire | false | Boolean true/false | `true`이면 맞은 엔티티에 불이 붙는다(투사체의 `on_fire_time`을 쓴다). |
+| ceil_pre_critical_damage | false | Boolean true/false | `true`이면 크리티컬 배율을 적용하기 전에 투사체 피해를 다음 정수로 올림한다. |
+| channeling | false | Boolean true/false | `true`이면 천둥 치는 동안 투사체가 맞은 엔티티 위로 번개를 내리게 할 수 있다. |
+| damage | &#123;"max":0,"min":0&#125; | Damage item | 충돌 시 줄 피해의 범위. 적중마다 `[min, max]`의 무작위 값을 정하고 속도에 비례하는 `power_multiplier` 항을 더해 투사체의 기본 피해를 정한다. |
+| death_message_override | *not set* | String | 충돌 피해로 엔티티가 죽을 때 사망 메시지로 쓸 번역 키. |
+| destroy_on_hit | false | Boolean true/false | `true`이면 투사체가 엔티티에게 피해를 주면 제거된다. |
+| destroy_on_hit_requires_damage | true | Boolean true/false | `true`이면 `destroy_on_hit`이 실제로 피해가 1 이상 들어갔을 때만 작동한다(피해를 완전히 흡수하는 대상은 투사체를 파괴하지 않는다). |
+| difficulty_randomization | none | Difficulty Randomization choices | 월드 난이도가 굴린 피해에 영향을 주는 방식을 제어한다. |
+| filter |  | String | 투사체가 피해를 줄 수 있도록 제한된 엔티티 패밀리 또는 종류. 필터 밖의 엔티티는 피해를 입지 않는다. |
+| knockback | false | Boolean true/false | `true`이면 맞은 엔티티가 투사체에서 멀어지도록 넉백된다. |
+| max_critical_damage | 2147483647 | Integer number | 지정하면 크리티컬 피해를 적용한 뒤의 최대 피해를 정한다. 이 시점에 인챈트는 이미 적용되어 있으므로 크리티컬 최종 피해를 제한한다. |
+| min_critical_damage | 0 | Integer number | 지정하면 크리티컬 피해를 적용한 뒤의 최소 피해를 정한다. 이 시점에 인챈트는 이미 적용되어 있으므로 크리티컬 최종 피해를 제한한다. |
+| power_multiplier | 0 | Decimal number | 투사체 속도에 곱해져 굴린 `damage`에 더해져 투사체의 기본 피해를 정한다. 이것만으로 속도에 따라 피해를 조절할 수 있다. |
+| scale_damage_with_difficulty | true | Boolean true/false | `true`이면 충돌 피해가 월드 난이도에 따라 조정된다. |
+| set_last_hurt_requires_damage | true | Boolean true/false | `true`이면 실제로 피해가 1 이상 들어갔을 때만 투사체가 대상의 마지막 피해 원인으로 기록된다. |
+
+###### death_message_override
+
+A localization key to use as the death message when the impact damage kills an entity. If omitted, the default death message for projectiles is used. `%1$s` is the name of the killed entity and `%2$s` is the name of the projectile's owner, or of the projectile itself if it has no owner.
+
+###### difficulty_randomization
+
+Controls how world difficulty contributes to the rolled damage. `none` ignores difficulty, `additive` adds a difficulty-driven term on top of the base damage, and `multiplicative` folds the difficulty term into `power_multiplier` before scaling by velocity.
+
+
+###### Legacy FloatRange
+
+###### Legacy FloatRange Properties
+
+**JSON path:** `on_hit > impact_damage > damage`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max | 0 | Decimal number |  |
+| min | 0 | Decimal number |  |
+
+#### Difficulty Randomization choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| additive | Additive |  |
+| multiplicative | Multiplicative |  |
+| none | None |  |
+
+##### Entity MobEffectSubcomponentDefinition
+Applies one or more mob effects to the entity hit. Effects are described with an `effects` array of effect objects.
+
+
+###### Entity MobEffectSubcomponentDefinition Properties
+
+**JSON path:** `on_hit > mob_effect`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| effects | [] | Array of Effects items | 효과 객체 배열. 각 요소는 `effect`(이름), `amplifier`, 난이도별 지속 시간 `durationeasy`, `durationnormal`, `durationhard`를 지정할 수 있다. |
+
+###### Entity MobEffectInstance
+
+###### Entity MobEffectInstance Properties
+
+**JSON path:** `on_hit > mob_effect > effects`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| amplifier | 1 | Integer number |  |
+| durationeasy | *not set* | Integer number |  |
+| durationeasy (as String) | *not set* | String |  |
+| durationhard | *not set* | Integer number |  |
+| durationhard (as String) | *not set* | String |  |
+| durationnormal | *not set* | Integer number |  |
+| durationnormal (as String) | *not set* | String |  |
+| effect |  | String |  |
+
+##### Entity ParticleOnHitSubcomponentDefinition
+Emits a particle effect at the impact location, optionally only for entity hits or only for non-entity hits.
+
+
+###### Entity ParticleOnHitSubcomponentDefinition Properties
+
+**JSON path:** `on_hit > particle_on_hit`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| num_particles | 1 | Integer number | 적중마다 생성할 파티클 수. |
+| on_entity_hit | false | Boolean true/false | `true`이면 투사체가 엔티티에 맞을 때 파티클이 생성된다. |
+| on_other_hit | false | Boolean true/false | `true`이면 투사체가 엔티티가 아닌 것에 맞을 때 파티클이 생성된다. |
+| particle_item_name (Particle Item Name) | *not set* | Particle Item Name item | 아이템 식별자에서 필터 그룹으로의 맵. 상황(예: 투사체의 주인)에 따라 `iconcrack` 식 파티클의 아이템 아이콘을 고르는 데 쓴다. |
+| particle_item_name (Alternate 1) | *not set* | Object |  |
+| particle_type | none | Particle Type choices | 충돌 지점에서 생성할 파티클 종류. |
+
+###### Particle Item Name
+
+###### Particle Item Name Properties
+
+**JSON path:** `on_hit > particle_on_hit > particle_item_name`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| domain | *not set* | Object | 테스트를 수행할 도메인. |
+| operator | *not set* | Object | 'value'와 함께 적용할 비교 방식. |
+| subject | *not set* | Object | 이 필터 테스트의 대상(subject). |
+| test | *not set* | String | 적용할 테스트의 이름. |
+| value | *not set* | Object | 테스트에서 비교할 값. |
+
+#### Particle Type choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| balloongas | Balloongas |  |
+| bleach | Bleach |  |
+| blockforcefield | Blockforcefield |  |
+| blueflame | Blueflame |  |
+| breezewindexplosion | Breezewindexplosion |  |
+| bubble | Bubble |  |
+| bubblecolumndown | Bubblecolumndown |  |
+| bubblecolumnup | Bubblecolumnup |  |
+| bubblemanual | Bubblemanual |  |
+| campfiresmoke | Campfiresmoke |  |
+| campfiresmoketall | Campfiresmoketall |  |
+| candleflame | Candleflame |  |
+| carrotboost | Carrotboost |  |
+| coloredflame | Coloredflame |  |
+| conduit | Conduit |  |
+| creakingcrumble | Creakingcrumble |  |
+| crit | Crit |  |
+| dragonbreath | Dragonbreath |  |
+| dragonbreathfire | Dragonbreathfire |  |
+| dragonbreathtrail | Dragonbreathtrail |  |
+| dragondestroyblock | Dragondestroyblock |  |
+| driphoney | Driphoney |  |
+| driplava | Driplava |  |
+| dripwater | Dripwater |  |
+| dustplume | Dustplume |  |
+| electricspark | Electricspark |  |
+| enchantingtable | Enchantingtable |  |
+| endrod | Endrod |  |
+| evaporation | Evaporation |  |
+| explode | Explode |  |
+| eyeblossomclose | Eyeblossomclose |  |
+| eyeblossomopen | Eyeblossomopen |  |
+| fallingborderdust | Fallingborderdust |  |
+| fallingdust | Fallingdust |  |
+| fireworks | Fireworks |  |
+| fireworksoverlay | Fireworksoverlay |  |
+| fireworksstarter | Fireworksstarter |  |
+| flame | Flame |  |
+| food | Food |  |
+| greenflame | Greenflame |  |
+| heart | Heart |  |
+| hugeexplosion | Hugeexplosion |  |
+| iceballbreak | Iceballbreak |  |
+| iconcrack | Iconcrack |  |
+| ink | Ink |  |
+| largeexplode | Largeexplode |  |
+| largesmoke | Largesmoke |  |
+| lava | Lava |  |
+| mobappearance | Mobappearance |  |
+| mobflame | Mobflame |  |
+| mobspell | Mobspell |  |
+| mobspellambient | Mobspellambient |  |
+| mobspellinstantaneous | Mobspellinstantaneous |  |
+| myceliumdust | Myceliumdust |  |
+| none | None |  |
+| note | Note |  |
+| obsidiantear | Obsidiantear |  |
+| orangepoplarleaves | Orangepoplarleaves |  |
+| paleoakleaves | Paleoakleaves |  |
+| pausemobgrowth | Pausemobgrowth |  |
+| portal | Portal |  |
+| portalreverse | Portalreverse |  |
+| rainsplash | Rainsplash |  |
+| reddust | Reddust |  |
+| redpoplarleaves | Redpoplarleaves |  |
+| resetmobgrowth | Resetmobgrowth |  |
+| risingborderdust | Risingborderdust |  |
+| sculksoul | Sculksoul |  |
+| shriek | Shriek |  |
+| shulkerbullet | Shulkerbullet |  |
+| slime | Slime |  |
+| smoke | Smoke |  |
+| sneeze | Sneeze |  |
+| snowballpoof | Snowballpoof |  |
+| snowflake | Snowflake |  |
+| sonicexplosion | Sonicexplosion |  |
+| soul | Soul |  |
+| sparkler | Sparkler |  |
+| spit | Spit |  |
+| stalactitedriplava | Stalactitedriplava |  |
+| stalactitedripwater | Stalactitedripwater |  |
+| sulfurcube | Sulfurcube |  |
+| terrain | Terrain |  |
+| totem | Totem |  |
+| townaura | Townaura |  |
+| trackingemitter | Trackingemitter |  |
+| vaultconnection | Vaultconnection |  |
+| villagerangry | Villagerangry |  |
+| villagerhappy | Villagerhappy |  |
+| watersplash | Watersplash |  |
+| watersplashmanual | Watersplashmanual |  |
+| waterwake | Waterwake |  |
+| wax | Wax |  |
+| whitesmoke | Whitesmoke |  |
+| windexplosion | Windexplosion |  |
+| witchspell | Witchspell |  |
+| wolfarmorcrack | Wolfarmorcrack |  |
+| yellowpoplarleaves | Yellowpoplarleaves |  |
+
+##### Entity SpawnAoECloudSubcomponentDefinition
+Spawns an area effect cloud at the impact point that applies potion effects to entities inside it over time.
+
+
+###### Entity SpawnAoECloudSubcomponentDefinition Properties
+
+**JSON path:** `on_hit > spawn_aoe_cloud`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| affect_owner | true | Boolean true/false | `true`이면 투사체의 주인도 구름의 영향을 받을 수 있다. |
+| duration | 0 | Integer number | 구름이 사라지기 전까지 유지되는 시간(초). |
+| duration (as String) | *not set* | String |  |
+| particle | mobspellambient | Particle choices | 구름이 내보내는 파티클 효과. |
+| potion | -1 | Integer number | 구름이 적용하는 효과를 가진 포션의 보조 값. `-1`이면 투사체 엔티티 자체에서 포션을 가져온다. |
+| radius | 0 | Decimal number | 구름의 초기 반경(블록). |
+| radius_on_use | -1 | Decimal number | 구름이 효과를 적용할 때마다 반경이 줄어드는(또는 늘어나는) 양. `-1`이면 반경이 변하지 않는다. |
+| reapplication_delay | 0 | Integer number | 구름이 같은 엔티티에 효과를 다시 적용하기까지 기다리는 틱 수. |
+
+##### Entity SpawnChanceSubcomponentDefinition
+Conditionally spawns one or two groups of entities at the impact location and optionally fires events on each spawned entity.
+
+
+###### Entity SpawnChanceSubcomponentDefinition Properties
+
+**JSON path:** `on_hit > spawn_chance`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| first_spawn_chance | 0 | Decimal number | 첫 번째 그룹이 스폰될 확률(0-1.0). 값은 1 이하여야 한다. |
+| first_spawn_count | 0 | Integer number | 첫 번째 굴림이 성공했을 때 스폰되는 엔티티 수. |
+| on_spawn | [] | Array of Spawn items | 스폰된 각 엔티티에 발생시킬 엔티티 이벤트 트리거 배열. |
+| second_spawn_chance | 0 | Decimal number | 두 번째 그룹이 스폰될 확률(0-1.0). 첫 번째와 독립적으로 굴린다. 값은 1 이하여야 한다. |
+| second_spawn_count | 0 | Integer number | 두 번째 굴림이 성공했을 때 스폰되는 엔티티 수. |
+| spawn_baby | false | Boolean true/false | `true`이면 스폰된 엔티티가 (해당되는 경우) 새끼로 시작한다. |
+| spawn_definition |  | String | 스폰할 엔티티 정의의 식별자. |
+
+##### Entity StickInGroundSubcomponentDefinition
+Causes the projectile to embed itself in the block it hits.
+
+
+###### Entity StickInGroundSubcomponentDefinition Properties
+
+**JSON path:** `on_hit > stick_in_ground`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| shake_time | 0 | Decimal number | 박힌 뒤 투사체가 시각적으로 떨리는 시간(초). |
+
+##### Entity ThrownPotionEffectSubcomponentDefinition
+Applies the splash-potion effects of a thrown potion to nearby entities at the impact point.
+
+
+###### Entity ThrownPotionEffectSubcomponentDefinition Properties
+
+**JSON path:** `on_hit > thrown_potion_effect`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| effect | -1 | Integer number | 적용할 포션의 보조 값. |
+
+#### Should Bounce choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| if_invulnerable | If invulnerable |  |
+| if_no_damage_dealt | If no damage dealt |  |
+| no | No |  |
+
+## minecraft&#58;push_through
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_push_through.md`)
+
+엔티티가 밀고 지나갈 수 있는 거리를 정한다.
+
+Sets the distance through which the entity can push through.
+
+### Push Through Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| value | 0 | Decimal number | 엔티티가 밀고 지나갈 수 있는 값(블록). |

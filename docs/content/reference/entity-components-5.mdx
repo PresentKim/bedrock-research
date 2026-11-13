@@ -1,312 +1,558 @@
 ---
-title: 엔티티 컴포넌트 레퍼런스(주요 항목) (5/15)
-description: MS Learn 엔티티 컴포넌트·이벤트·필터 목록과 주요 컴포넌트.
-sidebar_position: 94
+title: 엔티티 컴포넌트 레퍼런스 (5/23)
+description: MS Learn 컴포넌트 문서 14개(minecraft:combat_regeneration ~ minecraft:entity_armor_equipment_slot_mapping). 속성 표와 예시 JSON을 원문대로 담았다.
+sidebar_position: 104
 sources:
   - ms-learn
 ---
 
-# 엔티티 컴포넌트 레퍼런스(주요 항목) (5/15)
+# 엔티티 컴포넌트 레퍼런스 (5/23)
 
-MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 레퍼런스를 발췌한 쪽이다. 원문의 상대 링크는 제거했다.
+MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 컴포넌트 문서를 옮긴 쪽이다. 설명은 한국어로 옮기고 ID, 속성 이름, 유형, 기본값, JSON은 원문 그대로 두었다. 전체 목록은 [색인](./entity-index.mdx)에 있다.
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_mob_effect_immunity.md`)
+## minecraft&#58;combat_regeneration
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_combat_regeneration.md`)
+
+이 엔티티의 공격 대상을 죽인 몹에게 재생 I을 주고 채굴 피로를 없앤다.
+
+Gives `Regeneration I` and removes `Mining Fatigue` from the mob that kills the entity's attack target.
+
+### Combat Regeneration Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| apply_to_family | false | Boolean true/false | 몹이 대상을 죽였을 때 같은 종류의 몹에게 전투 버프를 줄지 정한다. |
+| apply_to_self | false | Boolean true/false | 몹이 대상을 죽였을 때 자신에게 전투 버프를 줄지 정한다. |
+| regeneration_duration | 5 | Integer number | 몹에게 더해지는 재생 I의 지속 시간(초). "infinite"로도 설정할 수 있다. |
+
+### 예시
+
+## minecraft&#58;conditional_bandwidth_optimization
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_conditional_bandwidth_optimization.md`)
+
+엔티티의 조건부 공간 갱신 대역폭 최적화를 정의한다.
+
+Defines the Conditional Spatial Update Bandwidth Optimizations of this entity.
+
+### Conditional Bandwidth Optimization Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| conditional_values | *not set* | Array of Conditional Values items | 조건부 대역폭 최적화 값을 담은 객체. |  |
+| default_values | *not set* | Default Values item | 기본 대역폭 최적화 값을 담은 객체. | Arrow: `{"max_dropped_ticks":7,"max_optimized_distance":80,"use_motion_prediction_hints":true}` |
+
+#### Conditional Values
+The object containing the conditional bandwidth optimization values.
 
 
-### Entity Documentation - minecraft:mob_effect_immunity
+##### Conditional Values Properties
 
-Entities with this component will have an immunity to the provided mob effects.
+**JSON path:** `conditional_values`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| conditional_values | *not set* | Minecraft filter | 이 최적화 값이 쓰이기 위해 충족해야 하는 조건. |
+| max_dropped_ticks | 10 | Integer number | 최적화 값과 관련해, 공간 갱신 패킷을 보내지 않을 수 있는 최대 틱 수. 값은 0 이상이어야 한다. |
+| max_optimized_distance | 80 | Decimal number | 대역폭 최적화에서 고려하는 최대 거리. |
+| use_motion_prediction_hints | false | Boolean true/false | true이면 패킷 생략 간격 동안 더 작은 이동 패킷을 보낸다. 최적화 없이 보낼 때와 패킷 수는 같지만 데이터는 훨씬 적다. |
+
+##### max_optimized_distance
+
+The maximum distance considered during bandwidth optimizations. Any value below the max is interpolated to find optimization, and any value greater than or equal to this max results in max optimization.
+
+##### use_motion_prediction_hints
+
+When set to true, smaller motion packets will be sent during drop packet intervals, resulting in the same amount of packets being sent as without optimizations but with much less data being sent. This should be used when actors are travelling very quickly or teleporting to prevent visual oddities.
 
 
-#### Mob Effect Immunity Properties
+#### Default Values
 
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| mob_effects | *not set* | Array of strings | List of names of effects the entity is immune to. | Parched: `["weakness"]`, Polar Bear: `["freezing"]`, Silverfish: `["infested"]` | 
+##### Default Values Properties
 
-#### Samples
+**JSON path:** `default_values`
 
-#### Parched
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max_dropped_ticks | 10 | Integer number | 공간 갱신 패킷을 보내지 않을 수 있는 최대 틱 수. |
+| max_optimized_distance | 80 | Decimal number | 대역폭 최적화에서 고려하는 최대 거리. |
+| use_motion_prediction_hints | false | Boolean true/false | true이면 패킷 생략 간격 동안 더 작은 이동 패킷을 보낸다. |
+
+### 예시
+
+##### [Allay](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/allay.json)
 
 
 ```json
-"minecraft:mob_effect_immunity": {
-  "mob_effects": [
-    "weakness"
-  ]
+"minecraft:conditional_bandwidth_optimization": {}
+```
+
+##### [Arrow](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/arrow.json)
+
+
+```json
+"minecraft:conditional_bandwidth_optimization": {
+  "default_values": {
+    "max_dropped_ticks": 7,
+    "max_optimized_distance": 80,
+    "use_motion_prediction_hints": true
+  }
 }
 ```
 
-#### Polar Bear
+## minecraft&#58;custom_hit_test
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_custom_hit_test.md`)
+
+엔티티에 대한 근접·원거리 공격 판정용 히트박스 목록이다.
+
+List of hitboxes for melee and ranged hits against the entity.
+
+### Custom Hit Test Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| hitboxes | *not set* | Array of Hitboxes items | 엔티티에 대한 근접·원거리 공격 판정용 히트박스 목록. |
+
+#### Hitboxes
+
+##### Hitbox Entry Properties
+
+**JSON path:** `hitboxes`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| height | *not set* | Decimal number | 히트박스의 높이. |
+| pivot | *not set* | x, y, z coordinate array | 히트박스의 피벗 지점. |
+| width | *not set* | Decimal number | 히트박스의 너비. |
+
+### 예시
+
+## minecraft&#58;damage_over_time
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_damage_over_time.md`)
+
+정해진 간격마다 엔티티에 일정한 피해를 준다.
+
+Applies defined amount of damage to the entity at specified intervals.
+
+### Entity Damage Over Time Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| damage_per_hurt | 1 | Integer number | 피해를 입을 때마다 주어지는 피해량. | Dolphin: `1` |
+| time_between_hurt | 0 | Decimal number | 피해 사이의 시간(초). | Vex: `1` |
+
+### 예시
+
+##### [Dolphin](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/dolphin.json)
 
 
 ```json
-"minecraft:mob_effect_immunity": {
-  "mob_effects": [
-    "freezing"
-  ]
+"minecraft:damage_over_time": {
+  "damage_per_hurt": 1,
+  "time_between_hurt": 0
 }
 ```
 
-#### Silverfish
+##### [Vex](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/vex.json)
 
 
 ```json
-"minecraft:mob_effect_immunity": {
-  "mob_effects": [
-    "infested"
-  ]
+"minecraft:damage_over_time": {
+  "damage_per_hurt": 1,
+  "time_between_hurt": 1
 }
 ```
 
-#### Slime
+## minecraft&#58;damage_sensor
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_damage_sensor.md`)
+
+특정 엔티티나 아이템에게 피해를 입었을 때 호출할 이벤트를 정의한다.
+
+Defines what events to call when this entity is damaged by specific entities or items.
+
+### Damage Sensor Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| deals_damage | false | Deals Damage choices | 받은 피해가 엔티티에 미치는 영향을 정의한다. |  |
+| deals_damage (Alternate 1) | false | Boolean true/false |  |  |
+| triggers (Damage Sensor Trigger) | *not set* | Triggers item | 특정 종류의 피해를 받을 때 호출할 이벤트가 담긴 트리거 목록. | Allay: `[{"deals_damage":"no","on_damage":{"filters":{"all_of":[{"subject":"other","test":"is_family","value":"player"},{"subject":"other","test":"is_owner"}]}}}]`, Bat: `{"cause":"fall","deals_damage":"no"}`, Breeze: `[{"cause":"fall","deals_damage":"no"},{"cause":"projectile","on_damage":{"filters":{"operator":"!=","test":"is_family","subject":"damager","value":"wind_charge"}},"deals_damage":"no"}]` |
+| triggers (as Object) | *not set* | Object |  |  |
+
+#### Deals Damage choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| yes | Yes | 받은 피해가 엔티티에 적용된다. |
+| no | No | 받은 피해가 엔티티에 적용되지 않는다. |
+| no_but_side_effects_apply | No But Side Effects Apply | 받은 피해는 적용되지 않지만 공격의 부수 효과는 적용된다. 즉 공격자의 무기 내구도가 줄고 인챈트 부수 효과가 적용되는 식이다. |
+| no_but_entity_effects_apply | No But Entity Effects Apply | 피해는 적용되지 않지만 넉백과 인챈트는 적용되고 공격자의 무기도 평소처럼 쓰인다. 엔티티가 붉게 번쩍이지 않는다. |
+
+#### Triggers
+
+##### Damage Sensor Trigger Properties
+
+**JSON path:** `triggers`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| cause | none | String | 이벤트를 일으키는 피해의 종류. |
+| damage_modifier | 0 | Decimal number | 지정한 피해 원인에서 받는 기본 피해량에 더하거나 빼는 보정값. |
+| damage_multiplier | 1 | Decimal number | 지정한 피해 원인에서 받는 기본 피해량에 곱하는 배율. |
+| deals_damage | false | Boolean true/false | 받은 피해가 엔티티에 미치는 영향을 정의한다. |
+| deals_damage (as String) | *not set* | String |  |
+| event | *not set* | String | 트리거 조건이 충족되었을 때 내보낼 이벤트. |
+| filters | *not set* | Minecraft filter | 이 트리거가 적용되는 시점의 필터 조건. |
+| on_damage | *not set* | Minecraft Event Trigger | 트리거가 적용되는 엔티티와, 피해를 입었을 때 내보낼 이벤트를 정의한다. |
+| on_damage_sound_event | *not set* | Minecraft Event Reference | on_damage 필터를 만족했을 때 재생할 소리를 정의한다. |
+
+### 예시
+
+##### [Allay](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/allay.json)
 
 
 ```json
-"minecraft:mob_effect_immunity": {
-  "mob_effects": [
-    "oozing"
-  ]
-}
-```
-
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_movement.md`)
-
-
-### Entity Documentation - minecraft:movement
-
-Defines the base movement speed of an entity. Typical values: creeper (0.2), cow (0.25), zombie baby (0.35).
-
-
-#### Movement Properties
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| max | *not set* | Decimal number | Maximum movement speed this entity can have. | 
-| value | *not set* | Decimal number | The base movement speed value. Higher values result in faster movement. Can be a single number or a range object with range_min and range_max properties. | 
-| value (as Object) | *not set* | Value item |  | 
-
-##### Value
-
-#### Value Properties
-
-**JSON path:** `value`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| range_max | *not set* | Decimal number | Maximum movement speed | 
-| range_min | *not set* | Decimal number | Minimum movement speed | 
-
-#### Samples
-
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_nameable.md`)
-
-
-### Entity Documentation - minecraft:nameable
-
-Allows this entity to be named (e.g. using a name tag).
-
-
-#### Nameable Properties
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| allow_name_tag_renaming | true | Boolean true/false | If true, this entity can be renamed with name tags | 
-| always_show | false | Boolean true/false | If true, the name will always be shown | 
-| default_trigger | *not set* | String | Trigger to run when the entity gets named | 
-| name_actions | *not set* | Array of Name Actions items | Describes the special names for this entity and the events to call when the entity acquires those names | 
-
-##### Name Actions
-Describes the special names for this entity and the events to call when the entity acquires those names.
-
-
-#### Name Actions Properties
-
-**JSON path:** `name_actions`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| name_filter | *not set* | String | List of special names that will cause the events defined in 'on_named' to fire | 
-| on_named | *not set* | Minecraft Event Trigger | Event to be called when this entity acquires the name specified in 'name_filter' | 
-
-#### Samples
-
-#### Allay
-
-
-```json
-"minecraft:nameable": {}
-```
-
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_navigation.walk.md`)
-
-
-### Entity Documentation - minecraft:navigation.walk
-
-Walking style of the mob.
-
-
-#### Walk navigation Properties
-
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| avoid_damage_blocks | false | Boolean true/false | Tells the pathfinder to avoid blocks that cause damage when finding a path | Blaze: `true` | 
-| avoid_portals | false | Boolean true/false | Tells the pathfinder to avoid portals (like nether portals) when finding a path |  | 
-| avoid_sun | false | Boolean true/false | Whether or not the pathfinder should avoid tiles that are exposed to the sun when creating paths | Bogged: `true` | 
-| avoid_water | false | Boolean true/false | Tells the pathfinder to avoid water when creating a path | Blaze: `true` | 
-| blocks_to_avoid | *not set* | Array of strings | List of block descriptors that the pathfinder should avoid. Items can be block identifier strings or objects with name/tags properties. | Breeze: `[{"tags":"query.any_tag('trapdoors')"}]` | 
-| blocks_to_avoid (Block to Avoid) | *not set* | Array of Blocks To Avoid (Block To Avoid) items |  |  | 
-| can_breach | false | Boolean true/false | Tells the pathfinder whether or not it can jump out of water (like a dolphin) |  | 
-| can_break_doors | false | Boolean true/false | Tells the pathfinder that it can path through a closed door and break it |  | 
-| can_float | *not set* | Boolean true/false |  |  | 
-| can_jump | true | Boolean true/false | Tells the pathfinder whether or not it can jump up blocks |  | 
-| can_open_doors | false | Boolean true/false | Tells the pathfinder that it can path through a closed door assuming the AI will open the door |  | 
-| can_open_iron_doors | false | Boolean true/false | Tells the pathfinder that it can path through a closed iron door assuming the AI will open the door |  | 
-| can_pass_doors | true | Boolean true/false | Whether a path can be created through a door |  | 
-| can_path_from_air | false | Boolean true/false | Tells the pathfinder that it can start pathing when in the air |  | 
-| can_path_over_lava | false | Boolean true/false | Tells the pathfinder whether or not it can travel on the surface of the lava |  | 
-| can_path_over_water | false | Boolean true/false | Tells the pathfinder whether or not it can travel on the surface of the water | Blaze: `true` | 
-| can_sink | true | Boolean true/false | Tells the pathfinder whether or not it will be pulled down by gravity while in water |  | 
-| can_swim | false | Boolean true/false | Tells the pathfinder whether or not it can path anywhere through water and plays swimming animation along that path |  | 
-| can_walk | true | Boolean true/false | Tells the pathfinder whether or not it can walk on the ground outside water |  | 
-| can_walk_in_lava | false | Boolean true/false | Tells the pathfinder whether or not it can travel in lava like walking on ground |  | 
-| is_amphibious | false | Boolean true/false | Tells the pathfinder whether or not it can walk on the ground underwater | Bogged: `true` | 
-| using_door_annotation | *not set* | String |  | Blaze: `true` | 
-
-##### Blocks To Avoid (Block To Avoid)
-
-#### Block to Avoid Properties
-
-**JSON path:** `blocks_to_avoid`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| name | *not set* | String | Block identifier to avoid. | 
-| tags | *not set* | Molang | Molang expression to match block tags, e.g. query.any_tag('trapdoors') | 
-
-#### Samples
-
-#### Blaze
-
-
-```json
-"minecraft:navigation.walk": {
-  "avoid_damage_blocks": true,
-  "avoid_water": true,
-  "can_path_over_water": true,
-  "using_door_annotation": true
-}
-```
-
-#### Bogged
-
-
-```json
-"minecraft:navigation.walk": {
-  "avoid_sun": true,
-  "is_amphibious": true,
-  "avoid_water": true
-}
-```
-
-#### Breeze
-
-
-```json
-"minecraft:navigation.walk": {
-  "blocks_to_avoid": [
+"minecraft:damage_sensor": {
+  "triggers": [
     {
-      "tags": "query.any_tag('trapdoors')"
+      "deals_damage": "no",
+      "on_damage": {
+        "filters": {
+          "all_of": [
+            {
+              "subject": "other",
+              "test": "is_family",
+              "value": "player"
+            },
+            {
+              "subject": "other",
+              "test": "is_owner"
+            }
+          ]
+        }
+      }
     }
-  ],
-  "using_door_annotation": true
+  ]
 }
 ```
 
-#### Chicken
+##### [Bat](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/bat.json)
 
 
 ```json
-"minecraft:navigation.walk": {
-  "can_path_over_water": true,
-  "avoid_damage_blocks": true,
-  "using_door_annotation": true
+"minecraft:damage_sensor": {
+  "triggers": {
+    "cause": "fall",
+    "deals_damage": "no"
+  }
 }
 ```
 
-#### Cow
+##### [Breeze](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/breeze.json)
 
 
 ```json
-"minecraft:navigation.walk": {
-  "can_path_over_water": true,
-  "avoid_water": true,
-  "avoid_damage_blocks": true
+"minecraft:damage_sensor": {
+  "triggers": [
+    {
+      "cause": "fall",
+      "deals_damage": "no"
+    },
+    {
+      "cause": "projectile",
+      "on_damage": {
+        "filters": {
+          "operator": "!=",
+          "test": "is_family",
+          "subject": "damager",
+          "value": "wind_charge"
+        }
+      },
+      "deals_damage": "no"
+    }
+  ]
 }
 ```
 
+## minecraft&#58;dash
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_persistent.md`)
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_dash.md`)
 
+탑승 가능한 엔티티의 돌진 능력이다. 형식 버전 1.20.40 이상이 필요하다.
 
-### Entity Documentation - minecraft:persistent
+Ability for a rideable entity to dash.
 
-Defines whether an entity should be persistent in the game world.
+> [!Note]
+> This item requires a format version of at least 1.20.40.
 
+### Dash Properties
 
-#### Samples
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| cooldown_time | 1 | Decimal number | 돌진 쿨다운(초). 기본값은 1.000000이다. | Camel: `2.75` |
+| horizontal_momentum | 1 | Decimal number | 돌진의 수평 운동량. | Camel: `20` |
+| vertical_momentum | 1 | Decimal number | 돌진의 수직 운동량. | Camel: `0.6` |
 
-#### Armor Stand
+### 예시
 
-
-```json
-"minecraft:persistent": {}
-```
-
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_physics.md`)
-
-
-### Entity Documentation - minecraft:physics
-
-Defines physics properties of an actor, including if it is affected by gravity or if it collides with objects.
-
-
-#### Entity Physics Properties
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| has_collision | true | Boolean true/false | Whether or not the entity collides with things. | 
-| has_gravity | true | Boolean true/false | Whether or not the entity is affected by gravity. | 
-| push_towards_closest_space | false | Boolean true/false | Whether or not the entity should be pushed towards the nearest open area when stuck inside a block. | 
-
-#### Samples
-
-#### Allay
+##### [Camel](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/camel.json)
 
 
 ```json
-"minecraft:physics": {
-  "has_gravity": false
+"minecraft:dash": {
+  "cooldown_time": 2.75,
+  "horizontal_momentum": 20,
+  "vertical_momentum": 0.6
 }
 ```
 
-#### Area Effect Cloud
+## minecraft&#58;dash_action
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_dash_action.md`)
+
+탑승 가능한 엔티티의 돌진 능력이다.
+
+Ability for a rideable entity to dash.
+
+### Entity Dash Action Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| can_dash_underwater | false | Boolean true/false | 엔티티가 물속에서 돌진할 수 있는지 여부. |
+| cooldown_time | 1 | Decimal number | 돌진 쿨다운(초). |
+| direction | entity | Direction choices | 운동량을 'entity'와 'passenger' 중 어느 쪽 방향으로 적용할지 정한다. |
+| horizontal_momentum | 1 | Decimal number | 돌진의 수평 운동량. |
+| vertical_momentum | 1 | Decimal number | 돌진의 수직 운동량. |
+
+#### direction
+
+Should the momentum be applied in the direction of the 'entity' or 'passenger'. When 'entity' is used the momentum is applied horizontally according to the direction the entity is looking, using only the entity's yaw. When 'passenger' is used the momentum will be applied in the direction the controlling passenger is looking, using the passenger's pitch and yaw.
+
+
+#### Direction choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| entity | Entity |  |
+| passenger | Passenger |  |
+
+### 예시
+
+## minecraft&#58;default_look_angle
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_default_look_angle.md`)
+
+엔티티의 기본 머리 회전 각도를 정한다.
+
+Sets this entity's default head rotation angle.
+
+### Default Look Angle Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| value | 0 | Decimal number | 각도(도). |
+
+## minecraft&#58;despawn
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_despawn.md`)
+
+디스폰 규칙이나 필터가 참이면 엔티티를 디스폰한다.
+
+Despawns the Actor when the despawn rules or optional filters evaluate to true.
+
+### Despawn Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| despawn_from_chance | true | Boolean true/false | 표준 디스폰 규칙에서 "min_range_random_chance"를 쓸지 정한다. |  |
+| despawn_from_distance | *not set* | Despawn From Distance item | 표준 디스폰 규칙에서 'min_distance'와 'max_distance'를 쓸지 지정한다. | Bat: `{}` |
+| despawn_from_inactivity | true | Boolean true/false | 표준 디스폰 규칙에서 "min_range_inactivity_timer"를 쓸지 정한다. |  |
+| despawn_from_simulation_edge | true | Boolean true/false | 표준 디스폰 규칙에서 시뮬레이션 거리 가장자리에서 몹을 즉시 디스폰할지 정한다. |  |
+| filters | *not set* | Minecraft filter | 액터가 디스폰되기 전에 만족해야 하는 조건 목록. 필터를 정의하면 표준 디스폰 규칙은 무시된다. |  |
+| min_range_inactivity_timer | 30 | Integer number | 몹이 비활성 상태여야 하는 시간(초). |  |
+| min_range_random_chance | 800 | Integer number | 1과 주어진 값 사이의 무작위 확률. |  |
+| remove_child_entities | false | Boolean true/false | true이면 이 엔티티와 자식 관계(예: 끈으로 묶임)로 연결된 모든 엔티티도 함께 디스폰된다. |  |
+
+#### Despawn From Distance
+
+##### Despawn From Distance Properties
+
+**JSON path:** `despawn_from_distance`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max_distance | 128 | Integer number | 표준 디스폰 규칙으로 몹을 즉시 디스폰하는 최대 거리. |
+| min_distance | 32 | Integer number | 표준 디스폰 규칙으로 몹을 디스폰하려 시도하는 최소 거리. |
+
+### 예시
+
+##### [Bat](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/bat.json)
 
 
 ```json
-"minecraft:physics": {
-  "has_collision": false
+"minecraft:despawn": {
+  "despawn_from_distance": {}
 }
 ```
 
-#### Armor Stand
+## minecraft&#58;dimension_bound
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_dimension_bound.md`)
+
+엔티티가 차원문으로 차원을 옮기지 못하게 한다.
+
+Prevents the entity from changing dimension through portals.
+
+> [!Note]
+> This item requires a format version of at least 1.21.40.
+
+### 예시
+
+##### [Arrow](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/arrow.json)
 
 
 ```json
-"minecraft:physics": {}
+"minecraft:dimension_bound": {}
 ```
 
+## minecraft&#58;drying_out_timer
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_drying_out_timer.md`)
+
+마름 타이머를 추가한다. 끝나면 `dried_out_event`를 발생시키고, 비나 물에 닿으면 멈추며 `stopped_drying_out_event`를 발생시킨다.
+
+Adds a timer for drying out that will count down and fire 'dried_out_event' or will stop as soon as the entity will get under rain or water and fire 'stopped_drying_out_event'.
+
+### Drying Out Timer Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| dried_out_event | *not set* | Object | 마름 시간이 다 되었을 때 발생시킬 이벤트. event와 target 속성을 가진 객체 또는 단순한 이벤트 문자열을 쓸 수 있다. | Dolphin: `{"event":"dried_out"}` |
+| dried_out_event (as String) | *not set* | String |  |  |
+| recover_after_dried_out_event | *not set* | Object | 이미 말랐던 엔티티가 수분을 다시 공급받았을 때 발생시킬 이벤트. event와 target 속성을 가진 객체 또는 단순한 이벤트 문자열을 쓸 수 있다. | Dolphin: `{"event":"recover_after_dried_out"}` |
+| recover_after_dried_out_event (as String) | *not set* | String |  |  |
+| stopped_drying_out_event | *not set* | Object | 엔티티가 마르기를 멈췄을 때 발생시킬 이벤트. event와 target 속성을 가진 객체 또는 단순한 이벤트 문자열을 쓸 수 있다. | Dolphin: `{"event":"stop_dryingout"}` |
+| stopped_drying_out_event (as String) | *not set* | String |  |  |
+| total_time | 0 | Decimal number | 완전히 마르는 데 걸리는 시간(초). | Dolphin: `120` |
+| water_bottle_refill_time | 0 | Decimal number | 엔티티에게 물 포션(투척)을 썼을 때 추가로 주어지는 시간(초). 선택 사항이다. |  |
+
+### 예시
+
+##### [Dolphin](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/dolphin.json)
+
+
+```json
+"minecraft:drying_out_timer": {
+  "total_time": 120,
+  "water_bottle_refill_time": 0,
+  "dried_out_event": {
+    "event": "dried_out"
+  },
+  "stopped_drying_out_event": {
+    "event": "stop_dryingout"
+  },
+  "recover_after_dried_out_event": {
+    "event": "recover_after_dried_out"
+  }
+}
+```
+
+## minecraft&#58;dweller
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_dweller.md`)
+
+엔티티가 마을 등 거주지에 합류하고 옮겨 다니게 한다.
+
+Compels an entity to join and migrate between villages and other dwellings.
+
+### Dweller Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| can_find_poi | *not set* | Boolean true/false | 엔티티가 POI를 찾아 거주지에 추가할 수 있는지 여부. |  |
+| can_migrate | *not set* | Boolean true/false | 엔티티가 거주지 사이를 옮겨 다닐 수 있는지, 처음 거주지만 가질 수 있는지 정한다. | Iron Golem: `true` |
+| dweller_role | *not set* | String |  | Iron Golem: `"defender"` |
+| dwelling_bounds_tolerance | *not set* | Decimal number | 엔티티가 거주지 안에 있는지 확인할 때 쓰는 여유 거리. |  |
+| dwelling_role | *not set* | String | 엔티티가 거주지에서 맡는 역할. 현재 역할: inhabitant, defender, hostile, passive. |  |
+| dwelling_type | *not set* | String | 엔티티가 합류하려는 거주지 종류. 현재 종류: village. | Iron Golem: `"village"` |
+| first_founding_reward | *not set* | Integer number | 처음 마을을 세웠을 때 플레이어에게 주는 평판의 양을 정한다. |  |
+| preferred_profession | *not set* | String | 이 거주자가 스스로 직업을 고르게 두지 않고 시작 직업을 정하게 한다. (효과가 나려면 거래로 경험치를 얻어야 한다.) |  |
+| update_interval_base | *not set* | Decimal number | 엔티티가 거주지 상태를 확인하는 간격(틱). 양수만 가능하다. | Iron Golem: `60` |
+| update_interval_variant | *not set* | Decimal number | update_interval_base에 더해지는 변동값(틱). | Iron Golem: `40` |
+
+### 예시
+
+##### [Iron Golem](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/iron_golem.json)
+
+
+```json
+"minecraft:dweller": {
+  "dwelling_type": "village",
+  "can_find_poi": false,
+  "can_migrate": true,
+  "dweller_role": "defender",
+  "first_founding_reward": 0,
+  "update_interval_base": 60,
+  "update_interval_variant": 40
+}
+```
+
+## minecraft&#58;economy_trade_table
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_economy_trade_table.md`)
+
+엔티티가 플레이어와 거래하는 능력을 정의한다.
+
+Defines this entity's ability to trade with players.
+
+### Entity Economy Trade Table Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| convert_trades_economy | false | Boolean true/false | 레거시 거래 데이터를 경제 거래 데이터로 변환할지 여부. |
+| cured_discount | &#123;"max":-20,"min":-25&#125; | Cured Discount item | 치료된 주민 할인 범위가 거래 가격에 적용되는 정도. |
+| display_name |  | String | 거래 UI 표시 이름에 쓰는 엔티티 번역 키. |
+| hero_demand_discount | -4 | Integer number | 플레이어가 마을의 영웅 효과를 가진 동안 적용되는 추가 수요 할인. |
+| max_cured_discount | &#123;"max":-20,"min":-25&#125; | Max Cured Discount item | 치료된 주민 할인의 허용 최대 범위. |
+| max_nearby_cured_discount | -200 | Integer number | 레거시 가격 계산이 허용하는, 근처 치료된 주민 할인의 가장 낮은 값. |
+| nearby_cured_discount | -20 | Integer number | 레거시 가격 계산이 적용하는 근처 치료된 주민 할인 단계. |
+| new_screen | false | Boolean true/false | 이 상인이 새 거래 화면 구현을 쓰는지 여부. |
+| persist_trades | false | Boolean true/false | 생성된 제안을 액터 저장 데이터에 보존할지 여부. |
+| show_trade_screen | true | Boolean true/false | 이 상인과 상호작용할 때 거래 화면을 여는지 여부. |
+| table |  | String | 사용 가능한 제안을 정의하는 거래 테이블 JSON 경로. |
+| use_legacy_price_formula | false | Boolean true/false | 새 가격 공식 대신 레거시 가격 계산을 쓸지 여부. |
+
+#### Block IntRange
+
+##### Block IntRange Properties
+
+**JSON path:** `cured_discount`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max | 0 | Integer number |  |
+| min | 0 | Integer number |  |
+
+### 예시
+
+## minecraft&#58;entity_armor_equipment_slot_mapping
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_entity_armor_equipment_slot_mapping.md`)
+
+`equippable`의 두 번째 슬롯에 장착한 아이템이 어느 방어구 슬롯에 해당하는지 정의한다.
+
+It defines to which armor slot an item equipped to 'minecraft:equippable''s second slot should be equipped to. It is automatically applied to all entities for worlds with a version greater than or equal to 1.21.10. For older worlds, 'slot.armor.torso' will be used. It is strongly advised not to explicitly use this component, as no backwards compatibility for it will be provided.
+
+### Entity Armor Equipment Slot Mapping Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| armor_slot | *not set* | String | 'minecraft:equippable'의 두 번째 슬롯에 장착한 아이템이 들어가야 하는 방어구 슬롯. |
+
+#### armor_slot
+
+The armor slot an item equipped to 'minecraft:equippable''s second slot should be equipped to. It defaults to 'slot.armor.torso' for entities with a format version prior to 1.21.10, and to 'slot.armor.body' otherwise.

@@ -1,222 +1,476 @@
 ---
-title: 엔티티 컴포넌트 레퍼런스(주요 항목) (15/15)
-description: MS Learn 엔티티 컴포넌트·이벤트·필터 목록과 주요 컴포넌트.
-sidebar_position: 104
+title: 엔티티 컴포넌트 레퍼런스 (15/23)
+description: MS Learn 컴포넌트 문서 10개(minecraft:pushable ~ minecraft:renders_when_invisible). 속성 표와 예시 JSON을 원문대로 담았다.
+sidebar_position: 114
 sources:
   - ms-learn
 ---
 
-# 엔티티 컴포넌트 레퍼런스(주요 항목) (15/15)
+# 엔티티 컴포넌트 레퍼런스 (15/23)
 
-MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 레퍼런스를 발췌한 쪽이다. 원문의 상대 링크는 제거했다.
+MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 컴포넌트 문서를 옮긴 쪽이다. 설명은 한국어로 옮기고 ID, 속성 이름, 유형, 기본값, JSON은 원문 그대로 두었다. 전체 목록은 [색인](./entity-index.mdx)에 있다.
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_target_nearby_sensor.md`)
+## minecraft&#58;pushable
 
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_pushable.md`)
 
-### Entity Documentation - minecraft:target_nearby_sensor
+엔티티를 다른 엔티티와 피스톤 사이에서 밀 수 있는 대상을 정의한다. 1.26.10에서 둘로 나뉘었다.
 
-Defines the entity's range within which it can see or sense other entities to target them.
+Defines what can push an entity between other entities and pistons.
 
+> [!Note]
+> In 1.26.10 this component was split into `minecraft:pushable_by_block` (pistons and Shulker Boxes, equivalent to `is_pushable_by_piston: true`) and `minecraft:pushable_by_entity` (other entities, equivalent to `is_pushable: true`). The original `minecraft:pushable` component is no longer parsed.
 
-#### Target Nearby Sensor Properties
+> [!Note]
+> This item no longer works after format versions of at least 1.26.10.
 
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| inside_range | 1 | Decimal number | Maximum distance in blocks that another entity will be considered in the 'inside' range | Blaze: `2`, Drowned: `3` | 
-| must_see | false | Boolean true/false | Whether the other entity needs to be visible to trigger 'inside' events | Blaze: `true` | 
-| on_inside_range | *not set* | Object | Event to call when an entity gets in the inside range. Can be an object with event and target properties, or a simple event string. | Blaze: `{"event":"switch_to_melee","target":"self"}`, Drowned: `{"event":"minecraft:switch_to_melee","target":"self"}` | 
-| on_inside_range (as String) | *not set* | String |  |  | 
-| on_outside_range | *not set* | Object | Event to call when an entity gets outside the outside range. Can be an object with event and target properties, or a simple event string. | Blaze: `{"event":"switch_to_ranged","target":"self"}`, Drowned: `{"event":"minecraft:switch_to_ranged","target":"self"}` | 
-| on_outside_range (as String) | *not set* | String |  |  | 
-| on_vision_lost_inside_range | *not set* | Minecraft Event Trigger | Event to call when an entity exits visual range. Can specify 'event' for the name of the event and 'target' for the target of the event |  | 
-| outside_range | 5 | Decimal number | Maximum distance in blocks that another entity will be considered in the 'outside' range | Blaze: `3`, Drowned: `5` | 
+### Pushable Properties
 
-#### Samples
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| is_pushable | true | Boolean true/false | 엔티티가 다른 엔티티에게 밀릴 수 있는지 여부. | Allay: `true` |
+| is_pushable_by_piston | true | Boolean true/false | 엔티티가 피스톤에 안전하게 밀릴 수 있는지 여부. | Allay: `true` |
 
-#### Blaze
+### 예시
+
+##### [Allay](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/allay.json)
 
 
 ```json
-"minecraft:target_nearby_sensor": {
-  "on_inside_range": {
-    "event": "switch_to_melee",
-    "target": "self"
+"minecraft:pushable": {
+  "is_pushable": true,
+  "is_pushable_by_piston": true
+}
+```
+
+##### [Armor Stand](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/armor_stand.json)
+
+
+```json
+"minecraft:pushable": {
+  "is_pushable": false,
+  "is_pushable_by_piston": true
+}
+```
+
+## minecraft&#58;pushable_by_block
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_pushable_by_block.md`)
+
+셜커 상자나 피스톤 같은 블록이 엔티티를 밀 수 있게 한다.
+
+Allows the entity to be pushed by certain blocks, like Shulker Boxes and Pistons.
+
+> [!Note]
+> Added in 1.26.10 as part of the split of `minecraft:pushable` into `minecraft:pushable_by_block` (pistons and Shulker Boxes) and `minecraft:pushable_by_entity` (other entities). The legacy `minecraft:pushable` component is no longer parsed.
+
+> [!Note]
+> This item requires a format version of at least 1.26.10.
+
+### 예시
+
+##### [Armor Stand](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/armor_stand.json)
+
+
+```json
+"minecraft:pushable_by_block": {}
+```
+
+## minecraft&#58;pushable_by_entity
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_pushable_by_entity.md`)
+
+다른 엔티티가 이 엔티티를 밀 수 있게 한다.
+
+Allows an entity to be pushed by other entities.
+
+> [!Note]
+> Added in 1.26.10 as part of the split of `minecraft:pushable` into `minecraft:pushable_by_block` (pistons and Shulker Boxes) and `minecraft:pushable_by_entity` (other entities). The legacy `minecraft:pushable` component is no longer parsed.
+
+> [!Note]
+> Released out of beta in format version 1.26.30. The `presets` field replaces the previous flat property layout; the preset field `max_distance` was renamed from `kick_distance_threshold`.
+
+> [!Note]
+> This item requires a format version of at least 1.26.10.
+
+### Entity Pushable By Entity Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| presets | [] | Array of Presets items | 다른 엔티티에게 밀렸을 때 이 엔티티의 동작을 정의한다. "filter" 조건을 만족하는 첫 프리셋이 적용되며, 맞는 것이 없으면 기본 설정이 쓰인다. | Boat: `[{"filters":{"all_of":[{"test":"is_family","subject":"other","value":"sulfur_cube"},{"test":"enum_property","subject":"other","domain":"minecraft:sulfur_cube_archetype","operator":"not","value":"none"},{"test":"is_controlling_passenger_family","subject":"self","value":"player"}]},"push_mode":"none"},{"push_mode":"legacy_boat","strength_multiplier":0.1,"min_distance":0.55,"push_scale_self":0.5,"push_scale_other":0.25}]` |
+
+#### Entity PushableByEntityPreset
+
+##### Entity PushableByEntityPreset Properties
+
+**JSON path:** `presets`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| filters (Filters) | &#123;"AND":null,"NOT":null,"OR":null,"all":null,"all_of":null,"any":null,"any_of":null,"none_of":null&#125; | Filters item | 이 프리셋이 적용되기 위해 충족해야 하는 조건. |
+| filters (Alternate 1) | *not set* | Object |  |
+| kick_speed_scale | 2 | Decimal number | 발길질 힘을 정하기 위해 미는 엔티티의 이동 속도에 곱하는 배수. push_mode가 "ball"일 때만 쓴다. |
+| max_distance | 3.4028234663852886e+38 | Decimal number | 미는 힘이 적용되려면 밀리는 엔티티의 중심과 미는 엔티티의 충돌 사이 최대 수평 거리. 이보다 멀리 떨어진 엔티티는 서로 밀지 않는다. |
+| max_kick_speed | 0.5 | Decimal number | 미는 엔티티가 아무리 빠르게 움직여도 엔티티가 뒤로 밀리는 최대 속도. push_mode가 "ball"일 때만 쓴다. |
+| min_distance | 0.009999999776482582 | Decimal number | 미는 힘이 적용되려면 두 엔티티 중심 사이의 최소 수평 거리. 이보다 가까운 엔티티는 서로 밀지 않는다. |
+| min_kick_speed | 0 | Decimal number | 미는 엔티티가 아무리 느리게 움직여도 엔티티가 뒤로 밀리는 최소 속도. push_mode가 "ball"일 때만 쓴다. |
+| play_sound | false | Boolean true/false | (소리 이름과 달리) 다른 어떤 엔티티에게 밀려도 "pushed_by_player" 소리를 재생할지 여부. |
+| play_sound_cooldown_in_seconds | 0.20000000298023224 | Decimal number | 소리 사이의 쿨다운(초). 값이 작을수록 소리가 더 자주 난다. |
+| play_sound_impulse_threshold | 0.20000000298023224 | Decimal number | 밀림 소리를 내는 데 필요한 최소 속도 변화. 값이 작을수록 더 민감하다. |
+| push_mode | default | Push Mode choices | 엔티티에 적용되는 미는 벡터 계산의 종류를 정의한다. "none"은 엔티티를 밀 수 없다는 뜻이다. |
+| push_scale_other | 1 | Decimal number | 충돌할 때 이 엔티티가 상대 엔티티에게 가하는 미는 힘의 비율. 1.0은 전체 힘, 0.5는 절반이다. |
+| push_scale_self | 1 | Decimal number | 다른 엔티티와 충돌할 때 이 엔티티가 스스로 밀려나는 힘의 비율. 1.0은 전체 힘, 0.5는 절반이다. |
+| require_collision_overlap | true | Boolean true/false | true이면 충돌 상자가 겹치지 않는 한 엔티티들이 서로 밀지 않는다. |
+| strength_multiplier | 0.05000000074505806 | Decimal number | 미는 세기에 곱하는 배수. 값이 클수록 더 세게 민다. |
+| vertical_kick_multiplier | 0.30000001192092896 | Decimal number | 지면에 있는 엔티티가 밀릴 때 가해지는 위쪽 힘에 곱하는 배수. 0이면 엔티티가 납작하게 유지된다. push_mode가 "ball"일 때만 쓴다. |
+
+##### push_mode
+
+Defines the type of push vector calculation applied to the entity: - "none": The entity cannot be pushed. - "default": Standard push calculations used by most entities. - "legacy_boat": Legacy push calculations historically used by boats. Includes dampened forces and sneak-based cancellation. - "legacy_minecart": Legacy push calculations historically used by minecarts. Includes alignment-based collision handling and velocity averaging.- "ball": Push calculation resulting in a behavior similar to kicking a ball. The entity is propelled in the direction of the pusher’s movement, with force scaled by their speed.
+
+
+##### Filters
+
+###### Filters Properties
+
+**JSON path:** `presets > filters`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| domain | *not set* | Object | 테스트를 수행할 도메인. |
+| operator | *not set* | Object | 'value'와 함께 적용할 비교 방식. |
+| subject | *not set* | Object | 이 필터 테스트의 대상(subject). |
+| test | *not set* | String | 적용할 테스트의 이름. |
+| value | *not set* | Object | 테스트에서 비교할 값. |
+
+#### Push Mode choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| ball | Ball |  |
+| default | Default |  |
+| legacy_boat | Legacy boat |  |
+| legacy_minecart | Legacy minecart |  |
+| none | None |  |
+
+### 예시
+
+##### [Blaze](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/blaze.json)
+
+
+```json
+"minecraft:pushable_by_entity": {}
+```
+
+##### [Boat](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/boat.json)
+
+
+```json
+"minecraft:pushable_by_entity": {
+  "presets": [
+    {
+      "filters": {
+        "all_of": [
+          {
+            "test": "is_family",
+            "subject": "other",
+            "value": "sulfur_cube"
+          },
+          {
+            "test": "enum_property",
+            "subject": "other",
+            "domain": "minecraft:sulfur_cube_archetype",
+            "operator": "not",
+            "value": "none"
+          },
+          {
+            "test": "is_controlling_passenger_family",
+            "subject": "self",
+            "value": "player"
+          }
+        ]
+      },
+      "push_mode": "none"
+    },
+    {
+      "push_mode": "legacy_boat",
+      "strength_multiplier": 0.1,
+      "min_distance": 0.55,
+      "push_scale_self": 0.5,
+      "push_scale_other": 0.25
+    }
+  ]
+}
+```
+
+## minecraft&#58;raid_trigger
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_raid_trigger.md`)
+
+엔티티의 위치에서 습격 발생을 시도한다.
+
+Attempts to trigger a raid at the entity's location.
+
+### Raid Trigger Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| minecraft:raid_trigger | *not set* | Raid Trigger item |  | Player: `{"triggered_event":{"event":"minecraft:remove_raid_trigger","target":"self"}}` |
+| triggered_event | *not set* | Minecraft Event Trigger | 마을에서 습격이 시작되었을 때 실행할 이벤트. |  |
+
+#### Raid Trigger
+
+### 예시
+
+##### [Player](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/player.json)
+
+
+```json
+"minecraft:raid_trigger": {
+  "minecraft:raid_trigger": {
+    "triggered_event": {
+      "event": "minecraft:remove_raid_trigger",
+      "target": "self"
+    }
+  }
+}
+```
+
+## minecraft&#58;rail_movement
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_rail_movement.md`)
+
+엔티티의 레일 위 이동을 정의한다. 이 컴포넌트가 있으면 레일 위로만 움직인다.
+
+Defines the entity's movement on the rails. An entity with this component is only allowed to move on the rail.
+
+### Entity Rail Movement Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max_speed | 0.4000000059604645 | Decimal number | 엔티티가 레일 위에서 움직일 수 있는 최대 속도. |
+
+### 예시
+
+##### [Chest Minecart](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/chest_minecart.json)
+
+
+```json
+"minecraft:rail_movement": {}
+```
+
+## minecraft&#58;rail_sensor
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_rail_sensor.md`)
+
+광부 수레류 엔티티가 파워 레일을 감지하고 활성 상태 변화에 반응하게 한다.
+
+Enables minecart-type entities to detect powered rails and respond to activation state changes. Triggers events when the entity passes over activated or deactivated rails, enabling custom minecart behaviors like launching at boosted speed, stopping at braking rails, or triggering special effects at detector rails.
+
+### Rail Sensor Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| check_block_types | false | Boolean true/false | true이면 틱마다 이 엔티티가 on_deactivate 동작을 실행한다. | Command Block Minecart: `true` |
+| eject_on_activate | true | Boolean true/false | true이면 활성화된 레일을 지날 때 이 엔티티가 모든 탑승자를 내보낸다. | Minecart: `true` |
+| eject_on_deactivate | false | Boolean true/false | true이면 비활성화된 레일을 지날 때 이 엔티티가 모든 탑승자를 내보낸다. |  |
+| on_activate | *not set* | Minecraft Event Trigger | 레일이 활성화되었을 때 호출할 이벤트. | Command Block Minecart: `{"event":"minecraft:command_block_activate"}`, Hopper Minecart: `{"event":"minecraft:hopper_deactivate"}`, Tnt Minecart: `{"event":"minecraft:on_prime","filters":{"all_of":[{"domain":"tntexplodes","operator":"==","test":"is_game_rule","value":true}]}}` |
+| on_deactivate | *not set* | Minecraft Event Trigger | 레일이 비활성화되었을 때 호출할 이벤트. | Command Block Minecart: `{"event":"minecraft:command_block_deactivate"}`, Hopper Minecart: `{"event":"minecraft:hopper_activate"}` |
+| tick_command_block_on_activate | true | Boolean true/false | true이면 활성화된 레일을 지날 때 명령 블록이 틱을 시작한다. | Command Block Minecart: `true` |
+| tick_command_block_on_deactivate | false | Boolean true/false | false이면 비활성화된 레일을 지날 때 명령 블록이 틱을 멈춘다. |  |
+
+### 예시
+
+##### [Command Block Minecart](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/command_block_minecart.json)
+
+At /minecraft:entity/component_groups/minecraft:command_block_active/minecraft:rail_sensor/: 
+
+```json
+"minecraft:rail_sensor": {
+  "check_block_types": true,
+  "on_deactivate": {
+    "event": "minecraft:command_block_deactivate"
   },
-  "inside_range": 2,
-  "must_see": true,
-  "outside_range": 3,
-  "on_outside_range": {
-    "event": "switch_to_ranged",
-    "target": "self"
-  }
+  "eject_on_activate": false,
+  "eject_on_deactivate": false,
+  "tick_command_block_on_activate": true,
+  "tick_command_block_on_deactivate": false
 }
 ```
 
-#### Drowned
-
+At /minecraft:entity/component_groups/minecraft:command_block_inactive/minecraft:rail_sensor/: 
 
 ```json
-"minecraft:target_nearby_sensor": {
-  "inside_range": 3,
-  "on_inside_range": {
-    "event": "minecraft:switch_to_melee",
-    "target": "self"
+"minecraft:rail_sensor": {
+  "check_block_types": false,
+  "eject_on_activate": false,
+  "eject_on_deactivate": false,
+  "on_activate": {
+    "event": "minecraft:command_block_activate"
   },
-  "on_outside_range": {
-    "event": "minecraft:switch_to_ranged",
-    "target": "self"
-  },
-  "outside_range": 5
+  "tick_command_block_on_activate": true,
+  "tick_command_block_on_deactivate": false
 }
 ```
 
+##### [Hopper Minecart](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/hopper_minecart.json)
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_offspring.md`)
-
-
-### Entity Documentation - minecraft:offspring
-
-Defines the way an entity can create a born offspring.
-
-
-#### Offspring Properties
-
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| blend_attributes | true | Boolean true/false | If true, the entities will blend their attributes in the offspring after they breed. |  | 
-| deny_parents_variant | *not set* | Array of Deny Parents Variant items | Determines how likely the baby of parents with the same variant will deny that variant and take a random variant within the given range instead. |  | 
-| inherit_tamed | true | Boolean true/false | If true, the babies will be automatically tamed if its parents are |  | 
-| mutation_factor | *not set* | Array of Mutation Factor items | Determines how likely the babies are to NOT inherit one of their parent's variances. Values are between 0.0 and 1.0, with a higher number meaning more likely to mutate. |  | 
-| offspring_pairs | *not set* | Array of strings | The map of entity to offspring definitions that this entity can make offspring with. | Chicken: `{"minecraft:chicken":"minecraft:chicken"}`, Cow: `{"minecraft:cow":"minecraft:cow"}`, Dolphin: `{"minecraft:dolphin":"minecraft:dolphin"}` | 
-| parent_centric_attribute_blending | *not set* | Array of strings | List of attributes that should benefit from parent centric attribute blending. For example, horses blend their health, movement, and jump_strength in their offspring. |  | 
-| property_inheritance | *not set* | Array of strings | List of Entity Properties that should be inherited from the parent entities and potentially mutated. | Chicken: `{"minecraft:climate_variant":{}}` | 
-| random_extra_variant_mutation_interval | 0 | Range of integers | Range used to determine random extra variant. |  | 
-| random_variant_mutation_interval | 0 | Range of integers | Range used to determine random variant. |  | 
-
-##### Deny Parents Variant
-Determines how likely the baby of parents with the same variant will deny that variant and take a random variant within the given range instead.
-
-
-#### Deny Parents Variant Properties
-
-**JSON path:** `deny_parents_variant`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| chance | 0 | Decimal number | The percentage chance of denying the parents' variant. | 
-| max_variant | 0 | Integer number | The inclusive maximum of the variant range. | 
-| min_variant | 0 | Integer number | The inclusive minimum of the variant range. | 
-
-##### Mutation Factor
-Determines how likely the babies are to NOT inherit one of their parent's variances. Values are between 0.0 and 1.0, with a higher number meaning more likely to mutate.
-
-
-#### Mutation Factor Properties
-
-**JSON path:** `mutation_factor`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| color | 0 | Decimal number | The percentage chance of the offspring getting its color as if spawned rather than inheriting color from its parents. | 
-| extra_variant | 0 | Decimal number | The percentage chance of a mutation on the entity's extra variant type. | 
-| variant | 0 | Decimal number | The percentage chance of a mutation on the entity's variant type. | 
-
-#### Samples
-
-#### Chicken
-
+At /minecraft:entity/component_groups/minecraft:hopper_active/minecraft:rail_sensor/: 
 
 ```json
-"minecraft:offspring": {
-  "offspring_pairs": {
-    "minecraft:chicken": "minecraft:chicken"
-  },
-  "property_inheritance": {
-    "minecraft:climate_variant": {}
+"minecraft:rail_sensor": {
+  "on_activate": {
+    "event": "minecraft:hopper_deactivate"
   }
 }
 ```
 
-#### Cow
-
+At /minecraft:entity/component_groups/minecraft:hopper_inactive/minecraft:rail_sensor/: 
 
 ```json
-"minecraft:offspring": {
-  "offspring_pairs": {
-    "minecraft:cow": "minecraft:cow"
-  },
-  "property_inheritance": {
-    "minecraft:climate_variant": {}
+"minecraft:rail_sensor": {
+  "on_deactivate": {
+    "event": "minecraft:hopper_activate"
   }
 }
 ```
 
-#### Dolphin
+##### [Minecart](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/minecart.json)
 
 
 ```json
-"minecraft:offspring": {
-  "offspring_pairs": {
-    "minecraft:dolphin": "minecraft:dolphin"
+"minecraft:rail_sensor": {
+  "eject_on_activate": true
+}
+```
+
+##### [Tnt Minecart](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/tnt_minecart.json)
+
+At /minecraft:entity/component_groups/minecraft:inactive/minecraft:rail_sensor/: 
+
+```json
+"minecraft:rail_sensor": {
+  "on_activate": {
+    "event": "minecraft:on_prime",
+    "filters": {
+      "all_of": [
+        {
+          "domain": "tntexplodes",
+          "operator": "==",
+          "test": "is_game_rule",
+          "value": true
+        }
+      ]
+    }
   }
 }
 ```
 
-#### Drowned
+At /minecraft:entity/component_groups/minecraft:instant_explode_tnt/minecraft:rail_sensor/: 
+
+```json
+"minecraft:rail_sensor": {}
+```
+
+## minecraft&#58;ravager_blocked
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_ravager_blocked.md`)
+
+파괴수의 근접 공격이 막혔을 때의 반응을 정의한다.
+
+Defines the ravager's response to their melee attack being blocked.
+
+### Ravager Blocked Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| knockback_strength | 3 | Decimal number | 막는 엔티티가 넉백되는 세기. |
+| reaction_choices | [ ] | Array of strings | 근접 공격이 막혔을 때 가중치가 있는 반응 목록. |
+
+### 예시
+
+## minecraft&#58;reflect_projectiles
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_reflect_projectiles.md`)
+
+[실험적] 엔티티가 투사체를 반사하게 한다.
+
+[EXPERIMENTAL] Allows an entity to reflect projectiles.
+
+### Reflect Projectiles Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| azimuth_angle | 0 | String | [실험적] 투사체의 y축 회전에 더할 각도(도)를 정의하는 Molang 식. | Breeze: `"180.0 + Math.random(-20.0, 20.0)"` |
+| elevation_angle | 0 | String | [실험적] 투사체의 x축 회전에 더할 각도(도)를 정의하는 Molang 식. |  |
+| reflected_projectiles | *not set* | Array of strings | [실험적] 엔티티에 맞았을 때 반사되는 투사체 종류를 정의하는 문자열 배열. | Breeze: `["xp_bottle","thrown_trident","shulker_bullet","dragon_fireball","arrow","snowball","egg","fireball","splash_potion","ender_pearl","wither_skull","wither_skull_dangerous","small_fireball","lingering_potion","llama_spit","fireworks_rocket","fishing_hook"]` |
+| reflection_scale | 1 | String | [실험적] 반사된 투사체의 속도 배율을 정의하는 Molang 식. 1보다 작으면 속도가 줄고 1보다 크면 늘어난다. | Breeze: `"0.5"` |
+| reflection_sound | reflect | String | [실험적] 투사체가 반사될 때 재생할 소리 이벤트의 이름을 정의하는 문자열. 지정하지 않으면 "reflect"다. |  |
+
+### 예시
+
+##### [Breeze](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/breeze.json)
 
 
 ```json
-"minecraft:offspring": {
-  "offspring_pairs": {
-    "minecraft:drowned": "minecraft:drowned"
-  }
+"minecraft:reflect_projectiles": {
+  "azimuth_angle": "180.0 + Math.random(-20.0, 20.0)",
+  "reflected_projectiles": [
+    "xp_bottle",
+    "thrown_trident",
+    "shulker_bullet",
+    "dragon_fireball",
+    "arrow",
+    "snowball",
+    "egg",
+    "fireball",
+    "splash_potion",
+    "ender_pearl",
+    "wither_skull",
+    "wither_skull_dangerous",
+    "small_fireball",
+    "lingering_potion",
+    "llama_spit",
+    "fireworks_rocket",
+    "fishing_hook"
+  ],
+  "reflection_scale": "0.5"
 }
 ```
 
-#### Frog
+## minecraft&#58;remove_in_peaceful
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_remove_in_peaceful.md`)
+
+평화로움 난이도에서 존재할 수 없는 엔티티임을 나타낸다.
+
+Denotes entities that are not allowed to exist in "Peaceful" difficulty.
+
+> [!Note]
+> This item requires a format version of at least 1.21.90.
+
+### 예시
+
+##### [Blaze](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/blaze.json)
 
 
 ```json
-"minecraft:offspring": {
-  "offspring_pairs": {
-    "minecraft:frog": "minecraft:tadpole"
-  }
-}
+"minecraft:remove_in_peaceful": {}
 ```
 
+## minecraft&#58;renders_when_invisible
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_home.md`)
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_renders_when_invisible.md`)
 
+투명해도 엔티티를 렌더링하게 한다. 구체적 렌더링은 `client_entity`에서 정한다.
 
-### Entity Documentation - minecraft:home
+When set, the entity will render even when invisible. Appropriate rendering behavior can then be specified in the corresponding "minecraft:client_entity".
 
-Saves a home position for when the entity is spawned. This component allows entities like bees to remember and return to a specific location such as a hive or nest.
+### 예시
 
-
-#### Entity Home Properties
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| home_block_list | [] | Array of strings | Optional list of blocks that can be considered a valid home. | 
-| restriction_radius | 0 | Integer number | Optional radius that the entity will be restricted to in relation to its home. | 
-| restriction_type | none | Restriction Type choices | Defines how the entity will be restricted to its home position. | 
-
-##### home_block_list
-
-Optional list of blocks that can be considered a valid home. If no such block longer exists at that position, the home restriction is removed. Example syntax: minecraft:sand. Not supported: minecraft:sand:1.
-
-##### restriction_type
-
-Defines how the entity will be restricted to its home position. Valid values are: 'none' (no restriction), 'random_movement' (restricts random wandering to be near home), and 'all_movement' (restricts all movement to be near home, though entities can always move closer to home if they are too far away). This item requires a format version of at least 1.21.40.
+##### [Cave Spider](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/cave_spider.json)
 
 
-##### Restriction Type choices
-
-|Value       |Title |Description |
-|:-----------|:-----|:-----------|
-| all_movement | All movement | |
-| none | None | |
-| random_movement | Random movement | |
-
-#### Samples
-
+```json
+"minecraft:renders_when_invisible": {}
+```

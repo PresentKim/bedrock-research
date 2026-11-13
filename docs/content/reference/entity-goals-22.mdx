@@ -1,0 +1,563 @@
+---
+title: 엔티티 AI 목표 레퍼런스 (22/41)
+description: MS Learn AI 목표(behavior) 문서 6개(minecraft:behavior.leap_at_target ~ minecraft:behavior.make_love). 속성 표와 예시 JSON을 원문대로 담았다.
+sidebar_position: 221
+sources:
+  - ms-learn
+---
+
+# 엔티티 AI 목표 레퍼런스 (22/41)
+
+MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 AI 목표(behavior) 문서를 옮긴 쪽이다. 설명은 한국어로 옮기고 ID, 속성 이름, 유형, 기본값, JSON은 원문 그대로 두었다. 전체 목록은 [색인](./entity-index.mdx)에 있다.
+
+## minecraft&#58;behavior.leap_at_target
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityGoals/minecraftBehavior_leap_at_target.md`)
+
+몬스터가 대상에게 뛰어올라 공격하게 한다. 적대적인 몹만 쓸 수 있고 대상이 필요하다.
+
+Allows monsters to jump at and attack their target. Can only be used by hostile mobs.
+
+> [!Note]
+> Requires a target in order to work properly. Entities can generate targets via one of the following behaviors:
+> 
+> * Nearest Attackable Target Behavior (minecraft:behavior.nearest_attackable_target)
+> * Hurt By Target Behavior (minecraft:behavior.hurt_by_target)
+
+### Entity Leap At Target Behavior Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| control_flags | [] | Control Flags choices |  |  |
+| must_be_on_ground | true | Boolean true/false | true이면 몹이 지면에 있을 때만 대상에게 뛰어오른다. false이면 이미 공중에 있어도 뛰어오를 수 있다. |  |
+| priority | 0 | Integer number | 0에 가까울수록 우선순위가 높아진다. 우선순위가 높을수록 이 행동(목표)이 더 먼저 실행된다. | Cave Spider: `4` |
+| set_persistent | false | Boolean true/false | 플레이어를 대상으로 삼을 때 액터가 유지(persist)되게 한다. |  |
+| yd | 0 | Decimal number | 몹이 대상에게 뛰어오를 때의 점프 높이(블록). | Cave Spider: `0.4` |
+
+#### Control Flags choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| jump | Jump |  |
+| look | Look |  |
+| move | Move |  |
+
+### 예시
+
+##### [Cave Spider](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/cave_spider.json)
+
+At /minecraft:entity/component_groups/minecraft:spider_angry/minecraft:behavior.leap_at_target/: 
+
+```json
+"minecraft:behavior.leap_at_target": {
+  "must_be_on_ground": false,
+  "priority": 4,
+  "yd": 0.4
+}
+```
+
+## minecraft&#58;behavior.look_at_entity
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityGoals/minecraftBehavior_look_at_entity.md`)
+
+`head` 본 포즈를 제한 범위 안에서 돌려 특정 엔티티를 바라보게 한다.
+
+Compels an entity to look at a specific entity by rotating the `head` bone pose within a set limit.
+
+> [!Note]
+> In 1.26.0 the schema is stricter and rejects invalid JSON. The `min_look_time` and `max_look_time` fields are deprecated and replaced by a single `look_time` range (with `min` and `max`). Existing uses of `min_look_time` / `max_look_time` are upgraded automatically.
+
+### Entity Look At Entity Behavior Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| angle_of_view_horizontal | 360 | Integer number | 몹이 Y축(좌우)으로 돌려 볼 수 있는 각도(도). 값은 360 이하여야 한다. | Ravager: `45` |
+| angle_of_view_vertical | 360 | Integer number | 몹이 X축(상하)으로 돌려 볼 수 있는 각도(도). 값은 360 이하여야 한다. |  |
+| control_flags | [] | Control Flags choices |  |  |
+| filters (Filters) | &#123;"AND":null,"NOT":null,"OR":null,"all":null,"all_of":null,"any":null,"any_of":null,"none_of":null&#125; | Filters item | 이 몹이 엔티티를 바라보는 조건을 정하는 필터. | Evocation Illager: `{"test":"is_family","subject":"other","value":"mob"}` |
+| filters (Alternate 1) | *not set* | Object |  |  |
+| look_distance | 8 | Decimal number | 엔티티가 가장 가까운 엔티티를 바라보는 블록 거리. | Evocation Illager: `8`, Vex: `6` |
+| look_time | &#123;"max":4,"min":2&#125; | Look Time item | 가장 가까운 엔티티를 바라보는 시간 범위. |  |
+| priority | 0 | Integer number | 0에 가까울수록 우선순위가 높아진다. 우선순위가 높을수록 이 행동(목표)이 더 먼저 실행된다. | Evocation Illager: `10`, Vex: `9` |
+| probability | 0.019999999552965164 | Decimal number | 대상을 바라볼 확률. 1.00이 100%다. 값은 1 이하여야 한다. | Vex: `0.02` |
+
+#### Control Flags choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| jump | Jump |  |
+| look | Look |  |
+| move | Move |  |
+
+#### Filters
+
+##### Filters Properties
+
+**JSON path:** `filters`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| domain | *not set* | Object | 테스트를 수행할 도메인. |
+| operator | *not set* | Object | 'value'와 함께 적용할 비교 방식. |
+| subject | *not set* | Object | 이 필터 테스트의 대상(subject). |
+| test | *not set* | String | 적용할 테스트의 이름. |
+| value | *not set* | Object | 테스트에서 비교할 값. |
+
+#### Legacy FloatRange
+
+##### Legacy FloatRange Properties
+
+**JSON path:** `look_time`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max | 0 | Decimal number |  |
+| min | 0 | Decimal number |  |
+
+### 예시
+
+##### [Vex](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/vex.json)
+
+
+```json
+"minecraft:behavior.look_at_entity": {
+  "priority": 9,
+  "look_distance": 6,
+  "probability": 0.02,
+  "filters": {
+    "test": "is_family",
+    "subject": "other",
+    "value": "mob"
+  }
+}
+```
+
+##### [Evocation Illager](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/evocation_illager.json)
+
+
+```json
+"minecraft:behavior.look_at_entity": {
+  "priority": 10,
+  "look_distance": 8,
+  "filters": {
+    "test": "is_family",
+    "subject": "other",
+    "value": "mob"
+  }
+}
+```
+
+##### [Ravager](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/ravager.json)
+
+
+```json
+"minecraft:behavior.look_at_entity": {
+  "priority": 10,
+  "look_distance": 8,
+  "angle_of_view_horizontal": 45,
+  "filters": {
+    "test": "is_family",
+    "subject": "other",
+    "value": "mob"
+  }
+}
+```
+
+## minecraft&#58;behavior.look_at_player
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityGoals/minecraftBehavior_look_at_player.md`)
+
+`head` 본 포즈를 제한 범위 안에서 돌려 플레이어를 바라보게 한다.
+
+Compels an entity to look at the player by rotating the `head` bone pose within a set limit.
+
+> [!Note]
+> In 1.26.0 the schema is stricter and rejects invalid JSON. The `min_look_time` and `max_look_time` fields are deprecated and replaced by a single `look_time` range (with `min` and `max`). Existing uses of `min_look_time` / `max_look_time` are upgraded automatically.
+
+### Entity Look At Player Behavior Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| angle_of_view_horizontal | 360 | Integer number | 몹이 Y축(좌우)으로 돌려 볼 수 있는 각도(도). 값은 360 이하여야 한다. | Ravager: `45` |
+| angle_of_view_vertical | 360 | Integer number | 몹이 X축(상하)으로 돌려 볼 수 있는 각도(도). 값은 360 이하여야 한다. |  |
+| control_flags | [] | Control Flags choices |  |  |
+| look_distance | 8 | Decimal number | 엔티티가 가장 가까운 엔티티를 바라보는 블록 거리. | Bogged: `8`, Breeze: `16`, Cave Spider: `6` |
+| look_time | &#123;"max":4,"min":2&#125; | Look Time item | 가장 가까운 엔티티를 바라보는 시간 범위. | Zombie Horse: `[2,4]`, Campghost: `[0,100]` |
+| max_look_time | *not set* | Decimal number |  | Armadillo: `80` |
+| min_look_time | *not set* | Decimal number |  | Armadillo: `40` |
+| priority | 0 | Integer number | 0에 가까울수록 우선순위가 높아진다. 우선순위가 높을수록 이 행동(목표)이 더 먼저 실행된다. | Allay: `8`, Armadillo: `7`, Axolotl: `10` |
+| probability | 0.019999999552965164 | Decimal number | 대상을 바라볼 확률. 1.00이 100%다. 값은 1 이하여야 한다. | Allay: `0.02`, Elder Guardian: `0.01`, Enderman: `8` |
+| target_distance | *not set* | Decimal number |  | Allay: `6` |
+
+#### Control Flags choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| jump | Jump |  |
+| look | Look |  |
+| move | Move |  |
+
+#### Legacy FloatRange
+
+##### Legacy FloatRange Properties
+
+**JSON path:** `look_time`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max | 0 | Decimal number |  |
+| min | 0 | Decimal number |  |
+
+### 예시
+
+##### [Allay](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/allay.json)
+
+
+```json
+"minecraft:behavior.look_at_player": {
+  "priority": 8,
+  "target_distance": 6,
+  "probability": 0.02
+}
+```
+
+##### [Bogged](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/bogged.json)
+
+
+```json
+"minecraft:behavior.look_at_player": {
+  "priority": 7,
+  "look_distance": 8
+}
+```
+
+##### [Breeze](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/breeze.json)
+
+
+```json
+"minecraft:behavior.look_at_player": {
+  "priority": 7,
+  "look_distance": 16
+}
+```
+
+##### [Cave Spider](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/cave_spider.json)
+
+
+```json
+"minecraft:behavior.look_at_player": {
+  "priority": 7,
+  "look_distance": 6,
+  "probability": 0.02
+}
+```
+
+##### [Armadillo](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/armadillo.json)
+
+
+```json
+"minecraft:behavior.look_at_player": {
+  "priority": 7,
+  "target_distance": 6,
+  "probability": 0.02,
+  "min_look_time": 40,
+  "max_look_time": 80
+}
+```
+
+##### [Axolotl](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/axolotl.json)
+
+
+```json
+"minecraft:behavior.look_at_player": {
+  "priority": 10,
+  "target_distance": 6,
+  "probability": 0.02
+}
+```
+
+##### [Camel](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/camel.json)
+
+
+```json
+"minecraft:behavior.look_at_player": {
+  "priority": 7,
+  "target_distance": 6,
+  "probability": 0.02
+}
+```
+
+##### [Cat](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/cat.json)
+
+
+```json
+"minecraft:behavior.look_at_player": {
+  "priority": 9
+}
+```
+
+##### [Copper Golem](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/copper_golem.json)
+
+
+```json
+"minecraft:behavior.look_at_player": {
+  "priority": 6,
+  "look_distance": 6,
+  "probability": 0.02
+}
+```
+
+##### [Creeper](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/creeper.json)
+
+
+```json
+"minecraft:behavior.look_at_player": {
+  "priority": 6,
+  "look_distance": 8
+}
+```
+
+##### [Dolphin](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/dolphin.json)
+
+
+```json
+"minecraft:behavior.look_at_player": {
+  "priority": 8,
+  "look_distance": 6
+}
+```
+
+##### [Drowned](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/drowned.json)
+
+
+```json
+"minecraft:behavior.look_at_player": {
+  "priority": 8,
+  "look_distance": 6,
+  "probability": 0.02
+}
+```
+
+## minecraft&#58;behavior.look_at_target
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityGoals/minecraftBehavior_look_at_target.md`)
+
+머리 본 포즈를 제한 범위 안에서 돌려 대상을 바라보게 한다.
+
+Compels an entity to look at the target by rotating the head bone pose within a set limit.
+
+> [!Note]
+> In 1.26.0 the schema is stricter and rejects invalid JSON. The `min_look_time` and `max_look_time` fields are deprecated and replaced by a single `look_time` range (with `min` and `max`). Existing uses of `min_look_time` / `max_look_time` are upgraded automatically.
+
+> [!Note]
+> Requires a target in order to work properly. Entities can generate targets via one of the following behaviors:
+> 
+> * Nearest Attackable Target Behavior (minecraft:behavior.nearest_attackable_target)
+> * Hurt By Target Behavior (minecraft:behavior.hurt_by_target)
+
+### Entity Look At Target Behavior Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| angle_of_view_horizontal | 360 | Integer number | 몹이 Y축(좌우)으로 돌려 볼 수 있는 각도(도). 값은 360 이하여야 한다. |  |
+| angle_of_view_vertical | 360 | Integer number | 몹이 X축(상하)으로 돌려 볼 수 있는 각도(도). 값은 360 이하여야 한다. |  |
+| control_flags | [] | Control Flags choices |  |  |
+| look_distance | 8 | Decimal number | 엔티티가 가장 가까운 엔티티를 바라보는 블록 거리. | Axe Turret: `12`, Bow Turret: `19`, Crossbow Turret: `15` |
+| look_time | &#123;"max":4,"min":2&#125; | Look Time item | 가장 가까운 엔티티를 바라보는 시간 범위. | Axe Turret: `[1,5]` |
+| priority | 0 | Integer number | 0에 가까울수록 우선순위가 높아진다. 우선순위가 높을수록 이 행동(목표)이 더 먼저 실행된다. | Wither: `5`, Axe Turret: `2`, Bow Turret: `1` |
+| probability | 0.019999999552965164 | Decimal number | 대상을 바라볼 확률. 1.00이 100%다. 값은 1 이하여야 한다. | Axe Turret: `1` |
+
+#### Control Flags choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| jump | Jump |  |
+| look | Look |  |
+| move | Move |  |
+
+#### Legacy FloatRange
+
+##### Legacy FloatRange Properties
+
+**JSON path:** `look_time`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max | 0 | Decimal number |  |
+| min | 0 | Decimal number |  |
+
+### 예시
+
+##### [Wither](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/wither.json)
+
+
+```json
+"minecraft:behavior.look_at_target": {
+  "priority": 5
+}
+```
+
+##### [Axe Turret](https://github.com/microsoft/minecraft-samples/tree/main/casual_creator/gray_wave/behavior_packs/mikeamm_gwve/entities/axe_turret.behavior.json)
+
+
+```json
+"minecraft:behavior.look_at_target": {
+  "priority": 2,
+  "look_distance": 12,
+  "probability": 1,
+  "look_time": [
+    1,
+    5
+  ]
+}
+```
+
+##### [Bow Turret](https://github.com/microsoft/minecraft-samples/tree/main/casual_creator/gray_wave/behavior_packs/mikeamm_gwve/entities/bow_turret.behavior.json)
+
+
+```json
+"minecraft:behavior.look_at_target": {
+  "priority": 1,
+  "look_distance": 19,
+  "probability": 1,
+  "look_time": [
+    1,
+    5
+  ]
+}
+```
+
+##### [Crossbow Turret](https://github.com/microsoft/minecraft-samples/tree/main/casual_creator/gray_wave/behavior_packs/mikeamm_gwve/entities/crossbow_turret.behavior.json)
+
+
+```json
+"minecraft:behavior.look_at_target": {
+  "priority": 1,
+  "look_distance": 15,
+  "probability": 1,
+  "look_time": [
+    1,
+    5
+  ]
+}
+```
+
+##### [Shbullet Turret](https://github.com/microsoft/minecraft-samples/tree/main/casual_creator/gray_wave/behavior_packs/mikeamm_gwve/entities/shbullet_turret.behavior.json)
+
+
+```json
+"minecraft:behavior.look_at_target": {
+  "priority": 1,
+  "look_distance": 12,
+  "probability": 1,
+  "look_time": [
+    1,
+    5
+  ]
+}
+```
+
+## minecraft&#58;behavior.look_at_trading_player
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityGoals/minecraftBehavior_look_at_trading_player.md`)
+
+현재 거래 중인 플레이어를 바라보게 한다. 거래 능력이 필요하다.
+
+Compels an entity to look at the player that is currently trading with the entity.
+
+> [!Note]
+> Requires the ability to trade in order to work properly.
+
+> [!Note]
+> In 1.26.0 the schema is stricter and rejects invalid JSON. The `min_look_time` and `max_look_time` fields are deprecated and replaced by a single `look_time` range (with `min` and `max`). Existing uses of `min_look_time` / `max_look_time` are upgraded automatically.
+
+### Entity Look At Trading Player Behavior Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| angle_of_view_horizontal | 360 | Integer number | 몹이 Y축(좌우)으로 돌려 볼 수 있는 각도(도). 값은 360 이하여야 한다. |  |
+| angle_of_view_vertical | 360 | Integer number | 몹이 X축(상하)으로 돌려 볼 수 있는 각도(도). 값은 360 이하여야 한다. |  |
+| control_flags | [] | Control Flags choices |  |  |
+| look_distance | 8 | Decimal number | 엔티티가 가장 가까운 엔티티를 바라보는 블록 거리. |  |
+| look_time | &#123;"max":4,"min":2&#125; | Look Time item | 가장 가까운 엔티티를 바라보는 시간 범위. |  |
+| priority | 0 | Integer number | 0에 가까울수록 우선순위가 높아진다. 우선순위가 높을수록 이 행동(목표)이 더 먼저 실행된다. | Villager: `2`, Villager v2: `7`, Wandering Trader: `4` |
+| probability | 0.019999999552965164 | Decimal number | 대상을 바라볼 확률. 1.00이 100%다. 값은 1 이하여야 한다. |  |
+
+#### Control Flags choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| jump | Jump |  |
+| look | Look |  |
+| move | Move |  |
+
+#### Legacy FloatRange
+
+##### Legacy FloatRange Properties
+
+**JSON path:** `look_time`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max | 0 | Decimal number |  |
+| min | 0 | Decimal number |  |
+
+### 예시
+
+##### [Villager](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/villager.json)
+
+
+```json
+"minecraft:behavior.look_at_trading_player": {
+  "priority": 2
+}
+```
+
+##### [Villager v2](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/villager_v2.json)
+
+
+```json
+"minecraft:behavior.look_at_trading_player": {
+  "priority": 7
+}
+```
+
+##### [Wandering Trader](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/wandering_trader.json)
+
+
+```json
+"minecraft:behavior.look_at_trading_player": {
+  "priority": 4
+}
+```
+
+## minecraft&#58;behavior.make_love
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityGoals/minecraftBehavior_make_love.md`)
+
+주민이 짝을 찾아 새 주민을 낳게 한다. 주민에게만 쓸 수 있다.
+
+Allows the villager to look for a mate to spawn other villagers with.
+
+> [!Note]
+> Can only be used on the following type of entity:
+> 
+> * Villager (minecraft:villager)
+> 
+
+### Entity Make Love Behavior Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| control_flags | [] | Control Flags choices |  |
+| priority | 0 | Integer number | 0에 가까울수록 우선순위가 높아진다. 우선순위가 높을수록 이 행동(목표)이 더 먼저 실행된다. |
+
+#### Control Flags choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| jump | Jump |  |
+| look | Look |  |
+| move | Move |  |
+
+### 예시

@@ -1,521 +1,570 @@
 ---
-title: 엔티티 컴포넌트 레퍼런스(주요 항목) (12/15)
-description: MS Learn 엔티티 컴포넌트·이벤트·필터 목록과 주요 컴포넌트.
-sidebar_position: 101
+title: 엔티티 컴포넌트 레퍼런스 (12/23)
+description: MS Learn 컴포넌트 문서 12개(minecraft:navigation.generic ~ minecraft:player.level). 속성 표와 예시 JSON을 원문대로 담았다.
+sidebar_position: 111
 sources:
   - ms-learn
 ---
 
-# 엔티티 컴포넌트 레퍼런스(주요 항목) (12/15)
+# 엔티티 컴포넌트 레퍼런스 (12/23)
 
-MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 레퍼런스를 발췌한 쪽이다. 원문의 상대 링크는 제거했다.
+MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 컴포넌트 문서를 옮긴 쪽이다. 설명은 한국어로 옮기고 ID, 속성 이름, 유형, 기본값, JSON은 원문 그대로 두었다. 전체 목록은 [색인](./entity-index.mdx)에 있다.
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_preferred_path.md`)
+## minecraft&#58;navigation.generic
 
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_navigation.generic.md`)
 
-### Entity Documentation - minecraft:preferred_path
+걷기, 헤엄, 비행, 오르기, 블록 오르내리기를 모두 포함한 경로를 만들게 한다.
 
-Specifies costing information for mobs that prefer to walk on preferred paths.
+Allows this entity to generate paths by walking, swimming, flying and/or climbing around and jumping up and down a block.
 
+### Generic Navigation Properties
 
-#### Entity Preferred Path Properties
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| avoid_damage_blocks | false | Boolean true/false | 경로를 찾을 때 피해를 주는 블록을 피하도록 길 찾기에 알린다. | Frog: `true` |
+| avoid_portals | false | Boolean true/false | 경로를 찾을 때 (네더 포털 같은) 포털을 피하도록 길 찾기에 알린다. |  |
+| avoid_sun | false | Boolean true/false | 경로를 만들 때 햇빛에 노출된 칸을 피할지 정한다. |  |
+| avoid_water | false | Boolean true/false | 경로를 만들 때 물을 피하도록 길 찾기에 알린다. |  |
+| blocks_to_avoid | *not set* | Array of strings | 경로를 만들 때 피할 블록을 길 찾기에 알린다. |  |
+| can_breach | false | Boolean true/false | (돌고래처럼) 물 밖으로 뛰어오를 수 있는지 길 찾기에 알린다. | Elder Guardian: `true` |
+| can_break_doors | false | Boolean true/false | 닫힌 문을 부수고 지나가는 경로를 만들 수 있다고 길 찾기에 알린다. |  |
+| can_jump | true | Boolean true/false | 블록 위로 뛰어오를 수 있는지 길 찾기에 알린다. |  |
+| can_open_doors | false | Boolean true/false | AI가 문을 열 것이라 가정하고 닫힌 문을 지나는 경로를 만들 수 있다고 길 찾기에 알린다. |  |
+| can_open_iron_doors | false | Boolean true/false | AI가 문을 열 것이라 가정하고 닫힌 철문을 지나는 경로를 만들 수 있다고 길 찾기에 알린다. |  |
+| can_pass_doors | true | Boolean true/false | 문을 지나는 경로를 만들 수 있는지 여부. |  |
+| can_path_from_air | false | Boolean true/false | 공중에 있을 때도 경로 탐색을 시작할 수 있다고 길 찾기에 알린다. |  |
+| can_path_over_lava | false | Boolean true/false | 용암 표면 위를 이동할 수 있는지 길 찾기에 알린다. |  |
+| can_path_over_water | false | Boolean true/false | 물 표면 위를 이동할 수 있는지 길 찾기에 알린다. | Frog: `true` |
+| can_sink | true | Boolean true/false | 물속에서 중력에 끌려 내려가는지 길 찾기에 알린다. |  |
+| can_swim | false | Boolean true/false | 물속 어디든 경로를 만들 수 있는지, 그 경로에서 수영 애니메이션을 재생하는지 길 찾기에 알린다. | Elder Guardian: `true` |
+| can_walk | true | Boolean true/false | 물 밖 지면 위를 걸을 수 있는지 길 찾기에 알린다. | Frog: `true` |
+| can_walk_in_lava | false | Boolean true/false | 지면을 걷듯 용암 속을 이동할 수 있는지 길 찾기에 알린다. |  |
+| is_amphibious | false | Boolean true/false | 물속 바닥 위를 걸을 수 있는지 길 찾기에 알린다. | Elder Guardian: `true` |
+| using_door_annotation | *not set* | String |  | Elder Guardian: `true` |
 
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| default_block_cost | 0 | Decimal number | Cost for non - preferred blocks | Iron Golem: `1.5` | 
-| jump_cost | 0 | Decimal number | Added cost for jumping up a node | Iron Golem: `5` | 
-| max_fall_blocks | 3 | Integer number | Distance mob can fall without taking damage | Iron Golem: `1`, Warden: `20` | 
-| preferred_path_blocks | [] | Array of Preferred Path Blocks items | A list of block types with their associated pathfinding costs. Each entry specifies blocks and their cost value. | Iron Golem: `[{"blocks":["grass_path"],"cost":0},{"blocks":["cobblestone","stone","granite","polished_granite","diorite","polished_diorite","andesite","polished_andesite","stone_bricks","mossy_stone_bricks","cracked_stone_bricks","chiseled_stone_bricks","sandstone","cut_sandstone","chiseled_sandstone","smooth_sandstone","mossy_cobblestone","smooth_stone_slab","sandstone_slab","cobblestone_slab","brick_slab","stone_brick_slab","quartz_slab","nether_brick_slab","red_sandstone_slab","purpur_slab","prismarine_slab","dark_prismarine_slab","prismarine_brick_slab","mossy_cobblestone_slab","smooth_sandstone_slab","red_nether_brick_slab","end_stone_brick_slab","smooth_red_sandstone_slab","polished_andesite_slab","andesite_slab","diorite_slab","polished_diorite_slab","granite_slab","polished_granite_slab","mossy_stone_brick_slab","smooth_quartz_slab","normal_stone_slab","cut_sandstone_slab","cut_red_sandstone_slab","smooth_stone_double_slab","sandstone_double_slab","cobblestone_double_slab","brick_double_slab","stone_brick_double_slab","quartz_double_slab","nether_brick_double_slab","red_sandstone_double_slab","purpur_double_slab","prismarine_double_slab","dark_prismarine_double_slab","prismarine_brick_double_slab","mossy_cobblestone_double_slab","smooth_sandstone_double_slab","red_nether_brick_double_slab","end_stone_brick_double_slab","smooth_red_sandstone_double_slab","polished_andesite_double_slab","andesite_double_slab","diorite_double_slab","polished_diorite_double_slab","granite_double_slab","polished_granite_double_slab","mossy_stone_brick_double_slab","smooth_quartz_double_slab","normal_stone_double_slab","cut_sandstone_double_slab","cut_red_sandstone_double_slab","oak_slab","spruce_slab","birch_slab","jungle_slab","acacia_slab","dark_oak_slab","oak_double_slab","spruce_double_slab","birch_double_slab","jungle_double_slab","acacia_double_slab","dark_oak_double_slab","oak_planks","spruce_planks","birch_planks","jungle_planks","acacia_planks","dark_oak_planks","brick_block","nether_brick","red_nether_brick","end_bricks","red_sandstone","cut_red_sandstone","chiseled_red_sandstone","smooth_red_sandstone","white_stained_glass","orange_stained_glass","magenta_stained_glass","light_blue_stained_glass","yellow_stained_glass","lime_stained_glass","pink_stained_glass","gray_stained_glass","light_gray_stained_glass","cyan_stained_glass","purple_stained_glass","blue_stained_glass","brown_stained_glass","green_stained_glass","red_stained_glass","black_stained_glass","glass","glowstone","prismarine","emerald_block","diamond_block","lapis_block","gold_block","redstone_block","purple_glazed_terracotta","white_glazed_terracotta","orange_glazed_terracotta","magenta_glazed_terracotta","light_blue_glazed_terracotta","yellow_glazed_terracotta","lime_glazed_terracotta","pink_glazed_terracotta","gray_glazed_terracotta","silver_glazed_terracotta","cyan_glazed_terracotta","blue_glazed_terracotta","brown_glazed_terracotta","green_glazed_terracotta","red_glazed_terracotta","black_glazed_terracotta"],"cost":1},{"blocks":["bed","lectern","composter","grindstone","blast_furnace","smoker","fletching_table","cartography_table","brewing_stand","smithing_table","cauldron","barrel","loom","stonecutter"],"cost":50}]` | 
+### 예시
 
-##### Entity PreferredPath BlockSet
-
-#### Entity PreferredPath BlockSet Properties
-
-**JSON path:** `preferred_path_blocks`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| blocks (Blocks) | [] | Array of Blocks items | List of preferred blocks | 
-| blocks (as String) | *not set* | String |  | 
-| blocks (as Object) | *not set* | Object |  | 
-| cost | *not set* | Decimal number | Cost for preferred blocks | 
-
-#### Blocks
-
-##### Blocks Properties
-
-**JSON path:** `preferred_path_blocks > blocks`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| name |  | String |  | 
-| states | &#123;&#125; | Integer number |  | 
-| states (as String) | *not set* | String |  | 
-| states (as Boolean true/false) | *not set* | Boolean true/false |  | 
-| tags |  | String |  | 
-
-#### Samples
-
-#### Iron Golem
+##### [Elder Guardian](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/elder_guardian.json)
 
 
 ```json
-"minecraft:preferred_path": {
-  "default_block_cost": 1.5,
-  "jump_cost": 5,
-  "preferred_path_blocks": [
+"minecraft:navigation.generic": {
+  "can_breach": true,
+  "can_walk": false,
+  "can_path_over_water": false,
+  "can_swim": true,
+  "is_amphibious": true,
+  "using_door_annotation": true
+}
+```
+
+##### [Frog](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/frog.json)
+
+
+```json
+"minecraft:navigation.generic": {
+  "avoid_damage_blocks": true,
+  "can_path_over_water": true,
+  "can_sink": false,
+  "can_swim": true,
+  "can_walk": true,
+  "is_amphibious": true,
+  "using_door_annotation": true
+}
+```
+
+## minecraft&#58;navigation.hover
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_navigation.hover.md`)
+
+벌처럼 공중에서 경로를 만들게 한다. 하늘에서 떨어지지 않게 하고 예측 이동을 한다.
+
+Allows this entity to generate paths in the air like the vanilla Bees do. Keeps them from falling out of the skies and doing predictive movement.
+
+### Hover Navigation Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| avoid_damage_blocks | false | Boolean true/false | 경로를 찾을 때 피해를 주는 블록을 피하도록 길 찾기에 알린다. | Allay: `true` |
+| avoid_portals | false | Boolean true/false | 경로를 찾을 때 (네더 포털 같은) 포털을 피하도록 길 찾기에 알린다. |  |
+| avoid_sun | false | Boolean true/false | 경로를 만들 때 햇빛에 노출된 칸을 피할지 정한다. |  |
+| avoid_water | false | Boolean true/false | 경로를 만들 때 물을 피하도록 길 찾기에 알린다. | Allay: `true` |
+| blocks_to_avoid | *not set* | Array of strings | 경로를 만들 때 피할 블록을 길 찾기에 알린다. |  |
+| can_breach | false | Boolean true/false | (돌고래처럼) 물 밖으로 뛰어오를 수 있는지 길 찾기에 알린다. |  |
+| can_break_doors | false | Boolean true/false | 닫힌 문을 부수고 지나가는 경로를 만들 수 있다고 길 찾기에 알린다. |  |
+| can_jump | true | Boolean true/false | 블록 위로 뛰어오를 수 있는지 길 찾기에 알린다. |  |
+| can_open_doors | false | Boolean true/false | AI가 문을 열 것이라 가정하고 닫힌 문을 지나는 경로를 만들 수 있다고 길 찾기에 알린다. |  |
+| can_open_iron_doors | false | Boolean true/false | AI가 문을 열 것이라 가정하고 닫힌 철문을 지나는 경로를 만들 수 있다고 길 찾기에 알린다. |  |
+| can_pass_doors | true | Boolean true/false | 문을 지나는 경로를 만들 수 있는지 여부. |  |
+| can_path_from_air | false | Boolean true/false | 공중에 있을 때도 경로 탐색을 시작할 수 있다고 길 찾기에 알린다. | Allay: `true` |
+| can_path_over_lava | false | Boolean true/false | 용암 표면 위를 이동할 수 있는지 길 찾기에 알린다. |  |
+| can_path_over_water | false | Boolean true/false | 물 표면 위를 이동할 수 있는지 길 찾기에 알린다. | Allay: `true` |
+| can_sink | true | Boolean true/false | 물속에서 중력에 끌려 내려가는지 길 찾기에 알린다. |  |
+| can_swim | false | Boolean true/false | 물속 어디든 경로를 만들 수 있는지, 그 경로에서 수영 애니메이션을 재생하는지 길 찾기에 알린다. |  |
+| can_walk | true | Boolean true/false | 물 밖 지면 위를 걸을 수 있는지 길 찾기에 알린다. |  |
+| can_walk_in_lava | false | Boolean true/false | 지면을 걷듯 용암 속을 이동할 수 있는지 길 찾기에 알린다. |  |
+| is_amphibious | false | Boolean true/false | 물속 바닥 위를 걸을 수 있는지 길 찾기에 알린다. |  |
+
+### 예시
+
+##### [Allay](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/allay.json)
+
+
+```json
+"minecraft:navigation.hover": {
+  "avoid_damage_blocks": true,
+  "can_pass_doors": false,
+  "can_path_from_air": true,
+  "avoid_sun": false,
+  "avoid_water": true,
+  "can_path_over_water": true,
+  "can_sink": false
+}
+```
+
+## minecraft&#58;navigation.swim
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_navigation.swim.md`)
+
+물을 지나는 경로를 만들게 한다.
+
+Allows this entity to generate paths that include water.
+
+### Swim Navigation Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| avoid_damage_blocks | false | Boolean true/false | 경로를 찾을 때 피해를 주는 블록을 피하도록 길 찾기에 알린다. |
+| avoid_portals | false | Boolean true/false | 경로를 찾을 때 (네더 포털 같은) 포털을 피하도록 길 찾기에 알린다. |
+| avoid_sun | false | Boolean true/false | 경로를 만들 때 햇빛에 노출된 칸을 피할지 정한다. |
+| avoid_water | false | Boolean true/false | 경로를 만들 때 물을 피하도록 길 찾기에 알린다. |
+| blocks_to_avoid | *not set* | Array of strings | 경로를 만들 때 피할 블록을 길 찾기에 알린다. |
+| can_breach | false | Boolean true/false | (돌고래처럼) 물 밖으로 뛰어오를 수 있는지 길 찾기에 알린다. |
+| can_break_doors | false | Boolean true/false | 닫힌 문을 부수고 지나가는 경로를 만들 수 있다고 길 찾기에 알린다. |
+| can_jump | true | Boolean true/false | 블록 위로 뛰어오를 수 있는지 길 찾기에 알린다. |
+| can_open_doors | false | Boolean true/false | AI가 문을 열 것이라 가정하고 닫힌 문을 지나는 경로를 만들 수 있다고 길 찾기에 알린다. |
+| can_open_iron_doors | false | Boolean true/false | AI가 문을 열 것이라 가정하고 닫힌 철문을 지나는 경로를 만들 수 있다고 길 찾기에 알린다. |
+| can_pass_doors | true | Boolean true/false | 문을 지나는 경로를 만들 수 있는지 여부. |
+| can_path_from_air | false | Boolean true/false | 공중에 있을 때도 경로 탐색을 시작할 수 있다고 길 찾기에 알린다. |
+| can_path_over_lava | false | Boolean true/false | 용암 표면 위를 이동할 수 있는지 길 찾기에 알린다. |
+| can_path_over_water | false | Boolean true/false | 물 표면 위를 이동할 수 있는지 길 찾기에 알린다. |
+| can_sink | true | Boolean true/false | 물속에서 중력에 끌려 내려가는지 길 찾기에 알린다. |
+| can_swim | false | Boolean true/false | 물속 어디든 경로를 만들 수 있는지, 그 경로에서 수영 애니메이션을 재생하는지 길 찾기에 알린다. |
+| can_walk | true | Boolean true/false | 물 밖 지면 위를 걸을 수 있는지 길 찾기에 알린다. |
+| can_walk_in_lava | false | Boolean true/false | 지면을 걷듯 용암 속을 이동할 수 있는지 길 찾기에 알린다. |
+| is_amphibious | false | Boolean true/false | 물속 바닥 위를 걸을 수 있는지 길 찾기에 알린다. |
+
+## minecraft&#58;navigation.walk
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_navigation.walk.md`)
+
+몹의 걷기 방식을 정한다.
+
+Walking style of the mob.
+
+### Walk navigation Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| avoid_damage_blocks | false | Boolean true/false | 경로를 찾을 때 피해를 주는 블록을 피하도록 길 찾기에 알린다. | Blaze: `true` |
+| avoid_portals | false | Boolean true/false | 경로를 찾을 때 (네더 포털 같은) 포털을 피하도록 길 찾기에 알린다. |  |
+| avoid_sun | false | Boolean true/false | 경로를 만들 때 햇빛에 노출된 칸을 피할지 정한다. | Bogged: `true` |
+| avoid_water | false | Boolean true/false | 경로를 만들 때 물을 피하도록 길 찾기에 알린다. | Blaze: `true` |
+| blocks_to_avoid | *not set* | Array of strings | 길 찾기가 피해야 하는 블록 설명자 목록. 항목은 블록 식별자 문자열이나 name/tags 속성을 가진 객체다. | Breeze: `[{"tags":"query.any_tag('trapdoors')"}]` |
+| blocks_to_avoid (Block to Avoid) | *not set* | Array of Blocks To Avoid (Block To Avoid) items |  |  |
+| can_breach | false | Boolean true/false | (돌고래처럼) 물 밖으로 뛰어오를 수 있는지 길 찾기에 알린다. |  |
+| can_break_doors | false | Boolean true/false | 닫힌 문을 부수고 지나가는 경로를 만들 수 있다고 길 찾기에 알린다. |  |
+| can_float | *not set* | Boolean true/false |  |  |
+| can_jump | true | Boolean true/false | 블록 위로 뛰어오를 수 있는지 길 찾기에 알린다. |  |
+| can_open_doors | false | Boolean true/false | AI가 문을 열 것이라 가정하고 닫힌 문을 지나는 경로를 만들 수 있다고 길 찾기에 알린다. |  |
+| can_open_iron_doors | false | Boolean true/false | AI가 문을 열 것이라 가정하고 닫힌 철문을 지나는 경로를 만들 수 있다고 길 찾기에 알린다. |  |
+| can_pass_doors | true | Boolean true/false | 문을 지나는 경로를 만들 수 있는지 여부. |  |
+| can_path_from_air | false | Boolean true/false | 공중에 있을 때도 경로 탐색을 시작할 수 있다고 길 찾기에 알린다. |  |
+| can_path_over_lava | false | Boolean true/false | 용암 표면 위를 이동할 수 있는지 길 찾기에 알린다. |  |
+| can_path_over_water | false | Boolean true/false | 물 표면 위를 이동할 수 있는지 길 찾기에 알린다. | Blaze: `true` |
+| can_sink | true | Boolean true/false | 물속에서 중력에 끌려 내려가는지 길 찾기에 알린다. |  |
+| can_swim | false | Boolean true/false | 물속 어디든 경로를 만들 수 있는지, 그 경로에서 수영 애니메이션을 재생하는지 길 찾기에 알린다. |  |
+| can_walk | true | Boolean true/false | 물 밖 지면 위를 걸을 수 있는지 길 찾기에 알린다. |  |
+| can_walk_in_lava | false | Boolean true/false | 지면을 걷듯 용암 속을 이동할 수 있는지 길 찾기에 알린다. |  |
+| is_amphibious | false | Boolean true/false | 물속 바닥 위를 걸을 수 있는지 길 찾기에 알린다. | Bogged: `true` |
+| using_door_annotation | *not set* | String |  | Blaze: `true` |
+
+#### Blocks To Avoid (Block To Avoid)
+
+##### Block to Avoid Properties
+
+**JSON path:** `blocks_to_avoid`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| name | *not set* | String | 피할 블록 식별자. |
+| tags | *not set* | Molang | 블록 태그에 맞는 Molang 식. 예: query.any_tag('trapdoors') |
+
+### 예시
+
+##### [Blaze](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/blaze.json)
+
+
+```json
+"minecraft:navigation.walk": {
+  "avoid_damage_blocks": true,
+  "avoid_water": true,
+  "can_path_over_water": true,
+  "using_door_annotation": true
+}
+```
+
+##### [Bogged](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/bogged.json)
+
+
+```json
+"minecraft:navigation.walk": {
+  "avoid_sun": true,
+  "is_amphibious": true,
+  "avoid_water": true
+}
+```
+
+##### [Breeze](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/breeze.json)
+
+
+```json
+"minecraft:navigation.walk": {
+  "blocks_to_avoid": [
     {
-      "blocks": [
-        "grass_path"
-      ],
-      "cost": 0
-    },
-    {
-      "blocks": [
-        "cobblestone",
-        "stone",
-        "granite",
-        "polished_granite",
-        "diorite",
-        "polished_diorite",
-        "andesite",
-        "polished_andesite",
-        "stone_bricks",
-        "mossy_stone_bricks",
-        "cracked_stone_bricks",
-        "chiseled_stone_bricks",
-        "sandstone",
-        "cut_sandstone",
-        "chiseled_sandstone",
-        "smooth_sandstone",
-        "mossy_cobblestone",
-        "smooth_stone_slab",
-        "sandstone_slab",
-        "cobblestone_slab",
-        "brick_slab",
-        "stone_brick_slab",
-        "quartz_slab",
-        "nether_brick_slab",
-        "red_sandstone_slab",
-        "purpur_slab",
-        "prismarine_slab",
-        "dark_prismarine_slab",
-        "prismarine_brick_slab",
-        "mossy_cobblestone_slab",
-        "smooth_sandstone_slab",
-        "red_nether_brick_slab",
-        "end_stone_brick_slab",
-        "smooth_red_sandstone_slab",
-        "polished_andesite_slab",
-        "andesite_slab",
-        "diorite_slab",
-        "polished_diorite_slab",
-        "granite_slab",
-        "polished_granite_slab",
-        "mossy_stone_brick_slab",
-        "smooth_quartz_slab",
-        "normal_stone_slab",
-        "cut_sandstone_slab",
-        "cut_red_sandstone_slab",
-        "smooth_stone_double_slab",
-        "sandstone_double_slab",
-        "cobblestone_double_slab",
-        "brick_double_slab",
-        "stone_brick_double_slab",
-        "quartz_double_slab",
-        "nether_brick_double_slab",
-        "red_sandstone_double_slab",
-        "purpur_double_slab",
-        "prismarine_double_slab",
-        "dark_prismarine_double_slab",
-        "prismarine_brick_double_slab",
-        "mossy_cobblestone_double_slab",
-        "smooth_sandstone_double_slab",
-        "red_nether_brick_double_slab",
-        "end_stone_brick_double_slab",
-        "smooth_red_sandstone_double_slab",
-        "polished_andesite_double_slab",
-        "andesite_double_slab",
-        "diorite_double_slab",
-        "polished_diorite_double_slab",
-        "granite_double_slab",
-        "polished_granite_double_slab",
-        "mossy_stone_brick_double_slab",
-        "smooth_quartz_double_slab",
-        "normal_stone_double_slab",
-        "cut_sandstone_double_slab",
-        "cut_red_sandstone_double_slab",
-        "oak_slab",
-        "spruce_slab",
-        "birch_slab",
-        "jungle_slab",
-        "acacia_slab",
-        "dark_oak_slab",
-        "oak_double_slab",
-        "spruce_double_slab",
-        "birch_double_slab",
-        "jungle_double_slab",
-        "acacia_double_slab",
-        "dark_oak_double_slab",
-        "oak_planks",
-        "spruce_planks",
-        "birch_planks",
-        "jungle_planks",
-        "acacia_planks",
-        "dark_oak_planks",
-        "brick_block",
-        "nether_brick",
-        "red_nether_brick",
-        "end_bricks",
-        "red_sandstone",
-        "cut_red_sandstone",
-        "chiseled_red_sandstone",
-        "smooth_red_sandstone",
-        "white_stained_glass",
-        "orange_stained_glass",
-        "magenta_stained_glass",
-        "light_blue_stained_glass",
-        "yellow_stained_glass",
-        "lime_stained_glass",
-        "pink_stained_glass",
-        "gray_stained_glass",
-        "light_gray_stained_glass",
-        "cyan_stained_glass",
-        "purple_stained_glass",
-        "blue_stained_glass",
-        "brown_stained_glass",
-        "green_stained_glass",
-        "red_stained_glass",
-        "black_stained_glass",
-        "glass",
-        "glowstone",
-        "prismarine",
-        "emerald_block",
-        "diamond_block",
-        "lapis_block",
-        "gold_block",
-        "redstone_block",
-        "purple_glazed_terracotta",
-        "white_glazed_terracotta",
-        "orange_glazed_terracotta",
-        "magenta_glazed_terracotta",
-        "light_blue_glazed_terracotta",
-        "yellow_glazed_terracotta",
-        "lime_glazed_terracotta",
-        "pink_glazed_terracotta",
-        "gray_glazed_terracotta",
-        "silver_glazed_terracotta",
-        "cyan_glazed_terracotta",
-        "blue_glazed_terracotta",
-        "brown_glazed_terracotta",
-        "green_glazed_terracotta",
-        "red_glazed_terracotta",
-        "black_glazed_terracotta"
-      ],
-      "cost": 1
-    },
-    {
-      "blocks": [
-        "bed",
-        "lectern",
-        "composter",
-        "grindstone",
-        "blast_furnace",
-        "smoker",
-        "fletching_table",
-        "cartography_table",
-        "brewing_stand",
-        "smithing_table",
-        "cauldron",
-        "barrel",
-        "loom",
-        "stonecutter"
-      ],
-      "cost": 50
+      "tags": "query.any_tag('trapdoors')"
     }
   ],
-  "max_fall_blocks": 1
+  "using_door_annotation": true
 }
 ```
 
-#### Warden
+##### [Chicken](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/chicken.json)
 
 
 ```json
-"minecraft:preferred_path": {
-  "max_fall_blocks": 20
+"minecraft:navigation.walk": {
+  "can_path_over_water": true,
+  "avoid_damage_blocks": true,
+  "using_door_annotation": true
 }
 ```
 
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_follow_range.md`)
-
-
-### Entity Documentation - minecraft:follow_range
-
-Defines the maximum range, in blocks, that a mob will pursue a target. This affects AI behaviors like chasing players or attacking.
-
-
-#### Follow Range Properties
-
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| max | *not set* | Integer number | Maximum follow distance in blocks. The entity will not pursue targets beyond this range. | Blaze: `48`, Elder Guardian: `16` | 
-| value | *not set* | Integer number | The default follow range in blocks. Entities will attempt to stay within this radius of their target. | Allay: `1024`, Blaze: `48`, Breeze: `32` | 
-
-#### Samples
-
-#### Allay
+##### [Cow](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/cow.json)
 
 
 ```json
-"minecraft:follow_range": {
-  "value": 1024
+"minecraft:navigation.walk": {
+  "can_path_over_water": true,
+  "avoid_water": true,
+  "avoid_damage_blocks": true
 }
 ```
 
-#### Blaze
+## minecraft&#58;offspring
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_offspring.md`)
+
+엔티티가 새끼를 낳는 방식을 정의한다.
+
+Defines the way an entity can create a born offspring.
+
+### Offspring Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| blend_attributes | true | Boolean true/false | true이면 번식 후 새끼가 부모의 속성을 섞어 갖는다. |  |
+| deny_parents_variant | *not set* | Array of Deny Parents Variant items | 같은 변종인 부모의 새끼가 그 변종을 거부하고 주어진 범위에서 무작위 변종을 택할 확률을 정한다. |  |
+| inherit_tamed | true | Boolean true/false | true이면 부모가 길들여져 있을 때 새끼도 자동으로 길들여진다. |  |
+| mutation_factor | *not set* | Array of Mutation Factor items | 새끼가 부모의 변이 하나를 물려받지 않을 가능성을 정한다. 값은 0.0~1.0이며 클수록 돌연변이가 생기기 쉽다. |  |
+| offspring_pairs | *not set* | Array of strings | 이 엔티티가 새끼를 낳을 수 있는 엔티티와 새끼 정의의 맵. | Chicken: `{"minecraft:chicken":"minecraft:chicken"}`, Cow: `{"minecraft:cow":"minecraft:cow"}`, Dolphin: `{"minecraft:dolphin":"minecraft:dolphin"}` |
+| parent_centric_attribute_blending | *not set* | Array of strings | 부모 중심 속성 혼합의 이점을 받아야 하는 속성 목록. 예를 들어 말은 체력, 이동 속도, jump_strength가 새끼에게서 섞인다. |  |
+| property_inheritance | *not set* | Array of strings | 부모 엔티티에게서 물려받고 돌연변이가 생길 수 있는 엔티티 속성 목록. | Chicken: `{"minecraft:climate_variant":{}}` |
+| random_extra_variant_mutation_interval | 0 | Range of integers | 무작위 추가 변종을 정하는 데 쓰는 범위. |  |
+| random_variant_mutation_interval | 0 | Range of integers | 무작위 변종을 정하는 데 쓰는 범위. |  |
+
+#### Deny Parents Variant
+Determines how likely the baby of parents with the same variant will deny that variant and take a random variant within the given range instead.
+
+
+##### Deny Parents Variant Properties
+
+**JSON path:** `deny_parents_variant`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| chance | 0 | Decimal number | 부모의 변종을 거부할 확률(퍼센트). |
+| max_variant | 0 | Integer number | 변종 범위의 최대값(포함). |
+| min_variant | 0 | Integer number | 변종 범위의 최소값(포함). |
+
+#### Mutation Factor
+Determines how likely the babies are to NOT inherit one of their parent's variances. Values are between 0.0 and 1.0, with a higher number meaning more likely to mutate.
+
+
+##### Mutation Factor Properties
+
+**JSON path:** `mutation_factor`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| color | 0 | Decimal number | 새끼가 부모에게서 색을 물려받지 않고 스폰된 것처럼 색을 갖게 될 확률(퍼센트). |
+| extra_variant | 0 | Decimal number | 엔티티의 추가 변종 유형에 돌연변이가 생길 확률(퍼센트). |
+| variant | 0 | Decimal number | 엔티티의 변종 유형에 돌연변이가 생길 확률(퍼센트). |
+
+### 예시
+
+##### [Chicken](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/chicken.json)
 
 
 ```json
-"minecraft:follow_range": {
-  "max": 48,
-  "value": 48
+"minecraft:offspring": {
+  "offspring_pairs": {
+    "minecraft:chicken": "minecraft:chicken"
+  },
+  "property_inheritance": {
+    "minecraft:climate_variant": {}
+  }
 }
 ```
 
-#### Breeze
+##### [Cow](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/cow.json)
 
 
 ```json
-"minecraft:follow_range": {
-  "value": 32
+"minecraft:offspring": {
+  "offspring_pairs": {
+    "minecraft:cow": "minecraft:cow"
+  },
+  "property_inheritance": {
+    "minecraft:climate_variant": {}
+  }
 }
 ```
 
-#### Dolphin
+##### [Dolphin](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/dolphin.json)
 
 
 ```json
-"minecraft:follow_range": {
-  "value": 48,
-  "max": 48
+"minecraft:offspring": {
+  "offspring_pairs": {
+    "minecraft:dolphin": "minecraft:dolphin"
+  }
 }
 ```
 
-#### Elder Guardian
+##### [Drowned](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/drowned.json)
 
 
 ```json
-"minecraft:follow_range": {
-  "max": 16,
-  "value": 16
+"minecraft:offspring": {
+  "offspring_pairs": {
+    "minecraft:drowned": "minecraft:drowned"
+  }
 }
 ```
 
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_equipment.md`)
-
-
-### Entity Documentation - minecraft:equipment
-
-Sets the Equipment table to use for this Entity.
-
-
-#### Equipment Properties
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| slot_drop_chance | *not set* | Array of strings | A list of slots with the chance to drop an equipped item from that slot. Can be an array of slot name strings or an array of objects with slot and drop_chance properties. | 
-| slot_drop_chance (Slot Drop Chance Item) | *not set* | Array of Slot Drop Chance (Slot Drop Chance Item) items |  | 
-| table | *not set* | String | The file path to the equipment table, relative to the behavior pack's root. | 
-
-##### Slot Drop Chance (Slot Drop Chance Item)
-
-#### Slot Drop Chance Item Properties
-
-**JSON path:** `slot_drop_chance`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| drop_chance | *not set* | Decimal number | The chance to drop the equipped item (0.0 to 1.0). | 
-| slot | *not set* | String | The equipment slot name. | 
-
-#### Samples
-
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_tick_world.md`)
-
-
-### Entity Documentation - minecraft:tick_world
-
-Defines if the entity ticks the world and the radius around it to tick.
-
-
-#### Entity Tick World Properties
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| distance_to_players | 128 | Decimal number | The distance at which the closest player has to be before this entity despawns. This option will be ignored if never_despawn is true. Value must be >= 128. | 
-| never_despawn | true | Boolean true/false | If true, this entity will not despawn even if players are far away. If false, distance_to_players will be used to determine when to despawn. | 
-| radius | 2 | Integer number | The area around the entity to tick. Value must be >= 2. Value must be &lt;= 6. | 
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_dweller.md`)
-
-
-### Entity Documentation - minecraft:dweller
-
-Compels an entity to join and migrate between villages and other dwellings.
-
-
-#### Dweller Properties
-
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| can_find_poi | *not set* | Boolean true/false | Whether or not the entity can find and add POIs to the dwelling. |  | 
-| can_migrate | *not set* | Boolean true/false | Determines whether the entity can migrate between dwellings, or only have its initial dwelling. | Iron Golem: `true` | 
-| dweller_role | *not set* | String |  | Iron Golem: `"defender"` | 
-| dwelling_bounds_tolerance | *not set* | Decimal number | A padding distance for checking if the entity is within the dwelling. |  | 
-| dwelling_role | *not set* | String | The role of which the entity plays in the dwelling. Current Roles: inhabitant, defender, hostile, passive. |  | 
-| dwelling_type | *not set* | String | The type of dwelling the entity wishes to join. Current Types: village. | Iron Golem: `"village"` | 
-| first_founding_reward | *not set* | Integer number | Determines how much reputation players are rewarded on first founding. |  | 
-| preferred_profession | *not set* | String | Allows the user to define a starting profession for this particular Dweller, instead of letting them choose organically. (They still need to gain experience from trading before this takes effect.) |  | 
-| update_interval_base | *not set* | Decimal number | How often the entity checks on their dwelling status in ticks. Positive values only. | Iron Golem: `60` | 
-| update_interval_variant | *not set* | Decimal number | The variant value in ticks that will be added to the update_interval_base. | Iron Golem: `40` | 
-
-#### Samples
-
-#### Iron Golem
+##### [Frog](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/frog.json)
 
 
 ```json
-"minecraft:dweller": {
-  "dwelling_type": "village",
-  "can_find_poi": false,
-  "can_migrate": true,
-  "dweller_role": "defender",
-  "first_founding_reward": 0,
-  "update_interval_base": 60,
-  "update_interval_variant": 40
+"minecraft:offspring": {
+  "offspring_pairs": {
+    "minecraft:frog": "minecraft:tadpole"
+  }
 }
 ```
 
+## minecraft&#58;out_of_control
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_can_join_raid.md`)
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_out_of_control.md`)
 
+엔티티의 '제어 불능' 상태를 정의한다.
 
-### Entity Documentation - minecraft:can_join_raid
+Defines the entity's 'out of control' state.
 
-Specifies if an entity can join a raid.
+### 예시
 
+##### [Boat](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/boat.json)
 
-#### Samples
-
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_body_rotation_blocked.md`)
-
-
-### Entity Documentation - minecraft:body_rotation_blocked
-
-When set, the entity will no longer visually rotate their body to match their facing direction.
-
-> [!Note]
-> This item requires a format version of at least 1.20.80.
-
-
-#### Samples
-
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_renders_when_invisible.md`)
-
-
-### Entity Documentation - minecraft:renders_when_invisible
-
-When set, the entity will render even when invisible. Appropriate rendering behavior can then be specified in the corresponding "minecraft:client_entity".
-
-
-#### Samples
-
-#### Cave Spider
-
+At /minecraft:entity/component_groups/minecraft:above_bubble_column_down/minecraft:out_of_control/: 
 
 ```json
-"minecraft:renders_when_invisible": {}
+"minecraft:out_of_control": {}
 ```
 
+## minecraft&#58;peek
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_jump.static.md`)
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_peek.md`)
 
+엔티티의 '엿보기' 동작과 그동안 호출할 이벤트를 정의한다.
 
-### Entity Documentation - minecraft:jump.static
+Defines the entity's 'peek' behavior, defining the events that should be called during it.
 
-Gives the entity the ability to jump.
+### Peek Properties
 
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| on_close | *not set* | Minecraft Event Trigger | 엔티티가 엿보기를 마쳤을 때 호출할 이벤트. | Shulker: `{"event":"minecraft:on_close"}` |
+| on_open | *not set* | Minecraft Event Trigger | 엔티티가 엿보기를 시작할 때 호출할 이벤트. | Shulker: `{"event":"minecraft:on_open"}` |
+| on_target_open | *not set* | Minecraft Event Trigger | 엔티티의 대상 엔티티가 엿보기를 시작할 때 호출할 이벤트. | Shulker: `{"event":"minecraft:on_open"}` |
 
-#### Entity Static Jump Properties
+### 예시
 
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| jump_power | 0.41999998688697815 | Decimal number | The initial vertical velocity for the jump. | 
-
-#### Samples
-
-#### Allay
-
-
-```json
-"minecraft:jump.static": {}
-```
-
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_underwater_movement.md`)
-
-
-### Entity Documentation - minecraft:underwater_movement
-
-Defines the speed with which an entity can move through water.
-
-
-#### Underwater Movement Properties
-
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| value | *not set* | Decimal number | Movement speed of the entity under water. | Dolphin: `0.15`, Elder Guardian: `0.3`, Guardian: `0.12` | 
-
-#### Samples
-
-#### Dolphin
+##### [Shulker](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/shulker.json)
 
 
 ```json
-"minecraft:underwater_movement": {
-  "value": 0.15
+"minecraft:peek": {
+  "on_close": {
+    "event": "minecraft:on_close"
+  },
+  "on_open": {
+    "event": "minecraft:on_open"
+  },
+  "on_target_open": {
+    "event": "minecraft:on_open"
+  }
 }
 ```
 
-#### Elder Guardian
+## minecraft&#58;persistent
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_persistent.md`)
+
+엔티티가 월드에 유지되는지 정한다.
+
+Defines whether an entity should be persistent in the game world.
+
+### 예시
+
+##### [Armor Stand](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/armor_stand.json)
 
 
 ```json
-"minecraft:underwater_movement": {
-  "value": 0.3
-}
+"minecraft:persistent": {}
 ```
 
-#### Guardian
+## minecraft&#58;physics
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_physics.md`)
+
+중력의 영향이나 물체와의 충돌 여부 등 엔티티의 물리 속성을 정의한다.
+
+Defines physics properties of an actor, including if it is affected by gravity or if it collides with objects.
+
+### Entity Physics Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| has_collision | true | Boolean true/false | 엔티티가 물체와 충돌하는지 여부. |
+| has_gravity | true | Boolean true/false | 엔티티가 중력의 영향을 받는지 여부. |
+| push_towards_closest_space | false | Boolean true/false | 엔티티가 블록 안에 끼었을 때 가장 가까운 열린 공간 쪽으로 밀려나는지 여부. |
+
+### 예시
+
+##### [Allay](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/allay.json)
 
 
 ```json
-"minecraft:underwater_movement": {
-  "value": 0.12
+"minecraft:physics": {
+  "has_gravity": false
 }
 ```
 
+##### [Area Effect Cloud](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/area_effect_cloud.json)
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_floats_in_liquid.md`)
+
+```json
+"minecraft:physics": {
+  "has_collision": false
+}
+```
+
+##### [Armor Stand](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/armor_stand.json)
 
 
-### Entity Documentation - minecraft:floats_in_liquid
+```json
+"minecraft:physics": {}
+```
 
-Sets that this entity can float in liquid blocks.
+## minecraft&#58;player.exhaustion
 
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_player.exhaustion.md`)
+
+플레이어의 탈진 수치를 정의한다.
+
+Defines the player's exhaustion level.
+
+### Player Exhaustion Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| max | *not set* | Integer number | 플레이어 탈진 수치의 최대값. | Player: `20` |
+| value | *not set* | Integer number | 플레이어 탈진 수준의 초기값. |  |
+
+### 예시
+
+##### [Player](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/player.json)
+
+
+```json
+"minecraft:player.exhaustion": {
+  "max": 20,
+  "value": 0
+}
+```
+
+## minecraft&#58;player.experience
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_player.experience.md`)
+
+플레이어 행동마다 얻는 경험치를 정의한다.
+
+Defines how much experience each player action should take.
+
+### Player Experience Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| max | 5 | Integer number | 이 엔티티의 플레이어 경험치 최대값. | Player: `1` |
+| value | 1 | Integer number | 플레이어 경험치의 초기값. |  |
+
+### 예시
+
+##### [Player](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/player.json)
+
+
+```json
+"minecraft:player.experience": {
+  "max": 1,
+  "value": 0
+}
+```
+
+## minecraft&#58;player.level
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_player.level.md`)
+
+플레이어의 레벨을 정의한다.
+
+Defines the player's level.
+
+### Player Level Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| max | *not set* | Integer number | 엔티티의 플레이어 레벨 최대값. | Player: `24791` |
+| value | *not set* | Integer number | 플레이어 레벨의 초기값. |  |
+
+### 예시
+
+##### [Player](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/player.json)
+
+
+```json
+"minecraft:player.level": {
+  "max": 24791,
+  "value": 0
+}
+```

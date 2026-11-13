@@ -1,0 +1,392 @@
+---
+title: 엔티티 AI 목표 레퍼런스 (20/41)
+description: MS Learn AI 목표(behavior) 문서 4개(minecraft:behavior.jump_around_target ~ minecraft:behavior.lay_down). 속성 표와 예시 JSON을 원문대로 담았다.
+sidebar_position: 219
+sources:
+  - ms-learn
+---
+
+# 엔티티 AI 목표 레퍼런스 (20/41)
+
+MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 AI 목표(behavior) 문서를 옮긴 쪽이다. 설명은 한국어로 옮기고 ID, 속성 이름, 유형, 기본값, JSON은 원문 그대로 두었다. 전체 목록은 [색인](./entity-index.mdx)에 있다.
+
+## minecraft&#58;behavior.jump_around_target
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityGoals/minecraftBehavior_jump.around_target.md`)
+
+대상 주위를 뛰어다니게 한다.
+
+Allows an entity to jump around a target.
+
+> [!Note]
+> In format version 1.26.20, `valid_distance_to_target` and `landing_distance_from_target` must be specified as Float Range objects (objects with `range_min` / `range_max`). Legacy scalar or array forms no longer parse.
+
+> [!Note]
+> This item requires a format version of at least 1.21.30.
+
+### Entity Jump Around Target Behavior Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| check_collision | false | Boolean true/false | 점프를 계산할 때 충돌 검사를 켠다. check_collision을 true로 하면 성능에 영향을 줄 수 있으므로 주의해서 써야 한다. |  |
+| control_flags | [] | Control Flags choices |  |  |
+| entity_bounding_box_scale | 0.699999988079071 | Decimal number | 점프하는 동안 엔티티의 AABB 경계에 일시적으로 적용하는 배율. | Breeze: `0.7` |
+| filters (Filters) | &#123;"AND":null,"NOT":null,"OR":null,"all":null,"all_of":null,"any":null,"any_of":null,"none_of":null&#125; | Filters item | 행동이 시작되기 위해 충족해야 하는 조건. | Breeze: `{"all_of":[{"any_of":[{"test":"in_water","value":true},{"test":"on_ground","value":true}]},{"test":"is_riding","value":false},{"test":"in_lava","value":false}]}` |
+| filters (Alternate 1) | *not set* | Object |  |  |
+| jump_angles | [40, 55, 60, 75, 80] | Array of numbers | 점프할 때 허용되는 점프 각도(도, 실수). 각도를 고르는 순서는 무작위다. | Breeze: `[40,55,60,75,80]` |
+| jump_cooldown_duration | 0.5 | Decimal number | 이 목표를 다시 쓰기 전에 쿨다운으로 보내는 시간(초). | Breeze: `0.5` |
+| jump_cooldown_when_hurt_duration | 0.10000000149011612 | Decimal number | 피해를 입은 뒤 이 목표를 다시 쓰기 전에 쿨다운으로 보내는 시간(초). | Breeze: `0.1` |
+| landing_distance_from_target | &#123;"max":8,"min":4&#125; | Landing Distance From Target item | 점프할 때 착지 위치가 대상에서 얼마나 가까이, 얼마나 멀리 있을 수 있는지 정하는 범위. | Breeze: `{"min":4,"max":8}` |
+| landing_position_spread_degrees | 90 | Integer number | 대상 뒤쪽 착지 위치를 고를 때 퍼짐을 제어하는 각도(도). | Breeze: `90` |
+| last_hurt_duration | 2 | Decimal number | 엔티티가 최근 이 시간(초) 안에 피해를 입었다면 jump_cooldown_duration 대신 jump_cooldown_when_hurt_duration을 쓴다. | Breeze: `2` |
+| line_of_sight_obstruction_height_ignore | 4 | Integer number | 엔티티의 대상 방향 시선이 이 값보다 낮은 장애물에 가려지면 그 장애물을 무시하고 유효한 착지 위치를 찾으려 한다. | Breeze: `4` |
+| max_jump_velocity | 1.399999976158142 | Decimal number | 점프를 수행할 수 있는 최대 속도. | Breeze: `1.4` |
+| prepare_jump_duration | 0.5 | Decimal number | 점프를 준비하는 데 쓰는 시간(초). | Breeze: `0.5` |
+| priority | 0 | Integer number | 0에 가까울수록 우선순위가 높아진다. 우선순위가 높을수록 이 행동(목표)이 더 먼저 실행된다. | Breeze: `5` |
+| required_vertical_space | 4 | Integer number | 이 목표를 쓰려면 엔티티 머리 위로 공기여야 하는 블록 수. | Breeze: `4` |
+| snap_to_surface_block_range | 10 | Integer number | 착지할 표면을 찾기 위해 점프 목표 위치의 위아래로 확인하는 블록 수. | Breeze: `10` |
+| valid_distance_to_target | &#123;"max":20,"min":4&#125; | Valid Distance To Target item | 점프가 일어나려면 대상이 이 범위 안에 있어야 한다. | Breeze: `{"min":4,"max":20}` |
+
+#### entity_bounding_box_scale
+
+Scaling temporarily applied to the entity's AABB bounds when jumping. A smaller bounding box reduces the risk of collisions during the jump. When check_collision is true it also increases the chance of being able to jump when close to obstacles.
+
+#### landing_position_spread_degrees
+
+This angle (in degrees) is used for controlling the spread when picking a landing position behind the target. A zero spread angle means the landing position will be straight behind the target with no variance. A 90 degree spread angle means the landing position can be up to 45 degrees to the left and to the right of the position straight behind the target's view direction.
+
+
+#### Control Flags choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| jump | Jump |  |
+| look | Look |  |
+| move | Move |  |
+
+#### Filters
+
+##### Filters Properties
+
+**JSON path:** `filters`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| domain | *not set* | Object | 테스트를 수행할 도메인. |
+| operator | *not set* | Object | 'value'와 함께 적용할 비교 방식. |
+| subject | *not set* | Object | 이 필터 테스트의 대상(subject). |
+| test | *not set* | String | 적용할 테스트의 이름. |
+| value | *not set* | Object | 테스트에서 비교할 값. |
+
+#### Legacy FloatRange
+
+##### Legacy FloatRange Properties
+
+**JSON path:** `landing_distance_from_target`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max | 0 | Decimal number |  |
+| min | 0 | Decimal number |  |
+
+### 예시
+
+##### [Breeze](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/breeze.json)
+
+
+```json
+"minecraft:behavior.jump_around_target": {
+  "jump_cooldown_duration": 0.5,
+  "check_collision": false,
+  "filters": {
+    "all_of": [
+      {
+        "any_of": [
+          {
+            "test": "in_water",
+            "value": true
+          },
+          {
+            "test": "on_ground",
+            "value": true
+          }
+        ]
+      },
+      {
+        "test": "is_riding",
+        "value": false
+      },
+      {
+        "test": "in_lava",
+        "value": false
+      }
+    ]
+  },
+  "entity_bounding_box_scale": 0.7,
+  "landing_position_spread_degrees": 90,
+  "required_vertical_space": 4,
+  "jump_angles": [
+    40,
+    55,
+    60,
+    75,
+    80
+  ],
+  "jump_cooldown_when_hurt_duration": 0.1,
+  "landing_distance_from_target": {
+    "min": 4,
+    "max": 8
+  },
+  "last_hurt_duration": 2,
+  "line_of_sight_obstruction_height_ignore": 4,
+  "max_jump_velocity": 1.4,
+  "prepare_jump_duration": 0.5,
+  "priority": 5,
+  "snap_to_surface_block_range": 10,
+  "valid_distance_to_target": {
+    "min": 4,
+    "max": 20
+  }
+}
+```
+
+## minecraft&#58;behavior.jump_to_block
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityGoals/minecraftBehavior_jump.to_block.md`)
+
+다른 무작위 블록으로 점프하게 한다.
+
+Allows an entity to jump to another random block.
+
+> [!Note]
+> In format version 1.26.20, `cooldown_range` must be specified as a Float Range object (an object with `range_min` / `range_max`). Legacy scalar or array forms no longer parse.
+
+### Entity Jump To Block Behavior Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| control_flags | [] | Control Flags choices |  |  |
+| cooldown_range | &#123;"max":20,"min":10&#125; | Cooldown Range item | 시도한 점프 사이의 최소·최대 쿨다운 시간 범위(양수, 초). | Frog: `{"min":5,"max":7}`, Goat: `[30,60]` |
+| forbidden_blocks | [] | String | 몹이 점프해 갈 수 없는 블록. | Frog: `[{"name":"minecraft:water"}]` |
+| forbidden_blocks (as Keyed set of strings) | *not set* | Keyed set of strings |  |  |
+| max_velocity | 1.5 | Decimal number | 몹이 점프할 수 있는 최대 속도. | Frog: `1` |
+| minimum_distance | 2 | Integer number | 몹이 어떤 블록으로 점프하는 것을 고려하기 위한 몹과 블록 사이의 최소 거리(블록). | Frog: `1` |
+| minimum_path_length | 5 | Integer number | 몹이 어떤 블록으로 점프하는 것을 고려하기 위한 몹의 블록까지 경로의 최소 길이(블록). | Frog: `2`, Goat: `8` |
+| preferred_blocks | [] | String | 몹이 점프해 가기를 선호하는 블록. | Frog: `[{"name":"minecraft:waterlily"},{"name":"minecraft:big_dripleaf"}]` |
+| preferred_blocks (as Keyed set of strings) | *not set* | Keyed set of strings |  |  |
+| preferred_blocks_chance | 1 | Decimal number | 범위 안에 있을 때 몹이 선호 블록으로 점프할 확률(0.0~1.0). 선호 블록을 정의한 경우에만 의미가 있다. 값은 1 이하여야 한다. | Frog: `0.5` |
+| priority | 0 | Integer number | 0에 가까울수록 우선순위가 높아진다. 우선순위가 높을수록 이 행동(목표)이 더 먼저 실행된다. | Frog: `10`, Goat: `8` |
+| scale_factor | 0.699999988079071 | Decimal number | 점프하는 동안 몹의 경계 상자 배율. | Frog: `0.6` |
+| search_height | 10 | Integer number | 몹을 중심으로 한 검색 상자의 높이(블록, 범위 [1, 15]). 값은 1 이상 15 이하여야 한다. | Frog: `4`, Goat: `10` |
+| search_width | 8 | Integer number | 몹을 중심으로 한 검색 상자의 너비(블록, 범위 [1, 15]). 값은 1 이상 15 이하여야 한다. | Frog: `8`, Goat: `10` |
+
+#### cooldown_range
+
+Minimum and maximum cooldown time-range (positive, in seconds) between each attempted jump.  Check that the limits imposed on the range (minimum, maximum and maximum distance between values) are respected.
+
+
+#### Control Flags choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| jump | Jump |  |
+| look | Look |  |
+| move | Move |  |
+
+#### Legacy FloatRange
+
+##### Legacy FloatRange Properties
+
+**JSON path:** `cooldown_range`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| max | 0 | Decimal number |  |
+| min | 0 | Decimal number |  |
+
+### 예시
+
+##### [Frog](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/frog.json)
+
+
+```json
+"minecraft:behavior.jump_to_block": {
+  "cooldown_range": {
+    "min": 5,
+    "max": 7
+  },
+  "priority": 10,
+  "max_velocity": 1,
+  "forbidden_blocks": [
+    {
+      "name": "minecraft:water"
+    }
+  ],
+  "minimum_distance": 1,
+  "minimum_path_length": 2,
+  "preferred_blocks": [
+    {
+      "name": "minecraft:waterlily"
+    },
+    {
+      "name": "minecraft:big_dripleaf"
+    }
+  ],
+  "preferred_blocks_chance": 0.5,
+  "scale_factor": 0.6,
+  "search_height": 4,
+  "search_width": 8
+}
+```
+
+##### [Goat](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/goat.json)
+
+
+```json
+"minecraft:behavior.jump_to_block": {
+  "priority": 8,
+  "search_width": 10,
+  "search_height": 10,
+  "minimum_path_length": 8,
+  "minimum_distance": 1,
+  "scale_factor": 0.6,
+  "cooldown_range": [
+    30,
+    60
+  ]
+}
+```
+
+## minecraft&#58;behavior.knockback_roar
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityGoals/minecraftBehavior_knockback_roar.md`)
+
+주변 모든 엔티티에게 피해와 넉백을 주는 포효를 하게 한다.
+
+Allows the mob to perform a damaging knockback that affects all nearby entities.
+
+### Entity Knockback Roar Behavior Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| attack_time | 0.5 | Decimal number | 넉백이 일어나기까지의 지연(초). |
+| control_flags | [] | Control Flags choices |  |
+| cooldown_time | 0.10000000149011612 | Decimal number | 몹이 목표를 다시 쓰기 전에 기다려야 하는 시간(초). |
+| damage_filters (Damage Filters) | &#123;"AND":null,"NOT":null,"OR":null,"all":null,"all_of":null,"any":null,"any_of":null,"none_of":null&#125; | Damage Filters item | 다른 엔티티가 피해를 줄 유효한 대상이 되기 위해 충족해야 하는 조건 목록. |
+| damage_filters (Alternate 1) | *not set* | Object |  |
+| duration | 1 | Decimal number | 포효의 최대 지속 시간(초). |
+| knockback_damage | 6 | Integer number | 넉백 포효가 주는 피해량. |
+| knockback_filters (Knockback Filters) | &#123;"AND":null,"NOT":null,"OR":null,"all":null,"all_of":null,"any":null,"any_of":null,"none_of":null&#125; | Knockback Filters item | 다른 엔티티가 넉백을 적용할 유효한 대상이 되기 위해 충족해야 하는 조건 목록. |
+| knockback_filters (Alternate 1) | *not set* | Object |  |
+| knockback_height_cap | 0.4000000059604645 | Decimal number | 수직 넉백의 최대 높이. |
+| knockback_horizontal_strength | 4 | Integer number | 수평 넉백의 세기. |
+| knockback_range | 4 | Integer number | 넉백 효과의 반경(블록). |
+| knockback_vertical_strength | 4 | Integer number | 수직 넉백의 세기. |
+| on_roar_end (Entity ActorDefinitionTrigger) | &#123;"event":"","filters":&#123;"AND":null,"NOT":null,"OR":null,"all":null,"all_of":null,"any":null,"any_of":null,"none_of":null&#125;,"target":"self"&#125; | Roar End item | 포효가 끝났을 때 발생시킬 이벤트. event와 target 속성을 가진 객체 또는 단순한 이벤트 문자열을 쓸 수 있다. |
+| on_roar_end (as String) | *not set* | String |  |
+| priority | 0 | Integer number | 0에 가까울수록 우선순위가 높아진다. 우선순위가 높을수록 이 행동(목표)이 더 먼저 실행된다. |
+
+#### Control Flags choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| jump | Jump |  |
+| look | Look |  |
+| move | Move |  |
+
+#### Damage Filters
+
+##### Damage Filters Properties
+
+**JSON path:** `damage_filters`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| domain | *not set* | Object | 테스트를 수행할 도메인. |
+| operator | *not set* | Object | 'value'와 함께 적용할 비교 방식. |
+| subject | *not set* | Object | 이 필터 테스트의 대상(subject). |
+| test | *not set* | String | 적용할 테스트의 이름. |
+| value | *not set* | Object | 테스트에서 비교할 값. |
+
+#### Knockback Filters
+
+Same structure as Damage Filters.
+
+
+#### Entity ActorDefinitionTrigger
+Triggers an entity event when specified conditions are met. Events activate component groups that change entity behavior—transforming villagers into zombie villagers, switching mobs to aggressive mode, or triggering growth stages. Combine with filters to create conditional state machines that respond to gameplay.
+
+
+##### Entity ActorDefinitionTrigger Properties
+
+**JSON path:** `on_roar_end`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| event |  | String |  |
+| filters (Filters) | &#123;"AND":null,"NOT":null,"OR":null,"all":null,"all_of":null,"any":null,"any_of":null,"none_of":null&#125; | Filters item | 필터는 데이터 객체가 사용 조건이 되는 테스트 기준을 지정할 수 있게 한다. |
+| filters (Alternate 1) | *not set* | Object |  |
+| target | self | Target choices |  |
+
+##### filters
+
+Filters allow data objects to specify test criteria which allows their use. Filters can be defined by a single object of type (Filter Test), an array of tests, collection groups, or a combination of these objects.
+
+
+##### Filters
+
+###### Filters Properties
+
+**JSON path:** `on_roar_end > filters`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| domain | *not set* | Object | 테스트를 수행할 도메인. |
+| operator | *not set* | Object | 'value'와 함께 적용할 비교 방식. |
+| subject | *not set* | Object | 이 필터 테스트의 대상(subject). |
+| test | *not set* | String | 적용할 테스트의 이름. |
+| value | *not set* | Object | 테스트에서 비교할 값. |
+
+#### Target choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| baby | Baby |  |
+| block | Block |  |
+| damager | Damager |  |
+| holder | Holder |  |
+| item | Item |  |
+| other | Other |  |
+| parent | Parent |  |
+| player | Player |  |
+| self | Self |  |
+| target | Target |  |
+
+### 예시
+
+## minecraft&#58;behavior.lay_down
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityGoals/minecraftBehavior_lay_down.md`)
+
+몹이 가끔 눕게 한다.
+
+Allows mobs to lay down at times.
+
+### Entity Lay Down Behavior Properties
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| control_flags | [] | Control Flags choices |  |
+| interval | 120 | Integer number | 어떤 일이 일어날 수 있는 간격을 정하는 무작위 값. 이 목표를 고를 확률이 1/interval이다. |
+| priority | 0 | Integer number | 0에 가까울수록 우선순위가 높아진다. 우선순위가 높을수록 이 행동(목표)이 더 먼저 실행된다. |
+| random_stop_interval | 120 | Integer number | 목표에서 빠져나올 수 있는 무작위 값. 눕기를 멈출 확률이 1/interval이다. |
+
+#### Control Flags choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| jump | Jump |  |
+| look | Look |  |
+| move | Move |  |
+
+### 예시

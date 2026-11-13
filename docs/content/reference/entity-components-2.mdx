@@ -1,503 +1,450 @@
 ---
-title: 엔티티 컴포넌트 레퍼런스(주요 항목) (2/15)
-description: MS Learn 엔티티 컴포넌트·이벤트·필터 목록과 주요 컴포넌트.
-sidebar_position: 91
+title: 엔티티 컴포넌트 레퍼런스 (2/23)
+description: MS Learn 컴포넌트 문서 4개(minecraft:annotation.break_door ~ minecraft:apply_knockback_rules_instance). 속성 표와 예시 JSON을 원문대로 담았다.
+sidebar_position: 101
 sources:
   - ms-learn
 ---
 
-# 엔티티 컴포넌트 레퍼런스(주요 항목) (2/15)
+# 엔티티 컴포넌트 레퍼런스 (2/23)
 
-MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 레퍼런스를 발췌한 쪽이다. 원문의 상대 링크는 제거했다.
+MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 컴포넌트 문서를 옮긴 쪽이다. 설명은 한국어로 옮기고 ID, 속성 이름, 유형, 기본값, JSON은 원문 그대로 두었다. 전체 목록은 [색인](./entity-index.mdx)에 있다.
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_ageable.md`)
+## minecraft&#58;annotation.break_door
 
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_annotation_break_door.md`)
 
-### Entity Documentation - minecraft:ageable
+엔티티가 문을 부술 수 있게 한다. 내비게이션의 `can_break_doors`가 `true`여야 한다.
 
-Adds a timer for the entity to grow up. It can be accelerated by giving the entity the items it likes as defined by feed_items.
+Allows an entity to break doors, assuming that that flags set up for the component to use in navigation.
 
 > [!Note]
-> In 1.21.130 the `transform_to_item` field on each entry of `feed_items` was renamed to `result_item`. The new field is defined per-item, so different feed items can transform into different result items on use.
+> Requires the entity's `navigation` component to have the parameter `can_break_doors` set to `true`.
 
+### Break doors annotation Properties
 
-#### Ageable Properties
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| break_time | 12 | Integer number | 문을 부수는 데 필요한 시간(초). |
+| min_difficulty | hard | Min Difficulty choices | 이 엔티티가 문을 부수려면 월드가 가져야 하는 최소 난이도. |
 
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| drop_items | *not set* | Array of strings | List of items that are dropped when an entity grows up |  | 
-| duration | 1200 | Decimal number | Length of time before an entity grows up (-1 to always stay a baby) | Chicken: `1200` | 
-| feed_items (Ageable Feed Item) | *not set* | Array of Feed Items items | List of items that can be fed to an entity to age them up. Can be a single item string, an array of strings, or an array of objects with item and growth properties. | Chicken: `["wheat_seeds","beetroot_seeds","melon_seeds","pumpkin_seeds","pitcher_pod","torchflower_seeds"]`, Cow: `"wheat"`, Dolphin: `["fish","salmon"]` | 
-| feed_items (as Array of strings) | *not set* | Array of strings |  |  | 
-| feed_items (as String) | *not set* | String |  |  | 
-| grow_up | *not set* | Object | Event to fire when an entity grows up. Can be an object with event and target properties, or a simple event string. | Chicken: `{"event":"minecraft:ageable_grow_up","target":"self"}`, Dolphin: `{"event":"ageable_grow_up","target":"self"}` | 
-| grow_up (as String) | *not set* | String |  |  | 
-| interact_filters | *not set* | Minecraft filter | List of conditions to meet so that the entity can be fed. |  | 
-| pause_growth | *not set* | Object | Event triggered when a baby entity's growth is paused (via a `pause_growth_items` feed). |  | 
-| pause_growth (as String) | *not set* | String |  |  | 
-| pause_growth_items | *not set* | Array of strings | List of items that can be fed to a baby entity to pause its growth. This item requires a format version of at least 1.26.10. | Chicken: `["golden_dandelion"]` | 
-| reset_growth | *not set* | Object | Event triggered when a baby entity's growth is reset (via a `reset_growth_items` feed). |  | 
-| reset_growth (as String) | *not set* | String |  |  | 
-| reset_growth_items | *not set* | Array of strings | List of items that can be fed to a baby entity to reset its growth timer. This item requires a format version of at least 1.26.10. | Chicken: `["golden_dandelion"]` | 
+#### Min Difficulty choices
 
-##### pause_growth
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| easy | Easy |  |
+| hard | Hard |  |
+| normal | Normal |  |
+| peaceful | Peaceful |  |
 
-Event triggered when a baby entity's growth is paused (via a `pause_growth_items` feed). Can be an object with `event` and `target` properties, or a simple event string. This item requires a format version of at least 1.26.10.
+### 예시
 
-##### reset_growth
-
-Event triggered when a baby entity's growth is reset (via a `reset_growth_items` feed). Can be an object with `event` and `target` properties, or a simple event string. This item requires a format version of at least 1.26.10.
-
-
-##### Feed Items
-
-#### Ageable Feed Item Properties
-
-**JSON path:** `feed_items`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| growth | *not set* | Decimal number | How much the entity ages when fed this item. | 
-| item | *not set* | String | The item identifier. | 
-
-#### Samples
-
-#### Chicken
+##### [Drowned](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/drowned.json)
 
 
 ```json
-"minecraft:ageable": {
-  "duration": 1200,
-  "feed_items": [
-    "wheat_seeds",
-    "beetroot_seeds",
-    "melon_seeds",
-    "pumpkin_seeds",
-    "pitcher_pod",
-    "torchflower_seeds"
-  ],
-  "pause_growth_items": [
-    "golden_dandelion"
-  ],
-  "reset_growth_items": [
-    "golden_dandelion"
-  ],
-  "grow_up": {
-    "event": "minecraft:ageable_grow_up",
-    "target": "self"
-  }
-}
+"minecraft:annotation.break_door": {}
 ```
 
-#### Cow
+## minecraft&#58;annotation.open_door
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_annotation_open_door.md`)
+
+엔티티가 문을 열 수 있게 한다. 내비게이션의 `can_open_doors`가 `true`여야 한다.
+
+Allows the entity to open doors.
+
+> [!Note]
+> Requires the entity's `navigation` component to have the parameter `can_open_doors` set to `true`.
+
+### 예시
+
+## minecraft&#58;apply_knockback_rules
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_apply_knockback_rules.md`)
+
+엔티티가 넉백을 가하는 방식을 정의한다.
+
+Defines how an entity applies knockback.
+
+> [!Note]
+> Released out of beta in format version 1.26.30. The preset field `extra_knockback_approach` controls how knockback from enchantments, sprinting, and swimming combines with the preset's power (`reapply_default` preserves the prior behavior; `multiply` multiplies the preset's power by the extra-knockback factor).
+
+> [!Note]
+> This item requires a format version of at least 1.26.30.
+
+### Entity Apply Knockback Rules Properties
+
+| 이름 | 기본값 | 유형 | 설명 | 예시 값 |
+| --- | --- | --- | --- | --- |
+| presets | [] | Array of Presets items | 엔티티에 넉백을 적용하는 방식을 정의하는 규칙 인스턴스의 배열. | Drowned: `[{"horizontal_power":0.6,"vertical_power":-0.6,"vertical_velocity_cap":-0.4,"check_if_target_is_immersed_in_water":true}]`, Egg: `[{"vertical_power":0.1,"vertical_velocity_cap":0.1}]`, Iron Golem: `[{"horizontal_power":0.52,"vertical_power":0.39,"vertical_velocity_cap":0.8}]` |
+
+#### Entity Apply Knockback Rules Instance
+Intance of rules definition.
+
+
+##### Entity Apply Knockback Rules Instance Properties
+
+**JSON path:** `presets`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| check_if_target_is_immersed_in_water | false | Boolean true/false | 넉백 규칙이 적용되려면 대상이 완전히 물에 잠겨 있어야 하는지 여부. |
+| extra_knockback_approach | reapply_default | Extra Knockback Approach choices | 인챈트나 달리기로 인한 추가 넉백을 합치는 방식을 정의한다. "reapply_default"는 기본 넉백 매개변수로 넉백을 다시 적용한다. |
+| filter (Filter) | &#123;"AND":null,"NOT":null,"OR":null,"all":null,"all_of":null,"any":null,"any_of":null,"none_of":null&#125; | Filter item | 이 넉백 규칙의 영향을 받을 엔티티 종류에 대한 필터. |
+| filter (Alternate 1) | *not set* | Object |  |
+| horizontal_power | 1 | Decimal number | 대상을 뒤로 날려 보내는 힘. |
+| knockback_mode | relative_horizontal | Knockback Mode choices | 대상에게 넉백을 적용하는 방식을 정의한다. "relative_horizontal"은 공격자에서 대상으로 향하는 수평 방향으로 넉백을 적용한다. |
+| scale_with_damage | false | Boolean true/false | 피해량의 제곱에 반비례하여 넉백 크기에 적용하는 배율. |
+| slowdown_scale | 0.5 | Decimal number | 넉백을 적용하기 전에 대상의 속도에 곱하는 배율. 값은 1 이하여야 한다. |
+| vertical_power | 0.4000000059604645 | Decimal number | 대상을 위로 날려 보내는 힘. |
+| vertical_velocity_cap | 0.4000000059604645 | Decimal number | 대상의 넉백 규칙을 평가한 뒤 허용되는 최대 Y 속도. |
+
+##### extra_knockback_approach
+
+Defines the approach for combining extra knockback from enchantments or sprinting: - "reapply_default": Reapplies knockback again with default knockback parameters, i.e. values not defined by this component. - "multiply_reduced": Multiplies the extra knockback with the base knockback and a reduction factor, and adds it to the base knockback.
+
+##### knockback_mode
+
+Defines how knockback is applied to the target: - "relative_horizontal": Applies knockback along the horizontal direction from the attacker to the target. - "hit_direction": Applies knockback based on the hit direction and the point of impact (e.g. hits to the bottom of the entity or from below push it upward, hits on the left side of the entity push it to the right).
+
+
+#### Extra Knockback Approach choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| multiply_reduced | Multiply reduced |  |
+| reapply_default | Reapply default |  |
+
+##### Filter
+
+###### Filter Properties
+
+**JSON path:** `presets > filter`
+
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| domain | *not set* | Object | 테스트를 수행할 도메인. |
+| operator | *not set* | Object | 'value'와 함께 적용할 비교 방식. |
+| subject | *not set* | Object | 이 필터 테스트의 대상(subject). |
+| test | *not set* | String | 적용할 테스트의 이름. |
+| value | *not set* | Object | 테스트에서 비교할 값. |
+
+#### Knockback Mode choices
+
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| hit_direction | Hit direction |  |
+| relative_horizontal | Relative horizontal |  |
+
+### 예시
+
+##### [Drowned](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/drowned.json)
 
 
 ```json
-"minecraft:ageable": {
-  "duration": 1200,
-  "feed_items": "wheat",
-  "pause_growth_items": [
-    "golden_dandelion"
-  ],
-  "reset_growth_items": [
-    "golden_dandelion"
-  ],
-  "grow_up": {
-    "event": "minecraft:ageable_grow_up",
-    "target": "self"
-  }
-}
-```
-
-#### Dolphin
-
-
-```json
-"minecraft:ageable": {
-  "duration": 1200,
-  "feed_items": [
-    "fish",
-    "salmon"
-  ],
-  "pause_growth_items": [
-    "golden_dandelion"
-  ],
-  "reset_growth_items": [
-    "golden_dandelion"
-  ],
-  "grow_up": {
-    "event": "ageable_grow_up",
-    "target": "self"
-  }
-}
-```
-
-#### Llama
-
-
-```json
-"minecraft:ageable": {
-  "duration": 1200,
-  "feed_items": [
+"minecraft:apply_knockback_rules": {
+  "presets": [
     {
-      "item": "wheat",
-      "growth": 0.1
+      "horizontal_power": 0.6,
+      "vertical_power": -0.6,
+      "vertical_velocity_cap": -0.4,
+      "check_if_target_is_immersed_in_water": true
+    }
+  ]
+}
+```
+
+##### [Egg](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/egg.json)
+
+
+```json
+"minecraft:apply_knockback_rules": {
+  "presets": [
+    {
+      "vertical_power": 0.1,
+      "vertical_velocity_cap": 0.1
+    }
+  ]
+}
+```
+
+##### [Iron Golem](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/iron_golem.json)
+
+
+```json
+"minecraft:apply_knockback_rules": {
+  "presets": [
+    {
+      "horizontal_power": 0.52,
+      "vertical_power": 0.39,
+      "vertical_velocity_cap": 0.8
+    }
+  ]
+}
+```
+
+##### [Player](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/player.json)
+
+
+```json
+"minecraft:apply_knockback_rules": {
+  "presets": [
+    {
+      "filter": {
+        "test": "enum_property",
+        "subject": "other",
+        "domain": "minecraft:sulfur_cube_archetype",
+        "value": "bouncy"
+      },
+      "horizontal_power": 0.165,
+      "vertical_power": 0.105,
+      "vertical_velocity_cap": 8,
+      "slowdown_scale": 1,
+      "scale_with_damage": true,
+      "knockback_mode": "hit_direction",
+      "extra_knockback_approach": "multiply_reduced"
     },
     {
-      "item": "hay_block",
-      "growth": 0.9
-    }
-  ],
-  "pause_growth_items": [
-    "golden_dandelion"
-  ],
-  "reset_growth_items": [
-    "golden_dandelion"
-  ],
-  "grow_up": {
-    "event": "minecraft:ageable_grow_up",
-    "target": "self"
-  }
-}
-```
-
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_ambient_sound_interval.md`)
-
-
-### Entity Documentation - minecraft:ambient_sound_interval
-
-Delay for an entity playing its sound.
-
-
-#### Ambient Sound Interval Properties
-
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| event_name | ambient | String | Level sound event to be played as the ambient sound. | Allay: `"ambient"` | 
-| event_names | *not set* | Array of Event Names items | List of dynamic level sound events, with conditions for choosing between them. Evaluated in order, first one wins. If none evaluate to true, 'event_name' will take precedence. | Allay: `[{"condition":"query.is_using_item","event_name":"ambient.tame"},{"condition":"!query.is_using_item","event_name":"ambient"}]`, Breeze: `[{"condition":"!query.is_on_ground","event_name":"ambient.in.air"}]` | 
-| range | 16 | Decimal number | Maximum time in seconds to randomly add to the ambient sound delay time. |  | 
-| value | 8 | Decimal number | Minimum time in seconds before the entity plays its ambient sound again. |  | 
-
-##### Event Names
-List of dynamic level sound events, with conditions for choosing between them. Evaluated in order, first one wins. If none evaluate to true, 'event_name' will take precedence.
-
-
-#### Event Names Properties
-
-**JSON path:** `event_names`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| condition | *not set* | String | The condition that must be satisfied to select the given ambient sound | 
-| event_name | *not set* | String | Level sound event to be played as the ambient sound | 
-
-#### Samples
-
-#### Allay
-
-
-```json
-"minecraft:ambient_sound_interval": {
-  "event_name": "ambient",
-  "event_names": [
-    {
-      "condition": "query.is_using_item",
-      "event_name": "ambient.tame"
+      "filter": {
+        "test": "enum_property",
+        "subject": "other",
+        "domain": "minecraft:sulfur_cube_archetype",
+        "value": "regular"
+      },
+      "horizontal_power": 0.165,
+      "vertical_power": 0.105,
+      "vertical_velocity_cap": 8,
+      "slowdown_scale": 1,
+      "scale_with_damage": true,
+      "knockback_mode": "hit_direction",
+      "extra_knockback_approach": "multiply_reduced"
     },
     {
-      "condition": "!query.is_using_item",
-      "event_name": "ambient"
-    }
-  ],
-  "range": 5,
-  "value": 5
-}
-```
-
-#### Breeze
-
-
-```json
-"minecraft:ambient_sound_interval": {
-  "event_name": "ambient",
-  "event_names": [
+      "filter": {
+        "test": "enum_property",
+        "subject": "other",
+        "domain": "minecraft:sulfur_cube_archetype",
+        "value": "slow_bouncy"
+      },
+      "horizontal_power": 0.165,
+      "vertical_power": 0.24,
+      "vertical_velocity_cap": 8,
+      "slowdown_scale": 1,
+      "scale_with_damage": true,
+      "knockback_mode": "hit_direction",
+      "extra_knockback_approach": "multiply_reduced"
+    },
     {
-      "condition": "!query.is_on_ground",
-      "event_name": "ambient.in.air"
-    }
-  ],
-  "range": 16,
-  "value": 8
-}
-```
-
-#### Chicken
-
-
-```json
-"minecraft:ambient_sound_interval": {
-  "event_name": "ambient",
-  "event_names": [
+      "filter": {
+        "test": "enum_property",
+        "subject": "other",
+        "domain": "minecraft:sulfur_cube_archetype",
+        "value": "slow_flat"
+      },
+      "horizontal_power": 0.165,
+      "vertical_power": 0.105,
+      "vertical_velocity_cap": 8,
+      "slowdown_scale": 1,
+      "scale_with_damage": true,
+      "knockback_mode": "hit_direction",
+      "extra_knockback_approach": "multiply_reduced"
+    },
     {
-      "condition": "query.is_baby",
-      "event_name": "ambient.baby"
-    }
-  ],
-  "range": 16,
-  "value": 6
-}
-```
-
-#### Dolphin
-
-
-```json
-"minecraft:ambient_sound_interval": {
-  "event_name": "ambient",
-  "event_names": [
+      "filter": {
+        "test": "enum_property",
+        "subject": "other",
+        "domain": "minecraft:sulfur_cube_archetype",
+        "value": "fast_flat"
+      },
+      "horizontal_power": 0.365,
+      "vertical_power": 0.09,
+      "vertical_velocity_cap": 8,
+      "slowdown_scale": 1,
+      "scale_with_damage": true,
+      "knockback_mode": "hit_direction",
+      "extra_knockback_approach": "multiply_reduced"
+    },
     {
-      "condition": "query.head_is_in_water",
-      "event_name": "ambient.in.water"
-    }
-  ],
-  "range": 16,
-  "value": 6
-}
-```
-
-#### Drowned
-
-
-```json
-"minecraft:ambient_sound_interval": {
-  "event_name": "ambient",
-  "event_names": [
+      "filter": {
+        "test": "enum_property",
+        "subject": "other",
+        "domain": "minecraft:sulfur_cube_archetype",
+        "value": "light"
+      },
+      "horizontal_power": 0.165,
+      "vertical_power": 0.18,
+      "vertical_velocity_cap": 8,
+      "slowdown_scale": 1,
+      "scale_with_damage": true,
+      "knockback_mode": "hit_direction",
+      "extra_knockback_approach": "multiply_reduced"
+    },
     {
-      "condition": "query.head_is_in_water",
-      "event_name": "ambient.in.water"
+      "filter": {
+        "test": "enum_property",
+        "subject": "other",
+        "domain": "minecraft:sulfur_cube_archetype",
+        "value": "fast_sliding"
+      },
+      "horizontal_power": 0.265,
+      "vertical_power": 0.09,
+      "vertical_velocity_cap": 8,
+      "slowdown_scale": 1,
+      "scale_with_damage": true,
+      "knockback_mode": "hit_direction",
+      "extra_knockback_approach": "multiply_reduced"
+    },
+    {
+      "filter": {
+        "test": "enum_property",
+        "subject": "other",
+        "domain": "minecraft:sulfur_cube_archetype",
+        "value": "slow_sliding"
+      },
+      "horizontal_power": 0.165,
+      "vertical_power": 0.09,
+      "vertical_velocity_cap": 8,
+      "slowdown_scale": 1,
+      "scale_with_damage": true,
+      "knockback_mode": "hit_direction",
+      "extra_knockback_approach": "multiply_reduced"
+    },
+    {
+      "filter": {
+        "test": "enum_property",
+        "subject": "other",
+        "domain": "minecraft:sulfur_cube_archetype",
+        "value": "sticky"
+      },
+      "horizontal_power": 0.165,
+      "vertical_power": 0.09,
+      "vertical_velocity_cap": 8,
+      "slowdown_scale": 1,
+      "scale_with_damage": true,
+      "knockback_mode": "hit_direction",
+      "extra_knockback_approach": "multiply_reduced"
+    },
+    {
+      "filter": {
+        "test": "enum_property",
+        "subject": "other",
+        "domain": "minecraft:sulfur_cube_archetype",
+        "value": "high_resistance"
+      },
+      "horizontal_power": 0.165,
+      "vertical_power": 0.09,
+      "vertical_velocity_cap": 8,
+      "slowdown_scale": 1,
+      "scale_with_damage": true,
+      "knockback_mode": "hit_direction",
+      "extra_knockback_approach": "multiply_reduced"
+    },
+    {
+      "filter": {
+        "test": "enum_property",
+        "subject": "other",
+        "domain": "minecraft:sulfur_cube_archetype",
+        "value": "explosive"
+      },
+      "horizontal_power": 0.165,
+      "vertical_power": 0.09,
+      "vertical_velocity_cap": 8,
+      "slowdown_scale": 1,
+      "scale_with_damage": true,
+      "knockback_mode": "hit_direction",
+      "extra_knockback_approach": "multiply_reduced"
+    },
+    {
+      "filter": {
+        "test": "enum_property",
+        "subject": "other",
+        "domain": "minecraft:sulfur_cube_archetype",
+        "value": "hot"
+      },
+      "horizontal_power": 0.165,
+      "vertical_power": 0.105,
+      "vertical_velocity_cap": 8,
+      "slowdown_scale": 1,
+      "scale_with_damage": true,
+      "knockback_mode": "hit_direction",
+      "extra_knockback_approach": "multiply_reduced"
+    },
+    {
+      "filter": {
+        "test": "enum_property",
+        "subject": "other",
+        "domain": "minecraft:sulfur_cube_archetype",
+        "value": "cold"
+      },
+      "horizontal_power": 0.265,
+      "vertical_power": 0.09,
+      "vertical_velocity_cap": 8,
+      "slowdown_scale": 1,
+      "scale_with_damage": true,
+      "knockback_mode": "hit_direction",
+      "extra_knockback_approach": "multiply_reduced"
     }
-  ],
-  "range": 16,
-  "value": 8
+  ]
 }
 ```
 
+## minecraft&#58;apply_knockback_rules_instance
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_angry.md`)
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_apply_knockback_rules_instance.md`)
 
+넉백 규칙 정의의 인스턴스다.
 
-### Entity Documentation - minecraft:angry
+Intance of rules definition.
 
-Defines an entity's 'angry' state using a timer.
+### Entity Apply Knockback Rules Instance Properties
 
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| check_if_target_is_immersed_in_water | false | Boolean true/false | 넉백 규칙이 적용되려면 대상이 완전히 물에 잠겨 있어야 하는지 여부. |
+| extra_knockback_approach | reapply_default | Extra Knockback Approach choices | 인챈트나 달리기로 인한 추가 넉백을 합치는 방식을 정의한다. "reapply_default"는 기본 넉백 매개변수로 넉백을 다시 적용한다. |
+| filter (Filter) | &#123;"AND":null,"NOT":null,"OR":null,"all":null,"all_of":null,"any":null,"any_of":null,"none_of":null&#125; | Filter item | 이 넉백 규칙의 영향을 받을 엔티티 종류에 대한 필터. |
+| filter (Alternate 1) | *not set* | Object |  |
+| horizontal_power | 1 | Decimal number | 대상을 뒤로 날려 보내는 힘. |
+| knockback_mode | relative_horizontal | Knockback Mode choices | 대상에게 넉백을 적용하는 방식을 정의한다. "relative_horizontal"은 공격자에서 대상으로 향하는 수평 방향으로 넉백을 적용한다. |
+| scale_with_damage | false | Boolean true/false | 피해량의 제곱에 반비례하여 넉백 크기에 적용하는 배율. |
+| slowdown_scale | 0.5 | Decimal number | 넉백을 적용하기 전에 대상의 속도에 곱하는 배율. 값은 1 이하여야 한다. |
+| vertical_power | 0.4000000059604645 | Decimal number | 대상을 위로 날려 보내는 힘. |
+| vertical_velocity_cap | 0.4000000059604645 | Decimal number | 대상의 넉백 규칙을 평가한 뒤 허용되는 최대 Y 속도. |
 
-#### Angry Properties
+#### extra_knockback_approach
 
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| angry_sound | *not set* | String | The sound event to play when the mob is angry | 
-| broadcast_anger | false | Boolean true/false | If set, other entities of the same entity definition within the broadcastRange will also become angry | 
-| broadcast_anger_on_attack | false | Boolean true/false | If set, other entities of the same entity definition within the broadcastRange will also become angry whenever this mob attacks | 
-| broadcast_anger_on_being_attacked | false | Boolean true/false | If true, other entities of the same entity definition within the broadcastRange will also become angry whenever this mob is attacked | 
-| broadcast_anger_when_dying | true | Boolean true/false | If false, when this mob is killed it does not spread its anger to other entities of the same entity definition within the broadcastRange | 
-| broadcast_filters | *not set* | Minecraft filter | Conditions that make this entry in the list valid | 
-| broadcast_range | 20 | Integer number | Distance in blocks within which other entities of the same entity type will become angry | 
-| broadcast_targets | *not set* | Array of strings | A list of entity families to broadcast anger to | 
-| calm_event | *not set* | Object | Event to fire when this entity is calmed down. Can be a simple event name string or an object with event and target properties. | 
-| calm_event (as String) | *not set* | String |  | 
-| duration | 25 | Integer number | The amount of time in seconds that the entity will be angry. | 
-| duration_delta | 0 | Integer number | Variance in seconds added to the duration [-delta, delta]. | 
-| filters | *not set* | Minecraft filter | Filter out mob types that it should not attack while angry (other Piglins) | 
-| sound_interval | 0 | Range of integers | The range of time in seconds to randomly wait before playing the sound again. | 
+Defines the approach for combining extra knockback from enchantments or sprinting: - "reapply_default": Reapplies knockback again with default knockback parameters, i.e. values not defined by this component. - "multiply_reduced": Multiplies the extra knockback with the base knockback and a reduction factor, and adds it to the base knockback.
 
-#### Samples
+#### knockback_mode
 
+Defines how knockback is applied to the target: - "relative_horizontal": Applies knockback along the horizontal direction from the attacker to the target. - "hit_direction": Applies knockback based on the hit direction and the point of impact (e.g. hits to the bottom of the entity or from below push it upward, hits on the left side of the entity push it to the right).
 
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_attack.md`)
 
+#### Extra Knockback Approach choices
 
-### Entity Documentation - minecraft:attack
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| multiply_reduced | Multiply reduced |  |
+| reapply_default | Reapply default |  |
 
-Defines an entity's melee attack damage and any additional status effects applied on hit. Typical damage values range from 3 (zombie, creeper) to 7-21 (iron golem).
+#### Filter
 
+##### Filter Properties
 
-#### Entity Attack Properties
+**JSON path:** `filter`
 
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| damage | &#123;"max":0,"min":0&#125; | Range of floats | Range of the random amount of damage the melee attack deals. | 
-| damage (Damage) | *not set* | Damage (Damage) item |  | 
-| effect_amplifier | 0 | Integer number | Amplifier level (potion tier) of the status ailment applied to the damaged entity. | 
-| effect_duration | 0 | Decimal number | Duration in seconds of the status ailment applied to the damaged entity. | 
-| effect_name |  | String | Identifier of the status ailment to apply to an entity attacked by this entity's melee attack. | 
+| 이름 | 기본값 | 유형 | 설명 |
+| --- | --- | --- | --- |
+| domain | *not set* | Object | 테스트를 수행할 도메인. |
+| operator | *not set* | Object | 'value'와 함께 적용할 비교 방식. |
+| subject | *not set* | Object | 이 필터 테스트의 대상(subject). |
+| test | *not set* | String | 적용할 테스트의 이름. |
+| value | *not set* | Object | 테스트에서 비교할 값. |
 
-##### damage
+#### Knockback Mode choices
 
-Range of the random amount of damage the melee attack deals. A negative value can heal the entity instead of hurting it. Can be a number, an array [min, max], or an object with range_min and range_max properties.
-
-##### effect_amplifier
-
-Amplifier level (potion tier) of the status ailment applied to the damaged entity. Higher values increase the strength of the effect. Fixed in format version 1.26.30: `effect_amplifier` is now actually applied to the inflicted status effect, so amplifier-sensitive effects such as Hunger now scale correctly when triggered by a mob's melee attack. Prior versions silently ignored this value.
-
-
-##### Damage (Damage)
-
-#### Damage Properties
-
-**JSON path:** `damage`
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| max | 0 | Decimal number |  | 
-| min | 0 | Decimal number |  | 
-
-#### Samples
-
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_boss.md`)
-
-
-### Entity Documentation - minecraft:boss
-
-Defines the current state of the boss for updating the boss HUD.
-
-
-#### Entity Boss Properties
-
-|Name       |Default Value |Type |Description |
-|:----------|:-------------|:----|:-----------|
-| hud_range | 55 | Integer number | The max distance from the boss at which the boss's health bar is present on the players screen. | 
-| name | 55 | String | The name that will be displayed above the boss's health bar. | 
-| should_darken_sky | false | Boolean true/false | Whether the sky should darken in the presence of the boss. | 
-
-#### Samples
-
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_breathable.md`)
-
-
-### Entity Documentation - minecraft:breathable
-
-Defines what blocks this entity can breathe in and gives them the ability to suffocate.
-
-
-#### Breathable Properties
-
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| breathe_blocks | *not set* | Array of strings | List of blocks this entity can breathe in, in addition to the selected items above. |  | 
-| breathes_air | true | Boolean true/false | If set, this entity can breathe in air. |  | 
-| breathes_lava | true | Boolean true/false | If set, this entity can breathe in lava. |  | 
-| breathes_solids | false | Boolean true/false | If set, this entity can breathe in solid blocks. |  | 
-| breathes_water | false | Boolean true/false | If set, this entity can breathe in water. | Bogged: `true` | 
-| can_dehydrate | false | Boolean true/false | If true, entities that only breathe water (for example, fish) will take dehydration damage when out of water. This item requires a format version of at least 1.21.130. |  | 
-| generates_bubbles | true | Boolean true/false | If set, this entity will have visible bubbles while in water. |  | 
-| inhale_time | 0 | Decimal number | Time in seconds to recover breath to maximum. |  | 
-| non_breathe_blocks | *not set* | Array of strings | List of blocks this entity cannot breathe in, in addition to the selected items above. |  | 
-| suffocate_time | -20 | Integer number | Time in seconds between suffocation damage. |  | 
-| suffocateTime | *not set* | Decimal number |  |  | 
-| total_supply | 15 | Integer number | Time in seconds the entity can hold its breath. | Bat: `15` | 
-| totalSupply | *not set* | Decimal number |  | Allay: `15` | 
-
-#### Samples
-
-#### Allay
-
-
-```json
-"minecraft:breathable": {
-  "suffocateTime": 0,
-  "totalSupply": 15
-}
-```
-
-#### Bat
-
-
-```json
-"minecraft:breathable": {
-  "suffocate_time": 0,
-  "total_supply": 15
-}
-```
-
-#### Bogged
-
-
-```json
-"minecraft:breathable": {
-  "breathes_water": true,
-  "suffocate_time": 0,
-  "total_supply": 15
-}
-```
-
-
-(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_collision_box.md`)
-
-
-### Entity Documentation - minecraft:collision_box
-
-Sets the width and height of the Entity's collision box.
-
-
-#### Entity Collision Box Properties
-
-|Name       |Default Value |Type |Description |Example Values |
-|:----------|:-------------|:----|:-----------|:------------- |
-| height | 1.7999999523162842 | Decimal number | Height of the collision box in blocks. A negative value will be assumed to be 0. Value must be >= -100000000. Value must be &lt;= 100000000. | Allay: `0.6`, Armor Stand: `1.975`, Arrow: `0.25` | 
-| width | 0.6000000238418579 | Decimal number | Width and Depth of the collision box in blocks. A negative value will be assumed to be 0. Value must be >= -100000000. Value must be &lt;= 100000000. | Allay: `0.35`, Armor Stand: `0.5`, Arrow: `0.25` | 
-
-#### Samples
-
-#### Allay
-
-
-```json
-"minecraft:collision_box": {
-  "height": 0.6,
-  "width": 0.35
-}
-```
-
-#### Armor Stand
-
-
-```json
-"minecraft:collision_box": {
-  "height": 1.975,
-  "width": 0.5
-}
-```
-
-#### Arrow
-
-
-```json
-"minecraft:collision_box": {
-  "height": 0.25,
-  "width": 0.25
-}
-```
-
-#### Bat
-
-
-```json
-"minecraft:collision_box": {
-  "height": 0.9,
-  "width": 0.5
-}
-```
-
-#### Blaze
-
-
-```json
-"minecraft:collision_box": {
-  "height": 1.8,
-  "width": 0.5
-}
-```
-
+| 값 | 제목 | 설명 |
+| --- | --- | --- |
+| hit_direction | Hit direction |  |
+| relative_horizontal | Relative horizontal |  |
