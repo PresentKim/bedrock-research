@@ -1,0 +1,143 @@
+---
+title: "디버깅, 성능, 도구"
+description: "콘텐츠 로그, /reload, VS Code 디버거, 프로파일러, 성능과 메모리, 도구·라이브러리 목록"
+sidebar_position: 9
+sources:
+  - private-research
+  - ms-learn
+  - bedrock-wiki
+---
+
+## 디버깅 방법 한눈에
+
+공식 문서가 정리한 접근은 다음과 같다(출처: ms-learn, `creator/Documents/scripting/debugging-scripts.md`).
+
+| 방법 | 알맞은 경우 | 난이도 |
+|---|---|---|
+| 콘솔 로그 | 빠른 점검, 간단한 문제 | 쉬움 |
+| 콘텐츠 로그 | JSON 오류, 팩 로딩 문제 | 쉬움 |
+| VS Code 디버거 | 복잡한 로직, 변수 검사 | 보통 |
+| 사용자 도구 | 시간에 따른 변수 변화 | 보통 |
+| 시각 디버그 도구 | 공간 문제, 엔티티 추적 | 어려움 |
+| 스크립트 프로파일러 | 성능 문제 | 어려움 |
+
+## 콘텐츠 로그와 console
+
+콘텐츠 로그는 설정의 Creator 항목 아래 Content Log Settings에서 켠다. Content Log File은 파일로, Content Log GUI는 화면에 실시간으로 보여 주며, GUI Log Level은 Verbose(전부), Info(콘솔 출력과 경고·오류), Warn(경고·오류만)이다. 로그 파일은 GDK 빌드(1.21.120 이상)에서 `%APPDATA%\Minecraft Bedrock\logs\`, 프리뷰는 `%APPDATA%\Minecraft Bedrock Preview\logs\`에 있다. `console.warn()`은 로그 레벨과 무관하게 항상 보이고, `console.log()`는 Verbose나 Info일 때만 보인다.
+
+```javascript
+import { world, system } from "@minecraft/server";
+
+system.runInterval(() => {
+  const players = world.getAllPlayers();
+  console.warn(`Player count: ${players.length}`);
+  for (const p of players) {
+    console.warn(`Player ${p.name} at ${p.location.x}, ${p.location.y}, ${p.location.z}`);
+  }
+}, 100);
+
+const DEBUG_MODE = true;
+function debugLog(category, msg) {
+  if (DEBUG_MODE) console.warn(`[${category.toUpperCase()}] ${msg}`);
+}
+```
+
+## VS Code 디버거
+
+Mojang의 확장 "Minecraft Bedrock Edition Debugger"(`mojang-studios.minecraft-debugger`)를 설치하고 `development_behavior_packs` 폴더 기준으로 VS Code를 연다. 프로젝트의 `.vscode/launch.json`은 다음과 같고, 기본 포트는 19144다. TypeScript라면 `localRoot` 대신 `sourceMapRoot`(소스맵 폴더)와 `generatedSourceRoot`(생성된 js 폴더)를 쓴다(출처: ms-learn, `creator/Documents/scripting/vscode-debugger.md`).
+
+```json
+{
+  "version": "0.3.0",
+  "configurations": [
+    {
+      "type": "minecraft-js",
+      "request": "attach",
+      "name": "Debug with Minecraft",
+      "mode": "connect",
+      "targetModuleUuid": "<스크립트 모듈 UUID>",
+      "localRoot": "${workspaceFolder}/",
+      "port": 19144
+    }
+  ]
+}
+```
+
+F5로 디버깅을 시작해 VS Code를 대기 상태로 두고, 게임에서 `/script debugger connect`를 실행하면 "Debugger connected to host"가 나온다. Windows 클라이언트는 한 번 관리자 권한으로 루프백 예외(`CheckNetIsolation.exe LoopbackExempt -a -p=<패키지 SID>`)를 걸어야 한다. BDS는 반대로 서버가 디버그 연결을 기다리며 `server.properties`에서 스크립트 디버깅 허용 항목을 켠다. 중단점, 조건부 중단점, watch 식, 디버그 콘솔을 쓸 수 있고, 클라이언트 진단을 보려면 크리에이터 디버그 설정의 Enable Client Diagnostics를 켠다.
+
+## 프로파일러
+
+```text
+/script profiler start
+...  (몇 분간 평소처럼 플레이)
+/script profiler stop
+```
+
+멈추면 타임스탬프가 붙은 `.cpuprofile`이 로그 폴더에 생기고, VS Code로 열어 본다. 결과에는 함수 이름, Self time(자기 코드), Total time(호출한 것 포함), 호출 횟수가 나오고, 1.19.10 이후는 핵심 API 호출도 다룬다. 총 시간이 큰 함수, 예상보다 자주 불리는 함수, 뜻밖의 API 호출을 찾는다(출처: ms-learn, `creator/Documents/scripting/script-performance.md`).
+
+## 성능 원칙
+
+- 네이티브 호출은 비싸므로 한 번 얻은 값(차원, 플레이어 목록)을 변수에 담아 재사용한다.
+- 한 틱에 큰 데이터를 처리하지 말고 `runJob`으로 나눈다.
+- 매 틱 폴링하지 말고 이벤트를 쓴다. 조회는 필터 옵션(`type: "minecraft:zombie"` 등)을 API에 넘긴다.
+- 엔티티를 지나치게 소환하지 말고, ticking area도 꼭 필요한 만큼만 둔다.
+
+```javascript
+// 느림: 매 틱 차원을 다시 얻는다
+system.runInterval(() => {
+  world.getDimension("overworld").spawnEntity("minecraft:experience_orb", { x: 0, y: 10, z: 0 });
+}, 1);
+
+// 더 낫다: 밖에서 한 번만 얻는다
+const overworld = world.getDimension("overworld");
+system.runInterval(() => {
+  overworld.spawnEntity("minecraft:experience_orb", { x: 0, y: 10, z: 0 });
+}, 1);
+```
+
+## 타입과 외부 진단
+
+`npm i @minecraft/server`로 설치한 타입으로 VS Code가 자동 완성과 인라인 문서를 보여 준다. `@minecraft/debug-utilities`는 디버그 도형과 런타임 통계를, `@minecraft/diagnostics`는 Sentry 연동(`sentry.initialize`, `captureException`)을 제공한다. 공식 샘플 저장소 `minecraft-scripting-samples`의 스타터에는 이 도구 설정이 미리 들어 있다(출처: ms-learn, `developer-tools.md`).
+
+## 커뮤니티 노트
+
+아래는 커뮤니티 조사로 모은 로그, `/reload`, 디버거 문제 해결, 성능 팁, 도구와 라이브러리 목록이다.
+
+
+`*confirmed*`, `*single report*`, `**conflicting**`은 보고의 신뢰도 표시다. 이 페이지의 근거는 커뮤니티 보고이며 Mojang 공식 문서와 다를 수 있다.
+
+#### 디버깅과 로그
+
+- **콘텐츠 로그**: 설정 > Creator(크리에이터 설정) > Content Log GUI/파일. 파일은 `AppData/Roaming/Minecraft Bedrock/logs`. 30 GB로 쌓인 로그가 5~15 FPS의 원인이었던 사례. "discovered package with uuid" 잡음은 GUI 로그 레벨을 Info/Warn으로.
+- **`console.log` vs `console.warn`**: 로그 레벨에 info가 포함되어야 `console.log`가 보인다. warn이면 `console.warn`/`error`만. 핫 패스의 `console.log`는 CPU 스파이크, 한 틱에 300번 로그하면 watchdog으로 월드 종료.
+- **"At least one of your resource or behavior packs failed to load"** 메시지는 팩이 동작하면 무시 가능.
+- **`/reload` vs `/reload all`**: `/reload`는 스크립트만, `/reload all`은 전체(매니페스트 변경은 게임 재시작이 필요했던 사례). `/reload` 후 `Native class [ItemStack] not registered for JSClassID` 같은 stale context 오류는 `/reload all` 또는 재입장으로 해결. `/reload`는 `development_behavior_packs` 또는 월드 폴더 팩을 핫리로드하며 .mcpack으로 넣은 팩은 월드에 복사된다.
+- **Mojang VS Code 디버거**(`https://github.com/Mojang/minecraft-debugger/` , 확장 `mojang-studios.minecraft-debugger`): `launch.json` type `minecraft-js`, request `attach`, mode `listen`, `targetModuleUuid`, `localRoot`, `port`. 26.40~1.26.43에서 attach가 반복/`ECONNRESET`로 실패 → request를 `"listen"`으로 바꾸고 게임에서 `/script connect localhost 19144`(또는 `script debugger listen 19144`), Windows는 `CheckNetIsolation` 루프백 예외 필요. BDS는 `server.properties`에 `allow-outbound-script-debugging`/`allow-inbound-script-debugging`. 서버 시작 시 attach하면 로딩 스파이크가 크게 보인다.
+- **프로파일러**: `/script profiler start` / `stop`으로 파일 생성 후 VS Code 디버거에서 열기. Self time = 자기 코드, Total = 호출 포함. `.cpuprofile`은 idle을 큰 self-time으로 보이고 호출 횟수가 없으며 합계라 신뢰도가 떨어질 수 있다. Creator > Enable Client Diagnostics. 문서: `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/developer-tools?view=minecraft-bedrock-stable`
+- **메모리 누수 추적**: `@minecraft/debug-utilities` `runtimeStats`(QuickJS 카운터)를 시간별로 덤프.
+- **#debug-playground의 JaylyBot**: ```js 코드블록 메시지 > Apps > "Debug Scripts"로 오류와 debug.log를 받는다(슬래시 커맨드 아님, DM에서도 사용 가능, 유효한 JS/TS만). 모듈별 `.d.ts`를 게시하고 stable이 없는 모듈은 "not found in stable". `;compile` 봇은 순수 Node JS용이라 Script API에는 무용. 봇의 문자열 슬롯명(`'Mainhand'`) 경고는 오탐이지만 대소문자 구분(`'mainhand'`, `'slot.weapon.mainhand'`는 실패). `/docs info &lt;module>`로 버전 목록. (한 보고자는 *caveat: 봇 채널 노트, 일부 추론*)
+
+
+### 성능과 메모리
+
+- **네이티브 호출을 줄여라**: `player.name` 등 네이티브 getter는 JS Map 조회보다 20~30배 느리다. `entity.location`, `system.currentTick` 같은 속성 접근도 API 경계를 넘으므로 틱당 한 번 캐시, 컴포넌트는 WeakMap 캐시, 핫 루프에서 객체·문자열 할당 피하기(8000회: 0.38 ms vs 1.65 ms), 정규식은 상수로. API 호출 수 감소가 작업 분할보다 중요하고 안 쓰는 함수는 비용이 없다.
+- **`runCommand`는 네이티브 API보다 느리다**(runCommand → 파서 → 엔진). 네이티브 메서드 우선(`player.addItem` vs `/give`, `setActionBar` vs `title`, `inputPermissions` vs `/inputpermission`). 커맨드를 스크립트에서 일괄 호출하지 말 것. 반대 사례: `effect clear` 커맨드가 효과별 `clearEffect`보다 빨랐다. 커맨드는 피드백 텍스트를 반환하지 않고 `successCount`만.
+- **이벤트 > 폴링**: entitySpawn 같은 이벤트가 틱 함수 폴링보다 낫고, 근접 검사는 5~20틱마다, 장비 감지는 5~20틱 폴링. `getEntities` 반복 대신 `entitySpawn`/`entityLoad`/`entityRemove`로 Set/Map을 유지하고(무해한 효과 `effectAdd`나 `dataDrivenEntityTrigger`로 추적하는 트릭도) 하나의 `runInterval`에서 틱당 N개(예: 8)만 처리 — 217개 엔티티를 20 TPS로 유지한 사례. 인벤토리 변경 필터가 틱당 `hasitem` 태그 커맨드 200개보다 빠를 것(벤치마크 권장).
+- **엔티티 비용 기준**: `Dimension.getEntities` ~0~1 ms. BDS(Ryzen 9 7950X)에서 배회하는 좀비 ~500마리가 20 TPS 한계, 추적/경로탐색은 더 비싸고 저가 VPS는 300~350마리부터 TPS 하락. 스크립트 경로탐색은 렉 → JSON AI. cannon-es 래그돌 물리는 실험 없이 동작하지만 몹이 많으면 렉(crashcat `https://crashcat.dev` 추천, Rapier는 Sable 사용).
+- **인터벌 위생**: 인터벌을 다른 인터벌 안에 중첩 금지, 적을수록 좋지만 합친 인터벌은 한 함수 실패가 나머지를 멈추므로 작업별 try/catch. 애드온 간에 공유 `runInterval` 하나가 여러 개보다 싸다. 플레이어별 인터벌은 싸면 괜찮다. 모든 차원을 몇 초마다 스캔하는 무거운 인터벌을 피하고, `InvalidEntityError` 하나가 틱 스크립트를 멈출 수 있다.
+- **QuickJS 미시 최적화**: switch는 객체 맵보다 느리다(JIT 없음, 태그 디스패치 `FUNC_LISTS[tag]()`), for 루프가 forEach보다 빠르고 `.find`/filter가 `.map`보다 낫다, 큰 조회는 Set/Map(O(1)), 제너레이터 헬퍼는 지연·단일 패스이지만 원시 루프보다 약간 느림. `var`가 `let`보다 25~30% 빨랐고 `await`가 `.then`보다 느렸다는 측정이 있으나 차이는 작아 let/const 권장. 빈번한 키 추가/삭제엔 Map(객체는 누수를 겪은 사례). 가중 랜덤은 별칭 방법(`https://www.keithschwarz.com/darts-dice-coins/`)이나 누적 가중치. `import * as mc`는 번들 크기를 키울 수 있다.
+- **FPS**: 스크립트는 보통 FPS에 영향을 주지 않는다(파티클·엔티티가 원인). 한 틱에 엔티티를 많이 스폰하면 렉 → 한 번 스폰 후 텔레포트, 틱 분산, 상한. 마켓플레이스 애드온 다수가 낮은 TPS의 원인이며 플레이어의 Memory Tier 설정도 애드온 로드에 영향.
+- **메모리 누수 원인**: 해제하지 않은 리스너, 엔티티·아이템을 영원히 쥐는 전역 배열/Map, 정리 안 한 인터벌, 플레이어별 Map 미삭제. `/reload`는 인터벌을 죽이지만 옛 모듈 데이터는 GC까지 남는다(ticking area 생성 후 해제 안 되는 누수 MCPE-236954 보고). 프로토타입 getter를 Player 키로 쓰면 누수 가능 → WeakMap 또는 퇴장 시 정리. 큰 DP DB는 프로파일러에 안 보이는 TPS 저하를 낼 수 있다.
+- **코드 보호**: 진정한 JS 난독화는 없다. 난독화는 쉽게 되돌려지고 엔진 오류·성능 저하, 다중 파일 import/export를 깨뜨림(먼저 번들), eval 기반은 금방 해독. esbuild minify + 심볼 이름 변경 정도가 현실적, 라이선스(choosealicense.com)가 실질적 보호. DP는 같은 스크립트 환경에서만 접근되므로 난독화로 보호할 이유가 없다. JSON은 보호 불가, IP/포트로 애드온 제한 불가.
+
+
+### 도구와 자료
+
+- **API 문서**: Microsoft Learn `https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/?view=minecraft-bedrock-stable` (실험판 `?view=minecraft-bedrock-experimental`에서 이름 확인; 이벤트 클래스별 페이지 예 `https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/minecraft/server/playerspawnafterevent` ; 문서 예제가 낡은 경우가 있음; 오류는 bedrock-samples / MS Learn 저장소나 피드백 채널에 보고), JaylyDev `https://jaylydev.github.io/scriptapi-docs/latest/` (커뮤니티가 공식보다 낫다고 평가, 플랫폼 차이 #platform-differences, 권한 설명 /features/script-privileges.html, LLM용 `https://jaylydev.github.io/scriptapi-docs/meta/llms.html` 및 llms.txt; 2026-06 기준 26.20까지), stirante `https://stirante.com/script/` (버전별 `https://stirante.com/script/server/<version>/classes/<Class>.html`, server-ui·server-admin·debug-utilities·server-graphics, 버전 diff `https://stirante.com/script/diff.html` ; CloudFront/S3로 이전).
+- **위키/가이드**: `https://wiki.bedrock.dev/scripting/what-is-script` , /scripting/scripting-intro , /scripting/api-modules , /scripting/resources , /scripting/typescript , /scripting/privileges , /scripting/custom-commands , /scripting/script-server (커맨드 실행, 미구현 커맨드 목록), wiki 저장소 `https://github.com/Bedrock-OSS/bedrock-wiki/tree/wiki` ; MS 문서: 스크립팅 소개 `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/introduction?view=minecraft-bedrock-stable` , 커스텀 컴포넌트 `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/custom-components?view=minecraft-bedrock-stable` , 아이템 커스텀 컴포넌트 `https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/minecraft/server/itemcustomcomponent?view=minecraft-bedrock-stable` , v2 개요, TS next steps `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/next-steps?view=minecraft-bedrock-stable` , 커스텀 팩 설정 `https://learn.microsoft.com/en-us/minecraft/creator/documents/addons/custompacksettings?view=minecraft-bedrock-experimental` , 블록 상태 목록 `https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/intrinsicblockstateslist?view=minecraft-bedrock-stable` , 블록 낙하 `https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/blockcomponents/minecraftblock_entity_fall_on?view=minecraft-bedrock-stable` . 커스텀 작물 `https://wiki.bedrock.dev/blocks/custom-crops` , 블록 이벤트 `https://wiki.bedrock.dev/blocks/block-events` , 팀 데미지(JSON) `https://wiki.bedrock.dev/entities/disabling-team-damage.html` , 무적 엔티티 `https://wiki.bedrock.dev/entities/invulnerable-entities` , runtime identifier `https://wiki.bedrock.dev/entities/runtime-identifier` , 커스텀 이모지 `https://wiki.bedrock.dev/text/custom-emojis` .
+- **타입/메타데이터**: npm `@minecraft/server`, `@minecraft/server-ui`, `@minecraft/server-net`, `@minecraft/server-admin`, `@minecraft/server-gametest`, `@minecraft/debug-utilities`, `@minecraft/math`, `@minecraft/vanilla-data`, `@bedrock-apis/env-types`(`https://github.com/bedrock-apis/env-types`), Ore UI 타입 `ore-ui-types`, `@ore-ui-types/enums`. 바닐라 메타데이터 `https://github.com/bedrock-apis/bds-docs/tree/preview/metadata/vanilladata_modules` , Mojang bedrock-samples `https://github.com/Mojang/bedrock-samples` (레시피, 파티클, 텍스처/폰트), 바닐라 RP `https://github.com/ZtechNetwork/MCBVanillaResourcePack` . 최소 버전 찾기(모든 버전에 대해 tsc 타입 검사) `https://waveplayz.github.io/bedrock-api-version-finder/` . AI에게는 사람용 문서보다 `.d.ts`를 읽히는 게 낫다(`minecraft_server.d.ts` ~200K 컨텍스트).
+- **개발 도구**: Mojang 디버거 `https://github.com/Mojang/minecraft-debugger/` (VS Code `mojang-studios.minecraft-debugger`), 개발자 도구 문서, `minecraft-scripting-samples` ts-starter(모든 모듈을 main.js 하나로 번들), Regolith(esbuild 로컬 필터, Rolldown 필터 `https://github.com/azurite-bedrock/regolith-filters/tree/main/dinoscript` , comptime `https://github.com/azurite-bedrock/rolldown-plugins/tree/main/comptime` , `https://github.com/lukeed/comptime` , serde `https://github.com/arexon/serdeco` ; oxc 계열 rolldown/oxlint/oxfmt, tsgo; TypeScript 7.0(Go 포트) 2026-07-08 출시), JaylyBot(#debug-playground), 온라인 편집기 `https://minato.beyondbedrock.org/web-apps/web-editor.html` , 커맨드 빌더 `https://cmd-builder.beyondbedrock.org/` , mctools.dev, `bds` 패키지 매니저 `https://github.com/PhantomXD-nepal/bds` (`bds init|list|add`), 월드 편집 `https://github.com/8Crafter-Studios/Bedrock-World-Editor` , `https://bedrocktoolchest.com/download` , `https://www.chunker.app/` .
+- **라이브러리**: bedrock-boost(`https://github.com/Bedrock-OSS/bedrock-boost` ; 벡터/커맨드 유틸, `PlayerPulseScheduler`, `EntitySaver`, `testfor` 기반 `isItem`), adk-scripts `https://github.com/SmokeyStack/adk-scripts` , Script-API-Utilities `https://github.com/IMvampireXD/Script-API-Utilities` (runJob 유틸, 지형 생성), MCBE-IPC / DirectIPC / @mcbe-mods/ipc / AddonAPIKit, command-wrapper(github.com/Aevarkan/command-wrapper), QIDB / QUICK-ITEM-DATABASE, script-api-database, KinetixDB, Paradox AntiCheat(rewrite 브랜치: data-hive.ts, player-cache.ts, event-coordinator.ts `https://github.com/Visual1mpact/Paradox_AntiCheat/blob/rewrite/penrose/classes/core/event-coordinator.ts` , criticals.ts, dome.js), UnloadedUtils, ChunkLoader, Jobs.js(우선순위 job), Chest-UI(Herobrine643928), Chest-Form(Sprixvy), Detect-Click `https://github.com/mittens4all/Detect-Click` (점수 `detect:right_click`, `detect:left_click`), Player-Outline(github.com/JuanLuci/Player-Outline), 나무 벌목 `https://github.com/whynotoss/chop-chop` (Apache 2.0), recursive-crafting(github.com/Efficient123/recursive-crafting), Sweep-N-Slash `https://github.com/azurite-bedrock/Sweep-N-Slash` (및 CurseForge `https://www.curseforge.com/minecraft-bedrock/addons/sweep-n-slash`), WebhookAPI, OverTakesJS(conmaster2112, 프로토타입 패치), QuantumBE/Daniye CPS 카운터, Better Knockback(Agg-dev; 저장소 삭제), JaylyDev/interpreter `https://github.com/JaylyDev/interpreter` , Generic DDA·블록 상태 코덱(WavePlayz gist), Native Local & Relative Coordinates 유틸.
+- **물리/기타**: cannon-es(MajestikButter/Physics-Test), crashcat `https://crashcat.dev` , Rapier; RISC-V 리눅스 에뮬레이터를 Script API로 돌린 사례(느림). 중국판 ShaderSDK `https://mc.163.com/dev/mcmanual/mc-dev/mcdocs/4-ShaderSDK/0-%E6%A6%82%E8%BF%B0.html?catalog=1` . 방향 규약 정리 스프레드시트(위키 반영 예정).
+- **노드/외부**: Endstone(`scripting-nodejs-release` V8 바인딩, 플러그인), SerenityJS(Node 기반 서버), 커스텀 BDS 소프트웨어(QuickJS를 V8로 교체).
+

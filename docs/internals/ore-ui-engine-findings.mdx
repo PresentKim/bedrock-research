@@ -1,0 +1,118 @@
+---
+title: Ore UI 엔진 발견
+description: Ore UI 파일 요청의 팩 조회와 신뢰 판정, 암호화 팩, 버튼 다리, DDUI 레이아웃과 데이터 통로, geo-item 아이콘(NB-17~22).
+sidebar_position: 3
+sources:
+  - private-research
+  - repo-guide
+  - repo-ore-ui-loading
+  - private-research
+---
+
+
+Ore UI는 Coherent Gameface 위에서 도는 React 기반 웹 UI다. 설정, 월드 목록, 로딩, 사망 화면, 게임 중 일부 화면과 스크립트 폼(DDUI)이 이쪽이다. JSON UI와 달리 리소스팩의 JSON으로 배치를 바꾸지 못하므로 "리소스팩으로 정말 못 바꾸나"가 오래된 질문이었다. 이 페이지는 클라이언트 바이너리를 읽어 **파일 요청이 팩을 어떻게 조회하는지**, **어떤 팩이 신뢰되는지**, **JSON UI 버튼 정의가 Ore UI로 넘어가는 다리**, **DDUI 데이터 통로**, **`geo-item://` 아이콘 해석**을 확인한 결과다.
+
+
+검증 수준은 모두 `코드`다. 컴파일 결과를 읽은 것이라 게임 동작까지 보장하지 않으며, 게임 실측과 다르면 실측을 따른다. `@0x…`는 Android 1.26.52.3 arm64 빌드의 분석 주소이고 판이 바뀌면 달라진다. 분석한 코드는 싣지 않고 동작만 한국어로 다시 썼다.
+
+각 발견은 서버·Dragonfly로 탐침 팩을 보내 Windows 1.26.52에서 확인한 실측(`OL`, Ore UI 로딩 조사)과 짝을 이룬다. 바이너리는 "왜 그렇게 되는가"를, 실측은 "실제로 그렇게 되는가"를 답한다.
+
+## 0. 한눈에
+
+- Ore UI 파일 요청(`ui://…`)은 설치 폴더보다 **팩 스택을 먼저** 보지만 신뢰된 팩만 본다. 일반·서버 리소스팩의 `hbui/…`는 쓰이지 않는다(NB-17).
+- 암호화 팩 접근 전략(`EncryptedFileAccessStrategy` 등)은 **언제나 신뢰된다**. 그래서 서버가 아무 콘텐츠 키로 암호화해 보낸 팩, 또는 로컬 팩 루트에 0바이트 `content.zipe`만 둔 팩은 Ore UI 파일을 대체한다(NB-20).
+- 게임 중 Ore UI 버튼의 모양은 `vanilla.resourcePackOverrides`로 JSON UI의 두 정의(`common_buttons.light_text_button`, `common_buttons.focus_border`)에서 넘어온다(NB-18).
+- DDUI 레이아웃(`ddui/root`, `ddui/composition`)은 내장 팩 표시가 있는 팩에서만 읽힌다(NB-19).
+- 아이템 아이콘 `geo-item://<이름>?width=&height=&id=&bag=`은 JSON UI 아이템 렌더러가 쓰는 `#item_id_aux` 속성 묶음을 받는다(NB-22).
+
+### 가이드 규칙에 미치는 영향
+
+| 주제 | 이전 주장 | 바이너리 결과 | 판정 |
+| --- | --- | --- | --- |
+| 리소스팩으로 Ore UI 수정(ALT-11) | "팩으로 못 고친다"(OUC 코드, 커뮤니티) | 배치·동작·CSS는 신뢰된 팩만 조회한다. 하지만 암호화 접근 전략은 항상 신뢰된다 | **보완.** 전혀 못 고치는 것이 아니다 |
+| 버튼 모양(ALT-15) | "팩으로 못 고친다" | `resourcePackOverrides`가 JSON UI 버튼 정의 두 개를 Ore UI 버튼으로 넘긴다 | 확정(실측 포함) |
+| DDUI 사용자 팩 레이아웃(ALT-16) | Mojang 발언: 2단계 전까지 내부 팩 전용 | 내장 팩 표시가 있는 팩만 읽는다 | 뒷받침(추론) |
+| 아이템 아이콘(ALT, HOST-17) | 숫자 ID 방식만 알려짐 | `geo-item://`이 이름으로 아이템을 찾고 `#item_id_aux`를 속성 묶음에서 받는다 | 새 사실 |
+
+
+
+## 1. 파일 요청과 팩 조회
+
+### NB-17 Ore UI 파일 요청은 신뢰된 팩을 먼저 보고, 없으면 설치 폴더에서 연다
+
+질문은 "Ore UI를 리소스팩으로 정말 못 바꾸나"였다(2026-10-23 8~10차 분석). 실측까지 한 조사 전체는 (`OL`)에 있다.
+
+- `@0x09cf635c`가 요청 경로를 `ui://…`로 맞추고, `@0x09cf68d4`가 파일을 찾는다. `../`·`..\`는 거부한다.
+- 팩 스택(0x110바이트 팩 항목)을 돌며, 팩 접근 전략의 가상 함수 +0x30이 참인 팩에서만 `hasResource`(`@0x112ac30c`, 가상 함수 +0x38 = `hasAsset(path,false,false)`)를 본다. +0x30은 `isTrusted()`로 보인다(추론). 없으면 `gui/dist/` 아래를 앱 패키지 파일 시스템에서 연다(`@0x09cf66f8`).
+- `hbui/routes.json`(`@0x09cd39dc`)과 `gui/dist/hbui/fonts`(`@0x096de4bc`)는 설치 폴더에서만 읽는다.
+- 서버 팩에 넣은 `hbui/…css`는 적용되지 않았다(`OL` 실측).
+
+
+## 2. 팩 접근 전략과 신뢰
+
+"팩이 신뢰되는가"는 팩을 읽는 **접근 전략 클래스**가 정한다. 팩 UUID나 manifest는 보지 않는다.
+
+### NB-20 암호화 팩 접근 전략은 언제나 신뢰된다
+
+NB-17의 신뢰 검사(+0x30)를 클래스마다 역어셈블했다(11차, `DumpVtables.java`. 분석 주소 = ELF 주소 + 0x100000).
+
+- `ZipPackAccessStrategy`(`@0x1125865c`)는 `위치.파일시스템 == 1`(앱 패키지)이거나 +0x170 플래그일 때, `DirectoryPackAccessStrategy`(`@0x112ee564`)는 `위치.파일시스템 == 1`일 때만 참이다.
+- `EncryptedFileAccessStrategy`·`ZippedEncryptedFilesAccessStrategy`(`@0x112f456c`)와 `DirectoryPackWithEncryptionAccessStrategy`(`@0x112f0a70`)는 **언제나 참**을 돌려준다.
+- 팩 UUID나 manifest는 보지 않는다. 서버가 아무 콘텐츠 키로 암호화해 보낸 팩도 신뢰되어 Ore UI 파일을 대체한다(`OL` 7장 실측).
+- 폴더 팩은 팩 생성 함수(`FUN_1127c5e0` → `FUN_1128022c` → `FUN_11280ebc`)가 키 공급자가 있을 때 `content.zipe`를 찾고, 있으면 `DirectoryPackWithEncryptionAccessStrategy`로 연다(24~27차). 로컬 팩 루트에 0바이트 `content.zipe`만 두어도 신뢰되어 Ore UI 파일을 대체했다(`OL` 7장 실측). 이 검사는 파일이 있는지만 보는 것으로 보인다. 팩 파일 종류 판정(`FUN_129c3d34`)은 256바이트 미만을 암호화 파일로 보지 않는데, 빈 파일이 통했기 때문이다(추론).
+- Zip 팩의 +0x170 플래그는 생성자 `FUN_112569a0`이 인자 구조체 +0x48에서 복사한다. 생성자를 부르는 네 곳이 모두 이 값에 0을 넣으므로, 이 플래그로 신뢰되는 팩은 없다(24차).
+- 콘텐츠 키는 `ClientContentKeyProvider`가 서버가 보낸 키, 엔타이틀먼트, 내장 표에서만 찾는다. 팩 옆 키 파일이나 월드 db는 보지 않는다(26~27차).
+
+
+## 3. JSON UI에서 Ore UI로 넘어가는 버튼 정의
+
+### NB-18 `vanilla.resourcePackOverrides`: JSON UI 버튼 정의 두 개가 Ore UI로 넘어간다
+
+- facet은 `definitions`·`lastUpdated`를 낸다(`@0x09ef8760`). 정의는 `identifier`, `control`, `propertyData[]`(`name`, `value`), `textureData[]`(`identifier`, `path`, `sliceSize`, `uvSize`, `uvScale`)다.
+- 엔진이 푸는 정의는 하드코딩된 두 개다(`@0x09ef8a7c`): `common_buttons.light_text_button`(텍스처 `$new_ui_button_texture`, 속성 `$text_color`·`$border_color`)과 `common_buttons.focus_border`(텍스처 `texture`).
+- 게임 중 번들이 이것을 primary·secondary 버튼의 상태별 `border-image`(`pack://<path>.png?filtering=point`), `color`, `filter`로 바꾼다. 서버 팩으로 Ore UI 사망 화면 버튼이 바뀌는 것을 확인했다(`OL` 실측).
+
+
+## 4. DDUI
+
+DDUI(`@minecraft/server-ui`의 `CustomForm` 계열)는 스크립트가 만든 폼을 Ore UI가 그리는 방식이다. 레이아웃 로더와 데이터 통로는 다음과 같다.
+
+### NB-19 DDUI 레이아웃은 내장 팩에서만 읽는다
+
+- `@0x0b96ab2c`가 팩 스택의 `ddui/root`(`minecraft:ui-root`, `@0x0b96b304`)와 `ddui/composition`(`minecraft:ui-composition`, `@0x0b96c468`)을 읽고 팩 UUID를 `sourcePackId`로 남긴다.
+- 팩 객체의 bool +0x88(`@0x112ac54c`)이나 +0x89(`@0x112ac55c`)가 참인 팩만 읽는다. 같은 두 함수가 POI 로더(`@0x10a29438`, `@0x10a2b6e8`)에서 `minecraft:` 이름공간 허용을 가른다(둘 다 거짓이면 `Cannot use minecraft namespace found %s`). 그래서 이 값은 내장 팩 표시로 본다(추론). 사용자 팩의 DDUI 레이아웃은 읽히지 않는다. 실측하지 않았다.
+
+### NB-21 DDUI 데이터 통로와 게임 중 Ore UI 스위치
+
+- 게임 중 번들은 DDUI 데이터를 엔진 query `vanilla.ddui.string/number/bool/object/objectArray`(인자: 저장소, 속성, 경로)로 읽는다. 쓰기는 명령 그룹 `vanillaDduiDataStoreSetCommandGroup`(`setDataStorePathString/Number/Bool`, `dataStoreButtonPress`, `dataStoreCloseButtonPress`)이다. 주입 JS도 `engine.trigger("query:subscribe/<이름>", id, …)`와 `window.__commands__`로 같은 것을 쓸 수 있다(`OL` 9장 실측).
+- 바이너리의 타입 이름: `OreUI::DataStoreQueryString` 등, `OreUI::DataStoreSetCommandGroup`, `Bedrock::DDUI::DataStoreSyncClient`/`DataStoreSyncServer`. 패킷 `ClientboundDataStorePacket`은 cereal 스키마(`ClientboundDataStorePacketPayload`, `variant<DataStoreUpdate, DataStoreChange, DataStoreRemoval>`)로 정의된다.
+- 아이템 아이콘은 `geo-item://<이름>?width=&height=`이다(`OL` 10장 실측). 해석은 NB-22.
+- `vanilla.screenSpecificOptions`의 속성 `devOreUIGameplayUI`(`@0x09e6f6cc`)는 옵션 593(`0x251`)이 정수 1이면 참이다. 게터 `@0x09e6f998`, 세터 `@0x09e6f9fc`(1 켬, 2 끔, 14차). 옵션 593을 읽는 다른 두 함수(`@0x0b5db54c`, `@0x0b5db59c`, 15차)는 먼저 `@0x0b5db380`(전역 설정 객체 확인)을 보고, 옵션 593이 1인지 본다. 두 번째는 인자로 받은 번호가 비트 마스크 `0x380103ef`에 드는지까지 본다(화면 종류별 허용 표로 보인다, 추론). 등록 위치(`@0x078a325c`)는 분석 도구가 다른 함수로 잘못 묶어 읽지 못했다.
+- 기능 토글 표(`@0x0b16a4c4`, 13차)는 (번호, 플라이팅 키, 이름, 기본값)을 등록한다. `0x28`이 `mc-enable-sdl-inventory`/`enableSDLInventoryPage`(기본 꺼짐)다.
+
+
+## 5. 아이템 아이콘 `geo-item://`
+
+### NB-22 `geo-item://`은 JSON UI 아이템 렌더러의 속성 묶음을 받는다
+
+- 12차의 ADRP+ADD 탐색이 `geo-item://`의 사용처를 못 찾은 것은 그 코드가 분석 도구에서 함수로 묶이지 않았기 때문이다. 창 크기를 64개 명령으로 넓혀 바이트로 다시 훑자 스킴 등록 함수(`@0x0b911e34`)가 나왔다. `https://`, `paperdoll://`과 함께 등록되고, `geo-item://`과 `paperdoll://`은 같은 처리기 공장(+0x200)을 플래그 0/1로 쓴다.
+- 처리기는 `OreUI::GeometryAtlasResourceHandlerImpl`(vtable `@0x12ea8058`)이다. 요청(슬롯 2, `@0x0b91aa50`)은 URL 문자열을 `OreUI::ItemResourceResolver`의 해석 함수(vtable +0x18, `@0x0b91af24`)에 넘긴다(18~22차).
+- 해석 함수는 URL의 호스트를 아이템 이름으로 둔다. 쿼리 키는 FNV-1a 32비트 해시로 비교한다: `width`(`0x95876e1f`), `height`(`0xd5bdbb42`), `id`(`0x37386ae0`, 정수), `bag`(`0x63b75f31`, URL 디코드 후 `Json::Value`). 이름은 해시를 사전과 전수 탐색으로 맞춰 찾았다. 기본 크기는 50이다.
+- `GeometryAtlas::ItemHandleFactoryImpl`의 생성 함수(vtable +0x10, `@0x09766138`)는 이름을 `ItemRegistryRef::lookupByName`(`@0x0fcc10e8`)으로 찾고, 없으면 빈 핸들을 돌려준다. 있으면 아이템 인스턴스를 만들어 그 id·aux 값을 속성 묶음의 `#item_id_aux`에 넣는다. 다만 **속성 묶음에 `#item_id_aux`가 이미 있으면 넣지 않는다**. 그래서 `bag`으로 준 `#item_id_aux`가 그려질 아이템이 된다. 커스텀 아이템·블록도 그려진다(`OL` 10장 실측).
+
+
+## 6. 다른 출처와의 대조
+
+### 6.1 리버싱으로만 알게 된 것
+
+| # | 내용 | 다른 출처에 있던 것 | NB | 가이드 |
+| --- | --- | --- | --- | --- |
+| R-16 | **Ore UI 파일 요청의 팩 조회.** `ui://` 요청은 설치 폴더(`gui/dist/`)보다 팩 스택을 먼저 보지만 신뢰된 팩(`isTrusted`로 보임)만 본다. 그래서 일반·서버 리소스팩의 `hbui/…`는 쓰이지 않는다(실측) | 커뮤니티·OUC: "팩으로 Ore UI를 못 고친다", "RP에서 Ore UI를 불러오게 하는 모드가 필요하다" | NB-17 | ALT-11 |
+| R-17 | **리소스팩 → Ore UI 버튼 다리.** `vanilla.resourcePackOverrides`가 `common_buttons.light_text_button`(`$new_ui_button_texture`, `$text_color`, `$border_color`)과 `common_buttons.focus_border`(`texture`)를 게임 중 Ore UI 버튼에 넘긴다. 서버 팩으로 Ore UI 사망 화면 버튼이 바뀌었다(실측) | 없음. 모두 "Ore UI는 팩으로 못 고친다"고만 했다 | NB-18 | ALT-15 |
+| R-18 | **DDUI 레이아웃 경로와 팩 제한.** `ddui/root`·`ddui/composition`을 팩 폴더에서 읽지만 내장 팩 표시가 있는 팩만 통과한다. JS는 바닐라가 아닌 출처 팩의 레이아웃을 이미 처리한다 | 커뮤니티: "커스텀 RP 패널은 2단계 전까지 내부 팩 전용"(Mojang 발언) | NB-19 | ALT-16 |
+
+### 6.2 다른 출처의 주장을 보완한 것
+
+| # | 주장 | 누가 | 리버싱 결과 | 결과 | NB | 가이드 |
+| --- | --- | --- | --- | --- | --- | --- |
+| C-12 | Ore UI는 리소스팩으로 못 고친다 | 가이드(ALT-11, OUC 코드), 커뮤니티 | 배치·동작·CSS는 맞다(신뢰된 팩만 조회). 하지만 게임 중 버튼 모양은 다리로 넘어가고 `pack://` 텍스처는 서버 팩으로도 풀린다(R-16, R-17). 루트에 빈 `content.zipe`를 둔 로컬 팩은 암호화 접근 전략으로 열려 신뢰되므로 Ore UI 파일까지 바꾼다(NB-20, OL 7장 실측) | **보완.** "전혀 못 고친다"가 아니다 | NB-17, NB-18 | ALT-11, ALT-12, ALT-15 |

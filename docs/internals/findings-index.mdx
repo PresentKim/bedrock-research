@@ -1,0 +1,70 @@
+---
+title: 발견 색인
+description: 엔진 동작 분석 발견 NB-01~22의 목록, 영향받는 가이드 규칙, 다시 확인한 것과 남은 것.
+sidebar_position: 4
+sources:
+  - private-research
+  - repo-guide
+---
+
+이 페이지는 엔진 동작 분석의 발견 22개(`NB-01`~`NB-22`)를 한 번에 찾아보는 색인이다. 주제별 설명은 JSON UI 엔진 발견과 Ore UI 엔진 발견 페이지에, 분석 방법은 엔진 동작 분석 방법 페이지에 있다.
+
+## 1. 발견 색인
+
+| NB | 한 줄 요약 | 주제 | 페이지 | 영향받는 규칙 |
+| --- | --- | --- | --- | --- |
+| NB-01 | `modifications` 연산 이름은 11개 | modifications | [JSON UI 엔진 발견](./json-ui-engine-findings.mdx) | MOD-01, MOD-14, MOD-23 |
+| NB-02 | `target_control`이 `target`보다 먼저 읽힌다. 항목 키 7개 | modifications | 같음 | MOD-03, MOD-24, C-10 |
+| NB-03 | `array_name`은 정의의 같은 이름 멤버를 찾는다 | modifications | 같음 | MOD-25, C-64 |
+| NB-04 | `factory_variables`는 배열일 때만 읽는다 | 팩토리 | 같음 | COL-15, COL-41 |
+| NB-05 | 팩토리 이름 결정 규칙 | 팩토리 | 같음 | COL-25, COL-42 |
+| NB-06 | `control_name`이 먼저, `max_children_size`, `insert_location` | 팩토리 | 같음 | COL-28, COL-43 |
+| NB-07 | 컬렉션 항목은 부모로 정해진다. `ignoreCollectionItem` | 컬렉션 | 같음 | COL-02, COL-38, COL-44 |
+| NB-08 | `#hyperlink` 허용 URL 116개 | 입력 | 같음 | INP-24, INP-34 |
+| NB-09 | 바인딩 해석, `binding_condition` 6값 | 바인딩 | 같음 | BND-22~25, BND-35 |
+| NB-10 | `ignored`가 `variables`보다 먼저 | 변수 | 같음 | FILE-34, FILE-43 |
+| NB-11 | `§` 색표는 전역 변수 29개 | 텍스트 | 같음 | TXT-24 |
+| NB-12 | 종이 인형과 NetEase 골격 모델 | 렌더러 | 같음 | ANI-35, ANI-36 |
+| NB-13 | 팩토리 해석 함수 | 팩토리 | 같음 | COL-45 |
+| NB-14 | `_first_hidden_child_index`는 상점 전용 | 팩토리 | 같음 | COL-46, COL-27 |
+| NB-15 | 장비 슬롯 5개(JSON UI 밖) | 렌더링 | 같음 | (서버 장) |
+| NB-16 | 서버 폼 스키마 행 9종 | 서버 폼 | 같음 | HOST-46 |
+| NB-17 | Ore UI 파일 요청은 신뢰된 팩을 먼저 | Ore UI, 팩 | [Ore UI 엔진 발견](./ore-ui-engine-findings.mdx) | ALT-11 |
+| NB-18 | `resourcePackOverrides` 버튼 다리 | Ore UI, 팩 | 같음 | ALT-15 |
+| NB-19 | DDUI 레이아웃은 내장 팩만 | Ore UI, 팩 | 같음 | ALT-16 |
+| NB-20 | 암호화 접근 전략은 언제나 신뢰 | 팩 | 같음 | ALT-11, ALT-12 |
+| NB-21 | DDUI 데이터 통로, 옵션 593 | Ore UI | 같음 | ALT-16 |
+| NB-22 | `geo-item://` 아이콘 해석 | Ore UI | 같음 | ANI-06 |
+
+`NB 4장`은 문자열 검색으로 확인한 목록(`button.menu_*` 31개, 오류 문구, `grid_rescaling_type` 값)이고 JSON UI 엔진 발견 페이지의 "문자열로 확인한 것"에 있다.
+
+## 2. 이미 알던 것을 다시 확인한 것
+
+새 정보는 아니지만 근거가 재구성 코드(`CN`)에서 실제 바이너리로 바뀌었다.
+
+
+새 정보는 아니지만 근거가 재구성 코드(`CN`)에서 실제 바이너리로 바뀌었다. 가이드에서는 출처를 `NB`로 적었다.
+
+- 팩토리는 `control_name`을 먼저 읽고, 비어 있을 때만 `control_ids`를 읽는다(NB-06, COL-28·COL-43).
+- `insert_location`은 기본 `back`, 값이 `front`일 때만 앞이다(NB-06, CN-43).
+- `array_name`이 비어 있고 `control_name`이 있으면 `controls`가 대상이다(NB-03, CN-10).
+- view 바인딩은 `source_control_name`이 없으면 자기 컨트롤을 읽고, 두 스코프를 함께 켜면 형제 범위로 동작한다(NB-09, BND-24·BND-25). 새로 안 것은 그때의 오류 문구(`resolve_ancestor_scope and resolve_sibling_scope cannot both be set!`)뿐이다.
+- `button.menu_*` 31개 중 27개는 바닐라도 쓴다(R-09의 4개 제외).
+- `grid_rescaling_type` 값 후보 `horizontal`, `vertical`, `none`은 공식 enum과 같다(NB 4장).
+
+
+## 3. 리버싱으로도 아직 못 얻은 것
+
+
+엔진 내부 장의 각 페이지 끝 "남은 것"에 있다. 요약하면 바인딩 식 평가기(연산자, `'%.Ns'`), `binding_type` 문자열 해석과 기본값, `$x|default`가 들어가는 단계, `#hyperlink` 접두사 목록의 조건 함수, `grid_rescaling_type`·`propagate_alpha`·`clip_direction`을 읽는 함수다. 식 규칙(가이드 5장)은 여전히 실측과 `CN`이 근거다.
+
+
+## 4. 근거 수준과 사용법
+
+| 수준 | 이 장에서의 뜻 |
+| --- | --- |
+| `코드` | 컴파일 결과를 읽었다. 엔진이 그렇게 읽는다는 뜻이지 게임 화면 결과까지 보장하지는 않는다 |
+| `추론` | 함수 일부나 타입 이름만 읽고 판단했다 |
+| `실측` | 같은 주제를 Windows 1.26.52에서 게임으로 확인했다(`OL`, `MS`, `DF`) |
+
+규칙이 `코드` 수준이면 쓰기 전에 게임에서 확인한다. 바이너리 결과와 게임 실측이 다르면 실측을 따른다.

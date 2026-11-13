@@ -1,0 +1,83 @@
+---
+title: "팩 구조와 개발 환경"
+description: "BP/RP 폴더 구조, com.mojang 경로, 개발 폴더, 임포트와 패키징, 팩 우선순위와 덮어쓰기"
+sidebar_position: 3
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+---
+
+## 개념: 두 종류의 팩
+
+애드온은 **행동팩(BP, behavior pack)** 과 **리소스팩(RP, resource pack)** 으로 나뉜다. BP는 서버 쪽 정의(엔티티·아이템·블록 동작, 루트 테이블, 레시피, 함수, 스크립트)를, RP는 클라이언트 쪽 자산(텍스처, 모델, 사운드, 애니메이션, UI, 파티클)을 담는다. 팩 종류는 폴더 이름이 아니라 `manifest.json`의 `modules` type이 정한다(자세한 내용은 [manifest.mdx](manifest.mdx)). 팩은 `com.mojang` 폴더 아래 `development_behavior_packs`, `development_resource_packs`에서 개발한다. (출처: bedrock-wiki, project-setup)
+
+## 폴더 구조 (Bedrock Wiki Pack Folder Structure)
+
+아래는 BP와 RP에 둘 수 있는 폴더와 파일의 전체 목록이다. (출처: bedrock-wiki, documentation/pack-structure)
+
+```text
+BP/
+  manifest.json, pack_icon.png, contents.json
+  aim_assist/presets/  animation_controllers/  animations/  biomes/  blocks/
+  cameras/presets/  dialogue/  dimensions/  entities/  feature_rules/  features/
+  functions/ (example.mcfunction, tick.json)
+  item_catalog/crafting_item_catalog.json
+  items/  loot_tables/  recipes/  scripts/  shapes/
+  sounds/sound_definitions.json
+  spawn_rules/  structures/<namespace>/*.mcstructure
+  texts/ (languages.json, *.lang)
+  trading/ (economy_trades/)
+  worldgen/ (processors/, structure_sets/, structures/, template_pools/)
+RP/
+  manifest.json, pack_icon.png, contents.json, sounds.json, splashes.json, loading_messages.json
+  animation_controllers/  animations/  atmospherics/  attachables/  biomes/ (client_biome)
+  block_culling/  color_grading/  entity/  fogs/  font/ (emoticons.json, font_metadata.json, *.png, *.ttf)
+  lighting/  materials/  models/blocks/  models/entity/  particles/  pbr/global.json
+  render_controllers/  shadows/global.json
+  sounds/ (*.ogg *.wav *.mp3 *.fsb, music_definitions.json, sound_definitions.json)
+  texts/ (*.lang, language_names.json, languages.json, 언어별 font/)
+  textures/ (blocks/ entity/ items/ particle/ environment/overworld_cubemap/cubemap_0..5.png,
+             flipbook_textures.json, item_texture.json, terrain_texture.json, textures_list.json)
+  ui/ (_global_variables.json, _ui_defs.json, *.json)
+  water/
+  biomes_client.json (legacy), blocks.json (legacy)
+```
+
+`BP/sounds/sound_definitions.json`도 목록에 있으나 실제 사용은 RP 쪽이 일반적이다. 아래 규칙은 커뮤니티 보고에서 모은 것이다.
+
+### 폴더와 경로
+
+- **Windows GDK 경로 (1.21.120 이후)**: 팩(공유)은 `%AppData%\Minecraft Bedrock\Users\Shared\games\com.mojang`, 월드·설정은 `%AppData%\Minecraft Bedrock\Users\<랜덤숫자>\games\com.mojang`, 게임 내부 파일(바닐라 데이터)은 `C:\XboxGames\Minecraft for Windows\Content\data`. Microsoft 계정에 로그인하지 않았다면 팩은 `C:\XboxGames\Minecraft for Windows\Content`에 저장된다. 공식 안내는 MS 문서 "gdkpcprojectfolder".
+- **GDK 마이그레이션 함정**: 팩이 Shared가 아니라 사용자별(랜덤 ID) 폴더로 옮겨진 경우가 있었다. Shared com.mojang으로 옮기면 해결된다. 1.21.120 이후 업데이트 뒤 일부 사용자에게서 팩이 사라지거나 숨겨진 사례도 같은 방법으로 해결.
+- **개발 폴더**: 반드시 `development_behavior_packs` / `development_resource_packs`에서 작업한다. 월드 사본 폴더에서 작업하면 수정이 안정적으로 반영되지 않고, 월드의 커스텀 아이템/블록이 업데이트 시 지워질 수 있다. "cached data" 폴더는 필요 없다. 실험 기능도 개발 폴더가 필요하다.
+- **서버 다운로드 RP 캐시**: `C:\Users\<user>\AppData\Local\Temp\minecraftpe\packcache\resource` (내용은 보호됨/비어 있음). 2025-11에 위치가 이쪽으로 바뀌었다.
+- **iOS**: `development_resource_packs`는 팩이 유효할 때만 목록에 나타난다. manifest의 쉼표 하나 누락으로도 조용히 숨겨진다.
+- **Android 11~16**: `Android/data/com.mojang.minecraftpe` 접근이 막혀 기기 내 직접 편집이 어렵다. CX File Explorer로 .mcaddon 압축은 가능.
+- **macOS에서 패키징**: `._*`, `.DS_Store`, `__MACOSX`가 남아 있으면 아이템 로딩이 깨진다. 제거할 것.
+- **폴더 이름 함정**: RP 폴더는 `entity/`(entities 아님), `animations/`, `animation_controllers/`, `render_controllers/`, `models/entity/`, `attachables/`. 블록 지오메트리는 `models/blocks`에 있어야 한다. 단일 사례로 "behind the scene BP"라는 팩 폴더 이름이 로드를 깨뜨렸다. *(단일 보고)*
+- **식별자와 파일 이름은 소문자 snake_case**. `The_Between_Boss`처럼 대문자가 들어간 식별자는 엔티티 로드를 막았다. 엔티티 JSON의 텍스처 경로는 `textures/` 경로와 정확히 일치해야 한다.
+- **`header.name`의 `+`** 문자는 디버깅을 깨뜨린다. *(단일 보고)*
+- **팩 아이콘**: 팩 루트의 `pack_icon.png`.
+- **경로 길이 제한**: learn.microsoft.com의 mctoolsvalreference "pathlength" 참고.
+
+### 임포트와 패키징
+
+- **.mcpack/.mcaddon 더블클릭 임포트**: 2025-11 업데이트 이후 게임을 먼저 완전히 종료한 뒤 파일을 열어야 한다. GDK 임포트는 조용히 실패할 수 있으니 .zip으로 이름을 바꿔 개발 폴더에 직접 풀어도 된다.
+- **zip 구조**: BP/RP 폴더가 zip 루트에 있어야 하고 `behavior_packs/`, `resource_packs/` 래퍼 폴더에 넣으면 안 된다. 유효한 .mcpack은 manifest가 루트에 있는 zip이다(콘솔/모바일의 `.mcpack.zip` 이름 문제 주의).
+- **`.mcaddon` 내용물**: mcpack, mcworld, mctemplate, mceditoraddon을 압축 또는 풀린 상태로 담을 수 있다. 여러 BP도 가능하지만 Marketplace에서는 불가.
+- **같은 폴더 레벨에 manifest가 여러 개**면 "Cannot determine which pack manifest to use". 모바일용 manifest에서는 `generated_with` 메타데이터를 제거하라는 조언이 있었다.
+- **개발 폴더에 남은 팩 zip은 폴더보다 우선**한다(2시간 디버깅 사례).
+- **.mcworld에 팩 포함**: https://nchiari.github.io/Minecraft-Bedrock-Edu-World-Builder/
+- **모바일 구조물/월드 내보내기**: 1.21.130 이후 Android UI에서 제거되었다(1.21.124까지는 팩으로 Export 버튼을 여는 우회가 동작). 1.21.130 미만으로 다운그레이드하거나 Windows를 쓴다.
+
+
+### 팩 우선순위와 덮어쓰기
+
+- **같은 엔티티 파일(player.json, horse.json)을 두 팩이 정의하면 우선순위가 높은 팩 하나만 적용**된다. 순서를 바꿔도 한쪽이 항상 이기는 사례도 있었다. 하나의 파일로 합쳐야 한다.
+- **바닐라 엔티티 덮어쓰기**: bedrock-samples(preview 브랜치 `behavior_pack/entities`)에서 파일을 같은 경로로 복사하고, 내 팩을 BP 로드 순서 최상단에 둔다. 예: 랙 감소를 위해 `tnt` 폭발 크기를 1로.
+- **바닐라 몹 애니메이션 덮어쓰기**: 같은 식별자의 바닐라 client entity를 수정(animations + scripts.animate).
+- **Add-On 간 호환(Orevilles A&S 가이드)**: 엔티티 파일에서 딕셔너리는 팩 간 병합되지만 배열은 병합되지 않는다. 플레이어 `particles` 애니메이션 컨트롤러에 훅을 거는 방식. https://guides.orevillestudios.com/Creators-23fd7015059881aa8dd8cecb7f948f58
+- **바닐라 파일을 덮어쓰지 않은 애드온에는 봄 2026 Tiny Takeover 변경이 자동 적용**되었다.
+- **BP 3개를 동시에 켰을 때만 지형이 투명해진** 사례(어느 두 개 조합은 정상). 로드 순서·UUID·버전 변경으로 해결되지 않았고 해결 내용은 미기록. *(단일 보고)*
+

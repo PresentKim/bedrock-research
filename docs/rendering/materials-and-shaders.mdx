@@ -1,0 +1,205 @@
+---
+title: 머티리얼과 셰이더
+description: .material 문법과 상속, states·defines·블렌드·스텐실·깊이 필드, 발광·반투명·아웃라인·벽 너머 보이기 레시피, VV에서의 머티리얼, material.bin 셰이더
+sidebar_position: 5
+sources: [private-research, bedrock-wiki, ms-learn]
+---
+
+# 머티리얼과 셰이더
+
+## 개념
+
+머티리얼은 "어떤 셰이더로 어떤 상태(블렌드, 깊이, 컬링, 스텐실)로 그릴지"를 정한다. 게임의 대부분은 특정 머티리얼에 하드코딩돼 있어 새 머티리얼을 붙일 수 없고, 엔티티·파티클 등 일부만 이름으로 바꿀 수 있다. 머티리얼은 이전에 정의된 머티리얼을 **상속**해 고쳐 쓰는 방식이며, 네임스페이스가 없다(출처: bedrock-wiki `visuals/materials`).
+
+```json
+{
+  "materials": {
+    "version": "1.0.0",
+    "<새 머티리얼 ID>:<기반 머티리얼 ID>": {
+      "+defines": [], "-defines": [], "+states": [], "-states": []
+    }
+  }
+}
+```
+
+바닐라 엔티티 머티리얼은 대부분 `entity_static`의 후손이다. 주민 머티리얼 하나를 따라가 보면 상속이 보인다.
+
+```json
+"villager_v2_masked:entity_multitexture_masked": { "depthFunc": "LessEqual" },
+"entity_multitexture_masked:entity_alphatest": { "+defines": ["MASKED_MULTITEXTURE"] },
+"entity_alphatest:entity_nocull": { "+defines": ["ALPHA_TEST"], "msaaSupport": "Both" },
+"entity_nocull:entity": { "+states": ["DisableCulling"] },
+"entity:entity_static": { "+defines": ["USE_OVERLAY"], "msaaSupport": "Both" }
+```
+
+`entity_static`은 콜론이 없는 뿌리로서 `vertexShader`, `fragmentShader`, `vertexFields`, `variants`(skinning 등)를 직접 가진다. `+`는 추가, `-`는 제거다.
+
+### 필드 요약 (출처: bedrock-wiki `documentation/material-config-description`)
+
+| 필드 | 뜻 |
+| --- | --- |
+| `states` | 렌더 상태: `EnableAlphaToCoverage`, `Wireframe`, `Blending`, `DisableColorWrite`, `DisableAlphaWrite`, `DisableRGBWrite`, `DisableDepthTest`, `DisableDepthWrite`, `DisableCulling`, `InvertCulling`, `StencilWrite`, `EnableStencilTest` |
+| `defines` | 셰이더 매크로(`ALPHA_TEST`, `USE_EMISSIVE`, `USE_OVERLAY`, `USE_UV_ANIM`, `FANCY`, `ENABLE_FOG`, `ENABLE_LIGHT` 등) |
+| `depthFunc` | 깊이 비교: `Always`, `Equal`, `NotEqual`, `Less`, `Greater`, `GreaterEqual`, `LessEqual` |
+| `stencilRef`, `stencilReadMask`, `stencilWriteMask` | 스텐실 기준값과 마스크 |
+| `frontFace`, `backFace` | `stencilFunc`(깊이 함수와 같은 값 집합), `stencilFailOp`, `stencilDepthFailOp`, `stencilPassOp`(`Keep`, `Replace` 등) |
+| `blendSrc`, `blendDst`, `alphaSrc`, `alphaDst` | 블렌드 인자: `DestColor`, `SourceColor`, `Zero`, `One`, `OneMinusDestColor`, `OneMinusSrcColor`, `SourceAlpha`, `DestAlpha`, `OneMinusSrcAlpha` |
+| `samplerStates` | 샘플러별 `textureFilter`, `textureWrap` |
+| `msaaSupport` | 멀티샘플링 지원 |
+| `variants` | 스키닝 등 변형 |
+
+판정 순서는 스텐실 검사가 먼저, 깊이 검사가 그다음이다. 블렌드는 최종 RGB = 현재색 x 원본 인자 + 버퍼색 x 대상 인자다. 엔진 기본은 `blendSrc` SourceAlpha, `blendDst` OneMinusSrcAlpha, `alphaSrc` One, `alphaDst` OneMinusSrcAlpha다. `Blending`을 선언하면 보통 `blendSrc`와 `blendDst`도 정한다. 이 필드 설명 문서는 일부가 NetEase 판 기능(`NETEASE_SKINNING` 등)을 섞어 담고 있다.
+
+### 예제: 알파 테스트 엔티티 머티리얼을 클라이언트 엔티티에 연결
+
+```json
+{
+  "materials": {
+    "version": "1.0.0",
+    "invert_culling:entity": { "+states": ["InvertCulling"] }
+  }
+}
+```
+
+이 파일을 `RP/materials/entity.material`로 저장하고, 클라이언트 엔티티에서 `"materials": {"default": "invert_culling"}`로 가져온 뒤 렌더 컨트롤러가 `Material.default`를 쓴다.
+
+아래는 커뮤니티 조사에서 모은 규칙과 레시피다(출처: 비공개 조사).
+
+## 파일과 상속의 규칙
+
+- 엔티티 머티리얼은 `RP/materials/<x>.material`이다. 애니메이션 엔티티 텍스처 등에서는 파일 이름이 `entity.material`이어야 하고 `.json` 확장자가 **없어야** 한다. 내장 머티리얼 이름에는 네임스페이스가 없다. 머티리얼이 로드되지 않으면 콘텐츠 로그에 오류가 남는다. `confirmed`
+- 어태처블 `materials`에 키가 올바로 없으면 "Material ... referenced but not defined"가 난다. 이 오류는 manifest의 팩 버전을 올리자 해결된 사례도 있다.
+- Bedrock Wiki에 따르면 1.16부터 바닐라 머티리얼 상속에 문제가 있고, 한 사용자는 바닐라 정의 전체를 복사해야만 동작했다. 변경 사항은 게임을 완전히 재시작해야 반영되며 `/reload all`로는 머티리얼이 갱신되지 않는다.
+- 바닐라 정의 위치: `...\Minecraft for Windows\Content\data\resource_packs\vanilla\materials\entity.material`(Windows GDK는 `C:\XboxGames\Minecraft for Windows\Content\data`)이나 BDS에서 찾는다. 위키의 목록은 오래됐고 bedrock-samples에도 일부 있다.
+- Microsoft는 머티리얼을 사실상 문서화하지 않았다(Microsoft Learn의 material-files 문서가 일부 있다). 엔티티 머티리얼은 VV와 릴리스마다 깨지며 한 개발자는 전면 재작성이 필요하다고 말한다.
+- Marketplace: 바닐라 머티리얼을 수정하지 않고 네임스페이스를 붙이면 Marketplace 애드온에서 커스텀 머티리얼을 쓸 수 있다.
+- 현재 버전(2026-10)의 제약: 일부 블렌드 쌍만 동작하고, `EnableStencilTest`만 존중되며, `DisableRGBWrite`는 쓰이지 않는다(유효한 이름은 `DisableColorWrite`). ORE UI가 스텐실을 써서 엔티티가 UI 위에 그려질 수 있다. `Wireframe` 상태는 RenderDragon에서 효과가 없다. 멀티텍스처, 발광, 알파를 합친 커스텀 머티리얼(`+defines ALPHA_TEST, USE_EMISSIVE, USE_MULTITEXTURE`와 samplerStates 2개)은 게임을 크래시시켰다.
+- 하드코딩된 것: 크리퍼 머티리얼은 하드코딩된 것으로 보인다. 늑대 같은 머티리얼은 바닐라에서 알파를 지원하지 않는다. `USE_UV_ANIM`과 `ALPHA_TEST`를 쓴 `custom_animated:entity`는 검은 배경을 보였다(미해결). 투명과 염색을 함께(늑대 목걸이) 하려면 오버레이 텍스처(별도 레이어)를 쓴다. 마법 부여 광택 색은 엔진에 하드코딩돼 있고 glint 텍스처는 교체할 수 있다.
+
+## 발광 (VV 없이)
+
+- **`entity_emissive_alpha`**: 텍스처 알파가 글로우가 되며 더 투명할수록 더 밝다(약 10~20% 불투명도). 엔더맨·거미 눈 효과다(철자 `entity_emmisive_alpha`는 오타). 빛 레벨과 관계없이 빛난다. 완전히 투명한 픽셀은 검정이어야 하고 머티리얼은 모든 본에 적용돼야 한다. 부분 반투명과 발광을 함께 하려면 머티리얼을 나눈다. 머리카락처럼 일부만 빛나게 하려면 빛날 부분을 투명(알파)으로 만든다. 알파 약 11은 부족하다는 질문은 미해결이다. 바닐라 `spider`, `enderman` 머티리얼과 `emissive_alphatest`도 같은 용도이고, 플레이어 스킨도 머티리얼을 바꾸면 빛나게 할 수 있다. `confirmed`(출처: bedrock-wiki `visuals/glowing-texture`도 같은 방식)
+- 엔더맨 눈: 텍스처는 `textures/entity/enderman/enderman.tga`이고 Fancy에서 빛나려면 눈 픽셀의 알파가 0이어야 한다. VV 호환 버전은 더 어렵다.
+- 기타 발광·언셰이드 머티리얼: `entity_beam_additive`(충전된 크리퍼, 번개 같은 반투명 글로우와 그라데이션 빔, 반투명 플레이어도 빛남, 일부 각도에서 사라짐), `charged_creeper`(일부 각도에서 사라질 수 있음, 대안 `lightning_bolt`), `breeze_wind_charge`(언셰이드 글로우, 커스텀 `+defines USE_EMISSIVE`는 실패한 경우), `entity_emissive_alpha_one_sided`(제목·명판 엔티티).
+- 애니메이션과 발광: `{"materials":{"version":"1.0.0","entity_emissive_animated:entity_emissive_alpha":{"+defines":["USE_UV_ANIM"]}}}`. `"electro_rocket:entity_alphatest": {"+defines": ["USE_UV_ANIM"]}` 같은 커스텀 머티리얼도 쓴다. 애니메이션 텍스처에는 `breeze_wind`나 `player_animated`도 된다.
+- 가산(additive) 머티리얼이 잘 동작한다.
+
+```json
+"entity_add:entity_emissive_alpha": {
+  "-defines": ["FANCY", "ENABLE_FOG", "ENABLE_LIGHT"],
+  "+states": ["Blending", "DisableDepthWrite"],
+  "blendSrc": "SourceAlpha",
+  "blendDst": "One"
+}
+```
+
+예전 변형 `entity_additive_old:entity_alphablend`(`+defines USE_EMISSIVE`, `DisableAlphaWrite`)는 근처에 빛이 있어야 한다.
+- 갑옷이 진짜 빛을 내는 것은 불가능하다. 렌더 컨트롤러 `ignore_lighting`이나 `entity_emissive_alpha`로 가짜 글로우를 내고 VV에서는 MER를 쓴다. 블록 쪽 `shaded`류 옵션은 `face_dimming`과 `ambient_occlusion`을 끄는 단축일 뿐 픽셀별 발광이 아니다. 반딧불이 덤불의 빛은 별도 블록 텍스처(`firefly_bush_firefly.png`)와 머티리얼이다.
+- "flashbang": 발광 머티리얼이 낮에 아래에서 보면 섬광탄처럼 번쩍이는 문제는 미해결이다. 커스텀 `entity.material`을 쓰면 마법 부여 광택이 발광 갑옷 장식을 가린다(미해결).
+
+## 반투명, 블렌드, 컬링
+
+- 알파 영역에서 뒷면이 보이면 유리식 알파 블렌드 대신 `entity_alphatest`를 쓴다. 투명 영역이 검정이나 이상한 색으로 나오는 것도 머티리얼 선택 문제다.
+- 반투명 머티리얼: `slime_outer`(렌더 컨트롤러에서 본별 적용), `beacon_beam_additive`, `entity_alphablend`. 언셰이드 알파 시도는 `"entity_unshaded_alpha:entity_alphablend": {"+defines": ["USE_EMISSIVE"]}`다. `entity_alphablend`는 2D 엔티티에서 뒷면이 사라질 수 있으니 커스텀 "stacking translucency" 머티리얼(the-bedrock-notebook.dev의 materials 참고)을 쓴다.
+- `entity_alphablend`는 다른 반투명 물체가 렌더링되지 않는 박스를 그린다. `entity_emissive_layer_alpha_blend`(엔티티가 안 보이게 됨)와 `breeze_wind`(반투명 투사체에 성공)가 제안됐다.
+- 겹치는 알파 평면: `"overlap:entity_alphablend"`에 `"+states": ["DisableCulling","DisableDepthWrite"]`, `blendSrc: SourceAlpha`. 한 머티리얼 안에서 쌓인 투명 픽셀끼리 블렌딩되는 것을 피하려면 머티리얼에서 블렌딩을 끈다.
+- 양면과 반전 컬링: 양면은 `"+states": ["DisableCulling"]`. 앞면 컬링은 `"invert_culling:entity": {"+states":["InvertCulling"]}`를 두고 클라이언트 엔티티에서 `"materials": {"default": "invert_culling"}`로 쓴다. 반투명이 필요하면 `entity`를 `entity_alphablend`로 바꾼다. 렌더 컨트롤러 자체에는 컬링 옵션이 없다.
+- 반투명 본이 안쪽 본을 가리면 지오메트리를 나누고 각각 렌더 컨트롤러를 둔다(하나는 `entity_alphablend`, 하나는 `entity_alphatest`). Outliner의 본 순서도 중요하다. 쓰인 커스텀 머티리얼: `"entity_translucent:entity_alphatest": {"+states":["Blending"],"+defines":["USE_OVERLAY","USE_EMISSIVE"]}`.
+- 제목·텍스트 모델의 안쪽 면이 보이면 `entity_alphatest_one_sided`(위키에는 없지만 동작)나 `entity_emissive_alpha_one_sided`를 쓰고, 번짐을 막으려면 패딩을 넣어 텍스처를 다시 만든다. 커스텀 변형 `"title_letters:entity_alphatest": {"-states":["DisableCulling"],"-defines":["FANCY"]}`. FANCY를 빼면 VV 셰이딩도 사라진다.
+- 임의 알파(텍스처에 굽지 않고): (a) 알파를 직접 제어하는 머티리얼(`player_spectator`, `warden`)은 runtime_identifier가 필요하다. (b) 2x1 텍스처(알파 0 픽셀 하나, 불투명 하나)에 바이리니어 머티리얼과 두 픽셀 사이 UV 애니메이션. (c) 곱셈·alphablend 패스 후 가산 패스로 수동 블렌딩(순서가 어렵고 VV 호환은 첫 단계가 alphablend일 때만). (d) `USE_COLOR_MASK` 머티리얼 define은 runtime id가 **없는** 커스텀 엔티티에서 동작했다(크리퍼·돼지에서는 안 됨). (e) 엔더 드래곤 디졸브 효과, 지오메트리 페이드용 파티클, 렌더 컨트롤러의 알파가 다른 텍스처 배열.
+- 흑백 필터는 불가능하다. 블렌딩은 성분별이라 채널 간 혼합이 없어서 빨강·초록·파랑 단색만 된다. VV(그레이딩 채도)나 커스텀 셰이더가 필요하다.
+- 유령 머티리얼(non-VV): `"ghost_material:entity_alphablend": {"+defines":["USE_EMISSIVE"],"+states":["Blending","DisableCulling"]}`. 포털 페이드: `"+defines": ["USE_UV_ANIM"], "+states": ["Blending","DisableDepthWrite"]`.
+- 수면의 반투명 엔티티: 깊이 전용 패스가 불투명 엔티티 패스 중에 깊이를 써서 나중에 그려지는 뒤쪽 엔티티가 사라진다. 알려진 미해결 문제다.
+
+## 스텐실과 아웃라인
+
+**개념**: 기본 모델을 스텐실 값을 쓰는 머티리얼로 그리고, 부풀린 사본을 "그 값이 아닌 곳만" 그리는 머티리얼로 그리면 테두리만 남는다.
+
+```json
+"outline_base:entity_alphatest": {
+  "+states": ["EnableStencilTest", "StencilWrite"],
+  "frontFace": { "stencilFunc": "Always", "stencilFailOp": "Replace", "stencilDepthFailOp": "Replace", "stencilPassOp": "Replace" },
+  "backFace":  { "stencilFunc": "Always", "stencilFailOp": "Replace", "stencilDepthFailOp": "Replace", "stencilPassOp": "Replace" },
+  "stencilRef": 2
+},
+"outline_main:entity_alphatest": {
+  "+states": ["EnableStencilTest", "DisableDepthWrite"],
+  "-defines": ["FANCY"],
+  "depthFunc": "Always",
+  "frontFace": { "stencilFunc": "NotEqual" },
+  "backFace":  { "stencilFunc": "NotEqual" },
+  "stencilRef": 2
+}
+```
+
+부풀린 지오메트리, 별도 텍스처, 각각의 렌더 컨트롤러가 필요하다(arxance "Entity Outline" 템플릿). `confirmed`.
+
+Mojang식 아웃라인 예:
+
+```json
+"outline:entity_static": {
+  "+states": ["InvertCulling", "EnableStencilTest", "DisableDepthWrite", "Blending"],
+  "+defines": ["USE_OVERLAY"], "-defines": ["FANCY"],
+  "depthFunc": "Always",
+  "frontFace": { "stencilFunc": "NotEqual" },
+  "backFace": { "stencilFunc": "Equal" },
+  "stencilRef": 2, "stencilReadMark": 2
+}
+```
+
+- 다른 변형: (1) `outline_main:outline_base`에 `depthFunc Always`, `-defines [lighting, ENABLE_LIGHTING]`, `+states [DisableDepthWrite, DisableCulling]`, 스텐실 `NotEqual`/`Keep`. `-defines FANCY`를 빼자 깜빡임이 줄었다(2026-08-18). (2) outline_base는 EnableStencilTest, StencilWrite, DisableCulling, stencilRef 6이고 outline_main은 depthFunc Always, stencilFunc Greater다. 1인칭 변형은 z-fighting을 막으려 DisableDepthWrite를 더하지만 VV 하늘에서 실패한다. (3) 기본 머티리얼(`InvertCulling`, `DisableDepthWrite`, `EnableStencilTest`, `depthFunc LessEqual`, stencilFunc `NotEqual`)이 기본 엔티티가 쓴 곳을 건너뛴다. 기본에는 Blending을 쓸 수 없어서 기본은 불투명(`entity` 상속)으로, 아웃라인은 `entity_alphatest`로 하고 기본에 `DisableColorWrite`와 `DisableAlphaWrite`를 더해 숨긴다. (4) 전역 아웃라인 시도에서는 아웃라인이 모델 위에 그려지는 문제가 미해결이었다. `entity_glow_base`와 `entity_glow_outline` 스타일로 렌더 컨트롤러 2개를 쓰는 구성도 있다.
+- 트레이드오프: 교차하는 여러 엔티티를 처리하는 아웃라인은 투명할 수 없고, 투명 아웃라인은 겹침을 처리하지 못한다. 둘 다 원하면 기본·아웃라인 엔티티를 따로 둔다. 1인칭에서는 스텐실 버퍼가 다음 프레임에 리셋되지 않고, 3인칭에서는 투명 처리 전에 지워진다.
+- **stencilRef 레이어**: `stencilRef`는 레이어 번호다. 높은 레이어는 바닐라 머티리얼(조준점, 문, Ore UI 화면)과 섞이므로 32를 넘기지 않는다. 바닐라 엔티티 그림자가 `stencilRef` 1을 쓰므로 2를 쓴다. 아웃라인을 여러 개 쓰려면 `outline_base`를 더 높은 `stencilRef`로 복제하고, 아웃라인 위에 다른 것(이름·체력바)을 그리려면 아웃라인 머티리얼을 복사해 그 엔티티의 레이어를 낮춘다.
+- 렌더 순서: 스텐실을 쓰는 엔티티의 렌더 순서는 머티리얼 이름이 아니라 엔티티 **파일 이름**(알파벳 로드 순서)에 달릴 수 있다. 블렌드 모드 등이 여전히 우선한다. `WriteMask`는 믿을 수 없고, 어태처블에서는 스텐실이 읽기 전용이다. 순서에 의존하기 전에 다른 플랫폼에서 테스트한다.
+- 스텐실이 안 되는 곳: 파티클에는 스텐실이 동작하지 않는다(엔티티를 쓴다). 블록에는 아웃라인을 쓸 수 없다(엔티티·어태처블 머티리얼 필요). 일반 손 아이템(다이아몬드, 주괴 등 어태처블 없는 것)은 접근할 수 없는 하드코딩 머티리얼을 써서 아웃라인할 수 없으니 어태처블과 커스텀 머티리얼, 별도 아웃라인 모델과 텍스처가 필요하다.
+
+### 아웃라인 템플릿 세부
+
+- 어태처블용 아웃라인 모델은 Blockbench에서 아이템 모델을 부풀려 만든다. 아웃라인이 아이템 회전·애니메이션을 무시하면 아웃라인 큐브를 같은 루트 본 안의 하위 본(`root > outline_bone > cubes`)에 둔다. 다른 이름의 별도 본으로 두면 안 되고, 부풀린 큐브만 있는 모델은 본 이름 때문에 애니메이션이 두 번 재생된다.
+- 모든 큐브를 0.5씩 부풀리면 안쪽 면과 큐브가 비친다. 바깥 큐브만 부풀리거나 가려진 면의 텍스처를 지운다.
+- 조건부 아웃라인(인챈트됐을 때만): 아웃라인 렌더 컨트롤러에 `"part_visibility": [{ "*": "variable.is_enchanted" }]`를 넣고, 갑옷 슬롯 아이템은 어태처블 `render_controllers` 배열에서 `query.is_item_name_any('slot.armor.chest', 0, 'diamond_chestplate') && query.is_enchanted`를 조건으로 쓴다.
+- 아웃라인과 인챈트 광택 유지: 스텐실 머티리얼의 광택 변형(`outline_based:entity_alphatest_glint`, stencilRef 2)과 `"materials": [{ "*": "variable.is_enchanted ? Material.enchanted : Material.default" }]`, `"textures": ["variable.has_trim ? variable.trim_path : Texture.default", "Texture.enchanted"]`(텍스처 `textures/misc/enchanted_item_glint`) 렌더 컨트롤러를 둔다. 광택 컨트롤러는 어태처블 `render_controllers`의 **첫 번째**여야 하며, 아니면 엉뚱한 위치에 그려지거나 3인칭에서 안 보인다.
+- 엔티티 `format_version` 1.8.0으로 선언한 커스텀 엔티티에서는 아웃라인이 실패하므로 1.10.0을 쓰고 RP 엔티티의 `scripts.animate`로 클라이언트 애니메이션 컨트롤러를 돌린다.
+- 플레이어용 조건 예: `"controller.render.x.outline": "!v.is_first_person && !v.is_paperdoll && !q.is_spectator && q.is_angry"`.
+- 템플릿은 모델별이다(메시마다 아웃라인 지오메트리 하나, 지오메트리가 다르면 렌더 컨트롤러 하나). 모든 애드온 몹에 일반적으로 적용할 수 없고 클라이언트 모드만 가능하다.
+- 플레이어 모델 지오메트리 이름은 `geometry.humanoid.custom`(넓은 팔)과 `geometry.humanoid.customSlim`이다. 슬림 감지가 하드코딩·불안정(망토)해서 템플릿 v3는 슬림 전용 아웃라인만 제공한다.
+- 바라볼 때만 아웃라인: 엔티티에 property를 주고, 스크립트가 시선 대상을 감지해 property를 설정하고, property가 조건부 렌더 컨트롤러를 구동한다.
+- 알려진 문제: 아웃라인된 몹 위에서 조준점이 사라진다(이후 템플릿에서 수정). 아웃라인 레이어가 `!q.is_in_ui` 상황을 깨뜨릴 수 있다. 플레이어 머티리얼을 바꾸는 서버 팩은 아웃라인을 깨뜨릴 수 있다.
+- Template V3(3.2 zip, 2026-06-18/19): 단일 머티리얼로 재작성, 1인칭 아이템 아웃라인, 카툰 엣지, 아웃라인 텍스처 대신 오버레이 색을 추가했다. 알려진 문제는 Blending이 VV와 잘 맞지 않고 VV에서 1인칭 어태처블 아웃라인이 버그라는 점이다. 스크립트로 특정 플레이어에게만 보여 주는 아웃라인 예는 `entity.playAnimation(name, { players: [...] })`를 쓴다.
+- 역헐(inverted-hull) 아웃라인은 제대로 렌더링되지 않는다는 보고가 있고, 단면 머티리얼로 "부풀린 큐브를 뺀" 느낌을 낼 수 있지만(진짜 스텐실 아님) 불완전하고 모델 안쪽에 선이 생긴다.
+- 포털·안이 더 큰 효과: `EnableStencilTest`는 여전히 동작한다. 엔티티 마스킹(포털 같은) 효과는 지오메트리 구역마다 커스텀 머티리얼 약 5개로 만든다. 가짜 포털·방 효과는 완전한 3D 방 모델과 커스텀 스텐실 머티리얼이다.
+- fog 없는 스카이박스(멀티패스): 큰 스카이박스를 먼저 그리고 색을 가진 작은 것을 그린다(큰 것만으로는 효과 없음). 머티리얼 `"+states":["EnableStencilTest","StencilWrite","DisableDepthWrite"]`, `"-defines":["FANCY","ENABLE_FOG","ENABLE_LIGHT"]`, `stencilRef` 3.
+
+## 깊이: 벽 너머 보이기, 앞에 그리기
+
+- 벽 너머 보이기: 머티리얼의 `"depthFunc": "Always"`로 블록 너머가 보인다. 예: `materials/entity.material`에 `"entity_alphatest_omniscient:entity_alphatest": {"depthFunc":"Always"}`(파일 이름 중요). `DisableDepthTest`나 `DisableDepthWrite`만으로는 다른 엔티티가 앞에 있으면 실패한다. 파티클로는 할 수 없으니 커스텀 머티리얼 엔티티를 쓴다.
+- 블록 뒤에는 그리되 엔티티는 통과하지 않음: `{"+states":["DisableDepthTest","DisableDepthWrite","Blending"],"depthFunc":"Always","blendSrc":"SourceAlpha","blendDst":"OneMinusSrcAlpha"}`가 동작했다(안팎이 뒤집힌 아티팩트 일부).
+- 1인칭 어태처블 위에 엔티티 그리기: 1인칭 지오메트리 전에 깊이 버퍼가 지워지므로 스텐실을 쓴다. 엔티티 머티리얼 `depth_entity:entity_alphatest`에 `+states ["EnableStencilTest","StencilWrite"]`, `depthFunc: Always`, front/backFace `stencilFunc Always`, `stencilFailOp`, `stencilDepthFailOp`, `stencilPassOp` 모두 `Replace`, `stencilRef: 2`. 어태처블 머티리얼 `attachable:entity_alphatest`에 `+states ["EnableStencilTest"]`, `stencilFunc: NotEqual`, `stencilRef: 2`.
+- 긴 발광 빔이 사라짐: 꼭짓점별로 보간되는 fog 때문에 특정 지점을 보지 않으면 사라진다. 빔을 짧게 하거나 10~100개의 쌓인 큐브로 나눈다.
+- 벽 너머 이름표 숨기기: `name_tag_text` 머티리얼을 `+states [Blending, DisableDepthWrite]`, `+defines [ALPHA_TEST, USE_EMISSIVE]`, `msaaSupport: Both`로 수정하고 `ui3D.material`에 있는 `depthFunc: Always`를 뺀다.
+
+## 조명과 그림자 제거
+
+- 조명 무시: 렌더 컨트롤러의 `"ignore_lighting": true`(어태처블에서는 동작하지 않음)를 쓴다. 블록 안에서 모델이 검게 되는 문제도 이것으로 해결된다. 방향별 셰이딩은 발광 머티리얼이나 머티리얼 JSON의 `"-defines": ["FANCY"]`로 제거한다. `light_color_multiplier`를 최대로 올려 어떤 빛에서도 최대 밝기로 렌더링하는 우회책도 쓰였다. 플레이어에 붙인 HUD 같은 지오메트리가 조명으로 어두워질 때 `ignore_lighting`이 안 됐다는 보고가 있으니 발광 머티리얼을 시도한다(페이퍼돌은 너무 버그가 많다). 엔티티는 블록 안에 있으면 검게 된다(하드코딩, RTX는 아님).
+- 어태처블 조명은 [어태처블과 아이템 렌더링](./attachables-and-items.mdx)을 본다.
+- 갑옷 셰이딩 제거: `"entity_noshade:entity": {"-defines":["FANCY"]}`는 면 셰이딩은 없애지만 밤·어둠에서는 여전히 어두워진다. noshade 머티리얼을 `entity_alphatest`에 묶고 텍스처 불투명도를 낮춘다(알파가 낮을수록 밝다).
+- 그림자 제거(non-VV): `minecraft:renders_when_invisible`와 무한 투명화 `spell_effects` 방식이 있다(Bedrock Wiki `visuals/remove-shadows`). blob 그림자는 Fancy 모드에만 있고 Simple과 Raytraced는 그 그림자 유형을 쓰지 않는다.
+
+## VV에서의 머티리얼
+
+- Simple/Fancy와 VV의 머티리얼은 서로 호환되지 않으므로 그래픽 모드 쿼리로 머티리얼을 바꾼다. 커스텀 머티리얼은 VV에서 잘 동작하지 않는다(머티리얼 변형 깨짐, 스텐실은 고쳐짐). VV에서는 `DisableColorWrite`가 깨져서 마스크를 숨길 수 없다. VV/RenderDragon 커스텀 셰이더 아웃라인이 Windows에서는 되고 모바일에서는 실패했다(기본 엔진에서 유효하지 않은 머티리얼).
+- VV 스텐실: 1.21.120 전에는 VV에서 스텐실이 완전히 깨졌고 이후 "어느 정도" 고쳐졌지만 일반 렌더링과 수정 방식이 달라서 옛 머티리얼을 다시 만들어야 한다. VV에서는 아웃라인이 엔티티 **뒤에** 그려진다. 일반 그래픽용 아웃라인은 VV에서 앞에 그려지거나 깜빡이고, VV용을 일반 그래픽에서 쓰면 엔티티 그림자가 아웃라인을 덮고 문·표지판에 그림자가 생긴다. VV 스텐실은 불안정하니 클리어를 강제하는 투명 본을 넣거나, 깊이·색 쓰기를 끄고 스텐실 0을 설정하는 전체 화면 불투명/alphablend 패스를 그린다. 1인칭 아이템 아웃라인에는 추가 설정이 필요하다.
+- Fancy 스텐실 아웃라인: 하늘·물 위에 그리려면 두 머티리얼 모두 `Blending` 상태가 필요하다. 부작용으로 다른 투명 블록을 통과해 그려지지 않고 각도에 따라 깜빡인다. `FANCY` define을 빼고 렌더 컨트롤러 `ignore_lighting: true`로 그림자를 없앨 수 있다. VV에서는 그림자를 피하려고 texture_set에 아주 작은 발광 값(약 5/255)을 준다. 텍스처 투명에는 `ALPHA_TEST` define으로 충분하다. VV에는 빛나지 않으면서 조명을 무시하는 제대로 된 방법이 없다.
+- 알파와 디더링: VV는 투명 머티리얼에 알파 테스트를 강제한다. 투명 글로우 머티리얼(`entity_alphablend` + `USE_EMISSIVE` + 스텐실 상태)이 VV 1인칭에서 깨지는 원인은 디더링이니 접근성 설정에서 끄거나 최소 알파를 올려 알파 테스트를 피한다. 커스텀 투명·반투명 머티리얼은 VV에서 예상대로 동작하지 않을 수 있다. 1px 떨어진 alpha-blend 큐브 2개는 VV에서 되지만 비침 버그가 생겼다. `entity_nocull`은 VV에서 제대로 동작하지 않는다.
+- VV 엔티티 발광: 예전 트릭(`entity_emissive_alpha`, 불투명도 낮추기)은 VV에서 통하지 않는다. MER 발광 채널(초록)과 texture_set과 pbr capability를 쓴다([VV와 RTX](./vibrant-visuals-and-rtx.mdx)). VV에서 발광 모델이 깜빡일 수 있다. VV 방향별 셰이딩은 SSS나 발광으로만 없앨 수 있다.
+- VV에서 엔티티를 칠흑같이: 최대 metalness texture set(`[255,0,0,0]`, `[255,0,255,0]`, `[0,255,0,0]`, `[0,255,255,0]` 후보)과 새까만 색 텍스처를 쓴다. 물속에서는 여전히 수중 fog(파란빛)가 섞이고 완전한 "void" 느낌은 불가능하다고 판단됐다.
+- `charged_creeper`류 VV 반사 아티팩트는 texture set의 `metalness_emissive_roughness`를 고쳐 해결했다.
+
+## 커스텀 셰이더 (material.bin)
+
+- 종류: RD 셰이더(Fancy 수정, 가장 쉬움), RTX 셰이더, VV 셰이더(소스 난독화, 가장 어려움). 진짜 셰이더는 교체한 `material.bin` 파일이 필요하고 Mojang은 공식 material.bin 로딩을 제공하지 않는다. Marketplace에는 셰이더가 없고 VV/RTX 팩은 리소스 팩이다. Mirai 2.11, Bliss, Vanilla Reforged 같은 커스텀 VV 셰이더 팩은 모드 로더에 의존한다. 리소스 팩으로는 셰이더·머티리얼을 배포할 수 없다.
+- 설치: BetterRenderDragon(BRD)을 쓰거나 머티리얼을 `...\Minecraft for Windows\content\data\renderer\materials`에 복사한다(먼저 백업). 리소스 팩을 통한 `materials.index.json`은 더 이상 동작하지 않으므로, 바닐라 `.material.bin`을 교체하거나 내부 `renderer/materials`에 새 폴더를 만들어 커스텀 bin을 두고 `materials.index.json` **맨 위**에 항목을 추가한다(위쪽 항목이 우선). 2026-05-12 프리뷰에 `{"materials": []}`만 담은 `materials.index.json`이 있는 새 `shaders` 폴더가 생겼다.
+- 컴파일: Mojang은 크게 수정한 bgfx 포크로 셰이더를 컴파일하고, 머티리얼은 플랫폼별로 교차 컴파일된다. Windows와 Android만 모드가 가능하다. Lazurite 컴파일러는 멀티스레드이고 `-m`으로 고른 머티리얼만 컴파일할 수 있다(actor는 건너뛰기, ActorPatternForwardPBR이 가장 느림). 4코어에서 전체 컴파일은 약 15분이다. 최신 머티리얼은 자기 게임 설치 폴더(XboxGames)에서 가져오는 것이 가장 쉽고, 컴파일용 소스는 newb 셰이더 저장소에 있다(26.20 시점에는 26.10 버전뿐). MaterialBinLoader는 당시 베타를 지원하지 않았다. VV 셰이더 소스 참고: veka0/mcbe-shader-codebase.
+- GDC 발표 "Modernizing the Rendering of Minecraft"는 DragonFX(GLSL 기반 셰이딩 언어)와 그림자·반사 양자화를 다룬다.
+- Java 셰이더 개발 조언: Iris 튜토리얼로 시작해 읽기 쉬운 셰이더(BSL, Glimmer)를 공부한다. GPU는 분기에 약하다. 진짜 `.hlsl` 셰이더를 쓰는 방법에 대한 안내는 찾지 못했다.
+- JSON UI 색수차 흉내: 셰이더를 팩에 넣을 수 없으므로 텍스처에 굽거나 크기를 살짝 다르게 한 가산 사본 3장(R, G, B)을 그린다.

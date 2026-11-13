@@ -1,0 +1,105 @@
+---
+title: 레시피, 스미딩, 아이템 태그
+description: 레시피 파일의 구조와 종류(shaped, shapeless, 화로, 양조, 스미딩), 잠금 해제, 아이템 서술자, 바닐라 레시피 덮어쓰기와 알려진 제한, 레시피 잠금 서버 사례.
+sidebar_position: 4
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+  - private-research
+---
+
+# 레시피, 스미딩, 아이템 태그
+
+레시피는 제작대, 화로류, 양조대 등에서 일어나는 아이템 변환을 정의한다. 레시피 사용에는 실험 기능 토글이 필요 없다. 모루 상호작용은 레시피 파일이 아니라 [아이템 정의](./items.mdx)가 다루고 베틀 변환은 현재 지원되지 않는다. 근거는 MS Learn 레시피 문서(a9fd1c0), Bedrock Wiki(0930b39)의 loot/recipes, bedrock-samples(15701fa9)의 바닐라 레시피, 커뮤니티 조사(2025-10~2026-10), 한 Dragonfly 기반 서버 기술 문서다.
+
+## 1. 구조와 최소 예제
+
+레시피는 BP 루트의 `recipes/` 폴더에 두며 이름과 하위 구조는 자유다. 공통 요소는 다음과 같다(출처: bedrock-wiki, ms-learn).
+
+- `format_version`: 레시피 스키마 버전이다. 사실상 어떤 값이나 생략해도 되지만 실제 마인크래프트 버전을 적는 것이 권장된다.
+- `description.identifier`: 모든 팩에 걸쳐 레시피를 유일하게 식별한다. 네임스페이스 규칙은 없지만 충돌을 피하려면 네임스페이스를 붙인다.
+- `tags`: 레시피를 제작 인터페이스에 연결하는 필수 배열이다. 제작은 `crafting_table`, `stonecutter`, `smithing_table`, 조리는 `furnace`, `blast_furnace`, `smoker`, `campfire`, `soul_campfire`, 양조는 `brewing_stand`, 교육 에디션은 `material_reducer`다. 커스텀 제작대는 `minecraft:crafting_table` 블록 컴포넌트에서 커스텀 태그를 선언한다. 커스텀 조리/양조 블록은 지원되지 않는다. 레시피를 사실상 끄려면(앞 레시피를 덮을 때 유용) 태그 배열을 `[""]`로 둔다.
+- `unlock`: 레시피 해금 조건이다(아래).
+- 결과 `result`: 아이템 서술자다.
+
+모양 있는 레시피(shaped) 예제다. 패턴은 최대 3x3이며 셋째 글자 뒤는 무시된다. 키 문자는 공백을 제외한 한 글자다.
+
+```json
+{
+  "format_version": "1.17.41",
+  "minecraft:recipe_shaped": {
+    "description": { "identifier": "wiki:cold_steel_sword" },
+    "tags": [ "crafting_table", "altar" ],
+    "pattern": [ "X", "X", "I" ],
+    "key": { "X": "wiki:cold_steel", "I": "minecraft:stick" },
+    "unlock": [
+      { "item": "wiki:cold_steel" },
+      { "item": "minecraft:wool", "data": 3 },
+      { "context": "PlayerInWater" }
+    ],
+    "result": "wiki:cold_steel_sword"
+  }
+}
+```
+
+바닐라 빵 레시피(bedrock-samples, format 1.20.10)는 `pattern: ["###"]`, `key: {"#": {"item": "minecraft:wheat"}}`, `unlock: [{"item": "minecraft:wheat"}]`, `result: {"item": "minecraft:bread"}`로 이뤄진다(출처: bedrock-samples).
+
+## 2. 레시피 종류
+
+| 종류 | 키 | 매개변수 |
+|---|---|---|
+| shaped | `minecraft:recipe_shaped` | tags, pattern, key, priority, result, assume_symmetry |
+| shapeless | `minecraft:recipe_shapeless` | tags, ingredients(위치 무관), priority, result |
+| 화로 | `minecraft:recipe_furnace` | tags, input, output |
+| 양조 | `minecraft:recipe_brewing_container`, `minecraft:recipe_brewing_mix` | tags, input, reagent, output |
+| 스미딩 변환 | `minecraft:recipe_smithing_transform` | tags, template, base, addition, result |
+| 스미딩 트림 | `minecraft:recipe_smithing_trim` | base, addition, template |
+
+- `priority`는 낮은 숫자가 높은 우선순위다. `assume_symmetry`(기본 true)를 false로 하면 좌우 반전 레시피를 따로 정의해 다른 결과를 줄 수 있다.
+- 화로 레시피의 `output`은 `{ "item": ... }`가 아니라 문자열 `"ns:item"`이다.
+- 아이템 서술자는 문자열(`"minecraft:planks"`, 데이터 접미사 `"minecraft:planks:2"`)이거나 객체(`{"item": "minecraft:planks", "data": 2, "count": 3}`)다. 객체의 `count`는 제작과 화로 결과에서만 동작하고 쌓이지 않는 아이템에 1보다 큰 값을 주면 오류다. 서술자에는 함수를 쓸 수 없다. 스폰 알의 데이터는 Molang도 된다(`"data": "q.get_actor_info_id('minecraft:chicken')"`). 기본 물약은 문자열에만 `minecraft:potion_type:strength` 형식 식별자를 쓴다(water, awkward, mundane, thick, healing, regeneration, swiftness, strength, harming, poison, slowness, weakness, water_breathing, fire_resistance, nightvision, invisibility, leaping, slow_falling). 투척/잔류 물약 변형은 없다.
+
+### 레시피 해금
+
+1.20.10 이후 플레이어가 레시피를 해금한다. manifest의 `min_engine_version`이 1.20.11 이상(1.20.30 권장)이어야 한다. `unlock` 배열은 `{ "item": ..., "data": ...}`(인벤토리에 그 아이템이 있으면 해금)와 `{ "context": ... }`(`AlwaysUnlocked`, `PlayerInWater`: 처음 물에 들어갈 때, `PlayerHasManyItems`: 인벤토리에 10개 넘는 아이템)를 쓴다. 제작대는 `"unlock": {"context": "AlwaysUnlocked"}`다.
+
+## 3. 규칙과 제한 (커뮤니티 보고)
+
+- 컨테이너 아이템을 돌려주는 것은 shaped 레시피만 된다. shapeless는 결과 여러 개를 줄 수 없다. 재료 `count`는 없다. 크리에이티브 전용 레시피는 불가능하다. 여러 레시피가 같은 아이템을 출력할 수 있다. 물약은 데이터 값으로 지정한다. 나무 종류별 제작에는 스크립트가 아니라 아이템 태그(`minecraft:logs`)를 쓴다. 웹 도구로 레시피 생성기(Bedrock 1.21로 설정)가 있다.
+- 문제가 되는 바닐라 아이템 ID(재료 위치에서 변형까지 매칭됨): anvil, bucket(우유, 용암, 가루눈, 물고기, 물 양동이), coal(목탄), cobblestone_wall(모든 벽), dirt(거친 흙), prismarine, purpur_block, quartz_block, red_sandstone, sand(붉은 모래), sandstone, sponge(젖은 스펀지), stone(화강암/섬록암/안산암과 매끄러운 것), tnt(수중 TNT). `"minecraft:stone:0"`처럼 `:0`을 붙인다. 점검용 정규식은 `"(?:minecraft:)?(?:anvil|bucket|coal|cobblestone_wall|dirt|prismarine|purpur_block|quartz_block|red_sandstone|sand|sandstone|sponge|stone|tnt)(?!:0)"`다.
+- 바닐라 레시피 덮어쓰기는 같은 `description.identifier`(예 `minecraft:bread`)와 유효한 내용이 필요하고 빈 파일은 아무 일도 하지 않는다. 결과를 `minecraft:air` count 0으로 두라는 제안이 있었다. 한 사용자는 다른 애드온에서만 빵을 덮어쓸 수 있었다(캐시 의심, manifest 버전을 올리거나 새 월드). 근본 원인은 밝혀지지 않았다.
+- 레시피 책에서 숨기되 제작은 가능하게 하는 방법은 찾지 못했다(아이디어는 해금 아이템이나 커스텀 제작대 태그). 커스텀 제작 블록에서 제작 태그 여러 개를 쓰면 레시피가 보이지 않을 수 있다(MCPE-240719).
+- 레시피 결과 이름: `set_name`은 동작하지 않고 제작 결과 스크립트 이벤트도 없다.
+- 폴더 이름 오타(`recepies`)는 레시피를 조용히 무시한다.
+
+## 4. 스미딩
+
+- 업그레이드 레시피는 `minecraft:recipe_smithing_transform`(`tags:["smithing_table"]`, template/base/addition/result)이다. base 아이템에 태그 `minecraft:transformable_items`(다이아→네더라이트), 커스텀 템플릿 태그 `minecraft:transform_template`를 쓴다. `addition`은 `minecraft:netherite_ingot`이어야 하고(하드코딩) `{"tag": ...}` 형태는 동작하지 않는다(format 1.26.50 시험). 바닐라 아이템에는 태그를 붙일 수 없다. 아이템 파일이 없는 블록에는 아이템 태그가 없다. 예전 커스텀 스미딩 레시피는 두 번째 슬롯에 `<ns>:netherite_ingot`이 필요했고 이것은 1.18.30 이후 동작하지 않는다.
+- 1.26.40의 base 아이템 제한: base가 방어구/장비가 아니면 `base item is not a piece of armor or equipment`가 나고 `minecraft:durability`가 없는 아이템은 실패한다(MCPE-242206, 2026-08-30 등록). 우회:
+
+```json
+"minecraft:durability": { "damage_chance": { "min": 0, "max": 0 }, "max_durability": 0 },
+"minecraft:wearable": { "slot": "slot.armor.body" }
+```
+
+  wearable이 있으면 몹을 때려도 내구도가 줄지 않는다. (confirmed)
+
+## 5. 아이템 태그
+
+- 바닐라 태그 목록은 Bedrock Wiki의 item-tags 페이지(ItemTypes를 도는 스크립트로 자동 생성)에 있고 바닐라 아이템 그룹은 vanilla-item-groups 페이지로 옮겨졌다. Mojang은 바닐라에 필요할 때만 태그를 추가한다. 동적 태그는 없으니 겹치지 않는 아이템 + 다이나믹 프로퍼티를 쓴다. 외부 모드의 액세서리 호환은 아이템 태그 하나인 경우가 있다.
+- 염소 뿔 변형은 전리품 `set_data`(무작위 `{min,max}` 또는 고정 `data`)로 정한다.
+
+## 6. 사례: 레시피 잠금과 실시간 개방 (한 Dragonfly 기반 서버)
+
+서버가 `CraftingData` 패킷으로 보낸 레시피만 클라이언트가 안다. 이 패킷은 `ClearRecipes`로 언제든 다시 보내 목록을 통째로 바꿀 수 있다. 한 Dragonfly 기반 서버는 이를 이용해 참나무 판자·제작대·연구대를 뺀 모든 레시피를 잠그고 연구로 하나씩 연다(출처: 비공개 조사).
+
+- Dragonfly 서버는 접속 때 한 번 전체 목록을 보내고 세션마다 `네트워크 ID → 레시피` 표를 만들어 조합 요청(`CraftRecipe`, `AutoCraftRecipe`, 대장장이, 석재 절단기)을 그 표로만 받는다. 표에 없는 ID는 동적 레시피(장식된 도자기)로 넘어가고 거기도 없으면 거절한다.
+- 패치 `Player.SetRecipeFilter(f)`는 필터가 고른 레시피만 보내고 표에 넣는다(네트워크 ID는 전체 목록 순번 그대로). 부르면 바로 다시 보낸다. 필터가 있으면 동적 레시피는 막는다. 잠긴 레시피는 레시피 책·조합 칸에 안 나오고 패킷을 위조해도 서버가 거절한다. 열기 단위는 결과 아이템 이름이다.
+- 레시피 목록에 없는 것은 따로 막아야 한다. 화로·훈연기·용광로 굽기는 레시피가 아니라 아이템의 `Smeltable`로 굽기 때문에 넣을 때·구울 때 검사를 둔다. 양조는 목록에 있어 같이 잠긴다.
+- 클라이언트 레시피 책은 창작 인벤토리 목록(`CreativeContent`)에 있는 결과의 레시피만, 블록 상태까지 같을 때만 나열한다. 그래서 새 아이템·블록을 레시피로 만들 때는 창작 인벤토리에도 등록해야 하고, 바닐라 블록 결과는 창작 항목과 상태가 다른 것이 많아(상자·퇴비통 등 30여 종) 런타임 ID를 맞추는 패치가 필요했다.
+
+## 7. 명령어로 만드는 커스텀 제작
+
+제작대 없이 dropper 두 개(레시피, 결과)와 제작용 dropper 하나로 `execute if blocks <recipe> <recipe> <crafter> masked run clone <recipe_output> <recipe_output> <crafter>` 한 줄로 제작 시스템을 흉내 낼 수 있다(출처: bedrock-wiki, custom-crafting). 레시피 dropper와 제작용 dropper가 일치하면 결과 dropper를 제작용 dropper에 복사한다. 이 방식은 인챈트나 커스텀 이름이 있는 아이템을 만들 때 쓴다.

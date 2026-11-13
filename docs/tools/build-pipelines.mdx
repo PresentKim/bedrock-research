@@ -1,0 +1,373 @@
+---
+title: "빌드 파이프라인: Regolith와 GDK 배포"
+description: "Regolith, jsonte, bedrock-boost, GDK 경로, 필터 생태계, 빌드 프레임워크"
+sidebar_position: 5
+sources:
+  - private-research
+  - regolith
+  - jsonte
+  - bedrock-boost
+  - ms-learn
+---
+
+애드온을 BP/RP 소스에서 게임용 팩으로 만드는 빌드 도구와 템플릿 언어, 배포 경로를 다룬다. 작은 애드온은 도구 없이 `development_behavior_packs`에 직접 넣어도 되지만, 필터로 JSON을 생성하거나 TypeScript를 번들하거나 여러 환경에 내보내려면 컴파일러가 필요하다.
+
+| 도구 | 하는 일 | 라이선스 |
+|---|---|---|
+| Regolith | 프로젝트 폴더를 복사하고 필터를 돌려 com.mojang으로 내보내는 애드온 컴파일러(Go) | MIT |
+| jsonte | JSON 템플릿 엔진과 질의 언어(Go, Regolith 필터) | MIT |
+| bedrock-boost | Script API용 유틸리티 라이브러리(npm) | MIT |
+| `@minecraft/core-build-tasks` | Mojang 공식 just-scripts 배포 작업 | Microsoft 패키지 |
+
+## Regolith
+
+**하는 일.** `bridge. v2`처럼 "프로젝트 폴더"(RP, BP, 모델, 텍스처, 설정을 한 폴더에)를 쓰고, 가장 단순한 경우 RP와 BP를 com.mojang 폴더로 "컴파일"(복사)한다. 복사 중에 필터(프로그램)를 순서대로 돌려 파일을 변환한다. 가치는 여러 언어로 만든 도구를 하나의 컴파일 흐름에 묶는 데 있다(출처: tool-regolith, `README.md`, MIT, Copyright 2021 Bedrock-OSS, 조사 커밋 `eeaf064`). 필터는 프로그램이므로 믿을 수 있는 것만 실행한다.
+
+**설치.** 사용자용 설치 안내는 문서의 Installation 절이고(winget, MSI, Homebrew 등 채널 차이는 아래 노트), 소스에서 받으려면 Go가 필요하다.
+
+```bash
+go install github.com/Bedrock-OSS/regolith@latest
+```
+
+**기본 명령.**
+
+```bash
+regolith init                 # config.json이 있는 프로젝트 만들기
+regolith install jsonte       # 필터 레지스트리에서 필터 설치
+regolith install-all          # config의 모든 필터 설치
+regolith run dev              # profile 하나 실행 후 export
+regolith watch dev            # 파일이 바뀔 때마다 다시 실행
+regolith apply-filter <필터>   # 필터 결과를 소스에 반영
+```
+
+게임에서는 `reload all`로 다시 불러온다(스크립트와 함수만이면 `reload`).
+
+**config.json.** 프로젝트 루트의 `config.json`은 팩 경로, profile, 필터 정의, export 대상을 적는다. 저장소 테스트 프로젝트에서 가져온 최소 예다.
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/Bedrock-OSS/regolith-schemas/main/config/v1.2.json",
+  "name": "my_project",
+  "author": "me",
+  "packs": { "behaviorPack": "./packs/BP", "resourcePack": "./packs/RP" },
+  "regolith": {
+    "profiles": {
+      "dev": {
+        "filters": [ { "filter": "test_exe_filter" } ],
+        "export": { "target": "development", "readOnly": false }
+      }
+    },
+    "filterDefinitions": {
+      "test_exe_filter": { "runWith": "exe", "exe": "./executables/test_exe_filter" }
+    },
+    "dataPath": "./packs/data"
+  }
+}
+```
+
+`runWith`는 필터 실행 방식(`python`, `nodejs`, `deno`, `bun`, `shell`, `exe`, `dotnet` 등)이고 `data` 폴더에는 필터별 데이터를 둔다. export 대상은 `development`(com.mojang의 development 폴더), `local`, `exact`(경로 직접 지정) 등이다. com.mojang 경로는 사용자 환경변수 `COM_MOJANG`으로 지정하는 것이 권장이다.
+
+**한계.**
+- 프로젝트당 BP와 RP가 하나씩이고 임시 폴더 이름은 `BP`, `RP`, `data`로 고정이다.
+- `regolith watch`는 필터가 소스를 수정하면 무한 루프가 돈다.
+- 큰 프로젝트에서는 필터 입출력이 시간을 대부분 쓴다(jsonte가 자주 범인).
+- 릴리스 바이너리가 일부 백신에 오탐된다.
+
+세부(1.6~1.8 릴리스별 기능, 러너, 필터 개발, 다중 팩)는 아래 노트에 있다.
+
+## jsonte (JSON Templating Engine)
+
+**하는 일.** Minecraft 애드온처럼 반복되는 대량 JSON을 적은 스크립트로 생성하는 JSON 전용 템플릿 엔진이다. 자체 질의 언어를 가진다. 온라인 데모와 인터랙티브 튜토리얼이 `mcdevkit.com`에 있다(출처: tool-jsonte, `README.md`, MIT, Copyright 2021 MCDevKit, 커밋 `73a3c3b`).
+
+**설치.**
+
+```powershell
+regolith install jsonte                       # Regolith 필터로
+go install github.com/MCDevKit/jsonte@latest  # 독립 실행 (Go 1.18 이상)
+```
+
+소스 개발은 `go mod vendor` 후 `scripts` 폴더의 ANTLR 설정과 문법 컴파일 스크립트를 실행하고 `go build`한다. VS Code 확장은 `MCDevKit.jsonte-vscode`다. 한계는 위 Regolith와 같은 성능 문제(Deno만 쓰는 구성이 5000파일을 1초 안에 컴파일하는 데 jsonte를 더하면 약 10초)와 문법 학습 비용이다.
+
+## bedrock-boost
+
+**하는 일.** Script API 개발 보조 라이브러리로 `Vec3` 벡터, 차원 조회와 블록 permutation을 캐시하는 `Cache`(네이티브 호출 감소), 플레이어 폴리필(`applyImpulse`, `clearVelocity`), `console.log`를 채팅으로 보내는 폴리필, 프로파일링 보조(`addIdleDummy`), `Timings`, 레벨·태그·필터가 있는 `Logger`, `ChatColor`, `ColorJSON`, 작업을 틱에 나누는 `PulseScheduler` 계열(`PlayerPulseScheduler` 등), `BlockUtils`, `CommandUtils`, `EntitySaver`, `JobUtils`를 제공한다(출처: tool-bedrock-boost, `README.md`, MIT, Copyright 2023 Bedrock-OSS, 커밋 `1314f85`).
+
+```bash
+npm install @bedrock-oss/bedrock-boost
+```
+
+```typescript
+import { Vec3 } from "@bedrock-oss/bedrock-boost";
+import { world } from "@minecraft/server";
+
+world.beforeEvents.itemUse.subscribe((event) => {
+  event.source.applyImpulse(Vec3.from(event.source.getViewDirection()).setY(0).normalize().multiply(2));
+});
+```
+
+로거는 `Logger.getLogger("main", "tag1")`로 얻고 `scriptevent logging:level <레벨>`로 레벨을 바꾼다. 번들러(esbuild 등)가 필요하고 [Script API 개요](../scripting/overview-and-modules.mdx)의 번들링 규칙을 따른다.
+
+## 커뮤니티 노트
+
+아래는 커뮤니티 조사로 모은 GDK 경로 이동, Regolith 릴리스와 버그, 필터 생태계, 그 밖의 빌드 도구, TypeScript 개발 도구, 커뮤니티 라이브러리와 Molang 도구다.
+
+`(confirmed)`, `(single report)`, `(conflicting)` 같은 말은 보고의 신뢰도 표시다.
+
+### GDK 경로 이동과 배포
+
+- **경로**: 1.21.120(2025-10)부터 `%AppData%\Minecraft Bedrock\Users\Shared\games\com.mojang`(공유)와 `...\Users\<개인별 숫자>\games\com.mojang`(사용자별)를 쓴다. 예전 UWP LocalState 경로는 쓰지 않는다. 이동 과정에서 dev 팩이 지워진 것처럼 보이는 사례가 있었다. 개발 팩은 Shared에 둔다. 이주 문서: `https://learn.microsoft.com/en-us/minecraft/creator/documents/gdkpcprojectfolder?view=minecraft-bedrock-stable` , `https://jaylydev.github.io/posts/bedrock-gdk/#restore-your-data` (confirmed)
+- **중복 dev 팩**: 이주 중에 숫자 폴더에 dev 팩이 중복으로 생겨 `/reload all`이 새 파일을 못 보는 것처럼 보인 사례가 있다. 중복 팩(오래된 사본)이 있으면 변경이 반영되지 않는다.
+- **멀티플레이 텍스처 캐시**: GDK 이후에는 `%temp%/Minecraft Bedrock` 아래에 있다. content log는 `AppData/Roaming/Minecraft Bedrock/logs`에 쌓이는데, 켜 두면 수십 GB까지 커질 수 있다. 바닐라 게임 파일은 `C:\XboxGames` 아래에 있다.
+- **`@minecraft/core-build-tasks` local-deploy**: ^5.5.0(또는 latest)으로 올리고 `.env`의 product를 `MINECRAFT_PRODUCT="BedrockGDK"`로 바꾼 뒤(이전 값은 MinecraftW8P/UMP) `npm run local-deploy -- --watch`를 실행한다. 새 starter 프로젝트를 만드는 방법도 있다.
+- **Junction 스크립트**: LuckedCoronet의 PowerShell `mc-link.ps1` gist로 com.mojang에 junction을 만든다. Linux/macOS는 minecraft-linux.github.io를 참고한다.
+- **GDK 전환 뒤 지원 상태**: MCPE-tool(jeanmajid)이 GDK 경로를 지원한다. bridge. 컴파일 대상 설정은 `https://wiki.bedrock.dev/guide/project-setup#windows` 를 따른다. Haze(월드 파일 이동 도구)는 경로가 바뀐 뒤 동작하지 않는다.
+- **UWP 서버**: UWP는 사라지는 중이지만, 2025-11 당시 많은 서버가 여전히 1.21.94 UWP를 썼다.
+- **플랫폼 간 블록 불일치**: GDK 전환 뒤 플랫폼 사이에 "blocks between client and server do not match"가 날 수 있다. 양쪽 버전을 맞춘다. (single report)
+- **loopback 예외**: BDS 문서의 loopback 예외/UPnP loopback은 UWP 제약이었고 GDK에서는 필요 없다. 예전 방식은 `CheckNetIsolation.exe LoopbackExempt -a -p=<SID>`다.
+- **여러 인스턴스 실행**: GDK에서는 설치를 복제해야 한다(복제한 exe는 시작 화면을 건너뛴다).
+  - gdk-version-archiver(`gdkva`, github.com/conmaster2112/gdk-version-archiver, npm, Bun 필요): `gdkva archive --tag=stable`, `gdkva archive *windowsbeta* --tag=preview`, `gdkva list`, `gdkva run --tag=stable`.
+  - 2026-03 프리뷰에서는 다중 인스턴스가 깨졌다. 계정 전환은 Xbox 로그인에 묶여 있다.
+  - 같은 계정으로 한 월드를 두 인스턴스에서 열 수는 없다(Blaze 오류).
+- **MCBE 프로토콜 URI**: 2025-10 말 GDK 릴리스에서 Editor를 빼고는 대부분 동작하지 않다가 나중에 복구됐다.
+- **Linux 경로**: Wine/GDK에서는 com.mojang 안의 `development_*_pack`이 동작하지 않는다(원인 미상). mcpelauncher는 네이티브와 flatpak 두 위치를 쓴다.
+
+---
+
+### Regolith
+
+#### 기본
+- **동작 방식**: `regolith run`/`regolith watch`는 프로젝트를 복사하고 필터를 돌린 뒤 `development_behavior_packs`/`development_resource_packs`로 export한다. 게임에서는 `reload all`(스크립트와 함수만이면 `reload`)로 다시 불러온다. 필터는 프로그램이므로 믿을 수 있는 것만 실행한다. 문서: `https://regolith-docs.readthedocs.io/en/stable/introduction/introduction/`
+- **Python 필터**: `python` 명령을 쓴다(Windows는 `python` 다음 `python3`, Linux는 반대 순서). 외부 모듈이 없으면 기본 인터프리터로 돌기 때문에 `.regolith/cache/venvs`가 비어 있다. 버전을 고르려면 PATH 맨 앞에 둔다.
+  - bump_manifest는 Python 3.9+가 필요하다(1.1.1이 새 manifest를 지원한다).
+  - Python 3.15의 install manager는 `Scripts`를 PATH에 넣지 않으므로 `python -m pip`를 쓴다.
+  - PATH 항목 끝에 `\`가 있으면 "Python version check failed"가 난다.
+- **설정 위치**: Regolith는 `.env`를 읽지 않는다(1.7.0부터 지원). config.json은 프로젝트 단위 설정이므로 머신별 경로는 환경변수에 둔다.
+- **업데이트 채널**: winget 업데이트는 UnownBot PR로 처리되어 약 1주 늦을 수 있다. 빨리 받으려면 MSI를 쓴다. 릴리스 바이너리는 Malwarebytes에 오탐된다. Homebrew(goreleaser `brews`, PR #362)는 2026-07-17 develop에 머지됐고 다음 릴리스부터 나온다.
+- **기여 규칙**: fork해서 `develop` 브랜치를 대상으로 한다(`main`은 릴리스용이라 뒤처져 있다). 새 기능은 문서(docs 저장소, Bedrock-OSS/regolith-schemas)를 갖춘 뒤에 릴리스한다. 로고와 에셋: `https://github.com/Bedrock-OSS/regolith-docs/tree/main/docs/_static`
+
+#### GDK 경로와 export target
+- **권장 방법**: 사용자 환경변수 `COM_MOJANG`을 `development_behavior_packs`와 `development_resource_packs`가 있는 폴더로 설정한다. 다른 방법은 config.json에 `exact` target으로 경로를 적는 것인데, 머신마다 달라서 팀에서는 환경변수가 낫다. (confirmed)
+- **환경변수 적용 시점**: 환경변수는 설정 이후에 시작한 프로세스에만 보인다. 통합 터미널만이 아니라 VS Code 창을 전부 닫는다. "여전히 예전 경로로 export된다"는 보고 대부분이 이 경우였다.
+- **안 되는 방법**: profile `export` 블록 안의 `"COM_MOJANG": "..."`는 `"target": "development"`에서 동작하지 않는다. 환경변수를 쓰거나 `"target": "local"`/`exact`를 쓴다.
+- **환경변수 목록**: `COM_MOJANG`, `COM_MOJANG_PREVIEW`, 그리고 각 문맥에서 우선하는 `COM_MOJANG_PACKS`, `COM_MOJANG_WORLDS`, `COM_MOJANG_PACKS_PREVIEW`, `COM_MOJANG_WORLDS_PREVIEW`가 있다. 보통은 아무것도 설정하지 않는다. export 경로 안에서는 `%var%`와 함께 `${var}`, `$var`도 쓸 수 있다(1.6.0). 문서: `https://regolith-docs.readthedocs.io/en/stable/project-configuration/export-targets/#export-target-environment-variables` , 경로 결정 방식: `https://regolith-docs.readthedocs.io/en/1.6.0/project-configuration/export-targets/#how-does-regolith-determine-the-com-mojang-path`
+- **UWP 폴백 없음**: 1.6.0부터 GDK 경로가 기본이고 UWP로 폴백하지 않는다. UWP 사용자는 환경변수를 설정해야 한다. 다른 도구에서는 `output: "stable"|"preview"|"stable_uwp"|"preview_uwp"` 같은 방식도 논의됐다.
+- **다중 export target(1.8.0)**: 프로필당 여러 target을 리스트로 지정할 수 있다. `https://regolith-docs.readthedocs.io/en/stable/project-configuration/export-targets/#single-or-multiple-export-targets`
+
+#### 릴리스별 기능과 버그
+- **1.6.0 (2025-11-08)**: `watchPaths`(처음에는 문서와 스키마에 없었다), `symlink_export` experiment, 원격 필터의 subfilter 뒤에 watch를 더 일찍 중단, go-simple-eval의 `initial`/`mode` 변수, GDK 기본 경로, Go 1.25.3. 버그: `export.go`에 최대 formatVersion 1.4.0이 하드코딩되어 새 `regolith init` 프로젝트(1.6.0)가 "Incompatible formatVersion"으로 실패했다.
+- **1.6.1 (2025-11-10)**: formatVersion 1.6.0 크래시를 고쳤다. 문자열 리스트가 아닌 `arguments`는 크래시 대신 오류를 낸다.
+- **1.6.2 (2025-12-02)**: Windows junction 재귀 복사 버그를 고쳤다. Go 1.23부터 junction이 symlink로 보고되지 않아 `otiai10/copy`가 junction을 파일처럼 복사하며 재귀했고, `data`에 `node_modules`를 둔 프로젝트에서 `tmp` 준비가 실패했다. 핫픽스는 Go 1.18로 빌드하는 것이었다.
+- **1.7.0 (2026-01-25)**
+  - `asyncFilters`: `{"asyncFilters":[{"filter":"a"},{"filter":"b"}]}`로 필터를 병렬 실행한다.
+  - `extraArguments`(`ignore` 기본 / `override` / `append`): `regolith run <profile> -- args...`의 인자를 어떻게 넘길지 정한다. 원래 순서는 `settings`가 먼저, 그다음 `arguments`다.
+  - profile 필터에서 `when`/`disabled`를 쓸 수 있다.
+  - go-simple-eval이 환경변수와 `nested` 플래그를 읽는다.
+  - `.env` 지원(PR #348)과 전역 `--env`.
+  - `preShell`/`postShell`: regolith 셸 컨텍스트에서 돌고, `preShell`에서 만든 환경변수가 필터와 `postShell`에 보인다.
+- **1.8.0 (2026-05-14 발표, 성능 중심)**
+  - user config `tmp_dir`
+  - Bun 필터 타입(`"runWith": "bun"`)
+  - 러너 실행 파일 지정(`node_runner`, `deno_runner`, `dotnet_runner`)
+  - `node_runner_override`(예: `regolith config node_runner_override *:bun`, `my_filter:node`). Node 필터만 override할 수 있다.
+  - `--unsafe`(편집된 export 파일 추적, 즉 삭제 안전 검사를 건너뛴다. 벤치마크 7.34s → 6.64s(새 safe) → 6.35s(unsafe))
+  - 디렉터리 동기화 병렬화, 다중 export target
+  - `size_time_check`는 기본값이 되었고 `symlink_export`도 experiment에서 졸업했다.
+  - `regolith init`이 통합 `$schema`를 쓴다.
+  - 문서: `https://regolith-docs.readthedocs.io/en/1.8.0/using-regolith/performance-tips/` , `https://regolith-docs.readthedocs.io/en/stable/using-regolith/user-configuration/` (GitHub 태그 `1.8.0`은 2026-06경이라는 기록도 있다)
+- **experiment 설명**: `size_time_check`는 크기와 mtime으로 변경 없는 파일 복사를 건너뛴다. 거의 모두가 쓰고, 이론상 결함은 mtime을 조작하는 필터뿐이다. `symlink_export`(PR #328)는 아직 많은 필터를 깨뜨리고, 실행이 성공했는지 알기 전에 출력부터 지운다. 1.8.0 이전에는 `regolith run debug --experiments size_time_check`로 켰다. 필터가 `size_time_check` 사용 여부를 알 수 있게 환경변수를 노출하자는 제안이 있다(JSONTE 캐시용, 미구현).
+- **`tmp_dir`과 RAM 드라이브**: `regolith config tmp_dir <path>`로 지정하고 `-d`로 초기화한다. RAM 드라이브(Windows ImDisk, Linux tmpfs)를 가리키게 하면 빨라진다. 사용자 수준 설정이라 regolith 인스턴스는 한 번에 하나다. Bun은 필터 스크립트와 작업 디렉터리가 다른 Windows 드라이브에 있으면 실패하므로, RAM 드라이브 + bun 조합은 동작하지 않는다.
+
+#### watch 모드와 알려진 버그
+- **필터가 소스를 수정하면 무한 루프**: 같은 내용으로 다시 써도 루프가 돈다. 예를 들어 gametests 필터가 `package.json`의 modules를 고치면 루프가 돌므로 필터 settings로 설정한다. `node_modules`를 지울 때까지 루프가 돈 사례도 있다. `runWith: shell` 필터(예: prettier)로 소스를 포맷해도 루프가 돈다. 소스에 반영하려면 `regolith apply-filter`를 쓴다.
+- **`"when": "initial == true"` 반복 실행(2026-03~04)**: 필터가 pack/data 폴더에 쓰면 중단된 빌드가 `initial`이 true인 채로 다시 시작해 계속 반복된다. 필터는 `initial`을 직접 읽을 수 없다. 제안: `when` 스코프를 JSON 환경변수로 넘기거나 `data`에 `regolith-meta.json`을 쓰는 것.
+- **RP/BP 디렉터리가 없을 때**: `regolith watch`는 "Could not start watching" 오류를 내고, `run`은 경고만 낸다. 빈 문자열 경로는 건너뛴다. BP만 정의해도 `development_resource_packs`에 빈 RP 폴더를 만드는 버그가 있다(`regolith/profile.go`).
+- **재귀 파일 감시**: fsnotify는 공식적으로 Windows만 지원한다. regolith는 arexon의 포크로 Linux에서 강제로 쓰고, macOS는 불완전하다.
+- **병렬 필터의 효과**: 대부분의 필터가 앞 필터의 출력에 의존해서 속도 이득이 드물다. 오류가 나면 필터 하나의 오류만 보고된다.
+
+#### 러너 (Node, Deno, Bun)
+- **Deno와 Bun**: Deno는 `require()`/`import()`를 쓰는 필터(비 CJS 스코프의 `require()`)에서 실패한다. `require("node:os")`는 Deno에서 동작한다. gametests 필터는 bun에서 동작하지 않을 수 있다. Node에는 regolith가 플래그를 넘기지 못하므로 `exe` 필터를 우회로로 쓴다(`"bun": {"runWith":"exe","exe":"filters/bun/bun.exe"}`). Node 24는 기본으로 TS 타입을 벗겨낸다. Regolith는 Deno 필터를 모든 권한으로 실행한다.
+- **성능**: 전부 Deno인 필터 구성은 5000파일 프로젝트를 1초 안에 컴파일한다. jsonte를 더하면 약 10초가 된다.
+- **TS watch 병행**: `concurrently`로 regolith와 함께 돌리거나, 필터로 트랜스파일하는 편이 낫다(gametests 필터가 esbuild로 번들한다).
+
+#### 필터 개발
+- **입력 받기 금지**: Python `input()`은 stdin이 연결돼 있지 않아 EOFError가 난다. 오류를 던지거나 profile settings를 쓴다. 필터가 오류를 던지면 전체 실행이 멈춘다.
+- **`data` 폴더**: `data/<filtername>`은 기본으로 읽기 전용이다. `exportData: true`이면 소스에 다시 쓴다. 바깥에 쓰려면 환경변수 `ROOT_DIR`(프로젝트 루트)을 쓰는 편이 낫다. 필터의 `test` 폴더는 캐시 다운로드에서 빠진다.
+- **설정 설계**: 필터는 profile/필터 이름으로 의도를 추측하지 말고 profile별 settings를 받는다. 필터 settings에는 JSON 스키마를 붙일 수 없으니 config 전체용 스키마를 직접 만든다. 필터 config에서 PascalCase와 snake_case 키를 섞지 않는다.
+- **배포**: 필터 저장소에 `node_modules`를 커밋하지 않는다(`regolith install`/`install-all`이 설치한다). 버전은 git 태그 `<filter-name>-<semver>`(예: `git tag loot_tabler-1.0.0`)로 붙인다. 문서: `https://regolith-docs.readthedocs.io/en/stable/developing-filters/publishing-filters/#versioning-your-filter`
+- **필터 레지스트리**: Bedrock-OSS/regolith-filter-resolver(`https://github.com/Bedrock-OSS/regolith-filter-resolver`)에 PR로 항목을 추가해야 `regolith install <name>`이 동작한다. 커스텀 resolver를 붙일 수도 있다(예: `regolith config resolvers --append github.com/Alien-Edds/Regolith-Filters/resolver.json`). brarchive 필터처럼 표준 저장소에서 거절된 필터는 자기 저장소에 호스팅한다.
+- **filter-manifest PR #323**: 릴리스 zip URL로 실행 파일 필터를 배포하자는 PR인데, 비공개 저장소 인증 문제로 정체 중이다.
+- **`regolith install --profile`**: 설치한 필터를 그 profile에 추가할 뿐이다.
+- **다른 starter 필터를 쓰는 profile**: `{ "filter": "starter_filter", "settings": {...}}, {"profile": "main_profile"}`로 만든다. go-simple-eval의 `profile` 변수는 중첩된 경우에도 현재 profile을 담는다.
+- **git 버전 얻기**: `ROOT_DIR`에서 `git describe --tags --always --abbrev=0`을 실행한다(태그가 없으면 커밋 id가 나온다).
+
+#### 프로젝트 구조와 다중 팩
+- **BP/RP 한 쌍**: 프로젝트당 BP와 RP가 하나씩이고, tmp 폴더 이름은 반드시 `BP`, `RP`, `data`다(project-config-standard의 일부이고 bridge.도 쓴다).
+  - 우회법: 추가 팩을 `data`에 두고 필터로 복사하거나, profile이나 프로젝트를 나눈다.
+  - 제안(Draft PR #363): `filters`에 `{"bpOrder":[0,1],"rpOrder":[1,0]}` 같은 설정 단계를 넣어 tmp의 팩 디렉터리 이름을 바꾸는 방식.
+- **Project Config Standard**: `https://github.com/Bedrock-OSS/project-config-standard/` 의 공유 `config.json`에 `name`, `packs: {behaviorPack, resourcePack}`, `targetVersion`을 두고, 각 도구가 자기 네임스페이스 섹션(예: `"bedrock-cli": {...}`)을 더한다.
+- **대형 프로젝트 불만**: 컴파일이 30초를 넘고, 병렬 profile이 없다(`regolith run profile1 profile2` 제안).
+  - 시간 대부분은 필터 IO에 들고, jsonte가 자주 범인이다. json_cleaner를 Rust로 다시 쓰니 150ms에서 16~20ms가 됐는데, 대부분 단일 패스 알고리즘 덕분이었다.
+  - 대안으로 rgl(`https://github.com/ink0rr/rgl`, Rust 재작성)이 있다.
+  - Molang 한 줄 제한은 프로젝트 컴파일러로 해결한다.
+
+---
+
+### Regolith 필터 생태계와 템플릿 언어
+
+#### JSONTE (stirante, `https://github.com/MCDevKit/jsonte`)
+- **설계 원칙**: 템플릿(`.templ`, 모듈 `.modl`)은 그 자체로 유효한 JSON이어야 한다. VS Code에서는 `"files.associations": {"*.templ": "jsonc", "*.modl": "jsonc"}`로 연결한다.
+- **2.16.0 (2026-05-28)**
+  - 문법: backtick 템플릿 문자열 `` `$&#123;a&#125; + $&#123;b&#125;` ``, `+=`, block lambda, 일급 lambda
+  - `.molang` 파일: `#{expr}` 보간, `# ` 주석 제거, minify(`query.foo` → `q.foo`)
+  - `.jsonte` scope 스크립트: `$scope.key = value` 형태로 scope를 수정한다.
+  - 함수: `loadText(path)`, 구분자 없는 `join()`
+  - CLI: `--workers N`(0이면 CPU 코어 수), `jsonte help`, `--scope '{"debug":true}'`, symlink 디렉터리 순환 감지
+  - 벤치마크: 2.4배 빠르고 메모리 9.5배 적음. 한 사용자 비교에서 컴파일이 18s에서 3s가 됐다.
+- **2026-09 변경**
+  - `$molang:` 필드 접두사(예: `$molang:pre_animation`)로 Molang을 minify하고 검증한다.
+  - `loadMolang(file, scope)`: 예를 들어 `variable.i = #{test};`에 `{test: 5}`를 주면 `v.i=5;`가 나온다.
+  - `brarchive` 지원
+  - object shorthand, computed key, 배열 slicing, `in`, else 없는 삼항식, compound assignment, `++`/`--`, 16진수와 과학 표기 리터럴
+  - Claude의 도움으로 최적화해 약 80% 빨라졌다고 주장했다.
+- **`$scope` 함정**: 같은 scope 안의 값끼리는 `{{=floor(x/y)}}`로 서로 참조할 수 없다(앞 항목이 문자열이나 NaN으로 들어온다). JS로 생성하는 것이 권장 우회법이다.
+- **릴리스에서 dev 전용 templ 빼기**: 기본 기능이 없으므로 `dev` 폴더를 지우는 작은 필터나 스크립트를 쓴다.
+- **VS Code 확장**: `MCDevKit.jsonte-vscode`. templ/modl 스키마, 자동완성, .molang/.lang/.mcfunction 안의 injection을 지원한다.
+- **jsonte 작성자의 "fast json" 파서(Go)**: 전체 파싱과 순회가 91.5µs로 표준 라이브러리 146.8µs보다 빠르다. 키 하나만 읽을 때는 가장 느리다.
+
+#### ModularMC (nusiq, System Template 2)
+- **위치**: `https://github.com/Nusiq/regolith-filters` (`modular_mc`), 문서 `https://modular-mc-docs.readthedocs.io` (llms.txt: `https://modular-mc-docs.readthedocs.io/llms.txt`). Deno와 esbuild 기반이다.
+- **`{ts: ... :}` 블록은 실제로는 JS다**(`new Function()`): 타입 주석을 넣으면 "Unexpected token ':'"가 난다. 타입 있는 헬퍼는 `.ts`에 두고 `_map.ts`에서 import해 scope로 넘긴다. `_map.ts`를 `.js`로 바꿀 수는 없다.
+- **scope JSON 주석**: `import x from "./_scope.json" with { type: "json" }`은 주석을 허용하지 않으므로 `_scope.ts`를 쓴다.
+- **기본 `onConflict` 없음**: `terrain_texture.json`, `sounds.json` 등에는 플러그인 함수(예: `defaults([...])`)로 `onConflict: "merge"`를 채운다. `_map.ts`에서 `Deno.writeTextFile(...)`로 파일을 직접 만들 수도 있다.
+- **빌드 전용 npm 패키지**: `deno.json`에 넣는다(게임 스크립트가 import하지 않으면 번들에 들어가지 않는다).
+- **실행 순서**: 컴파일은 알파벳 순서다. `executionOrder` MAP 속성(1.3.0, 2026-09-14)이 `prioritized_systems`를 대체한다.
+- **버전 이력**: 1.1.1(2026-06-05, 병렬 읽기, 약 15% 빠름), 1.2.0(Deno 2.6+에서 `deno.json` 상대 import 수정), 1.3.0(`executionOrder`). config에 `"version": "<commit sha>"`로 고정할 수 있다.
+- **예시**: git 버전을 scope에 넣는 `Deno.Command("git", {args:["describe","--tags","--always","--abbrev=0"], cwd: Deno.env.get("ROOT_DIR")})`. `**/*.lang`을 `RP/texts/`에 `onConflict: "appendEnd"`로 붙인다. `__unpack__`과 `::` 표현식으로 terrain_texture 변형을 만든다. map 화살표 안의 `{i}`는 `({i})`로 쓴다.
+- **System Template와 Lantern 비교**: System Template(지금의 ModularMC)는 필터가 필요한 대신, 하나의 "것"을 무엇으로 구성할지 정의하고, 파일 하나에서 여러 파일을 만들고, `sounds_definitions.json` 같은 파일을 쪼갤 수 있다.
+
+#### gametests 필터 (stirante)
+- **1.8.0 (2026-06-11)**
+  - `comptime(fn)`: 가상 모듈 `"comptime"`에서 가져온다. 빌드 시점에 Node에서 콜백을 실행하고 직렬화한 결과를 인라인한다. 예: `comptime(() => JSON.parse(fs.readFileSync("data/blocks.json","utf8")))`. 끄려면 `comptime: false`.
+  - `buildOptions.dropLabels: ["LOGGING"]`가 본문 전체가 drop된 함수 호출까지 지운다(`dropLabeledCalls: false`로 끈다).
+  - `modules: "auto"`: `data/gametests/package.json`에서 manifest 의존성을 끌어낸다(`"auto-dev"`는 devDependencies 포함). `@minecraft/math` 같은 런타임 라이브러리는 번들되고, `@minecraft/server` 같은 엔진 모듈은 external이 된다.
+- **문서**: `https://github.com/Bedrock-OSS/regolith-filters/blob/master/gametests/readme.md`
+- **`regolith install gametests` 함정**: `data/gametests` 아래에 `node_modules`가 중복으로 생겨 `@minecraft/server` 타입이 깨졌다(예: `Player.selectedSlotIndex` 누락). 보통은 필요 없다.
+
+#### 그 밖의 필터
+- **패키징**: `packer` `https://github.com/MCDevKit/regolith-library/tree/main/packer` . 예전 Makercamp exporter의 사본은 `https://github.com/Fabrimat/regolith-filters/tree/main/exporter` 에 있다.
+- **Pack Anything (nusiq)**
+  - 1.2.0은 git 명령을 root dir에서 실행한다.
+  - 1.3.0(2026-05-18)은 config의 `\`를 `/`로 취급한다. 이름에 `\`가 든 파일(Linux나 GitHub Actions에서 생길 수 있다)은 `allow_backslash_paths`가 없으면 오류를 낸다. Python이 Windows와 Linux에서 경로를 다르게 정리하기 때문이다.
+- **`git_metadata`** (`https://github.com/MCDevKit/regolith-library/tree/main/git_metadata`): git 태그와 커밋 정보를 JSON으로 쓴다. esbuild `define`으로도 빌드 상수를 넣을 수 있다.
+- **Shapescape NBT Replacer** (`https://github.com/ShapescapeMC/Shapescape-NBT-Replacer`)
+  - NBT/mcstructure 안의 문자열을 regex로 바꾼다.
+  - 지그소 구조물의 `#1`, `#2` 같은 자리표시자를 pool/name/target name으로 바꿔, 연결 관계를 코드로 관리할 수 있다.
+  - 지그소는 앞서 배치된 구조물 정보를 넘기지 못하므로 변형마다 pool을 복제해야 한다.
+  - 2026-04에 일부 mcstructure 로딩 문제를 고쳤다(PR #2).
+- **Replacements (pixelmancer)**: 2026-03-27부터 mcstructure 안의 문자열도 바꾼다. CLI: `regolith run default -- --replace "old" "new"`.
+- **Loot Tabler** (`https://github.com/TaisenSchettler/regolith-loot-tabler`): mcstructure 블록 엔티티(상자, 통, decorated pot, suspicious sand/gravel)에 루트 테이블을 지정한다. 가장 구체적인 경로 규칙이 이긴다. 한 구조물 안의 상자마다 다른 테이블을 줄 수는 없다.
+- **Edds' Regolith Filters** (`https://github.com/Alien-Edds/Regolith-Filters`): Addon Packer, Image Duplicator(`.duplicate.json`), Image Merge(`.merge.json`), Image Tint(`.tint.json`), JSON File Maker(`.files.json`).
+- **Addon Docs** (`https://github.com/thePixelmancer/regolith-filters/tree/main/addon_docs`): JSON과 `/** */` 주석으로 마크다운 문서를 만든다. 실험적인 `bedrock-kit` API를 쓴다.
+- **Jsonify와 multifeatures**: Jsonify는 YAML/TOML/JSONC/JSON5 소스를 쓰게 해 준다. multifeatures는 feature와 feature rule을 한 파일에 쓰게 해 준다.
+- **bedrock-core 필터** (`https://github.com/bedrock-core/regolith-filters/tree/main/item-aux` 외): 13절 참고.
+- **`type_gen` 필터**: 손으로 쓴 enum 파일을 자동 생성 결과로 덮어썼다.
+- **`blockbench_convert`**: 새 Blockbench export에서 `group.origin` undefined로 크래시한다(2026-10, 미해결).
+- **Aggressive Optimizer** (`https://github.com/acoolg/agr_opt`): Rollup, Closure, Terser, Prettier를 연결한다. 실제 애드온 코드에서는 이득이 거의 없었다.
+- **Shapescape Cutscenes**: `/tp` 기반이라 구식이다. 스크립팅과 카메라 명령을 쓴다.
+- **Nusiq 필터**: ModularMC와 System Template. `https://github.com/Nusiq/regolith-filters/tree/master/modular_mc`
+
+#### Nolana (arexon, `https://github.com/arexon/nolana`)
+- **개요**: Molang 상위 언어다. 함수, match 표현식, 정적 배열, 비트/시프트 연산, 추가 대입 연산자, 파이프를 지원한다.
+- **함수 동작**: 함수는 호출 지점에 인라인된다("glorified templating"). 재귀는 의도적으로 오류다. early return은 결과 변수와 분기로 컴파일한다.
+- **계획**: `local.*` 스코프, 상수 접기, 변수명 축소, struct, `$` 자리표시자 파이프, `if` 표현식, `case`, 블록 스코프.
+- **함정**: 호출된 함수에서 인라인된 문장이 삼항식보다 먼저 실행되므로, 조건 안의 함수 호출은 따로 처리해야 한다.
+- **상태**: 별도 브랜치(`feat/functions`)에 있고 미완성이다.
+
+---
+
+### 기타 빌드 도구와 프레임워크
+
+#### Bedrock CLI / bedrock-build (keyyard)
+- **저장소와 시작**: CLI `https://github.com/Keyyard/create-mc-bedrock-cli` , 컴파일러 `https://github.com/Keyyard/bedrock-build` (npm `@keyyard/bedrock-build`), 템플릿 `https://github.com/Keyyard/custom-mc-scripting-templates` , 문서 `https://bedrockcli.keyyard.xyz/docs` . `npx create-mc-bedrock`로 시작하고, 주로 `deploy`, `deploy:watch`, `npm run pack`/`release`를 쓴다. 혼자 관리하며 PR을 받는다.
+- **버전 이력**
+  - v1.5.0(2026-04-14): Regolith 호환 레이아웃 선택
+  - v2.0(2026-05-14): bedrock-build 컴파일러(.mcaddon 출력, 편집 중 핫 업데이트, workspace에서 Minecraft까지 약 0.03s)
+  - v2.1 / bedrock-build 1.1.0: `folders` 명령(정식 폴더명 생성, `entity` vs `entities` 혼동 방지)
+  - bedrock-build 1.2.1 / create-mc-bedrock 2.2.1(2026-06-14): Project Config Standard `config.json`(`bedrock-cli` 네임스페이스) 지원(예전 `bedrock.config.json`도 동작), TS/JS 혼용(`allowJs`), 약 26% 빠른 빌드(병렬 번들+복사, diff 기반 배포), `.vscode/extensions.json`으로 Blockception + Lantern 추천, 생성 시 언어 선택
+  - 3.0(2026-06-21): starter 하나로 통일, `npm run create:weapon|tool|armor|item|entity|block` 생성기(BP+RP JSON, texture atlas, lang 등록, 멱등, `--dry-run`). 커스텀 모델/애니메이션/텍스처는 먼저 import해야 한다.
+  - bedrock-build 3.1.0(2026-10-20): `build`가 `packs/`를 `dist/`로 미러링하고(삭제/이동한 파일 정리), 크기와 mtime 기준으로 증분 빌드한다. `--clean`은 최적화 옵션일 뿐이다. `<out>/packs/BP/scripts/`는 미러링에서 빠진다. `syncTree(src, dst, { skipSource, keepInDest })` 옵션이 추가됐다.
+- **플랫폼 제한**: 배포 경로가 Windows 중심이다. Linux는 커스텀 설정이 필요하고, 커스텀 deploy 경로 요청이 있었다. macOS에는 Bedrock이 없어 지원하지 않는다.
+
+#### 프레임워크와 생성기
+- **Anvil** (`https://github.com/StarkTMA/Anvil` , 문서 `https://anvil.starktma.net/`): Python/TypeScript OOP로 팩을 생성한다. .bbmodel과 PBR을 직접 지원하고, CSV를 .lang으로 바꾸고, 스키마를 검증하고, dev 폴더에 자동 배포하고, 패키징한다. v0.9.92(크로스플랫폼, 2026-09-04), v0.9.96(2026-10-03). 네이티브 `.brarchive` export를 개발 중이다.
+- **bedrock-core** (drav0011, `https://bedrock-core.drav.dev/` , `https://github.com/bedrock-core/ui`)
+  - Regolith 기반이다. Node.js 20+와 Regolith를 갖춘 뒤 `corepack enable`, `npx @bedrock-core/cli`로 시작한다.
+  - 필터: `generator`(공식 스키마로 타입 생성), `i18n`(deprecated된 `translation-keys`를 대체, 이전 필요), `guides`(MDX를 게임 내 가이드로), manifest 필터(profile별 manifest)
+  - 서버 패키지: `@bedrock-core/sync`(애드온 간 메시지 버스, peer discovery, typed RPC, 복제 KV), `@bedrock-core/server-runtime`(registry, state, config, features, host election, guides/translations)
+  - bds-runner: CLI에서 gametest를 실행한다.
+- **ingot** (C#, .NET 10, NuGet 1.0.0 안정판 2026-08-13): `https://github.com/pyroboots/ingot` . Regolith식 후처리를 담은 v2 재작성이 계획돼 있다.
+- **woah** (Rust): `https://github.com/NaKeRNarolino/woah` , 위키 `https://github.com/NaKeRNarolino/woah/wiki/Start-developing` (API가 많이 바뀌었다).
+- **rustRock**: `https://github.com/Bissolis/rustRock` , 초기 단계의 Rust 매크로 라이브러리.
+- **변환기**
+  - Modmorpher(Java 모드 → Bedrock, AI가 만든 매핑): github.com/indozilla1234/modmorpher
+  - Java-to-Bedrock 변환기(bbmodel, GeckoLib, ItemsAdder, ModelEngine, OptiFine CIT, Geyser 매핑. attachable은 약함): `https://github.com/boredape874/Java-to-bedrock`
+- **scriptup** (npm `@nano191225/scriptup`, github.com/Nano191225/scriptup): `scriptup new`, `build --release`, `build --watch --bundle`, `--lib`. npm 패키지는 번들해야 하고, Node 내장 모듈(fs, path, net)은 런타임에 없다. package.json 주변(깊이 3)을 훑어 manifest.json을 찾는다.
+- **mcaddon-generator** (`https://github.com/AngrySalt/mcaddon-generator`): 터미널에서 .mcaddon을 만들고 패키징한다. Regolith보다 가볍다.
+- **bds-mcbe** (pypi `bds-mcbe`, `https://github.com/PhantomXD-nepal/bds`): `bds init`은 최신 의존성으로 manifest를 만들고, `bds add`는 커뮤니티 스크립트를 추가한다.
+- **mcbe-mods/create**: `https://github.com/mcbe-mods/create` , 스캐폴더.
+- **MCX/mbler** (`https://github.com/RuanhoR/mcx-core` , `https://github.com/RuanhoR/mbler`): .mcx DSL, 자동 manifest, rolldown 빌드, .mcaddon 패키징, 타입 검사. 커뮤니티에서는 과하게 복잡하다는 평이다.
+- **Visual Bedrock** (`https://visualbedrock.com/`): Electron 기반 노드 비주얼 스크립팅 앱이다. JS로 내보내고, 폼 빌더와 DB 관리자를 담고 있다(WIP).
+- **hakomc-server 프레임워크**: TSX 폼, 타이머 래퍼, 디버그 헬퍼, fetch.
+- **TriggerScripts**: Bedrock 안에서 도는 스크립팅 언어. `https://github.com/TheoristMC/TriggerScripts`
+- **Microsoft MCTools** (alpha, 2026-04 v0.16.2, `https://mctools.dev/`)
+  - 애드온 메이커, 내장 BDS, 검증 기능이 있다. npm 패키지, Regolith 필터, CI/CD용으로도 쓸 수 있다.
+  - 템플릿, npm 모듈, 엔티티 JSON과 갑옷 예제, script box 애드온(코드 스니펫 실행)을 제공한다.
+  - `.mcstructure` 렌더러는 기본 형태(풀 큐브, 트랩도어)만 처리한다.
+- **mccreator.tools**: Waypoint Studios, Sparks, Shapescape 도구.
+- **Workspace Creator and Compiler**: 1.21.120+의 `development_*_packs` 경로용이다. 더 단순한 대안으로 symlink를 권한다.
+
+#### 커뮤니티 기술 토론 (빌드/코드 생성)
+- **feature 생성기 패턴(TS)**: `scatterFeature({identifier, feature: singleBlockFeature({block})})` 같은 헬퍼를 둔다. 자식 id는 `__<n>`으로 이어 붙이고(`__1__1` 식 연쇄는 피한다), 속성명은 snake_case로 하고, 클래스보다 인터페이스를 쓴다. arexon의 `https://github.com/arexon/mcbe-types` (`FeatureRule`, `AggregateFeature`, `ScatterDistribution`; features 브랜치)가 있다. 공개된 feature-rule 생성기로는 MachineBuilder 것만 언급됐다. 정의를 BDS 데이터에서 일부 생성할 수는 있다.
+- **자주 바뀌는 포맷의 라이브러리 버전 정책**(예: material.bin): 유지보수 여력에 맞춰 정한다. 프로토콜 프로젝트는 최근 3~4개 버전을 지원한다.
+- **git 기반 의존성 도구 논의**: `destination`은 실제 clone 위치로 정하는 쪽으로 합의됐다.
+- **oxc 툴체인**(oxlint, oxfmt, tsgo, Rolldown): CI의 lint/format/typecheck가 30s에서 10s로 줄었다. VS Code oxc 확장은 불안정하다. IR에서 JS를 내보낼 때는 AST보다 문자열 버퍼 writer를 권한다.
+- **TypeScript 컴파일러의 Go 네이티브화**: typescript-go가 2026-08-20 microsoft/TypeScript 본 저장소로 옮겨졌다.
+- **런타임 소식**: Bun이 2026-05-14에 Rust 포트를 머지했다. Deno PR `https://github.com/denoland/deno/pull/36194` , `https://github.com/littledivy/v8x` .
+- **JS 컴파일 단계 최적화는 효과가 거의 없다**: compilecat(`https://github.com/isaac-mason/compilecat`)을 시험해 보니 병목은 Script API 호출이었다. perlin 계산을 46s에서 1s로 줄여도 `fillBlock` 호출이 전체 시간을 지배했다.
+
+---
+
+
+### 커뮤니티 라이브러리와 Molang 도구
+
+- **bedrock-boost (Bedrock-OSS, stirante)**
+  - Vec3는 불변이라 핫 패스에서 느려서 MutVec3를 추가했다. MutVec은 AI가 기존 Vec을 바탕으로 썼다.
+  - 2026-09-15 릴리스: 번들이 작아지고 벡터 수학이 약 35% 빨라졌다.
+  - `src/utils/EntitySaver.ts`: 엔티티를 구조물에 저장해 나중에 복원한다.
+  - `isItem`(testfor), 카메라 흔들기 명령 래퍼.
+  - 릴리스는 로컬에서 `npm publish`(2FA)로 한다. GitHub Action은 불안정했다.
+- **애드온 간 통신(IPC)**: 모두 scriptevent를 전송 수단으로 쓴다.
+  - MCBE-IPC(github.com/OmniacDev/MCBE-IPC, MIT, 단일 파일): 사실상의 표준이다. `IPC.handle/invoke`(invoke는 scriptevent 2회), typed `PROTO` 직렬화. union/Any 타입은 일부러 없다. DirectIPC는 별도 저장소로 옮겼다(v3.0.4가 마지막 번들). 버전 v3.2.1(2026-01), v3.3.x(2026-02), v3.4.0(2026-03). 문서: `https://deepwiki.com/OmniacDev/MCBE-IPC/` . MIT 코드를 복사할 때 저작권 고지를 빼서 DMCA를 받은 fork가 있다.
+  - AddonAPIKit(github.com/ForestOfLight/AddonAPIKit, `AddonAPIServer`/`AddonAPICaller`)
+  - mcbe-mods/runtime(ipc, rpc, discover, bedrock-url)
+  - Bedrock Registry(xXDMOGXx/mcbe-registry-client)
+  - `@bedrock-core/sync`
+  - 팩 사이에 데이터는 공유되지 않는다. 업데이트 뒤에도 dynamic property를 유지하려면 UUID를 바꾸지 않는다.
+- **기타 스크립트 라이브러리**
+  - Data Handler(`https://github.com/SilencedPlayz/Data-Handler-MC`), Chunk Loader V1.2.0(`https://github.com/gamezaSRC/ChunkLoader/releases/tag/V1.2.0`)
+  - Script-API-Utilities(runJob), SuperStack(64 초과 스택), QIDB(아이템 DB), script-api-database(`https://github.com/AutoAsteroid/script-api-database`)
+  - WorldEdit-BE(`https://github.com/SIsilicon/WorldEdit-BE`, CurseForge 판도 있음), Sweep-N-Slash, Detect-Health v2.0.0, Detect-Click, Netbound
+  - Paradox AntiCheat(GPL-3, 아래 참고), 동적 엔티티 히트박스, Dynamic Lighting API(사용 시 크레딧 표기나 API 팩 의존성 연결)
+  - PimpMyConfig API(애드온 공통 설정 메뉴, JS gist `https://gist.github.com/Alien-Edds/0ecc000faaff856eac2f0afbe96c260e` , TS gist `https://gist.github.com/Alien-Edds/afee960b97de3edcf20c8cddc2c8b9f6`)
+  - Novelty API(장신구 호환), Furnace API, Chest UI
+  - 8Crafter AndexDB(스크립트 REPL, docs.api.8crafter.com/andexdb), Canopy(테크 애드온, `/debugentity`에 포화도 표시)
+  - 엔티티 컴포넌트 시각화(`https://zeonplay.github.io/Minecraft-Entity-Component-Visualizer/`)
+  - Persona 이모트 id 목록(`https://github.com/TwistedAsylumMC/Bedrock-Emotes`)
+  - A* 경로 탐색(nox7, scripting-resources 채널)
+  - 에임 어시스트 가이드(elzonim)
+- **Paradox AntiCheat** (`https://github.com/Visual1mpact/Paradox_AntiCheat`, rewrite 브랜치): `data-hive.ts` DB 래퍼가 있다. `npm run update-bds`와 `npm run test`로 BDS와 함께 테스트한다. 스윕 충돌 기반 noclip 감지가 있다. `bin/` 빌드 스크립트에는 loopback 예외가 들어 있다. 과거에 beta 채팅 이벤트로 숨긴 채팅 암호화를 했다가 계정 정지를 불렀다(Microsoft가 채팅을 감시한다).
+- **molang-go (stirante)**: `https://stirante.github.io/molang-go/` . 바닐라 Molang 단위 테스트를 포함하고, Bedrock에 DLL을 주입해 쿼리를 검증했다(`q.noise`는 게임에서 테스트하지 않았지만 1:1 구현이다). 다른 구현자가 부정확한 점 몇 개를 보고했다(내용 미상).
+- **Python Molang 파서 (kiteob)**: Lark 기반이고 EBNF `MolangGrammar.py`가 있다. `reticulator`를 확장 중이다.
+
+---
+

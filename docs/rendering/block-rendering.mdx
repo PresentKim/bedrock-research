@@ -1,0 +1,67 @@
+---
+title: 블록 렌더링
+description: 커스텀 블록의 material_instances와 render method, 발광, 조명·AO 버그, 투명 픽셀, 오버레이와 틴트, 파괴 균열, 블록 모델 규칙
+sidebar_position: 2
+sources: [private-research, bedrock-wiki, ms-learn]
+---
+
+# 블록 렌더링
+
+## 개념
+
+커스텀 블록의 겉모습은 비헤이비어 팩 블록 정의의 `minecraft:geometry`(모델)와 `minecraft:material_instances`(면별 텍스처와 렌더 방식)가 정한다. 엔티티와 달리 블록에는 렌더 컨트롤러가 없다. 텍스처 이름은 리소스 팩 `textures/terrain_texture.json`에 등록해 아틀라스에 들어간다([텍스처와 아틀라스](./textures-and-atlases.mdx)). 리소스 팩 `blocks.json`은 사운드와, 지오메트리 없는 블록의 레거시 `textures`·`isotropic`만 설정한다(출처: 비공개 조사).
+
+```json
+"minecraft:geometry": "geometry.my_block",
+"minecraft:material_instances": {
+  "*": { "texture": "my_block_tex", "render_method": "alpha_test_single_sided", "face_dimming": false, "ambient_occlusion": 0 },
+  "sushi_side": { "texture": "my_block_side", "render_method": "opaque" }
+}
+```
+
+`*`는 모든 면(본) 기본이고, 지오메트리의 본 이름을 키로 본별 머티리얼을 줄 수 있다. 위 예의 키 이름 `render_method`가 맞는 이름이다(`material`이 아니다). 인스턴스당 `render_method`는 하나뿐이다. `face_dimming`과 `ambient_occlusion`은 `blocks.json`이 아니라 material instance 속성이다. 위 값의 의미는 다음 절에 있다. 참고 문서로 Microsoft Learn의 `minecraft:material_instances` 블록 컴포넌트 레퍼런스(render method choices)와 Bedrock Wiki의 vanilla block models 목록이 있다.
+
+## render method 선택
+
+- `opaque`: 불투명. 투명 픽셀이 필요하면 투명 픽셀을 불투명 색으로 바꾼다.
+- `blend`: 반투명과 투명 픽셀이 섞일 때 쓴다. 복잡한 지오메트리에서 버그가 있어 최후의 수단이고, 일부 각도에서 면이 사라지며, 단면이다(뒷면 없음, 지오메트리를 복제해 우회).
+- 잎: `alpha_test_to_opaque`, `alpha_test_single_sided_to_opaque`. 둘러싸였을 때 잎 같은 불투명도의 최대치는 `alpha_test_to_opaque`다.
+- 교차·식물 지오메트리의 z-fighting: `alpha_test_single_sided`(멀리서는 다시마처럼 `alpha_test_single_sided_to_opaque`).
+- 인벤토리의 반투명: 레거시 렌더링(리소스 팩 `blocks.json`의 `textures`) 블록은 인벤토리 UI에서 반투명이 깨진다. 그것을 지우고 `minecraft:geometry`와 material_instances를 쓴다(Bedrock Wiki `blocks/custom-glass-blocks`).
+- 투명 픽셀이 검정으로 나오면 텍스처의 투명 픽셀에 실제 색 정보가 있어야 하고(아니면 편집기·변환기 문제) PNG여야 한다.
+
+## 발광
+
+- 커스텀 블록의 픽셀별 발광은 VV에서만 된다. material_instances의 `"emissive": true`(포맷 1.21.120+, Upcoming Creator Features)를 쓴다. VV 없이는 엔티티와 파티클만 발광할 수 있다. 진짜 PBR에는 texture_set과 MER이 필요하고 `terrain_texture` 경로에 `.png`를 쓰지 않는다. VV/RTX 없이 블록 글로우는 불가능하며(Fancy 포함, 엔티티·파티클 없이는) 플립북 밝기 프레임으로 흉내 낸다. 블록 전체는 light emission으로 빛나게 할 수 있다. 광석 텍스처의 플립북 광택은 블록에서 동작한다(정사각형 텍스처). `confirmed`
+
+## AO와 조명 버그
+
+- 커스텀 블록에서 벽·고체 블록에 닿은 면이 어두워진다(AO 버그). 지오메트리를 조정하거나, 1.26.10 이후 `ambient_occlusion`을 숫자 0으로, `face_dimming`을 false로 한다. 모래 같은 부분 어두워짐에는 `ambient_occlusion: 0.55`, 면별로 `ambient_occlusion: 1.5`도 시도됐다.
+- 커스텀 계단·반 블록·벽의 이상한 셰이딩: material instance에서 `ambient_occlusion`을 0이나 false, `face_dimming`을 false로 한다. 1.21.60 이후 게임 버그(고칠 수 없음)라는 의견이 있고, `blocks.json` 블록은 조명이 맞지만 material instance 블록은 아니다. 빛을 맞추려 바닐라 블록의 커스텀 버전을 만드는 우회책도 있다.
+- 마른 다시마와 지도 제작대 블록 셰이프가 커스텀 블록에 AO를 과하게 드리운다(셰이프 관련). 반 블록은 바닐라가 아닌 커스텀 블록에만 AO를 드리운다. 낮은 스카이라이트에서 빛이 맞지 않는다(MCPE-237493).
+- `random_offset`이나 가라앉은 모델의 식물은 어두운 그림자가 생기고 `ambient_occlusion: false`, `face_dimming: false`로도 사라지지 않는다.
+- 아래에 블록이 있을 때 커스텀 블록 아랫면의 그림자 아티팩트는 down UV를 덮는 평면을 추가해 고친다(조명은 빈 UV를 무시).
+- 엑스레이 팩: 바닐라 블록 셰이프 `structure_void`가 AO를 없앤다(fluoroscopy 팩).
+- 상자 같은 모양: 바닐라 상자는 블록 엔티티로 렌더링된다. 커스텀 블록은 AO와 face_dimming을 꺼서 흉내 낼 수 있지만 Fancy·Simple에서 이상해 보인다. 바닐라 상자, PBR, 옛 물 셰이더를 단순 팩으로 재현하는 것은 불가능하다.
+- z-fighting: 좌표는 소수점 한 자리로 유지되니 `inflate`를 작게 쓴다. VV를 켜면 2D 평면의 z-fighting이 돌아온다(해결책 없음).
+
+## 오버레이, 틴트, 파괴 균열
+
+- 오버레이 텍스처: 약간 오프셋한 두 번째 평면에 자체 머티리얼 인스턴스를 준다(파괴 애니메이션이 두 배가 된다). 틴트를 텍스처 일부에만 거는 방법은 Bedrock Wiki `blocks/block-tinting`의 texture tinting이나 본 두 개다. 잔디 측면 틴트는 material instance의 `alpha_masked_tint` true와 흙 부분 알파 0이다.
+- 파괴 균열은 텍스처 전체를 덮으니 면별 16x16 텍스처(Blockbench 면별 "blank" 텍스처와 material instance)를 쓴다. `minecraft:destruction_particles` 컴포넌트를 쓰고, 16x16보다 큰 아틀라스 텍스처는 파티클을 깨뜨린다. 8x8을 16x16으로 키우면 균열이 작아진다(몹 머리). Blockbench 엔티티식 모델은 균열 패턴을 늘린다.
+
+## 모델
+
+- 개별 큐브 크기는 동적으로 바꿀 수 없으니 상태와 `bone_visibility`로 늘어나는 부분을 표현한다(중첩·그룹 지정은 불가). `uv_lock`은 이상하게 동작한다(계단 지오메트리).
+- 투명 블록은 UV 면이 없는 큐브 하나짜리 지오메트리로 만든다. UV를 0으로 줄이지 말고 면을 완전히 지운다(가운데 이상한 텍스처).
+- 바닐라 블록 모델은 리소스 팩으로 바꿀 수 없고(하드코딩, 블록 셰이프만) 커스텀 모델은 커스텀 블록에만 쓸 수 있다. 블록에는 렌더 컨트롤러가 없고 바닐라 블록 JSON을 팩이 수정할 수 없다. texture set은 블록·상태별 텍스처와 PBR 맵 선택만 하고 스크립트로 바꿀 수 없으며, 커스텀(BP) 블록은 상태별 텍스처를 쓸 수 있다. 광석 교체 쇼케이스는 커스텀 블록과 근처 바닐라 광석을 바꾸는 스크립트를 썼다. 무성한 잎은 모델링으로 가능하지만 평이 나쁘다.
+- "Blockshapes"로 일부 바닐라 블록이 다른 바닐라 블록의 지오메트리를 쓴다(반딧불이 덤불이 불 지오메트리, 덩굴·잎도). 무성한 식물과 건초 더미에 쓰인다.
+- 울타리 물잠김 렌더 글리치는 충돌 15.999로 고쳤다. 바닐라 울타리 UV는 연결에 따라 바뀌므로 커스텀 울타리도 바닐라 UV를 맞춘다. 블록 텍스처 변형(흙, 잔디)은 월드 좌표 기반이다.
+
+## VV에서의 블록
+
+- VV가 커스텀 블록 모델을 잘못 보이게 할 수 있으니 VV를 끄고도 테스트한다. VV 밝기 차이는 MER 파일 경로와 SSS를 확인한다. MER이 같은데 커스텀 블록이 바닐라보다 어두운 것은 게임 버그일 수 있다. face dimming·AO 없는 블록 면은 `face_dimming`과 `ao`를 false로 추가한다.
+- 커스텀 유리에 햇빛 반사가 없던 원인은 잘못된 texture_set과 MER이었다. VV에서 발광·금속·거칠기가 안 보이던 블록은 "[FIXED]"로 표시됐지만 원인은 밝혀지지 않았다.
+- 고유 TNT 깜빡임은 리소스 팩으로 끌 수 없고(점화된 TNT는 하드코딩, 클라이언트 엔티티 `minecraft:tnt` 무시) VV 상시 발광이 우회책이었다. 커스텀 TNT는 `variable.swell` 대신 키프레임 스케일 애니메이션으로 깜빡일 수 있다.
+- 잔디 체커보드는 리소스 팩만으로 불가능하고, 서버 측에서 상태 2개를 가진 커스텀 잔디를 월드 생성으로 바꿔야 한다.
+- 손에 든 블록 지오메트리에는 PBR/MER이 적용되지 않는다([VV와 RTX](./vibrant-visuals-and-rtx.mdx)).

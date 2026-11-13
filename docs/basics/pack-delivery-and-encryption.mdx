@@ -1,0 +1,212 @@
+---
+title: "팩 배포, 암호화, 난독화"
+description: "BDS·Realm 팩 적용, system packs, CDN, Marketplace 규칙, 팩 암호화와 난독화, brarchive, 팩 최적화, Ore UI 신뢰 판정과 content.zipe, JsonEncryptor"
+sidebar_position: 8
+sources:
+  - private-research
+  - ms-learn
+  - repo-ore-ui-loading
+  - repo-jsonencryptor
+  - jsonencryptor
+  - repo-bedrock-core
+---
+
+## 개념
+
+팩이 플레이어에게 가는 길은 셋이다. (1) 로컬 개발 폴더나 `.mcpack`/`.mcaddon` 임포트, (2) 월드에 포함되어 서버/Realm으로 업로드, (3) 서버가 접속 시 내려보내는 리소스팩. 어느 경로든 클라이언트는 **팩 UUID + 버전**으로 캐시하므로 내용이 바뀌면 `header.version`을 올려야 다시 받는다. 이 페이지는 서버 쪽 적용 방법, 아카이브(brarchive), 보호(암호화·난독화), 그리고 암호화 팩이 Ore UI 파일 조회에서 "신뢰된 팩"으로 취급된다는 실측을 모은다.
+
+## BDS·Realm·호스팅 서버에서의 팩
+
+### 월드 팩 적용 (고전 방식)
+
+월드 폴더의 `world_behavior_packs.json`, `world_resource_packs.json`에 팩 목록을 둔다.
+
+```json
+[
+  { "pack_id": "<manifest header uuid>", "version": [1, 0, 0] }
+]
+```
+
+`/packstack`으로 활성 팩을 확인하고 클라이언트 쪽은 `/packstack client`다. `server.properties`의 `texturepack-required=true`만으로는 팩이 강제되지 않는다.
+
+- **System packs (Preview 26.30.28 / Stable 26.30)**: BDS 폴더에 `system_behavior_packs`, `system_resource_packs`를 직접 만들면 안의 팩이 모든 월드에 자동 적용되고, 그 ID는 다른 팩이 재사용할 수 없다. 월드별 팩이 아니면 world_*_packs.json이 필요 없다. 로드 순서는 폴더명이 아니라 `pack.name` 순(테스트: "Resource Pack 1"이 "2"보다 먼저). 변경 로그 문구: "Added new pack folder to dedicated server for system packs".
+- **호스팅 서버**: `development_behavior_packs`의 팩은 월드에 복사되지 않는다. 팩을 포함한 월드를 업로드하거나 world_behavior_packs.json에 수동 추가.
+- **Windows 파일 권한 함정**: 다른 PC에서 복사한 월드 팩 json이 원본 ACL을 유지해 BDS(1.26.10.4/13.1/14.1)가 `Pack Stack - None`을 표시. bedrock_server 실행 사용자에게 팩과 json 읽기/쓰기 권한이 필요하다.
+- **BP `structures/` 폴더의 구조물을 BDS가 인식하지 못한** 사례는 Script API로 구조물을 만들어 회피. *(단일 보고)*
+- **Realm에서 팩이 동작하지 않을 때**: 재적용, manifest 버전 상향, 캐시 정리, 또는 팩을 `minecraftWorlds/<world>/behavior_packs/1`에 복사하고 `world_behavior_packs.json`을 지운 뒤 재업로드. level.dat의 `hasLockedBehaviorPack` 확인.
+- **Aternos는 커스텀 스크립트 애드온을 받지 않는다.**
+- **개발 RP는 접속자에게 오래된 캐시**를 남기므로 RP 버전을 올려 재다운로드시킨다.
+- **피처드 서버만 리소스팩 수락 화면을 건너뛸 수 있다**(모든 피처드 서버가 쓰는 것은 아님).
+- **26.30 BDS에서 스크립트가 BDS 재시작 전까지 로드되지 않는** 보고.
+
+### CDN 리소스팩 (`cdn_config.json`)
+
+- 비공식 문서화된 파일로 server.properties 옆에 둔다: `{"<pack UUID>_<pack version>": "https://cdn.example.com/my_pack.zip"}`. 월드의 모든 비바닐라 RP를 정확한 버전으로 나열해야 하며 하나라도 빠지면 파일 전체가 무시된다. zip은 직접 링크, `Content-Type: application/zip`, 올바른 `Content-Length` 필요. 클라이언트는 UUID+버전으로 캐시하므로 변경마다 버전(manifest, 월드 json, cdn_config)을 올린다. 결과는 플랫폼별로 엇갈렸다(R2에서 Windows 플레이어가 멈춘 사례, 자체 HTTP는 성공, 모바일 실패 소문). 도구: https://github.com/wimziicals/bedrock-cdn (Bun + Cloudflare R2), 형식 메모: https://gist.github.com/xKingDark/e80569d688e692ee11e161b427f6e49f
+
+### 명령어·설정 파일
+
+- **`config/commands.json`**: `{"permission_levels": {"me": "internal"}}`로 어떤 명령이든 숨기거나 비활성화. `game_directors` 레벨은 op, 커맨드 블록, 함수, NPC 실행 허용. 바닐라 이름(`gamemode`, `save`)을 재사용한 커스텀 명령은 여전히 충돌한다("Custom Command alias [gamemode] already in use. Required to use full name [custom:gamemode]"). `/script`는 계속 보인다. 콘솔/호스트는 host 레벨 커스텀 명령을 실행 가능. 문서: https://bedrock-wiki.netlify.app/bds/topics/command-config.html
+- **`/save`는 BDS 내장 백업 명령**으로 콘솔에서 사용 가능.
+- **채팅 소음 제거**: `enable-player-connection-text=false`, `enable-player-sleeping-text=false`, `enable-player-changed-skin-text=false`(게임 내 채팅만, 로그 아님). `disable-persona`는 "Internal use only"로 일부 클라이언트에서 동작하지 않는다.
+- **BDS에서 VV가 Fancy로 떨어질 때**: 클라이언트 VV를 끄는 server.properties 속성을 확인하고, 적용된 모든 RP가 manifest에 PBR capability를 선언했는지 확인.
+- **pack optimization (BDS)**: 26.40.27 프리뷰부터 JSON minify + brarchive CLI 플래그가 있고, JSON 설정의 `"unpack": true`로 언팩도 가능. 문서: https://learn.microsoft.com/en-us/minecraft/creator/documents/bedrockserver/pack-optimization?view=minecraft-bedrock-experimental
+
+### cdn_config.json 예
+
+```json
+{
+  "<pack UUID>_<pack version>": "https://cdn.example.com/my_pack.zip"
+}
+```
+
+### pack optimization (MS Learn)
+
+BDS를 팩 최적화 모드로 돌려 느슨한 파일을 아카이브로 묶고 JSON 공백을 지운다. 최적화된 팩은 클라이언트 최소 버전이 **1.26.40**이며 이전 클라이언트는 로드에 실패한다. 이후 버전과는 호환된다. (출처: ms-learn, Documents/BedrockServer/pack-optimization.md)
+
+```powershell
+./bedrock_server.exe PackOptimizerConfigPath=D:/path/to/pack_optimizer_config.json
+```
+
+```json
+{
+  "input_directory": "D:/path/to/packs",
+  "output_directory": "D:/path/to/output",
+  "verbose_logging": false
+}
+```
+
+- `input_directory`(필수)의 하위 폴더 하나가 팩 하나다. `output_directory`는 자동 생성되고 출력에는 `__brarchive/`가 들어 있다. `verbose_logging`은 기본 `false`다.
+- 서버는 처리 뒤 종료하며 일반 런타임으로 넘어가지 않는다. 실패하면 종료 코드 `7`(ResourceProcessingError), 입력 폴더가 없으면 초기에 잘못된 인자 오류다. 경로에 공백이 있으면 `"PackOptimizerConfigPath=..."`로 전체를 따옴표로 감싼다.
+- Marketplace 구조 팩이면 입력은 `Content\resource_packs`, `Content\behavior_packs` 폴더다.
+
+## Marketplace 규칙, 팩 보호, brarchive
+
+- **바닐라 파일 포함 금지**, 텍스처는 `textures/<studio>/<project>/` 아래, 커스텀 재질에 네임스페이스 필요. 바닐라 엔티티 파일(예: 좀비) 편집은 아마 허용되지 않으니 Marketplace 담당자에게 확인.
+- **별도 RP에 의존하지 말고 자산을 번들**하라. JSON UI에서 `#form_button_texture`에 `%`(모듈로)를 쓰면 인증에 실패한다.
+- **실험적/베타 API 사용 불가**(DDUI 베타 폼 포함), Marketplace는 안정 API를 요구한다.
+- **.mcaddon에 여러 BP 금지.**
+- **1.26.50부터 업적 친화 `product_type: addon`은 Marketplace 팩 전용.**
+- **비 Marketplace 애드온과 VV**: 위의 `pbr` 규칙 참조.
+
+### 팩 보호와 난독화
+
+- **어떤 난독화도 되돌릴 수 있다**는 합의. 논의된 도구: AutoAsteroid/pack-obfuscator(https://github.com/AutoAsteroid/pack-obfuscator: JSON 유니코드+쓰레기 주석, 텍스처 경로 변경, TGA 헤더 손상, Windows 탐색기에서 보이지 않는 제어문자 폴더 이름). 클라이언트 Molang(애니메이션/렌더 컨트롤러)은 난독화기에서 자주 깨진다. 실제 Marketplace 팩은 암호화를 쓴다(EncryptMC https://github.com/Cra-ZGuy/EncryptMC, 서버 통합 또는 일치하는 Marketplace UUID/키 필요, 입출력 디렉터리가 같으면 지우기 전에 경고). RP/BP JSON 난독화는 사실상 불가능하다는 의견.
+- **서버 규칙**: 작성자 허락 없이 다른 사람 코드 난독화 해제를 돕지 않는다.
+- **바닐라 BP/RP 아카이브 공개의 저작권**: Mojang 문서 담당은 법률 자문 불가, `ip_justice`에 문의, 내려질 수 있다는 합의.
+
+### brarchive
+
+- **정체**: 공식 문서 없는 아카이브 컨테이너(압축 자체가 아님)로, deflate zip 안에 들어가 반복 파일이 함께 압축되게 한다. UTF-8 텍스트 디렉터리를 묶어 로드 성능을 높이고(파일 작아짐, 추출 약간 느림) `header.pack_optimization_version` "0.1.0"을 설정한다. 쉽게 언팩되므로 보호 수단이 아니다. 커뮤니티 구현은 tryhaster의 gist 기반이며 형식은 버전이 있다.
+- **`pack_optimization_version`은 JSON이 .brarchive로 변환되고 manifest format 3일 때만** 적용.
+- **로드되지 않는 폴더**: font, loot_tables, materials, scripts, sounds, subpacks, texts, textures(JSON 계열 폴더만 가능). 루트 테이블은 아카이브에서 동작하지 않아 Regolith 필터 v1.0.2에서 금지. 바닐라 팩에서는 원본 옆의 `.brarchive`가 우선하지만 애드온의 사용은 제한적(월드젠/레시피 류)이라는 2025-12 의견. brarchive만 있는 애드온이 콘솔에서 텍스처를 로드하지 못한 보고.
+- **26.50부터 바닐라 RP가 `.brarchive`로 배포**되고, 26.50.x부터 brarchive 안에 MCB로 인코딩된 데이터 파일이 들어가 패치 워크플로에 영향. JSONTE는 `x.brarchive#/dir/file.txt` 의사 경로로 지원 추가. 설치된 바닐라 팩에 fogs 폴더가 더는 없으므로 bedrock-samples 사용.
+- **도구**: Regolith 필터 `github.com/SprightGamesMC/regolith-filters/brarchive`(설정 `mode` replace/keep_both, `minify`, config.json에 `"url": "github.com/SprightGamesMC/regolith-filters", "version": "1.0.1"`), CLI https://github.com/Torrekie/br-ar (theaddonn 도구와 비교), BDS pack optimization(`"unpack": true`).
+
+## Ore UI와 암호화 팩의 신뢰 판정 (실측)
+
+(출처: repo-ore-ui-loading, Windows 1.26.52와 Android 1.26.52.3 네이티브 클라이언트 라이브러리 분석 및 2026-10-23 Dragonfly 시험 서버 실측)
+
+**서버가 리소스팩을 콘텐츠 키로 암호화해 보내면, 그 팩으로 Ore UI의 HTML·JS·CSS를 바꿀 수 있다** `{코드, 실측}`. Ore UI 파일 조회(`ui://...`)는 설치 폴더로 가기 전에 팩 스택을 먼저 뒤지는데 **신뢰된(trusted) 팩만** 본다. 평문 서버 팩에 넣은 `hbui/*.css`는 적용되지 않았고, 같은 팩을 암호화해 보내자 적용됐다.
+
+### 접근 전략별 isTrusted
+
+| 접근 전략 | `isTrusted` | `isWritable` |
+|---|---|---|
+| `ZipPackAccessStrategy` | `위치.파일시스템 == 1` 또는 `+0x170` 플래그 | `+0x171` 플래그 |
+| `DirectoryPackAccessStrategy` | `위치.파일시스템 == 1` | 언제나 참 |
+| `EncryptedFileAccessStrategy` | **언제나 참** | 언제나 거짓 |
+| `ZippedEncryptedFilesAccessStrategy` | **언제나 참** | 언제나 거짓 |
+| `DirectoryPackWithEncryptionAccessStrategy` | **언제나 참** | 언제나 참 |
+
+- `위치`는 팩의 `ResourceLocation`이고 첫 필드가 파일 시스템 종류다. 1은 앱 패키지(게임 설치 폴더의 내장 팩)로 본다 `{추론}`.
+- **팩 UUID나 manifest 내용은 신뢰 판정에 쓰이지 않는다.** 마켓플레이스 애드온 UUID를 흉내 내도 평문 팩은 Zip/Directory 전략으로 열리고 판정은 설치 위치만 본다.
+- 바이너리의 `Failed encrypted file signature check`는 월드 저장소(LevelDB) 쪽 코드였다. 팩 서명(`signatures.json`) 검사는 따라가지 않았고, 서명 없이 암호화만 한 팩이 실측에서 신뢰됐다.
+- "내장 팩과 마켓플레이스 팩만 신뢰된다"는 처음 짐작은 틀렸다.
+- 앞으로 Mojang이 이 판정을 바꿀 수 있으므로 판마다 확인해야 한다.
+
+### 마켓플레이스 암호화 형식 (시험 서버가 구현)
+
+- `contents.json`: 0~3바이트 버전 0, 4~7바이트 마법수 `0x9BCFB9FC`(리틀엔디언), 0x10에 콘텐츠 ID(팩 UUID) 길이 바이트와 문자열, 0x100부터 `{"content":[{"path","key"}...]}`를 콘텐츠 키로 AES-256-CFB8(IV는 키 앞 16바이트) 암호화한 것.
+- `manifest.json`, `pack_icon.png`는 평문이고 나머지 파일은 파일마다 무작위 32바이트 키로 같은 방식으로 암호화한다.
+
+### 실측 결과
+
+같은 탐침 팩(CSS `body{background-color:rgba(255,0,255,0.6)}`)을 평문과 암호화로 번갈아 보냈다(받아 둔 팩을 재사용하지 않게 버전을 매번 올림).
+
+| 보낸 팩 | Ore UI 사망 화면 배경 |
+|---|---|
+| 평문 (1.0.2, 1.0.4) | 바닐라 그대로 |
+| 암호화 (1.0.3) | 자홍 |
+
+접속을 끊은 뒤 메뉴 화면에도 자홍이 남은 적이 있다. 메뉴 `index.html`도 `gameplay-theme-*.css`를 불러오고 서버 팩이 접속 뒤에도 잠시 팩 스택에 남기 때문으로 보인다.
+
+### content.zipe: 서버 없이 로컬 팩으로 [실측, 2026-10-27]
+
+평문 팩 폴더에 빈 파일 `content.zipe`(0바이트)를 넣으면 키 없이도 `DirectoryPackWithEncryptionAccessStrategy`로 열려 신뢰되고 Ore UI 파일을 바꾼다. 엔진은 이 파일이 **있는지만** 본다. 암호화 헤더를 달아도, 안에 팩 zip이나 `manifest.json`만 넣어도 결과가 같았다. 파일은 팩 폴더의 평문을 읽는다. 같은 헤더를 `contents.json`에 단 팩(`EncryptedFileAccessStrategy` 경로)과 `.mcpack` 안의 `contents.json`은 바뀌지 않았다. 8Crafter Ore UI Customizer의 "Export as RP"가 "RP에서 Ore UI를 불러오게 하는 모드가 필요하다"고 적은 것은 평문 팩 기준으로 맞다. Ore UI 자체는 별도 섹션에서 다룬다.
+
+## JsonEncryptor: 난독화기가 기대는 파서 문법
+
+(출처: repo-jsonencryptor; 코드는 MIT, jsonencryptor 저장소 `48e7837`, 2025-03-10 마지막 커밋)
+
+JsonEncryptor(제작 pipa_ngry, StarLibV2와 GrimUI와 함께 쓰임)는 리소스팩 `ui/` 파일을 (1) 사용자 정의 이름을 MD5 또는 솔트 카이사르 암호로 바꾸고 (2) 공백을 지우고 아무 데나 `/* */` 주석을 끼우고 (3) 선택하면 문자열을 `\uXXXX`로 바꾸고 (4) zip이면 파일 이름을 해시로 바꾸고 최상위 정의마다 파일을 나누는 브라우저 도구다. 표기: [확인] 코드, [재현] 정규식을 다시 실행, [추론] 판단, [미검증] 게임 확인 필요.
+
+### 처리 순서 [확인]
+
+1. 주석 제거 후 엄격 `JSON.parse`. 뒤따르는 쉼표가 있으면 실패한다.
+2. `namespace`가 없는 바닐라 경로 파일은 내장 표(약 220쌍)로 `namespace`를 채운다.
+3. 문법 키, 엔진 팩토리 이름, 바닐라 namespace·정의 이름, 엔진 `$` 변수, 사용자 예외를 뺀 키·`@` 뒤 참조·`$변수`·점이 든 값을 해시한다. `#속성` 이름과 점 없는 문자열은 그대로 두고 `|default` 접미는 보존한다.
+4. 출력: 들여쓰기 JSON, (선택) 내용 어지럽히기, (선택) `\u` 이스케이프, 앞에 작성자 메시지, 끝에 고정 블록 주석.
+5. zip 모드: 파일 이름 해시, 대상 폴더로 이동, 정의별 파일 분리, `_ui_defs.json` 재작성.
+
+### 파서가 허용하는 난독화 형태
+
+| 형태 | 예 | 근거 |
+|---|---|---|
+| 키 콜론 뒤 블록 주석 | `"type":/*...*/"label"` | jsoncpp 주석 허용 |
+| 값 뒤, 쉼표 앞 주석 | `"label"/*...*/,` | 같음 |
+| 배열 원소 사이 주석 | `["100%"/*...*/,10]` | 같음 |
+| 공백 없는 한 줄 JSON | | JSON 규격 |
+| 키·값의 `\uXXXX` | | 읽을 때 풀린다. 게임 확인 기록 없음 [미검증] |
+| 파일 끝 주석 | | jsoncpp 주석 수집 |
+| 확장자 `.zip`인 UI 파일 | `ui/obfuscated/<md5>.zip` | 확장자 무관 규칙(FILE-02)의 극단 [미검증] |
+| 앞에 붙은 작성자 메시지 | | 주석 기호 없이 쓰면 JSON 오류로 파일 전체 손실(FILE-30) |
+
+`\u` 이스케이프는 읽는 순간 원래 글자가 되므로 식의 `'%.Ns'` 바이트 수와 비교 결과는 같고 누구나 JSON 파서 한 번으로 되돌릴 수 있다. 보호 효과가 없고 크기만 늘어난다 `{FILE-40 후보, 코드, 미검증}`.
+
+### 위험과 결함
+
+- **바닐라 경로 파일 이동** [확인, 추론] `{DBG-24 후보}`: zip 모드 기본값은 "파일 이름 해시 켬, 정의별 분리 켬, 대상 폴더 `obfuscated`, 확장자 `zip`"이다. `ui/server_form.json`, `ui/hud_screen.json` 같은 바닐라 경로 파일도 옮겨져 바닐라와 같은 경로라는 성질이 사라진다. 그 결과 바닐라 정의 재선언은 무시되고(FILE-22), 바닐라 경로 파일의 `modifications`가 적용되지 않는다(MOD-02). 바닐라 수정 팩은 바닐라 경로 파일을 zip 모드에서 빼고 단일 `.json` 모드로 처리해 같은 경로에 둔다. 자기 namespace 파일만 이동·분리한다.
+- **namespace 하나를 여러 파일로 나누기** [미검증] `{FILE-41 후보}`: 분리 모드는 모든 파일에 같은 `namespace`를 적는다. 작성자는 참조가 모두 동작한다고 했다. 바닐라 1.26.50.4는 namespace 하나당 파일이 하나다(겹치는 것 0개). 나눌 이유가 없으면 namespace당 파일 하나를 유지한다.
+- **내용 어지럽히기 정규식** [재현] `{DBG-25 후보}`: 값 뒤에 주석을 넣는 정규식이 문자열 안의 `,`와 `}`에서 멈춘다.
+
+```text
+입력 값:  "text": "Hello, world: 1"       ->  "Hello/*C12*/, world: 1"
+입력 식:  "(not (#a = 'p,q'))"             ->  "(not (#a = 'p/*C16*/,q'))"
+```
+
+  라벨에는 주석 텍스트가 그대로 보이고 식은 비교 문자열이 달라져 조용히 틀린다. 쉼표가 든 텍스트·식이 있으면 이 옵션을 끈다. 공백 제거 정규식은 따옴표 개수로 문자열 밖을 판단하므로 `\"`가 든 문자열의 공백을 지울 수 있다 [추론].
+- **이름 해시의 한계** [확인]: 점이 든 문자열 값은 참조로 보고 해시하므로 번역 키 등이 깨질 수 있어 `text` 키를 통째로 제외했다. `pressed_button_name` 같은 값은 하드코딩 값 표(약 980개)로 피한다. `default`/`hover`/`pressed`처럼 엔진이 자식 이름으로 찾는 컨트롤(스크롤 뷰 역할 이름, 토글 상태 컨트롤 등)은 직접 예외 처리해야 한다 [추론].
+
+### 엔진 고정 이름 데이터 [확인]
+
+| 파일 | 내용 |
+|---|---|
+| `data/factories.js` | 엔진 팩토리 이름 22개(`server_form_factory`, `hud_tip_text_factory`, `popup_dialog_factory` 등) |
+| `data/global_variables.js` | 엔진이 주는 `$` 변수 약 300개(`$container_title`, `$max_page_length`, `$text_box_size`, `$chat_font_type` 등) |
+| `data/hardcored_values.js` | `button.*` ID, `#textbox.buttonName` 같은 값 약 980개 |
+| `data/common_exceptions.js` | 바닐라 namespace별 정의 이름 |
+| `data/namespace_mapping.js` | 바닐라 파일 경로와 namespace 약 220쌍 |
+
+## 컴파일러 출력과 팩 경로 (bedrock-core 사례)
+
+`@bedrock-core/ui` 컴파일러(MIT, 작성자 DrAv0011)는 JSX 화면을 빌드 시점에 정적 JSON UI로 바꿔 각 애드온 팩에 싣는다. 출력 배치는 다음과 같다. 렌더 팩(`core-ui-<ver>.mcpack`)에는 이제 텍스처만 들어 있다. (출처: repo-bedrock-core)
+
+| 파일 | 내용 |
+|---|---|
+| `ui/<addon>_<screen>.json` 계열 | 화면 정의와 전용 정의 |
+| `ui/core-ui/screens/<addon>_forms.json` | 폼 라우터 |
+| `ui/core-ui/screens/<addon>_router.json` | 상자 라우터 |
+| `ui/core-ui/support/<addon>.json` | 토글, 슬라이더, 입력창, 상자 셀 공용 어휘 |
+| `ui/server_form.json`, `ui/chest_screen.json`, `ui/data_driven_container_screen.json` | 바닐라 파일에 거는 `modifications` 훅 |
+
+바닐라 파일 수정은 같은 경로 파일의 `modifications`만 쓰므로 여러 애드온의 modifications가 팩 순서대로 쌓여 공존한다. 바닐라 파일에 **정의**를 쓰면 다른 팩의 것을 덮어쓴다.

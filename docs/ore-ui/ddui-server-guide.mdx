@@ -1,0 +1,318 @@
+---
+title: 서버 주도 DDUI 가이드
+description: 바닐라 DDUI(Script API)의 개념과 예, 그리고 서버가 데이터만 보내 Ore UI 위에 화면을 그리는 직접 만든 렌더러의 패킷·저장소·엔진 API·노드 규칙.
+sidebar_position: 5
+sources:
+  - repo-ore-ui-loading
+  - private-research
+  - ms-learn
+---
+
+# 서버 주도 DDUI 가이드
+
+DDUI(Data-Driven UI)는 화면의 모양을 데이터로 정하는 Ore UI 쪽 틀이다. 이 페이지는 두 가지를 다룬다. 먼저 Mojang이 공식으로 내놓은 스크립트용 DDUI(`@minecraft/server-ui`의 `CustomForm`)를 설명하고, 그다음 그 데이터 통로를 빌려 서버가 직접 렌더러를 돌리는 방법을 정리한다. 근거는 2026-10-23 Windows 1.26.52 실측(Dragonfly 시험 서버), 게임 중 번들 `gameplay-100751586307248a0527.js`, Android 1.26.52.3 분석(11~15차)이다. (출처: repo-ore-ui-loading)
+
+## 1. 공식 DDUI(스크립트) `{문서}`
+
+### 개념
+
+기존 `@minecraft/server-ui`의 폼은 한 번 띄우면 닫았다 다시 열기 전에는 내용이 바뀌지 않는다(정적). DDUI는 값을 `Observable`로 감싸 두면 값이 바뀔 때 열린 폼이 따라 바뀐다(반응형). 첫 단계로 모달 폼이 DDUI로 나왔다. (출처: ms-learn, Introduction to DataDriven UI)
+
+| 기존 클래스 | 용도 |
+| --- | --- |
+| `ActionFormData` | 버튼 목록에서 고르기 |
+| `MessageFormData` | 두 버튼 확인 창 |
+| `ModalFormData` | 여러 입력 컨트롤 설문 |
+
+| DDUI 클래스 | 용도 |
+| --- | --- |
+| `CustomForm` | 세 가지를 합친 유연한 폼. 동적 내용과 반응형 바인딩 |
+| `MessageBox` | 두 버튼 대화 상자(옵션 강화) |
+| `ObservableString`·`ObservableBoolean`·`ObservableNumber`·`ObservableUIRawMessage` | UI를 자동 갱신하는 값 |
+
+### 예
+
+```ts
+import { CustomForm, ObservableString, ObservableNumber, ObservableBoolean } from "@minecraft/server-ui";
+
+const playerName = new ObservableString("Player", { clientWritable: true });
+const musicEnabled = new ObservableBoolean(true, { clientWritable: true });
+const volumeLevel = new ObservableNumber(75, { clientWritable: true });
+
+new CustomForm(player, "Game Settings")
+    .closeButton()
+    .label("General Settings")
+    .divider()
+    .textField("Player Name", playerName, { description: "Your display name in-game" })
+    .toggle("Music Enabled", musicEnabled)
+    .slider("Volume", volumeLevel, 0, 100, { description: "Master volume level", step: 5 })
+    .button("Reset to Defaults", () => resetSettings())
+    .show()
+    .then(() => console.log(playerName.getData()))
+    .catch(e => console.error(e));
+```
+
+```ts
+new MessageBox(player, "Confirm Action")
+    .body("Are you sure you want to delete this item?")
+    .button1("Delete")
+    .button2("Cancel", "Keep the item and close this dialog")
+    .show()
+    .then((response) => { if (response.selection === 1) deleteItem(); });
+```
+
+`response.selection`은 선택 없이 닫으면 `undefined`, 첫 버튼이면 1, 둘째면 2다.
+
+실시간 갱신 예(4초마다 개체 수를 라벨과 버튼 활성에 반영):
+
+```ts
+const entityStatus = new ObservableString("Scanning...");
+const killButtonDisabled = new ObservableBoolean(true);
+const intervalId = system.runInterval(() => {
+    const near = player.dimension.getEntities({ location: player.location, maxDistance: 20 });
+    entityStatus.setData(`Found ${near.length} entities within 20 blocks`);
+    killButtonDisabled.setData(near.length === 0);
+}, TicksPerSecond * 4);
+
+new CustomForm(player, "Entity Monitor")
+    .label(entityStatus)
+    .button("Remove All Entities", () => { /* ... */ }, {
+        tooltip: "Removes all non-player entities within range",
+        disabled: killButtonDisabled
+    })
+    .closeButton()
+    .show()
+    .then(() => system.clearRun(intervalId));
+```
+
+### 규칙
+
+- Observable 값: 읽기 전용(서버가 값을 정함)과 `clientWritable: true`(UI 컨트롤이 값을 바꿈)로 나뉜다. `setData`로 바꾸고 `getData`로 읽고 `subscribe(콜백)`로 변화를 받는다.
+- 컨트롤 옵션: `description`, `tooltip`, `disabled`, `visible`에 Observable을 줄 수 있어 표시와 활성을 동적으로 바꾼다.
+- 버튼 콜백은 눌리는 즉시 실행되고 폼은 열려 있다. 한 폼에서 여러 번 조작할 수 있다.
+- 다른 UI가 열려 있으면 폼이 뜨지 않는다. `show()` 결과가 `DataDrivenScreenClosedReason.UserBusy`인지 확인한다.
+- 현지화는 `RawMessage`(`translate`, `with`)를 제목·라벨·버튼에 쓴다.
+- 이전: `ActionFormData`와 `ModalFormData`는 `new CustomForm(player, title)`로, `MessageFormData`는 `new MessageBox(player)`로, `.show(player)`는 `.show()`로, `response.formValues[0]`은 `observable.getData()`로 바뀐다.
+- 스크립트 DDUI가 열린 폼을 바꾸는 것은 아래 5장의 경로 갱신 규칙을 쓰는 것으로 보인다 `{추론}`.
+- 팩으로 바닐라 DDUI 레이아웃(`ddui/root`)을 바꾸는 것은 지금 막혀 있다([로딩 경로](./loading-paths.mdx)).
+
+## 2. 직접 만든 렌더러로 무엇이 되나
+
+서버가 데이터만 보내서 Ore UI 위에 원하는 화면을 그리고, 플레이어의 조작을 돌려받는 방법이다. 바닐라 `CustomForm`이 아니라 바닐라 DDUI의 데이터 통로를 빌려 쓰는 직접 만든 렌더러다.
+
+| 하고 싶은 것 | 결과 | 근거 |
+| --- | --- | --- |
+| 게임 중 Ore UI 화면(`gameplay.html`)에 직접 만든 HTML·JS·CSS 넣기 | **됨.** 서버가 리소스팩을 암호화해 보내면 된다 | `{실측, 코드}` |
+| 서버 데이터대로 화면 그리기, 실시간 값 바꾸기(4Hz 이상) | **됨** | `{실측}` |
+| 버튼·토글·슬라이더·글 입력·선택을 서버로 돌려받기 | **됨** | `{실측}` |
+| 버튼 수백 개(200개 격자), 탭 전환, 부분 갱신 | **됨** | `{실측}` |
+| 엔진이 그리는 아이템·블록 아이콘 | **됨.** 커스텀 아이템·블록도 `geo-item://`의 `bag`으로 | `{실측, 코드}` |
+| 팩 텍스처(커스텀 아이템·블록 그림) | **됨.** `pack://경로.png` | `{실측}` |
+| 연구 서버 연구 화면 전체 | **됨.** 연구 99개, 실제 규칙 | `{실측}` |
+| 진짜 상자·화로·인벤토리를 Ore UI로 열기 | **안 됨.** 클라이언트 개발자 옵션이 켜져야 한다 | `{실측, 코드}` |
+| 컨테이너를 흉내 낸 화면 | 그려지지만 시프트 클릭, 커서 아이템, 드래그가 없다. 접었다 | `{실측}` |
+| 바닐라 DDUI 레이아웃(`ddui/root`)을 팩으로 바꾸기 | 안 됨. 엔진이 내장 팩만 읽는다 | `{코드}` |
+| 게임 밖 메뉴 | 시험하지 않음 | 없음 |
+
+전제는 [Ore UI 페이지 바꾸기](./modifying-pages.mdx)의 암호화 팩(또는 `content.zipe`)이다. 평문 팩은 Ore UI 파일을 바꾸지 못한다.
+
+## 3. 전체 구조
+
+```text
+서버                                   클라이언트 (gameplay.html 안의 oui-ddui.js)
+ | ClientBoundDataStore (Change)        |
+ |   minecraft / custom_form_data_1 --->| query vanilla.ddui.string -> 화면 구조(oui)를 그림
+ |   minecraft / oui_vars_1_n       --->| query vanilla.ddui.string -> 값 패치를 적용
+ | ClientBoundDataDrivenUIShowScreen -->| query vanilla.ddui.screenId -> "minecraft:custom_form"이면 우리 화면 표시
+ |                                      |
+ |<-- ServerBoundDataStore -------------| setDataStorePathString(oui_event) <- 버튼·입력
+ |<-- ServerBoundDataDrivenScreenClosed | Esc, 닫기
+ | ClientBoundDataDrivenUICloseScreen ->|
+```
+
+바닐라 서버 폼 루트 `minecraft:custom_form`을 **빈 틀**로 연다. 바닐라 폼은 CSS로 숨기고(`body.oui-active #root {visibility: hidden}`), 우리 렌더러가 그 위에 화면을 그린다. 바닐라 루트는 `$.minecraft.custom_form_data_{instanceId}`를 읽으므로 폼 ID와 데이터 ID를 둘 다 1로 두면 맞았다. 연결마다 한 번에 폼 하나를 쓴다. 바닐라 필드(`title`, `closeButton`, `layout`)도 함께 채운다.
+
+## 4. 패킷 `{실측, 코드}`
+
+gophertunnel v1.62.0의 패킷 이름이다. Dragonfly는 DDUI 패킷을 처리하지 않으므로, 리스너를 감싸 연결의 `ReadPacket`에서 클라이언트 패킷(`ServerBoundDataStore`, `ServerBoundDataDrivenScreenClosed`)을 가로챈다.
+
+| 방향 | 패킷 | 쓰는 법 |
+| --- | --- | --- |
+| S to C | `ClientBoundDataDrivenUIShowScreen` | `ScreenID: "minecraft:custom_form"`, `FormID: 1`, `DataInstanceID: Option(1)` |
+| S to C | `ClientBoundDataStore` | 데이터 저장소 쓰기. 5장 |
+| S to C | `ClientBoundDataDrivenUICloseScreen` | `FormID: Option(1)`. 빈 값이면 모두 닫는다 |
+| C to S | `ServerBoundDataStore` | JS가 쓴 값. `Update{DataStoreName, Property, Path, ControlType, StringValue...}` |
+| C to S | `ServerBoundDataDrivenScreenClosed` | `FormID`, `CloseReason`(`programmaticclose`, `clientcanceled` 등) |
+
+바이너리 쪽 이름(NB-21): `OreUI::DataStoreQueryString`, `OreUI::DataStoreSetCommandGroup`, `Bedrock::DDUI::DataStoreSyncClient`/`DataStoreSyncServer`. 패킷 `ClientboundDataStorePacket`은 cereal 스키마(`variant<DataStoreUpdate, DataStoreChange, DataStoreRemoval>`)다(출처: 비공개 조사).
+
+닫기: 서버가 `ClientBoundDataDrivenUICloseScreen`을 보내면 클라이언트가 `ServerBoundDataDrivenScreenClosed`(`programmaticclose`)로 답한다. Esc는 `clientcanceled`다.
+
+## 5. 데이터 저장소 쓰기 규칙 `{실측}`
+
+### 개념
+
+데이터 저장소는 `저장소 이름 / 속성 / 경로`로 값을 찾는 서버-클라이언트 공유 트리다. 서버가 쓰면 클라이언트의 쿼리 구독자가 새 값을 받는다. `ClientBoundDataStore`는 항목 종류가 셋이다.
+
+| 종류 | 내용 | 용도 |
+| --- | --- | --- |
+| `Change` | 속성 하나를 통째로 바꾼다. 값은 map·list·string·int64·double·bool 트리 | 처음 채우기, 큰 교체 |
+| `Update` | 속성 안 경로 하나만 바꾼다. 값은 string·double·bool | 작은 갱신 |
+| `Removal` | 저장소를 지운다 | 없음 |
+
+### 갱신 번호 (가장 중요)
+
+- `Change.UpdateCount`는 그 속성의 판 번호다. 커지기만 하면 된다(시험 서버는 전역 카운터를 쓴다). 클라이언트는 속성의 마지막 판보다 큰 판만 받는다.
+- `Update.PropertyUpdateCount`는 **마지막 `Change`의 판 번호와 같아야 한다.** `Update.PathUpdateCount`는 경로마다 커지기만 하면 된다.
+
+속성을 `Change`(UpdateCount 100)로 채운 뒤 경로 `v`를 1초마다 바꾼 `/ddupdate` 실험이다.
+
+| PropertyUpdateCount | PathUpdateCount | 결과 |
+| --- | --- | --- |
+| 100 (마지막 Change와 같음) | 1, 2, 3... | 적용됨 |
+| 100 | 101, 102... | 적용됨 |
+| 101, 102... (갱신마다 올림) | 101, 102... | **무시됨** |
+
+처음에 "경로 갱신이 안 된다"고 본 것은 갱신마다 속성 판까지 올렸기 때문이다. 그때의 `ClientDisconnection-90`이 이것 때문인지는 가리지 않았다. 렌더러는 지금 속성 통째 교체만 쓴다. 경로 갱신으로 바꾸면 패킷이 더 작아진다.
+
+### 한 프레임에 같은 속성을 두 번 바꾸면 앞의 값이 사라진다
+
+클라이언트는 구독자에게 속성의 가장 새 값만 준다. 연구 화면에서 알림과 화면 갱신을 연달아 보내자 알림이 보이지 않았다. 시험 서버는 이렇게 보낸다.
+
+- 10ms 안의 `SetVars` 호출을 하나로 합친다.
+- 패치를 속성 8개(`oui_vars_1_0`~`_7`)에 돌아가며 싣는다. 값은 `{"f": 폼 ID, "s": 순번, "p": {바뀐 키: 값}}` JSON 문자열이다.
+- 렌더러는 여덟 개를 모두 구독하고, 지금 폼(`f`)의 패치를 순번마다 한 번씩 적용한다. 앞 폼의 늦은 패치는 버린다.
+
+## 6. 클라이언트 JS가 쓰는 엔진 API `{실측, 코드}`
+
+### 읽기(query)
+
+```js
+var id = 0x7e000000; // 바닐라와 겹치지 않을 번호
+engine.on("query:subscribed/" + id, cb);
+engine.on("query:updated/" + id, cb);
+engine.trigger("query:subscribe/vanilla.ddui.string", id, "minecraft", "custom_form_data_1", "oui", false);
+// cb는 값 또는 value 필드를 가진 객체를 받는다
+```
+
+| query | 인자 | 결과 |
+| --- | --- | --- |
+| `vanilla.ddui.screenId` | 없음 | 지금 열린 DDUI 화면 이름(`screenId` 필드 객체 또는 문자열) |
+| `vanilla.ddui.string` | 저장소, 속성, 경로, false | 문자열 |
+| `vanilla.ddui.number`, `.bool` | 저장소, 속성, 경로 | 숫자, 불리언 |
+| `vanilla.ddui.object`, `.objectArray` | 저장소, 속성, 경로 | 객체, 객체 배열 |
+
+### 쓰기(명령)
+
+`window.__commands__.vanillaDduiDataStoreSetCommandGroup`의 항목들이다. 각 항목의 `callable`을 그 항목에 묶어 부른다.
+
+```js
+var g = window.__commands__.vanillaDduiDataStoreSetCommandGroup;
+var c = g.setDataStorePathString;
+c.callable.apply(c, ["minecraft", "custom_form_data_1", "oui_event",
+  JSON.stringify({ seq: 1, id: "btn1", kind: "click", value: null })]);
+```
+
+| 명령 | 인자 | 서버에 오는 것 |
+| --- | --- | --- |
+| `setDataStorePathString` | 저장소, 속성, 경로, 문자열 | `ServerBoundDataStore`(string) |
+| `setDataStorePathNumber`, `setDataStorePathBool` | 같음 | double, bool |
+| `dataStoreButtonPress`, `dataStoreCloseButtonPress` | 저장소, 속성, 경로 | 시험하지 않음 |
+
+렌더러는 `custom_form_data_1`의 `oui_event`에 `{"seq","id","kind","value"}` JSON을 쓴다.
+
+### Gameface에서 걸린 것
+
+- **일반 `div`에 `click`이 오지 않는다.** `:hover`는 된다. 누름은 `mousedown`(왼쪽 버튼)으로 처리한다.
+- `<input type="text">`의 입력과 `keydown`은 된다. 렌더러는 글 입력을 400ms 묶어 보내고 Enter면 바로 보낸다.
+- 바닐라 폼을 숨기면 Esc가 먹지 않는다. 렌더러가 Esc를 `close` 이벤트로 보내고, 서버가 폼을 닫는다.
+- `overflow-y: auto` 스크롤, flex, `border-radius`, `rgba`, `@keyframes`, `transform: rotate`는 됐다.
+- 팩 JS를 고치면 팩 버전을 올려야 클라이언트가 새로 받는다. 디버그 줄(`oui-ddui screen=... sent=...`)은 값 `__debug`가 참일 때만 보인다.
+
+## 7. 렌더러 화면 구조 `{실측}`
+
+화면 구조는 노드 트리 JSON이다. 모든 노드는 `t`(종류)와 선택 속성 `id`, `text`, `bind`, `class`, `style`(CSS 속성 객체), `tip`(툴팁), `children`을 가질 수 있다.
+
+```json
+{
+  "t": "col",
+  "children": [
+    { "t": "text", "text": "§l제목" },
+    { "t": "bar", "bind": "progress" },
+    { "t": "button", "id": "go", "text": "시작" },
+    { "t": "toggle", "id": "sound", "value": true }
+  ]
+}
+```
+
+| `t` | 속성 | 동작 |
+| --- | --- | --- |
+| `col`, `row` | `scroll` | 세로·가로 flex. `scroll: true`면 세로 스크롤 |
+| `grid` | `cols` | 줄바꿈 격자 |
+| `text` | `text`, `bind` | 글. `§` 색·`§l`·`§o`·`§r`, `\n` 지원 |
+| `button` | `active`, `activeBind`, `disabled` | 누르면 `{id, kind: "click"}` |
+| `bar` | `bind`(0~1) | 진행 막대 |
+| `toggle` | `value`, `disabled` | `{id, kind: "change", value: bool}`. 모양은 바닐라 설정 화면의 스위치 |
+| `slider` | `min`, `max`, `step`, `value` | 놓을 때 값 |
+| `input` | `value`, `placeholder` | 글 |
+| `select` | `options`, `value` | 고른 항목 문자열 |
+| `item` | `icon`, `size`, `count`, `text`, `clickable`, `activeBind` | 아이콘 |
+| `slot` | `bind`(값 `{id, n}`), `size` | 아이템 칸. 바뀐 칸만 값으로 보낼 수 있다 |
+| `region` | `name` | 값 `@이름`(노드)으로 그 부분만 다시 그린다 |
+| `watch` | `property`, `path` | 저장소 값을 직접 구독해 표시(시험용) |
+| `space` | 없음 | 남는 공간 채우기 |
+
+- `toggle`은 설정 화면의 바닐라 스위치(메뉴 번들 `index-*.js`의 `BaseSwitch`)를 옮긴 React 컴포넌트이고, 렌더러는 빌드 결과 `oui-react.js`의 `OuiReact.mountSwitch`를 부른다.
+- 값(variables): `bind`는 값 이름이다. 값이 오면 글, 막대 폭, 아이콘, 칸 내용이 바뀐다. `activeBind`는 참일 때 `on` 클래스를 붙인다. `@이름` 값은 영역(`region`) 노드의 새 내용이고, 그 안의 바인딩은 다시 만든다. `__debug`가 참이면 왼쪽 아래에 디버그 줄(화면, 구조 크기, 갱신 수, 보낸 수, 오류)이 보인다.
+
+### 서버 쪽 API(시험 서버 Go)
+
+```go
+f, err := OpenForm(playerName, layout, vars, func(ev Event) { /* ev.ID, ev.Kind, ev.Value */ }, onClose)
+f.SetLayout(layout)          // 화면 구조 통째로 (탭 전환 등)
+f.SetVars(map[string]any{})  // 바뀐 값만. 10ms 안의 호출은 합쳐진다
+f.Close()
+```
+
+## 8. 결과와 성능 `{실측, Windows 1.26.52, 2026-10-23}`
+
+| 시험 | 결과 |
+| --- | --- |
+| 화면 구조 742B·13KB(버튼 200개) 전달과 그리기 | 됨. 바닐라 폼은 `#root`를 숨겨 가렸다 |
+| 실시간 값(시각, 위치, 체력·틱 막대) 4Hz | 됨. 11.5초에 갱신 46번, 끊김 없음 |
+| 버튼 200개(20열 격자) 켜고 끄기 | 됨. 누름, 서버, 그 버튼 값과 집계만 되돌림 |
+| 탭 전환(서버가 화면 구조 교체) | 됨 |
+| 토글, 슬라이더(누른 위치), 글 입력, 선택 | 됨. 서버가 받은 값을 되돌려 표시 |
+| 서버가 닫기 | 됨 |
+
+성능 규칙
+
+- 화면 구조는 한 번만 보낸다. 그 뒤로는 바뀐 값만 보낸다.
+- 대량 목록은 `region`으로 나눠 필요한 부분만 다시 그린다. 전부 다시 그리는 `SetLayout`은 탭 전환처럼 드물게 쓴다.
+- 연구 화면: 선택을 바꾸면 상세 영역과 선택 표시 값 두 개, 연구를 마치면 격자 영역과 탭 수만 보낸다.
+
+## 9. 시험 서버 명령
+
+`samples/ouitest`에서 `go run . <팩 폴더> <32바이트 키> [평문으로 보낼 추가 팩...]`로 연다.
+
+| 명령 | 내용 |
+| --- | --- |
+| `/ddui` | 실시간 값, 버튼 200개, 입력 요소, 아이템 아이콘 후보, 미디어 탭 |
+| `/research` | 연구 서버 연구 화면 |
+| `/ddupdate a`~`e` | 경로 갱신 판 번호 실험(5장) |
+| `/ddscreen 루트` | 바닐라 DDUI 루트를 데이터 없이 연다 |
+| `/ddchest` | 바닐라 Ore UI 상자 루트에 서버 데이터를 채워 연다(그려지지 않음) |
+| `/die` | 사망 화면(Ore UI) |
+
+연구 화면 예: 커스텀 텍스처용 팩을 평문으로 같이 보낸다.
+
+```bash
+go run . ../ddui-pack OreUiProbeContentKey0123456789AB <서버>/assets/resourcepack/연구 서버
+```
+
+## 10. 남은 것
+
+- 값 패치를 경로 갱신(`Update`)으로 바꿔 패킷을 줄이기(5장 규칙대로).
+- 게임 밖 메뉴(`index.html`)도 서버 팩으로 바뀌는지, 서버를 나간 뒤 언제 원래대로 돌아오는지.
+- 게임 업데이트 때 `gameplay.html`의 바닐라 번들 이름을 자동으로 맞추는 방법(서버가 설치본을 볼 수 없으므로 판마다 수동).
+- Mojang이 암호화 팩의 신뢰 판정을 바꾸면 통째로 막힌다. 판마다 확인한다.

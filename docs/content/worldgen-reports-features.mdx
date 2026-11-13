@@ -1,0 +1,182 @@
+---
+title: "월드젠 커뮤니티 보고 - 피처, 지형, 구조물, 지그소"
+description: "피처와 피처 룰, Molang, 지형, 월드젠 커스텀 블록, 구조물 파일, 지그소에 대한 커뮤니티 보고 상세."
+sidebar_position: 22
+sources:
+  - private-research
+---
+
+# 월드젠 커뮤니티 보고 - 피처, 지형, 구조물, 지그소
+
+커뮤니티 조사(2025-10-22 ~ 2026-10-23)에서 본 페이지의 앞 문서가 요약하지 못한 개별 보고를 모았다. 각 항목 끝의 `[uNNN 날짜]`는 조사 노트 번호와 보고 날짜이고, `(single report)`는 한 사람만 보고한 내용이다.
+
+### 월드젠: 피처와 피처 룰 기본
+
+- **기본 구조**: 피처는 피처 룰(= 루트 피처)이 있어야 생성된다. 피처 파일은 BP에 둔다(RP에 넣으면 조용히 실패). 피처 룰이 참조하지 않는 피처는 등록·검증되지 않지만 `/place`로는 쓸 수 있다. 검증이 필요하면 무해한 피처 룰을 만든다. 피처는 명령/스크립트에서도 룰이나 processor list가 참조할 때만 쓸 수 있다(MCPE-242142). 시작은 MS "features introduction"과 위키 world-generation/generating-custom-ores, https://bedrock.dev/docs/stable/Features.
+- **파일과 폴더**: 피처 파일명은 `<dimension>_..._feature.json` 같은 규칙이 필요 없다. 피처 룰 파일명은 식별자의 이름 부분과 같아야 한다(MCPE-242144). format_version이 그 피처 타입에 맞지 않으면 "description missing `places_feature`" 오류가 난다. "no valid version passed"는 format_version이 빠졌다는 뜻이다.
+- **iterations와 scatter_chance**: `iterations`는 분포 규칙이 정한 영역에 놓는 개수(청크당 횟수)이며 정수로 반올림된다(0.4→0, 0.5→1). 1 미만은 불가능하다. `scatter_chance`는 청크당 확률이고, 퍼센트(0-100, 5 = 5%, 0.40 = 0.4%)나 `{numerator, denominator}`로 쓴다. 희귀 구조물은 1/100 → 1/1000으로 고쳤지만 1/1500에서도 붙어서 두 번 나온 사례가 있다(원인 불명). `iterations` 0이면 룰이 꺼진다. 테스트는 scatter_chance 100, iterations 1로 시작해 낮춘다.
+- **3x3 청크 한도**: 피처는 원점 청크와 그 주변 3x3 청크만 편집할 수 있다. 원점은 가운데 청크의 최소 x/z 모서리이므로 도달 범위는 -16..+32(48x48)다. 원점 청크 밖의 블록은 배치 패스 순서를 무시한다. 큰 구조물과 나무가 청크 경계에서 잘리는 것은 버그가 아니며 로그 오류도 없다. 구조물은 청크 중앙에 두고, 16x16 이하로 하고, x=z=8에 놓는다(완벽하진 않음). scatter x/z extent [0,64] 같은 큰 범위는 구조물을 경계 밖으로 밀어 잘리게 한다.
+- **청크 커버 분포**: `fixed_grid` extent는 `[0,15]`, `uniform`은 `[0,16]`이어야 청크 전체를 덮는다(버그일 수 있음). 원점을 넘지 않는 grid 분포 extent는 잘못 오프셋된다(MCPE-242145). fixed_grid에 음수 값을 쓰면 이상하게 동작하니 앞에 scatter를 하나 더 두고 음수 오프셋을 x/y/z에 직접 넣는다. 오프셋 없는 x=y=z=0 피처는 청크 최소 모서리 y=0에 놓인다. 피처 룰은 청크 단위, 바이옴 필터는 블록 단위로 평가된다.
+- **배치 패스**: 나무는 `first_pass`/`before_surface_pass`, 지면 장식은 `after_surface_pass`, 광석은 `underground_pass`에 둔다. 광석은 대부분 피처보다 늦게 돌아 앞서 놓인 돌을 유효하다고 보므로 `final_pass` 구조물도 덮어쓴다(돌 위의 화강암). 구조물에는 돌을 피한다. 기본 순서 버그도 있다(당근이 잎과 쓰러진 나무에 가려짐). 패치를 더 크게 하려면 다른 패스(`final_pass`)에 복사본을 하나 더 둔다.
+- **피처는 버전이 없다**: 새 변경이 기존 피처를 깰 수 있다. PC와 모바일에서 배치가 다르게 관찰된 적이 있다(버그).
+- **슈퍼플랫**: 바이옴, 구조물 세트, 피처 룰이 돌지 않는다. `/place featurerule`, `/place feature`, `/place jigsaw`는 평지 월드의 로드된 청크에서 동작한다(x/z는 따르고 y는 룰의 y를 씀). `q.noise`도 평지에서 동작한다. `/place`는 명령 블록이나 함수에서 실행할 수 없다. `/place feature`와 자연 배치는 다르게 놓일 수 있다(룰이 +37을 준 사례).
+- **스크립트 배치**: `Dimension.placeFeature` / `placeFeatureRule`로 배치할 수 있다. 좌표를 무시한다는 보고(saltysean, single report)와 성능 오버헤드 질문(미해결)이 있다. 복잡한 피처 하나가 메인 스레드를 약 1초 막는다. nusiq는 16x16x16 큐브로 나누고 놓은 곳을 추적하며 `system.runJob`으로 다음 작업을 정하는 방식을 썼다. 스크립트 배치에도 3x3 청크 한도가 있는지는 불명이다(없다고 추정).
+- **피처 생성은 코드로**: 손으로 중첩하지 말고 TS/Python/JS 스크립트로 피처와 Molang을 생성하라는 권장이 있다. 조건 하나에 scatter 1 + aggregate 1 + scatter 1이 든다(nusiq). 피처/scatter 배치는 스크립팅보다 빠르고, 미로나 프랙탈도 가능하다.
+- **디버깅**: 비 Molang-debug 빌드에서는 `q.log`가 없어 게임 안 디버깅이 어렵다. 외부 시뮬레이터로 heightmap 배열을 출력하는 우회법이 있다. scatter가 안 되면 대개 JSON 오류(쉼표 누락)이니 린트하고 콘텐츠 로그를 본다. 바이옴/피처를 바꿀 때마다 월드를 다시 만든다(디스크에 저장된 오래된 청크가 정사각 경계를 만든다). db 파일만 지우고 시드를 유지해도 된다.
+- **바닐라 파일 구하기**: 바닐라 피처/피처 룰 식별자는 샘플 팩의 `metadata/command_modules/mojang-commands.json`에 있다. 파일은 BDS zip의 `data/definitions/`(https://www.minecraft.net/en-us/download/server/bedrock), PC 설치 폴더(XboxGames), APK(예 26.20 폴더), 옛 features_archive.zip(1.18), vanilla_1.17.0(지오드)에 있다. GitHub의 바닐라 BP 템플릿에는 바이옴 피처나 피처 룰이 없다. 커뮤니티 사본 https://github.com/llgava/mcbedrock-features는 최신이 아니다. Mojang 샘플(https://github.com/Mojang/bedrock-samples)에 `roofed_forest_surface_roofed_tree_feature_rules.json`이 있다. 모든 바닐라 피처/룰이 현재 파일에 있는 것은 아니다(옛 roofed forest 나무 룰은 기본 인스턴스에서 빠짐). 많은 기본 바닐라 피처가 데이터 드리븐이 아니다(MCPE-242143). 커뮤니티 공유 자료: `features__rules_vanilla.json`(kiteob), 오버월드 광석 피처/룰 zip, mesa gold, underwater magma, pumpkin after_surface.
+
+### 월드젠 Molang(좌표, noise, heightmap, 바이옴 쿼리)
+
+- **`v.originx/z` 대 `v.worldx/z`**: `originx/originz`는 피처 룰 원점이다(청크 정렬, 16의 배수: 75000은 아니고 74992). scatter 피처에 들어갈 때만 설정되므로 필요하면 직접 저장한다. `worldx/worldz`는 현재 배치 위치이며 즉시 갱신되지만 feature_rule 문맥에는 없다. heightmap과 함께 `coordinate_eval_order`에서 y를 x/z보다 앞에 두면 "unknown variable variable.worldz"가 나니 y를 마지막에 둔다. 높이 쿼리에는 worldx/z를 쓰라는 조언이 있다. Molang 변수 문맥은 피처 트리 전체에 이어진다. 임시 변수는 자연 배치에서 수천 청크에 걸쳐 남지만 `/place feature`와 자연 배치 사이에서는 공유되지 않는다. 청크는 임의 순서로 로드되므로 판단은 월드 좌표에서 끌어낸다(예 `math.mod(v.originx,256)`). 범위 객체는 extent 상/하한에서만 Molang을 받고 step size와 grid offset은 받지 않는다.
+- **특정 좌표에 배치**: iterations Molang으로 청크 원점을 검사한다(룰에서 y는 고정). 0을 돌려주면 아무것도 놓지 않는다.
+  ```
+  "iterations": "math.floor(v.originx/16)==math.floor(100/16)&&math.floor(v.originz/16)==math.floor(100/16) ? 1 : 0"
+  ```
+- **`q.noise()`**: 시드와 무관한 2D Perlin류 함수 하나다(모든 월드에서 같음). 값은 대략 -1..1이고 양 끝으로 치우치며, `/2+0.5`로 정규화한다. 시드 대신 좌표 오프셋을 salt로 쓴다(Molang random으로 오프셋을 정하는 방법도 있음). 스케일 8 미만은 거의 쓸모없다. 큰 구역은 낮은 주파수, 패치는 1/256-1/64를 쓴다. Elektrika는 의존하지 말라고 했다. kiteob의 구역 예(세계의 약 14%를 바이옴 크기로 차지):
+  ```
+  "iterations": "v.freq=1/8192;v.q=100*(q.noise(v.worldx*v.freq,v.worldz*v.freq)*0.5+0.5); return(v.q>=34&&v.q<=47)?1:0;"
+  ```
+  구조물끼리 겹치지 않게 하려면 구조물마다 다른 noise 구역과 주파수를 쓰거나 지그소를 쓴다. 노이즈 프로토타이핑은 Perlin Fiddle을 쓴다. 3D noise는 없다.
+- **시드 쿼리**: `query.get_level_seed_based_fraction`은 1.26.10 피처에서 "does not exist or not supported in this context"로 실패한다(애니메이션/파티클에서만 동작, 버그 티켓 있음). 시드 비율 쿼리는 월드젠에서 쓸 수 없다(MCPE-240790 / 242120).
+- **`q.heightmap` 대 `q.above_top_solid`**: 올바른 호출은 `q.heightmap(v.worldx, v.worldz)`다(잘못된 인자는 월드 로딩을 크래시시켰다). heightmap은 해수면과 동굴 입구를 포함한 월드 표면이다. `q.above_top_solid`는 그것을 무시하므로 커스텀 표면 블록 위에서 피처가 안 나오는 문제, 물 위 나무, 연못/동굴 문제를 고친다. 커스텀 바이옴에서는 이것을 쓴다. 다만 above_top_solid는 잎을 포함한 모든 "고체"에 반응한다. `light_dampening`이 없는 커스텀 블록은 투명으로 취급돼 지형 생성에 영향을 준다(isSolid가 평탄화되기 전까지 건너뛰게 할 방법 없음). `q.above_top_solid` 오프셋 한도는 3청크로 보고됐다(48 이상이면 생성이 깨지고 47 이하는 동작).
+- **경사 검사**: 구조물 전에 scatter의 iterations Molang으로 중심과 모서리의 `q.heightmap` 차이를 비교한다(예 모두 &lt;= 2면 1, 아니면 0). y는 `q.above_top_solid(v.worldx, v.worldz) - 2`.
+- **`q.has_biome_tag`**: 블록별 검사 `"iterations": "q.has_biome_tag('ocean')?1:0"`. 문서에 없지만 좌표를 받는다(`q.has_biome_tag(tag, x, y, z)`, stirante 발견). 호출당 태그 하나이고 boolean을 돌려준다(`!`로 부정). 바이옴은 3D라 y가 중요하다. 열당 약 48회 호출해도 눈에 띄는 성능 저하는 없었다. scatter 안에서는 grid spread 뒤(단일 블록 문맥)에서만 믿을 만하고, 청크 가장자리 +15,+15 블록은 실제 바이옴을 돌려주지 않는다(ocean 태그). 제대로 된 바이옴 필터링은 피처 룰(먼저 scatter하고 바이옴 필터를 검사)을 쓴다. 바이옴 쿼리 3종은 conditional list 피처에서만 동작한다는 버그도 있다(MCPE-242119). 바이옴 태그 경계는 피처 룰의 청크 바이옴 필터와 정확히 맞지 않는다. 피처 룰과 커스텀 바이옴은 `minecraft:biome_filter`의 `has_biome_tag` 커스텀 태그로 연결한다.
+- **바이옴 경계 블렌딩(arexon)**: blend_dist부터 아래로 돌며 8방향 이웃을 `!q.has_biome_tag(...)`로 검사하고, 거리로 `v.blend_factor`를 정한 뒤 `v.height = math.lerp(q.heightmap(...)-64, custom, v.blend_factor)`를 쓴다. `math.lerp` 셋째 인자는 0-1이어야 하고 Molang에는 `1..8` 범위가 없다.
+
+### 피처 타입별 노트
+
+- **`single_block_feature`**: 상태로 교체할 수 있다(ore_feature는 불가). `places_block`에 상태가 있는 블록 기술자를 쓴다: `{"name":"kado:stable_air","states":{"kado:purpose":"skybox"}}`. 가중치 배열 `[{block:{name, states:{...}}, weight}]`는 최신 프리뷰에서 동작했다(계단 `weirdo_direction` 0 west, 1 east, 2 north, 3 south, `upside_down_bit`). 커스텀 상태는 동작하지만 블록 트레이트(`placement_position`/`block_face`)는 피처 배치에서 적용되지 않는 것으로 보인다. 커스텀 `minecraft:facing_direction` 상태나 천장 블록 회전은 실패했다. `may_attach_to`에는 방향 키와 블록 목록이나 `{ "tags": "query.any_tag('log')" }`를 주며, `auto_rotate:false` + 커스텀 상태로 방향 있는 선반 버섯을 만든 사례가 있다. 가중치가 조용히 잘린다(weighted random/growing plant).
+- **`ore_feature`**: 광석류(감염된 블록 포함)에 적합하다. scatter + single block보다 빠르다. 버그 7개: `place`로 클라이언트 비동기(242115), x/z +8 오프셋(242122), `count` 이름이 잘못 지어짐(242125), `may_replace`가 조용히 필수(242127), `may_replace`의 블록 상태 무시(242128), `may_replace`에 태그 블록 기술자 불가(242124), 출력 위치 항상 (0,0,0)(242129). 큰 광석(약 200블록은 크래시)은 음수 방향 16블록에서 멈추니 scatter로 +8,+8 오프셋을 준다. 큰 광석 피처로 새 돌/심층암 같은 층을 만들 수 있다(saltysean 확인). 바닐라 광석 희귀도는 iterations 500이 아니라 같은 ID의 룰을 덮어 scatter_chance로 바꾼다. 바닐라 다이아몬드 분포는 triangle `[-144, 16]`(`overworld_underground_diamond_ore_feature`, format 1.13.0, `underground_pass`, `coordinate_eval_order` zyx)이고, -64 쪽으로 더 흔하게 하려면 triangle `[-16, -64]`. 광석에는 지그소가 아니라 피처를 쓴다.
+- **`scatter_feature`**: 기둥은 `y` 분포만 주고 step_size 없이 만든다. 등록에 실패하면 iterations를 줄인다. 청크의 모든 표면 블록을 덮으려면 피처 룰이 Feature A를 0,-64,0에 1회 놓고, A = scatter(`fixed_grid` x/z 0..15, `"y": "q.above_top_solid(v.worldx, v.worldz)"`, 256회), B = single block feature로 한다. 전체 Y 범위를 덮으려면 iterations를 차원에 맞춰야 하고(예 64x320) 큰 수는 월드 로드를 늦춘다. 표면 레이어는 Y 오프셋 `fixed_grid`로 만든다.
+- **`aggregate_feature`와 `sequence_feature`**: `early_out`(first success/first failure)을 붙인 aggregate는 조건문으로 Mojang 파일에서 널리 쓰인다. sequence는 버그가 있으니(수직 쌓기, 문서화되지 않은 부작용) aggregate를 쓴다. 오프셋은 놓이는 피처 안에 있어야 한다. aggregate/sequence의 first-failure early-out은 실패한 항목이 첫 번째가 아니면 실패 후에도 계속 놓는다(MCPE-242141). 문서도 `early_out`에 대해 모호하다. 48x48 조각으로 96x96 거대 구조물을 이을 때 원점 청크가 다르면 조각이 16 밀리므로 `early_out: first_failure` sequence와 조각별 오프셋을 쓰고, `(v.worldx-v.originx)/48` 같은 검사로 48 그리드에 맞춘다.
+- **`snap_to_surface_feature`**: 한 표면에만 동작한다. `random_vertical` 이름이 잘못 지어졌고(242117) 공기가 아닌 블록에서 반대 방향으로 붙는다(242118). 동굴 바닥 블록: 피처 룰을 Y -60..40으로 두고 "floor" snap_to_surface가 `may_attach_to` stone/deepslate, `may_replace` air인 single_block_feature를 놓는다(바다 바닥 회피). 천장에 놓은 자수정류는 위에 공기가 남아 structure void로 저장하라는 제안이 있었다. search 피처: `min`/`max` 순서가 바뀌면 반복이 깨지고(242130), 모든 조건이 search 버퍼를 참조하지는 않는다(242132).
+- **`geode_feature`**: 매우 까다롭다("mcstructure를 써라"). 레이어는 블록 하나만 받고(가중치 풀 없음) crack 속성을 무시한다. `outer_layer`/`alternate_inner_layer`는 문서 샘플에만 있고 정식 필드가 아니다. `inner_placements`는 `{name}`만 받아서 커스텀 싹 블록은 모두 "down"(또는 위)을 향한다. onPlace 커스텀 컴포넌트는 `/place`에서만 발생한다. 피처 파일에 상태를 넣으라는 제안은 확인되지 않았다.
+- **`multi_block_feature`(1.26.40)**: 멀티블록의 모든 부품을 놓는다(single_block_feature는 part 0만, 아래 반쪽만). `{"places_block":"test:block","enforce_placement_rules":false,"may_replace":["minecraft:air"]}`. `enforce_placement_rules` true면 공기/물이 지지로 허용될 때만 놓이므로, 피처 룰이 snap_to_surface를 놓고 그것이 멀티블록 피처를 놓게 한다. 문서는 2026-07-30 learn.microsoft.com(featuresreference ... minecraft_multi_block_feature)에 공개됐다. 그 전에는 aggregate → scatter → 부품별 상태 single block(바닐라 tall_grass식)을 썼다. 1.26.40 시점엔 아직 깨져 있었다는 보고도 있다.
+- **2칸 꽃**: 바닐라 겹꽃(작약/라일락)은 `double_plant` 경로로 놓인다. 대안은 `minecraft:multipart_block_column_feature`에 `tip_block`(`upper_block_bit: true`), `frustum_block`(`upper_block_bit: false`), `height_range` 2..2, `direction: "UP"`, `may_replace` air, `may_place_on` grass_block을 주는 것이다.
+- **`cave_carver_feature`**: 바이옴 의존이고 8방향이다. 물로 하려면 air 대신 water로 설정한다. y는 부모 피처/룰의 입력 좌표에 상대적이라(`project_input_to_floor`와 sequence 확인) 약 -64에 놓인 문제는 미해결이다. 크레이터용 carver는 없다. 건너뛰기 확률이 뒤집혀 있다(미신고). 문서: wiki.bedrock.dev/world-generation/feature-types.html#carver-features.
+- **기타 피처**: fossil 피처는 입력 위치에 놓이지 않는다(242159/242161). 수평 나무 장식에는 `cardinal_direction`과 `growth` 상태를 둘 다 가진 블록이 필요하다(242146). multiface 피처는 깨진 것으로 보인다. kelp `growing_plant`는 끝을 막을 수 없다. `spring_feature`는 찾지 못했다. 쓰러진 나무 줄기(fallen trunk)는 쓰러진 통나무를 만든다. `minecraft:feature_pool_element`는 하드코딩된 바닐라 피처만 참조할 수 있다.
+- **이끼 번짐(뼛가루)**: 바닐라 피처 `minecraft:moss_patch_bonemeal_feature`(`minecraft:vegetation_patch_feature`, format 1.16.0)의 `replaceable_blocks`가 정한다. `BP/features/`에 복사해 블록(예 `minecraft:bone_block`)을 추가한다. 바닐라 식별자를 덮어쓰므로 피처 룰은 필요 없고 순서도 상관없다.
+- **나무 피처**: 잎을 없애려면 `leaf_blocks`를 공기로 한다(나무 피처는 바이옴 파일이 아니라 BDS 패키지에 있음). azalea 형식(줄기 기울임 필요)이면 잎 두 종류를 쓸 수 있고 oak는 안 됐다. 잎이 통나무 위에만 나오거나 줄기가 짧으면 줄기 높이를 올린다. `branch_start_offset_from_top`의 `range_min`은 0 이하여야 한다(`outside [-2147483648,0]` 오류). 위키의 나무 생성 페이지는 오래됐고 2026-10까지 새 예제 요청에 답이 없었다.
+
+#### 지형
+
+- **지형은 애드온으로 바꿀 수 없다**: 지형은 먼저 하드코딩으로 만들어지고, 바이옴 `noise_type`은 표면만 바꾼다. 변형은 공기/돌을 놓는 피처로 한다(`q.noise(v.worldx, v.worldz)`, `q.heightmap()`, `q.above_top_solid()`). 높은 산은 기존 고지대에 블록을 더하는 룰이나, 산 태그 바이옴(cherry_grove, frozen_peaks, grove, jagged_peaks, meadow, snowy_slopes, stony_peaks)에서 scatter → weighted_random → structure_template_feature로 mcstructure 봉우리를 놓는다. 큰 수역은 피처가 아니다: 바이옴 피처 전에 표면이 약 y=62까지 물로 채워지므로 공기 교체 보정만 되며 보정 월드젠은 느리다. 해수면(63) 변경은 noise 파라미터로 안 됐고, 목표 높이까지 물을 채우는 피처를 쓴다. kiteob 체크리스트: 3D noise 없음, 바닐라를 직접 지움, 시드는 오프셋으로만 사용, 참고작 Realistic Landscapes(Shapescape), C++ 모드 로더 LeviLamina.
+- **처음부터 지형 만들기(nusiq)**: 청크 단위 scatter(fixed_grid x/z 0..15, iterations Molang이 `return 256;`으로 끝남) → 열 단위 scatter(Y fixed_grid [0, terrain_height-1], iterations가 정규화된 다중 옥타브 `q.noise` 높이를 반환). 3x3 청크만 조회할 수 있어 바이옴과의 블렌딩은 어렵다. Fast Biome Generation Template(1.20.30)은 Molang으로 바이옴 위치를 정하고 열 피처를 직접 공급한다(먼저 기존 월드를 지움, Molang은 지금도 동작, 피처는 갱신 필요).
+- **더 깊은 바다**: scatter + single_block_replace로 만든다. 문서의 `sea_floor_depth`는 효과가 없고 표면 레이어 두께만 바꾼다. 예제 팩 `Deeper_Ocean_BP.zip`(kiteob). 2블록 깊이 바다는 바이옴만으로 불가능하니 바이옴 필터 룰로 지형을 상수 Y까지 깎고 물 2칸을 놓는다(이웃 블렌딩은 이웃 청크 바이옴 태그를 샘플링해 lerp). 바다 세계는 "remover" 피처로 공간을 깎거나 흙을 물 기둥으로 바꾼다(해초가 떠 있게 됨).
+  ```
+  "iterations": "v.oldfloor=q.above_top_solid(v.worldx,v.worldz); v.olddepth=62-v.oldfloor; v.adddepth=math.clamp(3*v.olddepth,0,90); v.newfloor=v.oldfloor-v.adddepth; return v.adddepth;"
+  ```
+- **물 제거**: 바닐라 수중 동굴 carver 룰(`overworld_underwater_cave_carver_feature` / `underground_underwater_cave_carver_feature`)을 커스텀 carver로 덮으면 지하 물이 많이 사라진다. carver는 덮을 수 있지만 aquifer는 안 된다. 바다 물을 공기로 바꾼 뒤 남는 물은 해초/켈프 룰을 덮어 지운다. `springs`류 덮어쓰기는 일부만 돕는다.
+- **돌을 네더랙으로**: 16x16 청크 fixed_grid scatter → 열 피처 256개 → single block 피처, 광석은 나중 패스. 엔드 비우기: 청크마다 single block으로 공기를 놓는 룰. 섬과 코러스 같은 일부 바닐라 블록은 애드온 룰 뒤에 놓이므로 스크립트로 나중에 지운다(End_Void_BP.zip). 엔드 공허에 구조물을 놓는 데는 `scatter_chance`와 무작위 y가 동작한다(End_Void_v2_BP.zip).
+- **커스텀 엔드 "바이옴"**: 엔드는 바이옴이 하나라 커스텀 바이옴이 동작하지 않는다. 관련 룰이 모두 같은 저주파 noise 범위를 검사하게 한다. 경계는 고주파·저진폭 noise로 흐리게 하며, 최소 크기는 보장되지 않고 Voronoi noise가 대안이다.
+  ```
+  "iterations": "v.biome = 100*(1 + q.noise(v.originx/8000, v.originz/8000))/2; return v.biome >= 28 && v.biome <= 45;"
+  ```
+- **높이 한도**: 높이 한도는 서버 패킷이 정한다. LeviLamina로 바꿀 수 있고, 바닐라에서는 네더 천장 위에 건축할 수 없다.
+
+#### 바닐라 생성 수정/제거
+
+- **덮어쓰기 원칙**: 피처/피처 룰의 식별자를 바닐라와 같게 해 수정한다(새 피처에 `minecraft:` 접두사는 못 씀). `iterations: 0`이나 `distribution` 제거로 끈다. 피처 파일이 없으면 미지의 ID를 가리키는 `places_feature` 룰은 오류를 낸다. 반딧불 덤불 등 일부는 노출된 피처 파일이 없다. 식생을 멈추려면 바닐라 룰을 복사해 iterations를 0으로 한다. `foliage` 룰은 풀/꽃용이고 나무 룰은 별도 파일이다.
+- **나무 교체/제거**: 바닐라 나무 피처는 레거시로 옮겨져 커스텀 룰에서 직접 부를 수 없다. 바닐라 나무 룰(식별자 유지, 예 `minecraft:roofed_forest_surface_roofed_tree_feature_rules`)의 `places_feature`만 자기 피처로 바꾼다. 이름 패턴은 `<biome>_surface_trees_feature`다. 피처 이름: oak_tree_feature, spruce_, birch_, jungle_, acacia_, dark_oak(roofed_tree_feature), mangrove_, cherry_, azalea_tree_feature. 제거는 `minecraft:air`를 놓는 single_block으로 가리키거나(iterations 1이면 청크당 공기 한 칸) iterations 0으로 한다(어두운 숲에서 확인). 모든 나무를 한 종류로 바꾸려면 모든 바이옴의 surface-tree 룰을 이름을 유지한 채 덮는다. 낙엽 더미는 룰이 없고 나무 룰의 aggregate에 통합돼 있다. 참고 애드온: IceCraft Studios "No Trees" https://github.com/IceCraft-Studio/No-Trees-MC-Beh/releases/tag/v1.3.0.
+- **대나무 밀도**: 바닐라 정글 대나무는 `bamboo_jungle_after_surface_bamboo_feature.json`의 iterations Molang이 정한다. 바닐라 값은 `math.clamp(math.trunc(math.ceil((query.noise(math.trunc(variable.originx / 80), math.trunc(variable.originz / 80)) + 0.3) * 160)), 15, 160)`이고, 줄이려면 `+0.1`, `*20`, clamp 0..5로 하거나 `math.random_integer(1, 5)`나 0을 쓴다.
+- **지울 수 없는 것**: 잎, 덩굴, 발광 이끼, 폐광은 완전히 교체/제거할 수 없다. 폐광 제거, 바닐라 구조물 빈도 변경, 마을 제거, 네더/엔드 바이옴 안의 커스텀 바이옴은 2025-11~12 기준 불가능했다. 엔드 구조물(엔드 배, 섬)은 바이옴 기반이 아니어서 지울 수 없다. 엔드 기둥은 고정 좌표다. 심층암은 피처가 아닐 수 있고 표면/하위 블록은 바이옴 surface builder로 교체한다. 동굴은 기본 지형 패스의 일부라 끌 수 없다.
+
+### 월드젠 속 커스텀 블록
+
+- **틱이 돌지 않음**: 피처(`pregeneration_pass` 동굴 carver, single_block_feature 등)가 놓은 커스텀 블록은 `onPlace`/`onTick`/`minecraft:tick`이 신뢰성 있게 초기화되지 않는다(안정판 버그로 확인). 부수고 다시 놓을 때까지 돌지 않는다. 세부: 선택된 16x16 청크(x/z 0..15) 안에 놓인 블록만 틱하고 이웃 청크 블록은 놓이기만 한다. distribution에 음수 extent(-8..8 대신 0..16 사용)가 있으면 불안정하다. scatter 대신 search + feature, `after_surface_pass` 대신 `final_pass`가 동작했다. 바이옴 surface builder 블록은 queued tick이 돌지 않는다. single block feature는 queued tick을 트리거하지 않는다(나중에 수정됐다는 주장도 있음).
+- **구조물의 틱 데이터 중복**: NBT에 틱 데이터를 가진 .mcstructure 블록은 스케줄 이벤트가 두 번 발생했다(정상 지연 + 저장된 남은 tick_delay). 우회는 NBT의 그 블록 위치/틱 항목을 지우는 것(태그 자체는 유지)이었고 2026-03 프리뷰에서 수정됐다(MCPE-236362).
+- **표면 블록 목록**: 배치 피처는 하드코딩된 블록 목록을 쓴다. `minecraft:geometry.full_block`으로 만든 커스텀 잔디에는 나무/꽃/버섯이 생기지 않으니 바닐라 목록을 복사해 블록을 추가한다. dirt 태그를 줘도 모든 식물이 자라지는 않는다. 커스텀 해초도 표면 블록(커스텀 발광 잔디)이 맞아야 나왔다. 커스텀 잔디 위 피처는 may_replace를 air로 제한한다.
+- **기타**: Plains에서는 나오지만 Basalt Deltas에서는 안 나오는 사례(미해결)가 있다. 커스텀 선인장 growing-plant 피처에 random ticking을 넣으면 블록이 꺼진다는 보고(미해결)도 있다. 커스텀 블록만으로 된 월드가 렌더 거리 5 이상에서 렉/크래시가 났는데, 원인은 커스텀 지오메트리를 쓴 커스텀 돌 블록이었다(제대로 된 컬링이나 바닐라 큐브 지오메트리로 해결).
+
+#### 구조물 파일
+
+- **위치와 이름**: `structures/<namespace>/<name>.mcstructure`이고 식별자는 `namespace:name`이다. 네임스페이스 폴더가 없으면 "structure not found"가 나지만 지그소는 하위 폴더도 찾는다. 로드는 `/structure load ns:name`이나 스크립트 `world.structureManager`로 한다. 파일명에 공백(`klee_boss (1)`)을 쓰지 않는다. 잘못 내보내면 `format_version` 누락 오류가 난다. 바닐라 구조물을 재현할 때 깨지지 않게 하려면 `structures/` 아래 다른 폴더에 둔다.
+- **크기**: 구조 블록 저장은 최대 64x64x64다(NBT 편집 우회는 1.20.50에서 막힘). mcstructure 최대는 64x384x64(최소 1x1x1)이지만 성능상 16x16 중앙 배치가 낫다. 문서는 64x64가 된다지만 약 35x64x50 구조물은 structure_template_feature로 전혀 생성되지 않았고 약 32x35는 생성됐다(미해결). 더 크면 지그소 조각으로 나눈다.
+- **structure void**: `/give @s structure_void`로 얻는다. 구조물에 공기 대신 void를 저장해야 기존 블록과 지형이 비치고 나무가 덮어쓰지 않는다. 일반 공기는 물/물잠김 블록을 교체한다. 내보내기 전에 공기를 StructureVoid로 채우지 않으면 자연 구조물 주위에 "void 블록"이 보인다. .mcstructure는 void를 저장하지 않는다(팔레트 밖 index -1). 그래서 Java 변환 시 structure_void가 보존되지 않지만, 공기를 void로 바꾼 것은 유지된다. 구조물 로드는 기존 블록(잎 포함)을 교체하며, void인 곳만 기존 블록이 남는다. 교체를 건너뛰는 바닐라 방법은 없다.
+- **구조물 루트**: 구조물 파일과 루트 테이블은 하위 폴더에 둘 수 있다(루트 경로는 `loot_tables/`로 시작). 같은 이름으로 구조 블록이 월드에 저장한 루트 없는 사본이 BP 것보다 우선하므로 `/structure delete <name>` 후 다시 로드한다. 하위 폴더 구조물에 놓인 상자가 루트를 잃었다는 보고도 있다. 상자 루트는 NBT 편집, 지그소 processor, 무작위 루트 도구(wiki.bedrock.dev/loot/randomized-structure-loot)로 넣는다. 항아리(pot) 루트도 같은 processor 방식(https://wiki.bedrock.dev/loot/randomized-structure-loot#example)으로 하되, 커스텀 항아리는 교체되어 원래 조각 무늬를 잃는다.
+- **타일 엔티티 NBT**: trial spawner, vault, suspicious sand 루트는 타일 엔티티라 MCBE Essentials 구조 편집기(https://mcbe-essentials.github.io/structure-editor/)로 구조물 NBT를 편집한다(spawn potentials, 장비 루트, 거리, 보상 루트 테이블, 일반 + ominous). vault의 `state_updating_resumes_at`은 0으로 둔다. 지그소 processor로 suspicious sand 루트도 설정할 수 있다. 커스텀 타일 엔티티가 없어 완전 커스텀 trial spawner 블록은 만들 수 없다. 커스텀 vault는 NBT 편집으로 동작한다.
+- **열매 달린 커스텀 나무**: 커스텀 .mcstructure가 필요하다.
+
+#### structure_template_feature
+
+- **필드**: format 1.13.0, `structure_name`(예 `mystructure:abc/def/ghi/oaktree` → `BP/structures/abc/def/ghi/oaktree.mcstructure`, 새 형식은 `abc:def/ghi/oaktree`), `adjustment_radius`(8-16으로 올리면 자리를 찾음), `facing_direction`(random 가능), `constraints`(`grounded`, `unburied`, `block_intersection.block_allowlist`). 블랙리스트는 없다. 공기만 허용하면 공기 아닌 블록이 하나라도 있을 때 실패한다. 지그소 도시를 나무로부터 지킬 때 허용 목록에는 air, grass, dirt가 있어야 한다. 조건은 "any_of"와 `==`(오타 `=`는 깨짐)가 필요하다. "Cannot find behavior pack structures definition" 오류는 IDE를 재시작해 고쳐졌다.
+  ```json
+  "constraints": {"grounded": {}, "unburied": {}, "block_intersection": {"block_allowlist": ["minecraft:air","minecraft:stone","minecraft:dirt","minecraft:grass"]}}
+  ```
+- **최소 자연 생성**: `structure_template_feature`(`structure_name`, `adjustment_radius`, `constraints: {"grounded": {}}`)를 `surface_pass` 피처 룰이 `scatter_chance`, `y: "query.heightmap(variable.worldx, variable.worldz)"`, `has_biome_tag` 필터로 놓는다. 떠 있는 구조물 설정 예: `unburied` + `block_intersection.block_allowlist ["minecraft:air"]`, adjustment_radius 0, 룰 y uniform [100,240]. 용암 위 배치는 제약을 조합한다.
+- **배치 기하**: 선택된 청크 모서리가 원점이고 구조물은 굴린 x/z에서 +x/+z로 자란다. 3x3 청크 범위(-16..32, 48x48)를 넘는 부분은 잘린다. 48x48 구조물은 룰 x/z의 음수 `extent`로 원점을 (-16,-16)으로 옮긴다. `rotate_around_center`는 피벗(x/z의 floor(size/2))을 선택 위치로 옮기며 최대 33x33(-16..16)까지 맞는다. scatter 오프셋을 8,8로 고정하면 피벗이 청크 중앙에 가서 48x48이 된다(회원 테스트). `rotate_around_center` 버그는 1.26.30에 수정됐지만 새 `ground_level` 옵션에 같은 문제가 있다. facing_direction에 따라 잘림이 달라지고, 48x48 밖 무작위 회전은 잘릴 수 있다.
+- **엔티티 없음**: 피처로 놓인 구조물의 엔티티는 생성되지 않는다. 구조물 안에 명령 블록이나 커스텀 블록(명령 블록은 꺼질 수 있어 커스텀 블록 권장)을 두거나 지그소를 쓴다. 피처가 놓은 구조물 안의 지그소 블록은 동작하지 않는다. 다만 kiteob은 2026-08-23에 "지그소가 이제 피처와 함께 동작한다"고 말해 **conflicting**이다(feature_pool_element 문맥일 수 있음).
+- **구조물 위치 지도**: 루트 함수 `exploration_map`의 `destination`을 구조물 식별자로 하면 상자와 거래표에서 동작한다. `/loot`이나 스크립트로 직접 얻으면 항상 캐시된 위치를 가리킨다. 구조물 지도가 동작하게 하려면 지그소로 만든다.
+- **커스텀 나무 구조물**: structure_template_feature나 tree_feature로 놓고 weighted_random_feature로 변형 5-10개 중 고른다. 주위를 structure_void로 감싸 지형을 깎지 않게 한다.
+- **지하/동굴 침범**: 지그소나 나무가 동굴/피처에 먹힐 때, 한 팀은 시간이 지나면 스스로 공기로 바뀌는 커스텀 "가짜 공기" 블록(커스텀 컴포넌트)을 썼다. 배치 패스를 바꾸거나 스크립트로 경계 박스의 물/섬록암을 지우라는 조언도 있다.
+
+#### 파일과 최소 구성
+
+- **폴더**: BP `worldgen/structures`(예전 `worldgen/jigsaw_structures`에서 이름 변경, 옛 예제는 동작 안 함), `worldgen/structure_sets`(복수형, 단수 폴더는 조용히 실패), `worldgen/template_pools`, `worldgen/processors`(processor list는 반드시 여기, 아니면 "Missing referenced asset")이다. 폴더명은 `world_gen`이 아니라 `worldgen`이다. .mcstructure는 바깥 `structures/`에 둔다. 필수는 template pool + 구조물 설정이고, structure set은 자연 생성에만 필요하며 processor는 선택이다. 식별자에 `/`를 쓸 수 있다. supernova는 format_version 1.21.100을 쓴다(마지막 지그소 형식 변경이 그 무렵). 데이터 드리븐 지그소는 1.21.50.26 프리뷰부터 안정이다(2025-10-30에 1년 됨).
+- **`minecraft:jigsaw` 필드**: `step`, `start_pool`, `max_depth`, `start_height`, `heightmap_projection`, `terrain_adaptation`, `max_distance_from_center`, `dimension_padding`, `biome_filters`. **structure set**: `minecraft:structure_set`, placement `minecraft:random_spread`에 `salt`, `spread_type: linear`, `separation`, `spacing`(숫자, 필수). 없으면 `/place structure` 목록에 나타나지 않는다. **template pool**: `minecraft:template_pool`, 원소는 `element_type: minecraft:single_pool_element`, `location`, `processors`, `projection`, `weight`, `fallback`. `legacy_single_pool_element`는 지원되지 않는다. 공식 예제: https://learn.microsoft.com/ja-jp/minecraft/creator/reference/content/worldgenreference/examples/jigsawjigsawstructures?view=minecraft-bedrock-stable.
+- **`projection` 위치**: `element` 객체 안(`element_type`, `location`, `processors` 옆)에 둬야 하고, `weight`는 밖에 둔다. 잘못 두면 조용히 무시되고 `rigid`가 된다. 필수 필드이며 스키마상 어떤 `element_type`에도 쓸 수 있을 것으로 보인다.
+- **`location`**: 구조물 파일 경로이지 식별자가 아니다. `structures/` 기준 상대 경로로, 팩 네임스페이스 접두사 없이 쓴다(예 `3008_plots/room0`). "Empty or non-existent pool" 오류는 대개 pool ID/네임스페이스/location이 틀린 것이니 대소문자도 확인한다. pool에 `mystructure:` 접두사를 쓰지 않는다. JSON 파싱 오류("Invalid encoding in string", "document root must not be followed by other values", "Invalid asset path ...")는 pool 파일의 이상 문자나 중복 루트다.
+- **지그소 없는 지그소**: 지그소 블록이 없는 단일 조각 "지그소 구조물"도 start_pool만으로 큰 구조물을 놓는 방법이 되며(피처 크기 한도 우회) `/locate` 지원을 얻는다. 지그소는 피처/피처 룰과 별개 시스템이라 `/locate structure`가 동작하고, 피처 룰을 쓰지 않는다.
+
+#### 지그소 블록과 연결
+
+- **이름 규칙**: `name` = 이 블록 자신의 이름, `target name` = 찾을 이름, `target pool` = 검색할 template pool. 생성하는 블록은 pool에서 jigsaw `name`이 자기 target name과 같은 조각을 찾고 `weight`에 따라 무작위로 고른다. 모두 같은 이름을 쓰면 name = target name이어야 한다. 생성 전용 지그소는 target + pool만 있으면 되고(name은 `minecraft:empty`도 됨), 받는 쪽은 name만 있으면 된다. 자기 시작 조각만 참조하는 pool은 아무것도 찾지 못한다: start_pool은 연결 지그소가 있는 조각이어야 하고 다른 조각은 target pool에 있어야 한다. 엔티티 pool도 target name이 필요하다. 지그소 블록 텍스트에는 키보드에 없는 문자(유로/파운드/엔)를 쓰지 않는 편이 안전하다.
+- **우선순위와 회전**: selection priority는 두 지그소가 같은 자리를 다툴 때 높은 쪽이 이기고, placement priority는 조각 안 후보 지그소의 순서다. 세로(UP/DOWN) 지그소는 자식 조각을 Y축으로 무작위 회전시킨다. `joint_type: aligned`는 양쪽 지그소 블록의 선 표시를 맞추며 배치하는 쪽 블록에서만 동작한다(표시 방향이 같은지 확인). 가로 지그소의 회전은 끌 수 없고 항상 대상 지그소에 맞춰 회전한다(`rollable`은 세로 전용). 지그소 블록을 옆으로 눕히면 조각이 회전하지 않는다. 세로 블록이면 무작위 회전되므로 한 방향만 만들면 된다. 방향을 강제하거나 processor로 지그소의 pool을 바꿀 수는 없다.
+- **조각 정렬 확인**: `/place structure ... keepJigsaws=true`로 지그소 블록이 맞물리는지 본다. `/place jigsaw <pool> <target> <depth> ~~~ true`가 더 나은 디버깅 명령이다. `/place structure`는 structure set이 있어야 하며 월드젠 기술을 써서 일부(예 Anchor)는 실패한다. `start_jigsaw_name`이 동작하지 않는다는 보고가 있다(2026-08-17, 이전엔 동작).
+
+#### 한도와 간격
+
+- **한도**: `max_depth` 최대 20(1.21 전엔 7, 고대 도시 7, 마을 6, 무한 구조물 불가), `max_distance_from_center` 최대 128(Chebyshev 반경, 지름 256, 기본 128, 마을 80), 최대 구조물 256x256, 사방으로 약 20청크다. 길과 도시를 늘리려면 둘 다 올린다. 생성이 일찍 멈추면 max depth와 중심 거리를 확인한다.
+- **겹침**: 한 구조물 안의 조각 경계 박스는 절대 겹치지 않는다. 예외는 부모 조각 안에 완전히 들어가는 조각이다. 별개 구조물은 같은 structure_set에 있지 않으면 겹친다(salt는 spacing/separation이 같을 때만 의미). exclusion zone은 없으니 떨어뜨리려면 같은 세트에 둔다. 지형 맞춤 조각(길)은 겹칠 수 있고 버그로 집을 덮는다(MCPE-224012). 우회는 길 구조물을 높이 약 25로 저장하는 것(길이 바닥에 있고 위로 공기 24칸)이다. `use_expansion_hack`도 언급됐다.
+- **간격**: separation은 spacing의 절반보다 작아야 한다(spacing >= 5에 separation 2처럼 spacing이 separation의 두 배보다 커야 함). separation을 키우면 멀어지고 `salt`를 바꾸면 위치가 옮겨진다. Java와 Bedrock은 같은 값과 같은 시드에서 같은 위치를 준다.
+- **정확한 개수 불가**: 시작 조각만 보장된다. 방을 N개 강제하거나 개수를 제한할 수 없다(요새 포털 방식). 한 번만 나올 조각은 시작 조각으로 한다(여러 개는 불가). 스크립트로 재구현하면 지형 적응을 잃는다. 커스텀 요새 예시가 채널 1459006306915581984에 있다.
+- **fallback pool**: 맞는 원소가 없을 때와 max_depth에 닿았을 때 시도된다(복도 끝막이에 사용). 보장되지 않으며, 거리와 공간 제약을 똑같이 받는다.
+
+#### 높이, 투영, 지형 적응
+
+- **`start_height`**: `{"type":"constant","value":{"absolute":0}}`를 쓴다. `uniform`은 `min`과 `max`가 필요하고(`"min": {"absolute": 50}, "max": {"absolute": 150}`, `value`는 스키마 경고) 구조물이 하늘에 생겼다는 보고가 있다. start_height는 `heightmap_projection` 기준 시작 조각 위치만 정한다. 고정 Y(바다 바닥 y=20 등)는 absolute에 heightmap_projection을 빼고, 바다 바닥에서 시작하려면 `heightmap_projection: ocean_floor`를 쓴다. 음수 start_height는 낮춘다. `dimension_padding`(철자 주의, "dimensional_padding" 아님) 예 `{"top": 25, "bottom": 10}`은 높이 한계에서 떨어뜨리며, 약 100씩 주면 64x64x64 구조물이 평평한 지역으로 몰린다. "Out of bounds"는 높이 한계 밖 배치일 수 있다. processor의 "ignore start height"는 고정 Y에 true여야 한다. 옛 예제에는 `"start_height": {"type":"constant","value":{"absolute":-70}}`가 있다.
+- **projection**: `rigid`는 지형을 따르지 않는다. `terrain_matching`은 조각(길)을 지형 높이에 맞추며 start_height를 무시한다(그래서 마을 고도 범위를 정할 수 없고, 공중엔 rigid). 자연 생성에서만 동작하고 `/place`에서는 아니다. 지형 맞춤 길은 실제로 매끄럽게 할 수 없다. 한 저자는 terrain_matching/rigid 혼합이 생성되지 않자 지그소 블록 둘을 다시 배치해 고쳤다. 지형 맞춤 조각이 엔티티를 5-10칸 지하에 소환했다는 보고가 있다(재현 안 됨).
+- **`terrain_adaptation`**: `bury`, `beard_box`, `beard_thin`, `none`. 시작 조각은 항상 땅에 묻히므로 바닥에 structure void 층을 저장하거나 구조물을 나눈다. beard_box는 다 채우지 않고 땅속에 놓는다(마을 때문에 의도된 것으로 봄). 배가 늘 받침대 위에 생기던 문제는 `"none"`과 올바른 start_height(`"absolute": 1`)로 고쳤다. 떠 있는 것을 피하려면 `beard_thin`이 가장 낫다. 묻으려면 start_height에 y 오프셋 + `none`을 쓴다(bury는 주변을 바꿈). 적응 박스에는 지역 바이옴의 블록이 쓰이며 제어할 수 없다. 이웃 조각을 덮어쓰게 하는 유일한 방법이 지형 적응이다. 네더와 엔드에서는 동작하지 않는다.
+- **지형 높이 판단 불가**: 지그소는 지형 높이를 조각 원점과 비교하거나 높이로 pool 원소를 고를 수 없고, 특정 블록 위에만 생성되게 할 수도 없다. 좌표 범위 제한 옵션도 없다(피처는 distribution으로 가능). 우회법은 배치 후 스크립트, `minecraft:protected_blocks` processor로 "다리" 만들기, feature pool element로 기둥 만들기다(기둥은 땅에서 멈추지 않아 동굴 공기를 덮어씀. 동굴 공기 블록이 없으므로 한 패스 앞에 동굴 공기 교체를 돌리자는 아이디어가 있다).
+- **떠 있는 구조물의 기초**: 구조물 아래에 지그소로 큰 블록 큐브를 붙이고 지면 블록 태그를 가진 `minecraft:protected_blocks` processor를 쓴다(wiki.bedrock.dev/world-generation/jigsaw-structures#protected-blocks-processor). 동굴 공기도 덮어쓴다.
+- **바이옴 경계**: 지그소는 바이옴 경계를 전혀 처리하지 않는다(마을은 Java와 Bedrock 모두 경계를 넘는다). 큰 구조물이 바이옴 경계에서 잘리면 지그소를 쓴다. 여러 바이옴은 `any_of`가 필요하다. 아니면 생성되지 않으니, 대안으로 원하는 바이옴 모두에 커스텀 태그를 단다.
+  ```json
+  "biome_filters": [{"any_of":[{"test":"has_biome_tag","operator":"==","value":"plains"},{"test":"has_biome_tag","operator":"==","value":"taiga"}]}]
+  ```
+
+#### 생성 순서와 피처
+
+- **지그소가 피처보다 먼저**: Java와 같게 지그소는 항상 피처보다 먼저 생성되므로 피처가 덮어쓸 수 있다. 피처 쪽에 `block_allowlist` 제약을 쓰고, 나무가 파고들지 않게 structure void를 쓴다. 나무와 피처는 지그소 안에서도 생성된다. 막으려면 grass/dirt 태그 바닥(뿌리 흙도 `dirt` 태그)을 쓰지 않거나 피처가 놓일 수 없는 바닥을 쓴다(블록 화이트리스트 성공 사례). `/place`로 놓은 조각은 잔디를 덮지만 자연 생성은 그렇지 않다. 커스텀 지그소는 생성 단계와 무관하게 항상 바닐라 구조물을 덮어쓴다.
+- **`minecraft:feature_pool_element`**: 2026-03-11 무렵 최신 프리뷰에서 template pool에 추가됐다(Java의 피처 원소에 대응). 하드코딩된 바닐라 피처만 참조할 수 있고, 구조물 세트 생성과 `/place structure`에서 다르게 동작할 수 있으며, 자연 구조물에서 버그가 있다. 이를 통해 놓인 피처 안의 지그소는 트리거되지 않는다.
+
+#### processor
+
+- **종류**: Nov 2025 당시 Bedrock에는 `minecraft:rule`만 있었다(3 tp elements, `spawn_overrides`도 없었음). 2025-11 말에 블록 보호 processor가 추가됐다(유효하지만 문서에 없음): `minecraft:protected_blocks`(태그로 지정한 블록, 예 stone 태그는 조각이 덮지 않음, `value: not_feature_replaceable`도 덮어쓰기를 막음), `minecraft:block_ignore`, `minecraft:capped`. 탑 기초가 잔디는 교체하되 돌은 남기게 할 때 쓴다(동굴 아래 공기도 채우는 한계가 있음). 예제 팩 `New_Project.mcaddon`(`test:hut`). 고대 도시에는 `block_rot` processor가 없다. processor 유형은 4종이며, 구리 문 노화는 조합 규칙 약 2000줄이 필요하다.
+- **방향 있는 상자에 루트**: processor는 배치 뒤에 적용되므로 상태마다 규칙이 필요하다(상자 4개, 통은 `facing_direction` 숫자). `minecraft:blockstate_match`(`block_match` 아님)에 `"block_state": {"name":"minecraft:chest","states":{"minecraft:cardinal_direction":"east"}}`, `block_entity_modifier` `{"type":"minecraft:append_loot","loot_table":"loot_tables/..."}`, 같은 상태의 `output_state`를 준다. modifier는 `passthrough`와 `append_loot`뿐이다(`clear` 없음). processor의 상태 키에는 네임스페이스가 필요하다(`minecraft:vertical_half`). `/setblock ~~~ chest[`로 상태 목록을 볼 수 있다. 특정 상자만 루트를 주거나 스포너 몹을 정하거나 조각된 책장 루트를 넣을 수는 없다. 바이옴별 processor도 불가능하니 구조물을 나눈다. processor는 엔티티를 편집하지 않는다. 무작위로 블록을 바꾸는 것은 가능하지만 양초 교체는 불명이다.
+- **조각 아래 공기 채우기(광산 레일 등)**: 구조물에 바닥 블록을 두고 `minecraft:rule` processor(`input_predicate` block_match FLOORBLOCK, `location_predicate` block_match `minecraft:air`, `output_state` oak_planks)와 FLOORBLOCK을 나열한 `minecraft:block_ignore` processor를 함께 쓴다. 바닥은 structure void로 남고 공기만 판자가 된다.
+- **pool alias**: `pool_aliases`의 `random_group`이 동작한다. 같은 구조물을 다른 processor로 한 세트에 넣으면 오류가 난다.
+
+#### 엔티티
+
+- **지그소에서만 생성**: 구조물 파일에 저장된 엔티티는 지그소로 생성될 때 나타난다(`doMobSpawning` 게임룰이 켜져 있어야 함, 아니면 조용히 빠짐). 피처 배치에서는 아니다. 약 1/50 확률로 무작위로 빠지는 버그가 있다(신고 없음). 우회는 틱하는 블록이 소환하고 스스로 지워지게 하는 것이다. 늑대/주민이 바이옴 변형을 얻게 하려면, 보이지 않고 움직이지 않는 엔티티(`minecraft:physics`, `minecraft:transformation`, 4초 뒤 spawned 이벤트)를 저장하거나 타이머 대신 태그 검사 `execute`를 쓴다. 이제 지그소로 엔티티를 소환할 수 있다.
+
+#### 바닐라 구조물 덮어쓰기
+
+- **덮어쓸 수 있는 것**: 커스텀 지그소는 바닐라 구조물 템플릿을 놓고 그 지그소에 연결할 수 있지만 바닐라 지그소를 생성하지는 않는다. 2025-12 기준 덮어쓸 수 있던 것은 trail ruins와 trial chambers뿐이었다(template pool 편집 가능, 트라이얼 챔버 코드는 비공개지만 Java와 거의 같음). 2026-04 테스트에서는 버려진 야영지, trail ruins, 마을, trial chambers 일부, 고대 도시(`/place`는 불가)까지 덮어썼다. 바닐라 pool/구조물 파일을 덮으면 바닐라와 커스텀 pool이 함께 돈다. 약탈자 전초기지와 요새는 하드코딩이고, 난파선도 하드코딩이다.
+- **트라이얼 챔버 수정**: 물 패턴을 만드는 조각은 `worldgen/template_pools/trial_chambers/chambers`에 `end.json`을 둬서 지운다(조각 `trial_chambers/corridor/end_2`). 책임 pool은 크리에이티브에서 `/place structure minecraft:trial_chambers ~~~ true true`로 놓고 지그소 블록을 살펴 찾는다. start pool을 바꿔 작은 커스텀 구조물 하나로 줄일 수 있다. pool alias로 몹을 더할 수 있지만(스포너 지그소를 NBT 편집) spawn_overrides는 아직 노출되지 않았다.
+- **바닐라 구조물 파일**: 1.21.131 BDS zip에서 바닐라 `.nbt` 구조물 822개를 Jayly의 nbt-to-mcstructure로 변환한 자료가 있다(스포너 등 일부 블록 엔티티 손실). 바닐라 지그소 pool은 trial ruins/chambers 외엔 하드코딩이다(데이터 드리븐 지그소 실험 시절 APK에서 발견). trial chamber NBT는 옛 폴더(1.21.0/1.21.30/1.21.50)에 있고, trail ruins 지그소 파일은 공유 zip `experimental_jigsaw_structures_3.zip`(옛 APK)에 있다. 마을은 하드코딩된 데이터 모드 구조 블록을 쓴다(보루와 고대 도시가 다음 후보). 바닐라 구조물 파일을 교체하자 고대 도시가 깨졌다.
+- **고대 도시 포팅**: `minecraft:feature_pool_element`가 안정될 때까지 프리뷰 전용으로 데이터 드리븐 지그소 이식을 했다. list pool 원소와 `block_rot` processor가 없다. bedrock 이름은 `minecraft:sculk_patch_feature_ancient_city`다. shrieker 핵: 공기 피처 필터에서 `minecraft:target`을 지워 target 블록만 표식으로 남기고 스크립트가 교체한다.
+- **불가능**: 바닐라 마을에 커스텀 조각 추가, 구조물 바이옴 규칙 변경, 커스텀 spawn_overrides를 가진 structure pool, `/locate`가 희귀 구조물 무시. 커뮤니티 요청: 하드코딩 바닐라 구조물을 애드온식으로 변환(트라이얼 챔버처럼), `use_expansion_hack`, `legacy_single_pool_element` → `single_pool_element`, 바닐라 생성 규칙/바이옴 제한/processor/연결을 유지한 채 마을을 덮는 공식 방법. 지그소 문서는 오래됐다.
+
+#### 네더와 엔드
+
+- **네더**: `heightmap_projection`(`world_surface`)은 네더 천장/기반암에 투영한다. `"heightmap_projection": "none"`과 `start_height` uniform `{min:{above_bottom:28}, max:{above_bottom:70}}`, `"step":"surface_structures"`, `"terrain_adaptation":"beard_box"`, `max_depth` 4, `has_biome_tag` biome_filters를 쓴다. 그래도 어색하다(구조물이 영혼 모래 상자가 된 사례). 지형 생성이 나빠 떠 있는 구조물이 현실적이다. 피처는 교체할 모든 블록을 `allow`/replace 목록에 넣어야 한다. 음수 start_height와 `world_surface`를 쓰라는 다른 조언도 있다.
+- **엔드**: 바이옴이 없어 바깥 섬에 지그소를 생성할 수 없다(드문 간격 spacing 140/separation 300이나 태그 기반 biome_filters로 우회). Bedrock에는 midlands/highlands 바이옴 태그가 없다. 동작한 예는 `biome_filters`에 `the_end`, `dimension_padding {top,bottom}`, `terrain_adaptation: beard_thin`을 줬다. 엔드에서는 지그소가 가끔 뜨고 `beard_box`가 기대대로 안 된다.
+
+#### 기타 지그소
+
+- **무한 구조물(SCP-3008식)**: 틱킹 구역 + 명령 블록 시스템으로 만든다. 기반암 표식 위 갑옷 거치대가 확장 지점을 표시하고, 함수가 중복을 지우며, 각 구획이 이웃을 생성한다. `/schedule on_area_loaded`와 `/tickingarea preload`로 청크를 순서대로 로드하고, 스크립트에서 영역별 청크 비트맵을 둘 수 있다.
+- **시드 트릭**: 지그소 `start_height`를 고정하면 무작위 시드가 배치 명령의 입력 y를 쓰고 구조물은 start_height에 놓이므로, 입력 y가 자신만의 RNG 시드 역할을 한다(월드 밖 값도 가능). 구조 블록 시드는 integrity와 함께만 쓴다.
+- **크래시**: 1.21.12x 이후 구조물 애드온 두 개를 합치면 일부 지역에서 크래시가 났고, 한 팩의 .mcstructure 하나로 좁혀졌다(MCPE-232661, Mojang 2025-12-02 확인). 조각을 많이 추가한 뒤 생성 크래시가 나자 지그소 블록이 빠진 조각을 지워 해결한 사례도 있다.
+- **Java 변환**: Java 데이터팩 구조물은 직접 변환할 수 없다(지그소 형식이 다름). 하지만 Java 지그소 튜토리얼은 대부분 적용된다. Java NBT는 https://github.com/JaylyDev/nbt-to-mcstructure로 .mcstructure로 바꾼다(python, `structures`에 .nbt를 넣고 `cli/__main.py` 실행).
+- **버전 차이**: 한 사용자는 json pool BP가 v26에서는 동작했지만 1.21.130에서는 안 됐다. 행동 팩(BP)은 서브팩을 지원하지 않는다(RP만 지원). 지그소의 서브팩 지원은 불명이다.

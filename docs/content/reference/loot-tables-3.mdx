@@ -1,0 +1,513 @@
+---
+title: 루트 테이블 레퍼런스 (3/7)
+description: MS Learn 루트 테이블 소개, 함수, 조건, 레퍼런스.
+sidebar_position: 32
+sources:
+  - ms-learn
+---
+
+# 루트 테이블 레퍼런스 (3/7)
+
+MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 레퍼런스를 발췌한 쪽이다. 원문의 상대 링크는 제거했다.
+
+(출처: ms-learn, `creator/Documents/LootTableConditions.md`)
+
+
+### Loot Table Conditions
+
+Conditions are a list of requirements that must be met before a pool can be used or an individual entry can be selected. All conditions are stored within the `conditions` list, and each condition runs one at a time. If any one condition in the list fails, the remaining conditions in the list will be ignored.
+
+##### has_mark_variant
+
+`has_mark_variant` specifies that there are different variations for the loot.
+
+An example of this are the marked variants for which suspicious stew you might get from a mooshroom.
+
+Example:
+
+```json
+{
+  "conditions": [
+    {
+      "condition": "has_mark_variant",
+      "value": 7
+    }
+  ],
+  "rolls": 1,
+  "entries": [
+    {
+      "type": "item",
+      "name": "minecraft:suspicious_stew",
+      "weight": 1,
+      "functions": [
+        {
+          "function": "set_data",
+          "data": 7
+        }
+      ]
+    }
+  ]
+}
+```
+
+##### has_variant
+
+`has_variant` specifies that there are different variations for the loot.
+
+An example of this is when a frog kills a magma cube and drops either a verdant, ochre, or pearlescent froglight. 
+
+Example:
+
+```json
+{
+  "rolls": 1,
+  "entries": [
+    {
+      "type": "item",
+      "name": "minecraft:pearlescent_froglight",
+       "weight": 1
+     }
+   ],
+   "conditions": [
+     {
+       "condition": "has_variant",
+       "value": 2
+     },
+     {
+       "condition": "entity_killed",
+       "entity_type": "minecraft:magma_cube"
+     }
+   ]
+}
+```
+
+##### killed_by_player_or_pets
+
+The `killed_by_player_or_pets`condition can supply another way to customize a loot drop, depending on how the entity was killed. For example, if you make your pet wolf takes down a drowned zombie for you, then that entity's loot table takes that into consideration.
+
+Example:
+
+```json
+ "conditions": [
+    {
+      "condition": "killed_by_player_or_pets"
+    },
+ ]
+```
+
+##### random_chance
+
+`random_chance` is a condition that applies a given value to the chances that loot will drop.
+
+Example:
+
+```json
+"conditions": [
+    {
+        "condition": "random_chance",
+        "chance": 0.2
+    }
+]
+```
+
+##### random_chance_with_looting
+
+The `random_chance_with_looting` condition is similar to the `random_chance` condition, but also includes a multiplier value.
+
+The **looting** enchantment results in more dropped items from entities, like getting two or more raw chickens when you kill one chicken.
+
+Example:
+
+```json
+"conditions": [
+    {
+        "condition": "killed_by_player"
+    },
+    {
+        "condition": "random_chance_with_looting",
+        "chance": 0.11,
+        "looting_multiplier": 0.02
+    }
+]
+```
+
+##### random_difficulty_chance
+
+`random_difficulty_chance` is a condition that can control loot drops depending on the difficulty level.
+
+Example:
+
+```json
+"conditions": [
+    {
+        "condition": "random_difficulty_chance",
+        "default_chance": 0.5,
+        "peaceful": 0,
+        "hard": 0.6
+    }
+],
+
+```
+
+##### random_regional_difficulty_chance
+
+`random_regional_difficulty_chance` determines loot probability according to the region.
+
+Example:
+
+```json
+"conditions": [
+        {
+          "condition": "random_regional_difficulty_chance",
+          "max_chance": 0.15
+        }
+      ]
+
+```
+
+##### match_tool
+
+`match_tool` checks whether the tool (or weapon/item the player is using) used to make the loot drop matches the modifier conditions provided.
+
+The predicates used are: count, durability, enchantments, and item. `match_tool` also supports matching by item tag (including custom tags), which can be achieved using any combination of: `minecraft:match_tool_filter_any`, `minecraft:match_tool_filter_all`, and `minecraft:match_tool_filter_none`.
+
+>- **count:** amount of the item
+>   - range_max: the maximum value
+>   - range_min: the minimum value
+>- **durability:** the durability of the item
+>   - range_max: the maximum value
+>   - range_min: the minimum value
+>- **enchantments:** list of enchantments
+>   - enchantment: an enchantment ID
+>   - levels: the level of the enchantment
+>   - range_max: the maximum value
+>   - range_min: the minimum value
+>- **item:** an item ID  
+>- **minecraft:match_tool_filter_any\:** list of item tags
+>- **minecraft:match_tool_filter_all\:** list of item tags
+>- **minecraft:match_tool_filter_none\:** list of item tags
+
+Example:
+
+```json
+
+"conditions": [  
+            {  
+              "condition": "match_tool",  
+              "enchantments": [  
+                {  
+                  "enchantment": "sharpness",  
+                  "levels": {  
+                    "range_max": 6  
+                  }  
+                }  
+              ],  
+              "item": "minecraft:diamond_sword",  
+              "count": 1,  
+              "durability": {  
+                "range_min": 1  
+              }  
+            }  
+          ]  
+```
+
+Example 2 (Item tags):
+```json
+"conditions": [  
+            {
+              "condition": "match_tool",
+              "minecraft:match_tool_filter_any": [
+                "minecraft:iron_tier",
+                "minecraft:golden_tier",
+                "minecraft:diamond_tier"
+              ],
+              "minecraft:match_tool_filter_all": [
+                "minecraft:is_tool"
+              ],
+              "minecraft:match_tool_filter_none": [
+                "minecraft:is_shovel"
+              ]
+            }
+          ]
+```
+
+This will match any tool that is iron, golden or diamond tier, except for shovels.
+
+##### Pool conditions
+
+Applying a condition to a pool allows you execute the entire pool based on the conditions defined.
+
+The below example will only trigger if the entity calling it was killed by a skeleton resulting in either a diamond or piece of coal.
+
+```json
+"pools": [
+    {
+        "conditions": [
+            {
+                "condition": "killed_by_entity",
+                "entity_type": "minecraft:skeleton"
+            }
+        ],
+        "rolls": 1,
+        "entries": [
+            {
+                "type": "item",
+                "name": "minecraft:diamond",
+                "weight": 1
+            },
+            {
+                "type": "item",
+                "name": "minecraft:coal",
+                "weight": 1
+            }
+        ]
+    }
+]
+```
+
+##### Entry conditions
+
+You can also apply conditions to specific `entries` within the roll. The following example will only return a diamond 50% of the time if the entity that called it was killed by the player. All other times it's called, it will return coal.
+
+```json
+"pools": [
+    {
+        "rolls": 1,
+        "entries": [
+            {
+                "type": "item",
+                "name": "minecraft:diamond",
+                "weight": 1,
+                "conditions": [
+                    {
+                        "condition": "killed_by_player"
+                    }
+                ]
+            },
+            {
+                "type": "item",
+                "name": "minecraft:coal",
+                "weight": 1
+            }
+        ]
+    }
+]
+```
+
+Exploring the different loot and trade table functions can allow creators to further customize the player experience. 
+
+From naming items and giving them lore to dropping resource crates full of supplies, or even creating written books for instructions or information, the possibilities truly are staggering!
+
+
+(출처: ms-learn, `creator/Documents/LootOverloads.md`)
+
+
+### Loot Overloads
+
+Now that you understand how loot tables work and how to customize them, it's time to learn about loot overloads. Loot overloads are commands that may be used to access items from loot tables in a variety of ways. The loot overloads include:
+
+- `/kill` simulates the loot drop of an entity if it were killed normally
+- `/mine` simulates the loot drop of a block if it were mined normally
+- `/loot replace block` allows users to populate target containers with items from a specified loot source
+- `/loot replace entity` allows user to populate target entities with items from a specified loot source
+- `/loot spawn` drops the loot of any entity that has a defined loot table in the world
+
+##### Requirements
+
+It's recommended that the following be completed before beginning this tutorial.
+
+- Introduction to Loot and Trade Tables
+- Loot and Trade Table Functions
+
+Let's take a look at the overloads in more detail, beginning with the `/kill` command.
+
+#### Kill
+
+`/kill` is a command that simulates the loot drop of a selected entity as if it were killed normally. This differs from `/loot spawn` in that some loot tables specify a condition of `"condition": "killed_by_player"` for specific loot to be dropped.  
+
+##### Syntax
+
+`kill <entity: target> [tool|mainhand|offhand]` - Pulls items from the specified entity's loot table, as if it were killed it with the specified tool, or no tool if none is specified.
+
+**kill** - Keyword to identify overload.
+
+**entity** - Target specifying the entity whose loot table will be used.
+
+**[tool|mainhand|offhand]** - (Optional) Tool with which to simulate killing a given entity. Default is an empty hand.
+
+**Output** - Command returns an error message if no entity is found or if more than one entity is specified.
+
+#### Mine
+
+`/mine` is a command that simulates the loot drop of a selected block in the world as if it were mined normally.
+
+##### Syntax
+
+`mine <position: x y z> [tool|mainhand|offhand]` - Obtains item resource drops from the target block's loot table, taking into account the tool, or no tool if none is specified. Enchanted tools held in the mainhand when `mainhand` is specified will have their enchantment evaluated for dropping loot.
+
+
+**mine** - Keyword to identify overload.
+
+**position** - Position specifying the block in the world to mine for loot.
+
+**[tool|mainhand|offhand]** - (Optional) Tool with which to simulate mining a given block. Default is an empty hand.
+
+**Output** - If successful, the command returns a message saying how many items were dropped. The command returns an error message if the position is out of the world or if the position is not loaded.
+
+#### Loot replace block
+
+The `/loot replace block` overload allows users to directly target containers and populate slots with items from a specified loot source. This source could be a currently existing loot table in Minecraft, a custom loot table, or a loot table associated with an entity.
+
+##### Syntax
+
+`/loot replace block <position: x y z> slot.container <slotId: int> [<count: int>] <source: loot|kill|mine> <source parameter> [<tool>|mainhand|offhand]`
+
+#### Loot Replace Block Parameters
+
+- **replace block** - Keyword to identify overload.
+
+- **position** - Position specifying which container block will receive items.
+
+- **slot.container** - Slot type for container blocks.
+
+- **slotId** - Slot number in which to place the first item.
+
+- **count** - (Optional) Number of consecutive slots to be filled. If the count is 0, no items are dropped. If a count is not specified, as many slots as possible are filled.
+
+- **source** - `loot` (path to a loot table), `kill` (loot that drops from a killed entity), or `mine` (loot that drops from a block when mined)
+
+##### Output
+
+If successful, the `loot replace block` command returns a message saying how many items were replaced and over how many slots.
+
+The command returns errors if:
+
+- The target block is not a container, or if the target block is either air or an Ender Chest
+
+- The items were unable to be distributed (invalid `slotId`)
+
+- The `count` specified is a negative number
+
+- The combined `slotId` and `count` exceed the container size
+
+#### Loot replace entity
+
+The `/loot replace entity` overload allows users to directly target entities and populate slots with items from a specified loot source. This source could be a currently existing loot table in Minecraft, a custom loot table, or a loot table associated with an entity.
+
+##### Syntax
+
+`/loot replace entity <entity: target> <slotType: EntityEquipmentSlot> <slotId: int> [<count: int>] <source: loot|kill|mine> <source parameter> [<tool>|mainhand|offhand]`
+
+#### Loot Replace Entity Parameters
+
+- **replace entity** - Keyword to identify overload.
+
+- **entity** - Selector specifying which entity(s) will receive the items.
+
+- **slotType** - `EntityEquipmentSlot` to place the first item in. Different slot types have different valid slot numbers.
+
+- **slotId** - Slot number in which to place the first item. Different slot types have different slot numbers. If there is only a single slot, the `slotId` does not matter. Single slots include: mainhand, offhand, player armor slots (head, chest, legs, feet), saddle, and armor (used by the horse and llama entities).
+
+- **count** - (Optional) Number of consecutive slots to be filled. If the count is 0, no items are dropped. If a count is not specified, as many slots as possible are filled.
+
+- **source** - `loot` (path to a loot table), `kill` (loot that drops from a killed entity), or `mine` (loot that drops from a block when mined)
+
+##### Output
+
+If successful, the `loot replace entity` command returns a message saying how many items were replaced and over how many slots.
+
+The command returns errors if:
+
+- No matching entities are found
+
+- The items were unable to be distributed (invalid `slotType`/`slotId` combination, or an entity does not have that `slotType`)
+
+- The count specified is a negative number
+
+- The combined `slotId` and count exceed the container size
+
+
+#### Loot spawn
+
+The `/loot spawn` command allows creators to drop the loot of any entity that has a defined loot table into the world. This can be done with custom loot tables as well. The command follows the "standard" rules of loot tables, so they go through all conditions and pools. For example, using `/loot spawn` on a cave spider will not drop spider eyes, because the condition for spider eyes to drop is "killed by player."  
+
+##### Syntax
+
+```
+/loot spawn <position: x y z> loot <loot_table: string> [<tool>:mainhand:offhand: string]
+```
+
+`spawn <position: x y z>` - Spawns an item into the world at the given position.
+
+**spawn** - Keyword to identify overload.
+
+**position** - Position at which the item will be spawned, specified in x, y, z coordinates.
+
+**Output** - If successful, the command returns a message saying how many items were dropped. The command returns an error message if the position is out of the world or if the position is not loaded.
+
+`loot <loot_table> [tool|mainhand|offhand]` - Pulls items from the specified loot table as if you used the specified tool to obtain them or no tool if none is specified.
+
+**loot** - Keyword to identify overload.
+
+**loot_table** - Path of the loot table to use.
+
+**[tool|mainhand|offhand]** - (Optional) Tool to simulate mining the given loot table. Default is an empty hand.
+
+**Output** - Command returns an error message if the given loot table does not exist.
+
+#### Source Parameter Variations
+
+Certain loot overloads, such as `loot replace block` and `loot replace entity` have the option to use the `loot`, `kill`, and `mine` source parameter variations. The following details how these variations operate in the loot overloads.
+
+##### loot
+
+`loot` is used to specify that the source is a defined loot table (or even a custom loot table) that can be found at a given path. The path to the loot table must be surrounded by quotes.
+
+`/loot replace block <position: x y z> slot.container <slotId: int> [<count: int>] loot "loot_table" [<tool>|mainhand|offhand]`
+
+The `loot_table` parameter is mandatory and it must be the path of the loot table to use, surrounded by quotation marks.
+
+Examples:
+
+- In this example, slot 0 of the target container is filled with 1 item. The path specifies that the items will be pulled from the "chests/abandoned_mineshaft" loot table.
+
+`/loot replace block 0 0 0 slot.container 0 1 loot "chests/abandoned_mineshaft"`
+
+- In this example, slots 2 through 5 of the target container will be filled. You can think of it like, "starting with slot 2, fill 4 slots with loot." So, the affected slots are 2 3 4 5.
+
+`/loot replace block 0 0 0 slot.container 2 4 loot "chests/abandoned_mineshaft"`
+
+- This variation, without a count specified, will fill the container starting from slot 2, until either the entire contents of the given loot table have been dropped or there are no more slots to fill.
+
+`/loot replace block 0 0 0 slot.container 2 loot "chests/abandoned_mineshaft"`
+
+##### kill
+
+> [!NOTE]
+> The kill variation of a loot overload command is different from the `/kill` command.  In the context of the `/loot` command, using the kill variation means that the dropped loot will end up in the target container's specified slot.
+
+Using the `kill` variation specifies that the user wants to simulate killing a specific entity in the world and use the loot table attached to it as the source for the loot to be dropped.
+
+The target entity must be present within the world or the command will return an error saying that no matching targets were found.
+
+`/loot replace block <position: x y z> slot.container <slotId: int> [<count: int>] kill <entity: target> [<tool>|mainhand|offhand]`
+
+Example:
+
+- `/loot replace block 0 0 0 slot.container 0 1 kill @e[type=blaze]`
+
+This will fill the target container slots 0 through 1 with items that would be dropped if the blaze was killed by a player.
+The count parameter works the same for the kill source variation as it does for the loot source variation.
+
+##### mine
+
+Using the `mine` variation specifies that the user wants to simulate mining a specific block in the world and use it's loot table as the source for the loot to be dropped.
+
+The target block must be present and loaded within the world or the command will return an error saying that blocks outside the world cannot be accessed.
+
+`/loot replace block <position: x y z> slot.container <slotId: int> [<count: int>] mine <position: x y z> [<tool>|mainhand|offhand]`
+
+Example:
+
+- `/loot replace block 0 0 0 slot.container 0 1 mine 0 0 0`
+

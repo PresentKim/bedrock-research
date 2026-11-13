@@ -1,0 +1,134 @@
+---
+title: 커뮤니티 보고와 대조
+description: 가이드와 커뮤니티 1년치 UI 대화를 맞춰 본 대조표(D-01~D-28)와 커뮤니티 UI 노트(현황, 제한, 버전 연표, 미해결 질문).
+sidebar_position: 16
+sources:
+  - private-research
+  - repo-guide
+  - cinnabar
+  - repo-ore-ui-loading
+  - private-research
+---
+
+이 페이지는 두 자료를 합친다. 앞부분은 가이드 규칙과 커뮤니티 보고를 같은 주제끼리 맞춰 본 대조표(D-01~D-28)이고, 뒷부분과 같은 폴더의 세 페이지는 Bedrock OSS·커뮤니티 서버의 최근 1년(2025-10-22 ~ 2026-10-23) 대화에서 UI 주제를 정리한 노트다. 원문 대화는 공개하지 않았고 이 노트는 대화를 주제별로 다시 쓴 것이다.
+
+커뮤니티 항목 끝의 ``은 작업 단위 id와 날짜이고, `[보충 2026-10-28]`은 2026-10-23 이후 대화를 직접 읽고 더한 항목이다. 신뢰 표시는 다음과 같다: *confirmed*는 여러 사람이 확인, *single report*는 한 사람의 보고, *unverified*는 추측이나 근거가 약한 내용, **conflicting**은 보고가 엇갈림. 원문은 커뮤니티 대화이므로 중요한 내용은 공식 문서나 직접 테스트로 확인하고 쓴다. 가이드의 `실측`과 커뮤니티 보고가 다르면 가이드를 따르되, 커뮤니티 쪽에 버전 정보가 있으면 버전이 바뀐 것일 수 있다.
+
+## 가이드와 커뮤니티 대조
+
+가이드 규칙과 커뮤니티 보고를 같은 주제끼리 맞춰 본 결과다. **같음**은 서로 독립된 근거가 같은 결론을 낸 것, **보강**은 커뮤니티가 가이드에 없는 사실이나 버전 정보를 더한 것, **다름**은 아직 갈리는 것이다. 다름은 게임에서 확인하기 전에는 단정하지 않는다.
+
+### 16.1 서로 확인해 준 것
+
+| 주제 | 가이드 | 커뮤니티 | 결론 |
+| --- | --- | --- | --- |
+| `'%.Ns'`는 바이트 단위, `§` 2바이트, 한글 3바이트 | EXP-09, EXP-24 | *confirmed*(`§` 3바이트 주장은 측정으로 정정) | 확정 |
+| `>=`·`<=` 없음 | EXP-03 | *confirmed* | 확정 |
+| 라벨 `localize` 기본값 `true` | TXT-01, C-32 | 같음(위키 오기 지적) | 확정 |
+| `visible: false`도 생성·파싱 비용이 든다, `ignored`·길이 0 팩토리가 싸다 | COL-10~12 | 같음, 성능 수치 다수 | 확정 |
+| 서버 폼 버튼은 자신에 `collection_details`가 있어야 한다 | COL-04 | *confirmed* | 확정 |
+| `header`·`label`·`divider`가 폼 컬렉션 인덱스를 민다 | COL-19 | 같음(1.21.x부터) | 확정 |
+| `ignored`는 조상 스코프의 변수만 본다 | FILE-34, FILE-43(NB) | 같음 | 확정 |
+| `variables`·`ignored`는 로드(생성) 시점, `#바인딩` 불가 | FILE-13, FILE-16 | 같음 | 확정 |
+| HUD 타이틀은 채널 하나, 다른 애드온과 덮어쓰기 | HOST-14 | 같음, 같은 틱 여러 번이면 마지막만 | 확정 |
+| 스택 패널 자식은 앵커·`offset` 무시 | LAY-38 | 같음 | 확정 |
+| `%cm`·`%sm`·`default`의 뜻 | LAY-03, LAY-37 | 설명이 엇갈림 | 엔진 코드(LAY-37)로 정리 |
+| 템플릿 상속 컨트롤에 `bindings`를 쓰면 상속 바인딩이 사라진다 | FILE-37 | 같음(`scroll_grid` 사례) | 확정 |
+| `remove` 뒤 같은 대상 `replace` 실패 | MOD-17 | 같음 | 확정 |
+| 문자열 나누기는 위험 | EXP-21, EXP-32 | 크래시 보고 다수 | 쓰지 않는다 |
+| 커스텀 URL은 열리지 않는다 | INP-24, INP-34(NB) | 같음(QR 우회) | 확정 |
+| `paper_doll_renderer`는 커스텀 지오메트리를 못 그린다 | ANI-35, ANI-36(NB) | 같음 | 확정 |
+| Ore UI는 리소스팩으로 못 고친다 | ALT-11, ALT-15(OL) | 같음 | 평문 팩에서만 맞다. 루트에 빈 `content.zipe`를 둔 로컬 팩(서버 없이)과 서버가 암호화해 보낸 팩은 게임 중 Ore UI 페이지를 바꾼다(실측). 평문 팩도 게임 중 버튼 모양과 `pack://` 텍스처는 바꾼다(실측) |
+| 조준점이 `hud_crosshair_overlay.json`으로 이동 | ANI-07 | 2026-10-15 관찰 | 확정 |
+| 숫자 아이템 ID는 커스텀 아이템에 따라 밀린다 | ANI-06, C-33 | 같음, 26.40에서 삽입 위치가 256 → 849로 이동 | 확정, 범위는 버전마다 다시 확인 |
+
+### 16.2 커뮤니티가 보강한 것 (가이드 반영 후보)
+
+| ID | 내용 | 커뮤니티 근거 강도 | 관련 규칙 |
+| --- | --- | --- | --- |
+| D-13 | **preserved title(래치) 패턴은 동작한다.** HUD 데이터 채널의 표준으로 2026-07까지 여러 사람이 확인 | *confirmed* | BND-18(`미검증` → 상향 후보) |
+| D-14 | 그리드의 숨은 항목도 자리를 차지한다 | 여러 보고 | LAY-31(`미검증` → 상향 후보) |
+| D-04 | 1.21.130(2025-12)에서 동적 N(`('%.' + #n + 's')`)과 `'%.Ns'` 밖의 서식이 막혔다. 서식 문자열은 왼쪽에 둔다 | *confirmed*(changelog에는 없음) | EXP-09, EXP-25 |
+| D-01 | `* 1` 변환이 1.21.130, 2026-01, 1.26.30 무렵에 차례로 멈췄다 | 여러 보고 | EXP-16, C-04(버전 변화 가설을 뒷받침) |
+| D-03 | 실수는 JSON 변수(`"$k": 0.01`)에 담아 곱하면 된다. `(#x / 1.0)`은 크래시 | 여러 보고 | EXP-18, EXP-27 |
+| D-23 | Marketplace 애드온은 바닐라 UI 파일을 못 고친다(월드 템플릿은 된다). `%` assert는 Marketplace 인증 실패 원인 | 여러 보고 | EXP-02, 12장 |
+| D-24 | `$container_title`은 `variables` 밖에서 복사본을 비교한다. 프리뷰에서 커스텀 블록 엔티티 컨테이너도 `title`을 지원 | 여러 보고 / 프리뷰 | HOST-19, FILE-28 |
+| D-25 | 렌더러 `live_player_renderer`, `live_horse_renderer`(`#entity_id`는 문자열), `3d_structure_renderer`, `gradient_renderer` 사용법 | 보고 다수 | ANI-05 |
+| D-26 | `/reload all`이 JSON UI를 다시 읽지만 1.21.130 이후 자주 실패 | 여러 보고 | DBG-18 |
+| D-27 | 32비트 정수 한계, 큰 엔티티 ID는 문자열로 | 보고 | EXP-30 |
+| D-28 | 바닐라 RP가 26.50부터 `.brarchive`로 배포 | *confirmed* | 13장 바닐라 대조 방법 |
+
+### 16.3 아직 다른 것
+
+| ID | 주제 | 가이드 | 커뮤니티 | 지금의 판단 |
+| --- | --- | --- | --- | --- |
+| D-02 | 숫자 변환 `+ 0` | `(#v + 0)`은 이어 붙이기(`'350'`), `(0 + #v)`·`(#v - 0)`이 변환 [EXP-16][EXP-31] | `(0 + #str)` 또는 `(#str + $zero)`(`"$zero": 0.0`) 권장 | 왼쪽에 숫자를 두는 `(0 + #v)`와 `(#v - 0)`을 쓴다. `(#v + $zero)`는 게임에서 확인하고 쓴다 |
+| D-05 | 여러 팩의 `modifications` | 팩 순서대로 누적 [MOD-02] (실측) | 같은 바닐라 요소면 위 팩만 이긴다(여러 보고) | 실측을 따르되, 보고 사례가 속성 덮어쓰기나 `replace`를 섞은 것인지 재측정 필요 |
+| D-06 | 파일 안 오류의 범위 | 오류 앞까지 읽은 정의는 로드 [FILE-30] (CN) | 파일 전체가 무시 | 어느 쪽이든 그 파일 뒷부분은 없다고 보고 오류를 고친다 |
+| D-07 | `%` 연산자 | 쓰지 않는다. 개발 빌드 assert [EXP-02], 릴리스는 조용함 [EXP-46] | Chest-UI의 `% 65536` 수정판이 *confirmed*로 동작, 동시에 Marketplace 인증 실패 원인 | 둘은 모순이 아니다. 릴리스에서는 돌아가지만 assert를 낸다. `%` 없는 식으로 바꾼다 |
+| D-08 | 문자열 `-` | **모든** 출현을 지운다 [EXP-12] | 대다수 "모두", 한 사람 "첫 번째만" | 모두 지운다고 보고 구분자를 본문에 넣지 않는다 |
+| D-10 | 문자열 `<`·`>` | 규칙 없음 | 사전순 비교(한 보고) | 쓰기 전 확인 |
+| D-11 | view 바인딩의 `binding_condition` | 레이아웃 `#visible`에 `always`·`visible`이 효과가 있었다 [BND-31][BND-32] (실측) | view 바인딩에는 걸 수 없다는 보고 | 실측을 따른다 |
+| D-12 | `resolve_ancestor_scope` | 쓰지 않는다 [BND-01] | 동작·미동작 보고가 섞임 | 쓰지 않는다 |
+| D-15 | 정적 `offset` 바인딩 | 안 된다 [LAY-05] (실측), CN은 된다 [C-44] | 된다·안 된다 보고가 섞임 | spacer 크기나 `#anchored_offset_value_*`를 쓴다 |
+| D-16 | `#alpha` 바인딩 | 0과 1만 적용(S12), CN은 숫자 그대로 [C-45] | 0.75가 안 보이는 등 불안정, `#color`로 대체 | 중간 투명도는 애니메이션이나 색으로 낸다 |
+| D-17 | 버튼 포커스 | 바닐라 `common.button`은 포커스가 켜져 휴대폰에서 첫 버튼이 호버로 그려진다 [INP-32] | 원시 버튼은 `focus_enabled` 기본값 false, 컨트롤러 탐색에 필요 | 둘 다 맞다. 템플릿이냐 원시 버튼이냐의 차이 |
+| D-18 | 서버 폼의 `$touch` | 전역 플랫폼 변수 [FILE-29] | 서버 폼에서는 못 쓴다는 한 보고 | 서버 폼에서 쓸 때 확인 |
+| D-19 | NPC 대화 버튼 수 | 6개 제한·NBT로 9개 모두 미확인 [HOST-24] | "최대 6개", "NPC NBT로 제한 해제"가 함께 보고 | 6개를 기본으로 설계 |
+| D-20 | preserved title의 `data_control` 위치 | 규칙 없음 | 루트에 둔다(다수) / 바 이미지의 자식으로 둔다(튜토리얼 하나) | 루트에 둔다 |
+| D-21 | 인자 있는 번역 `translate('key', #a)` | 규칙 없음 | 된다·없다 보고가 섞임 | 쓰지 않는다. lang 키 조립 [TXT-09] |
+| D-22 | `#anchored_offset_value_*_absolute` | 규칙 없음 | 있다·없다 보고가 섞임 | 비율 값을 쓴다 |
+
+D-09(문자열 나누기)는 16.1에 합쳤다. 이 대조로 가이드 규칙을 고치지는 않았다. 상향 후보(D-13, D-14)와 보강 후보는 게임에서 한 번 확인한 뒤 가이드 장 파일에 반영하는 것이 순서다.
+
+## 핵심 요약
+
+1. **JSON UI의 위상**: Mojang은 JSON UI를 공식 지원한 적이 없고 공식 문서 계획도 없다. 단계적으로 폐기(deprecated)되고 있으며 DDUI/Ore UI로 대체되는 중이다. 그래도 2026-10 현재 HUD, 서버 폼, 컨테이너 화면을 꾸밀 수 있는 수단은 JSON UI뿐이다. 버전이 붙어 있지 않아서 릴리스마다 자주 깨진다.
+2. **DDUI는 Ore UI 위에서 돈다**: DDUI(`@minecraft/server-ui`의 `CustomForm` + `Observable*`)는 Ore UI(Coherent Gameface 웹 기술) 기반이라 JSON UI 리소스 팩으로는 꾸밀 수 없다. 열린 폼을 실시간으로 갱신할 수 있지만 크기, 배경, 위치, 폰트는 바꿀 수 없다. 26.30 stable(2026-06-16)에 들어갔다.
+3. **JSON UI는 스크립트 상태를 직접 읽지 못한다**: scoreboard 값, dynamic property, tag, Molang, 체력을 읽을 수 없다. 스크립트는 title/subtitle/actionbar/chat 텍스트나 폼 title/body/button 텍스트로 데이터를 보내고, JSON UI가 그 문자열을 파싱한다. UI에서 스크립트로 이벤트를 보내는 길도 없다(폼 submit만 가능).
+4. **Preserved title 패턴이 HUD 데이터 채널의 표준이다**: 크기 0인 `data_control` 패널에서 `#hud_title_text_string`을 `binding_condition: "visibility_changed"` + `binding_name_override: "#preserved_text"`로 한 번 더 바인딩한다. 그러면 타이틀이 사라진 뒤에도 값이 남는다(wiki `preserve-title-texts`).
+5. **문자열 연산**: `'%.Ns' * #text`(앞 N **바이트** 자르기), `-`(부분 문자열 제거), `+`(이어 붙이기)가 사실상 전부다. 연산자는 `and`/`or`/`not`/`=`/`<`/`>`만 쓸 수 있고 `<=`/`>=`/`==`/`&&`/`||`는 없다. `§`는 2바이트, 한글과 이모지는 3바이트 이상이다.
+6. **1.21.130(2025-12)에 문자열 곱셈이 제한됐다**: 리터럴 N을 쓰는 `'%.Ns' * #x` 형태만 남았고, 동적 N(`('%.' + #n + 's')`)과 다른 printf 형식은 막혔다. `* 1`로 숫자 변환하는 방식도 불안정해졌다. 지금은 `(0 + #str)`을 쓰는 것이 안전하다.
+7. **크래시 위험**: `#size_binding_x/y`나 `#anchored_offset_value_*`에 잘못된 값이 들어가거나, 문자열을 나누거나, prefix가 없는 타이틀에 산술 연산을 하면 게임이 죽는다. 월드가 손상된 사례도 있다. superflat 테스트 월드를 쓰고 산술은 prefix가 맞을 때만 돌게 한다.
+8. **`_ui_defs.json` 등록**: 새 UI 파일은 `ui/_ui_defs.json`에 등록해야 한다. 파일 안에 오류가 하나라도 있으면 그 파일 전체가 없는 것처럼 무시된다. Content Log GUI를 켜고 확인한다.
+9. **`modifications`는 바닐라 요소에만 쓸 수 있다**: 자기가 만든 요소나 다른 팩의 요소에는 적용되지 않는다. 같은 바닐라 요소를 여러 팩이 수정하면 위에 있는 팩만 이긴다.
+10. **서버 폼 버튼**: 버튼에 `{"binding_type":"collection_details","binding_collection_name":"form_buttons"}`와 `collection_index`가 없으면 스크립트 쪽 `selection`이 undefined가 된다. `button.form_button_click`이 눌리면 폼은 항상 닫힌다.
+11. **폼 라우팅**: 폼 title에 `§` 플래그 prefix를 넣고 `third_party_server_screen`/`server_form_factory`에서 title로 레이아웃을 고른다. `visible:false`는 요소를 여전히 로드하므로, 많을 때는 factory `#collection_length` 0/1이나 `ignored`로 아예 생성하지 않는다.
+12. **커스텀 컨테이너 UI(Chest UI)**: `minecraft:inventory`를 가진 엔티티를 이름 키로 매칭해서 만든다. 블록은 커스텀 UI를 직접 띄울 수 없다. 아이템 아이콘은 aux id(`id * 65536 + data`)로 렌더하는데, aux id는 버전과 설치된 애드온에 따라 바뀐다.
+13. **성능**: 렉의 주원인은 레이아웃이 아니라 바인딩이다. `binding_condition: "once"`, `ignored: true`(`visible:false`보다 쌈), 페이지 분할, grid(10k 버튼도 즉시 로드)를 쓴다. factory를 줄이고 바인딩 루프를 피한다.
+14. **같은 tick 충돌**: 한 tick에 title을 여러 번 보내면 마지막 것만 남는다. 다른 애드온이 같은 title/actionbar를 쓰면 서로 덮어쓴다. 큐를 두고 tick마다 하나씩 보내거나 값을 한 문자열에 묶는다.
+15. **Marketplace**: 애드온은 바닐라 UI 파일을 건드릴 수 없다. 월드 템플릿은 가능하며 주로 NPC 화면을 쓴다. DDUI도 Marketplace에서 쓸 수 없다고 보고됐다(2026-04).
+
+## UI 시스템 현황과 로드맵
+
+### JSON UI
+- **공식 지원 아님, 폐기 예정**: Mojang(커뮤니티 경유 전달)은 JSON UI가 비공식이고 deprecated이며 메뉴를 하나씩 교체하고 있다고 했다. 공식 문서 계획은 없다. 원래 JSON UI 팀도 없다는 보고가 있다. *confirmed*
+- **반대 의견(2025-12)**: "JSON UI는 아직 업데이트되므로 deprecated가 아니다"라는 의견도 있었다. 이후 2026년 공지와 정황으로 보면 점진적 대체가 맞다. **conflicting**(시기에 따라 다름)
+- **전망**: 커뮤니티는 1~3년 안에 폐기된다고 본다. Ore UI가 모든 화면을 대체하는 것은 2028년쯤으로 예상한다. Mojang은 Marketplace 콘텐츠를 깨뜨리지 않으려고 Ore UI 전환을 서두르지 않는다고 했다. *unverified*(커뮤니티 추정)
+- **이미 Ore UI로 바뀐 화면**: 설정, 월드 목록, 로딩 화면, 사망 화면 등 게임 외 화면이 Ore UI로 바뀌었다. 예전 설정을 열던 button id도 이제 Ore UI 설정을 연다. 2026-01 preview는 서버 "treatments"(kill switch)로 메뉴/설정을 교체했다. 게임플레이 HUD와 서버 폼은 하위 호환을 어느 정도 유지한다.
+- **오래된 min engine 버전**: min engine version이 낮게 고정된 월드에서는 JSON UI가 계속 동작한다. Marketplace 맵이 이 방식을 쓴다. 예전 JSON UI 팩이 앞으로도 동작할지는 알 수 없다.
+- **중국판**: 중국판(Chinese edition)에는 JSON UI 기능이 더 있다. *single report*
+
+### Ore UI
+- **정체**: React 기반 웹 UI다(github.com/Mojang/ore-ui). Coherent Gameface(Cohtml) 위에서 V8로 돈다. 축소된 ~5 MiB React 번들 하나가 느린 원인으로 지목됐다. Gameface는 float를 지원하지 않는다. 2026-10 정식판 UA는 `Cohtml/2.2.8.1 (Windows; Native)`, 주소는 `ui://hbui/gameplay.html`이다.
+- **JSON UI와의 관계**: JSON UI로는 Ore UI 화면을 수정하거나 우회할 수 없다. 두 레이어는 겹쳐 쌓일 수 있다. Ore UI는 TTF/OTF, GIF, 비디오를 지원한다. Ore UI 전용 폰트 `mcFive`가 있다. 신뢰된 리소스 팩은 Ore UI 파일을 교체할 수 있다([화면별 노트](./community-reports-screens.mdx)의 Ore UI 수정 절).
+- **26.60 stable(2026-10-27)**: Ore UI 로딩이 크게 빨라져 "JSON UI와 비슷하다"는 반응이 나왔다. 모바일에서 버튼 소리가 늦게 난다는 보고가 있다. [보충 2026-10-28]
+- **강제로 예전 UI 쓰기**: LeviLauncher나 "Force Close OreUI" 같은 모드로 예전 UI를 강제할 수 있다.
+
+### DDUI 로드맵 (Mojang darknavi 발언, 날짜 미정)
+- **발언 내용**: 모달 폼은 첫 단계일 뿐이고, 레이아웃 파일이 크리에이터에게 공개될 예정이다. 레이아웃과 스타일은 별도 파일로 나뉘어서 스타일 팩이 스타일과 이미지만 담을 수 있게 된다. 컨테이너(chest 같은) 컴포넌트를 커스텀 화면에 넣을 수 있고, 엔티티 렌더러/paperdoll은 "불합리하지 않다"고 했다. HUD도 계획돼 있다. JSON UI와 DDUI는 한동안 공존한다. *confirmed*(Mojang 발언)
+- **커뮤니티 정리**: 레이아웃이 스타일보다 먼저 나온다. 크리에이터가 CSS를 직접 쓰지는 않는다(g07hn: "nope"). 스타일은 웹 표준을 따를 예정이다. 일정은 없다. Mojang 개발자는 "1단계 = 단순 모달 폼, 2단계 = 전체 레이아웃"이라고 했고, 커스텀 RP 패널은 2단계 전까지 내부 팩 전용이다.
+- **DDUI 정의**: DDUI는 Ore UI가 아니라 Ore UI 위에서 돌아가는, 애드온이 커스텀 화면을 기술하는 포맷이다("JSON UI 2.0 running on Ore UI"). 서버가 JSON 형태의 데이터를 facet으로 보내 바인딩한다. 레이아웃은 게임 파일(`hbui`, 리소스 팩 `ddui` 폴더)에 있다. 성능은 JSON UI보다 나쁘다는 평가가 있다. wiki는 DDUI를 scripting 아래에 두고 이동할 수 있다고 적었다.
+
+### Marketplace 규칙
+- **애드온 vs 월드**: 애드온은 바닐라 UI 파일을 수정할 수 없고, 월드 템플릿은 수정할 수 있다(주로 NPC 화면). 커스텀 UI가 없다는 것이 Marketplace 콘텐츠의 한계로 꼽힌다. 그래서 Marketplace 팩은 엔티티와 render controller로 UI를 흉내 낸다.
+- **@bedrock-core/ui 인증**: 버튼 라우터의 `#form_button_texture % 65536` 모듈로 연산이 assert를 일으켜 인증에서 떨어진다. 이 경우 `item_renderer`를 빼고 RP 에셋을 모두 자기 팩에 넣는다.
+- **DDUI는 Marketplace 불가**: 2026-04 시점 보고다. *single report*
+
+## 커뮤니티 UI 노트의 구성
+
+아래 세 페이지에 커뮤니티 UI 노트의 나머지가 나뉘어 있다. 이 페이지에는 핵심 요약과 시스템 현황만 둔다.
+
+- [화면별 노트](./community-reports-screens.mdx)(서버 폼, 컨테이너·Chest UI, 바닐라 화면 팁, Script API 폼, DDUI, Ore UI 수정, 렌더러).
+- [데이터 채널·HUD·식 노트](./community-reports-hud-and-expressions.mdx)(개발 워크플로, 파일 구조, 바인딩, 표현식 언어, preserved title, HUD, 레이아웃).
+- [한계·버전·도구 노트](./community-reports-versions-and-bugs.mdx)(알려진 제한, 버전별 변화, 도구와 자료, 미해결 질문).

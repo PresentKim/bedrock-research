@@ -1,0 +1,264 @@
+---
+title: 서버 폼 API와 폼 종류
+description: "@minecraft/server-ui의 ActionFormData, MessageFormData, ModalFormData 사용법과 응답 처리, 서버 소프트웨어가 보내는 원시 폼 JSON, 바닐라 서버 폼 화면의 구조"
+sidebar_position: 2
+sources: [ms-learn, bedrock-wiki, bedrock-samples, repo-multiselect, private-research]
+---
+
+서버 폼은 서버가 플레이어에게 창 하나를 띄우고 응답을 돌려받는 기능이다. 폼의 종류는 세 가지이고, 글·버튼·입력칸의 종류와 순서만 서버가 정한다. 모양은 클라이언트의 바닐라 UI(`server_form.json`)가 그린다. 이 페이지는 Script API로 폼을 만드는 법, 응답을 읽는 법, 서버 소프트웨어(Dragonfly 등)가 폼을 JSON으로 직접 보낼 때의 꼴, 바닐라 화면의 구조를 정리한다. 폼의 모양을 바꾸는 법은 [서버 폼 재스킨](./reskinning-server-forms.mdx), 체크박스 목록 행은 [multiselect](./multiselect.mdx)에서 다룬다.
+
+## 1. `@minecraft/server-ui` 모듈
+
+모듈 이름은 `@minecraft/server-ui`다(옛 이름 `mojang-minecraft-ui`, 1.18.30에서 처음 나왔다). 이 페이지를 쓴 시점(MS Learn 문서 커밋 `a9fd1c0`)의 판 목록은 다음과 같다 (출처: ms-learn).
+
+| 판 | 비고 |
+| --- | --- |
+| `2.0.0` | `ActionFormData`에 `divider`·`header`·`label` 추가. 피어 의존성 `@minecraft/server@2.0.0` |
+| `2.1.0` | `CustomForm`·`MessageBox`·`Observable*` 4종(DDUI) 추가, `DataDrivenScreenClosedReason`·`FormVisibilityErrorReason`·`TextFilteringError` 열거형 추가 |
+| `2.2.0` | `CustomForm.image` 추가 |
+| `2.3.0` | 안정판. `MessageBox.button1WithOptions`·`button2WithOptions` 추가 |
+| `2.4.0-rc.1.26.70-preview.24` | `CustomForm.multiButtonRow`, `MessageBox.button3WithOptions` 추가 |
+| `2.5.0-beta.1.26.70-preview.24` | `CustomForm` 생성자에 `options` 인자, `MessageBox.body`에 `options` 인자 추가 |
+| `1.0.0`~`1.3.0` | 1.x 계열. 별도 문서에 있다 |
+
+manifest 의존성은 이렇게 쓴다 (출처: bedrock-wiki).
+
+```json
+{
+  "dependencies": [
+    { "module_name": "@minecraft/server", "version": "2.0.0" },
+    { "module_name": "@minecraft/server-ui", "version": "2.0.0" }
+  ]
+}
+```
+
+모듈에서 가져오는 이름은 세 폼 클래스다.
+
+```js
+import { ActionFormData, MessageFormData, ModalFormData } from "@minecraft/server-ui";
+```
+
+이 페이지는 이 세 클래스(바닐라 UI가 그리는 폼)를 다룬다. 클라이언트가 Ore UI로 그리는 `CustomForm`·`MessageBox`·`Observable*`(DDUI)는 [DDUI 서버 가이드](../ore-ui/ddui-server-guide.mdx)에 있다.
+
+### 폼이 열리는 조건
+
+- 다른 UI가 열려 있으면 폼은 뜨지 못하고 취소로 돌아온다. 채팅 창이 열려 있을 때도 마찬가지라, 채팅 명령으로 폼을 열려면 먼저 채팅 UI를 닫아야 한다. 가장 무난한 것은 `itemUse` 같은 다른 이벤트로 여는 것이다 (출처: bedrock-wiki).
+- `show()`는 제한 실행(restricted-execution) 모드에서 호출할 수 없다. 그래서 `beforeEvents` 콜백(제한 실행) 안에서는 바로 부르지 않고 `system.run`으로 한 틱 뒤에 연다 (출처: ms-learn의 "This function can't be called in restricted-execution mode" 문구에서 도출).
+- `show()`는 `EngineError`, `InvalidEntityError`, `RawMessageError`를 던질 수 있다 (출처: ms-learn).
+
+## 2. 응답의 공통 부분
+
+세 응답(`ActionFormResponse`, `MessageFormResponse`, `ModalFormResponse`)은 `FormResponse`를 상속한다 (출처: ms-learn).
+
+| 속성 | 뜻 |
+| --- | --- |
+| `canceled: boolean` | 플레이어가 닫기 버튼(X)을 눌러 취소했으면 참 |
+| `cancelationReason?: FormCancelationReason` | 취소 이유 |
+
+`FormCancelationReason`의 값은 두 개다.
+
+| 값 | 뜻 |
+| --- | --- |
+| `UserBusy` | 플레이어가 다른 UI(채팅·인벤토리 등)를 쓰는 중이라 취소됐다 |
+| `UserClosed` | 플레이어가 직접 닫았다 |
+
+`UserBusy`로 취소된 폼은 잠시 뒤 다시 열어 볼 수 있다. 업적 애드온은 10틱 간격으로 최대 20번까지 다시 연다 (출처: 비공개 조사).
+
+`show()`의 Promise가 거부될 때는 `FormRejectError`가 오고 `reason`(`FormRejectReason`)이 이유를 알려 준다 (출처: ms-learn).
+
+| `FormRejectReason` | 뜻 |
+| --- | --- |
+| `MalformedResponse` | 클라이언트 응답을 해석하지 못했다 |
+| `PlayerQuit` | 응답하기 전에 플레이어가 나갔다 |
+| `ServerShutdown` | 응답하기 전에 서버가 꺼졌다 |
+
+취소됐을 때도 `.then()` 안으로 들어오므로, 응답을 쓰기 전에 `canceled`부터 검사하는 것이 기본 규칙이다 (출처: bedrock-wiki).
+
+```js
+form.show(player).then((r) => {
+  if (r.canceled) return;      // 닫았거나 다른 UI 때문에 취소됨
+  // r.selection 또는 r.formValues를 쓴다
+}).catch((e) => {
+  console.error(e, e.stack);
+});
+```
+
+## 3. ActionFormData: 버튼 목록
+
+버튼을 세로로 늘어놓는 폼이다. 상점·미니게임 선택·메뉴에 쓴다.
+
+| 메서드 | 뜻 |
+| --- | --- |
+| `title(text)` | 창 제목 |
+| `body(text)` | 버튼 위 본문 |
+| `button(text, iconPath?)` | 버튼 추가. 둘째 인자는 아이콘 텍스처 경로 |
+| `header(text)` | 머리글(2.0.0부터) |
+| `label(text)` | 라벨 글(2.0.0부터) |
+| `divider()` | 구분선(2.0.0부터) |
+| `show(player)` | `Promise<ActionFormResponse>` |
+
+글 인자는 문자열이거나 `RawMessage`(`{ translate: ... }` 같은 객체)다. `ActionFormResponse.selection`은 누른 버튼의 번호(0부터)다. `header`·`label`·`divider`는 누를 수 없는 행이다(바닐라 팩토리가 `button.form_button_click`을 달지 않고 별도 컨트롤로 그린다 `{바닐라}`). 이 행들이 `selection` 번호를 차지하는지는 확인하지 못했다. 쓸 때는 `selection`을 찍어 보고 번호를 정한다.
+
+아이콘 경로는 바닐라 텍스처(`textures/items/compass`)나 리소스팩의 커스텀 텍스처(`textures/wiki/icons/btn_icon_3`)다. 커스텀 텍스처는 월드에 해당 리소스팩이 있어야 한다 (출처: bedrock-wiki). 이 경로 문자열은 UI 쪽에서 `#form_button_texture`로 읽히므로, 팩이 숫자 문자열을 읽어 아이템 아이콘을 그리게 하는 응용이 가능하다([상자 UI](./chest-ui.mdx)).
+
+버튼 수는 256개까지가 안전하다. 더 늘리면 폼이 깨질 수 있다 (출처: bedrock-wiki). 버튼 하나는 클라이언트에서 컨트롤 수십~수백 개로 펼쳐지므로 실제로는 훨씬 적게 쓰는 것이 낫다([인벤토리형 메뉴](./inventory-menus.mdx)의 성능 항목).
+
+```js
+const form = new ActionFormData()
+  .title("Minigames")
+  .body("Choose the games")
+  .button("Spleef", "textures/items/diamond_shovel")
+  .button("Murder Mystery", "textures/items/iron_sword");
+
+form.show(player).then((r) => {
+  if (r.canceled) return;
+  switch (r.selection) {
+    case 0: /* Spleef */ break;
+    case 1: /* Murder Mystery */ break;
+  }
+});
+```
+
+## 4. MessageFormData: 두 버튼 확인창
+
+본문이 크고 버튼이 둘인 폼이다. 예/아니오, 확인/취소 질문에 쓴다 (출처: ms-learn, bedrock-wiki).
+
+| 메서드 | 뜻 |
+| --- | --- |
+| `title(text)`, `body(text)` | 제목, 본문(5줄 이상 들어간다. 줄바꿈은 `\n`) |
+| `button1(text)`, `button2(text)` | 버튼 둘 |
+| `show(player)` | `Promise<MessageFormResponse>` |
+
+`MessageFormResponse.selection`은 `button1`이면 0, `button2`면 1이다. 닫기 버튼은 없지만 Esc로 닫으면 `canceled`가 된다. 그래서 "예"를 `button2`에, "아니오·취소"를 `button1`에 두면 취소와 `button1`을 한 가지로 처리할 수 있다.
+
+```js
+form.show(player).then((r) => {
+  if (r.canceled || r.selection === 0) return; // 닫기 또는 button1
+  // button2를 눌렀다
+});
+```
+
+## 5. ModalFormData: 입력 폼
+
+설문지처럼 컨트롤 여러 개를 늘어놓고 한 번에 보내는 폼이다. 본문(body)은 없다 (출처: bedrock-wiki). 맨 아래에 제출 버튼이 붙는다.
+
+| 메서드 | 응답 값 형식 |
+| --- | --- |
+| `toggle(label, options?)` | `boolean` |
+| `slider(label, min, max, options?)` | `number` |
+| `dropdown(label, items, options?)` | `number`(고른 항목의 번호, 0부터) |
+| `textField(label, placeholder, options?)` | `string` |
+| `header(text)`, `label(text)`, `divider()` | 값 없음(아래 참고) |
+| `title(text)`, `submitButton(text)` | 제목, 제출 버튼 글 |
+| `show(player)` | `Promise<ModalFormResponse>` |
+
+옵션 객체(`ModalFormData…Options`)의 속성은 다음과 같다 (출처: ms-learn).
+
+| 컨트롤 | 속성 |
+| --- | --- |
+| `toggle` | `defaultValue?: boolean`, `tooltip?: RawMessage 또는 string` |
+| `slider` | `defaultValue?: number`, `valueStep?: number`(기본 1), `tooltip?` |
+| `dropdown` | `defaultValueIndex?: number`(기본 0), `tooltip?` |
+| `textField` | `defaultValue?: RawMessage 또는 string`, `tooltip?` |
+
+`tooltip`은 컨트롤 옆에 느낌표 아이콘으로 나타나고 마우스를 올리면 글이 뜬다.
+
+드롭다운은 고른 글이 아니라 번호를 돌려준다. 옵션 배열을 따로 보관해 두고 번호로 값을 찾으면 화면에 보이는 글과 내부 값을 다르게 둘 수 있다 (출처: bedrock-wiki).
+
+### 응답: `formValues`
+
+`ModalFormResponse.formValues`는 `(boolean | number | string | undefined)[]`이고, 컨트롤을 추가한 순서 그대로 위에서 아래로 값이 들어 있다. 구조 분해로 변수에 나누어 받는다.
+
+```js
+const form = new ModalFormData()
+  .title("Effect Generator")
+  .textField("Target", "Target of Effect")
+  .dropdown("Effect Type", ["Regeneration", "Protection", "Poison", "Wither"])
+  .slider("Effect Level", 0, 255, { defaultValue: 1 })
+  .toggle("Hide Effect Particle", { defaultValue: true });
+
+form.show(player).then((r) => {
+  if (r.canceled) return;
+  const [target, effectIndex, level, hideParticles] = r.formValues;
+});
+```
+
+`label`·`header`·`divider`도 자리를 차지하는지는 판에 따라 다를 수 있으므로 값 자리 수를 직접 세지 말고 `console.warn(r.formValues)`로 확인하는 것이 안전하다. 서버가 JSON으로 직접 보낸 폼에서는 라벨 자리가 `null`로 온다(아래 6절 실측).
+
+판 호환 주의. 옛 문서 예제는 `slider(label, min, max, step, default)`처럼 위치 인자를 쓰고 `toggle(label, true)`처럼 불리언을 바로 넘긴다. 2.x의 현재 시그니처는 위 표처럼 마지막 인자가 옵션 객체다 (출처: ms-learn과 bedrock-wiki의 두 예제가 다르다).
+
+### 값 검증
+
+폼 값은 클라이언트가 보낸 것이다. 범위(`min`~`max`)와 드롭다운 번호의 유효성을 서버가 다시 검사하는 것이 안전하다. 서버가 JSON으로 직접 보내는 경우는 7절의 검증 항목을 따른다.
+
+## 6. 서버 소프트웨어가 보내는 원시 폼
+
+Dragonfly·PocketMine·Nukkit 계열 서버나 프록시에는 Script API가 없다. 이들은 `ModalFormRequest` 패킷에 폼 JSON을 직접 담아 보낸다. 환경 한 가지를 예로 들면 Dragonfly는 `form.Menu`(액션 폼), `form.Custom`(모달 폼)을 제공하고, 버튼 글·아이콘·본문·제목이 데이터 채널이다 (출처: 비공개 조사).
+
+### 6.1 폼 JSON의 종류
+
+| 폼 | `type` | 응답(`ModalFormResponse`의 `ResponseData`) |
+| --- | --- | --- |
+| 액션 폼 | `form` | 누른 버튼 번호(정수) |
+| 확인창 | `modal` | `true`/`false` |
+| 입력 폼 | `custom_form` | `content` 행마다 한 자리인 배열 |
+
+창을 닫으면 `ResponseData`가 오지 않고 `CancelReason`이 온다.
+
+### 6.2 `custom_form`의 행 종류
+
+클라이언트 바이너리(Android 1.26.52.3)에는 폼 JSON의 설명 문자열 달린 스키마가 있고, 행의 `type`은 아홉 가지다(`NB-16`, 출처: repo-multiselect).
+
+`label`, `toggle`, `slider`, `step_slider`, `dropdown`, `multiselect`, `input`, `header`, `divider`
+
+`text`는 "컨트롤 위에 보일 글"이다. 여섯 가지 행 종류가 `tooltip`("툴팁으로 보일 글")을 갖는다. 바닐라 UI의 팩토리(`generated_contents`)도 같은 이름들(`label`, `toggle`, `slider`, `step_slider`, `dropdown`, `input`, `header`, `divider`, `multiselect`)을 `control_ids`로 갖고 있다 (출처: bedrock-samples 1.26.50, 사실만 옮김).
+
+보낸 JSON의 꼴 하나다. 시험 서버에서 실제로 주고받은 동작을 한 폼에 모은 예다 (출처: repo-multiselect).
+
+```json
+{
+  "type": "custom_form",
+  "title": "알림 설정",
+  "content": [
+    { "type": "toggle", "text": "알림 받기", "default": true },
+    { "type": "dropdown", "text": "언어", "options": ["한국어", "English"], "default": 0 },
+    { "type": "label", "text": "고른 뒤 보내기를 누르세요" }
+  ]
+}
+```
+
+응답은 `content`의 행 순서대로 한 자리씩인 배열이다. 라벨 자리는 `null`이다 `{실측}`. 머리글·구분선 자리는 확인하지 않았다.
+
+| 행 | 응답 값 |
+| --- | --- |
+| `toggle` | `true`/`false` |
+| `dropdown` | 번호(정수) |
+| `label` | `null` |
+| `multiselect` | 번호 배열, 하나도 안 골랐으면 `null` ([multiselect](./multiselect.mdx)) |
+
+응답 JSON 끝에는 줄바꿈이 붙어 온다. 파싱 전에 공백을 걷어 낸다 `{실측}`.
+
+### 6.3 Dragonfly 쪽 제약
+
+Dragonfly의 `form.Custom`은 `form.Element` 인터페이스가 비공개 메서드를 요구하므로 밖에서 새 행 종류를 만들 수 없다. 스키마에 있어도 라이브러리가 모르는 행(`multiselect`)은 원시 패킷으로 보내고 응답도 직접 읽어야 한다 (출처: repo-multiselect).
+
+## 7. 서버가 알아 둘 폼 동작
+
+- **모달 폼은 서버 폼 테마를 받지 않는다**: `modal_form`(확인창)은 `server_form.json`의 `long_form`·`custom_form` 테마를 쓰지 않고 밝은 기본 창으로 뜬다. 모양을 바꾼 서버 폼 화면에서 확인창이 필요하면 액션 폼의 버튼 두 개로 보낸다 `{기록}` (출처: 비공개 조사).
+- **같은 폼이 쌓인다**: 클라이언트는 사용 버튼을 누르고 있는 동안 아이템 사용 패킷을 반복해서 보낸다. 사용마다 폼을 보내면 같은 폼이 여러 장 쌓여서 하나를 닫을 때마다 다음 것이 뜬다. 사용 이벤트에서 폼을 열 때는 쿨다운이나 이미 열린 폼 검사를 둔다 `{기록}` (출처: 비공개 조사).
+- **토스트**: 클라이언트는 토스트를 하나씩 차례로 보여 준다. 폼이 열려 있어도 토스트는 보이고 다음 폼을 막지 않는다 `{기록}`.
+- **폼 사이의 전환**: 폼이 다음 폼으로 바뀌는 사이 이전 레이아웃의 조건이 잠깐 맞으면 다음 폼 위에 남을 수 있다. 리소스팩에서 레이아웃을 제목 표식으로 고를 때의 조건은 [재스킨](./reskinning-server-forms.mdx)에 있다.
+- 1.26.40 변경으로 `ModalFormData`와 `MessageFormData`가 `CustomForm`이나 `MessageBox` 바로 다음에 보이지 않던 문제가 고쳐졌다 (출처: ms-learn Update1.26.40).
+
+## 8. 바닐라 서버 폼 화면의 구조
+
+바닐라 `resource_pack/ui/server_form.json`(1.26.50.4, 출처: bedrock-samples, 사실만 옮김)의 뼈대다. 리소스팩으로 폼을 다시 그리려면 이 구조를 알아야 한다.
+
+- 진입 화면 `third_party_server_screen`은 `common.base_screen`을 상속하고 `$screen_content`로 `server_form.main_screen_content`를 쓴다. `button.menu_cancel`을 `button.menu_exit`로 보낸다(전역).
+- `main_screen_content`의 `server_form_factory`는 `type: factory`이고 `control_ids`로 `long_form`(액션 폼)과 `custom_form`(입력 폼)을 `@server_form.long_form`, `@server_form.custom_form`에 잇는다. 폼 종류에 따라 그중 하나가 만들어진다.
+- **액션 폼(`long_form`)**: `common_dialogs.main_panel_no_buttons`를 상속한 225×200 창이다. 제목은 `#title_text`, 본문은 `#form_text`다. 안쪽은 스크롤 패널이고 그 안의 `long_form_dynamic_buttons_panel`이 `factory`(`name: buttons`, `control_ids`: `button`, `label`, `header`, `divider`)로 버튼 목록을 만든다. 컬렉션 이름은 `form_buttons`이고 길이는 `#form_button_contents`를 `#collection_length`로 받는다.
+- 버튼 하나(`dynamic_button`)는 높이 32의 가로 스택이다. 왼쪽 32×32 이미지는 `#form_button_texture`(컬렉션 바인딩)에서 경로를 받고, 값이 비어 있거나 `loading`이면 이미지를 숨긴다(`loading`이면 진행 막대). 오른쪽 `form_button@common_buttons.light_text_button`은 `$pressed_button_name`이 `button.form_button_click`이고 글은 `#form_button_text`다.
+- 머리글·라벨 행은 `#form_button_text`를 글로 쓰는 `dynamic_header`·`dynamic_label`이다.
+- **입력 폼(`custom_form`)**: 마찬가지로 225×200 창이다. 안의 `generated_contents`가 `custom_form` 컬렉션을 팩토리로 펼친다(길이 `#custom_form_length`). 행마다 바인딩 이름이 다르다: 라벨·머리글 `#custom_text`, 토글 `#custom_toggle_state`, 슬라이더 `#custom_slider_text`·`#custom_slider_value`, 스텝 슬라이더 `#custom_slider_step_text`·`#custom_slider_step_value`·`#custom_slider_steps`, 드롭다운 `#custom_dropdown_length`·`#custom_radio_text`·`#custom_radio_toggled`, 입력칸 `#custom_input_text`·`#custom_placeholder_text`, 툴팁 `#custom_tooltip_text`. 맨 아래 제출 버튼은 `$pressed_button_name`이 `button.submit_custom_form`이고 글은 `#submit_text`다.
+
+이 바인딩 이름은 서버가 데이터를 싣는 채널이 아니라 클라이언트가 폼 JSON을 해석해 UI에 넘기는 값이다. 서버가 화면 종류를 구분하는 방법은 제목·버튼 글에 표식을 싣는 것뿐이다([재스킨](./reskinning-server-forms.mdx)).

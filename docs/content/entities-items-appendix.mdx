@@ -1,0 +1,303 @@
+---
+title: 엔티티와 아이템 부록 (버전별 변화, 도구와 자료, 미해결 질문)
+description: 엔티티와 아이템 페이지를 보완하는 전체 버전별 변화, 공식 문서와 커뮤니티 도구 링크 모음, 아직 풀리지 않은 질문 목록.
+sidebar_position: 3.5
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+---
+
+# 엔티티와 아이템 부록
+
+[엔티티](./entities.mdx)와 [아이템](./items.mdx) 페이지가 다루지 못한 전체 버전별 변화, 참고 자료 링크, 미해결 질문을 모았다. 근거는 2025-10-22부터 2026-10-23까지의 커뮤니티 조사 노트다(출처: 비공개 조사). 검증 수준 표기는 다른 페이지와 같다. 노트 번호 표기는 생략했고 날짜는 본문에 남겼다.
+
+## 버전별 변화
+
+- **1.20.0**: 아이템 `minecraft:knockback_resistance` 컴포넌트 제거.
+- **1.20.30**: digger `use_efficiency` 도입.
+- **1.20.40**: `can_always_eat` 우회용 음식 format(커스텀 컴포넌트 없이).
+- **1.20.50**: 아이템 태그에 필요한 최소 format(`minecraft:is_sword` 등). `1.20.5`는 유효한 format이 아니다.
+- **1.21.44**: mob griefing이 꺼지면 몹이 아이템을 줍지 않는다(동작 변경, single report).
+- **1.21.50**: 이 format 이상에서 damage_sensor `deals_damage`가 문자열 enum으로 바뀌었다는 보고(1.21.50~1.26.0에서 깨짐, 이후 `false`가 다시 동작했다는 보고와 conflicting).
+- **1.21.60~1.21.80(~1.21.131)**: 플레이어 넉백이 가벼워졌다는 체감 보고.
+- **1.21.90**: 기후 변형 몹이 `minecraft:climate_variant` 속성을 쓴다. 아이템 커스텀 컴포넌트 V2(`"ns:comp": {}`), `minecraft:custom_components` 폐기, `description.category` 제거(→ `menu_category`). `remove_in_peaceful`은 1.21.90.20에서 추가됐다가 .25에서 빠졌다.
+- **1.21.100**: `minecraft:rideable`에 `on_rider_enter_event`/`on_rider_exit_event`. 스키마 경고를 피하려면 이 이상으로 올린다. wolf의 `was_upgraded_to_1_21_100` 업그레이드 패턴.
+- **1.21.110**: DurabilityManager 템플릿이 요구하는 아이템 format.
+- **1.21.120**: `fire_resistant`, `enchantable`(`/enchant`), 커스텀 컴포넌트에 권장되는 format.
+- **1.21.12x**: `minecraft:copper_horse_armor`.
+- **1.21.130 (2025-12, 창/Mounts of Mayhem)**: player.entity.json에 창 변수와 컨트롤러가 추가돼 옛 사본이 깨진다. `camel_husk` `spawn_with_rider`. bedrock-samples가 한동안 뒤처졌다.
+- **26.0 / 1.26.0 (2026-02 무렵)**: 16x16보다 큰 아이템 텍스처 문제 해결, `minecraft:damage` 표시 버그(MCPE-180073) 해결(새 format 필요), `/reload all` 팩 깨짐 해결, `menu_category` `none` 숨기기가 동작했다는 보고. aux ID 계산 규칙(v26.0).
+- **1.26.10**: `minecraft:pushable`이 더는 파싱되지 않는다. 커스텀 방패 템플릿이 @minecraft/server 2.6.0으로 정식. Holiday Creator Features 음식 `on_consume` 무효 확인. 스폰 알 아기 상호작용에는 최신 format(1.26.10) 필요. 아이템 카탈로그 format 1.26.10.
+- **1.26.13**: `saturation_modifier` 문자열이 "invalid numeric value".
+- **프리뷰 26.20**: 런타임 ID 없는 분열 스폰(spawn-on-death).
+- **1.26.20**: 엔티티 버전 업그레이드 시스템(`entity_version.upgrades`, 베타). bridge.가 이 format을 지원하지 않는다. 이 format에서 `minecraft:angry` broadcast가 동작하지 않았다는 보고.
+- **26.2(x) 이후**: `move_to_block`이 고장 났다는 보고.
+- **2026-04-24**: shooter 버그 MCPE-228333/228332 수정.
+- **2026-05-02**: `minecraft:wearable`의 `slot.armor.body`가 동작을 멈춤(MCPE-238263).
+- **2026-05-07**: 착용 아이템 스택 크기 버그(MCPE-236344) 수정.
+- **1.26.30**: 공 물리 컴포넌트(`bounciness`, `friction_modifier`, `air_drag_modifier`, `buoyant`, `pushable_by_entity`). `deals_damage: "no"`가 실패하고 `false`가 동작. move_to_block 태그 형식 변화 없음. `interact_button` onUse 버그 지속. 26.30.28부터 `record` 커스텀 소리(Beta APIs, `format_version: "beta"`).
+- **1.26.40 (2026-08, 게임 26.44)**: 최신 엔티티 format. `recipe_smithing_transform` base가 장비여야 하고 `durability`가 필요하다(MCPE-242206).
+- **2026-08 정식 패치**: 투사체 피해가 속도에 비례(power 50 초과 시 6 → 100 이상).
+- **2026-08-11 무렵**: 커스텀 음반 재생 시간과 꺼내기 수정(설명은 여전히 깨짐).
+- **26.x "tiny takeover"**: 옛 체력 표시 팩과 함께 쓰면 새끼 동물이 거대하게 보인다.
+- **format 1.26.50**: 스미딩 `addition` `{"tag": ...}`가 여전히 동작하지 않는다.
+- **프리뷰 1.26.70.21 (2026-10)**: 아토믹 클라이언트 엔티티.
+
+## 도구와 자료
+
+### 공식, 샘플
+- Mojang bedrock-samples: [https://github.com/Mojang/bedrock-samples](https://github.com/Mojang/bedrock-samples) , 엔티티 BP [https://github.com/Mojang/bedrock-samples/tree/main/behavior_pack/entities](https://github.com/Mojang/bedrock-samples/tree/main/behavior_pack/entities) (바닐라 엔티티, 아이템, 창 JSON, `resource_pack/models/mobs.json`, `resource_pack/attachables/diamond_helmet.player.json`, dolphin/arrow 애니메이션 참고).
+- 로컬 바닐라 파일: `...\Content\data\resource_packs\vanilla_1.21.130\entity\player.entity.json`, `C:/XboxGames/MinecraftforWindows/Content/data`. 최신 player.entity.json은 여기서 가져온다.
+- MS Learn: 엔티티 추가 입문 [https://learn.microsoft.com/en-us/minecraft/creator/documents/introductiontoaddentity](https://learn.microsoft.com/en-us/minecraft/creator/documents/introductiontoaddentity) , 컴포넌트 목록 [https://learn.microsoft.com/en-us/minecraft/creator/reference/content/entityreference/examples/componentlist?view=minecraft-bedrock-stable](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/entityreference/examples/componentlist?view=minecraft-bedrock-stable) , 필터 목록 [https://learn.microsoft.com/en-us/minecraft/creator/reference/content/entityreference/examples/filterlist?view=minecraft-bedrock-stable](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/entityreference/examples/filterlist?view=minecraft-bedrock-stable) , 피해 원인 [https://learn.microsoft.com/en-us/minecraft/creator/reference/content/vanillalistingsreference/addonentitydamagesources?view=minecraft-bedrock-stable](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/vanillalistingsreference/addonentitydamagesources?view=minecraft-bedrock-stable) , 커스텀 흉갑 트림 [https://learn.microsoft.com/en-us/minecraft/creator/documents/addcustomitems?view=minecraft-bedrock-stable#custom-chestplate-with-vanilla-armor-trim](https://learn.microsoft.com/en-us/minecraft/creator/documents/addcustomitems?view=minecraft-bedrock-stable#custom-chestplate-with-vanilla-armor-trim) , 염색 아이템 [https://learn.microsoft.com/en-us/minecraft/creator/documents/addcustomitems?view=minecraft-bedrock-stable#dyeable-custom-items](https://learn.microsoft.com/en-us/minecraft/creator/documents/addcustomitems?view=minecraft-bedrock-stable#dyeable-custom-items) , 엔티티 속성 [learn.microsoft.com/en-us/minecraft/creator/documents/introductiontoentityproperties](https://learn.microsoft.com/en-us/minecraft/creator/documents/introductiontoentityproperties) , 아이템 카탈로그 문서 `craftingitemcatalogdocumentation`.
+- bedrock.dev 문서: [https://bedrock.dev/docs/stable/Entities#any_slot_empty](https://bedrock.dev/docs/stable/Entities#any_slot_empty) , [https://bedrock.dev/docs/beta/Entities#minecraft%3Arotation_axis_aligned](https://bedrock.dev/docs/beta/Entities#minecraft%3Arotation_axis_aligned) , 필터 목록 [bedrock.dev/docs/stable/Entities.](https://bedrock.dev/docs/stable/Entities.)
+- 이슈 MicrosoftDocs/minecraft-creator 962(`on_unleash`).
+
+### wiki.bedrock.dev (엔티티)
+- [https://wiki.bedrock.dev/entities/entity-intro-rp](https://wiki.bedrock.dev/entities/entity-intro-rp) , [https://wiki.bedrock.dev/guide/project-setup](https://wiki.bedrock.dev/guide/project-setup)
+- [https://wiki.bedrock.dev/entities/entity-properties](https://wiki.bedrock.dev/entities/entity-properties) , [https://wiki.bedrock.dev/entities/entity-events](https://wiki.bedrock.dev/entities/entity-events) , [https://wiki.bedrock.dev/entities/timers](https://wiki.bedrock.dev/entities/timers)
+- [https://wiki.bedrock.dev/entities/spawn-rules](https://wiki.bedrock.dev/entities/spawn-rules) , [https://wiki.bedrock.dev/entities/detecting-other-entities](https://wiki.bedrock.dev/entities/detecting-other-entities) , [https://wiki.bedrock.dev/entities/solid-entities](https://wiki.bedrock.dev/entities/solid-entities)
+- [https://wiki.bedrock.dev/entities/invulnerable-entities](https://wiki.bedrock.dev/entities/invulnerable-entities) (#min-health), [https://wiki.bedrock.dev/visuals/death-animations#cancelling-death-animations](https://wiki.bedrock.dev/visuals/death-animations#cancelling-death-animations) , [https://wiki.bedrock.dev/visuals/remove-shadows](https://wiki.bedrock.dev/visuals/remove-shadows)
+- [https://wiki.bedrock.dev/entities/vanilla-usage-components#boss](https://wiki.bedrock.dev/entities/vanilla-usage-components#boss) , [https://wiki.bedrock.dev/entities/entity-holds-item](https://wiki.bedrock.dev/entities/entity-holds-item)
+- [https://wiki.bedrock.dev/entities/runtime-identifier#minecraft-ender-dragon](https://wiki.bedrock.dev/entities/runtime-identifier#minecraft-ender-dragon) , [https://wiki.bedrock.dev/entities/non-mob-runtime-identifiers](https://wiki.bedrock.dev/entities/non-mob-runtime-identifiers) , [https://wiki.bedrock.dev/entities/projectiles#stick-in-ground](https://wiki.bedrock.dev/entities/projectiles#stick-in-ground) , [https://wiki.bedrock.dev/entities/render-controllers#dynamic-alternate-geometries](https://wiki.bedrock.dev/entities/render-controllers#dynamic-alternate-geometries)
+- [https://wiki.bedrock.dev/commands/playanimation#list-of-useful-playanimation-commands](https://wiki.bedrock.dev/commands/playanimation#list-of-useful-playanimation-commands) , [https://wiki.bedrock.dev/commands/display-entities](https://wiki.bedrock.dev/commands/display-entities) , [https://wiki.bedrock.dev/commands/on-player-death](https://wiki.bedrock.dev/commands/on-player-death)
+
+### wiki.bedrock.dev (아이템, 블록)
+- [https://wiki.bedrock.dev/items/items-intro](https://wiki.bedrock.dev/items/items-intro) , [https://wiki.bedrock.dev/items/item-components](https://wiki.bedrock.dev/items/item-components) (#storage-weight-modifier, #cooldown), [https://wiki.bedrock.dev/items/vanilla-usage-items](https://wiki.bedrock.dev/items/vanilla-usage-items) , [https://wiki.bedrock.dev/items/item-format-history#_1-26-0](https://wiki.bedrock.dev/items/item-format-history#_1-26-0)
+- [https://wiki.bedrock.dev/items/item-events](https://wiki.bedrock.dev/items/item-events) , [https://wiki.bedrock.dev/items/custom-food](https://wiki.bedrock.dev/items/custom-food) , [https://wiki.bedrock.dev/items/throwable](https://wiki.bedrock.dev/items/throwable) , [https://wiki.bedrock.dev/items/high-resolution-items](https://wiki.bedrock.dev/items/high-resolution-items)
+- [https://wiki.bedrock.dev/items/custom-armor](https://wiki.bedrock.dev/items/custom-armor) (#attachable-json), [https://wiki.bedrock.dev/items/attachables#display-settings-1](https://wiki.bedrock.dev/items/attachables#display-settings-1)
+- [https://wiki.bedrock.dev/items/item-tags#list-of-vanilla-tags](https://wiki.bedrock.dev/items/item-tags#list-of-vanilla-tags) , [https://wiki.bedrock.dev/items/vanilla-item-groups](https://wiki.bedrock.dev/items/vanilla-item-groups) , [https://wiki.bedrock.dev/items/item-catalog](https://wiki.bedrock.dev/items/item-catalog) (#expandable-groups)
+- [https://wiki.bedrock.dev/blocks/tool-based-destruction](https://wiki.bedrock.dev/blocks/tool-based-destruction) , [https://wiki.bedrock.dev/blocks/block-tags#digger-example](https://wiki.bedrock.dev/blocks/block-tags#digger-example) , [https://wiki.bedrock.dev/blocks/vanilla-block-tags](https://wiki.bedrock.dev/blocks/vanilla-block-tags) , [https://wiki.bedrock.dev/blocks/ore-loot-tables](https://wiki.bedrock.dev/blocks/ore-loot-tables)
+- [https://wiki.bedrock.dev/guide/loot-table#crafting-recipes](https://wiki.bedrock.dev/guide/loot-table#crafting-recipes) , [https://wiki.bedrock.dev/guide/custom-item](https://wiki.bedrock.dev/guide/custom-item) , [https://wiki.bedrock.dev/animation-controllers/afk-animation-controller](https://wiki.bedrock.dev/animation-controllers/afk-animation-controller)
+
+### 스크립트 API 문서
+- jaylydev: [https://jaylydev.github.io/scriptapi-docs/latest/classes/_minecraft_server.EntityIsTamedComponent-1.html](https://jaylydev.github.io/scriptapi-docs/latest/classes/_minecraft_server.EntityIsTamedComponent-1.html) , [https://jaylydev.github.io/scriptapi-docs/latest/classes/_minecraft_server.ItemStack.html#setlore](https://jaylydev.github.io/scriptapi-docs/latest/classes/_minecraft_server.ItemStack.html#setlore)
+- stirante: [https://stirante.com/script/server/2.8.0/classes/TextPrimitive.html](https://stirante.com/script/server/2.8.0/classes/TextPrimitive.html) , [stirante.com/script/server/2.3.0/classes/ItemComponentHitEntityEvent.html](https://stirante.com/script/server/2.3.0/classes/ItemComponentHitEntityEvent.html)
+
+### 커뮤니티 도구, 템플릿
+- Blockbench "Minecraft Item Wizard" 플러그인 [https://www.blockbench.net/plugins/minecraft_item_wizard](https://www.blockbench.net/plugins/minecraft_item_wizard) : 아이템 + 어태처블 생성, 손/3인칭 미리보기. Blockbench Meshy 플러그인은 폴리메시를 geo.json으로 내보낸다(메시 내보내기에는 플러그인이 필요하며 오프라인일 때 제거될 수 있음).
+- Bridge 편집기 [https://editor.bridge-core.app/](https://editor.bridge-core.app/) (format 1.26.20 이상 미지원, 애니메이션 미리보기 없음, `name.ac`로 리소스 애니메이션 컨트롤러 생성). VS Code + Blockception 플러그인(오래된 컴포넌트 표시).
+- 레시피 생성기 [https://crafting.thedestruc7i0n.ca/](https://crafting.thedestruc7i0n.ca/) (Bedrock 1.21로 설정).
+- bedrock-auxgen: `go install github.com/DreamlandMC/bedrock-auxgen/cmd/bedrock-auxgen@latest`, 이전한 저장소 [https://github.com/wan-adrian/bedrock-auxgen](https://github.com/wan-adrian/bedrock-auxgen) (aux ID 맵 생성).
+- 커스텀 방패 템플릿 [github.com/Alien-Edds/Shield](https://github.com/Alien-Edds/Shield) .
+- 커스텀 음반 스크립트 [https://github.com/afandy0/Afandy-s-Custom-Music-Disc-Script-for-Minecraft-Bedrock/](https://github.com/afandy0/Afandy-s-Custom-Music-Disc-Script-for-Minecraft-Bedrock/) .
+- "Equipments Durability"(CurseForge, `DurabilityManager.js`): 도구/방어구 내구도 커스텀 컴포넌트.
+- 클릭 감지 애드온 [https://github.com/mittens4all/Detect-Click/releases/tag/v1.0.0](https://github.com/mittens4all/Detect-Click/releases/tag/v1.0.0) .
+- 플레이어 외곽선 예제 [https://github.com/JuanLuci/Player-Outline](https://github.com/JuanLuci/Player-Outline) .
+- 바닐라 RP 미러 MCBVanillaResourcePack [https://github.com/ZtechNetwork/MCBVanillaResourcePack](https://github.com/ZtechNetwork/MCBVanillaResourcePack) (한때 뒤처짐).
+- Actions & Stuff 호환 팩 [https://www.curseforge.com/minecraft-bedrock/addons/compatibility-with-a-s](https://www.curseforge.com/minecraft-bedrock/addons/compatibility-with-a-s) .
+- Novelty API [mcpedl.com/novelty](https://mcpedl.com/novelty) (액세서리 호환은 아이템 태그).
+- 아토믹 클라이언트 엔티티 참고 gist [https://gist.github.com/theaddonn/79745d88f86710003b18efc5919c0b66](https://gist.github.com/theaddonn/79745d88f86710003b18efc5919c0b66) .
+- Minecraft Wiki: [https://minecraft.wiki/w/Breaking#Mining_efficiency](https://minecraft.wiki/w/Breaking#Mining_efficiency) , "Calculators/Breaking Speed", [https://minecraft.wiki/w/Potion#Metadata](https://minecraft.wiki/w/Potion#Metadata) .
+- ciosciaa의 "Known Item Bugs" / "Known Entity Bugs" / "Known Block Bugs" 트래커(커뮤니티 개발 자료 채널): Mojira ID를 모아 둔다.
+- 템플릿(커뮤니티 #dev-resources): Custom Crossbow, Bow(estrongel 갱신본), Trims Template for Custom Armor, Custom Mace, Custom Trident, Vanilla Like Spears, Animated Items, Glowing items, Custom Crafting Table UI, Entity Upgrade Demo, Always Show NPC name.
+
+## 미해결 질문
+
+### 엔티티
+- `minecraft:is_sheared`와 `remove_in_peaceful`은 실제로 존재하는 컴포넌트인가?
+- 탈것 몸체를 `body_lock` 없이 고정하는 방법, `chest_screen`으로 엔티티 인벤토리를 확장하는 방법.
+- 커스텀 탈것이 특정 각도를 넘을 때의 회전 스냅(광산 수레는 정상).
+- 탑승자의 `is_collidable`이 탈것을 미는 문제, 탑승자 발소리 음소거.
+- `hurt_by_target`이 가장 최근 공격자로 다시 타깃을 바꾸게 하는 방법.
+- 바닐라 `vibration_listener`로 warden식 소리 추적을 커스텀 몹에 주는 방법.
+- 커스텀 투사체가 `reflect_projectiles`로 반사되게 하기, 폭발 투사체가 흑요석/기반암을 부수지 않게 하기, 커스텀 명중 파티클의 잘못된 아틀라스 텍스처.
+- Mace 윈드 버스트 면역, 질주 넉백 제거, 플레이어 넉백 저항(1.21.60 이후 변화).
+- `minecraft:particle_emitter`가 엔티티에서 "not in the Schema"를 내는 원인.
+- 번식이 로그 없이 실패하는 원인(`breeds_with` 형식).
+- `sittable`이 테이밍 엔티티의 인벤토리 상호작용을 막는가.
+- `minecraft:inventory`(container, 27칸)에 플레이어가 아이템을 넣지 못한 원인.
+- 엔티티 전리품 표를 고쳐도 드롭이 없던 원인.
+- `minecraft:despawn` 그룹 방식이 특정 버전에서 동작을 멈춘 원인.
+- 공허 네더에서 천장 없이 네더 몹을 스폰하는 방법, 스폰 규칙 `minecraft:spawn_event`가 발동하지 않는 문제.
+- 비행 탈것 WASD 조종(`free_camera_controlled`), 걷기/비행 속도를 따로 두기.
+- `angry` broadcast가 1.26.20에서 동작하지 않는 원인.
+- 횃불 스포너가 커스텀 몹에서 이상하게 동작하는 문제, 바닐라 스폰 규칙 파일 삭제 시 생기는 버그.
+- 낙타식 좌석이 커스텀 몹의 등을 따라가게 하기, 탈것과 탑승자 회전 동기화, 몹 사망 기울기 연출 제거.
+- 먹는 애니메이션 중 장비 해제 감지(BP).
+- 커스텀 양을 디스펜서로 털 깎기.
+
+### 아이템
+- 레시피 책에서 레시피를 숨기되 제작은 가능하게 하기. 바닐라 레시피 덮어쓰기가 일부 경우에만 되는 근본 원인.
+- 크리에이티브 인벤토리에서 아이템 숨기기의 확실한 방법(보고 엇갈림).
+- 커스텀 번들이 항상 가득 차 보이는 문제, `storage_weight_limit`의 실제 동작.
+- 오프핸드 커스텀 어태처블을 1인칭에서 렌더링하기, 우클릭 시 1인칭 모델이 사라지는 문제, 바닐라 검을 들었을 때 1인칭 커스텀 애니메이션.
+- 오프핸드 어태처블 반짝임이 3인칭에서 보이지 않는 문제.
+- 1.26에서 아이템 이름에 따라 텍스처 바꾸기, 물약 레벨별 텍스처, 아이콘을 슬롯보다 크게 하기.
+- 방어구가 아닌 어태처블의 염색(`variable.is_dyed`), 커스텀 geometry의 가죽 갑옷 염색과 트림 팔레트.
+- 바닐라 방어구의 손에 든 모습 어태처블(예: 철 부츠) 교체.
+- block_placer + `food` 아이템의 텍스처가 사라지는 문제, block_placer의 `liquid_clipped`.
+- shooter + projectile로 커스텀 투사체 엔티티를 쏘면서 아이템을 소모하지 않기.
+- format 1.10 내구도 오버라이드가 시각적으로 초기화되는 원인.
+- 쿨다운이 끝날 때 아이템이 제거되는 현상(Mojang 변경 여부).
+- 활처럼 쏘는 총의 커스텀 소리, 활/쇠뇌 교체 애니메이션, 반 스케일 아이템이 바닐라 도구 애니메이션을 물려받게 하기.
+- 트림마다 다른 모델을 쓰는 갑옷(`v.has_trim`).
+
+## 보충: 본 페이지에서 요약되며 빠졌던 세부 보고
+
+[엔티티](./entities.mdx)와 [아이템](./items.mdx) 본문을 쓰면서 줄인 세부 항목을 조사 노트의 절 순서대로 되살렸다. 본문과 겹치는 문장이 있을 수 있다.
+
+### 1. 엔티티 파일 기초, format_version, 오류 해결
+
+- **아토믹 클라이언트 엔티티**: 프리뷰 1.26.70.21에 등장했다(참고 [https://gist.github.com/theaddonn/79745d88f86710003b18efc5919c0b66](https://gist.github.com/theaddonn/79745d88f86710003b18efc5919c0b66)). 애니메이션은 조각마다 복제해야 하고 공유되지 않는다. companions나 페르소나 조각과 관련이 있어 보이며, 출시는 느리고 treatment 뒤에 있을 수 있다. (unverified)
+
+### 2. 컴포넌트 그룹, 이벤트, 타이머
+
+- **이벤트 디버깅**: 이벤트에 `queue_command`로 `say`를 넣어 발동 여부를 본다. 생존 모드로 때려 `hurt_by_target`을 확인한다. Content Log 기록은 Settings > Creator > "Content Log History".
+- **`minecraft:entity_sensor`**: 주변 엔티티를 감지한다. [https://wiki.bedrock.dev/entities/detecting-other-entities](https://wiki.bedrock.dev/entities/detecting-other-entities) 를 본다. 점수판 값을 검사하는 필터는 없으니 태그나 속성을 쓴다. 행동 컴포넌트(`behavior.look_at_player`)에 `has_component`를 쓰면 기대대로 동작하지 않았다. "주변에 플레이어 없음"은 `distance_to_player` 필터로 만든다. (한 보고자의 entity-sensor 항목은 caveats상 confidence가 낮다.)
+- **`minecraft:environment_sensor`**: 시간대나 빛 필터로 이벤트를 발동한다. 반복 발동은 `minecraft:breathable` 같은 것을 깨뜨리므로(거품 깜빡임) 한 번만 발동하도록 필터를 건다. 필터 목록: [bedrock.dev/docs/stable/Entities](https://bedrock.dev/docs/stable/Entities), [https://learn.microsoft.com/en-us/minecraft/creator/reference/content/entityreference/examples/filterlist?view=minecraft-bedrock-stable](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/entityreference/examples/filterlist?view=minecraft-bedrock-stable)
+- **"무언가를 들고 있는지" 확인**: `any_slot_empty` 필터(https://[bedrock.dev/docs/stable/Entities#any_slot_empty](https://bedrock.dev/docs/stable/Entities#any_slot_empty)).
+
+### 4. 체력, 피해, 무적
+
+- damage_sensor `deals_damage` format 1.21.0: 일부 버전에서 true/false.
+- damage_sensor `deals_damage` 투사체 통과 용도로는 `"no"`를 쓰고 `"no_but_side_effects_apply"`는 피한다(투사체가 터질 수 있음). Creaking 출시 즈음 damage_sensor 동작이 바뀌어 아주 오래된 format(1.16.100)은 다르게 동작할 수 있다.
+- **`knockback_filters`/`damage_filters`**: `none_of`/`all_of` 목록을 받으며 배열로 여러 개 가능하다. `knockback_roar`의 friend 필터는 한 사용자에게 동작하지 않았다.
+- **damage cause 목록**: [https://learn.microsoft.com/en-us/minecraft/creator/reference/content/vanillalistingsreference/addonentitydamagesources?view=minecraft-bedrock-stable](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/vanillalistingsreference/addonentitydamagesources?view=minecraft-bedrock-stable)
+- **최대 체력은 엔티티 JSON에서만 설정한다**: 스크립트로는 설정할 수 없고, 스크립트 setter는 UI를 갱신하지 않는다는 보고가 있다. 플레이어는 player.json 그룹에서 `minecraft:health`의 `"value"`와 `"max"`를 둘 다 설정하고(예: 22/22) `player.triggerEvent('evt')`로 발동한다. 이 방식은 player.json을 수정하는 다른 애드온과 호환되지 않는다. Health Boost는 하트 2개 단위로 늘고 우유가 취소한다(tick.json으로 갱신).
+
+### 5. AI, 타기팅, 전투
+
+- **감지 범위가 16블록에서 멈춤**: `follow_range`, `max_dist`/`within_radius`, look_at 거리를 조정한다. 답은 없었다.
+- **`nearest_attackable_target` 필터가 잘못되면** 대상을 죽인 뒤 가장 가까운 엔티티를 공격한다.
+- **`delayed_attack`와 `melee_attack`을 한 몹에 같이 쓰지 않는다**: 죽을 때 변신하는 엔티티를 죽인 뒤 몹이 멈추고 공격 애니메이션이 실패했다.
+- **`behavior.delayed_attack`의 `on_attack` 이벤트는 발동하지 않는다(버그)**: 타이머 컴포넌트를 쓴다. 피할 수 있는 예약 피해 공격은 ravager를 본다.
+- **`behavior.look_at_entity`의 `filters`는 무시된다**: 가장 가까운 엔티티를 본다. 우회법은 family 필터를 건 nearest_attackable_target + look_at_target.
+- **`behavior.barter`**: control flag가 있다. (untested hint)
+
+### 6. 이동, 내비게이션, 길찾기, 물리
+
+- **바닐라 길찾기 범위는 짧다(약 16블록)**: 먼 경로는 단계별로 옮기는 타깃이나 체크포인트를 둔다. `follow_range`로 길찾기 범위가 늘지는 않는다.
+- **목적지로 걷게 하기**: 목적지에 투명 타깃 엔티티를 스폰하고 몹이 그것을 노리게 한다. 다른 엔티티는 단계적으로 텔레포트한다. 스크립트에는 길찾기 API가 없다. A*가 있긴 하지만 느리고, 명령으로 A*/Dijkstra를 하는 것은 비현실적이다. 대신 `if block ^ ^ ^0.25 air`로 장애물을 확인하며 facing 텔레포트로 조종한다. 경로를 따라 `applyKnockback`/`applyImpulse`를 주는 방법도 있다.
+  - 대상 블록에서 밀려나면 몇 초 동안 얼 수 있다.
+  - 문 열기: `move_to_block` + `on_reach`. 선택적인 커스텀 문은 스크립트 길찾기가 필요하다. 내비게이션에는 door/iron-door 옵션만 있다.
+- **`navigation.walk.blocks_to_avoid`**: `[{"tags": "query.any_tag('trapdoors')"}]`로 태그 기준 회피가 된다. 블록을 장애물로 보지 않거나 통과하게 하는 것은 불가능하고(스크립트도 불가), 회피만 지원된다. 블록 쪽에서 "걸을 수 없음"을 선언할 수는 없고 엔티티 쪽 `behavior.avoid_block`의 몫이다.
+- **블록처럼 행동(회전/배치)**: `minecraft:body_rotation_blocked`와 `minecraft:rotation_axis_aligned`(https://[bedrock.dev/docs/beta/Entities#minecraft%3Arotation_axis_aligned](https://bedrock.dev/docs/beta/Entities#minecraft%3Arotation_axis_aligned)).
+- **`rail_movement` 엔티티는 레일 위로 들린다**([https://bedrock.dev/entities/non-mob-runtime-identifiers](https://bedrock.dev/entities/non-mob-runtime-identifiers)). keep-velocity 옵션을 준 `tryTeleport`로 맞춘다.
+
+### 7. 탑승(rideable)과 좌석
+
+- **회전 스냅**: 커스텀 탈것이 일정 각도를 넘으면 회전이 튄다. `lock_rider_rotation`/`minecraft:rotation_locked_to_vehicle`은 튀거나 천천히 돈다. 광산 수레는 괜찮지만 방법은 찾지 못했다.
+- **Happy ghast / ghastling**: 서서 탈 수 있는 이동 플랫폼(엘리베이터)이다. 너무 빠르면 플레이어가 빠진다. `"minecraft:is_collidable": {}`로 위에 설 수 있다.
+
+### 8. 투사체
+
+- **런타임 ID가 필요한 컴포넌트가 따로 있다**: 목록은 theaddon에게 물어보라는 정도의 답만 있었다. 가능하면 runtime_identifier를 피한다.
+- **화살 개선 팁**: "conditional bandwidth" 컴포넌트 제거, 화살 부정확성 끄기, 히트박스 약간 확대. (single report)
+
+### 9. 번식, 테이밍, 나이
+
+- **스크립트 테이밍**: 스폰 후 `entity.getComponent("minecraft:tameable").tame(player)`, 필요하면 `minecraft:on_tame` 발동. 엔티티에는 follow_owner, tameable, sittable(싸우려면 owner_hurt*)이 필요하다. 스크립트로 주인을 설정하면 먹이 테이밍 로직과 먹는 파티클은 건너뛰지만 하트는 나온다. 이벤트로 tamed 그룹을 추가해 길들여진 상태로 스폰할 수도 있다. 한 사람당 하나만 테이밍: `EntityIsTamedComponent`(https://jaylydev.github.io/scriptapi-docs/latest/classes/_minecraft_server.EntityIsTamedComponent-1.html). 주인 해제는 tame 컴포넌트로 한다.
+- **엔티티 리드**: `minecraft:leashable` `on_leash`/`on_unleash`. 리드가 끊어질 때는 `on_unleash_interact_only: false`여야 `on_unleash`가 발동한다(MicrosoftDocs/minecraft-creator issue 962). 리드 매듭 동작이 바뀌어 위키의 이동 감지 트릭이 깨졌다. 광산 수레가 아니라 알/눈덩이/화살/경험치 구슬을 쓴다.
+- **커스텀 양**: 털 깎인 상태 동작이 있어도 디스펜서로 털을 깎을 수 없다. (답 없음)
+
+### 10. 스폰 규칙, 디스폰, 지속성
+
+- **커스텀 블록 위 스폰** (conflicting): 몹은 커스텀 블록 위에 스폰하지 못한다는 보고(SmokeyStack)가 있다. 한편 커스텀 블록이 `blocks.json`에 정의돼 있거나(geometry와 material_instances 제거) `minecraft:geometry.full_block`이면 스폰 규칙상 "solid"로 본다는 보고도 있다. 커스텀 바이옴에서 커스텀 블록 위 스폰이 안 되는 것은 버그로 보고됐다(2026-03-17).
+- **monster `brightness_filter`의 하드코딩**: 그 뒤에 엔진의 빛 제한이 있어 제거해도 밝은 곳에서 스폰되지 않는다. (unverified, tester's finding)
+- **Peaceful**: `monster` 타입 몹은 디스폰한다. 우회 아이디어로 parrot_tamed family로 플레이어에 태우는 방법이 있었다.
+- **횃불 스포너가 커스텀 몹에서 이상하게 동작**: 해결 안 됨.
+
+### 11. 인벤토리, 장비, 이름, 보스바, 전리품
+
+- **엔티티 인벤토리 제목 "Unknown"**: 엔티티 이름 lang 항목이 필요하다(`tile.x.name`은 동작하지 않았음). `nameable`이 필요하다는 보고도 있다. 커스텀 UI가 그것을 쓸 때도 나온다. (한 보고자 쪽 원인 설명은 caveats상 unverified)
+- **비 플레이어 엔티티의 장비는 스크립트로 읽거나 쓸 수 없다**: `equippable` 컴포넌트는 플레이어 타입만 지원한다. `/replaceitem`을 대체로 쓰고(setEquipment는 될 수도 있음), 다른 엔티티의 인챈트(약탈자 쇠뇌의 piercing 등)도 읽을 수 없다. 스크립트로 바닐라 스폰 엔티티에 컴포넌트를 추가할 수 없다.
+- **떨어진 아이템 개수는 바꿀 수 없다**: 디스폰하고 새 개수로 다시 스폰한다. 아이템 엔티티의 선인장 피해를 취소하면 클라이언트에서 숨겨지지만 여전히 주울 수 있는 버그가 있다. 엔티티/item.json(중력, 이름표) 수정이 더는 동작하지 않는다는 보고가 있다(2026-08-08, 해결 안 됨).
+
+### 12. 엔티티 애니메이션과 애니메이션 컨트롤러 (동작 관점)
+
+- **`animation_controllers` 자식은 format 1.8.0에서만 유효하다**: 1.10.0 이상에서는 컨트롤러 ID를 `animations`에 짧은 이름으로 넣고 `animate`에서 참조한다("client_entity child 'animation controllers' not valid there"). 컨트롤러 이름 접두사는 `controller.animation.<name>`.
+- **애니메이션을 찾지 못함**: 폴더 이름, 짧은 이름 불일치, 이름 변경(Blockbench/McBlend 내보내기는 멀쩡한데 이름을 바꾸니 재생됨)을 확인한다. Blockbench 애니메이션에는 `NaN`이 들어 있을 수 있으니 `0`으로 바꾼다.
+- **무작위 공격 애니메이션**: 컨트롤러 `pre_animation: ["variable.attack_rand = math.die_roll_integer(1, 0, 2);"]`, `attack_selector` 상태, `query.is_delayed_attacking && variable.attack_rand == N` 전환, `!query.is_delayed_attacking`이면 idle로 돌아감. 다른 방식은 `math.random_integer(1, 5) == 1 && query.is_delayed_attacking`. 걷기 변형은 진입 시 `math.random`으로 변수를 정하는 중간 상태를 둔다.
+- **걷기 애니메이션이 마지막 포즈에서 멈추게**: 걷기 애니메이션의 anim_time 갱신을 `query.modified_distance_moved / <n>`로 하고 `query.modified_move_speed > 0.01` 상태로 감싼다. `anim_time_update`(예: `q.modified_distance_moved * 0.08`)로 속도에 맞춰 늘이고 줄인다. 교체한 소에서 걷기가 재생되지 않으면 `pre_animation` `variable.tcos0 = (Math.cos(query.modified_distance_moved * 38.17) * query.modified_move_speed / variable.gliding_speed_value) * 57.3;`을 쓴다.
+- **"처음 대상을 감지했을 때 한 번" 재생하던 애니메이션이 무작위로 다시 재생됨**: 대상이 초기화되는 것으로 보인다. Molang 상태만 쓰기보다 BP의 특정 behavior/event에 묶는 편이 안정적이다.
+- **회전 보정과 래핑**: 0과 360 사이 blend는 뒤로 튀므로 연쇄 애니메이션에서는 360을 넘는 연속 값을 유지한다. 보간 차이는 ±180으로 정규화한다. 몸체 회전에 맞서 일부를 독립적으로 돌리는 `rotation.y = -q.body_y_rotation`은 불안정했다(해결 안 됨). `q.bone_orientation_trs().r.y`는 -90..90으로 제한된다. Euler 순서는 X, Y, Z.
+- **컷신에서 몸이 머리를 따라가게**: 몸/루트(다리 포함)에 `- query.target_y_rotation`을 더하고, `playAnimation`으로 재생한다면 머리에서는 뺀다.
+- **Molang 키프레임 보간(프레임 정의 없이)**: `v.time = (v.time ?? 0) + q.delta_time;`(delta_time으로 프레임레이트 불일치 방지), `v.smooth_time = math.hermite_blend(v.time)`, `v.ypos = math.lerp(v.start, v.end, v.smooth_time)`. 구간식: `v.segment = math.min(math.floor(v.t),2); v.local_t = v.t - v.segment;`. 분기가 하나만 실행되면 `? :` 연쇄를 쓴다. `q.life_time`은 easing에 버그가 있을 수 있으니 자체 시간 변수를 쓴다. 클라이언트가 서버의 명령 매니저가 설정한 엔티티 점수판 값에서 `v.animation_state`를 읽는 2계층 구조도 있다.
+- **BP(서버) 애니메이션/컨트롤러**: 명령과 Molang만 실행하고 클라이언트 애니메이션은 실행하지 않는다. `/event entity @s ...`, timeline 타임스탬프 명령, `/effect`, `/replaceitem`이 가능하다. RP 컨트롤러는 `/scriptevent`나 명령을 실행할 수 없다. 지연 반복 소리는 BP 애니메이션 안에서 소리를 재생하고 컨트롤러가 켜고 끈다. BP 애니메이션 컨트롤러는 엔티티가 로드될 때마다 실행되므로 "on load" 이벤트로 쓸 수 있다. 서버 쪽 컨트롤러의 `variables`에 둔 `q.property`는 오류를 냈다(밖으로 옮기니 해결). `/playanimation`에서 `query.scoreboard`로 값을 넘길 수 있고 `query.scoreboard`는 BP에서만 동작한다.
+- **엔티티 소리**: 애니메이션(`sound_effects`)으로 재생한다. `sounds.json`의 엔티티 이벤트(`ambient`, `hurt`, `death`, `step`)는 유효한 LevelSoundEvent 이름이어야 한다("Event name 'cracked' is not a valid LevelSoundEvent"). 커스텀 엔티티 소리는 sound_definitions.json과 클라이언트 파일 `sound_effects` 모두에 있어야 한다. 탑승자 발소리 음소거는 해결되지 않았다. allay 상호작용 소리는 `sound_definitions.json`에서 `mob.allay.item_given`을 덮어써 지운다. 반복 소리는 `loop: true` 애니메이션에 넣는다.
+- **애니메이션 키 쿼리 참고**: `query.equipped_item_all_tag('slot.weapon.mainhand','tag')`, `query.is_item_name_any('slot.weapon.mainhand', 0, 'ns:item')`, `query.entity_biome_has_any_tags`, `query.entity_biome_has_any_identifier`, `query.is_riding_any_entity_of_type('id')`, `query.is_in_water_or_rain`. `query.foo`는 자리표시자일 뿐 실제 쿼리가 아니다. 컨트롤러 조기 종료에는 `q.state_time`, `q.all_animations_finished`. 들고 있는 아이템별 전환 `query.is_item_name_any(...)`는 BP가 아니라 RP 애니메이션 컨트롤러에 따옴표와 함께 넣는다. `query.client_max_render_distance`는 엔티티 컨텍스트 밖에서 쓸 수 없다. 렌더 컨트롤러가 엔티티 밖에서 적용되면 엔티티 전용 쿼리를 읽지 못하니 변수에 담아 쓴다. 이름 바꾼 갑옷 거치대에서 `query.is_name_any('Alex')` 전환이 발동하지 않았는데, 그 식 끝에 `;`가 있었다. 전환식의 남은 따옴표는 "unrecognized token"을 낸다.
+- **갑옷 거치대 포즈는 런타임 ID 변수에 하드코딩돼 있다(12~13개)**: 포즈를 늘리려면 자체 엔티티에 `pose_index` 속성과 `math.mod(...)` 이벤트를 두거나 갑옷 거치대 geo를 복사한다. 디스펜서로 장비를 준 갑옷 거치대는 runtime_identifier를 armor_stand로 했다가 아이템을 넣고 되돌리는 방법이 통했다.
+- **애니메이션 재사용**: 뼈 이름을 플레이어와 같게(`rightItem`, `leftItem`, head 등) 하면 바닐라 휴머노이드/플레이어 애니메이션을 재사용할 수 있다. 들고 있는 아이템 위치는 `rightItem`/`leftItem` 뼈가 정한다. 활, 쇠뇌, 창, 방패처럼 특수하게 드는 아이템에는 클라이언트 엔티티의 `"enable_attachables": true`가 필요하다. Bridge는 애니메이션을 미리 보여 주지 않는다. 뼈 표시 토글: `1*(query.is_item_equipped(0)||query.is_item_equipped(1))` 스케일.
+
+### 13. 렌더 거리, 디더링, 그림자, 히트박스 (엔티티 쪽 제한)
+
+- **그림자**: 크기는 히트박스/scale 컴포넌트를 따른다. 제거: [https://wiki.bedrock.dev/visuals/remove-shadows](https://wiki.bedrock.dev/visuals/remove-shadows) . 투명화 그림자 제거에는 `minecraft:renders_when_invisible` + 무한 투명 `spell_effects`.
+- **고체 엔티티(위에 설 수 있음)**: 최신 format에서 엔티티에 `"minecraft:is_collidable": {}`를 둔다. 대안은 [https://wiki.bedrock.dev/entities/solid-entities](https://wiki.bedrock.dev/entities/solid-entities) (stackable 방식은 player.json도 필요). happy ghast 파일이 날 수 있는 고체 탈것의 예다. (한 보고자 쪽 solid-entity 항목은 caveats상 confidence가 낮다)
+- **외형 교체 기법(렌더 컨트롤러 배열, 오버레이, 두 geometry 겹치기, 동적 대체 geometry)**: 동작과 관련된 부분만 적는다. 엔티티 하나에 렌더 컨트롤러 두 개를 나열하면 geometry 두 개를 겹쳐 그린다. 텍스처 겹치기(첫 번째가 바탕, 다음이 오버레이, 말/라마처럼)도 된다. 고양이 tuxedo처럼 특정 변형만 커스텀 모델로 하려면 [https://wiki.bedrock.dev/entities/render-controllers#dynamic-alternate-geometries](https://wiki.bedrock.dev/entities/render-controllers#dynamic-alternate-geometries) 를 본다. 텍스처 애니메이션에는 엔티티 파일의 `query.life_time`과 렌더 컨트롤러 텍스처 배열이 필요하다.
+
+### 14. 플레이어 엔티티 (player.json / player.entity.json)
+
+- **커스텀 player.json이 회전을 깨뜨림**: `getRotation()`/`getViewDirection()`이 약 30도 안에서 흔들렸고 샘플 팩 버전으로 되돌리니 해결됐다. `player.setRotation`은 그 틱 안에서 읽는 값을 잠시 바꾼다.
+- **우클릭 감지**: player.json의 `minecraft:player`에 BP 애니메이션 컨트롤러를 붙이고(`description.scripts.animate` + `animations`, 컨트롤러는 `animation_controllers/`), 상태에 `on_entry: "/function ..."`, 전환 쿼리 `query.is_item_name_any('slot.weapon.mainhand','ns:item') && query.is_using_item`을 쓴다. `&&`가 없으면 들자마자 발동한다. 컨트롤러를 두 번 정의하면(player.json과 player.ac.json) content log 오류가 난다.
+- **리스폰 화면 감지**: [https://wiki.bedrock.dev/commands/on-player-death](https://wiki.bedrock.dev/commands/on-player-death) (명령) 또는 스크립트 이벤트.
+- **1.21.130 창 업데이트로 깨짐**: Mojang이 `variable.melee_spear_equipped`, 창 컨트롤러 두 개, 바뀐 1인칭 컨트롤러 등을 추가했다. 오래된 사본으로 덮어쓰는 팩은 창 애니메이션, 휘두르기/공격, 수영, 기기, 손 애니메이션, 1인칭이 깨지고 "Unknown variable"이 난다. 해결법은 로컬 설치본의 최신 바닐라 파일(`...\Content\data\resource_packs\vanilla_1.21.130\entity\player.entity.json`, 또는 `C:/XboxGames/MinecraftforWindows/Content/data`)에서 시작해 자기 애니메이션, 스크립트, 컨트롤러를 다시 추가하는 것이다. 애니메이션 컨트롤러와 1인칭 애니메이션 파일도 같이 가져온다. 1.21.130 이상용으로 커뮤니티가 공유한 최신 player.json을 써야 창 애니메이션과 에디터 스킨이 깨지지 않는다. Mounts of Mayhem에 맞춰 갱신되지 않은 사본도 창 애니메이션 오류를 낸다. (confirmed)
+- **bedrock-samples가 뒤처졌던 시기가 있다**: 1.21.130.3 플레이어 클라이언트 엔티티는 `first_person_item_rotation_factor`가 없고 창 오류가 나고 빈손 휘두르기가 깨졌다. pre_animation/initialize도 빠져 있었다. MCBVanillaResourcePack(https://[github.com/ZtechNetwork/MCBVanillaResourcePack](https://github.com/ZtechNetwork/MCBVanillaResourcePack))도 `variable.melee_spear_equipped`가 없었다. 게임 설치 폴더의 파일을 쓴다. `/reload all`로 팩이 깨지던 버그는 26.0에서 고쳐졌다.
+- **창 애니메이션에 필요한 변수**: 플레이어 `initialize`에 `variable.melee_spear_equipped`, `variable.first_person_item_rotation_factor = 0.625` 등. 창은 애니메이션 컨트롤러 파일이 따로 있다. 수정 후에는 게임 전체를 재시작한다. 창 감지에는 `query.equipped_item_any_tag('slot.weapon.mainhand','minecraft:is_spear')`가 제안됐다. 창 어태처블 오류 `q.item_slot_to_bone_name(c.item_slot) returned a bone name that doesn't exist`는 `spear` 뼈가 없는 것으로, min_engine_version 불일치와 관련이 있다. 플레이어의 커스텀 렌더 컨트롤러는 바닐라 어태처블 오프셋(창)을 깨뜨릴 수 있다.
+- **paper doll(일시정지 화면) 오류**: "query.property/has_property does not have an actor"는 paper doll 모델에서 온다. `!variable.is_paperdoll`/`!query.is_in_ui`로 막는다(`q.is_in_ui`가 소용없었다는 보고도 있음). paper doll은 player.json 변수와 쿼리를 무시해 추가 geometry를 전부 보이거나 전부 숨긴다. paper doll이 보이는 동안 `/playanimation`과 파티클을 쓰면 복사본이 생기니 `variable.is_paper_doll`/`q.is_in_ui`로 막는다. 1인칭 추가 렌더 컨트롤러 조건 예: `!variable.is_paperdoll && !variable.map_face_icon && !query.is_spectator && query.property('addon:extra') != 'x'`.
+- **보이지 않는 플레이어**: 유효하지 않은 렌더 컨트롤러(예: `controller.render.player.dc15s`)가 content log에 나온다. 총용 렌더 컨트롤러 잔재를 지운다. "friendly name 'geometry.default' not found" / "minecraft:player | geometry not found?"는 player.entity.json의 geometry 짧은 이름과 렌더 컨트롤러 참조가 맞지 않거나 오타일 때 난다. 망토가 렌더링되지 않으면 새 geometry 키(`Geometry.default_custom`)를 추가해 렌더 컨트롤러가 가리키게 한다. 기본 모델은 교체할 수 없고, 하나를 추가하고 기본을 숨긴다.
+- **커스텀 플레이어 모델과 아이템 위치**: `leftItem`/`rightItem` 피벗을 기본 플레이어 geo와 같게 둔다(leftItem pivot [6,15,1] 부모 leftArm, rightItem pivot [-6,15,1] 로케이터 `lead_hold`). 뼈를 옮기지 말고 플레이어 RP 파일이 참조하는 애니메이션으로 위치를 옮긴다. 뼈를 추가하면 아이템 배치가 깨진다. 우회법은 바닐라 geometry를 빈 텍스처로 그대로 렌더링하고 그 위에 커스텀 geometry를 겹친 뒤, 투명한 팔을 애니메이션으로 옮겨 아이템 위치를 맞추는 것이다. 방어구를 붙이려면 같은 뼈 이름과 구조가 필요하다(바닐라 갑옷 어태처블은 `parent_setup: "variable.boot_layer_visible = 0.0;"`처럼 플레이어 렌더 컨트롤러의 part visibility를 제어).
+- **1인칭/3인칭 상태**: 애니메이션 상태는 따로 저장되지만 Molang 변수는 공유한다. `v.is_first_person`을 쓴 `blend_weight`가 어긋날 때 `+ 0.001`을 더하니 동작했다. 컨트롤러 태그로 1인칭/3인칭을 구분할 수 있다.
+- **차단/비공개 Molang 변수를 읽는 커스텀 플레이어 컨트롤러**(예: `variable.first_person_rotation_factor`)는 타격 애니메이션과 3인칭 활을 깨뜨린다.
+- **플레이어 모델 등록 한계는 약 1.14MB**라는 언급이 있다. 같은 모델을 가리키는 항목 20개는 렉이 없었지만 서로 다른 모델이 많으면 렉이 튄다. `q.get_item_equipped_name`이 `q.get_item_any`보다 안정적이다. (single report)
+
+### 15. 스크립트와 엔티티 연동
+
+- **엔티티별 애니메이션을 일부 플레이어에게만**: `entity.playAnimation(name, { players: [...] })`로 0 스케일이나 외곽선 애니메이션을 재생한다. 벽 너머 외곽선 예: [https://github.com/JuanLuci/Player-Outline](https://github.com/JuanLuci/Player-Outline) . 투명 변수 `t.invi` 트릭은 클라이언트 쪽이라 갑옷과 함께 쓰면 깨지고 패치될 수 있다.
+- **스크립트와 애니메이션**: 스크립트는 애니메이션 컨트롤러를 직접 구동할 수 없다. `playAnimation`의 `stopExpression`/controller 옵션이나 스크립트가 설정한 변수를 pre-animation Molang에서 읽는 방식(FMBE식)을 쓴다. `player.inputInfo.getMovementVector()` + `stopExpression: "v.movement_x=...; return 0;"` + 호출마다 무작위 컨트롤러 이름(`"animation_controller_set_"+rand`, 길이 0.05)으로 변수를 어태처블에 밀어 넣는 방식이 동작했다(속성 방식은 약 1틱 지연). 서버 `player.playAnimation(name, {blendOutTime, stopExpression})`은 3인칭만 움직인다. 바닐라 1인칭 애니메이션은 스크립트로 바꾸거나 트리거할 수 없으니 어태처블이나 수정한 클라이언트 플레이어를 쓴다.
+- **떠 있는 텍스트**: 거리와 가림 문제를 피하려면 엔티티 대신 Script API TextPrimitive(https://[stirante.com/script/server/2.8.0/classes/TextPrimitive.html](https://stirante.com/script/server/2.8.0/classes/TextPrimitive.html))를 쓴다. 이전에는 한 번 스폰하고 텔레포트하는 엔티티가 유일한 방법이었다(충돌/밀림 문제).
+- **클릭 감지**: [https://github.com/mittens4all/Detect-Click/releases/tag/v1.0.0](https://github.com/mittens4all/Detect-Click/releases/tag/v1.0.0) 또는 `world.afterEvents.playerAttack`. 핫바 슬롯 변경: `world.afterEvents.playerHotbarSelectedSlotChange`.
+- **폭발 감지(피해 없이)**: `explosionAfterEvent`. 태그 붙은 엔티티의 효과(예: nausea) 감지에는 `getEntities` 없이 `effectAdd`를 쓴다.
+- **엔티티 방향 차이**: `anchored eyes` 파티클 시험에서 비 플레이어 엔티티가 `^^^` 방향과 다르게 향했다는 보고가 있지만 다른 사람은 재현하지 못했다. (single report)
+
+### 16. 블록 보조 엔티티, 더미 엔티티, 홀로그램
+
+- **더미 엔티티**: 다른 엔티티가 제거된 뒤에도 태그나 상태를 보관하기 좋다. 컴포넌트가 적고 리소스 팩이 필요 없으며, 중력과 피해를 끈 armor_stand 수정본도 된다.
+
+### 17. 아이템 JSON 기초: format_version, 아이콘, 이름, 크리에이티브 메뉴
+
+- **`minecraft:icon`**: `description`이 아니라 `components` 안의 문자열 컴포넌트다(`"minecraft:icon": "electrite_spear"`). `textures.default` 객체 형태는 쓰지 않는다. 값은 `textures/item_texture.json`의 키이고 소문자만 쓴다(대문자는 "Missing referenced asset"). 키에 네임스페이스를 넣지 않는 것이 보통이다(`portal`, `floating_dimensions:portal` 아님). 키에 네임스페이스를 썼다면 icon도 똑같이 맞춘다는 의견, `:`가 된다는 의견, `.`를 쓰라는 의견이 엇갈렸다. format 1.10에는 BP 아이콘이 없고 RP 아이템 파일에서 정의한다(바닐라 `appleEnchanted`). "requires either an icon atlas or icon texture"는 아이콘이 없다는 뜻이다.
+- **바닐라 텍스처 사용**: RP 없이 `"minecraft:icon": "diamond"`처럼 바닐라 키를 쓸 수 있다. 다만 텍스처 배열(곡괭이 등)은 첫 번째로 기본 설정되고 인덱스를 지정할 수 없으니 자기 RP item_texture.json에 항목을 추가한다(텍스처마다 짧은 이름을 두고 같은 png를 가리킴). `tripwire_hook` 같은 이름은 존재하지 않는다. 바닐라 텍스처 이름은 bedrock-samples resource_pack에서 찾는다(예: 바다의 심장 `textures/items/heartofthesea_closed`). 데이터 기반 번들은 텍스처 키가 따로 있다(`bundle_white`). 이름표 텍스처는 `textures/items/name_tag.png`.
+- **`minecraft:display_name`은 객체다**: `{"value": "..."}`, 값은 번역 키일 수 있다. `§` 코드와 `\n`을 지원한다. lang에서는 `item.<ns:id>.name=...`. 줄바꿈 로어 흉내: `item.zxx:light_soul_ring.name=§cLight Soul Ring§r\nHold on screen to activate§r`, 커스텀 이름의 `~LINEBREAK~`. 이름 결합: `"%item.bucketCustomFish.name%entity.blaze.name"`. lang 값 끝의 공백은 잘리니 `§r`을 붙인다. `pack.name`/`pack.description`도 BP와 RP lang에서 번역된다.
+- **커스텀 그룹**: `item_catalog/crafting_item_catalog.json`(`minecraft:crafting_items_catalog`, `categories[].category_name` construction/equipment/items/nature, `groups[].group_identifier {name, icon}`, `items[]`). `icon`은 아이템 식별자여야 한다. `menu_category`와 섞지 않는다. 카탈로그 파일은 하나만 허용된다. [https://wiki.bedrock.dev/items/item-catalog](https://wiki.bedrock.dev/items/item-catalog) (#expandable-groups), MS 문서 `craftingitemcatalogdocumentation`.
+
+### 18. 커스텀 컴포넌트와 아이템 스크립트
+
+- **등록**: `system.beforeEvents.startup.subscribe(({itemComponentRegistry}) => itemComponentRegistry.registerCustomComponent("ns:name", { onUse, onUseOn, onHitEntity, onMineBlock, onConsume, onCompleteUse, onBeforeDurabilityDamage }))`. 예전 `world.beforeEvents.worldInitialize` 패턴은 낡았다. `onUse(event){}` 메서드 축약과 `onUse: (event)=>{}` 둘 다 유효하다. 내구도 훅 이름을 한 보고자는 `beforeOnDurabilityDamage`로 적었는데, 한 보고자의 등록 목록에는 `onBeforeDurabilityDamage`로 있다.
+- **`onHitEntity` 이벤트**: attackingEntity, hadEffect, hitEntity, itemStack(stirante.com/script/server/2.3.0/classes/ItemComponentHitEntityEvent.html). 특정 아이템으로 때림을 감지하려면 스크립트 `entityHitEntity` 후 `triggerEvent`를 쓰거나, 엔티티 `damage_sensor` + `has_equipment` 필터를 쓴다(특정 엔티티만).
+- **스크립트 함정**: `source.dimension.runCommand('spreadplayers ~ ~ 10 50 @s')`는 @s가 차원이 되어 실패하니 `source.runCommand`나 `system.run(...)`으로 감싼다. `runcommand`처럼 소문자로 쓰면 "Not a function" TypeError. 레이캐스트는 `player.getBlockFromViewDirection()`, `getHeadLocation()`/`getViewDirection()`. 5x5 불 예: `afterEvents.itemUse` → `getBlockFromViewDirection()?.block.location` → -2..2 루프 → `dimension.getTopmostBlock({x,z})` → `setBlockType(top.above().location,"minecraft:fire")`. Realms에서는 제거된 `runCommandAsync` 대신 `runCommand`.
+- **아이템 NBT는 스크립트에 노출되지 않는다**: 셜커 상자 아이템 내용, 불길한 병 효과 레벨, 염소 뿔 소리. 셜커는 디스펜서/블록 설치로 놓고 블록 `minecraft:inventory`를 읽거나, 아이템 엔티티를 태워 내용물을 떨군다. 내용을 바꾸려면 블록으로 놓아야 한다. `hasitem` 선택자의 `data`로 일부 값을 검사할 수 있고, 데이터/aux는 `testfor @s[hasitem={item=...,location=slot.weapon.mainhand,data=N}]` 루프로 찾는다.
+
+### 20. 도구, 내구도, 채굴, 인챈트
+
+- **`minecraft:digger`**: `use_efficiency`(1.20.30부터)와 `destroy_speeds`가 필요하다. 예: `{"block":{"tags":"q.any_tag('minecraft:is_pickaxe_item_destructible')"},"speed":7}`. 빈 digger는 아무것도 하지 않는다. 바닐라에 맞추려면 속도를 맞춘다(netherite 9, [https://minecraft.wiki/w/Breaking#Mining_efficiency](https://minecraft.wiki/w/Breaking#Mining_efficiency), 계산기 "Calculators/Breaking Speed"). 아이템에 `minecraft:is_pickaxe`, `minecraft:is_tool`, `minecraft:digger` 태그도 붙인다. [https://wiki.bedrock.dev/blocks/tool-based-destruction](https://wiki.bedrock.dev/blocks/tool-based-destruction) , [https://wiki.bedrock.dev/blocks/block-tags#digger-example](https://wiki.bedrock.dev/blocks/block-tags#digger-example)
+
+### 21. 방어구, 트림, 염색
+
+- **크리에이티브에서 커스텀 방어구는 손에 남으면서 슬롯에도 들어간다(MCPE-240759)**: Java도 핫바에 남기므로 바닐라 Bedrock 쪽이 특이한 것일 수 있다.
+- **착용 아이템의 스택 크기**: 클라이언트가 "불법" 크기의 착용 아이템 스택을 옮기지 않아 겹쳐지는 커스텀 방어구/해골/호박이 불가능했다. MCPE-236344로 2026-05-07에 고쳐진 것이 확인됐다.
+- **`minecraft:dyeable`**: 텍스처 alpha 1 부분은 염색되지 않는다(아이콘 일부만 물들이는 것은 알파 기반, 개 갑옷 참고). 플레이어가 염색하는 것을 막을 수 없다. [https://learn.microsoft.com/en-us/minecraft/creator/documents/addcustomitems?view=minecraft-bedrock-stable#dyeable-custom-items](https://learn.microsoft.com/en-us/minecraft/creator/documents/addcustomitems?view=minecraft-bedrock-stable#dyeable-custom-items)
+
+### 22. 무기: 활, 쇠뇌, 창, 철퇴, 방패, 총, 투척
+
+- **템플릿**: 스크립트로 shooter를 재현한 템플릿(멀티샷과 내구 지원). 1.20.60 활 템플릿은 2025-11-07에 더는 동작하지 않았고 estrongel이 갱신본을 올렸다.
+- **정식판의 커스텀 창**: 바닐라 창 아이템을 쓴다(바닐라 팩에 있음). 바닐라 창 JSON은 bedrock-samples(wooden/stone/netherite_spear.json, `behavior_pack/items/iron_spear.json`)에 있지만 바닐라 창 어태처블은 실제 바닐라 RP에만 있고 샘플에는 없다. 새 창은 플레이어 애니메이션을 덮어쓰는 팩의 1인칭/주먹 애니메이션도 바꿨다.
+- **커스텀 삼지창 템플릿**: Script API 1.19(2.0.0 이전)까지 동작했고 갱신에 필요한 변경은 적다. 물 밖 Riptide는 확인되지 않았다.
+- **철퇴형 아이템**: 철퇴 JSON을 복사하고 모든 참조 이름을 바꾼다. 커스텀 철퇴 템플릿(스크립트 2.4.0, 실험 기능 없음): 철퇴 인챈트를 받으려고 `slot: "all"` enchantable, manager.js 화이트리스트로 목록에 없는 인챈트 제거, 타격 후 텔레포트로 낙하 피해 취소, 내려찍기는 `playerSwingStart`와 범위 6, `!attacker.isOnGround` 확인. 윈드 버스트 applyImpulse는 일관되지 않다. 돌진에는 베타 휘두르기 감지나 `variable.attack_time` 기반 `player.json` 애니메이션 컨트롤러가 필요하다(진입 시 `/tag @s add ghastly`, `query.is_item_name_any('slot.weapon.mainhand', 0, 'custom:x')`로 animate).
+- **도끼형 커스텀 도구가 블록을 변환할 때 타격 애니메이션이 없음**: `minecraft:use_animation`을 넣으라는 제안이 있었다. (suggested) `minecraft:is_hoe`/`is_axe` 태그 아이템은 벗기기/갈기는 하지만 커스텀 컴포넌트 `onUseOn`을 발동하지 않는다(`is_shovel`은 발동). 소리와 파티클은 나지만 내구도 감소와 애니메이션이 없으니 스크립트가 필요하고, 태그를 빼면 `onUseOn`이 돌아온다. 블록에서는 is_hoe/is_axe 애니메이션도 빠져 있다.
+
+### 23. 어태처블 (attachables)
+
+- **1인칭과 3인칭은 좌표계가 다르다**: 1인칭 전용 애니메이션(`c.is_first_person`)을 따로 둔다. 어태처블 `scripts.animate`에서는 `c.is_first_person`/`context.is_first_person`을 써야 하고 `query.is_first_person`과 `variable.is_first_person`은 동작하지 않는다(부정은 `!`). 뼈 `rightItem`의 회전/위치를 `c.is_first_person ? a : b`로 주는 것도 맞는 방법이다. Blockbench 1인칭 미리보기는 시작점일 뿐이니 게임에서 축마다 이진 탐색으로 맞추고 `/reload all`로 확인한다. 3인칭은 잠시 던진 엔티티처럼 다뤄 맞출 수 있다. 피벗 위치도 중요하다. 예시 값: 루트 뼈(`root_item`) 3인칭 `rotation [90,0,0]`, `position [0.5,22.5,-0.5]`, 1인칭 루트 회전 -180, 3인칭 0. bedrock-samples의 기본 1인칭 플레이어 애니메이션이 위치 참고가 된다(`animation.player.first_person...`, 지도 애니메이션).
+- **`/playanimation`과 `playAnimation`은 어태처블에 적용되지 않는다**: 어태처블은 플레이어와 다른 엔티티로 취급되므로 플레이어 애니메이션(예: 쇠뇌 팔 자세)을 재생할 수 없다. 1인칭 애니메이션과 조준경은 어태처블 파일의 애니메이션 컨트롤러로 만든다. 우회법은 변수를 설정하는 더미 애니메이션을 재생하고 어태처블 컨트롤러가 그 변수를 읽게 하는 것, 또는 BP player.json 엔티티 속성 + 어태처블 `"scripts":{"pre_animation":["variable.animation_a = c.owning_entity -> q.property('property:name');"]}` + `v.animation_a`로 전환(enum `== 'value'`, bool, `>= 3`)하는 것이다. 같은 방법으로 아이템별 렌더 컨트롤러나 모델도 바꿀 수 있다. 속성 소개: [learn.microsoft.com/en-us/minecraft/creator/documents/introductiontoentityproperties](https://learn.microsoft.com/en-us/minecraft/creator/documents/introductiontoentityproperties)
+- **어태처블과 클라이언트 엔티티가 ID를 공유하면** 어태처블이 우선해서 같은 ID의 엔티티(cod, salmon, rabbit)를 덮어쓴다. 반대로 엔티티이기도 한 바닐라 아이템(엔더 진주, 화살, 눈덩이, 알, 투척 아이템)에서는 같은 식별자의 클라이언트 엔티티가 어태처블을 덮어쓴다는 보고도 있다. 두 파일의 애니메이션과 모델을 똑같이 하고 `q.is_attached` / `!q.is_attached`로 부분을 나눈다. 예: `{"controller.render.item_default": "query.is_attached"}`, `{"controller.render.thrown_item": "!query.is_attached"}`. A&S는 엔티티 파일을 확인 조건과 함께 어태처블로 복사한다. 엔더 진주 어태처블은 식별자 `minecraft:ender_pearl`로 attachables에 두고, 날아가는 모델은 ender_pearl.entity를 수정한다. 던진 삼지창 클라이언트 엔티티는 덮어쓸 수 있지만 텍스처 메시를 쓰면 모델이 사라졌고 식별자로 덮어쓰는 것은 됐다.
+- **바닐라 방식 파일 두 개**: 손에 든 표시와 착용 레이어(예: `netherite_helmet.json`, `netherite_helmet.player.json`). 착용 레이어는 `parent_setup`(예: `v.chest_layer_visible = 0.0;`, `variable.helmet_layer_visible = 0.0`), geometry `geometry.player.armor.chestplate`, materials `armor`/`armor_enchanted`, 텍스처 `textures/models/armor/...`, 렌더 컨트롤러 `controller.render.armor`. 한 모델로 세트 전체를 쓸 때는 어태처블 렌더 컨트롤러의 part visibility로 관계없는 뼈를 숨긴다. 갑옷은 어태처블이므로 애니메이션도 가질 수 있다. 어태처블은 식별자당 하나뿐이라 큰 방어구 아이콘을 원하면 아이템 어태처블과 방어구 어태처블을 합쳐 렌더 컨트롤러로 geometry/텍스처를 고른다. 장착됐을 때만 보이게 하려면 커스텀 방어구 변수(또는 스케일 0)를 쓰거나, 큐브를 부풀려 두 번째 레이어 위에 앉힌다. [https://wiki.bedrock.dev/items/custom-armor#attachable-json](https://wiki.bedrock.dev/items/custom-armor#attachable-json)
+- **커스텀 geometry 엔티티의 바닐라 갑옷**: RP 클라이언트 엔티티 `description`에 `"enable_attachables": true`를 둔다. 바닐라 갑옷은 휴머노이드 geometry를 따르므로, 휴머노이드가 아닌 모델에는 부위별 어태처블과 geometry(투구, 흉갑, 바지, 부츠 따로)를 RP `attachables/`에 만든다. 한 엔티티에만 적용하려면 고유 어태처블 식별자(예: `minecraft:diamond_helmet.jenny`)와 `item` 맵 Molang 조건 `"item": {"minecraft:diamond_helmet": "query.owner_identifier == 'ns:jenny'"}`을 쓴다(바닐라 식별자를 재사용하면 그 갑옷을 입은 모든 몹이 바뀐다, Mojang 샘플 `resource_pack/attachables/diamond_helmet.player.json`). 아이템 ID는 정확해야 한다(`minecraft:diamond_chestplate`, `diamond_chest` 아님). 틀리면 content log에도 아무것도 나오지 않는다. 바닐라 `animation.armor.chestplate.offset` / `animation.armor.helmet.offset`을 animate하고 몸통 갑옷에는 `armor`/`armor_enchanted`, 투구에는 `entity_alphatest`/`entity_alphatest_glint`를 쓴다. 흉갑 어깨가 NPC 애니메이션을 따르지 않으면 어태처블로 쓰는 자체 geometry가 필요하다. 플레이어가 아닌 착용자 감지: `q.owner_identifier != 'minecraft:player'`. 속성으로 갑옷 부위 숨기기: `"part_visibility":[{"head":"q.has_property('test:your_property') ? q.property('test:your_property') != 1 : true"}]`.
+- **커스텀 엔티티의 염색 갑옷**: 일반/염색 x 인챈트/비인챈트를 모두 다루는 커스텀 렌더 컨트롤러와 전용 머티리얼이 필요하다(thediamondblue1이 공유한 `custom_armour.render_controllers.json`). 남은 미해결: 가죽 갑옷 염료 색, 네더라이트 트림, 커스텀 엔티티의 거북 투구 효과. T-Rex 갑옷은 구리만 동작했고 원인을 찾지 못했다.
+- **UI/스크립트로 장비 장착(Jenny 동반자)**: 엔티티 `minecraft:inventory`/equippable을 읽고 내구도와 인챈트를 복사한다. 플레이어 인벤토리에 있는 갑옷에 대해서만 버튼이 있는 폼을 보이고, 해제하면 돌려준다.
+
+### 25. 레시피, 스미딩, 아이템 태그
+
+- **레시피 규칙**: 컨테이너 아이템을 돌려주는 것은 shaped 레시피만 된다. shapeless는 결과 여러 개를 줄 수 없다. 재료 `count`는 없다. 거울 대칭 중복에는 `assume_symmetry:false`. 크리에이티브 전용 레시피는 불가능하다. 화로 레시피 `output`은 `{ "item": ... }`가 아니라 문자열 `"ns:item"`이다. 여러 레시피가 같은 아이템을 출력할 수 있다. 물약은 데이터 값으로 지정한다(https://minecraft.wiki/w/Potion#Metadata). 나무 종류별 제작에는 스크립트가 아니라 아이템 태그(`minecraft:logs`)를 쓴다. 웹 도구 [https://crafting.thedestruc7i0n.ca/](https://crafting.thedestruc7i0n.ca/) (Bedrock 1.21로 설정), 입문 [https://wiki.bedrock.dev/guide/loot-table#crafting-recipes](https://wiki.bedrock.dev/guide/loot-table#crafting-recipes) , [https://wiki.bedrock.dev/guide/custom-item](https://wiki.bedrock.dev/guide/custom-item)
+- **목록**: [https://wiki.bedrock.dev/items/item-tags#list-of-vanilla-tags](https://wiki.bedrock.dev/items/item-tags#list-of-vanilla-tags) (ItemTypes를 도는 스크립트로 자동 생성), 바닐라 아이템 그룹은 [https://wiki.bedrock.dev/items/vanilla-item-groups](https://wiki.bedrock.dev/items/vanilla-item-groups) 로 옮겨졌다. Mojang은 바닐라에 필요할 때만 태그를 추가한다. 동적 태그는 없으니 겹치지 않는 아이템 + 다이나믹 프로퍼티를 쓴다. Novelty API(mcpedl.com/novelty) 액세서리 호환은 아이템 태그 하나다.

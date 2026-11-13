@@ -1,0 +1,58 @@
+---
+title: "format_version: 파일 종류별 스키마 버전"
+description: "format_version은 게임 버전이 아니라 파일 종류별 스키마 버전이다. 대표 값, 올릴 때의 함정, 위키 전수 조사표"
+sidebar_position: 6
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+---
+
+## 개념
+
+대부분의 JSON 파일 맨 위에 `"format_version": "1.21.0"` 같은 줄이 있다. 이 숫자는 **그 파일 종류 하위 시스템의 문법 버전**이다. 게임 버전이 아니다. Minecraft는 이 값으로 옛 애드온을 깨뜨리지 않고 새 기능을 넣는다. 예컨대 `1.8.0` RP 엔티티와 `1.10.0` RP 엔티티는 문법이 꽤 다르다. 파일마다 다른 버전을 섞는 것이 정상이다. "format_version을 게임 최신 버전으로 바꾸라"는 유혹을 피해야 한다. (출처: bedrock-wiki, guide/format-version)
+
+```json
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": { "description": { "identifier": "wiki:ghost" } }
+}
+```
+
+**자동 보정**: 잘못 쓴 값은 유효한 값까지 "아래로 내려간다". 예를 들어 `1.11.0` RP 엔티티는 `1.10.0`으로 해석되어 오류가 없다. 이 시스템은 잘 알려지지 않았고 모든 파일에 적용되지도 않으므로 의존하지 않는다.
+
+**고르는 법**: 바닐라 팩(bedrock-samples)을 내려받아 같은 종류 파일에서 가장 많이 또는 가장 최근에 쓰인 값을 따른다. 아래 표는 위키가 1.21.50 기준으로 센 바닐라 분포다(⭐ 권장).
+
+| RP 파일 | 값(개수) |
+|---|---|
+| Animation Controllers | 1.10.0 ⭐ (65) |
+| Animations | 1.10.0 ⭐ (6), 1.8.0 (130) |
+| Attachable | 1.10.0 ⭐ (30), 1.10 (1), 1.8.0 (25) |
+| Blocks Catalog | 1.21.40 ⭐ (1) |
+| Client Entity | 1.10.0 ⭐ (88), 1.8.0 (84) |
+| Fog Settings | 1.16.100 ⭐ (73) |
+| Geometry | 1.16.0 (6), 1.12.0 (30), 1.10.0 (5), 1.8.0 (91) |
+| Particle Effect | 1.10.0 ⭐ (176) |
+| Render Controllers | 1.10.0 ⭐ (24), 1.8.0 (98) |
+| Sound Definitions | 1.20.20 ⭐ (1) |
+
+| BP 파일 | 값(개수) |
+|---|---|
+| Entity | 1.21.50 ⭐ (9), 1.21.60 (17), 1.21.30 (1), 1.21.20 (2), 1.21.10 (9), 1.21.0 (28), 1.19.80, 1.19.60, 1.19.50, 1.19.30 (각 1), 1.18.20 (1), 1.18.10 (3), 1.17.10 (1), 1.16.210 (1), 1.16.0 (19), 1.14.0 (6), 1.13.0 (2), 1.12.0 (14), 1.10.0 (1), 1.8.0 (2) |
+| Item | 1.21.30 ⭐ (17), 1.20.50 (5), 1.16.0, 1.16, 1.14 (각 1), 1.10 (45) |
+| Recipe | 1.21.50 ⭐ (13), 1.21.60 (4), 1.21.30 (2), 1.20.60 (3), 1.20.30 (19), 1.20.10 (1315), 1.16 (139), 1.12 (67) |
+| Spawn Rules | 1.17.0 ⭐ (1), 1.11.0 (1), 1.8.0 (51) |
+| Trade Table | 1.18.10 (1) |
+
+이 표는 1.21.50 기준이라 낡았다. 최신 값은 아래 커뮤니티 보고를 우선한다. 파일별 이력: wiki.bedrock.dev의 block-format-history, item-format-history.
+
+## 규칙과 보고
+
+- **format_version은 게임 버전이 아니다**: 서브시스템/파일 종류의 버전이다(예: 게임 1.21.131, 블록 format 1.21.130). https://wiki.bedrock.dev/guide/format-version#format-version-is-not-game-version . 파일별 이력: https://wiki.bedrock.dev/blocks/block-format-history , https://wiki.bedrock.dev/items/item-format-history *(확인됨)*
+- **위키 기준 대표 값(2026-01-03 인용)**: RP attachable, client entity, animations, animation controllers, render controllers, particles `1.10.0`; geometry `1.16.0`; sound definitions `1.20.20`; fog `1.16.100`; blocks catalog `1.20.40`; BP entity `1.21.60`, item `1.21.30`, recipe `1.21.60`, spawn rules `1.17.0`, trade table `1.18.10`. 다른 관찰: BP entity `1.21.130`, render controller `1.8.0`, spawn_rules `1.8.0`, `sound_definitions` `1.14.0`(더 흔한 값).
+- **최신 엔티티 format**: 2026-03 `1.26.0`, 2026-04 `1.26.10` 권장, 2026-08-20 `1.26.40`(게임 26.44). 오래된 1.16은 `minecraft:offspring` 없이는 아기 스폰 알을 깨뜨렸다. client entity가 로드되지 않을 때 `1.10.0`으로 해결된 사례.
+- **포맷을 올리면 컴포넌트 형태 변경으로 엔티티가 조용히 사라질** 수 있다. 아이템 format을 섞으면 레시피가 레시피북에 안 보일 수 있다.
+- **아이템/블록 커스텀 컴포넌트**는 새 스키마를 쓰려면 format_version 상향이 필요하다(프리뷰 26.0.x에서 아이템 커스텀 컴포넌트는 `"1.26.0"` 요구).
+- **아이템 태그는 아이템 format >= 1.20.50**, `minecraft:use_modifiers`는 1.26.30, 스피어 샘플은 1.26.30, `minecraft:fire_resistant`는 1.21.120+ 필요(1.21.50/1.21.70에서 실패). 지오메트리는 바인딩을 위해 >= 1.16.
+- **`is_experimental`** 아이템 플래그는 더 이상 아무 효과가 없다(실험 게임플레이가 개별 토글로 분리). 아이템 `category` 설명 형식은 1.20.80 무렵 바뀌었다.
+- **비공식 레시피 format**: 2026-01 기준 최신 1.21.60(한 사용자), `"unlock": {"context": "None"}` 예시는 1.26.30.

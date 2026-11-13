@@ -1,0 +1,151 @@
+---
+title: 디버깅, 검증, 버전 관리
+description: 로그 읽기, 증상표, 스키마의 함정, 바닐라 대조, 1.26.50 변경, 실측 규칙(DBG-01~34).
+sidebar_position: 13
+sources:
+  - repo-guide
+  - repo-bedrock-core
+  - private-research
+  - mcbejsonuimasterai
+  - repo-testpack
+  - bedrock-samples
+  - cinnabar
+  - ore-ui-customizer-app
+  - private-research
+  - repo-multiselect
+  - netease-mcdocs
+  - bedrock-wiki
+  - ms-learn
+  - repo-survey
+  - private-research
+
+---
+
+## 개념: 조용한 실패를 다루는 법
+
+JSON UI에는 버전 필드와 친절한 오류 창이 없다. 잘못된 속성은 무시되거나 파일 전체가 버려지고, 화면에는 아무것도 그려지지 않는다. 그래서 디버깅은 ① 로그로 화면이 실제로 열렸는지 확인하고 ② 한 번에 하나만 바꾸고 ③ 실패를 마운트·바인딩·레이아웃 중 어디인지 가르는 순서로 한다. Content Log GUI(설정의 크리에이터 항목)를 켜고 `Unknown property` 같은 줄을 찾는 것이 출발점이다. Bedrock Wiki의 Best Practices 문서도 같은 방향으로, 바꿀 속성만 쓰고 `modifications`를 쓰며 식·바인딩 수를 줄이라고 권한다(성능은 JSON UI가 엔티티 다음으로 비싼 서브시스템이다, 출처: bedrock-wiki).
+
+새 UI 파일이 안 보이면 먼저 `ui/_ui_defs.json`에 등록했는지 본다.
+
+```json
+{ "ui_defs": [ "ui/my_screen.json", "ui/my_common_elements.json" ] }
+```
+
+이 형식은 MS Learn JSON UI 레퍼런스(`ui_defs`: 리소스팩 루트 기준 경로 배열, 사용자 UI 화면에 필수)와 같다. MS Learn은 `ui_defs`, `ui_element`, `ui_global_variables`, `ui_screen` 네 문서를 두며 바닐라 예제에서 자동 생성되어 엉성하다는 평이 있으므로(커뮤니티 보고) 속성 사전은 이 장과 값 사전 페이지로 대조한다. (출처: ms-learn)
+
+
+
+## 13.1 로그 읽기
+
+- **[DBG-01]** JSON UI 오류는 조용한 경우가 많다(아무것도 안 그려짐, 버튼이 `canceled`, 수정 전체 무시). Content Log를 켜고, 클라이언트 로그 `Debug_Log<세션>.txt`(Windows: `%APPDATA%/Minecraft Bedrock/logs/`)에서 `Unknown property`, `Type not specified (or @-base not found)`, `Must define a source property name in the binding!`, `Invalid expression`, `Assertion failed` 줄을 찾는다. 레이아웃 줄(`Full re-layout of N controls`)로 화면이 열렸는지 본다. 단 이 수는 팩토리가 셀을 만들기 전에 센 값이라 팩토리 게이트의 효과는 측정하지 못한다. `{실측}` (출처: BC-S8, BC-facts, BC-S12, MJ 8장-8)
+- **[DBG-02]** **실험은 한 번에 하나만 바꾸고, 먼저 그 화면이 실제로 열렸는지를 로그로 확인한다**(제목 문자열이 로그에 있는지). 프로브가 아예 실행되지 않은 세션은 아무것도 증명하지 않는다. "될 것 같은 것을 추론하지 말고 되는 것을 복사하라"는 bedrock-core 저자가 일곱 번의 실패 끝에 남긴 교훈이다. `{실측}` (출처: BC-S6, BC-S8, BC 7장-9)
+- **[DBG-03]** 실패를 "안 보임" 하나로 뭉뚱그리지 않는다. 프레임(항상 그려지는 테두리), 값 표시(같은 값을 텍스트로), 실제 대상(크기·가시성)을 함께 그려 "마운트 실패 / 바인딩 실패 / 레이아웃 실패"를 구분한다. 게이트는 식과 그 부정을 둘 다 그려(`YES`/`no`) 식 자체가 실패했는지 확인한다. `{실측}` (출처: BC-S6, BC-S14)
+- **[DBG-04]** 화면을 망가뜨릴 수 있는 실험(크래시 가능성)은 개발 중인 화면이 아니라 따로 만든 실험 화면에 올린다. `{실측}` (출처: BC-S6)
+
+## 13.2 자주 만나는 증상과 원인
+
+| 증상 | 먼저 볼 것 | 규칙 |
+| --- | --- | --- |
+| 폼 버튼을 눌렀는데 스크립트에 `canceled` | 버튼 자신의 `collection_details` | COL-04 |
+| 숨김 조건이 무시되고 항상 보임 | 식에 `>=`, `%` 등 없는 연산자 | EXP-02, EXP-03, BND-09 |
+| 한 컨트롤의 바인딩이 전부 안 먹음 | `#속성` 없는 식 하나 | BND-05 |
+| 내 `modifications`가 하나도 적용 안 됨 | 상속 자식 `remove`, 파일 경로 | MOD-05, MOD-02 |
+| 바닐라 화면 내용이 통째로 사라짐 | 상속 배열에 insert | MOD-04 |
+| 라벨이 빈칸 | 바인딩을 다른 컨트롤에 둠, 팩토리 셀 바인딩 타이밍 | BND-04, BND-07 |
+| 숫자가 안 보임 | 문자열과 이어 붙였는지, float인지 | TXT-06, EXP-22 |
+| 번역 키가 그대로 찍힘 | 키 오타, 공백 하나 값 | TXT-10, TXT-14 |
+| 토글이 호버 때 사라짐 | 8개 상태 | INP-10 |
+| 폼을 열 때마다 느림·숨은 슬라이더 assert | `visible` 게이트로 붙인 화면 전부 생성 | COL-10, HOST-12 |
+| 크기 바인딩이 안 됨 | 선언 `[0,0]`, 한 축만 바인딩 | LAY-10, LAY-11 |
+| 열자마자 게임 종료 | 문자열 나누기, 크기 바인딩+anchored offset+셀 | EXP-21, LAY-14 |
+| 한글 필드가 깨짐 | 바이트 단위 자르기 | EXP-09 |
+| 다른 애드온과 같이 쓰면 내 UI가 사라짐 | 타이틀 채널 공유, 정의 덮어쓰기 | HOST-14, MOD-13 |
+
+## 13.3 검증 도구와 스키마의 함정
+
+- **[DBG-05]** 공식 스키마(`@minecraft/bedrock-schemas`)의 `schemas/rp/ui/index.schema.json`은 `namespace`만 검사해서 UI 파일 검증에 쓸모없다. 실제 enum 값은 `forms/ui/ui_element.form.json`에만 있고, `types/rp/ui/UiElement.d.ts`는 enum 멤버가 비어 있다. `{실측, 코드}` (출처: BC-facts)
+- **[DBG-06]** 공식 enum과 바닐라 사용은 서로 포함 관계가 아니다. 바닐라는 enum에 없는 타입(`factory`, `collection_panel`, `tooltip_trigger` …), `binding_condition: "none"`, `font_size: "medium"`, `input_mode_condition: "gamepad"`/`"not_gamepad"`를 쓰고, enum의 `grid_rescaling_type: "none"`은 쓰지 않는다. `collection_index`, `localize`, `clip_ratio`, `property_bag`, `modifications`, `variables`, 배열형 `nineslice_size`는 공식 자료 어디에도 없다. `{바닐라, 실측}` (출처: VN, BC-facts, 부록B)
+- **[DBG-07]** 속성·값 사전은 **양방향**으로 대조한다. "바닐라가 쓰는 이름이 사전에 있는가"만 보면, 사전에 바닐라에 없는 이름(`resolve_ancestor_scope`, `scroll_box` 타입, `z_order` 등)이 섞여도 잡지 못한다. `{바닐라, 코드}` (출처: MJ 4.2 원인, MJ 8장-3, BW-doc)
+- **[DBG-08]** 커뮤니티 팩 검사기의 흔한 오탐: 바닐라 병합 파일의 namespace 없음, `_global_variables.json` 미등록 경고, 높은 레이어 경고. 반대로 `.json`이 아닌 확장자로 등록한 UI 파일은 검사하지 않고 통과시키는 도구도 있다. `{코드, 추론}` (출처: MJ 5장)
+- **[DBG-09]** 생성 도구로 만든 "평평한 최상위 정의 + 절대 px" JSON은 어떤 바닐라 화면에도 연결되어 있지 않으면 게임에 뜨지 않는다. 예제로 쓰기 전에 호스트 연결(10장)을 확인한다. `{코드}` (출처: MJ 5장)
+
+## 13.4 근거 관리 원칙
+
+- **[DBG-10]** 근거 우선순위는 ① 대상 팩과 로그 ② 고정한 바닐라 버전 ③ 확인된 외부 출처 ④ 추론이다. 문서에 적을 때 어느 단계의 근거인지 표시한다. 이 가이드의 검증 수준 표기가 그 형식이다. `{코드, 추론}` (출처: MJ 2장·8장-4)
+- **[DBG-11]** 반복이 많은 구조(비트 디코더, 노드 수백 개)는 손으로 쓰지 말고 생성기로 만든다. 스펙 파일 하나를 스크립트 인코더와 UI 생성기가 함께 읽게 하면 둘이 어긋나지 않는다. `{작동팩, 코드}` (출처: BA 1장·9장-9, BC 3장)
+
+## 13.5 바닐라 대조 방법
+
+```bash
+git clone --depth 1 --filter=blob:none --sparse https://github.com/Mojang/bedrock-samples
+cd bedrock-samples && git sparse-checkout set resource_pack/ui
+git log -1 --format='%h %cd %s'          # 이 가이드: 46ba6ea 1.26.50.4
+cd resource_pack/ui
+rg -c '"resolve_ancestor_scope"' . | wc -l          # 이름이 실제로 쓰이는가
+rg -o --no-filename '"type"\s*:\s*"[a-z_]+"' . | sort | uniq -c | sort -rn   # 값 분포
+rg -n -A10 '"server_form_factory"' server_form.json  # 구조 확인
+```
+
+- **[DBG-12]** 새 버전이 나오면 이 가이드가 기대는 바닐라 지점(`server_form.json`의 팩토리 구조, `hud_screen.json`의 `hud_title_text`·`root_panel`·`chat_grid_item`, `npc_interact_screen.json`, `chest_screen.json`의 `small_chest_screen`)을 먼저 diff한다. `{바닐라, 추론}` (출처: VN, MJ 4.1)
+
+## 13.6 1.26.50(1.26.10.4 → 1.26.50.4) 변경 중 주의할 것
+
+| 변경 | 영향 | 확인 위치 |
+| --- | --- | --- |
+| 모달 폼 `custom_form` 팩토리에 `multiselect` 행 추가 | Script API에 보내는 메서드 없음. 폼 JSON을 직접 보내는 서버는 쓸 수 있다(HOST-46) | VN server_form.json:294 |
+| 액션 폼 행 타입에 `label`, `header`, `divider` | `selection`과 인덱스 차이 | VN server_form.json:126-134 |
+| HUD 자막이 `subtitle_container_factory`로 | 자막 위치 의존 수정 확인 | VN hud_screen.json:3340 |
+| HUD 루트의 `cursor_renderer` 제거, `hud_crosshair_overlay.json`로 | 커서 기준 HUD 패치 깨짐 | VN hud_crosshair_overlay.json:4 |
+| 인벤토리 닫기 버튼 id `button.menu_inventory_exit` | 인벤토리 재스킨의 닫기 매핑 | VN inventory_screen.json |
+| 인벤토리 탭 팩토리가 `#*_tab_visible` 전역 바인딩으로 | 탭 커스터마이즈 | VN `#items_tab_visible` 등 |
+| 채팅 라벨 폭 `100% - 3px` | 채팅 재스킨 폭 | VN chat_screen.json:286 |
+
+- **[DBG-13]** 위 변경은 다른 프로젝트(MJ)의 버전 비교표를 바닐라에서 표본 재확인한 것이다. 이전 버전 팩을 1.26.50 이상에서 쓸 때 이 지점부터 확인한다. `{바닐라}` (출처: MJ 4.1·8장-1, VN)
+- **[DBG-14]** 애드온 프레임워크(bedrock-core 0.x 등)는 프로토콜이 버전마다 깨지는 변경을 했다. 의존할 때는 버전을 고정하고, 문서 사이트보다 소스 코드를 따른다. `{코드}` (출처: BC 8장)
+
+## 13.7 Bedrock Wiki 대조로 더한 규칙
+
+위키(BW) 문서를 바닐라 1.26.50.4와 대조해 더한 규칙이다. 위키 문장만 있는 것은 `미검증`, 위키의 게임 스크린샷이 있는 것은 `실측`(제3자 기록)으로 표시했다.
+
+- **[DBG-15]** JSON UI에는 버전 필드가 없다. 바닐라가 바뀌면 팩이 그대로 깨진다. 접점을 줄이는 순서: 바꿀 속성만 쓰기(FILE-21) → `modifications`(MOD-13) → 진입점 하나(MOD-15) → 경로 키 최소화(FILE-27). `{추론}` (출처: BW-best)
+- **[DBG-16]** Mojang은 화면을 Ore UI로 옮기고 있고, 평문 리소스팩은 Ore UI 화면의 배치·동작을 고칠 수 없다(버튼 모양·텍스처만 닿는다, ALT-15). 루트에 빈 `content.zipe`를 둔 팩이나 서버가 암호화해 보낸 팩은 게임 중 Ore UI 페이지를 바꿀 수 있다(ALT-11). 새 버전마다 대상 화면이 아직 바닐라 `resource_pack/ui/`에 JSON 파일로 있는지 먼저 확인한다(예: 1.26.50에는 위키가 적은 `feed_screen`, `comment_screen`, `manage_feed_screen` 파일이 없다). 설치본이 있으면 `data/gui/dist/hbui/routes.json`의 `supportedRoutes`도 함께 본다(ALT-11, ALT-13). `{미검증, 바닐라, 코드}` (출처: BW-intro 경고, BW-font, VN, OUC)
+- **[DBG-17]** 성능: 위키는 JSON UI를 엔티티 다음으로 비싼 서브시스템으로 꼽는다. 식과 바인딩 수를 줄이고(`(2 * (-1 * $n))` → `(-2 * $n)`), 같은 모양 컨트롤 여러 개는 `#texture` 같은 바인딩 하나로 합치고, 안 쓰는 컨트롤은 지우거나 `ignored: true`로 둔다. `{미검증, 추론}` (출처: BW-best)
+
+## 13.8 이 가이드의 게임 실측에서 얻은 것
+
+- **[DBG-18]** 게임은 개발 팩 폴더(이 측정의 Windows 1.26.52에서는 `%APPDATA%/Minecraft Bedrock/Users/Shared/games/com.mojang/development_*_packs`)와 월드 목록을 **시작할 때** 읽는다. 오래 켜 둔 게임은 새로 넣은 팩이나 복사한 월드를 보지 못하므로, 팩을 처음 넣었으면 게임을 다시 켠다. 월드에 팩을 붙일 때는 월드 편집 화면의 행동 팩·리소스 팩 목록에서 활성화하는 것이 확실하다. `{실측}` (출처: TP)
+- **[DBG-19]** 서버 폼에 붙인 프로브 화면이 `visible` 게이트로 모든 폼에서 생성되는 구성에서, 숫자가 아닌 본문(`'pick probe'`)에 대해 `(#v - 0)`·`(#v * 1)`을 `#size_binding_x`에 넣거나, `/ 100`을 `#clip_ratio`에 넣는 식이 있으면 액션 폼을 여는 순간 1.26.52 클라이언트가 종료되었다(1회). `collection_panel` 계산 길이 게이트·경로 사전 조회·`factory_variables` 셀이 든 이전 구성은 같은 시점에 멈췄다(2회). 어느 요소가 원인인지는 분리하지 못했다. 생성될 수 있는 모든 컨트롤의 식은 **엉뚱한 입력(빈 문자열, 다른 폼의 본문)에서도 안전해야 한다**고 보고, 숫자 속성에 넣는 식은 입력 형식을 먼저 확인하는 게이트 안에서만 생성되게 한다(COL-10, EXP-21, LAY-14). `{실측, 추론}` (출처: TP)
+
+## 13.9 다른 엔진·도구 분석에서 더한 규칙
+
+Ore UI 패치 도구(`OUC`)와 Cinnabar 재구성 엔진(`CN`)에서 얻은 방법이다.
+
+- **[DBG-20]** Ore UI 패치 도구(OUC)는 압축 코드에서 번역 키·`data-testid` 같은 안정 문자열을 닻으로 짧은 이름을 다시 뽑고, 실패한 패치는 빼고 나머지만 적용한다. JSON UI 팩도 같은 원칙(안정 이름에만 기대기, 실패를 국소화하기)을 따르면 버전 변경에 덜 깨진다. DBG-15와 같은 결론. `{코드, 추론}` (출처: OUC 4.2)
+- **[DBG-21]** 게임 없이 레이아웃·변수·식을 미리 볼 때 Cinnabar JSON-UI 편집기(jsonui.cinnabar.gg)를 쓸 수 있다. 엔진 규칙은 네이티브 재구성이지만 글꼴, HUD, 오류 처리가 바닐라와 다르므로 최종 확인은 게임에서 한다. 비상업 라이선스다. `{코드}` (출처: CN)
+- **[DBG-22]** 식의 결과를 바닐라 없이 확인하려면 Cinnabar `crates/json-ui`의 평가기를 빌드해 돌린다. 방법: Cinnabar 저장소(`ceb0fb6`에서 확인)를 클론하고, 이 프로젝트가 새로 쓴 시험 코드 `predicate_probe.rs`를 `crates/json-ui/src/predicate/tests.rs` 끝에 붙이고 `zz_probe.rs`를 `crates/json-ui/tests/`에 둔 뒤, `cargo test -p json-ui --locked --lib zz_probe -- --nocapture`(식, `PROBE` 줄)와 `cargo test -p json-ui --locked --test zz_probe -- --nocapture`(크기 식과 변수 스코프, `LEN`·`SCOPE` 줄)를 돌린다. `rust-toolchain.toml`이 Rust 1.99.0을 고정하므로 rustup이 처음에 내려받고, `json-ui` 크레이트만 빌드하면 의존성이 적어 몇 분이면 끝난다. 이 결과가 충돌 판정표의 C-04, C-16, C-41, C-42에 쓰였다. 크래시·어서트는 재현하지 않는다. `{코드}` (출처: CN-run)
+
+## 13.10 연구 서버 서버 실측으로 더한 규칙
+
+연구 서버 서버(`DF`, Dragonfly로 만든 Go 서버)를 만들며 Windows 1.26.52 에서 실측한 것이다. 서버 폼 하나로 여러 화면을 그리는 구조에서 얻었다.
+
+- **[DBG-33]** Windows 릴리스 클라이언트의 콘텐츠 로그는 `%APPDATA%/Minecraft Bedrock/logs/ContentLog<날짜>.txt`에 쌓였다. `Unknown property`는 남았지만 `%` 식의 `Invalid expression`은 남지 않았다(EXP-46). 로그에 없다고 식이 맞는 것은 아니다. `{실측}` (출처: DF)
+
+## 13.11 엔진 동작 분석으로 더한 규칙
+
+Android 1.26.52.3 클라이언트의 네이티브 라이브러리를 읽은 것이다(`NB`). 수준은 `코드`다.
+
+- **[DBG-34]** 콘텐츠 로그의 `JSON UI parse failure` 문구로 원인을 바로 찾을 수 있다. 엔진에 있는 문구: 타입 검사 `- expected a bool.`·`a number.`·`a string.`·`an object.`·`an array.`·`an array or a number.`·`an array or a string.`, 바인딩 `Must define bindings as an array.`·`Must define a binding name!`·`Must define a collection name for the binding!`·`Must define a source property name in the binding!`·`Must define a target property name in the binding!`·`resolve_ancestor_scope and resolve_sibling_scope cannot both be set!`, 팩토리 `The factory name should not be empty!`·`factory_variables should all be strings …`, 그 밖 `Invalid anim reference!`·`Must define 'images' as an array!`·`Must define state_controls as an array!`·포커스와 글꼴 문구. 참조 오류는 `Expected variable not found in ancestor tree: '%s'`(변수), `UI control reference not found: '%s'`(`@` 참조)다. `{코드}` (출처: NB 4장)
+
+## 반영안(미적용)
+
+아래는 추가 자료 조사(survey)에서 나온 규칙 제안이다. 병합 보고서에는 번호가 매겨져 있지만 위 본문의 규칙집에는 아직 반영하지 않았다. 번호는 병합 보고서의 최종 ID이고, 근거 강도는 제안 원문의 검증 수준을 따른다. 쓰기 전에 확인한다.
+
+- **[DBG-23 반영안(미적용), 스키마]** 커뮤니티 UI 스키마는 바닐라에도 오류를 낸다. 1.26.50.4 바닐라 205개 파일을 검증하면 Blockception 최신 소스는 43개 파일 116건(모르는 속성 50종), Bugrock(KalmeMarq)은 186개 파일 2,224건(크기 식·텍스처 경로 정규식), Blockception VS Code 확장 v8.0.46에 든 2025-09 스키마는 193개 파일 2,251건(`"100%c"`, 음수 offset, 크기 식 거부)이다. 스키마 오류는 먼저 바닐라에 같은 형태가 있는지 grep해서 오탐인지 가린다. `{코드}` (출처: jsonui-schemas)
+- **[DBG-24 반영안(미적용)]** 스키마를 통과했다고 게임이 받아들이는 것은 아니다. Blockception 스키마는 enum마다 "아무 식별자" 대안을 붙여 `clip_direction: "dwn"`·`font_size: "huge"`를 통과시키고, 앵커 enum에 바닐라에 없는 `left`·`top`·`center_middle`을, `clip_direction` enum에 바닐라가 쓰지 않는 `top`·`bottom`(바닐라는 `up`·`down`)을 둔다. Bugrock은 NetEase 전용 타입·속성 51종을 통과시킨다. 이름과 값은 값 사전과 바닐라 grep으로 확인한다(DBG-07). 생성기·스키마가 내는 이름은 바닐라 사용을 grep한다(예: 스크롤 뷰 역할은 `scrollbar_track`/`scrollbar_box`이고 `scroll_bar_track`이 아니다, 토글 강제 인덱스는 `toggle_group_forced_index`). `{코드, 바닐라}` (출처: jsonui-schemas, EasyUIBuilder, jsonui-lsp, VN)
+- **[DBG-25 반영안(미적용)]** 바닐라에도 깨진 값이 남아 있다: `"size": [ "fill%", "100%" ]`(sidebar_navigation.json:881), 원소가 하나인 `"size": [ "100%, 100%" ]`(store_promo_timeline_screen.json:1380), 괄호가 닫히지 않은 `"ignored": "($nx_os or $is_ps4"`(xbl_console_signin_succeeded.json:221), `"max_size": []`(ui_common.json:6551), 그리고 LAY-36의 `"100c%"`. **바닐라에 한두 번 나온 값은 유효하다는 증거가 아니다.** 근거로 쓸 때는 여러 화면에서 같은 의도로 쓰였는지 본다. `{바닐라}` (출처: jsonui-schemas, VN)
+- **[DBG-26 반영안(미적용)]** Microsoft Learn의 JSON UI 레퍼런스(`JsonUiReference`, AI 보조 생성, 2025-02-11)는 출처로 쓰지 않는다. 속성 이름 목록으로만 쓰고 타입·의미는 바닐라에서 확인한다. `font_scale_factor`·`default_focus_precedence`를 Boolean, `grid_item_template`을 Integer, `factory`를 String으로 적었고, 중국판 전용 `nine_slice_buttom`·`place_holder_text`·`slider_range`(바닐라 0회)를 섞었으며, enum 표는 `undefined`뿐이다. 또 jsonui-lsp(VS Code 확장 `jsonui-support`, MIT)는 바닐라 1.26.50.4 `ui/` 전체에서 뽑은 "컨트롤 → 타입·`$변수`" 사전으로 바닐라 템플릿이 받는 `$변수` 제안과 정의 이동을 하지만 진단·호버·레이아웃·식 검사는 없고, 마켓플레이스 판(v0.3.1)은 1.21.120.4 사전이다. `{바닐라, 코드}` (출처: web-tutorials, jsonui-lsp)
+- **[DBG-27 반영안(미적용)]** 중국판(NetEase) 문서·UI 편집기가 만든 JSON에는 국제판에 없는 속성(`is_new_nine_slice`, `nine_slice_top/left/right/bottom`·`nine_slice_buttom`, `rotate_pivot`, `rotate_angle`, `is_handle_button_move_event`, `is_swallow`, `gradient_direction`)과 타입(`stack_grid`, `rich_text`, `combox`, `joystick` 등), 템플릿(`common_selection_wheels`, `combo_box`, `mini_map`), `%모듈.메서드` 매핑이 섞여 있다. 바닐라 사용 횟수로 거른 뒤 쓴다. `{바닐라}` (출처: NetEase 문서, VN 0회)
+- **[DBG-28 반영안(미적용)]** 시각 편집기의 미리보기는 엔진 레이아웃이 아니다. JsonForge 캔버스는 `anchor_from`/`anchor_to`를 거꾸로 계산하고, 스택 패널을 쌓지 않고, `alpha`를 자식에 전파하고, `%`·`%c`·`fill`·`default`를 다루지 않는다. w1zardz 편집기는 `%c`를 가장 큰 자식으로, `default`를 내용 크기로 보고 스택 자식의 offset·앵커를 그대로 쓴다. 두 도구는 화면 크기도 다르게 가정한다(384×216, 427×240). 미리보기로는 대략의 배치만 잡고 위치는 게임에서 확인한다. 엔진 규칙에 가까운 미리보기가 필요하면 Cinnabar 편집기(DBG-21)를 쓴다. `{코드}` (출처: JsonForge, w1zardz, Cinnabar)
+- **[DBG-29 반영안(미적용)]** JsonForge의 "JSON 내보내기"는 자식을 `@` 참조 없이 이름만 넣어 자식 속성이 모두 빠지고, 바인딩 키 일부(`binding_collection_name`, `source_control_name`)를 버린다. 쓸 거라면 "애드온 내보내기"를 쓰되, HUD 오버레이(상속 배열에 insert, MOD-04), 닫기 버튼 offset(C-49), 제목이 안 맞는 폼을 빈 화면으로 만드는 서버 폼 라우터(HOST-15)는 고쳐서 쓴다. 생성기가 만든 `server_form.json`은 바닐라와 나란히 놓고 `controls`가 배열인지, 재선언 키의 상속 대상(`long_form@common_dialogs.main_panel_no_buttons`), 여러 화면 제외 게이트 식이 `and`나 빼기 사슬인지 본다. `{코드, 추론}` (출처: JsonForge, EasyUIBuilder)
+- **[DBG-30 반영안(미적용)]** 식 컴파일러(AsaJS 4.2.0)가 만든 JSON은 식 규칙으로 다시 검사한다. 확인된 문제: 삼항 `?:` 출력의 괄호 불일치, 지수 리터럴(`1e-2`)이 `0.01`(정수 0)로 나감, 리터럴만 든 보조 바인딩(BND-05), 문자열 바인딩에 `%` 적용(EXP-32), 사슬 비교 미검사(EXP-28), 소수점 리터럴을 쓸 수 없음. `{코드}` (출처: AsaJS)
+- **[DBG-32 반영안(미적용)]** 난독화·빌드 도구가 UI 파일의 **경로를 바꾸면** 바닐라 정의 재선언과 `modifications`가 조용히 무효가 된다(FILE-22, MOD-02). JsonEncryptor zip 모드 기본값(이름 해시, 정의별 분리, `ui/obfuscated/`로 이동)이 그렇다. 바닐라 경로 파일은 경로를 유지한 채 처리하고 결과 팩에서 바닐라 수정이 보이는지 먼저 확인한다. 정규식으로 JSON에 주석을 끼우는 도구("내용 어지럽히기")는 문자열 안의 `,`·`}`에서 멈춰 `"Hello, world"`를 `"Hello/*…*/, world"`로 바꿔 라벨에 보이고 식은 조용히 틀리므로, 쉼표가 든 텍스트·식이 있으면 끈다. `{코드, 추론}` (출처: JsonEncryptor)

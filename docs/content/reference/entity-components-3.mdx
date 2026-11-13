@@ -1,0 +1,517 @@
+---
+title: 엔티티 컴포넌트 레퍼런스(주요 항목) (3/15)
+description: MS Learn 엔티티 컴포넌트·이벤트·필터 목록과 주요 컴포넌트.
+sidebar_position: 92
+sources:
+  - ms-learn
+---
+
+# 엔티티 컴포넌트 레퍼런스(주요 항목) (3/15)
+
+MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 레퍼런스를 발췌한 쪽이다. 원문의 상대 링크는 제거했다.
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_damage_sensor.md`)
+
+
+### Entity Documentation - minecraft:damage_sensor
+
+Defines what events to call when this entity is damaged by specific entities or items.
+
+
+#### Damage Sensor Properties
+
+|Name       |Default Value |Type |Description |Example Values |
+|:----------|:-------------|:----|:-----------|:------------- |
+| deals_damage | false | Deals Damage choices | Defines how received damage affects the entity. |  | 
+| deals_damage (Alternate 1) | false | Boolean true/false |  |  | 
+| triggers (Damage Sensor Trigger) | *not set* | Triggers item | List of triggers with the events to call when taking specific kinds of damage. | Allay: `[{"deals_damage":"no","on_damage":{"filters":{"all_of":[{"subject":"other","test":"is_family","value":"player"},{"subject":"other","test":"is_owner"}]}}}]`, Bat: `{"cause":"fall","deals_damage":"no"}`, Breeze: `[{"cause":"fall","deals_damage":"no"},{"cause":"projectile","on_damage":{"filters":{"operator":"!=","test":"is_family","subject":"damager","value":"wind_charge"}},"deals_damage":"no"}]` | 
+| triggers (as Object) | *not set* | Object |  |  | 
+
+##### Deals Damage choices
+
+|Value       |Title |Description |
+|:-----------|:-----|:-----------|
+| yes | Yes | Received damage is applied to the entity.|
+| no | No | Received damage is not applied to the entity.|
+| no_but_side_effects_apply | No But Side Effects Apply | Received damage is not applied to the entity, but the side effects of the attack are. This means that the attacker's weapon loses durability, enchantment side effects are applied, and so on.|
+| no_but_entity_effects_apply | No But Entity Effects Apply | Damage is not applied to the entity, but knockback and enchantments are still applied and the attacker's weapon is used as normal. The entity does not flash red.|
+
+##### Triggers
+
+#### Damage Sensor Trigger Properties
+
+**JSON path:** `triggers`
+
+|Name       |Default Value |Type |Description |
+|:----------|:-------------|:----|:-----------|
+| cause | none | String | Type of damage that triggers the events. | 
+| damage_modifier | 0 | Decimal number | A modifier that adds/removes to the base damage received from the specified damage cause. | 
+| damage_multiplier | 1 | Decimal number | A multiplier that modifies the base damage received from the specified damage cause. | 
+| deals_damage | false | Boolean true/false | Defines how received damage affects the entity. | 
+| deals_damage (as String) | *not set* | String |  | 
+| event | *not set* | String | Event to emit when the trigger conditions are met. | 
+| filters | *not set* | Minecraft filter | Filter conditions for when this trigger applies. | 
+| on_damage | *not set* | Minecraft Event Trigger | Defines which entities the trigger applies to, and which event to emit when damaged. | 
+| on_damage_sound_event | *not set* | Minecraft Event Reference | Defines what sound to play when the on_damage filters are met. | 
+
+#### Samples
+
+#### Allay
+
+
+```json
+"minecraft:damage_sensor": {
+  "triggers": [
+    {
+      "deals_damage": "no",
+      "on_damage": {
+        "filters": {
+          "all_of": [
+            {
+              "subject": "other",
+              "test": "is_family",
+              "value": "player"
+            },
+            {
+              "subject": "other",
+              "test": "is_owner"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
+```
+
+#### Bat
+
+
+```json
+"minecraft:damage_sensor": {
+  "triggers": {
+    "cause": "fall",
+    "deals_damage": "no"
+  }
+}
+```
+
+#### Breeze
+
+
+```json
+"minecraft:damage_sensor": {
+  "triggers": [
+    {
+      "cause": "fall",
+      "deals_damage": "no"
+    },
+    {
+      "cause": "projectile",
+      "on_damage": {
+        "filters": {
+          "operator": "!=",
+          "test": "is_family",
+          "subject": "damager",
+          "value": "wind_charge"
+        }
+      },
+      "deals_damage": "no"
+    }
+  ]
+}
+```
+
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_despawn.md`)
+
+
+### Entity Documentation - minecraft:despawn
+
+Despawns the Actor when the despawn rules or optional filters evaluate to true.
+
+
+#### Despawn Properties
+
+|Name       |Default Value |Type |Description |Example Values |
+|:----------|:-------------|:----|:-----------|:------------- |
+| despawn_from_chance | true | Boolean true/false | Determines if "min_range_random_chance" is used in the standard despawn rules |  | 
+| despawn_from_distance | *not set* | Despawn From Distance item | Specifies if the 'min_distance' and 'max_distance' are used in the standard despawn rules. | Bat: `{}` | 
+| despawn_from_inactivity | true | Boolean true/false | Determines if the "min_range_inactivity_timer" is used in the standard despawn rules. |  | 
+| despawn_from_simulation_edge | true | Boolean true/false | Determines if the mob is instantly despawned at the edge of simulation distance in the standard despawn rules. |  | 
+| filters | *not set* | Minecraft filter | The list of conditions that must be satisfied before the Actor is despawned. If a filter is defined then standard despawn rules are ignored. |  | 
+| min_range_inactivity_timer | 30 | Integer number | The amount of time in seconds that the mob must be inactive. |  | 
+| min_range_random_chance | 800 | Integer number | A random chance between 1 and the given value. |  | 
+| remove_child_entities | false | Boolean true/false | If true, all entities linked to this entity in a child relationship (eg. leashed) will also be despawned. |  | 
+
+##### Despawn From Distance
+
+#### Despawn From Distance Properties
+
+**JSON path:** `despawn_from_distance`
+
+|Name       |Default Value |Type |Description |
+|:----------|:-------------|:----|:-----------|
+| max_distance | 128 | Integer number | Maximum distance for standard despawn rules to instantly despawn the mob. | 
+| min_distance | 32 | Integer number | Minimum distance for standard despawn rules to try to despawn the mob. | 
+
+#### Samples
+
+#### Bat
+
+
+```json
+"minecraft:despawn": {
+  "despawn_from_distance": {}
+}
+```
+
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_equippable.md`)
+
+
+### Entity Documentation - minecraft:equippable
+
+Defines an entity's behavior for having items equipped to it.
+
+> [!Note]
+> In 1.26.0, `on_equip` and `on_unequip` events on each slot no longer fire on world load; they now run only as a result of an in-game equip or unequip interaction.
+
+
+#### Equippable Properties
+
+|Name       |Default Value |Type |Description |Example Values |
+|:----------|:-------------|:----|:-----------|:------------- |
+| slots | *not set* | Array of Slots items | List of slots and the item that can be equipped. | Llama: `[{"slot":1,"item":"carpet","accepted_items":["carpet"]}]` | 
+
+##### Slots
+List of slots and the item that can be equipped.
+
+
+#### Slots Properties
+
+**JSON path:** `slots`
+
+|Name       |Default Value |Type |Description |
+|:----------|:-------------|:----|:-----------|
+| accepted_items | *not set* | Array of strings | The list of items that can go in this slot. | 
+| interact_text | *not set* | String | Text to be displayed when the entity can be equipped with this item when playing with Touch-screen controls. | 
+| item | *not set* | String | Identifier of the item that can be equipped for this slot. | 
+| on_equip | *not set* | Minecraft Event Trigger | Event to trigger when this entity is equipped with this item. | 
+| on_unequip | *not set* | Minecraft Event Trigger | Event to trigger when this item is removed from this entity. | 
+| slot | 0 | Integer number | The slot number of this slot. | 
+
+#### Samples
+
+#### Llama
+
+
+```json
+"minecraft:equippable": {
+  "slots": [
+    {
+      "slot": 1,
+      "item": "carpet",
+      "accepted_items": [
+        "carpet"
+      ]
+    }
+  ]
+}
+```
+
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_experience_reward.md`)
+
+
+### Entity Documentation - minecraft:experience_reward
+
+.
+
+
+#### Entity Experience Reward Properties
+
+|Name       |Default Value |Type |Description |Example Values |
+|:----------|:-------------|:----|:-----------|:------------- |
+| on_bred |  | Molang | A Molang expression defining the amount of experience rewarded when this entity is successfully bred. | Breeze: `"Math.Random(1,7)"` | 
+| on_bred (as Named set of objects) | *not set* | Key/item pairs of Bred (Legacy Molang Expression) items |  |  | 
+| on_bred (as Decimal number) | *not set* | Decimal number |  |  | 
+| on_death |  | Molang | A Molang expression defining the amount of experience rewarded when this entity dies. | Blaze: `"query.last_hit_by_player ? 10 : 0"`, Bogged: `"query.last_hit_by_player ? 5 + (query.equipment_count * Math.Random(1,3)) : 0"`, Cave Spider: `"query.last_hit_by_player ? 5 : 0"` | 
+| on_death (as Named set of objects) | *not set* | Key/item pairs of Death (Legacy Molang Expression) items |  |  | 
+| on_death (as Decimal number) | *not set* | Decimal number |  |  | 
+
+##### Legacy Molang Expression
+
+#### Legacy Molang Expression Properties
+
+**JSON path:** `on_bred`
+
+|Name       |Default Value |Type |Description |
+|:----------|:-------------|:----|:-----------|
+| expression | *not set* | String |  | 
+| version | *not set* | Integer number |  | 
+
+#### Samples
+
+#### Blaze
+
+
+```json
+"minecraft:experience_reward": {
+  "on_death": "query.last_hit_by_player ? 10 : 0"
+}
+```
+
+#### Bogged
+
+
+```json
+"minecraft:experience_reward": {
+  "on_death": "query.last_hit_by_player ? 5 + (query.equipment_count * Math.Random(1,3)) : 0"
+}
+```
+
+#### Breeze
+
+
+```json
+"minecraft:experience_reward": {
+  "on_bred": "Math.Random(1,7)",
+  "on_death": "query.last_hit_by_player ? 10 : 0"
+}
+```
+
+#### Cave Spider
+
+
+```json
+"minecraft:experience_reward": {
+  "on_death": "query.last_hit_by_player ? 5 : 0"
+}
+```
+
+#### Chicken
+
+
+```json
+"minecraft:experience_reward": {
+  "on_bred": "Math.Random(1,7)",
+  "on_death": "query.last_hit_by_player ? Math.Random(1,3) : 0"
+}
+```
+
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_explode.md`)
+
+
+### Entity Documentation - minecraft:explode
+
+Defines how the entity explodes.
+
+
+#### Explode Properties
+
+|Name       |Default Value |Type |Description |Example Values |
+|:----------|:-------------|:----|:-----------|:------------- |
+| add | *not set* | Add item |  | Fireball: `{"component_groups":["minecraft:exploding"]}` | 
+| allow_underwater | false | Boolean true/false | If true, the explosion will affect blocks and entities under water. This item requires a format version of at least 1.21.40. | Breeze Wind Charge Projectile: `true` | 
+| breaks_blocks | true | Boolean true/false | If true, the explosion will destroy blocks in the explosion radius. |  | 
+| causes_fire | false | Boolean true/false | If true, blocks in the explosion radius will be set on fire. | Fireball: `true` | 
+| damage_scaling | 1 | Decimal number | A scale factor applied to the explosion's damage to entities. |  | 
+| destroy_affected_by_griefing | false | Boolean true/false | If true, whether the explosion breaks blocks is affected by the mob griefing game rule. | Ender Crystal: `true` | 
+| fire_affected_by_griefing | false | Boolean true/false | If true, whether the explosion causes fire is affected by the mob griefing game rule. | Fireball: `true` | 
+| fuse_length | *not set* | Range of integers | The range for the random amount of time the fuse will be lit before exploding, a negative value means the explosion will be immediate. | Tnt Minecart: `4` | 
+| fuse_lit | false | Boolean true/false | If true, the fuse is already lit when this component is added to the entity. | Ender Crystal: `true` | 
+| knockback_scaling | 1 | Decimal number | A scale factor applied to the knockback force caused by the explosion. This item requires a format version of at least 1.21.40. | Breeze Wind Charge Projectile: `0.6`, Wind Charge Projectile: `1.22` | 
+| max_resistance | 3.40282e+38 | Decimal number | A blocks explosion resistance will be capped at this value when an explosion occurs. |  | 
+| negates_fall_damage | false | Boolean true/false | Defines whether the explosion should apply fall damage negation to Players above the point of collision. This item requires a format version of at least 1.21.40. | Wind Charge Projectile: `true` | 
+| particle_effect | explosion | String | The name of the particle effect to use. The accepted strings are 'explosion', 'wind_burst', or 'breeze_wind_burst'. This item requires a format version of at least 1.21.40. | Breeze Wind Charge Projectile: `"breeze_wind_burst"`, Wind Charge Projectile: `"wind_burst"` | 
+| power | 3 | Decimal number | The radius of the explosion in blocks and the amount of damage the explosion deals. | Breeze Wind Charge Projectile: `3`, Ender Crystal: `6`, Fireball: `1` | 
+| sound_effect | explode | String | The name of the sound effect played when the explosion triggers. This item requires a format version of at least 1.21.40. | Breeze Wind Charge Projectile: `"breeze_wind_charge.burst"`, Wind Charge Projectile: `"wind_charge.burst"` | 
+| toggles_blocks | false | Boolean true/false | If true, the explosion will toggle blocks in the explosion radius. This item requires a format version of at least 1.21.40. | Breeze Wind Charge Projectile: `true` | 
+
+##### damage_scaling
+
+A scale factor applied to the explosion's damage to entities. A value of 0 prevents the explosion from dealing any damage. Negative values cause the explosion to heal entities instead. This item requires a format version of at least 1.21.40.
+
+
+##### Add
+
+#### Add Properties
+
+**JSON path:** `add`
+
+|Name       |Default Value |Type |Description |Example Values |
+|:----------|:-------------|:----|:-----------|:------------- |
+| component_groups | *not set* | String |  | Fireball: `["minecraft:exploding"]` | 
+
+#### Samples
+
+#### Breeze Wind Charge Projectile
+
+
+```json
+"minecraft:explode": {
+  "knockback_scaling": 0.6,
+  "damage_scaling": 0,
+  "allow_underwater": true,
+  "breaks_blocks": false,
+  "causes_fire": false,
+  "max_resistance": 0,
+  "negates_fall_damage": false,
+  "particle_effect": "breeze_wind_burst",
+  "toggles_blocks": true,
+  "power": 3,
+  "sound_effect": "breeze_wind_charge.burst"
+}
+```
+
+#### Ender Crystal
+
+
+```json
+"minecraft:explode": {
+  "causes_fire": false,
+  "fuse_lit": true,
+  "power": 6,
+  "destroy_affected_by_griefing": true,
+  "fuse_length": 0
+}
+```
+
+#### Fireball
+
+At /minecraft:entity/component_groups/minecraft:exploding/minecraft:explode/: 
+
+```json
+"minecraft:explode": {
+  "causes_fire": true,
+  "fire_affected_by_griefing": true,
+  "fuse_lit": true,
+  "power": 1,
+  "destroy_affected_by_griefing": true,
+  "fuse_length": 0
+}
+```
+
+At /minecraft:entity/events/minecraft:explode/: 
+
+```json
+"minecraft:explode": {
+  "add": {
+    "component_groups": [
+      "minecraft:exploding"
+    ]
+  }
+}
+```
+
+#### Tnt Minecart
+
+At /minecraft:entity/component_groups/minecraft:instant_explode_tnt/minecraft:explode/: 
+
+```json
+"minecraft:explode": {
+  "causes_fire": false,
+  "fuse_lit": true,
+  "power": 3,
+  "fuse_length": 0
+}
+```
+
+At /minecraft:entity/component_groups/minecraft:primed_tnt/minecraft:explode/: 
+
+```json
+"minecraft:explode": {
+  "causes_fire": false,
+  "fuse_lit": true,
+  "power": 3,
+  "fuse_length": 4
+}
+```
+
+#### Wind Charge Projectile
+
+
+```json
+"minecraft:explode": {
+  "knockback_scaling": 1.22,
+  "damage_scaling": 0,
+  "allow_underwater": true,
+  "breaks_blocks": false,
+  "causes_fire": false,
+  "max_resistance": 0,
+  "negates_fall_damage": true,
+  "particle_effect": "wind_burst",
+  "toggles_blocks": true,
+  "power": 1.2,
+  "sound_effect": "wind_charge.burst"
+}
+```
+
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_health.md`)
+
+
+### Entity Documentation - minecraft:health
+
+Defines the health pool for an entity, measured in health points (1 point = half a heart). Typical values: cow (10), zombie (20), iron golem (100), wither (600).
+
+
+#### Health Properties
+
+|Name       |Default Value |Type |Description |
+|:----------|:-------------|:----|:-----------|
+| max | 20 | Integer number | Maximum health this entity can have. Can be higher than the starting value to allow healing beyond initial health. | 
+| value | 20 | Integer number | Starting health for this entity in health points (1 point = half a heart). | 
+| value (as Object) | *not set* | Value item |  | 
+
+##### Value
+
+#### Value Properties
+
+**JSON path:** `value`
+
+|Name       |Default Value |Type |Description |
+|:----------|:-------------|:----|:-----------|
+| range_max | *not set* | Integer number |  | 
+| range_min | *not set* | Integer number |  | 
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_inventory.md`)
+
+
+### Entity Documentation - minecraft:inventory
+
+Defines this entity's inventory properties.
+
+
+#### Entity Inventory Properties
+
+|Name       |Default Value |Type |Description |
+|:----------|:-------------|:----|:-----------|
+| additional_slots_per_strength | 0 | Integer number | Number of slots that this entity can gain per extra strength. | 
+| can_be_siphoned_from | false | Boolean true/false | If true, the contents of this inventory can be removed by a hopper. | 
+| container_type | none | String | Type of container this entity has. Can be horse, minecart_chest, chest_boat, minecart_hopper, inventory, container or hopper. | 
+| inventory_size | 5 | Integer number | Number of slots the container has. | 
+| private | false | Boolean true/false | If true, the entity will not drop its inventory on death. | 
+| restrict_to_owner | false | Boolean true/false | If true, the entity's inventory can only be accessed by its owner or itself. | 
+
+#### Samples
+
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_instant_despawn.md`)
+
+
+### Entity Documentation - minecraft:instant_despawn
+
+Despawns the Actor immediately.
+
+
+#### Entity Instant Despawn Properties
+
+|Name       |Default Value |Type |Description |
+|:----------|:-------------|:----|:-----------|
+| remove_child_entities | false | Boolean true/false | If true, all entities linked to this entity in a child relationship (eg. leashed) will also be despawned. | 
+
+#### Samples
+

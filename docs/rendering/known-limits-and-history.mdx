@@ -1,0 +1,193 @@
+---
+title: 제한, 버전별 변화, 도구, 미해결 질문
+description: 렌더링 영역의 알려진 제한과 우회법 표, 버전별 변화, 도구와 참고 자료, 미해결 질문
+sidebar_position: 14
+sources: [private-research, ms-learn, bedrock-wiki, bedrock-samples, particle-jester]
+---
+
+# 제한, 버전별 변화, 도구, 미해결 질문
+
+증상에서 시작해 우회법을 찾는 페이지다. 근거와 세부는 각 주제 페이지에 있다(출처: 비공개 조사).
+
+## 알려진 제한과 우회법
+
+| 제한 | 우회법 |
+| --- | --- |
+| VV 없이 블록 일부만 발광 불가 | 블록 전체 light emission, 플립북 밝기 프레임, 엔티티/파티클로 흉내 |
+| VV에서 `entity_emissive_alpha` 글로우가 안 됨 | MER 발광 채널 + texture_set + pbr capability |
+| 애드온 하나가 월드 VV를 끔 | 그 팩 manifest에 `"capabilities": ["pbr"]` 추가 |
+| 자동 노출/그림자 해상도/반사 품질을 팩으로 변경 불가 | 로컬 게임 파일 편집(본인 PC만), 컬러 그레이딩으로 보정 |
+| VV 톤매퍼에 AgX/Lottes 없음 | veka.의 재현 컬러 그레이딩 설정, 커스텀 material.bin |
+| 바이옴마다 VV 설정 필요 | `minecraft:default_*` 식별자로 전역 덮어쓰기, 늪/메사에는 client_biome 복사 |
+| 플립북이 멀리서 멈춤, 원거리 줄무늬 | `num_mip_levels` 0 또는 3, 정사각형·2의 거듭제곱·16배수 텍스처 |
+| 26.30 패딩 제거로 물 위 줄 | 정지 물 플립북을 3타일로 정의, 밉 레벨 낮추기 |
+| VV에서 합성(additive) 텍스처는 맨 위 레이어만 | 블록은 2026-07 수정, 아이템은 미수정. 별도 텍스처로 굽기 |
+| 블록 상태별 local light 불가 | 켜짐/꺼짐을 별도 블록 식별자로 |
+| 엔티티는 포인트 라이트가 될 수 없음 | 커스텀 빛 블록 사용 |
+| 반투명 파티클이 VV에서 매우 비쌈 | 수를 줄이고 불투명도를 올리고 작은 파티클로 |
+| 일반 손 아이템은 아웃라인 불가 | 어태처블 + 스텐실 머티리얼 + 아웃라인 모델 |
+| 1인칭 어태처블 위에 엔티티 그리기 | stencilRef 2 스텐실 레시피(머티리얼과 셰이더 페이지의 깊이 절) |
+| 어태처블에서 `light_color_multiplier`/`overlay_color`/`held_item_ignores_lighting` 불가 | 어태처블 자체를 발광 머티리얼로 |
+| 어태처블은 새 로케이터 불가, 커스텀 로케이터 파티클 안 됨 | 플레이어 로케이터(`lead_hold`) 재사용, 오프셋 |
+| 렌더 컨트롤러 텍스처 배열 3개 초과 크래시 | 렌더 컨트롤러 여러 개로 분할 |
+| 렌더 컨트롤러 `math.random` 깜빡임 | `initialize`/`pre_animation`에서 한 번만 설정, 또는 property |
+| 큰 엔티티가 히트박스가 시야 밖이면 사라짐 | `visible_bounds` 확대, `should_update_bones_and_effects_offscreen`, 프록시 엔티티 |
+| 플레이어 geo 합계 1.15 MB 초과 시 렉 | 모델 축소, 본/그룹 최소화, JSON 축소 |
+| 커스텀 계단/반 블록 셰이딩 버그 | `ambient_occlusion` 0, `face_dimming` false, vanilla 블록 커스텀판 |
+| VV에서 수중 fog를 옅게 할 수 없음 | 사실상 없음(설정에서 fog 끄기, volumetric 블록 라이트) |
+| VV 반사가 픽셀처럼 보임 | `texel_size` ~1024 + soft shadows |
+| VV에 거친 반사 없음 | 고해상도 무작위 방향 노멀 맵(192x192) |
+| RTX 엔티티 PBR/오버레이 텍스처 없음 | 오버레이는 다른 모델/렌더 컨트롤러로, 글로우는 `charged_creeper` + `light_color_multiplier` |
+| 디더링으로 모델이 사라짐/비침 | 설정 > 접근성에서 끄기, 최소 알파 올리기 |
+| `emitter_rate_manual` 메모리 누수 | `max_particles` 항상 지정(최대 1000) |
+| 파티클이 엔티티 변수를 읽지 못함 | client_sync 엔티티 property, MolangVariableMap, temp leaking(불안정) |
+| 리소스 팩에서 셰이더 배포 불가 | material.bin 교체, BetterRenderDragon(로컬 전용) |
+| 아이템 텍스처 애니메이션 불가 | 본 보이기, 렌더 컨트롤러 텍스처 교체, 설치 불가 애니메이션 블록 |
+| 플레이어 클라이언트 엔티티 수정 시 페르소나 스킨 꺼짐 | min engine version 추가, 설치된 게임의 최신 파일 사용 |
+| 흑백 필터 불가(블렌딩) | VV 컬러 그레이딩 채도 |
+
+## 버전별 변화
+
+- **1.16**: mipmap 설정 파일 등장. 이 무렵부터 vanilla 머티리얼 상속 문제가 wiki에 기록됨.
+- **1.17**: 엔더 드래곤 runtime_identifier의 원거리 렌더링이 패치됐다는 주장(**conflicting**).
+- **1.18.30**: 리소스 팩 카메라 파일 제거(한 멤버).
+- **1.20.80-1.21.80**: 블록 라이트가 volumetric fog에 영향을 줌. 이후 의도적으로 분리.
+- **1.21.60+**: 커스텀 계단/반 블록 material instance 조명 버그가 시작됐다는 의견.
+- **1.21.80**: TAAU가 흐려짐. lighting 설정 format 1.21.80.
+- **1.21.90**: vanilla VV PBR 도입, RTX에도 적용(texture_set 공유). 기본 VV 설정이 `resource_packs\1.21.90`에. 카메라 거리 기준 사운드 감쇠. 컬러 그레이딩/fog 형식 1.21.90.
+- **1.21.12x(GDK)**: 파도 `sample width` 제거, 정적 라이트 프리뷰.
+- **1.21.120**: VV 스텐실 "어느 정도" 수정. `local_lighting.json` 형식 1.21.120. 커스텀 블록 `"emissive": true` 포맷 1.21.120+. render distance fog 수정. RT 포인트 라이트 깨짐.
+- **~2025-10-31 GDK 릴리스**: 근접 디더링 도입, 화면 애니메이션 UI 렉, UI 설정 리셋.
+- **2025-11-04 프리뷰**: materials index의 물 변경(바다 거품 아티팩트 제거).
+- **2025-11(빌드)**: 플레이어/어태처블 로케이터 깨짐.
+- **1.21.130**: RT 포인트 라이트 절반 수정. 쇼케이스에서 색 변경은 텍스처 교체.
+- **2025-12-15 정식판**: 1인칭 어태처블 부분 알파 ~50%에서 잘림.
+- **26.0.23(프리뷰, 2025-12 말)**: 새 월드에서 MER이 보이는 아틀라스 손상.
+- **2026-01**: 디더링이 손 아이템으로 확대. ~2026-01-08 프리뷰 키프레임 sky intensity. 2026-01-13 무렵 프리뷰에서 16x16 초과 아이템 텍스처 버그 수정. 2026-01-14 Editor 바이옴별 VV 설정. ~2026-01-24 풀 블록 포인트 라이트. 2026-01-27 래스터 오버레이가 sRGB로. 1월 말 메시 모델 Fancy 스무딩 문제 시작.
+- **26.0(2026-02-10/11)**: 엔티티 틴트/멀티텍스처, End 하늘, 태양/달, 날씨 머티리얼 감마 보정(비-ACES 톤매퍼의 과포화 태양/달 수정, 엔티티 머티리얼도 변경됐으나 변경 로그엔 없음). 아기 몹 모델 변경. BetterRTX/RTX PBR 깨짐, 2026-02-14 BetterRTX 복구.
+- **1.26.10**: `ambient_occlusion` 숫자 0과 `face_dimming` false로 AO 버그 회피 가능. texture set format 1.26.10 사례.
+- **26.10 stable(2026-03)**: 정적 라이트와 색 블록 라이트가 volumetric fog에 영향. Preview 26.10.x에서도 local_lighting이 동작하지 않는다는 보고.
+- **26.1x 프리뷰**: VV Nether 심한 렉.
+- **2026-03-11~18 프리뷰**: `orbital_offset_degrees` 항상 0(깨짐).
+- **26.20.x**: 머티리얼 형식 변경으로 BetterRTX 프리셋 크래시. 왁스칠 구리 랜턴 `light_color` 무시. 26.20.21 동기화 버그 완화.
+- **~2026-04-21 프리뷰**: 아틀라스 변경으로 하이트맵 이음매와 RTX atlas tracing. 2026-04-30까지 미수정, 2026-05-01 프리뷰에서 수정. 정식판은 영향 없음.
+- **2026-04-30 프리뷰**: fog/lighting 키프레임(volumetric 밀도/scattering/absorption). DLSS 310.5.3.
+- **2026년 봄(2026-05-01 언급)**: Android와 PS4/Xbox One 포인트 라이트 제거. 하이트맵이 아틀라스 변경 후 깨졌다가 Mojang 수정 예정.
+- **2026-05-06 프리뷰**: RTX 새 하이트맵 저장 방식. veka. BetterRTX UV 갱신.
+- **2026-05-12 프리뷰**: TAA 지터 수정. `shaders` 폴더의 빈 `materials.index.json`.
+- **2026-05-18 프리뷰**: 떨어지는 블록이 RTX에 표시.
+- **2026-06 업데이트**: 2의 거듭제곱이 아닌 아틀라스 손상 보고. `padding`이 지형 아틀라스에서 무효. `num_mip_levels` 등 변경이 vanilla에도 적용.
+- **2026-06-10**: RTX 코드 수정 재적용(셰이더 템플릿에 `Support for 26.30.32` 필요).
+- **2026-06-18/19**: 아웃라인 Template V3(3.2).
+- **2026-06-20**: 포인트 라이트와 그 그림자가 "Point light quality" 하나로 합쳐짐.
+- **26.30**: 아틀라스 타일 패딩 제거(MCPE-240144).
+- **2026-07**: 포인트 라이트 low 등급 제거, 16/32/64 등급. 동적 그림자 아틀라스. 2026-07-10 코드 리뷰에서 용암 포인트 라이트 성능 수정. 2026-07-15까지 블록 합성 텍스처 VV 수정.
+- **26.50**: 용암 포인트 라이트 성능 개선(~80 fps).
+- **2026-08**: 현세대 콘솔 포인트 라이트 32개. 2026-08-06 프리뷰 `WaterSimulation` material.bin.
+- **1.26.40/.50**: `item_display_transforms` 버그.
+- **2026-09-22 프리뷰**: `transitioning_ambient_scalar` 추가. Series S 96개, Series X/PC 256개 포인트 라이트.
+- **26.52**: 커스텀 파노라마가 깨졌다는 보고.
+- **26.60**: 작은 텍스처 첫 로드 블러, 프리뷰 3D 조준점 이상.
+- **2026-10-20 프리뷰**: 포인트 라이트 그림자 픽셀 정렬, 실시간 복귀(가까운 그룹만), self shadowing 복귀.
+
+## 도구와 자료
+
+**공식 문서(Microsoft Learn)**
+- VV 개요: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/?view=minecraft-bedrock-stable , 소개 https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/introvibrantvisuals?view=minecraft-bedrock-stable
+- PBR 개요(MER, 노멀 맵): https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/pbroverview?view=minecraft-bedrock-stable (#normal-map 절)
+- Blockbench로 MER 만들기: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/useblockbenchtocreatemodelswithtextures?view=minecraft-bedrock-stable
+- SSS: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/subsurfacescatteringcustomization
+- 컬러 그레이딩/톤매핑: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/colorgradingtonemappingcustomization
+- 조명(로컬 라이트): https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/lightingcustomization?view=minecraft-bedrock-stable#local-lights
+- 물: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/watercustomization
+- volumetric fog/light shaft: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/volumetricfoglightshaftscustomization?view=minecraft-bedrock-stable
+- 머티리얼 파일: https://learn.microsoft.com/en-us/minecraft/creator/documents/material-files#technical-details
+- 블록 render method: https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/blockcomponents/minecraftblock_material_instances?view=minecraft-bedrock-stable#render-method-choices
+- 렌더 컨트롤러: https://learn.microsoft.com/en-us/minecraft/creator/documents/animations/animationrendercontroller
+- 파티클 참조: https://learn.microsoft.com/en-us/minecraft/creator/reference/content/particlesreference/particlesintroduction?view=minecraft-bedrock-stable
+
+**샘플**
+- Mojang bedrock-samples(텍스처, 파티클, fog, horse_v3, armor_stand 애니메이션, `panoramahdr_0.hdr`): https://github.com/Mojang/bedrock-samples , https://github.com/Mojang/bedrock-samples/tree/main/resource_pack , .../resource_pack/particles , .../resource_pack/fogs
+- VV/디퍼드 스타터: https://github.com/microsoft/minecraft-samples/tree/main/deferred_lighting_starter (blob 경로도 동일)
+- 오픈소스 VV fog 예: github.com/stephenle19/LerianX-Visuals
+
+**wiki.bedrock.dev**
+- 머티리얼: https://wiki.bedrock.dev/visuals/materials , https://wiki.bedrock.dev/documentation/material-config-description , wiki.bedrock.dev/documentation/materials(#emissive)
+- 글로우 텍스처: https://wiki.bedrock.dev/visuals/glowing-texture ; 애니메이션 엔티티 텍스처: https://wiki.bedrock.dev/visuals/animated-entity-texture ; 애니메이션 이펙트: https://wiki.bedrock.dev/visuals/animation-effects ; 그림자 제거: https://wiki.bedrock.dev/visuals/remove-shadows (#render-when-invisible)
+- 텍스처 아틀라스: https://wiki.bedrock.dev/concepts/texture-atlases (#mipmapping, #additive, #padding)
+- 블록: https://wiki.bedrock.dev/blocks/custom-glass-blocks , https://wiki.bedrock.dev/blocks/vanilla-block-models#list-of-vanilla-models , https://wiki.bedrock.dev/blocks/block-tinting#texture-tinting
+- 어태처블: https://wiki.bedrock.dev/items/attachables ; 애니메이션 컨트롤러: https://wiki.bedrock.dev/animation-controllers/animation-controllers-intro ; 포맷 버전: https://wiki.bedrock.dev/guide/format-version#format-version-is-not-game-version
+- 파티클 구 이미터: https://bedrock.dev/docs/stable/Particles#Emitter%20Shape%20Sphere%20component ; 파티클 목록: https://minecraft.wiki/w/Particles_(Bedrock_Edition)
+- 반투명 쌓기 머티리얼: the-bedrock-notebook.dev materials
+
+**편집기와 플러그인**
+- Snowstorm(파티클 편집기): https://snowstorm.app
+- Blockbench: Meshy(메시를 geo.json으로), Item Wizard(어태처블 애니메이션), title generator(3D 제목), texture_set/PBR 헬퍼("Add material")
+- BBModel Unpack(VS Code, .bbmodel에서 geometry/애니메이션/컨트롤러/텍스처 추출, 폴더 단위 가능): https://marketplace.visualstudio.com/items?itemName=Kaioga.bbmodel-unpack , https://github.com/Kaioga5/BBModel-Unpack
+- MC Texture Browser: https://marketplace.visualstudio.com/items?itemName=FineArts.mc-texture-browser , 웹 https://mc-assets.fineartsmc.com/
+- Framebook Visual(프레임을 플립북 시트와 flipbook_textures.json으로): https://piggamers4u.github.io/Framebook-Visual/
+- noisier(PNG 픽셀에 색상/채도 노이즈): `npx noisier in.png out.png`
+- 글리프 생성기: mcbeeringi.github.io/apps/mc/glyph_v1.html , darkness9373.github.io/Glyph-Maker ; 폰트 예: github.com/ZtechNetwork/MCBVanillaResourcePack
+- BlockMotion Studio(MP4/GIF를 메뉴 배경 .mcpack으로): blockmotion.vercel.app
+- 블록/아이템 색 참고: https://jom-er.github.io/Voxitema/
+- TesserPack 최적화 도구(알파 0 픽셀 색을 지워 SSS를 깨뜨릴 수 있으니 주의)
+- Blockbench MCP + AI 모델링 스킬: https://github.com/iMasterProX/mcbemodelingmasterAI
+- GIMP/Photoshop(하이트맵, MER TGA, .hdr 내보내기)
+
+**셰이더, RTX 도구**
+- BetterRTX(프리셋 빌더 bedrock.graphics/creator), EscheridiaRT: https://github.com/QuirkyPlague/EscheridiaRT
+- BetterRenderDragon(BRD), MaterialBinLoader, Lazurite(머티리얼 컴파일러, Android 편집), newb 셰이더 저장소, veka0/mcbe-shader-codebase(VV 셰이더 소스)
+- DLSS: techpowerup DLL, DLSS Swapper
+- ReShade(FXAA, DOF 대안, Windows)
+
+**참고 자료와 예제**
+- poggy의 디퍼드 표: https://poggy.org/Main/Wiki/deferred_table.html
+- GDC "Modernizing the Rendering of Minecraft": https://gdcvault.com/play/1035685/Modernizing-the-Rendering-of-Minecraft
+- Khronos PBR Neutral: https://github.com/KhronosGroup/ToneMapping/blob/main/PBR_Neutral/pbrNeutral.glsl ; AceX: odinsmods.github.io/posts/acex-tonemapper/
+- quirkyplague의 VV PBR 영상: (링크 생략) ; 파티클 대신 엔티티 스레드: (링크 생략)
+- 경로 추적/irradiance cache 영상 youtu.be/mDlmQYHApBU, VV 경로 추적 데모 youtu.be/x4IqwdnBg7w
+- Server-graphics Atmospherics API: https://stirante.com/script/server-graphics/1.0.0-beta.1.26.0-preview.26/classes/Atmospherics.html#setskyhorizoncolor ; `setPropertyOverrideForEntity`: stirante.com/script/server/2.6.0/classes/Player.html#setpropertyoverrideforentity
+- 엑스레이 팩: https://github.com/ryanlua/fluoroscopy ; 깔때기 Java 모델: https://github.com/GiwbyAlbatross/vanilla/blob/main/assets/minecraft/models/block/hopper.json
+- 블록을 엔티티로 배치하는 블로그: https://github.com/theaddonn/Blogs/blob/main/block_as_entities/README.md
+- 입김 파티클(Apache 2.0): https://github.com/whynotoss/cold-breath ; 플레이어 아웃라인: https://github.com/JuanLuci/Player-Outline
+- 자동 노출 피드백 글: https://feedback.minecraft.net/hc/en-us/community/posts/41526941899149-Give-a-toggle-to-turn-off-autoexposure
+- Backrooms RTX 맵: https://www.curseforge.com/minecraft-bedrock/maps/backrooms-rtx
+- 커뮤니티 템플릿과 애드온(커뮤니티 스레드): arxance "Entity Outline"(Template V3), "Dynamic Atlas Compositing", "Colormap Known Things", "All Blend Modes", "Custom Crossbow Template", "Better Vibrant Visuals Color Grading", "Better Mipmapping"(catgamer693), veka의 HDR 큐브맵 스크립트와 톤매퍼 설정
+- MCPE 버그: MCPE-237912, MCPE-223126, MCPE-237517, MCPE-237493, MCPE-236317, MCPE-235788, MCPE-240144(mojira.dev/MCPE-240144), MCPE-240476, MCPE-240457, MCPE-241087, MCPE-230030, MCPE-184865, MCPE-177602, 그리고 VV와 RTX 페이지의 RTX 버그 목록
+
+## 미해결 질문
+
+- 팩이 pbr capability를 가지고 있어도 VV가 켜지지 않는 경우의 다른 원인, 그리고 암호화된 팩에서 VV를 켜는 방법.
+- Preview 26.10.x에서 `local_lighting.json`이 동작하지 않는다는 보고(2026-02/03)의 원인.
+- 플레이어 엔티티 PBR이 VV에서 동작하는지(동작한다는 보고와 하드코딩이라 안 된다는 보고).
+- VV에서 vanilla 갑옷 장식을 MERS로 발광시키는 방법.
+- 발광 머티리얼이 낮에 아래에서 "섬광탄"처럼 번쩍이는 현상, 커스텀 entity.material에서 광택이 발광 갑옷 장식을 가리는 현상.
+- 저폴리 메시 모델이 Fancy에서 부드럽게 셰이딩되는 문제의 해결(면 디밍 가설만 있음).
+- 수면의 반투명 엔티티가 뒤쪽 엔티티를 지우는 깊이 전용 패스 문제.
+- 글로벌 스텐실 아웃라인이 모델 위에 그려지는 문제.
+- 염색 목걸이 틴트가 기본 텍스처로 번지는 문제, `custom_animated:entity`(USE_UV_ANIM+ALPHA_TEST)의 검은 배경.
+- 렌더 컨트롤러 1200개 대 40개의 RAM 영향, 두 번째 렌더 컨트롤러에서 `query.property('x')==4`가 안 되는 이유.
+- 안장 레이어(`Texture.saddle : Texture.empty`) 렌더 컨트롤러, 커스텀 철 골렘 투명 텍스처/변형.
+- 어태처블 색을 `color`/`overlay_color`로 바꾸는 방법.
+- 겉날개와 망토 텍스처 충돌.
+- 카메라를 향하지 않는 떠 있는 텍스트/빌보드, 클라이언트 측 틱당 파티클 생성 확률, 변수로 정하는 파티클 수명.
+- `per_render_expression`/`creation_expression`으로 파티클별 오프셋을 설정하는 방법, `particle_appearance_tinting`의 spellcolor 색상 변환.
+- 커스텀 트레일 파티클의 RAM 누수(이미터 미삭제 의심).
+- 파티클 이벤트로 서버 측 사운드를 재생하는 방법(Snowstorm 문서 버그).
+- blend(fog)와 add(반딧불이) 파티클 사이의 깜빡임.
+- `facing_camera_mode: direction_x` 단일 빔이 보이지 않는 이유.
+- 큰 모델이 렌더 거리와 별개로 fog를 무시하게 하는 방법, 빛 레벨에 따라 숨기는 방법.
+- VV에서 `/fog push`로 하늘을 물들이는 방법, 비 fog 파일로 vanilla fog를 덮어쓰는 방법, client_biomes의 `weather` fog.
+- fog 적용 후 하늘 색을 페이드 없이 즉시 바꾸는 방법, 서버에서 커스텀 차원/End 하늘을 바꾸는 방법.
+- `atmospherics.json`의 "no valid version"/"Identifier already exists" 오류 해결.
+- 구름 움직임 토글.
+- 정적 파노라마나 위로 패닝하는 메인 메뉴.
+- VV 커스텀 블록/아이템 PBR을 추가할 때의 z-fighting.
+- 무성한 16x1x16 잎 타일의 MER/노멀이 특정 애드온과 함께일 때만 잘못 렌더링되는 문제.
+- ~300개 텍스처 팩에서 terrain_texture 변형 배열이 블록 텍스처를 무작위로 깨뜨리는 원인.
+- 서브팩의 terrain texture와 기본 팩의 우선순위(답이 검증되지 않음), colormap grass.png가 측면 오버레이를 물들이지 않는 문제.
+- `spawn_aoe_cloud` 색 범위(0-255인지 정규화인지).
+- UV의 흰 선(텍스처 전송 버그)의 우회책.
+- vanilla 상자, PBR, 옛 물 셰이더를 단순 팩으로 재현하는 방법.
+- 진짜 .hlsl 셰이더를 작성하는 방법에 대한 안내.
+- 자동 노출의 `log_luminance_range`가 하는 일.

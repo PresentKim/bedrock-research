@@ -1,0 +1,97 @@
+---
+title: 아이콘(geo-item)과 컨테이너 UI
+description: Ore UI 아이템 렌더러 geo-item://의 해석 규칙과 커스텀 아이템 그리기, 컨테이너 DDUI 화면과 서버가 열 수 없는 까닭, 연구 화면 사례.
+sidebar_position: 6
+sources:
+  - repo-ore-ui-loading
+  - private-research
+---
+
+# 아이콘(geo-item)과 컨테이너 UI
+
+(출처: repo-ore-ui-loading, private-research NB-21·NB-22)
+
+## 1. `geo-item://` 아이템 렌더러
+
+### 개념
+
+게임 중 번들은 아이템 아이콘을 `<fast-img src="geo-item://id?width=px&height=px">`로 그린다(컨테이너 슬롯, 거래 화면). 엔진이 그 아이템을 직접 렌더링한다. 주입 JS의 `<img>`에도 그대로 쓸 수 있다. JSON UI의 아이템 렌더러(`item_renderer`)와 같은 엔진 경로다.
+
+### 예
+
+```html
+<img src="geo-item://diamond_sword?width=64&height=64">
+<img src="geo-item://stone?width=64&height=64&bag=%7B%22%23item_id_aux%22%3A786432%7D">
+```
+
+둘째는 호스트에 바닐라 이름 `stone`을 두고, `bag`으로 `{"#item_id_aux":786432}`(런타임 ID 12 × 65536 + 메타 0)를 URL 인코딩해 준 것이다. 그릴 아이템은 `bag`이 정한다.
+
+### 해석 규칙 `{코드}`
+
+`geo-item://`은 `paperdoll://`, `https://`와 함께 등록되고(스킴 등록 함수 VA `0xb811e34`, 같은 처리기 공장을 플래그 0/1로 씀), 처리기 `OreUI::GeometryAtlasResourceHandlerImpl`(vtable `@0x12ea8058`)이 URL을 `OreUI::ItemResourceResolver`(vtable `+0x18`, `@0x0b91af24`)에 넘긴다. 결과로 `GeometryAtlas::ItemHandleFactoryImpl`(vtable `+0x10`, VA `0x9666138`)이 아이템 핸들을 만든다.
+
+1. URL의 **호스트**가 아이템 이름이다. `ItemRegistryRef::lookupByName`으로 찾고, 못 찾으면 아무것도 그리지 않는다.
+2. 쿼리 키는 FNV-1a 32비트 해시로 가린다: `width`(`0x95876e1f`), `height`(`0xd5bdbb42`), `id`(`0x37386ae0`, 정수), **`bag`**(`0x63b75f31`, URL 디코드 후 JSON). 기본 크기는 50이다.
+3. `bag`은 JSON UI 아이템 렌더러의 속성 묶음(property bag)이다. 속성 묶음에 `#item_id_aux`가 없으면 공장이 1에서 찾은 아이템의 id·aux 값을 넣는다. **있으면 그 값을 그대로 쓴다.**
+
+그래서 호스트에는 아무 바닐라 이름을 두고, 그릴 아이템은 `#item_id_aux`(런타임 ID × 65536 + 메타, JSON UI의 AuxId와 같은 값)로 줄 수 있다. 등록된 커스텀 아이템과 커스텀 블록이 JSON UI처럼 엔진 렌더로 나온다. (12차의 ADRP+ADD 탐색이 사용처를 못 찾은 것은 그 코드가 분석 도구에서 함수로 묶이지 않았기 때문이고, 64개 명령 창으로 바이트를 다시 훑어 찾았다.)
+
+### 실측
+
+| 입력 | 결과 |
+| --- | --- |
+| `diamond_sword`, `diamond`, `apple`, `totem_of_undying`, `bow`, `elytra` 등 | 됨. 아이템은 스프라이트 |
+| `stone`, `grass_block`, `chest`, `furnace`, `glass`, `oak_log` 등 | 됨. 블록은 엔진이 그린 3D 아이소메트릭 아이콘 |
+| `minecraft:diamond_sword`, `diamond_sword:0`, `264`(숫자), `item.diamond_sword` | 안 됨(빈 그림) |
+| 등록된 커스텀 아이템 `연구 서버:ingot_steel`, `ingot_steel`, `minecraft%3Adiamond_sword` | 안 됨(빈 그림) |
+| 호스트에 AuxId나 런타임 ID를 그대로 | 안 됨 |
+| `stone?bag=` + URL 인코딩한 `{"#item_id_aux":<런타임 ID × 65536>}` | **됨.** 커스텀 강철 주괴 |
+| 같은 방법으로 바닐라 다이아몬드 검 | **됨** |
+| 같은 방법으로 등록한 커스텀 블록(자체 지오메트리 도관, 면마다 다른 텍스처의 연구대 큐브) | **됨.** 3D 아이콘 |
+| `bag`을 인코딩하지 않음 | 안 됨 |
+| `#item_id_aux`에 런타임 ID(× 65536 없이) | 안 됨 |
+
+- 호스트에 `:`가 들어가면 그리지 않았다. 그래서 이름으로는 커스텀 아이템을 줄 수 없고 `bag`으로 준다.
+
+### 렌더러의 아이콘 값
+
+| 값 | 그리는 법 | 결과 |
+| --- | --- | --- |
+| `geo:diamond_sword` | `geo-item://diamond_sword?width=&height=` | 엔진이 그린다 |
+| `aux:AuxId` | `geo-item://stone?width=&height=&bag=`(인코딩한 `#item_id_aux`) | 엔진이 그린다. 커스텀 아이템·블록도 된다 |
+| `tex:textures/items/pebble_stone` | `pack://textures/items/pebble_stone.png?filtering=point` | 팩 텍스처. 평문 팩에서도 된다 |
+
+- AuxId는 JSON UI와 같은 값이다: 런타임 ID × 65536 + 메타. Dragonfly에서는 `world.ItemRuntimeID(it)`의 `rid<<16 | meta`다.
+- 아이템 아이콘은 모두 `aux:`로 보낸다. `geo:`와 `tex:`는 서버에 없는 아이템의 대체다(클라이언트가 모르는 아이템은 `aux:`로 그릴 수 없다). UI 그림(`textures/ui/...`)만 `tex:`다.
+- 시험 서버는 연구 서버의 아이템을 가져올 수 없어서, 내보내기 스크립트가 df 아이템 175개의 식별자, 이름, 블록의 기본 상태 지오메트리·회전·면별 재질을 `codex.json`에 적고, 등록 코드가 그대로 등록한다. 연구 서버에는 변경이 없다(내보내기 테스트를 임시로 복사해 실행한 뒤 지운다).
+- `pack://textures/...png?filtering=point`는 신뢰하지 않는 서버 팩의 텍스처도 읽는다. 바닐라 `close_button_default`는 `pack://`로 읽히지 않았고 `_light`는 읽혔다.
+
+## 2. 컨테이너(화로·상자) UI
+
+### 엔진의 Ore UI 컨테이너 `{실측, 코드}`
+
+- 바닐라 DDUI 루트 `minecraft:chest_screen`·`barrel_screen`·`shulker_box_screen`과 번들 안 `furnace`·`hopper` 등 11개 레이아웃은 데이터 저장소 `minecraft` / `container`에서 읽는다(`name`, `colorMode`, `slots.levelEntityContainer[i]` = `{id, amount, containerItemType, details, ...}`). 슬롯 컴포넌트(`Container.Slot`)가 `geo-item://id`로 아이템을 그린다.
+- 이 클라이언트(1.26.52 정식판)에서 실제 상자를 열면 **기존 JSON UI 상자**가 열렸다. 엔진은 아직 컨테이너를 Ore UI로 보내지 않는다.
+- 서버가 `ShowScreen("minecraft:chest_screen")`으로 열면 DDUI 페이지는 그 화면으로 바뀌지만 `container` 데이터가 비어 아무것도 그리지 않았다. 서버가 `container` 속성을 직접 채우자 데이터는 JS까지 왔지만(891B) 바닐라 Ore UI 상자는 여전히 그리지 않았다. 바닐라 컨테이너 컴포넌트는 엔진의 진짜 컨테이너 세션이 있어야 도는 것으로 보인다 `{추론}`.
+
+### 무엇이 Ore UI로 바꾸나 `{코드}`
+
+- 번들의 라우트 `/gameplay/block-actors/:id`는 기능 플래그 `vanilla.oreUIGameplay`가 켜져야 올라간다(`alwaysMountedWithFeatureFlag`).
+- facet `vanilla.screenSpecificOptions`에 속성 `devOreUIGameplayUI`가 있다(`@0x09e6f6cc`). 게터(`@0x09e6f998`)는 옵션 593(`0x251`)의 정수 값이 1인지 보고, 세터(`@0x09e6f9fc`)는 켜면 1, 끄면 2를 쓴다. 이 옵션을 읽는 곳은 둘 말고 두 함수(`@0x0b5db54c`, `@0x0b5db59c`)다. 둘째는 화면 번호가 비트 마스크 `0x380103ef`에 드는지까지 보므로 화면 종류별로 Ore UI 전환을 허용하는 표로 보인다 `{추론}`. 개발자 빌드 옵션이라 정식판 설정 화면에는 나오지 않는다.
+- `enableSDLInventoryPage`(기능 토글 `0x28`, 원격 플라이팅 키 `mc-enable-sdl-inventory`, 기본 꺼짐)는 이름과 주변 토글로 보아 상점 쪽 보유 콘텐츠 페이지로 보인다 `{추론}`. 게임 안 인벤토리와 다르다.
+- 두 스위치 모두 클라이언트의 옵션이나 Microsoft 플라이팅이다. 서버가 패킷으로 켜는 통로는 찾지 못했다.
+
+### 서버가 흉내 낸 컨테이너는 접었다 `{실측}`
+
+렌더러로 상자·화로·인벤토리를 직접 그리는 `/invui`를 만들어 시험했다. 슬롯 내용은 맞게 보였지만 진짜 컨테이너가 아니어서 바닐라 조작이 없었다(시프트 클릭, 커서에 붙은 아이템, 드래그로 나누기, 숫자 키). 모두 JS와 서버로 다시 만드는 것은 득보다 실이 커서 지웠다. 컨테이너는 바닐라 JSON UI 화면을 리소스팩으로 꾸미는 쪽이 맞다. (한 Dragonfly 기반 서버는 이후 서버 쪽 클릭 규칙까지 직접 구현한 인벤토리 화면을 만들었다. [한 Dragonfly 기반 서버 적용 사례](./server-case.mdx) 참고.)
+
+## 3. 예: 연구 서버 연구 화면을 DDUI로 `{실측}`
+
+연구 서버의 연구 화면(JSON UI 서버 폼)을 렌더러로 다시 만들었다.
+
+- **데이터**: 연구 99개(ID, 선행, 비용, 해금, 한국어 이름·짧은 설명·소개, 화면 문구 키). 아이콘은 바닐라면 `geo:이름`, 연구 서버 아이템이면 `item_texture.json`의 텍스처, 기계·도관 같은 커스텀 블록이면 `terrain_texture.json`의 앞면·옆면 텍스처다.
+- **규칙은 원래 화면과 같다.** 선행 연구가 모두 끝나면 열린다. 남은 선행이 하나이고 그것이 열려 있으면 회색 미리보기다. 열린 것, 미리보기, 끝난 것 순서다. 비용은 한꺼번에 내거나 전혀 내지 않는다. 화면 문구는 df의 i18n 문자열(`§` 색 포함)을 그대로 쓴다. 플레이어 인벤토리는 서버 쪽 재고로 대신했다(시험용 "재료 채우기", "초기화").
+- **화면**: 머리(제목, 탭 "연구 필요 N"/"연구 완료 N", 도움말, 닫기), 왼쪽 연구 격자(스크롤, 테두리 색 초록 = 지금 가능, 노랑 = 재료 부족, 회색 = 미리보기, 선택은 금색, 마우스를 올리면 이름과 짧은 설명), 오른쪽 상세(큰 아이콘, 이름, 상태, 소개, 필요한 재료와 보유 수 색, 보상 레시피, "연구 진행", "선행 연구: ..." 버튼), 아래 알림 줄.
+- **성능**: 화면 구조는 한 번만 보낸다. 바뀌는 부분은 `region`으로 나눴다. 선택을 바꾸면 상세 영역과 선택 표시 값 두 개만, 연구를 마치면 격자 영역과 탭 수만 다시 보낸다.
+- **실측(Windows 1.26.52)**: 첫 화면, 연구 진행(완료 알림·탭 수·격자 갱신), 재료 부족 알림, 미리보기 선택과 툴팁, 선행 연구로 이동, 완료 탭, 도움말 토글이 모두 됐다. 커스텀 텍스처와 3D 블록 아이콘이 같이 보였다.
+- **연구 서버에 넣으려면**: 리스너를 감싸는 DDUI 처리와 렌더러 팩(암호화해서 보냄)을 옮기고, 재고 대신 실제 연구 함수를 쓰고, i18n 문자열을 플레이어 언어로 바꾸고, 도감 이동을 붙이고, 게임 업데이트마다 번들 해시를 맞춘다.

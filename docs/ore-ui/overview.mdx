@@ -1,0 +1,93 @@
+---
+title: Ore UI 개요
+description: Ore UI는 어디서 불러오고 리소스팩이 어디까지 닿는가. 결론표, 엔진, 파일 위치.
+sidebar_position: 1
+sources:
+  - repo-ore-ui-loading
+  - repo-ore-ui-customizer
+  - bedrock-wiki
+  - gameface-docs
+  - ms-learn
+---
+
+# Ore UI 개요
+
+분석 대상은 Windows 1.26.52(`Microsoft.MinecraftUWP 1.26.5203.0`) 설치 폴더, Android 1.26.52.3 네이티브 클라이언트 라이브러리의 엔진 동작 분석, 2026-10-23에 Windows 1.26.52 클라이언트로 Dragonfly 시험 서버가 탐침 리소스팩(평문과 암호화)을 보낸 실측이다. (출처: repo-ore-ui-loading)
+
+## 엔진과 이름
+
+Ore UI를 그리는 엔진은 Coherent Labs의 Gameface다. 예전 이름이 Hummingbird라서 설치 폴더가 `hbui`(HummingBird UI)다. Mojang 개발자가 Q&A에서 "Hummingbird는 GameFace의 옛 이름이고, 새 Bedrock UI를 만들려고 쓰는 UI 기술"이라고 답했다(출처: bedrock-wiki, GameTest Q&A). Gameface는 브라우저가 아니라 게임용 HTML·CSS 엔진이므로 웹 표준 가운데 빠진 것이 있다. 확인한 것은 다음과 같다.
+
+- 일반 `div`에 `click`이 오지 않는다. `mousedown`을 쓴다.
+- 여러 값을 받는 단축 속성 안의 `calc()`와 `inset` 그림자는 무시된다.
+- `@media`를 쓰지 않는다.
+- `min-width: 0`이 듣지 않는다.
+- 스크롤 막대를 그리지 않는다.
+- `fetch`가 없다.
+
+자세한 목록은 [페이지 환경](./page-environment.mdx)과 [UI 스타일](./style.mdx)에 있다. Bedrock Wiki는 "JSON UI는 Ore UI로 대체되는 중이며, Ore UI는 하드코딩되어 리소스팩으로 바꿀 수 없다"고 적는다(출처: bedrock-wiki, json-ui-intro). 이 섹션의 실측은 그 문장이 평문 팩에는 맞고 암호화 팩에는 맞지 않음을 보인다.
+
+## 결론표
+
+| 바꾸고 싶은 것 | 리소스팩으로 | 근거 |
+| --- | --- | --- |
+| Ore UI 화면의 배치·동작(JS), CSS 테마, HTML | **암호화한 팩이면 가능**(서버가 키와 함께 보냄). 평문 팩은 불가 | `{코드}` 로딩 경로 3·7장, `{실측}` |
+| **게임 중 Ore UI 버튼 모양**(배경 텍스처, 글자색, 테두리색; 기본·hover·눌림·잠김) | **가능.** `common_buttons.light_text_button`의 `$new_ui_button_texture`·`$text_color`·`$border_color`, `common_buttons.focus_border`의 `texture`를 바꾼다 | `{실측}`, `{코드}` |
+| 그 밖의 Ore UI 색·여백·글꼴 | 불가. 엔진이 넘기는 정의는 위 두 개뿐이다 | `{코드}` |
+| Ore UI가 `pack://`로 쓰는 게임 텍스처 | 가능. 신뢰하지 않는 서버 팩의 텍스처가 쓰였다 | `{실측}` |
+| 번들 이미지(`hbui/assets/*`) | 평문 팩은 불가. 같은 `ui://` 조회를 거치므로 암호화 팩이면 될 것이다(시험하지 않음) | `{설치본}`, `{코드}`, `{추론}` |
+| 폰트(`hbui/fonts`) | 불가. 설치 폴더에서만 읽는다 | `{코드}` |
+| DDUI 화면 레이아웃(서버 폼 `CustomForm`, 상자·통·셜커 등 컨테이너) | **지금은 불가.** 팩 폴더에서 읽지만 내장 팩만 통과한다 | `{코드}` |
+| 메뉴(게임 밖) Ore UI | 버튼 다리도 없다. 메뉴 번들은 facet 이름만 선언하고 쓰지 않는다 | `{코드}` |
+| Ore UI 문자열 | 커뮤니티 보고로는 팩 `texts/*.lang`으로 바뀐다. 시험하지 않았다 | 보고 |
+
+## 평문 팩이 Ore UI에 닿는 세 통로
+
+1. **버튼 스타일 다리 `vanilla.resourcePackOverrides`**: 엔진이 JSON UI 정의 `common_buttons.light_text_button`·`common_buttons.focus_border`의 변수를 팩 스택에서 풀어 게임 중 Ore UI에 넘긴다. 서버 리소스팩으로 Ore UI 사망 화면 버튼의 배경 텍스처와 글자색이 바뀌는 것을 확인했다 `{실측}`.
+2. **`pack://` 텍스처**: Ore UI가 `pack://textures/...png`로 요청한 텍스처는 신뢰하지 않는 서버 팩에서도 풀렸다 `{실측}`.
+3. **DDUI 레이아웃 `ddui/root`, `ddui/composition`**: 레이아웃 JSON은 리소스팩 폴더에서 읽는다. 엔진이 게임 내장 팩만 읽도록 걸러서 사용자 팩은 지금 막혀 있다 `{코드}`. 프런트엔드는 "출처 팩이 바닐라가 아닌 레이아웃"을 처리할 준비가 되어 있다 `{코드}`.
+
+Ore UI 파일 요청(`ui://...`)은 설치 폴더로 가기 전에 팩 스택을 먼저 뒤진다. 다만 **신뢰된(trusted) 팩만** 본다 `{코드}`. 평문 서버 팩에 넣은 `hbui/*.css`는 적용되지 않았고, 같은 팩을 암호화해 보내자 적용되었다 `{실측}`. 암호화 팩의 신뢰 판정은 [로딩 경로](./loading-paths.mdx)에서 다룬다.
+
+## 서버 없이도 된다
+
+로컬 리소스팩 폴더에 빈 파일 `content.zipe`(0바이트)를 넣으면, 키가 없어도 암호화 접근 전략으로 열려 신뢰된다 `{실측}`. 서버로 보낸 팩에서도 빈 `content.zipe`가 통하는지는 시험하지 않았다. 방법은 [Ore UI 페이지 바꾸기](./modifying-pages.mdx)에 있다.
+
+## 파일이 있는 곳 `{설치본}`
+
+| 위치 | 내용 |
+| --- | --- |
+| `data/gui/dist/hbui/` | `index.html`(메뉴), `gameplay.html`(게임 중), `editor-menu.html`·`editor-project.html`, 해시 붙은 `*.js`·`*.css`, `routes.json`, `assets/`(1177개), `fonts/`, `menus-atlas-*.png`·`gameplay-atlas-*.png`, `atlas.json` |
+| `data/resource_packs/oreui/` | "Minecraft UI Resource Pack"(uuid `fdcdb085-...`). `texts/*.lang`만 들어 있다. Ore UI 문자열 팩이다 |
+| `data/resource_packs/vanilla_1.21.130/__brarchive/ddui/root.brarchive` | DDUI 루트 레이아웃 8개: `barrel_screen`, `chest_screen`, `copper_chest_screen`, `custom_form`, `default_chest_screen`, `ender_chest_screen`, `message_box`, `shulker_box_screen` (`format_version` `1.21.130`, `minecraft:ui-root`) |
+| 게임 중 번들 안(`gameplay-*.js`) | 내장 DDUI 레이아웃 11개(`anvil`, `brewing_stand`, `dispenser`, `dropper`, `smoker`, `furnace`, `blast_furnace`, `grindstone`, `hopper`, `inventory`, `workbench` + `base_layout`). 이 화면들은 팩 레이아웃보다 번들 것이 먼저다 |
+
+`gameplay.html`의 라우트(`routes.json`): `/gameplay/death`(기본), `/gameplay/bedtime`, `/gameplay/inventory`, `/gameplay/data-driven`(DDUI), `/gameplay/trade`, `/gameplay/block-actors/:id` 등.
+
+`routes.json`의 한 항목은 `fileName`(예: `/hbui/index.html`), `scope`(`in-game`, `out-of-game`), `defaultRoute`, `supportedRoutes[]`(route, regexp, params, transition)를 가진다(출처: ore-ui-customizer-app). 어떤 화면이 Ore UI로 넘어갔는지 확인하려면 설치본의 `routes.json`과 `gameplay-*.js`가 쓰는 facet을 본다.
+
+## 엔진과 통신하는 방식 `{코드}`
+
+Ore UI 페이지는 전역 `engine` 객체의 이벤트로 게임과 대화한다(출처: repo-ore-ui-customizer, 8Crafter 코드 분석).
+
+- facet 구독: `engine.trigger("facet:request", 이름)`을 보내고 `engine.on("facet:updated:" + 이름, cb)`로 받는다. 오류는 `facet:error:이름`, 해제는 `facet:discard`다.
+- 쿼리: `query:subscribe/이름`을 보내면 `query:subscribed/id`, `query:updated/id`가 온다. 해제는 `query:unsubscribe`다.
+- 라우터: `core:router:push`, `replace`, `go`, `back`, 변경 알림 `core:router:changed`, 현재 상태 `core:router:requestState`.
+- facet 이름공간: `core.*`(입력·로케일·라우터·사운드·안전 영역), `vanilla.*`(월드 목록·옵션·리소스팩·렐름), `vanilla.gameplay.*`(화로 진행도, 컨테이너 아이템·크기 쿼리, 사망 정보, 리스폰, 침대, 좌표 HUD 등 13개), `debug.*`, `dev.*`, `test.*`. 전체 162개 이름은 [Customizer 분석](./customizer-tool.mdx)에 있다.
+- 아이템 이미지는 엔진이 `pack://textures/items/stick.png` 같은 `pack://` URL로 넘긴다. 화로는 `burnProgress`·`litProgress`(0~1), 컨테이너 아이템은 `amount`·`name`·`damageValue`·`maxDamage`·`image` 필드를 가진다.
+- 화면마다 JSON UI와 Ore UI 중 무엇을 쓸지 고르는 facet `vanilla.screenTechStack`이 있다(`getTechStackForScreen`, `getPreferredTechStackForScreen`, `selectTechStackForScreen`). 값은 `JsonUI=0`, `OreUI=1`이다. 두 구현이 공존하는 화면에서는 JSON UI 수정이 JSON UI 쪽이 선택됐을 때만 보인다고 본다 `{추론}`. 수정이 보이지 않으면 먼저 그 화면이 어느 쪽으로 열렸는지 확인한다.
+
+## 화면 선택과 문자열 `{코드, 추론}`
+
+- `vanilla.screenTechStack`의 대상 화면 열거는 `PlayScreen="/play"`, `EditWorldScreen="/edit-world"`다. 바이너리에 `OreUI_PlayScreen_OptIn`, `OreUI_EditWorldScreen_OptIn`, `OreUI_PlayScreen_Servers_OptIn` 같은 이름이 있다. 서버 "treatment"로 켜고 끄는 것으로 보인다.
+- Ore UI 문자열은 내장 `oreui` 팩의 `.lang`에 있다. `resource_packs/oreui` 경로 문자열은 바이너리에 있지만 `ADRP`+`ADD`로 만드는 함수는 찾지 못했다.
+- Ore UI 정식 변경 기록에도 "Ore UI 시스템의 여러 줄 글에서 서식 코드 수정" 같은 항목이 나온다(출처: ms-learn 1.26.30 업데이트 노트). Ore UI는 계속 개발 중이라 판마다 바뀐다.
+
+## 남은 것과 한계
+
+- DDUI 레이아웃이 사용자 팩에서 막히는지는 **실측하지 않았다.** `@minecraft/server-ui`의 `CustomForm`을 띄우는 동작 팩과 `ddui/root/custom_form.json`을 넣은 리소스팩으로 시험할 수 있다. DDUI의 팩 필터(+0x88/+0x89)는 `isTrusted`와 다른 값이라 암호화해도 열리지 않을 수 있다.
+- 메뉴(`index.html`)를 서버 팩으로 바꿀 수 있는지, 서버 접속이 끝난 뒤 언제 원래대로 돌아오는지 시험하지 않았다. 커뮤니티 보고(2026-10-30~11-05)로는 로컬 전역 리소스 팩의 `/hbui/index.html` 교체는 동작하고 게임을 재시작해야 적용된다(LAN 월드 숨기기, World Filter 등).
+- 주입 JS에서 facet 읽기와 엔진 호출이 되는지는 시험하지 않았다(DDUI query와 명령은 된다).
+- 앞으로의 판에서 Mojang이 암호화 팩의 신뢰 판정을 바꿀 수 있다. 판마다 [로딩 경로](./loading-paths.mdx)의 접근 전략 표를 다시 확인한다.
+- +0x88/+0x89의 정확한 이름(예: `isBaseGamePack`, `isSlicePack`)은 확인하지 못했다.
+- 분석한 바이너리는 Android 판이고 실측은 Windows 판이다. 엔진 코드는 같다고 보지만 보장하지는 않는다.

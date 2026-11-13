@@ -1,0 +1,113 @@
+---
+title: JSON UI가 맞지 않을 때
+description: 파티클 글리프와 Ore UI 화면 등 JSON UI 밖의 선택지(ALT-01~16).
+sidebar_position: 12
+sources:
+  - repo-guide
+  - repo-bedrock-core
+  - private-research
+  - advancementpack
+  - repo-damage-indicator
+  - ore-ui-customizer-app
+  - repo-ore-ui-loading
+  - repo-survey
+
+---
+
+## 개념: JSON UI의 한계와 대안
+
+JSON UI는 화면 좌표에 고정된 2D 표시와 메뉴를 위한 도구다. 월드 속 위치를 따라가는 표시(머리 위 숫자)는 그릴 수 없고, 스크립트 상태를 직접 읽지 못하며(문자열로 실어 보내야 한다), 다른 애드온과 바닐라 파일·타이틀 채널을 공유해 충돌한다. 그래서 표시 전용이면 파티클처럼 UI 파일을 건드리지 않는 방법이 낫다. 한편 Mojang은 화면을 웹 기술 기반 Ore UI로 옮기는 중이라, 어떤 화면이 아직 JSON UI인지, 팩이 Ore UI에 닿는 좁은 통로가 무엇인지 아는 것이 중요하다.
+
+파티클로 숫자를 그리는 최소 예(DI 방식): 숫자 글리프 아틀라스 한 장과 `uv`를 변수 하나로 고르는 파티클 컴포넌트다.
+
+```jsonc
+"minecraft:particle_appearance_billboard": {
+  "size": [ 0.2, 0.2 ], "facing_camera_mode": "lookat_xyz",
+  "uv": { "texture_width": 1024, "texture_height": 64,
+          "uv": [ "variable.glyph * 64", 0 ], "uv_size": [ 64, 64 ] } }
+```
+
+스크립트는 글자마다 `MolangVariableMap`에 `variable.glyph`와 `variable.tint`를 담아 `spawnParticle`로 띄운다. 이 예는 ALT-03~ALT-07의 구조를 줄인 것이고 게임에서 다시 실행하지 않았다. (출처: repo-guide)
+
+
+
+JSON UI는 **화면 좌표**에 고정된 2D 표시와 메뉴용이다. 표시만 필요하고 상호작용이 없거나, 월드 공간을 따라가야 하는 것은 다른 수단이 더 낫다. 이 장의 근거는 JSON UI를 전혀 쓰지 않고 대미지 숫자를 띄우는 Premium Damage Indicator(DI)와, Ore UI 화면을 게임 파일 패치로 고치는 8Crafter Ore UI Customizer(OUC)다.
+
+## 12.1 판단 기준
+
+| 필요한 것 | JSON UI | 파티클(DI 방식) |
+| --- | --- | --- |
+| 엔티티·블록 위치를 따라감 | 못 함(화면 좌표만) | 됨 |
+| 클릭·포커스·스크롤 | 됨 | 못 함 |
+| 다른 애드온과의 충돌 | 타이틀·폼·바닐라 파일 공유로 생김 | 없음(공유 슬롯 아님) |
+| 동시 표시 개수 | 채널당 하나(채팅은 여러 개) | 제한 없음 |
+| 숫자 전달 | 문자열 인코딩 필요 | `MolangVariableMap`으로 숫자 직접 |
+| 한 플레이어에게만 | 폼·타이틀은 원래 개인별 | `Player.spawnParticle` |
+| 가려짐 | 항상 최상단 | 블록·엔티티 뒤에 가려질 수 있음 [추론] |
+
+- **[ALT-01]** 3D 위치를 따라가야 하는 표시(머리 위 숫자, 피격 표시)는 JSON UI로 만들 수 없다. 파티클이나 엔티티를 쓴다. `{코드, 추론}` (출처: DI 0장·5장·6장-1)
+- **[ALT-02]** 표시 전용이면 바닐라 UI 파일을 건드리지 않는 방법이 호환성에서 이긴다. JSON UI 재스킨은 상호작용이 필요할 때 고른다. `{추론}` (출처: DI 6장-8, BA 6장, AP 5장)
+
+## 12.2 파티클 글리프 기법
+
+- **[ALT-03]** 숫자는 **글리프 아틀라스**로 그린다: 가로 한 줄에 정사각 셀(DI: 1024×64, 64px 셀 16칸 중 12칸 `0-9 - .`)을 두고 글자를 **흰색**으로 그린다. 파티클의 `uv`를 `["variable.glyph * 64", 0]`, `uv_size [64, 64]`로 주면 변수 하나로 글자를 고른다. 색은 틴트로 입히므로 텍스처 한 장으로 여러 색을 낸다. `{코드}` (출처: DI 4.1·4.2)
+- **[ALT-04]** 스크립트의 `MolangVariableMap.setColorRGBA("variable.tint", c)`는 `variable.tint.r/.g/.b/.a` 네 값으로 풀린다. 틴트 그라디언트에서 RGB는 변수, 알파만 키프레임으로 주면 색과 페이드를 분리할 수 있다. `{코드}` (출처: DI 4.2·4.3)
+- **[ALT-05]** 반투명이 필요하면 `material: particles_blend`, 컷아웃이면 `particles_alpha`. `{코드}` (출처: DI 4.3)
+- **[ALT-06]** 한 플레이어에게만 보여야 하면 `Player.spawnParticle`(공격자에게만), 주변 모두에게면 `Dimension.spawnParticle`. `{코드, 추론}` (출처: DI 4.6)
+- **[ALT-07]** 여러 글자 문자열은 카메라 기준 오른쪽 벡터 `right = (-view.z, 0, view.x)`로 `(i - (n-1)/2) × 간격`만큼 밀어 가운데 정렬하고, 파티클은 `facing_camera_mode: lookat_xyz`로 둔다. 연타 시 겹침은 후보 위치 중 최근 위치들과 가장 먼 곳을 고른다. `{코드}` (출처: DI 4.5)
+- **[ALT-08]** 글자 수만큼 파티클이 생기므로 범위 공격 등으로 대상이 많으면 개수가 빠르게 는다. `{추론}` (출처: DI 7장)
+
+## 12.3 JSON UI와의 공통 발상
+
+- **[ALT-09]** "텍스트를 직접 못 그리는 표면에서는 **숫자 코드로 글리프를 고른다**"는 같은 발상이 두 곳에 있다: 파티클(변수 → UV 셀)과 상자 슬롯(스택 수량 → lang 키 → 글자, TXT-12). 둘 다 고정 문자표를 쓰고 문자표 밖 글자는 버린다. `{코드}` (출처: DI 5.1, BC 4.3-(3))
+- **[ALT-10]** "모양은 고정, 값만 바뀐다": 파티클 정의·컴파일된 JSON UI 모두 정적이고 런타임은 값만 보낸다. 레이아웃 계산을 게임 API와 분리된 순수 함수로 두면 웹 미리보기·편집기와 같은 코드를 공유할 수 있다(BA의 `tabLayout.js`). `{코드}` (출처: DI 5.1, BC 1장·3.2, BA 1장)
+
+## 12.4 Ore UI 화면
+
+Ore UI는 Mojang이 JSON UI를 대체해 가는 웹 기술 기반 UI다. 리소스팩 제작자 입장에서는 "팩으로 무엇을 할 수 없는가"와 "팩이 닿는 좁은 통로가 어디인가"를 아는 것이 중요하다. 근거는 Ore UI 번들을 정규식으로 패치하는 도구(OUC)의 코드와, 엔진의 Ore UI 로딩 경로를 바이너리로 읽고 서버 팩으로 실측한 조사(OL)다.
+
+| 바꾸고 싶은 것 | 리소스팩으로 |
+| --- | --- |
+| Ore UI 화면의 배치·동작·CSS (평문 팩) | 불가(ALT-11) |
+| 게임 중 Ore UI 화면의 HTML·JS·CSS (루트에 빈 `content.zipe`를 둔 로컬 팩, 또는 서버가 암호화해 보낸 팩) | 됨, 실측(ALT-11) |
+| 게임 중 Ore UI 버튼의 배경 텍스처·글자색·테두리색 | 됨, 실측(ALT-15) |
+| Ore UI가 `pack://`로 쓰는 게임 텍스처 | 됨, 실측(ALT-12) |
+| Ore UI 번들 자체 이미지·폰트 | 불가(ALT-12) |
+| DDUI 화면 레이아웃(`ddui/root`) | 지금은 불가, 내장 팩만 읽음(ALT-16) |
+| JSON UI·Ore UI가 공존하는 화면 | JSON UI 쪽이 선택됐을 때만 보임(ALT-13) |
+
+- **[ALT-11]** Ore UI 화면은 설치 폴더 `data/gui/dist/hbui/`의 해시 붙은 압축 JS·CSS·HTML 번들이다. 엔진은 Ore UI 파일(`ui://…`)을 찾을 때 설치 폴더보다 팩 스택을 먼저 보지만, 신뢰된 팩(`isTrusted`)만 본다. 신뢰 판정은 팩을 여는 접근 전략이 정하고 UUID·마켓플레이스 서명은 보지 않는다. 평문 팩(Zip·Directory 전략)은 설치 폴더의 내장 팩만 신뢰되므로 일반 리소스팩·평문 서버 팩으로는 배치·동작·CSS를 바꿀 수 없다. 암호화 팩 전략 세 종류는 언제나 신뢰되므로, 그 전략으로 열린 팩의 `hbui/<파일>`은 게임 중 Ore UI 페이지(`gameplay.html`: 사망·침대·인벤토리·DDUI·거래·블록 화면)의 HTML·JS·CSS를 바꾼다. 그렇게 여는 길은 두 가지다. **(1) 서버 없이: 로컬 리소스팩 폴더의 루트에 0바이트 빈 파일 `content.zipe`를 두면** 엔진이 그 팩을 `DirectoryPackWithEncryptionAccessStrategy`로 연다. 엔진은 이 파일이 있는지만 보고, 키 없이 팩 폴더의 평문 파일을 그대로 읽는다. `.mcpack`으로 가져올 때는 zip 맨 위에 `manifest.json`과 `content.zipe`가 바로 있어야 한다(한 단계 깊으면 아무 메시지 없이 가져오기가 되지 않는다). 같은 가짜 암호화 헤더를 `contents.json`에 단 팩은 바뀌지 않는다. **(2) 서버가 아무 32바이트 콘텐츠 키로 암호화해 키와 함께 보낸 팩**(같은 팩을 평문으로 보내면 바뀌지 않음을 실측). 이 페이지의 JS가 바닐라 DDUI 데이터 저장소를 읽고 써서, 서버가 보낸 레이아웃대로 그리고 누름·입력을 돌려받는 화면을 만들 수 있다(OL 3장·6장~9장). 바꾼 `gameplay.html`에는 바닐라 번들의 해시 붙은 파일 이름이 들어가므로 게임 업데이트마다 설치본과 맞춘다. 클라이언트 설치 폴더를 직접 패치하는 도구(OUC)는 그 클라이언트에만 적용되고 업데이트마다 다시 적용해야 한다. `{코드, 실측}` (출처: OUC 2장·3장, OL 3장·6장·7장·8장·9장)
+- **[ALT-12]** Ore UI가 게임 텍스처를 쓸 때는 `pack://textures/…png` URL로 요청하고, 이 경로는 신뢰하지 않는 서버 팩의 텍스처로도 풀린다(버튼 텍스처로 실측). 따라서 텍스처를 바꾸는 리소스팩은 Ore UI의 아이템·블록 아이콘에도 반영될 것이다(아이콘 자체는 따로 확인하지 않음). 번들 자체 이미지(`/hbui/assets/`)와 폰트(`gui/dist/hbui/fonts`)는 설치 폴더에서 읽어 팩으로 바뀌지 않는다. `{코드, 실측, 추론}` (출처: OUC 3장·4.6, OL 4장·6장)
+- **[ALT-13]** 화면마다 JSON UI와 Ore UI 중 무엇을 쓸지 고르는 facet `vanilla.screenTechStack`(`getTechStackForScreen`, `getPreferredTechStackForScreen`, `selectTechStackForScreen`)이 있다. 두 구현이 공존하는 화면에서는 JSON UI 수정이 JSON UI 쪽이 선택됐을 때만 보인다고 보고, 수정이 안 보이면 먼저 그 화면이 어느 쪽으로 열렸는지 확인한다. `{코드, 추론}` (출처: OUC 0장)
+- **[ALT-14]** Ore UI의 데이터 채널은 바인딩이 아니라 facet이다(`engine.trigger("facet:request", 이름)` → `facet:updated:<이름>`). 게임 중 화면용 `vanilla.gameplay.*` facet(화로 진행도, 컨테이너 아이템·크기, 사망 정보, 리스폰, 침대, 좌표 HUD 등)이 있다는 것은 해당 화면이 Ore UI로 옮겨 가는 중이거나 옮겨 갔다는 신호다. JSON UI로 그 화면을 재스킨하는 작업은 이전 위험을 감안한다. `{코드, 추론}` (출처: OUC 3장)
+- **[ALT-15]** 엔진은 JSON UI 정의 두 개를 팩 스택에서 풀어 facet `vanilla.resourcePackOverrides`로 게임 중 Ore UI(`gameplay.html` 전체: 사망·침대·인벤토리·DDUI·거래 등)에 넘긴다. `common_buttons.light_text_button`의 하위 컨트롤 `default`·`hover`·`pressed`·`locked`에서 `$new_ui_button_texture`(배경, 나인슬라이스 포함), `$text_color`(글자색), `$border_color`(테두리색)를, `common_buttons.focus_border`에서 `texture`를 가져가 primary·secondary 버튼의 기본·hover/focus·pressed/selected·disabled 상태에 입힌다. 따라서 `_global_variables.json`의 `$light_button_*_text_color`나 `textures/ui/button_borderless_light*.png`를 바꾼 팩은 Ore UI 사망 화면 버튼까지 바꾼다(서버 팩으로 실측). 다른 정의·속성은 넘어가지 않고, 게임 밖 메뉴 번들은 이 facet을 쓰지 않는다. `{코드, 실측}` (출처: OL 4장·6장)
+- **[ALT-16]** DDUI 레이아웃(`ddui/root/*.json` = `minecraft:ui-root`, `ddui/composition` = `minecraft:ui-composition`)은 리소스팩 폴더에서 읽지만, 엔진은 게임 내장(퍼스트파티) 팩으로 표시된 팩만 읽는다(POI의 `minecraft:` 이름공간 허용 판정과 같은 플래그). 사용자·서버 팩에 `ddui/root/custom_form.json`을 넣어도 쓰이지 않을 것이다. JS는 바닐라가 아닌 출처 팩의 레이아웃(`isCreatorDataDriven`, 자기 팩 이미지만 허용)을 이미 처리하므로, 엔진 검사가 풀리면 열릴 통로다. `{코드, 추론}` (출처: OL 5장)
+
+"Ore UI 화면도 리소스팩으로 바꿔 달라"는 요구에는 "팩 루트에 빈 `content.zipe`를 두거나 서버가 팩을 암호화해 보내면 게임 중 Ore UI 화면의 배치·동작을 바꿀 수 있고(ALT-11), 평문 팩으로는 게임 중 Ore UI 버튼 모양과 게임 텍스처만 바뀐다(ALT-12, ALT-15)"가 답이다. 진짜 컨테이너(상자·화로·인벤토리)를 Ore UI로 여는 것, 바닐라 DDUI 레이아웃(ALT-16), HUD는 암호화 팩으로도 닿지 않는다.
+
+### ALT-11 보충: 암호화 팩으로 Ore UI 파일 바꾸기의 세부
+
+아래는 ALT-11이 기대는 Ore UI 로딩 조사(OL)의 실측 세부다. 수준은 `실측`과 `코드`다.
+
+- Ore UI는 파일(`/hbui/…`)을 찾을 때 설치 폴더보다 팩 스택을 먼저 보되 신뢰된 팩만 본다. 팩 안 위치는 `hbui/<파일>`이다. 사본을 팩 루트나 `gui/dist/hbui/`에 둘 필요는 없다(`hbui/`에만 두어도 바뀌었다, 2026-10-24 실측).
+- 서버가 보낼 때는 아무 32바이트 키로 팩을 암호화해 그 키와 함께 보낸다(`ResourcePacksInfo`의 콘텐츠 키, gophertunnel `pack.WithContentKey`). 마켓플레이스 형식은 다음과 같다. `contents.json`은 0~3바이트 버전 0, 4~7바이트 마법수 `0x9BCFB9FC`(리틀 엔디언), 0x10에 팩 UUID 길이와 문자열, 0x100부터 파일 목록 JSON(`{"content":[{"path","key"}]}`)을 콘텐츠 키로 AES-256-CFB8 암호화한 것이다(IV는 키 앞 16바이트). `manifest.json`과 `pack_icon.png`는 평문으로 두고, 나머지 파일은 파일마다 무작위 32바이트 키로 같은 방식으로 암호화한다.
+- 팩 파일을 고치면 팩 버전을 올린다. 같은 UUID·버전이면 클라이언트가 받아 둔 것을 쓴다.
+- 게임 중 Ore UI(사망, 침대, 인벤토리, DDUI, 거래, 블록 화면)는 `gameplay.html` 하나다. 바꿀 때는 바닐라 HTML을 따라 쓰고 태그 두 개를 더한다. 바닐라 React 앱은 `#root`에 그대로 그려지고 팩의 JS는 `body`에 따로 붙는다. 번들 파일 이름의 해시는 게임 업데이트마다 바뀌므로 설치 폴더 `data/gui/dist/hbui/gameplay.html`을 보고 맞춘다. 틀리면 게임 중 Ore UI 전체가 뜨지 않는다.
+
+```html
+<script defer="defer" src="/hbui/gameplay-100751586307248a0527.js"></script>
+<link href="/hbui/gameplay-26927106c1834224ebc7.css" rel="stylesheet">
+<link href="/hbui/menus-theme-b1a483c329eea7188853.css" rel="stylesheet">
+<link href="/hbui/gameplay-theme-cb1e5471975ef2c1abb9.css" rel="stylesheet">
+<link href="/hbui/oui-ddui.css" rel="stylesheet">
+<script defer="defer" src="/hbui/oui-ddui.js"></script>
+```
+
+- 이 방식으로 되는 것(실측): 서버 데이터대로 화면 그리기와 4Hz 이상의 실시간 갱신, 버튼·토글·슬라이더·글 입력·선택을 서버로 돌려받기, 200개 격자와 탭 전환, 엔진이 그리는 아이템·블록 아이콘, `pack://<경로>.png` 팩 텍스처. 안 되는 것: 진짜 상자·화로·인벤토리를 Ore UI로 열기(클라이언트 개발자 옵션이 필요), 바닐라 DDUI 레이아웃(`ddui/root`)을 팩으로 바꾸기, 컨테이너를 흉내 낸 화면의 시프트 클릭·커서 아이템·드래그. 게임 밖 메뉴는 시험하지 않았다.
+
+## 반영안(미적용)
+
+아래는 추가 자료 조사(survey)에서 나온 규칙 제안이다. 병합 보고서에는 번호가 매겨져 있지만 위 본문의 규칙집에는 아직 반영하지 않았다. 번호는 병합 보고서의 최종 ID이고, 근거 강도는 제안 원문의 검증 수준을 따른다. 쓰기 전에 확인한다.
+
+- **[ALT-15 반영안(미적용)]** 엔티티 렌더 컨트롤러 조건에 `query.is_in_ui`를 넣으면 UI 플레이어 렌더러(`live_player_renderer` 등) 안에서만 추가 지오메트리를 그린다. 뼈 회전에 `query.camera_rotation`을 쓰면 HUD에 카메라를 따라 도는 3D 표시(좌표축)를 만든다. 번호가 본문의 ALT-15(`vanilla.resourcePackOverrides`)와 겹치므로 병합 시 재배정한다. `{작동팩, 미검증}` (출처: small-packs)
+- **[ALT 장 전제 보강안(미반영 결정)]** Feedback 요청글을 근거로 한 "ALT 장 전제"는 사용자 요청글이 기능이 없다는 근거로 약해 병합 보고서가 반영하지 않기로 했다. 기존 ALT 규칙이 이미 같은 결론이다.

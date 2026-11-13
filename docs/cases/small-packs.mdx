@@ -1,0 +1,91 @@
+---
+title: "작은 공개 팩 모음"
+description: "일시정지 화면 재구성, 애니메이션 팩 아이콘, 사이드바, 3D 좌표축 조준점, 업적 문구 숨기기, 문자열 이스케이프 도구 여섯 저장소의 기법과 라이선스"
+sidebar_position: 14
+sources:
+  - fumeko-packs
+  - sidebar-mcbe
+  - sidebar-hud
+  - crosshair-xyz
+  - hide-achievements
+  - json-escape
+  - repo-guide
+---
+
+## 이것은 무엇인가
+
+공개된 작은 JSON UI 팩 5개와 도구 1개를 모은 분석이다. 라이선스가 자료마다 다르다. 클론에서 `LICENSE`를 열어 확인한 결과, `MCBE-Crosshair-XYZ`(MIT, 2024), `Hide-Disabled-Achievements`(MIT, 2025), `JSON-Escape`(MIT, 2025)만 파일이 있고 나머지 셋은 LICENSE 파일이 없다. fumeko-ts는 README가 "크레딧 또는 링크를 넣으면 사용 가능"이라고만 적고, Sidebar-Mcbe는 manifest가 CC BY-ND 4.0(변경물 배포 금지)이라 적고, Sidebar-HUD는 표기가 없다. 그래서 MIT 셋만 짧게 발췌하고 나머지는 사실만 요약한다(출처: cs-fumeko-packs, cs-sidebar-mcbe, cs-sidebar-hud, cs-crosshair-xyz, cs-hide-achievements, cs-json-escape).
+
+| 약어 | 저장소 | 내용 날짜 | 대상 | 가치 |
+| --- | --- | --- | --- | --- |
+| SP-fu | fumeko-ts/example-texture-packs-mcbe (`7c4e1b5`) | 2025-12-03 | 일시정지 팩, 팩 아이콘 팩(1.21.0~1.21.132) | 중 |
+| SP-da | DeathAruban/Sidebar-Mcbe (`686e4c2`) ⚠ | 2024-03-08 | min 1.19.60, README 1.20.71 | 하(옛 버전) |
+| SP-tw | TrippleAWap/Sidebar-HUD (`9e71842`) ⚠ | 2023-07-01 | min 1.19.50 | 하(옛 버전) |
+| SP-xyz | RedStoneCraftGG/MCBE-Crosshair-XYZ (`91e8402`) ⚠ | 2024-11-14 | min 1.17.0, "old abandoned project" | 하 |
+| SP-ach | mittens4all/Hide-Disabled-Achievements (`2086c7b`) | 2025-09-09 | 1.21.100+ | 하 |
+| SP-esc | RedStoneCraftGG/JSON-Escape (`94f91c3`) | 2025-03-21 | 도구 | 하 |
+
+"작동 근거 시점"은 팩 내용이 마지막으로 바뀐 날짜다(README만 바뀐 HEAD 날짜는 근거가 아니다). ⚠ 표시는 1.21 이전 팩이라 근거 수준을 낮춘다.
+
+## SP-fu: 일시정지 화면 재구성
+
+`custom_pause_ui.mcpack`은 `ui/pause_screen.json`(604줄)이 `pause_screen_content`를 같은 경로에서 통째로 재선언하고 `ui/global.atemp`, `ui/player_list_item.atemp`를 더한다. manifest `description`은 `"§z"`(보이지 않는 설명)다.
+
+- **`.atemp` 확장자**: `_ui_defs.json`이 `.atemp` 파일을 등록하고 스크린샷에서 플레이어 목록 행이 그려지므로 확장자와 상관없이 읽힌 것이다(반영안 FILE-39).
+- **인원 수 표시(그리드 마지막 셀)**: `player_count_grid_holder`(크기 `[180, 12]`, `clips_children: true`) 안에 `collection_name: players_collection` 그리드를 `bottom_left`로 붙여 마지막 행만 보이게 하고, 셀 라벨에 `('players online: ' + (#collection_index + 1) + '§z')`를 찍는다. 엔진이 개수를 주지 않는 컬렉션의 길이를 보이는 방법이다(반영안 COL-33).
+- **검색 필터**: 검색 상자 `common.text_edit_box`의 `$text_edit_text_control: "search_bar_text_value"` 이름을 각 행 셀이 `source_control_name`으로 읽어 `#item_name`을 얻고, 게이머태그의 특수문자를 먼저 뺀 뒤 포함 검사로 `#visible`을 정한다. 입력이 비면 모두 보인다(반영안 INP-25).
+- **월드 이름**: `(#players_list_title - 'Players in ')`로 앞부분을 빼는데 바닐라 문구가 영어일 때만 맞는다(TXT-01).
+- **Realms 알림 수**: `property_bag {"#realm_count_true": "30+", "#realm_count_false": "#realms_unread_story_count"}` + `('#realm_count_' + (… > 30))`로 사전 조회한다. false 쪽 값이 다시 `'#이름'`이라 두 번 조회를 기대하지만 Cinnabar에서는 두 번째 조회가 없다(실측 필요).
+
+`animated_pack_icon.mcpack`은 `ui/resource_packs_screen.json`과 `manifest_validation_screen.json`이 바닐라 `icon_image`를 **namespace 없이** 같은 경로에서 재선언하고(FILE-05) 자식 이미지 하나를 더한다. 이미지는 `texture: "pack_icon_animated"`(팩 루트의 PNG + Aseprite JSON, 14×196 세로 시트 14프레임, 프레임당 50ms), `uv: {anim_type: aseprite_flip_book}`, `uv_size [14, 14]`다. 컬렉션 `#name`이 팩 이름일 때만 보이고 `ignored`로 선택·사용 가능 목록이 아닌 곳에서는 생성하지 않는다. README가 "v1.21.0 - v1.21.132"로 한정하는 것은 그 뒤 화면이 JSON UI가 아닌 쪽으로 바뀌었기 때문으로 추정된다.
+
+## SP-da, SP-tw: 스코어보드 사이드바 ⚠
+
+- SP-da는 `_ui_defs.json`에 **팩 루트의 `config.json` 하나만** 등록한다(`ui/` 밖 등록 실례, FILE-25, 1.20.71 시절). `config.json`의 `component_texture_sidebar`는 변수만 가진 기반 정의이고 `scoreboards.json`이 `scoreboard_sidebar@sidebar_ui.component_texture_sidebar`로 바닐라 정의를 다른 기반으로 재선언한다. 사이드바 목표의 표시 이름 `#objective_sidebar_name`이 `'da.aru.logo'`, `'da.aru.anim'`, `'da.logo.inv'`이면 모양을 바꾸는 식으로 **스코어보드 목표 이름이 서버에서 UI로 가는 채널**이 된다(반영안 HOST-42). 로고 애니메이션은 `anim_type: uv`, `from = to`인 단계 8개를 `next`로 원형으로 이어 5프레임 시트를 왕복 재생한다(반영안 ANI-33).
+- SP-tw는 `hud_title_text`를 같은 경로에서 재선언하며 `"alpha": 1`로 바닐라의 페이드인·`destroy_at_end` 사슬을 끊어 타이틀이 다음 타이틀까지 남게 한다. 바닐라 타이틀 표시를 완전히 잃고 다른 HUD 팩과 경쟁하므로 팩토리를 하나 더 두는 방식을 우선한다(반영안 HOST-41).
+
+## SP-xyz: 3D 좌표축 조준점 ⚠
+
+`ui/hud_screen.json`이 `live_player_renderer`(`type: custom`, 크기 13×13)를 `root_panel`에 `modifications insert_front`로 넣고, `entity/player.entity.json`에 렌더 컨트롤러 `controller.render.cxyz`를 조건 `query.is_sneaking && !variable.is_first_person && query.is_in_ui && …`로 추가한다. 축 지오메트리의 뼈 회전은 `query.camera_rotation`을 쓴다. 웅크리면 HUD의 작은 플레이어 렌더러 자리에 카메라 방향을 따라 도는 3D 축이 그려진다. **JSON UI가 아니라 엔티티 렌더 쪽에서 UI용 모양을 만드는 방법**이다(반영안 ALT-15, `{작동팩, 미검증}`). 앵커 값으로 대문자 `"Bottom"`을 쓰는데 바닐라 9개 앵커 값에 없는 단어라 해석은 확인되지 않았다.
+
+## SP-ach: 업적 비활성 문구 숨기기
+
+설정 화면의 "업적 비활성" 문구를 두 가지로 지운다. 첫째, `texts/*.lang` 29개에 `options.achievementsDisabled=`(빈 값)를 넣는다(언어마다 파일이 필요). 둘째, 문구 배경 텍스처 `text_label_box.png`를 투명으로 바꾸는데 같은 텍스처를 쓰던 다른 바닐라 컨트롤은 같은 경로 UI 파일 4개에서 **경로 키**로 원본 사본에 다시 연결한다.
+
+<Excerpt src="hide-achievements" title="Hide-Disabled-Achievements, controls_section.json" path="RP/ui/settings_sections/controls_section.json">
+
+```json
+{
+  "keymapping_item/option_info_label_control": {
+    "texture": "textures/ui/text_label_box_original"
+  },
+
+  "gamepad_mapping_item/option_info_label_control": {
+    "texture": "textures/ui/text_label_box_original"
+  }
+}
+```
+
+</Excerpt>
+
+공유 텍스처를 바꿀 때는 원본을 `_original` 같은 다른 이름으로 복사해 두고 바꾸지 않을 컨트롤만 경로 키로 사본에 다시 연결한다(반영안 MOD-22). 경로 키를 텍스처 재연결에 쓴 곳이 7곳이다. manifest는 기본 팩처럼 보이게 이름·설명을 꾸며 눈에 띄지 않게 한다.
+
+## SP-esc: JSON-Escape
+
+`main.py`, `main.go`, `main.html`로 JSON 문자열을 `\uXXXX`로 바꿔 읽기 어렵게 만드는 도구다. JSON UI 기법은 없다. 버그가 두 가지다. BMP 밖 글자(이모지)를 `hex(ord(c))[2:].zfill(4)`로 써서 **다섯 자리**가 나와 `ὠ0`이 `ὠ` + `0`으로 읽혀 깨지고 서로게이트 쌍으로 써야 한다. 줄 단위 주석 제거가 `line[:line.find('//')]`라 **문자열 안의 `//`**(URL 등)까지 자른다. UI 파일은 주석이 허용되므로 지울 필요도 없다(FILE-30, 반영안 FILE-40).
+
+## 우리 규칙과의 관계
+
+| 규칙 ID | 관계 |
+| --- | --- |
+| FILE-25, FILE-39(반영안) | `ui/` 밖 등록(`config.json`), `.atemp` 확장자 |
+| FILE-05, FILE-20, MOD-22(반영안) | namespace 없는 재선언, 경로 키로 텍스처 재연결 |
+| COL-10, COL-33(반영안), INP-25(반영안) | 숨긴 행의 공간, 그리드 마지막 셀로 개수, 검색 필터 |
+| HOST-41, HOST-42(반영안), ANI-33(반영안) | 상수 alpha 타이틀, 목표 이름 채널, 핑퐁 UV |
+| ALT-15(반영안), ALT-13 | `query.is_in_ui` 렌더 컨트롤러, 리소스팩 화면 JSON UI 수정이 1.21.132까지만 동작 |
+| TXT-01, TXT-21(반영안, C-63) | 영어 전용 접두 제거, lang 키 비우기(값이 공백 하나인 경우는 충돌) |
+| FILE-30, FILE-40(반영안) | 주석, `\u` 이스케이프 |
+
+## 실측이 필요한 항목
+
+사전 값이 다시 `'#속성'`일 때 두 번째 조회가 일어나는지, 검색으로 숨긴 행이 스택에서 자리를 차지하는지, `.atemp`와 루트 `config.json` 등록이 26.x에서 읽히는지, 1.21.132 이후 리소스팩 화면이 `resource_packs_screen.json`을 쓰는지, `query.is_in_ui` 조건과 대문자 `"Bottom"` 앵커가 현재 버전에서 동작하는지, 상수 alpha 재선언이 타이틀을 남기는지.

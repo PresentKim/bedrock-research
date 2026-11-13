@@ -1,0 +1,209 @@
+---
+title: "프로토콜 기초: RakNet, NetherNet, 접속 흐름"
+description: "Bedrock 프로토콜 계층, 접속 핸드셰이크, NetherNet 시그널링과 포트, 서버 권위 이동, SubChunk 요청, 라이브러리, WebSocket, 보안과 프록시"
+sidebar_position: 2
+sources:
+  - private-research
+  - bedrock-protocol-docs
+  - gophertunnel
+  - ms-learn
+---
+
+## 개념: 계층
+
+Bedrock 클라이언트와 서버는 **전송 계층 위에 게임 패킷**을 주고받는다. 전송은 오랫동안 RakNet(UDP 기반의 신뢰 전송)이었고, 26.50부터 WebRTC 기반 **NetherNet**이 생겼다. 그 위에서 패킷은 배치로 묶여 압축(zlib 또는 snappy, 임계값 이상일 때)되고, 인증이 끝나면 암호화된다. 게임 패킷마다 번호(ID)가 있고 필드 스키마는 릴리스마다 조금씩 바뀐다. raw UDP 소켓으로는 읽을 수 없고(RakNet 위에 Bedrock 프로토콜이 얹혀 있다), PrismarineJS bedrock-protocol이나 gophertunnel 같은 라이브러리가 필요하다.
+
+Mojang은 패킷·타입·열거형의 스키마를 `Mojang/bedrock-protocol-docs` 저장소(JSON)와 그것으로 만든 사이트(mojang.github.io/bedrock-protocol-docs, 2026-08 개편)에 공개한다. 이 저장소는 모든 권리 보유이므로 이 위키는 사실만 다시 적었다. 사이트에는 xref 표, 가이드, 버전별 페이지(예: `/1.26.50-preview.26/search/`), 고급 검색이 있고, 정확히 일치하는 결과가 아래로 밀리거나 검색이 때때로 대소문자를 구분하는 문제가 있다. 커뮤니티 채널은 2026-09-27에 닫혔고 피드백은 GitHub으로 한다. (출처: protocol-docs-repo, private-research)
+
+## 접속 흐름 (RakNet, 커스텀 서버 구현 기록)
+
+직접 서버를 구현한 사례의 순서다(출처: 비공개 조사).
+
+1. Unconnected Ping / Pong
+2. Open Connection Request 1 / Reply 1
+3. Request 2 / Reply 2. 여기서부터 frame set이고 ACK를 처리한다.
+4. Connection Request / Request Accepted
+5. New Incoming Connection
+6. 서버의 Connected Ping(Connected Pong으로 응답)
+7. 클라이언트 Network Settings Request(프로토콜 버전)
+8. 서버 Network Settings(압축 임계값). 이후 게임 패킷은 Frame Set 안의 게임 패킷 헤더로 감싼다.
+
+그다음 Login, 리소스팩 협상([resource-pack-delivery.mdx](resource-pack-delivery.mdx)), StartGame, 청크 전송 순으로 이어진다. 막힌 사례: C++ 서버가 NetworkSettings(0x8F)를 보낸 뒤 Login을 받지 못했고, 나중에는 StartGame/PlayStatus 뒤 "generating world"에서 끊겼다(클라이언트 1.26.51). 월드를 바꿀 때 청크를 전부 다시 보내면 클라이언트에 잔상이 생긴다. 네이티브 모드가 등록한 커스텀 아이템은 프로토콜로 전송되므로 바닐라 클라이언트도 팩 없이 본다.
+
+### gophertunnel 서버 예 (MIT)
+
+gophertunnel(Go)은 Bedrock 프로토콜 라이브러리다. 한 번에 한 게임 버전만 지원하되(보통 최신 릴리스) API로 여러 프로토콜을 다룰 수 있다. 서버를 여는 최소 예제다. (출처: gophertunnel-repo, minecraft/example_listener_test.go)
+
+<Excerpt src="gophertunnel" title="ExampleListen" path="minecraft/example_listener_test.go">
+
+```go
+name := "MOTD of this server"
+cfg := minecraft.ListenConfig{
+	StatusProvider: minecraft.NewStatusProvider(name, "Gophertunnel"),
+}
+listener, err := cfg.Listen("raknet", ":19132")
+if err != nil {
+	panic(err)
+}
+for {
+	c, err := listener.Accept()
+	if err != nil {
+		return
+	}
+	conn := c.(*minecraft.Conn)
+	go func() {
+		defer conn.Close()
+		// Make the client spawn in the world using conn.StartGame.
+		worldData := minecraft.GameData{}
+		if err := conn.StartGame(worldData); err != nil {
+			return
+		}
+		for {
+			pk, err := conn.ReadPacket()
+			if err != nil {
+				break
+			}
+			switch p := pk.(type) {
+			case *packet.MovePlayer:
+				fmt.Printf("Player %v moved to %v\n", p.EntityRuntimeID, p.Position)
+			}
+			conn.WritePacket(&packet.ChunkRadiusUpdated{ChunkRadius: 32})
+		}
+	}()
+}
+```
+
+</Excerpt>
+
+## 프로토콜 문서와 라이브러리
+
+- **RakNet 문서**: https://minecraft.wiki/w/RakNet , https://github.com/vp817/RakNetProtocolDoc , https://wiki.bedrock.dev/servers/raknet , https://wiki.bedrock.dev/servers/bedrock .
+- **라이브러리**: PrismarineJS bedrock-protocol(Node, 2026-01 기준 NetherNet 미지원), gophertunnel(Go), go-raknet, cloudburst, bedrock-portal(https://github.com/LucienHH/bedrock-portal, NetherNet 예제). NetherNet과 RakNet을 잇는 프록시: GameParrot/netherconnect(gophertunnel 기반). Rust NetherNet 라이브러리는 없다.
+- **최신 프로토콜 지원의 부담**: NetherNet 변경과 프로토콜 업그레이드 때문에 일부 서버는 일부러 옛 버전을 겨냥한다. 프로토콜은 릴리스마다 조금씩 바뀐다.
+
+## NetherNet
+
+### Mojang 온보딩 가이드 요약
+
+(출처: protocol-docs-repo, additional_docs/NetherNetOnboardingGuide.md. 원문은 모든 권리 보유라 사실만 옮겼다.)
+
+NetherNet은 WebRTC 위에 만든 Minecraft의 전송 계층이다. 클라이언트와 서버가 WebRTC offer/answer 협상으로 **데이터 채널**을 연다. 서버가 구현할 것은 **HTTP 시그널링**이다.
+
+- **용량 확인**: 클라이언트가 먼저 `GET {serverUrl}/v1/join`을 부른다. 2xx면 NetherNet을 지원하고, 아니면(예: 404) WebRTC를 시도하지 않는다. 응답 JSON은 `name`, `protocol`(프로토콜 번호), `version`(예: "1.26.50"), `level`, `players`, `maxPlayers`, `gameType`(0 서바이벌, 1 크리에이티브, 2 어드벤처)이다.
+
+```json
+{ "name": "Dedicated Server", "protocol": 2177, "version": "1.26.50",
+  "level": "Bedrock level", "players": 0, "maxPlayers": 10, "gameType": 0 }
+```
+
+- **SDP 교환**: `POST {serverUrl}/v1/join/{networkId}`, `Content-Type: application/sdp`, 본문은 ICE 후보가 모두 든 SDP offer다. 응답은 2xx와 `application/sdp`의 SDP answer다. 클라이언트는 시도마다 요청을 **한 번만** 보내고 재시도하지 않는다. `networkId`는 클라이언트를 식별하는 불투명 문자열이다.
+- **Full ICE**: trickle ICE를 끄고 모든 후보를 모은 뒤 SDP를 한 번에 보낸다. 그래서 STUN/TURN 서버는 권장하지 않는다(모든 서버에 접촉한 뒤에야 SDP를 보낼 수 있어 지연이 늘어난다).
+- **클라이언트 PeerConnection 설정**: TCP 후보 정책 `disabled`(모두 UDP), 번들 정책 `max-bundle`, STUN/TURN 없음(호스트 후보만), 데이터 채널 2개.
+- **데이터 채널**: `ReliableDataChannel`(순서 보장, 신뢰, 분할 지원)과 `UnreliableDataChannel`(순서 없음, `maxRetransmits` 0, 분할 불가, 이동 갱신 같은 지연 민감 데이터). 서버는 `ondatachannel`로 받는다.
+- **프레이밍**: 두 채널의 모든 메시지 앞에 1바이트 헤더가 붙는다. `0`은 완전한 메시지 또는 마지막 조각, `N`(양수)은 뒤에 N개 조각이 더 남았다는 뜻으로 첫 조각이 가장 큰 값이다. 신뢰 채널만 SCTP 최대 메시지 크기를 넘으면 분할한다. 비신뢰 채널에서 너무 큰 메시지는 버려진다.
+
+```text
+Fragment 1:  [0x02] [payload chunk 1]   ← 2개 더 온다
+Fragment 2:  [0x01] [payload chunk 2]   ← 1개 더 온다
+Fragment 3:  [0x00] [payload chunk 3]   ← 마지막
+```
+
+- **NAT 뒤 서버**: answer에는 클라이언트가 닿을 수 있는 후보(공개 주소의 `srflx` 후보 등)가 최소 하나 있어야 한다. 사설 주소 후보만 있으면 연결되지 않는다.
+- **신원 증명**: offer에는 클라이언트가 인증된 플레이어 신원을 주장하는 `a=identity` 속성이 들어 있고(서버가 검증해 입장 여부를 정한다), answer에는 서버가 운영자 신원을 주장하는 `a=identity`를 넣어 클라이언트가 TOFU(첫 사용 시 신뢰, 공개 키를 고정) 검사를 한다. 둘 다 base64 JSON 봉투(`idp.domain`, `idp.protocol`, `assertion`)이고 `assertion`은 JWT와 SDP의 `a=fingerprint` 줄에 대한 분리 JWS다.
+- **흐름**: PeerConnection 생성 → 두 채널 생성 → offer 생성과 ICE 수집 → HTTP POST → 서버가 offer를 호스트에 전달 → 호스트가 answer 생성 → 200 응답 → ICE 연결 확인 → DTLS → SCTP → 데이터 채널 열림 → 게임 트래픽.
+
+### BDS에서의 NetherNet (26.50 / 26.51)
+
+- **도입**: 26.50에서 `server.properties`에 `transport=nethernet`이 생겼다. RakNet은 deprecated이고 제거는 26.60으로 미뤄졌다. `transport` 항목이 없으면 예제 파일에 nethernet이라고 적혀 있어도 실제 기본값은 raknet이다. 26.50에서는 NetherNet 서버 목록 핑이 망가졌다(mcping.me 무응답). LAN 직접 접속은 됐다. 공식 가이드: https://mojang.github.io/bedrock-protocol-docs/guides/nether-net-onboarding-guide/ (https://github.com/Mojang/bedrock-protocol-docs/blob/main/NetherNetOnboardingGuide.md).
+- **포트 구조**: 시그널링은 TCP `server-port`(19132)의 HTTP(S)이고, 게임 트래픽은 UDP(WebRTC/ICE)로 접속한 플레이어마다 `server-udp-ports` 범위에서 포트 하나를 쓴다. 방화벽, Docker, Pterodactyl(추가 allocation)에 TCP 19132와 최대 인원만큼의 UDP 범위를 연다. 플레이어 쪽 오류는 "NetherNet / InitialConnection"이다. Cloudflare 같은 앞단 프록시는 이를 깨뜨릴 수 있다. *(확인됨)*
+- **동작하는 예(클라우드 VM, Caddy 뒤)**: `transport=nethernet`, `server-port=19132`, `server-udp-ports=<public-ip>:32000-32100:32000-32100`. 그냥 `32000-32100`으로 두면 NetherNet 오류가 났다. 도메인이 아니라 공인 IP를 쓴다. Docker는 `ports: "32000-32100:32000-32100/udp"`, 방화벽은 `32000-32100/udp`와 `19132/tcp`, Caddy는 `reverse_proxy bedrock-service:19132`. 간단한 형태는 `server-ip=<public ip>`, `server-udp-ports=19150-19169`.
+- **플레이어당 포트**: 플레이어당 포트 하나는 BDS 구현의 특성이다(Geyser는 공유 UDP 포트 하나를 쓴다). 한 운영자는 바닐라 BDS를 사설 인터페이스와 포트 범위로 돌리고, 최소 NetherNet 프록시를 앞에 둔다. 프록시가 HTTPS 시그널링을 처리하고 응답을 공인 IP/포트로 바꾸고, ICE uFrag → 로컬 포트를 기억해 UDP를 uFrag로 라우팅한다(1.6천 명 운영 주장). Endstone이 이 문제를 다룬다고 한다.
+- **기존 직접 접속 방식이 깨졌다**: 비공개 NetherNet 계층 때문에 Omlet/0verlix식 직접 접속이 깨졌다. IP 서버의 RakNet은 그때 멀쩡했다. eggnet.space는 Xbox Live 접속 흐름을 쓴다(약 95% 성공 주장). ZeroTier, Tailscale, n2n, FRPS가 비교 대상이다. 싱글플레이 초대 링크: https://github.com/kimaaaa1/bedrock-world-invite-link .
+
+### 라이브러리 지원
+
+gophertunnel은 `minecraft.ListenConfig.Listen("raknet", addr)`처럼 네트워크 이름으로 전송을 고른다. Dragonfly 패치는 NetherNet 리스너의 `LocalIP`(연결을 묶고 알리는 로컬 주소)와 `PublicIP`(1:1 NAT나 터널 뒤 서버가 알릴 공개 주소) 설정을 더했다(출처: 비공개 조사).
+
+## BDS 연결 문제 진단
+
+### LAN broadcast와 1.26.30 접속 타임아웃
+
+- **증상(BDS 1.26.30.5, 2026-06-16)**: 업그레이드한 기존 월드(특히 creator 실험이 켜진 월드)가 로드되고 오류도 없는데 플레이어가 타임아웃("Unable to connect to world")된다. BDS 로그에도 아무것도 없다(BDS-23063, MCPE-239705). gophertunnel 프록시로는 내내 접속됐다.
+- **원인과 해결**: `level.dat`의 `LANBroadcast`가 0이면 `server.properties`의 `enable-lan-visibility=true`를 덮어쓴다(import한 월드나 Chunker 월드에서 꺼져 있을 수 있다). 서버를 완전히 멈추고 백업한 뒤, NBT 편집기(예: VS Code NBT 확장)로 `level.dat`과 `level.dat_old`의 `LANBroadcast`를 1로 바꾼다. 편집 도구가 실제로 저장하는지 확인한다. 서버가 멈춘 상태에서 올리고(아니면 서버가 덮어쓴다) `enable-lan-visibility=true`를 유지한 채 재시작한다. 26.40에서도 같은 문제가 다시 보고됐다. *(확인됨)*
+- **관련 버그**: `enable-lan-visibility=false`일 때 BDS가 Server ID/MOTD가 빠진 잘못된 unconnected-pong을 돌려준다. go-raknet 수정: https://github.com/Sandertv/go-raknet/commit/703ec90295816a7e1fbe59981ca79c4446859445
+- **커스텀 포트**: `level.dat`에 `LANBroadcast: 1b`, `LANBroadcastIntent: 0b`(또는 1b)를 둔다. 기본 포트가 아닐 때의 transfer 오류 코드는 `silverfish`다. 26.40에서 외부 접속이 라우터 재시작이나 nethernet/raknet 조정 전까지 실패한 사례가 있다.
+- **한 호스트에서 여러 인스턴스(1.26.32)**: LAN broadcast는 고정 포트 범위 19132~19139를 쓰고, 두 번째 인스턴스는 포트 충돌을 조용히 실패한다. 19132 인스턴스를 먼저 시작하고, 각 인스턴스의 IPv4 포트를 19132~19139 안에 둔다. 두 번째 인스턴스는 LAN 메시지 없이도 동작한다.
+
+### 기타 연결 문제
+
+- **오류별 진단**
+  - "The server you are attempting to join may not exist or be locked": allowlist 문제일 수 있다. allowlist 우회 버그(MCPE-237527)는 고쳐졌으니 BDS를 업데이트한다.
+  - 특정 클라이언트 하나가 접속하면 나머지가 모두 튕긴다: RakNet 세션 혼동(공유 IP/CGNAT), 손상된 플레이어 데이터를 의심한다. 미해결.
+  - 로컬 서버가 127.0.0.1과 LAN IPv4를 오가며 보인다: Tailscale로 해결한 사례가 있다. 외부 IP는 `curl https://ipinfo.io/ip`로 확인한다.
+  - 커스텀 블록에 `use_beta_features`나 connection trait이 있으면 접속이 막혔다(26.0에서 수정). Xbox에서 커스텀 블록이 안 보이면 RP 다운로드 실패이거나 모델 경로가 80자를 넘은 경우일 수 있다.
+  - 스크립트 디버거를 켠 뒤 월드가 접속 불가가 되어 백업으로 복원했다(반복 보고).
+
+## LAN 탐색과 WebSocket
+
+- **동작**: 클라이언트는 고정 포트를 듣지 않는다. 빈 포트를 골라 UDP 19132로 broadcast/unicast 핑을 보낸다(RakNet). NetherNet 탐색은 7551 포트로 보고됐다.
+
+- **연결**: `/connect localhost:19131`(또는 `/wsserver`)로 연결한다. 웹소켓 설정을 켜야 하고, 호스트나 관리자 권한과 cheats가 필요하다. 접속할 때마다 다시 실행해야 한다. TLS가 아니면 "Require Encrypted WebSocket"을 끈다. 공식 문서가 없고 바뀔 수 있다. Realms에서는 외부 웹소켓 명령을 처리할 수 없다.
+- **명령 요청**: `{header:{version:1,requestId:uuid,messagePurpose:"commandRequest",messageType:"commandRequest"},body:{commandLine}}`. 이벤트는 여러 개 구독할 수 있지만 할 수 있는 동작은 명령 실행뿐이다. 명령 `version`은 최신 값으로 둔다(빼거나 0이면 가장 옛 명령 문법이 적용되고 `execute`도 마찬가지다). 블록 상태 명령의 따옴표 이스케이프에서 문법 오류가 났다는 보고가 있다. 웹소켓으로 보낸 `/me`와 `/msg`는 발신자가 "External"로 표시된다.
+- **쓰임새**: 싱글플레이에서 scriptEvent와 채팅을 섞어 애드온과 양방향 통신을 한다. BDS가 아니면 데이터를 게임 안으로 밀어 넣는 데 라이브 웹소켓이 필요하다. 오디오 터널링도 가능하지만 제한적이다(명령 큐 약 100개, 지연 100~150ms). 근접 채팅 아이디어(BDS가 위치를 내보내고, RP가 메시지를 숨기고, Windows 클라이언트 하나가 mcws로 읽는다)도 있었는데, server-net만 쓰는 편이 단순하다.
+- **PlayerDied 이벤트(문서 없음)**: body는 `cause`(int), `inRaid`, `killer{color,id,type,variant}`, `player`이고 header는 `eventName: "PlayerDied"`, `messagePurpose: "event"`다. cause 값(`/damage`로 시험해 찾았다): -1 None, 0 Override, 1 Contact, 2 EntityAttack, 3 Projectile, 4 Suffocation, 5 Fall, 6 Fire, 7 FireTick, 8 Lava, 9 Drowning, 10 BlockExplosion, 11 EntityExplosion, 12 Void, 13 SelfDestruct, 14 Magic, 15 Wither, 16 Starve, 17 Anvil, 18 Thorns, 19 FallingBlock, 20 Piston, 21 FlyIntoWall, 22 Magma, 23 Fireworks, 24 Lightning, 25 Charging, 26 Temperature, 27 Freezing, 28 Stalactite, 29 Stalagmite, 30 RamAttack, 31 SonicBoom, 32 Campfire, 33 SoulCampfire, 34 MaceSmash. 메모 gist: https://gist.github.com/pyroboots/62185c7addc62e018709a55b896bec68 . 서버 예: https://github.com/WavePlayz/bedrock-websocket-server . 1.16 이전에는 이벤트가 약 114개 동작했는데 지금은 약 30개만 남았다는 주장이 있다*(단일 보고)*.
+
+## 서버 권위 이동과 반치트 (Mojang 문서 요약)
+
+(출처: protocol-docs-repo, additional_docs. 사실만 옮겼다.)
+
+- **이동 프로토콜 전환**: `StartGamePacket`(ID 11)의 `ServerAuthMovementMode`가 이동 모드를 정한다. 2024년 가을부터 서버 권위 이동으로 옮기는 프리뷰가 시작됐고, 완료 뒤 한 릴리스가 지나면 클라이언트 권위 경로를 지운다. `ServerAuthoritativeV3`를 지정하지 않은 서버는 결국 호환되지 않는다. 물리를 서버가 모두 구현할 필요는 없고, 예전 방식으로 하던 일은 V3에서도 가능하다.
+- **영향 패킷**: 11 StartGame(여기서 이동 프로토콜 지정), 18 MoveActorAbsolute(차량 이동 갱신, 폐기), 19 MovePlayer(클라이언트 이동 갱신, 폐기), 20 PassengerJump(말 점프 폐기), 36 PlayerAction(일부 타입 폐기), 44 AnimateActor(보트 노 입력 폐기), 57 PlayerInput(차량 입력 폐기), 144 PlayerAuthInput(주 입력 패킷), 161 CorrectPlayerMovePrediction(새 선택 보정 수단).
+- **반치트 보정**: 클라이언트와 서버가 입력을 함께 시뮬레이션하다가 어긋나면 서버가 보정을 보낸다. 클라이언트는 서버가 가리킨 시점으로 되감아 보정한 뒤 그 이후 입력을 다시 적용한다. 서버가 `StartGame`으로 켜라고 알리면 클라이언트에서 활성화된다. 기본은 꺼짐이고 `server.properties`로 켠다.
+
+```properties
+# 보정 사이 최소 틱 간격 (틱 5에서 보정하고 지연 2면 다음 가능한 보정은 틱 8)
+player-rewind-min-correction-delay-ticks=5
+# 클라이언트 롤링 창이 담는 틱 기록. 20TPS에서 40이면 왕복 2초 지연까지 되감기로 처리
+player-rewind-history-size-ticks=40
+# 위치 불일치 허용치. 1.0을 넘으면 치트가 통과할 가능성이 커진다
+player-position-acceptance-threshold=0.5
+server-authoritative-block-breaking=true
+server-authoritative-block-breaking-pick-range-scalar=1.5
+```
+
+- **블록 부수기**: 서버 권위 부수기를 켜면 서버가 부수기 진행을 검증한다. 시작이나 계속할 때 거리 검사를 하며 배율은 플레이어 최대 선택 거리에 곱한다. 끄면 위치는 클라이언트 권위이고 0.5가 더해진다. 크리에이티브는 계속 클라이언트 권위다.
+
+## SubChunk 요청 시스템 (1.18.10)
+
+(출처: protocol-docs-repo, SubChunk Request System v1.18.10)
+
+1.18부터 월드 높이가 -64~319가 되어 열 전체를 보내면 네트워크가 거의 두 배가 된다. 그래서 서버는 **뼈대 LevelChunk**를 보낸다. LevelChunkPacket의 서브청크 수를 `0xffffffff`(uint32 최댓값)로 두면 클라이언트가 해당 청크의 서브청크를 요청하는 모드가 켜진다. 이때 블록 엔티티는 LevelChunk에 넣지 않고 서브청크 안에 넣는다.
+
+- 클라이언트는 ① 틱 영역(대략 4청크 안 전부)과 ② 보이는 서브청크를 점진적으로 `SubChunkRequestPacket`(차원 ID와 서브청크 위치. Y는 절대 서브청크 번호로, -64~319면 -4~20)으로 요청한다. 요청은 구속력이 없어 서버가 무시하고 자기 순서로 보내도 된다.
+- 응답을 받기 전 위치에는 보이지 않는 막힌 자리 블록이 놓인다. 응답은 `SubChunkPacket`: 차원 ID, 위치, 직렬화 서브청크(블록 엔티티 포함. 데이터가 없으면 빈 문자열), 결과(0 정의 없음, 1 성공, 2 청크 없음, 3 다른 차원, 4 플레이어 없음, 5 인덱스 범위 밖), 높이맵, blob 캐시 여부와 ID다. 3rd party 서버는 보통 성공(1)만 쓰면 된다.
+- 클라이언트는 `NeedsRequest` 표시가 있는 서브청크의 응답만 받고, 성공 처리 뒤에는 청크 전체가 다시 요청 모드로 표시되기 전까지 같은 서브청크의 패킷을 무시한다. 이후 변경은 일반 블록 갱신으로 보낸다.
+- 높이맵은 서브청크마다 상태 바이트(1이면 16x16 높이값 배열이 뒤따름)로 조금씩 알려 조명과 비·눈 처리를 유지한다. blob 캐시 ID는 서브청크와 블록 엔티티를 합친 덩어리 기준이라 일반 LevelChunk의 ID와 다르다.
+
+## 보안, 크래셔, 안티치트, 프록시
+
+- **패킷 크래셔**: Horion/Borion은 62,000바이트가 넘는 `TextPacket`과 6013바이트 `SubChunkRequestPacket`을 쏟아붓는다(Borion은 2026-03-30 기준 1.26.1 지원). 해커 클라이언트의 거대한 표지판 텍스트도 렉을 일으킨다.
+  - BDS 내장 packet limiter와 `packetratelimitconfig`는 효과가 제한적이다.
+  - 스크립트(server-net)는 크기 기준으로 막을 수 있지만, 크래셔가 패킷 종류를 바꾼다.
+  - Endstone은 내부 패치(청크 누수, 크래셔)를 싣고 있다. `CommandRequestPacket`을 차단하는 등 패킷 수준 차단은 BDS나 Endstone에서만 된다.
+  - 가장 확실한 방어는 검증 프록시다: Player → gophertunnel(Go) 프록시 → 검증기/차단목록/패킷 로거 → BDS. 알 수 없거나 너무 크거나 잘못된 패킷이면 연결을 끊는다. 기존 프록시: https://github.com/smell-of-curry/gobds . Verixen은 유료(약 $20)다. 프록시는 원본 IP를 숨기고 부하 분산과 전송도 해 준다.
+- **스팸 봇과 프록시 클라이언트(Lumine 등)**: op로 접속해 `/clear`를 실행하거나 외부 명령 패킷을 보낸다. `chatSend`로는 보이지 않으므로 `config/commands.json`으로 명령을 끈다. 일부 봇은 `playerSpawn`을 발생시키지 않는다. 신고 말고는 근본 대책이 없다. Bedrock OSS에 anti-crash 글이 있다. Lumine 같은 프록시 기반 안티치트는 BDS 전용이다.
+- **이름이 비었거나 잘못된 플레이어(LAN 파일 편집)**: `/kick`이 실패한다. 대응책:
+  - BDS에서 명령/텍스트 패킷을 거부한다.
+  - `sender.name.length < 3`이면 `chatSend`를 취소한다.
+  - 정상 플레이어에 tag를 붙이고 `/kick @a[tag=!valid]`
+  - MSA 인증을 강제한다.
+  - LAN을 닫는다.
+- **치트의 현실**: 대부분의 치트는 server-authoritative movement에서 깨지고, 남은 것도 서바이벌 밖에서는 깨진다. 명령 블록/NBT 익스플로잇은 2023년에 막혔다는 의견이 있다. 남은 공격은 크래셔와 리치 핵이다. server-authoritative movement는 싱글플레이에서도 강제되며, 낙하가 느려질 수 있다(Linux BDS에서 버그라는 보고 하나).
+- **PvP 끊김**: 바닐라 BDS는 `applyKnockback`을 쓰는 PvP에서 PMMP/PNX/Dragonfly보다 이동 끊김이 심하다(server-authoritative movement나 PlayerAuthInputPacket 처리로 추정). hit cooldown 동안 넉백을 줄이면 낫다. 이후 EndstoneMC로 고쳤다는 주장이 있다. 시간이 지나며 FPS가 떨어지다 재접속하면 회복된다면, 플레이어마다 취소되지 않는 반복 루프를 의심한다.
+- **IP와 VPN 감지**: 스크립트로는 불가능하다. 로그인 패킷을 읽는 프록시(gophertunnel, bedrock-protocol JS, WaterdogPE)와 IP 목록이나 VPNapi.io가 필요하다. RakNet/UDP라 리버스 프록시가 어렵다(TPROXY).
+- **트래픽 읽기**: raw UDP 소켓은 쓸모가 없다(RakNet 위에 Bedrock 프로토콜이 있다). PrismarineJS bedrock-protocol이나 gophertunnel을 쓰고, 로깅 프록시는 online mode로 인증해야 받아들여진다. Realms 패킷은 봇이나 릴레이로 sniff한다(bedrock-protocol `examples/realmRelay.js`).
+- **프록시 뒤 서버 전송**: 클라이언트 재접속 없는 빠른 전송은 아직 못 풀었다. 우회법은 transfer 패킷을 프록시로 되돌리고, 프록시가 일정 시간(예: 5분) 어느 하위 서버로 보낼지 기억하는 것이다. 프로토타입은 PrismarineJS bedrock-protocol로 만들었다. BungeeCord식 오픈소스 프록시는 아직 없다. WaterdogPE는 BDS를 완전히 지원하지 않는다(`/transfer` 뒤 청크 실패).
+- **"Atlas" 프록시 기법**: 서버를 떠나지 않고 RP를 다시 불러온다. 클라이언트를 프록시로 전송하면 프록시가 새 팩 스택을 다시 제시하고 월드 상태를 재생한다. `StartGame` 전에 `JigsawStructureData`를 보내지 않으면 "missing structure data"로 끊긴다. 큰 `PlayerList` 패킷은 나눠야 한다.
+- **출력 패킷이 이미 없는 상황**: Mojang은 디버그 심볼을 주지 않아 서버 쪽 크래시를 고치려면 바이너리를 직접 손대야 한다. 파트너 서버는 커스텀 소프트웨어를 쓴다.
+- **ESP/outline 팩**: 벽 너머 엔티티를 보여 줘 불공정할 수 있다. 서버와 Realms는 이런 팩을 막을 수 있고, 플레이어 머티리얼을 바꾸는 서버 팩이 outline 팩을 깨뜨린다.
+- **커뮤니티 규칙**: 유출, 역공학, DRM 우회 논의는 금지다.

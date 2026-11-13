@@ -1,0 +1,172 @@
+---
+title: 루트 테이블과 거래 테이블
+description: 루트 테이블의 풀·엔트리·함수·조건, 티어 풀, 거래 테이블의 tiers·groups·wants·gives, 엔티티와 블록에서 쓰는 방법과 알려진 제한.
+sidebar_position: 5
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+---
+
+# 루트 테이블과 거래 테이블
+
+루트 테이블은 선언된 아이템 모음에서 일부를 고르는 JSON이고, 거래 테이블은 엔티티의 거래 내용을 담은 JSON이다. 둘 다 독립 등록 대상이 아니라 다른 곳(엔티티, 블록, `/loot`, 구조물 상자)에서 경로로 참조된다. 근거는 Bedrock Wiki(0930b39)의 loot 문서, MS Learn(a9fd1c0), bedrock-samples(15701fa9)의 `loot_tables/`·`trading/`, 커뮤니티 조사다.
+
+## 1. 루트 테이블
+
+### 구조
+
+루트 테이블은 `pools` 배열 하나를 필수로 갖는 JSON이다. 호출 결과는 모든 풀 결과의 합이다. 풀은 서로 독립이라 다른 풀의 결과에 영향받지 않는다. BP 안 어디든 둘 수 있지만 바닐라처럼 최상위 `loot_tables/` 아래에 두는 것이 권장된다(출처: bedrock-wiki).
+
+사용처는 `/loot` 명령, 컨테이너 내용, 블록 드롭, 낚시, 몹 드롭, 생성된 몹의 장비, 기타 몹 동작이다.
+
+가중치 무작위 풀 예제다. `rolls`는 숫자나 `{min,max}`이며 `bonus_rolls`/`bonus_chance`로 플레이어 운에 따라 횟수를 바꿀 수 있다. 엔트리 `weight`가 클수록 잘 뽑히고 `quality`는 운(현재는 바다의 행운 낚싯대만)에 따라 가중치를 바꾼다.
+
+```json
+{
+  "pools": [
+    {
+      "rolls": { "min": 2, "max": 4 },
+      "entries": [
+        { "type": "item", "name": "minecraft:golden_apple", "weight": 20 },
+        { "type": "item", "name": "minecraft:appleEnchanted", "weight": 1 },
+        { "type": "item", "name": "minecraft:name_tag", "weight": 30 }
+      ]
+    }
+  ]
+}
+```
+
+### 티어 풀
+
+`tiers` 객체가 있는 풀은 정확히 하나의 엔트리를 고른다(주로 몹 장비). 엔트리는 순서가 있고 1부터 센다. 시작 인덱스는 1과 `initial_range` 사이 무작위 정수이고(기본 1) `bonus_rolls`번의 시도가 각각 `bonus_chance` 확률로 인덱스를 1씩 올린다. 최종 인덱스의 엔트리가 결과다. 티어 풀에서는 엔트리의 조건이 모두 무시되고 풀 자체의 조건만 허용된다.
+
+```json
+{
+  "tiers": { "initial_range": 2, "bonus_rolls": 3, "bonus_chance": 0.095 },
+  "entries": [
+    { "type": "loot_table", "name": "loot_tables/entities/armor_set_leather.json" },
+    { "type": "loot_table", "name": "loot_tables/entities/armor_set_gold.json" },
+    { "type": "loot_table", "name": "loot_tables/entities/armor_set_iron.json" }
+  ]
+}
+```
+
+### 엔트리, 함수, 조건
+
+- 엔트리 종류는 `item`(아이템 ID), `loot_table`(다른 루트 테이블 참조, 계층 구성), `empty`(그 롤에서 아무것도 주지 않음)다. `empty`는 롤 범위에 0을 포함하거나 확률 조건으로도 흉내 낼 수 있지만 가중치 풀에서 가독성이 좋다.
+- 함수는 엔트리에 붙어 개수, 이름, 인챈트 등을 바꾼다.
+
+```json
+{ "type": "item", "name": "minecraft:dirt", "weight": 10,
+  "functions": [
+    { "function": "set_count", "count": { "min": 16, "max": 64 } },
+    { "function": "set_name", "name": "Pile of dirt" }
+  ] }
+```
+
+  자주 쓰이는 함수는 `set_count`, `set_name`, `set_lore`, `set_data`, `enchant_with_levels`, `enchant_randomly`, `looting_enchant`, `furnace_smelt`, `exploration_map`(지도 거래의 `destination`, 예 `village_taiga`)이다.
+- 조건은 풀이나 엔트리에 붙는다.
+
+```json
+{
+  "conditions": [
+    { "condition": "killed_by_player" },
+    { "condition": "random_chance_with_looting", "chance": 0.025, "looting_multiplier": 0.01 }
+  ],
+  "rolls": 1,
+  "entries": [ { "type": "item", "name": "minecraft:iron_ingot", "weight": 1 } ]
+}
+```
+
+  `match_tool` 조건은 `minecraft:match_tool_filter_all/any/none`에 아이템 태그를 준다. `"count": 1`이 없으면 빈손도 매칭된다.
+
+### 엔티티와 블록에서의 사용 (커뮤니티 보고)
+
+- 엔티티 전리품은 풀마다 `rolls`와 `entries`가 필요하다. 최소 형태: `{"pools":[{"rolls":1,"entries":[{"type":"item","name":"ns:item","weight":1,"functions":[{"function":"set_count","count":{"min":1,"max":1}}]}]}]}`. 그래도 드롭이 없었다는 보고가 있다(해결 안 됨). 엔티티에는 `minecraft:loot`로 지정한다. 아기 변형에서는 `minecraft:ageable`이 있으면 아기용 전리품 표가 적용되지 않을 수 있으니 그룹 안에 loot 컴포넌트를 둔다.
+- 블록은 `"minecraft:loot": "loot_tables/..."`로 지정한다. 커스텀 테이블을 쓰면 직접 나열하지 않는 한 블록 자신이 떨어지지 않는다. 실크터치와 포춘은 하드코딩이라 스크립트로 처리한다. 광석 XP는 스크립트로 `minecraft:xp_orb`를 생성한다. 바닐라 블록 드롭은 26.50의 데이터 드리븐 바닐라 블록 외에는 바꿀 수 없다. 자세한 규칙은 [블록](./blocks.mdx)의 루트 테이블 절에 있다.
+- 구조물 상자 루트는 NBT 편집, 지그소 processor(`append_loot`), 무작위 루트 도구로 넣는다. 같은 이름의 월드 저장 구조물이 BP 것보다 우선하므로 `/structure delete <name>` 후 다시 로드한다.
+- 떨어진 아이템 개수는 바꿀 수 없으니 디스폰하고 새 개수로 다시 스폰한다. 모험 모드 곡괭이는 Can Destroy 속성을 가진 ItemStack을 준다.
+- 장비 장착에는 `/loot replace entity @s slot.armor.chest 0 loot "equipment/trial_chamber_diamond"`를 쓴다.
+
+## 2. 거래 테이블
+
+거래 테이블은 `BP/trading/`에 두는 버전·네임스페이스가 없는 JSON이다. 엔티티 컴포넌트(`minecraft:trade_table`)에서 참조한다. 충돌을 피하려면 `trading/` 아래 네임스페이스 폴더를 둔다. 루트 테이블처럼 Molang을 지원하지 않고 범위 객체와 함수를 쓴다. 쉼표 하나만 빠져도 파일 전체가 깨진다(`Failed to load trade table`).
+
+구조는 `tiers[]` → (`groups[]` → `trades[]`) 또는 바로 `trades[]`다. 티어는 `total_exp_required`로 해금된다. 거래는 `wants`(요구 아이템, `item`, `quantity`, `price_multiplier`, `choice` 목록)와 `gives`(제공 아이템, `functions` 가능), `max_uses`, `reward_exp`, `trader_exp`를 가진다. 그룹의 `num_to_select`는 그룹에서 고를 거래 수다(출처: bedrock-wiki, trade-tables).
+
+```json
+{
+  "tiers": [
+    {
+      "groups": [
+        {
+          "num_to_select": 1,
+          "trades": [
+            {
+              "wants": [
+                { "item": "wiki:blessing_glyph", "quantity": { "min": 2, "max": 4 }, "price_multiplier": 0.5 },
+                { "item": "minecraft:book" }
+              ],
+              "gives": [
+                { "item": "minecraft:enchanted_book",
+                  "functions": [ { "function": "enchant_book_for_trading",
+                    "base_cost": 4, "base_random_cost": 12, "per_level_cost": 4, "per_level_random_cost": 8 } ] }
+              ],
+              "max_uses": 7,
+              "trader_exp": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "total_exp_required": 28,
+      "trades": [
+        { "wants": [ { "choice": [
+            { "item": "wiki:sacred_stones", "quantity": { "min": 4, "max": 6 }, "price_multiplier": 0.5 },
+            { "item": "wiki:blessed_beads", "quantity": { "min": 16, "max": 24 }, "price_multiplier": 0.5 } ] } ],
+          "gives": [ { "item": "wiki:aeleon_jewels", "quantity": { "min": 4, "max": 6 } } ],
+          "max_uses": 2 }
+      ]
+    }
+  ]
+}
+```
+
+- 커스텀 주민 직업 블록은 네이티브 방법이 없다. `move_to_block` + 직업 그룹을 바꾸는 이벤트를 쓰고 블록 위치는 스크립트로 저장한다. 거래표를 갱신하려면 디스폰 후 재스폰해야 한다. `minecraft:dweller`로 주민이 침대와 작업대를 차지한다. 바닐라 인챈트 레벨을 넘는 거래는 불가능해 가짜 인챈트를 스크립트로 만든다. 자세한 엔티티 쪽 규칙은 [엔티티](./entities.mdx)의 5절에 있다.
+
+## 3. 추가 규칙 (커뮤니티 조사 packs-versions 병합)
+
+### 루트 테이블 기본
+
+- 다른 루트 테이블을 부르려면 엔트리 `"type": "loot_table"`의 `name`에 `.json`까지 포함한 전체 경로를 쓴다(`"loot_tables/chests/abandoned_mineshaft.json"`). 커스텀 테이블은 `BP/loot_tables/<folder>/<name>.json`, 엔티티 루트는 `loot_tables/entities/`에 둔다.
+- `random_chance`는 0~1 비율이다(`0.01` = 1%, `5.0`은 항상). 풀은 독립적으로 굴려지므로 확정 드롭 풀이 희귀 풀을 막지 않는다. 항상 드롭시키려면 그 아이템만 있는 풀을 따로 둔다. `minecraft:random_chance` 필터가 테스트에서 항상 참이었다는 단일 보고가 있다.
+- Fortune 에뮬레이션(중첩 풀): `apply_bonus`/`alternatives`는 없다. 어떤 엔트리든 자기 `pools`를 가질 수 있고(조건 포함) 무한 중첩되며 부모 엔트리가 드롭됐을 때만 발동한다. 석탄 Fortune 3(1개 40%, 2~4개 각 20%)은 1 + 0.6 확률로 (1 + 0.667 확률로 (1 + 0.5 확률로 1))로 만든다.
+- 함수: `set_enchants`/`specific_enchants`, `enchant_with_levels`(`treasure`), `set_data`(염소 뿔), 책 텍스트 설정, lang 참조 `%key`, `carry_over_block_entity_data`(26.40 실험적). 바닐라 시련 금고 테이블은 `set_ominous_bottle` 같은 함수를 쓴다. 루트 조건 목록은 바닐라 파일에서 추출한 것으로 MS 문서에 다 있지는 않다.
+- 탐험 지도: `loot_table` 엔트리가 `loot_tables/maps/<name>.json`을 가리킨다. 지그소 구조물은 위치 지정이 가능하고(`/locate`에도 표시) structure_template_feature 구조물은 불가할 수 있다. `decoration`으로 지도 아이콘을 정한다. `exploration_map`의 `destination`, `decoration`, `search_radius`는 지원되지만 `zoom`은 효과가 없어 거래로 지도 줌 레벨을 정할 수 없다.
+- `/loot`으로 상자에 넣으면 연속으로 채워진다. 바닐라 같은 분산은 NBT 편집이나 루트 프로세서 리스트로 한다.
+- 스크립트 커스텀 드롭은 `loot` 명령과 `LootTableManager`에 보이지 않는다(이들은 `minecraft:loot`만 본다). 스크립트에서 `dimension.runCommand('loot spawn ...')`나 loot API로 커스텀 드롭을 만든다. 루트 테이블로 몹을 소환할 수는 없다(`<typeId> <amount> <nameTag>` 이름의 아이템을 `minecraft:item` `entitySpawn` 리스너로 처리한 사례). 허스크가 좀비 없이 모래를 드롭하려면 허스크 전용 `minecraft:loot` 테이블을 쓴다.
+
+### match_tool과 도구 조건
+
+- 형태: `{"condition":"match_tool","minecraft:match_tool_filter_all":["minecraft:is_pickaxe"],"minecraft:match_tool_filter_any":["minecraft:diamond_tier","minecraft:netherite_tier"]}`. 제외는 `minecraft:match_tool_filter_none`이고 `"count": 1`을 넣어 맨손이 실패하게 한다. `enchantment: silk_touch` 형태도 있다. 풀 엔트리 `minecraft:air` 트릭은 동작하지 않는다.
+- `filter_all`/`_any` 태그 조합이 맨손에도 통과하던 것은 확인된 버그로 프리뷰 26.30.27에서 수정됐다(MCPE-188723 관련). 2025-12에도 "match all"이 깨졌다는 보고가 있다. 아이템 count 0은 목록 외 모든 도구에 루트를 주지만 맨손은 고려하지 않아 바닐라 같은 잎 루트(묘목/막대 확률, Fortune)는 정확히 재현할 수 없다. 26.30에 광석 match_tool 드롭이 바뀌었다. (confirmed)
+- `match_tool`은 loot 명령에 전달된 도구를 검사하므로 도구 없이 `loot spawn ... loot "table"`을 하면 만족할 수 없다.
+- 커스텀 아이템 태그는 아이템의 `minecraft:tags`(예: `wypnt:enderium_tier`)로 정의하고 루트/레시피에 쓴다. digger의 destroy_speeds는 블록 태그(`q.any_tag('minecraft:is_pickaxe_item_destructible')`)를 쓴다. 광석에 곡괭이 등급을 제대로 요구할 수는 없다(폭발 시 드롭 없음). 블록 드롭을 없애려면 `loot_tables/blocks/air.json`처럼 빈 루트를 둔다.
+
+### 바닐라 루트 덮어쓰기
+
+- 일반적으로 불가능하다(흑요석 드롭 등). 스크립트를 쓴다. 같은 경로 덮어쓰기가 동작한 예외: 사막 신전 의심스러운 모래(2026-05-31), 의심스러운 모래/자갈 루트, 떠돌이 상인 거래 `trading/economy_trades/wandering_trader_trades.json`(2026-04-17). 26.50에서 새로 데이터 기반이 된 바닐라 블록은 루트 덮어쓰기가 가능하다. 철광석이 원석 대신 다른 아이템을 드롭하게 하려면 블록 루트 교체(낮은/음수 priority)나 스크립트 블록 파괴를 쓰고, 명령 대체는 hasitem/clear/give를 쓴다(아이템 엔티티 `name=` 선택은 게임 언어에 좌우되므로 피함).
+- 플레이어가 설치한 의심스러운 모래/자갈에는 루트가 없다. 지그소 `block_entity_modifier` 프로세서로 배치한다.
+- 26.10에서 엔티티/상자 루트가 동작하지 않는다는 보고가 있다(해결 없음, single report). 루트 테이블은 brarchive 안에서 동작하지 않는다(바닐라도 아마).
+
+### 거래 테이블
+
+- 여러 주민이 같은 거래를 공유하면 테이블, 하나뿐인 주민은 NBT를 쓴다. 컴포넌트 그룹으로 거래 테이블을 교체할 수 있다(재고 리셋 방식은 불명, 태그별 가격도 불명). JSON 오류(쉼표 누락) 하나로 전체 테이블이 실패한다.
+- 스크립트 이벤트 중 주민 거래 이벤트는 기본 제공되지 않아 별도 구현이 필요하다고 보고된다(scripting 조사: 거래 감지는 이벤트 목록에 없음).
+
+## 4. 전체 레퍼런스
+
+함수와 조건의 전체 목록과 거래 테이블 전체 문서는 [루트 테이블 레퍼런스](./reference/loot-tables-1.mdx)와 [거래 테이블 레퍼런스](./reference/trade-tables.mdx)에 MS Learn 원문 발췌로 실었다.

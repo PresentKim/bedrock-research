@@ -1,0 +1,256 @@
+---
+title: "엔티티, 아이템, 커스텀 컴포넌트"
+description: "Entity와 Player API, 커스텀 블록·아이템 컴포넌트, ItemStack과 컨테이너"
+sidebar_position: 4
+sources:
+  - private-research
+  - ms-learn
+---
+
+## 엔티티와 플레이어
+
+`Entity`는 월드 안의 모든 개체이고 `Player`는 그 하위 클래스다. 엔티티의 기능은 컴포넌트로 나뉘어 `entity.getComponent("minecraft:health")`처럼 접근하며, 컴포넌트가 없으면 `undefined`다. 2.x에서는 엔티티가 무효(`isValid === false`)일 때 `getComponent`가 예외를 던지므로 지연 실행 안에서는 `isValid`를 먼저 확인한다(출처: ms-learn, `v2-overview.md`).
+
+```javascript
+import { world, system } from "@minecraft/server";
+
+system.runInterval(() => {
+  for (const player of world.getAllPlayers()) {
+    const health = player.getComponent("minecraft:health");
+    if (health && health.currentValue < 6) {
+      player.addEffect("minecraft:regeneration", 100, { amplifier: 1 });
+      player.onScreenDisplay.setActionBar("체력이 낮다!");
+    }
+  }
+}, 20);
+```
+
+월드 쪽에서 엔티티를 찾을 때는 `Dimension.getEntities(EntityQueryOptions)`나 `getPlayers()`를 쓰고, 필터(`type`, `tags`, `location`과 `maxDistance` 등)는 API에 맡긴다. 스크립트 루프에서 거르는 것보다 빠르다(출처: ms-learn, `world-apis.md`, `script-performance.md`).
+
+```javascript
+const overworld = world.getDimension("overworld");
+for (const skeleton of overworld.getEntities({ type: "minecraft:skeleton" })) {
+  skeleton.kill();
+}
+```
+
+## ItemStack과 컨테이너
+
+`ItemStack`은 아이템 한 묶음의 복사본이다. 생성은 `new ItemStack("minecraft:diamond", 3)`이고, 속성은 `typeId`, `amount`, `maxAmount`, `nameTag`, `lockMode`, `keepOnDeath`이며 메서드는 `getLore/setLore`, `getComponent`, `getDynamicProperty/setDynamicProperty`, `clone`, `isStackableWith` 등이다(출처: ms-learn, `ItemStack.md`). 복사본이므로 고친 뒤에는 컨테이너나 슬롯에 다시 써 넣어야 반영된다.
+
+```javascript
+const inv = player.getComponent("minecraft:inventory").container;
+const item = inv.getItem(0);
+if (item) {
+  item.setLore(["§7특별한 아이템"]);
+  inv.setItem(0, item);          // 되돌려 쓰기
+}
+// 슬롯은 실시간으로 반영된다
+const slot = inv.getSlot(1);
+slot.nameTag = "이름 변경";
+```
+
+## 커스텀 컴포넌트
+
+커스텀 컴포넌트는 블록·아이템 JSON에 이름으로 붙이고, 그 이름에 해당하는 스크립트 이벤트 함수를 `system.beforeEvents.startup`에서 등록해 연결하는 방식이다. 공식 문서는 이것을 "JSON 기반 설정과 스크립트의 결합"이라 설명한다. 이벤트 함수는 상태가 없고, 인자로 어느 블록(또는 아이템)에 대한 호출인지 알려 준다(출처: ms-learn, `creator/Documents/scripting/custom-components.md`).
+
+블록 컴포넌트 핸들러(`BlockCustomComponent`)는 다음과 같다: `beforeOnPlayerPlace`, `onBlockStateChange`, `onBreak`, `onEntity`, `onEntityFallOn`, `onNamedTick`, `onNeighborChanged`, `onPlace`, `onPlayerBreak`, `onPlayerInteract`, `onRandomTick`, `onRedstoneUpdate`, `onStepOff`, `onStepOn`, `onTick`. 아이템 컴포넌트 핸들러(`ItemCustomComponent`)는 `onBeforeDurabilityDamage`, `onCompleteUse`, `onConsume`, `onHitEntity`, `onMineBlock`, `onReleaseUse`, `onUse`, `onUseOn`이다(출처: ms-learn, `BlockCustomComponent.md`, `ItemCustomComponent.md`).
+
+### 등록
+
+```javascript
+import { system, BlockPermutation } from "@minecraft/server";
+
+system.beforeEvents.startup.subscribe((init) => {
+  init.blockComponentRegistry.registerCustomComponent("content:turn_to_air", {
+    onStepOn: (e) => {
+      e.block.setPermutation(BlockPermutation.resolve("minecraft:air"));
+    },
+  });
+
+  init.itemComponentRegistry.registerCustomComponent("starter:add_night_vision_on_consume", {
+    onConsume: (arg) => {
+      arg.source.addEffect("minecraft:night_vision", 600);
+    },
+  });
+});
+```
+
+컴포넌트 이름에는 네임스페이스가 필수이고, 등록은 startup 안에서만 한다. 클래스를 쓰면 메서드를 넘길 때 `this`가 사라지므로 생성자에서 `this.onStepOn = this.onStepOn.bind(this);`로 묶는다.
+
+### JSON 연결(커스텀 컴포넌트 V2)
+
+V2에서는 컴포넌트를 `minecraft:custom_components` 배열에 넣지 않고 다른 컴포넌트처럼 `components`에 직접 쓴다. 이때 Beta APIs와 Custom Components V2 실험이 켜져 있어야 했고, 이후 정식으로 합류했다(출처: ms-learn, `v2-overview.md`).
+
+```json
+"minecraft:block": {
+  "description": { "identifier": "content:my_block" },
+  "components": {
+    "content:turn_to_air": {},
+    "minecraft:loot": "loot_tables/blocks/my_block.json"
+  }
+}
+```
+
+같은 이벤트에 여러 컴포넌트가 붙어 있으면 JSON에 적힌 순서로 호출된다. 한 컴포넌트를 여러 블록에서 재사용할 수 있고, 한 BP에서 등록해 다른 BP가 쓸 수도 있다.
+
+### 매개변수
+
+JSON에 적은 값은 핸들러의 두 번째 인자 `CustomComponentParameters.params`로 전달된다. 순열(permutation)마다 다른 값을 줄 수 있다.
+
+```json
+"components": { "content:turn_to": { "into": "minecraft:dirt" } },
+"permutations": [
+  {
+    "condition": "query.block_state('content:state_name') == 1",
+    "components": { "content:turn_to": { "into": "minecraft:stone" } }
+  }
+]
+```
+
+```javascript
+system.beforeEvents.startup.subscribe((init) => {
+  init.blockComponentRegistry.registerCustomComponent("content:turn_to", {
+    onStepOn(e, p) {
+      const params = p.params;                       // { into: "minecraft:dirt" } 등
+      if (params.into !== undefined) {
+        e.block.setPermutation(BlockPermutation.resolve(params.into));
+      }
+    },
+  });
+});
+```
+
+JSON이나 등록을 바꾸면 월드를 나갔다 다시 들어와야 반영되고, 스크립트 본문은 `/reload` 핫 리로드가 된다. 콜백 안에서는 일반 스크립트와 같은 API를 쓸 수 있다.
+
+## 커뮤니티 노트
+
+아래는 커뮤니티 조사로 모은 컴포넌트 핸들러 세부, 엔티티·플레이어·아이템 API의 한계와 우회법이다.
+
+
+`*confirmed*`, `*single report*`, `**conflicting**`은 보고의 신뢰도 표시다. 이 페이지의 근거는 커뮤니티 보고이며 Mojang 공식 문서와 다를 수 있다.
+
+### 커스텀 컴포넌트 (블록·아이템)
+
+#### 등록과 JSON 연결
+
+- **등록**: `system.beforeEvents.startup.subscribe(({ blockComponentRegistry, itemComponentRegistry }) => { blockComponentRegistry.registerCustomComponent("ns:name", {...}); itemComponentRegistry.registerCustomComponent("ns:item", {...}); })`. 실험 기능이 아니다. 블록은 `blockComponentRegistry`(itemComponentRegistry와 혼동 금지). 엔티티 커스텀 컴포넌트 레지스트리는 없다(블록, 아이템, 커스텀 커맨드만; 루트 함수/조건 등록도 없음).
+- **JSON 연결**: 블록/아이템 JSON의 `components`에 `"ns:name": {}`(또는 params 객체) 추가. 1.21.90 이전 포맷은 `"minecraft:custom_components": ["ns:comp"]`였고 2.0에서 v1 방식은 폐기(블록 v2 등록은 블록 format_version 1.26.0을 요구했다는 보고; 이전 `minecraft:custom_components` 키는 invalid). 등록하지 않은 컴포넌트를 JSON에 쓰면 스키마 오류, 등록만 하고 `{}`로 태그처럼 쓰는 것도 허용. 스크립트 버전이 맞지 않으면 "not registered"/"child 'x' not valid here".
+- **아이템 format_version**: 아이템 커스텀 컴포넌트는 format_version 1.21.80~1.21.90 이상이어야 바인딩된다("Custom Component is not being used by an item" 경고; 1.20.50 등에서는 실패, 1.21.100+로 해결한 보고). 26.0 프리뷰 이후 최신 아이템 컴포넌트는 format_version 1.26.0을 요구("this member was found in the input, but is not present in the Schema"; 블록은 영향 없음, changelog 미기재).
+- **"component ... not present in the Schema" 갑작스런 발생**: 오래된 팩 캐시가 원인일 수 있어 `console.log` 추가 후 재로드로 해결된 경우, 게임 업데이트 후 format 1.26.50 블록에서 재발해 팩/블록을 처음부터 다시 만들어 해결(블록에서 더 흔함). "Child ti:slabs not valid here"는 블록 JSON 오류.
+- **필수 import 누락**(`import { world, system }`)이 "invalid definition" 오류를 낸 사례. 스크립트 모듈 2.6.0/2.7.0 stable로 동작.
+
+#### params
+
+- **전달**: 핸들러 두 번째 인자 `(event, { params })` — JSON의 컴포넌트 값 그대로(객체 또는 배열; JSON 문자열 아님). 배열이면 `for (const p of params)`, 객체를 배열처럼 반복하면 "cannot iterate" TypeError. TS에서는 `(params as any)`. 아이템에서 읽기: `itemStack.getComponent('ns:comp').customComponentParameters.params.<key>`(또는 `getComponent("ns:comp")`가 params를 가진 인스턴스 반환). 아이템 params는 2.0.0부터.
+- **깊이 제한 2**: 커스텀 컴포넌트 JSON 중첩 깊이/배열 깊이는 2로 제한(성능, 우회 불가). 객체 배열은 실패하므로 객체 맵(`"custom_dye": {"item_id": "#fff"}`), 범위는 `{min,max}` 대신 `[min, max]`, 또는 `"a:b:c"` 문자열 파싱.
+- **구조 팁**: 필드 열 개를 구조분해하기보다 `{effect, message, duration, amplifier, delay}` 객체 배열을 반복.
+
+#### 블록 컴포넌트 핸들러
+
+- **목록**: `onPlayerInteract`(player는 optional), `onTick`, `onRandomTick`, `onPlayerBreak`(v2; `onPlayerDestroy`는 v1, `onBreak`는 비플레이어 파괴 포함), `beforeOnPlayerPlace`(`permutationToPlace`, `cancel`), `onPlace`, `onStepOn`, `onStepOff`, `onEntityFallOn`, `onRedstoneUpdate({powerLevel, previousPowerLevel})`, `onEntity`(엔티티가 home 블록에 도달, `execute_event_on_home_block`과 연결; 블록 엔티티 이벤트는 없음). 핸들러 키는 대소문자 구분(`On...` 아님). 잘못된 이름은 조용히 실패.
+- **현재 퍼뮤테이션에 있어야 발생**: 컴포넌트를 조건부 `permutation`에만 넣으면 그 상태에서만 호출된다(예: `q.block_state('ns:growth') < 7` 퍼뮤테이션의 `onPlayerBreak`는 7단계에서 미호출 → `== 7` 퍼뮤테이션에 별도 컴포넌트). 모든 퍼뮤테이션에 커스텀 컴포넌트를 나열해야 한 사례. 퍼뮤테이션 안 커스텀 컴포넌트가 다른 컴포넌트를 깨는 버그(MCPE-234714), 두 컴포넌트 중 하나만 재정의하면 두 번째 상태에서 undefined가 되는 보고. "아무 일도 안 일어남"의 흔한 원인은 컴포넌트가 블록에 없는 것.
+- **`onTick` vs `onRandomTick`**: `onTick`은 `minecraft:tick`(`{interval_range:[20,20], looping:true}`)이 큐에 넣은 틱에만, `onRandomTick`은 tick 컴포넌트 없이 randomTickSpeed를 따른다(잎 소멸 등은 random tick; 불필요한 tick 컴포넌트는 지연 데이터를 저장하니 제거). 월드 생성 단일 블록 배치로 놓인 블록은 `onTick`을 받지 못하고 random tick만. `onTick`은 `/reload`를 넘어서도 동작하지만(`runInterval`과 달리) `/reload all` 중 블록이 무효화되면 실패할 수 있다. 언로드 블록 접근 시 `block.dimension.isChunkLoaded(...)`로 가드. 바닐라 블록에는 onTick을 붙일 수 없다.
+- **레드스톤**: `onRedstoneUpdate`는 `e.powerLevel`(not currentPower), 블록에 `minecraft:redstone_consumer`(min power 1) 필요, `powerLevel === 0`이 전원 상실. 월드 로드 시 power 0으로 발생해 저장 상태를 뒤집으며 첫 업데이트는 0, `previousPowerLevel`이 consumer `min_power`보다 작을 수 있다(26.20에 first-update 류 속성 예정). 커스텀 문 용도로는 한때 프리뷰 전용. 스크립트로 회로에 전원을 주려면 `minecraft:redstone_producer` 투명 블록을 배치(가루 상태 변경은 시각만). `block.getRedstonePower()`.
+- **`beforeOnPlayerPlace`**: `event.cancel = true`로 설치 차단(예: 액체 위), `event.permutationToPlace = event.permutationToPlace.withState('ns:state', false)`로 변경. `minecraft:block_placer` 아이템으로 놓으면 발생하지 않는다. 반블록 합치기에서 아이템이 사라지는 게임 버그.
+- **기타 동작**: 블록에는 `runCommand`가 없다 → `block.dimension.runCommand("execute positioned x y z run function ...")`(`/setblock ... destroy`는 드롭, `block.below().setType("minecraft:air")`는 드롭 없음). `block.spawnParticle`도 없다 → `dimension.spawnParticle(id, block.center())`. 얇은 블록(충돌 높이 &lt; ~3.3 px)에서는 `onStepOn`이 미발생. 커스텀 컴포넌트는 월드 이벤트/`runInterval`보다 블록 로직에 선호되지만 선인장 데미지 같은 효과는 `runInterval`이 낫다는 의견도.
+- **예제**: 밟으면 튀는 블록 `registerCustomComponent('ns:launch_entity', { onStepOn: (data, {params}) => data.entity?.applyImpulse({x:0, y:params.vertical_power, z:0}) })` + `"ns:launch_entity": {"vertical_power": 1}`. 파티클 블록: `onTick(e){ e.block.dimension.spawnParticle("ns:p", e.block.above().bottomCenter()) }`. 버튼: 상태 `ns:powered`, 위치 키 `activePresses` Map, `runTimeout` 해제 + `onTick` 폴백. 거북알/양초식 쌓기: `onPlayerInteract`에서 상태 카운터 증가, 크리에이티브가 아니면 주손 차감, 상태별 루트 테이블. JSON 정의 동작(setblock, 아이템 생성, 상태 전환, 가중 랜덤)을 실행하는 범용 "Player Interact Component"로 옛 블록 이벤트 대체(mcpedl.com/player-interact-component). Kaioga의 블록 템플릿(반블록, 침대, 콘크리트 가루, 유리 등).
+
+#### 아이템 컴포넌트 핸들러
+
+- **목록**: `onUse`, `onUseOn`(`ItemComponentUseOnEvent.block`; 커스텀 컴포넌트 전용 — 월드 `itemUseOn`은 `playerInteractWithBlock`으로 대체), `onHitEntity`(`attackingEntity`, `hitEntity`, `hadEffect`; `cancel` 없음 — 데미지 되돌리기는 체력 기록 후 1틱 뒤 `setCurrentValue`; i-frame 중 명중에도 `hadEffect`가 true인 미해결 보고), `onMineBlock`, `onBeforeDurabilityDamage`(`event.durabilityDamage = 0`으로 불괴; 엔티티 타격에만 발생, 갑옷엔 아님), `onCompleteUse({source, itemStack})`, `onConsume`(`food` 필요; 음식 효과용으로 전역 `itemCompleteUse`보다 선호). 블록 파괴용 `onBlockDestroy`는 없음.
+- **`onUse`와 `onUseOn`이 둘 다 발생**: 배타적으로 하려면 `onUseOn`에서 플레이어 id를 Set에 기록하고 다음 1~2틱 `onUse`를 건너뛴다. 활/창처럼 `use_duration`이 큰 아이템에서는 `onCompleteUse`/`onConsume`이 미발생.
+- **예제**: `onUse(event){ event.source.addEffect("minecraft:regeneration", 200, {amplifier:0, showParticles:true}) }`, `onUse`에서 명령은 `system.run`으로, 랜덤 `function` 실행, 투사체 스폰 + `applyImpulse`.
+- 커스텀 컴포넌트는 자기 아이템에만 적용되므로 바닐라·타 애드온 아이템까지 다루는 커스텀 인챈트는 이벤트 기반이 필요. 아이템 JSON의 커스텀 컴포넌트는 `hasComponent`가 아닌 등록된 컴포넌트로 읽고, 아이템 태그는 `hasTag`.
+
+
+### 엔티티와 플레이어
+
+#### 식별자와 유효성
+
+- **`entity.id` / `player.id`**: 월드 단위로 영구 고유(오름차순, 재접속·이름 변경 후에도 동일, 호스트는 항상 같은 id로 보임; 과거 호스트 id `-4294967295`). 엔티티가 변신하면(주민→좀비 주민) id가 바뀐다. `world.getEntity(id)`는 문자열 id를 받는다(타입 id가 아님), 로드된 엔티티만. 오프라인 Player 객체는 `id`, `typeId`만 허용. 이름은 바뀌므로 키는 id, 이름은 표시용 DP로.
+- **월드 간 식별자**: XUID는 스크립트로 읽을 수 없다(BDS에서 콘솔을 `child_process`로 읽어 `scriptevent`로 전달하는 방식). `Player.playfabId`(2.9/26.40 beta)는 계정 단위 PlayFab id로, preview beta에서 `persistentId`로 개명(~2026-08-04, hex 대소문자 변경)됐고 BDS/Realms/월드 간 안정적. `beforeEvents.asyncPlayerJoin`(server-admin, BDS)의 `persistentId`는 클라이언트 패킷으로 위조 가능. 이전 pfid류는 사라졌다. 버전별 changelog 확인.
+- **`isValid`는 속성**: `entity.isValid`/`block.isValid`(2.0부터, `isValid()`는 "not a function"). 이벤트·쿼리로 받은 엔티티도 무효일 수 있으며(`world.getPlayers()`가 입장 직후 무효 플레이어를 반환한 사례), 틱을 넘긴 참조(`system.run`, `runTimeout`, 캐시)는 사용 직전 `player?.isValid` 확인(객체 먼저). 동기 사용마다 감쌀 필요는 없다. 플레이어가 떠나면 네이티브 핸들이 파괴돼 속성 접근이 throw. 스폰 직후 자기 스크립트가 제거해 무효가 되는 경우도.
+- **플레이어 캐시**: `world.getAllPlayers()`(완전히 로드된 플레이어만; 2026-09 이후 `getPlayers()`와 함께 `Player[]` 반환, 이전엔 iterable)를 매 틱 부르지 말고 `playerSpawn`(initialSpawn) + `worldLoad`(이미 접속한 플레이어) + `playerLeave`(before 권장)로 Set/Map 유지. Map에 Player 참조를 두면 `world.getEntity(id)`보다 빠르다. `map.size`를 맹신하지 말고 주기적 재조정. 예: `https://github.com/Visual1mpact/Paradox_AntiCheat/blob/rewrite/penrose/classes/player-cache.ts` . 순서는 대략 입장순(보장 안 됨).
+- **호스트/권한 판정**: `player.commandPermissionLevel === CommandPermissionLevel.Host`(`world.getAllPlayers().find(...)`), OP는 `commandPermissionLevel >= 1 || playerPermissionLevel === PlayerPermissionLevel.Operator`(값 2=Operator, 3=Custom; 호스트가 3으로 나온 보고). `Player.isOp`은 1.21.90에서 제거, `PlayerPermissionLevel`은 1.21.90.21에 추가. Host가 없으면 BDS/Realm. Realm 소유자는 알 수 없다.
+- **플랫폼/클라이언트 정보**: `player.clientSystemInfo.platformType`(Desktop/Mobile/Console 범주만), `maxRenderDistance`, `memoryTier`, `locale`(취약). `deviceOS`/`deviceModel` 없음(Endstone류 필요). FOV, 시뮬레이션 거리, F1 HUD 상태, 카메라 시점, 게임 버전, 일시정지, 밝기 등 클라이언트 설정은 읽을 수 없다(`onScreenDisplay.getHiddenHudElements()`는 스크립트가 숨긴 것만). 시뮬레이션 거리는 `isChunkLoaded`를 바깥으로 크롤링해 추정. 지연: `player.getPing()`은 2.9.0-beta(Beta APIs; 로컬 프록시 뒤에서 부정확), 싱글에서도 클라-서버 지연 ~2틱. 파티 정보 `Player.partyInfo`는 beta에서 26.30에 제거.
+
+#### 컴포넌트
+
+- **이름**: `minecraft:` 접두사 생략 가능(`getComponent("inventory")`), `EntityComponentTypes` enum 권장. 스크립트로 엔티티 컴포넌트를 추가/제거할 수 없고(`addComponent` 없음) JSON 이벤트(`triggerEvent`)로 컴포넌트 그룹을 바꾼다. 컴포넌트 그룹에만 정의된 컴포넌트는 그룹이 추가되기 전엔 스크립트에서 보이지 않으므로(예: `leashable`) 항상 조회하려면 `components`에 둘 것.
+- **읽기 전용인 것**(내부 시스템이 덮어쓰기 때문): `minecraft:scale`, `mark_variant`, `skin_id`, `variant`, 마찰 수정자, `can_fly`, `Entity.target`, `isGliding`, `isSprinting`, 체력 `effectiveMax`. 우회: 클라이언트 동기 엔티티 속성 + `setProperty` + Molang `q.property()`, 컴포넌트 그룹/이벤트, 또는 구 API 버전 보조 팩.
+- **스케일 우회(호환 팩)**: 최신 API에서 `EntityScaleComponent.value`는 읽기 전용. Script API 1.19.0을 쓰는 작은 두 번째 BP가 `system.sendScriptEvent("src:size", JSON.stringify({id, size}))`를 받아 `getComponent("minecraft:scale").value`를 설정. 엔티티 JSON에 scale 컴포넌트가 직접 있어야 하고(바닐라 성체 몹엔 없음, 새끼는 `scale_by_age`), 스폰 후 ~27틱 기다려야 값이 되돌아가지 않는다.
+- **체력**: `getComponent("health")` → `currentValue`, `setCurrentValue(v)`(최대 체력 초과 불가, 1.19부터), `effectiveMin/effectiveMax`, `resetToDefaultValue`. 회복: `setCurrentValue(clamp(cur+x, effectiveMin, effectiveMax))`. 최대 체력 변경은 스크립트로 불가 → player.json 이벤트, `health_boost`(2단위, 최대 255, 현재 체력에 영향), 또는 별도 커스텀 HP 스탯. 반 칸 트릭: health_boost 레벨 trunc((n-1)/4) → 1틱 뒤 체력 20+n → 자연 회복 before 취소. 흡수: `addEffect("absorption", ...)`(흡수 중 `currentValue`가 `effectiveMax`를 넘을 수 있다는 관찰). `/effect @s instant_health 2 2`는 오버플로로 사망 → health 컴포넌트로 치유. 길들인 늑대는 바닐라 동작으로 40 HP가 된다.
+- **허기/포화**: `getComponent("minecraft:player.hunger")`/`player.saturation`/`player.exhaustion`의 `currentValue`(not `value`; float), `setCurrentValue(4)`로 스프린트 비활성. `EntitySaturationComponent` stable.
+- **`minecraft:equippable` — 플레이어 전용**: `getEquipment(EquipmentSlot.Mainhand)`(ItemStack), `getEquipmentSlot(...)`(ContainerSlot → `getItem()`), `setEquipment(slot, item, ItemLockMode...)`(undefined로 비움), `totalArmor`, `totalToughness`(읽기 전용; `totalProtection` 표기도 보고). `EquipmentSlot` 값은 대소문자 구분 문자열(`Mainhand`, `Offhand`, `Head`, `Chest`, `Legs`, `Feet`; `mainHand`/`'minecraft:offhand'` 불가 — 소문자 `'mainhand'`가 동작했다는 보고도 있으나 enum 사용 권장), 빈 슬롯은 undefined이므로 `?.typeId`. `EquipmentSlot.Body`(몹)는 beta. 모듈 스코프가 아니라 이벤트 안에서 읽을 것. 비-플레이어(갑옷 거치대 포함)에서는 undefined — 1년 넘게 지속, Mojang은 의도가 아니며 돌아올 것이라 언급("on our radar" 2026-05-20, 2026-08-21). `enable_attachables` 엔티티에서 `setEquipment`만 동작했다는 보고(*single report*). 보조손에 임의 아이템 설정은 throw(1:1 보조손 애드온 불가).
+- **몹 장비 우회**: 쓰기 `entity.runCommand("replaceitem entity @s slot.armor.head 0 diamond_helmet")`(RP 엔티티에 `"enable_attachables": true`; `slot.weapon.mainhand`, `slot.armor.body`(늑대 갑옷); 공백 필수, `keep` 모드로 빈손 테스트 후 `successCount`), 읽기 `testfor @s[hasitem={item=...,location=slot.armor.head}]`의 `successCount` 또는 점수를 매기는 mcfunction(`hasitem`은 id/슬롯/수량/data만, data 범위 불가), 인벤토리 컴포넌트가 있는 커스텀 엔티티는 `Container.transferItem`. 몹의 인챈트·내구도·자연 방어는 읽을 수 없다. 플레이어↔엔티티로 주손 아이템을 옮기면 데이터 손실.
+- **인벤토리**: `getComponent("inventory").container`는 인벤토리가 있는 엔티티(플레이어, 커스텀)만. 플레이어 주손: `container.getItem(player.selectedSlotIndex)`(`selectedSlot`은 제거됨; `selectedSlotIndex`는 쓰기 가능). 커서: `getComponent("minecraft:cursor_inventory")`(`PlayerCursorInventoryComponent`; `.item` 읽기, `.clear()`, 설정 불가). 엔더 상자: `EntityEnderInventoryComponent`(26.20.20; `getSlot`이 무효 슬롯을 준 미해결 보고). 엔티티 인벤토리 UI를 스크립트로 열 수 없다.
+- **길들이기**: 바닐라 길들인 몹은 `tameable`/`tame_mount` 컴포넌트가 길들여지면서 제거돼(늑대는 `wolf_wild` 그룹) `tamedToPlayer`가 undefined(WAI). 우회: 길들일 때 주인 id를 엔티티 DP에 저장, `playerInteractWithEntity` before에서 직접 `tame(player)`. 즉시 길들이기: `spawnEntity` → `getComponent(EntityComponentTypes.Tameable)?.tame(player)` → `triggerEvent("minecraft:on_tame")`(엔티티에 `minecraft:tameable`, `behavior.follow_owner`, `owner_hurt_by_target`, `owner_hurt_target`, `minecraft:on_tame` 필요; JSON에 컴포넌트가 정의된 엔티티만). `EntityTameMountComponent.tamedToPlayer`는 탈것용(동작 안 한다는 보고도). `minecraft:trusting`은 플레이어 한 명(`TrustedPlayer0`)만 저장하며 스크립트로 설정 불가.
+- **기타 컴포넌트**: `rideable`(`addRider(self)`로 강제 탑승, `ejectRiders()`는 반드시 괄호, `getRiders()`), `riding`(`entityRidingOn`), `type_family`(`EntityTypeFamilyComponent`), `EntityVariantComponent`, `EntityNpcComponent`(장면 생성 불가, `/dialogue`로 원격 열기), `minecraft:attack`/공격력·브리딩·`charged_item`·대부분 속성 컴포넌트는 비공개(몹 공격력은 조회 테이블이나 hurt 이벤트로 측정). 새끼 몹(양 색, 말 variant/mark_variant, 고양이, 늑대, 여우, 라마)은 색/변종 컴포넌트가 없다(버그 의심). 보트 variant 비공개. `minecraft:vibration_damper`는 1.26.60.28에서 `hasComponent`로 읽힘.
+- **타깃**: `Entity.target`(현재 공격 대상)은 한동안 beta였고 이후 stable에서 읽기 전용으로 동작(불안정 보고 공존). 설정 불가 → 엔티티 JSON(`minecraft:on_target_acquired` → `queue_command` scriptevent로 알리기), `teleport`의 facing 엔티티 인자로 타깃 설정, 목적지에 투명 "blank" 엔티티를 스폰해 JSON이 그것을 타깃하게 하는 이동 트릭. 경로탐색 API(`pathTo`) 없음 — 스크립트 A*는 100블록 이상에서 느리므로 HPA*/청크 웨이포인트, 더미 엔티티 경로 + 실제 엔티티 텔레포트, 가능하면 네이티브 AI.
+
+#### 이동, 회전, 텔레포트
+
+- **플레이어 회전은 `setRotation`/`lookAt`으로 안 된다**(클라이언트가 덮어씀; x만 되고 y는 안 된다는 보고, 2026-03-30 미수정). `player.teleport(loc, { rotation: {x, y} })`(도 단위) 또는 `{ facingLocation }`. 비플레이어는 `setRotation`이 되돌아가거나 늦게 동기화되므로 매 틱 재적용하거나 클라이언트 동기 속성 + 애니메이션. 시점 고정 대안: `camera.setCamera("minecraft:free", {location, rotation})` + `inputpermission set @s camera disabled`.
+- **텔레포트**: `teleport(loc, {dimension, rotation, facingLocation, keepVelocity})`(플레이어에 `keepVelocity` 미지원 보고와 레일 엔티티용 keep-velocity `tryTeleport` 보고 공존), `tryTeleport(loc, {checkForBlocks})`는 boolean(블록과 겹치면 실패). 대상 위치는 발 위치. 스크립트 텔레포트는 클라이언트에서 부드럽게 보간된다(커맨드는 끊김). 차원 간 회전 미적용 보고. 언로드 청크로의 텔레포트(특히 다른 차원의 ticking area)는 엔티티 제거 위험(~2026-07-28 수정). BDS 1.26.31.1에서 `Player#teleport()`가 킥을 유발, 1.26.44.3에서 수정(`tryTeleport`는 무관).
+- **입력 권한**: `player.inputPermissions.setPermissionCategory(InputPermissionCategory.Jump|Movement|Camera, false)`(`/inputpermission` 대체). 매 틱 설정하면 이동 desync(끊김) → 변경 시에만.
+- **시선/좌표 계산**: `getHeadLocation()`(실제 카메라보다 ~0.1 낮음), `getViewDirection()`, 앞 지점 `location + viewDir * d`. 방향→회전 `yaw = atan2(-x, z)*180/π`, `pitch = atan2(y, hypot(x,z))*180/π` 또는 `{x: -asin(v.y)*180/PI, y: atan2(-v.x, v.z)*180/PI}`. 회전→방향 `x=-sin(yaw)cos(pitch), y=-sin(pitch), z=cos(yaw)cos(pitch)`. 로컬 `^ ^ ^`: forward = viewDir, left = normalize(-z,0,x), up = cross(left, forward); Minecraft의 `^`는 +x가 *왼쪽*이라 right 벡터를 뒤집어야 한다. 비플레이어 몹의 수평 `getViewDirection`/`getRotation`은 스폰·이동·피격 시에만 갱신(수직은 실시간). 축 규약: 북쪽 -Z, 동쪽 +X, yaw 0 = 남쪽(+Z). `Block.north()`는 -Z. jaylydev 문서의 `Direction` enum 설명은 남북이 뒤바뀌어 있다(문서 오류).
+- **크기/히트박스**: `entity.getAABB()`(2.4.0, 1.21.120 무렵) → 너비 `extent.x*2`, 높이 `extent.y*2`(머리 ~0.85). 생존 모드 공격 사거리 검사 때문에 ~6블록보다 큰 커스텀 히트박스는 맞출 수 없다(크리에이티브는 됨). 블록 충돌 박스는 비공개.
+
+#### 스폰, 제거, 속성
+
+- **스폰**: `dimension.spawnEntity(id, loc, { spawnEvent: "ns:event", initialPersistence: true, initialRotation })` — `spawnEvent`로 변종/새끼(`minecraft:entity_born`), `initialPersistence`로 시뮬레이션 거리 밖 소멸 방지(이름표·ticking area로는 안 됐음), `initialRotation`은 Y만. 블록 중심(x+0.5, z+0.5)이나 `block.center()`에 스폰. 월드 높이 밖은 out-of-bounds 오류. 한 틱에 많이(투사체 80개) 스폰하면 렉 → 틱당 ~10개. 바닐라 화염구는 소환 불가(`is_summonable` 복제 엔티티나 구조물). 스폰 후 태그: `const e = spawnEntity(...); e.addTag("t")`(`setProperty()`는 void라 체이닝 불가).
+- **제거**: `entity.remove()`는 즉시(클라이언트 위치가 늦게 따라옴), `kill()`은 지연 제거 + hurt 이벤트 발생. 방금 제거한 엔티티에서 커맨드 실행 불가 → 위치를 기록하고 차원에서 실행. 바닐라 몹 디스폰 방지: `nameTag = "§r"`(빈 이름처럼 보임) 또는 바닐라 엔티티 재정의(`minecraft:persistent`).
+- **엔티티 속성**: `setProperty('ns:prop', v)`(BP 속성에 `client_sync: true`면 Molang `q.property`로 렌더 제어; 같은 틱의 `getProperty`는 옛 값 → 1틱 대기, 스폰 직후 설정도 1틱 대기 권장), 속성 최대값은 범위 밖 값을 try/catch로 설정해 `ArgumentOutOfBoundsError.maxValue`로 알아낼 수 있다. 커스텀/시뮬레이트 플레이어에서 "does not exist on Entity"가 나면 `client_sync` 추가 제안. 엔티티 속성(비-DP)은 애드온 간 공유된다. `variant`/`mark_variant`로 부족하면 속성(`https://wiki.bedrock.dev/entities/entity-properties`).
+- **플레이어별 시각**: `Player.setPropertyOverrideForEntity(entity, 'ns:prop', value)`(2.6.0)로 특정 플레이어에게만 다른 속성값 → 플레이어별 외곽선/팀 표시/부위 숨김(일시적이므로 바라보는 엔티티 Map을 유지, 디스폰 시 try/catch). 템플릿 github.com/JuanLuci/Player-Outline(`player:can_see_outline`, `player:has_outline`). `playAnimation(id, {players:[p]})`로 특정 플레이어에게만 애니메이션(예: scale 0으로 숨기기; 이름표는 안 숨겨짐).
+- **원거리 엔티티**: 64블록 밖에서 컬링됨. 트릭: `runtime_identifier: minecraft:tnt` 엔티티를 매 틱 플레이어에게 텔레포트하고 애니메이션으로 모델을 월드 위치로 오프셋, 히트박스는 스크립트.
+
+#### 효과, 경험치, HUD, 이름표
+
+- **`addEffect(effectType, durationTicks, { amplifier, showParticles })`**: 세 번째 인자는 옵션 객체, 지속시간은 틱(1이면 "효과 없음"), `amplifer` 오타는 조용히 무시, amplifier와 `BlockRaycastOptions.maxDistance`는 비정수를 내림(정수 필요). 최대 20,000,000틱, `Infinity`/-1 설정 불가(`getEffects()`는 무한을 -1로 보고; 이후 Infinity가 동작할 수도 있다는 2026-07 보고) → `effect @s x infinite` 커맨드. 효과 id는 `MinecraftEffectTypes`(vanilla-data). `clearEffect()` 반복보다 `effect clear` 커맨드가 빨랐다는 측정.
+- **경험치**: `player.addLevels`(온라인만), `player.level`. 경험치 구슬 픽업 이벤트 없음(레벨 폴링).
+- **HUD/타이틀**: `onScreenDisplay.setHudVisibility(HudVisibility.Hide, [HudElement.Health, HudElement.Hunger, ...])`, `setTitle(text, {stayDuration, fadeInDuration, fadeOutDuration})` — 옵션을 주면 세 값 모두 필수("Native setter cannot be assigned null or undefined"), `setActionBar`, `updateSubtitle`. 이름표: `player.nameTag = \`$&#123;player.name&#125;\nText\``(머리 위만, 채팅 이름은 아님; rawtext/translate 불가), `nameplateRenderDistance`. 엔티티 이름표를 항상 보이게 하는 API 없음. 보스바 이름은 `spawnEntity` + `nameTag`면 "unknown"(오래된 버그) → `/summon`으로 이름 지정, 동적 갱신 불가.
+- **채팅 이름/랭크**: beta `chatSend` before에서 취소 후 `world.sendMessage`로 서식 재전송(다른 팩 핸들러가 있으면 중복). 신규 beta Player 채팅 prefix/suffix 속성이 충돌을 피한다. `ChatSendBeforeEvent.targets`는 한때 읽기 전용이었다가 복원(Player[] 대입으로 수신자 제한). 귓속말(`/w`, `/tell`)과 슬래시 커맨드는 `chatSend`로 잡을 수 없다(`/me`는 BDS `config/commands.json`으로만 비활성화).
+- **메시지**: `player.sendMessage`(그 플레이어만), `world.sendMessage`(전체), 태그 그룹은 `world.getPlayers({tags:[...]})`/`excludeTags` 반복. RawMessage 중첩: `{rawtext:[{translate:"key", with:{rawtext:[...]}}]}`(`with`는 `string[]` 또는 RawMessage, `RawMessage[]` 아님). 번역은 클라이언트에서 일어나므로 스크립트가 번역된 문자열을 얻을 수 없다. 플레이어 언어는 읽을 수 없음(`locale` 제외). `player.name.repeat(10e3)` 같은 거대 메시지는 클라이언트 렌더 크래시.
+- **스킨**: 플레이어 스킨은 스크립트로 읽기/변경 불가(`skin_id`는 변종 번호뿐). 모핑은 player.json + 렌더 컨트롤러 + 엔티티 속성. NPC/분신은 플레이어 스킨 더미 엔티티나 SimulatedPlayer(14장).
+
+### 아이템과 컨테이너
+
+#### ItemStack 기본
+
+- **사본이다**: 인벤토리·이벤트에서 얻은 ItemStack 변경(`setLore`, `nameTag`, `amount`, durability, enchant, DP)은 `container.setItem(slot, item)` / `equippable.setEquipment(slot, item)`로 되돌려 써야 저장된다. 같은 함수 안에서 get+set이 되는 것처럼 보이는 건 같은 객체라서. 반대로 `ContainerSlot`(`container.getSlot(i)`, `equippable.getEquipmentSlot(...)`)은 항상 현재 내용을 반영하며 `slot.setLore()`, `slot.amount -= 1`, `slot.setItem()`이 바로 적용된다. 블록·엔티티는 다시 설정할 필요 없다. *confirmed*
+- **복제/소실 버그 방지**: 읽은 뒤 플레이어가 슬롯을 바꾸면 `setItem`이 엉뚱한 슬롯을 덮어쓴다 → ContainerSlot을 잡아 두고 쓰기 직전 typeId 재확인. 소비는 동작과 같은 틱(또는 먼저) 처리, 대안으로 `clear` 커맨드의 `successCount`. 커스텀 아이템 드롭 후 스크립트 차감 전 복제 위험(내용 해시 우회).
+- **비우기와 수량**: `container.setItem(slot)`/`(slot, undefined)`로 비운다(`new ItemStack("minecraft:air")`는 유령 스택). `amount`는 1~255, 1 이하면 감소 대신 제거. `item.amount = n`만으로는 반영되지 않음 → 새 스택/클론을 setItem. `ItemStack.maxAmount`로 최대 스택.
+- **타입 확인**: `item.typeId`(문자열) vs `item.type`(ItemType). `itemStack.matches(...)`에 커스텀 id를 쓰면 "unknown block descriptor" 로그 → `typeId` 비교. `isStackableWith`는 스택 불가 아이템에서 false, `matches`는 id/상태만. `BlockPermutation.resolve("minecraft:coarse_dirt").matches("minecraft:dirt")`는 true. 블록 여부는 `BlockTypes.get(item.typeId) !== undefined`(커스텀 블록 포함; `new Set(BlockTypes.getAll().map(b => b.id))`를 `system.run` 안에서 캐시). 별칭→id: `ItemTypes.get(id)?.id`. `ItemTypes.get()`은 커스텀 id도 동작. 아이템 태그: `hasTag("minecraft:is_pickaxe")`, `is_axe`, `is_sword`, `is_hoe`, `is_food`(바닐라 음식, 발광 열매는 없음).
+- **잠금/사망 유지**: `itemStack.lockMode = ItemLockMode.inventory`(또는 `slot`, `lockInInventory`), `keepOnDeath = true` 후 setItem; `equippable.setEquipment(EquipmentSlot.Chest, item, ItemLockMode.lockInInventory)`로 갑옷 잠금. 잠금 아이템 드롭 시 팝업은 숨길 수 없다(`showTags false`는 툴팁만). 잠금은 플레이어 인벤토리에서만, 블록 컨테이너 불가. `/give ... {"item_lock":{"mode":"lock_in_inventory"}}`.
+
+#### lore, 이름, 내구도, 인챈트
+
+- **lore**: `setLore(string[] | RawMessage[])`(2.2.0부터 RawMessage, 문자열화된 rawtext는 모든 버전), `getLore()`(없으면 빈 배열; 배열 비교는 원소별, `[] === []`는 false), `getRawLore()`. 지우기: `setLore()`/`setLore(undefined)`(빈 배열은 빈 줄을 남긴다는 보고와 "빈 배열로 지운다" 보고 공존). 한도 대략 100줄, 줄당 ~1000자. 리터럴 `%`는 `%%`. 같은 슬롯에 새 아이템이 들어오면 옛 lore를 상속하는 문제 → 다음 틱에 추가. "+4 공격 피해" 같은 내장 툴팁은 하드코딩. 크리에이티브 목록엔 lore가 안 보임.
+- **이름**: `ItemStack.nameTag` 편집 후 같은 슬롯에 되돌려 쓰기. 지우려면 undefined(미검증).
+- **내구도**: `item.getComponent("minecraft:durability").damage = Math.min(damage + n, maxDurability)` 후 되돌려 쓰기(`damage + 60;`처럼 대입 누락 주의, `(x ?? 0) + n`). 내구 인챈트를 존중하는 헬퍼(`level/(level+1)` 확률로 건너뜀, 0이면 `setItem(slot, undefined)`). `unbreakable = true`로 불괴(단 `unbreakable`이 `damage` 쓰기를 막진 않음). `world.beforeEvents.itemDurabilityDamage`는 존재하지 않음(AI 환각) → 아이템 컴포넌트 `onBeforeDurabilityDamage`. 갑옷 손상음은 `stopSound`로 확실히 못 끔(RP 빈 사운드).
+- **인챈트**: `getComponent('enchantable').addEnchantment({type: new EnchantmentType('fire_aspect'), level: 1})`, `addEnchantments(getEnchantments())`, `getEnchantment("silk_touch")`. 가능한 인챈트 목록은 얻을 수 없고 바닐라 상한 초과 레벨은 막힌다. 커스텀 인챈트는 lore로 흉내. 커스텀 갑옷에서 `minecraft:enchantable`을 빼면 인챈트 불가. 인챈트 테이블 제안은 플레이어 `EnchantmentSeed`에 묶여 재굴림 불가.
+- **아이템 변환**(데이터 유지): 새 `ItemStack(newId)`에 `nameTag`, lore, `getDynamicPropertyIds()` → `setDynamicProperty`, durability `damage`, 인챈트를 복사. 바닐라 아이템엔 `minecraft:dyeable`이 없어 염색 색은 옮길 수 없다(MCPE-237577).
+- **쿨다운**: `player.startItemCooldown(category, ticks)`(아이템이 없는 임의 카테고리도 가능 → 범용 플레이어 쿨다운; 1틱으로 재호출하면 사실상 리셋), `player.getItemCooldown(category)` > 0이면 활성, `ItemCooldownComponent.startCooldown(player)`/`getCooldownTicksRemaining(player)`(중지·감소·리셋 불가). 쿨다운은 아이템이 아닌 카테고리별. JSON `minecraft:cooldown`은 `category`, `type`("use"/"attack"), `duration`(초) — 사용 *시작* 시 시작되고(use_modifiers와 함께면 완료 시), 1.21.130의 `"type": "attack"` + `minecraft:swing_duration`으로 공격 쿨다운(두 값 같게). 재접속 시 쿨다운이 리셋된 보고 → `Date.now()`를 DP에 저장(지연 시 drift). 커스텀 아이템 쿨다운 바 표시는 26.10.20에서 수정.
+
+#### 특수 아이템
+
+- **물약/화살**: `Potions.resolve("minecraft:Healing", "Consume")`(효과 id엔 `minecraft:`, 전달 방식엔 없음; `Potions.getAllDeliveryTypes()`), 옛 `ItemStack.createPotion`은 없음. 물약 종류: `item.getComponent('potion')?.potionEffectType.id`(`minecraft:long_strength` 등; `ItemComponentTypes.Potion`은 한때 beta, amplifier는 vanilla-data에). 물약 화살 ItemStack은 생성 불가(커맨드/루트 `loot spawn`), 종류는 `localizationKey`(`tipped_arrow.effect.<name>`)로만, 물약 컴포넌트로 판정 실패(MCPE-236954 언급). 던진/잔류 물약 엔티티를 원하는 효과로 생성 불가(구조물 또는 `spawn_aoe_cloud` 커스텀 투사체). 가마솥 물약: FluidContainer에 `setPotion`만.
+- **번들/셜커**: `itemStack.getComponent("inventory").container`(`ItemInventoryComponent`)는 Storage Item 컴포넌트가 있는 아이템(번들)만 — 1500개 아이템 스캔 결과 번들뿐. 변경 후 소유 컨테이너에 다시 setItem. 셜커 상자 아이템은 내용물 비공개 → 블록으로 설치해 읽기, 디스펜서 설치(빈 슬롯 유지), 화염 데미지로 깨서 아이템 엔티티 읽기, 숨겨진 커스텀 차원 활용. 2026-06 "ItemInventoryComponent가 이제 셜커도 지원"이라는 보고와 2026-09-23 프리뷰에 셜커 인벤토리 접근 추가 보고가 있으나 2026-10에도 조작 불가 보고 — **conflicting**. 커스텀 `minecraft:storage_item`(format 1.21.130)의 인벤토리 접근 실패 보고. 번들 상호작용 자체는 끌 수 없다.
+- **기타 읽기 불가 데이터**: 아이템 aux/data 값(바닐라 `minecraft:arrow:3` 등; bedrock-samples `metadata/vanilladata_modules/mojang-items.json` 참고, `testfor @s[hasitem={item=x,data=n}]`), 아이템 텍스처 경로(직접 매핑 테이블 — `ItemTypes.getAll()` + item_texture.json, AI 목록은 ~70% 정확), 갑옷 장식(trim; 루트 테이블 `set_armor_trim`/`SetArmorTrimFunction` + `generateLootFromTable`이나 구조물로만), 바닐라 아이템 `minecraft:food`(대부분 undefined, 자체 목록), 가죽 갑옷 `dyeable`(커스텀 아이템만; `ItemComponentTypes.Dyeable`의 `color`는 &#123;red,green,blue&#125; 0~1), 나침반 lodestone 위치, 동적 글린트(JSON `minecraft:glint`만), 아이템 오버레이 텍스처(유사 아이템 두 개를 교체), 거의 모든 아이템 NBT.
+- **아이템 프레임/선반**: `block.getItemStack()`이 프레임 아이템(비었으면 프레임) 반환, 설정은 구조물로만, 인벤토리 컴포넌트 없음. 선반은 2.5.0에서 `inventory` 컴포넌트 없음. 독서대 책은 inventory 컴포넌트로 재추가.
+
+#### 컨테이너
+
+- **`Container` 메서드**: `getItem`, `setItem`, `getSlot`, `addItem`(남은 ItemStack 반환 → 가득 차면 `spawnItem`; 2026-06 "void 반환"이라는 반대 보고, `player.addItem`은 넘침 반환 — **conflicting**), `transferItem`(지연 보고), `swapItems(i, j, container)`(갑옷/보조손 제외), `emptySlotsCount`(0이면 가득 — 부분 스택은 수동 루프), `find`/`findLast`/`contains`(ItemStack을 받으며 수량·NBT까지 정확히 일치해야 함; `contains`는 수량 무시 보고; 커스텀 양조 물약에서 실패) → 보통 슬롯 루프 + typeId 비교(`while (slot--) inv.getSlot(slot)`). 여러 스택에 걸친 N개 제거도 수동 루프. 컨테이너 규칙 오류로 `setItem`이 throw할 수 있어 try/catch. 내구도를 바꾼 사본을 setItem해 지울 수 없는 아이템이 생긴 미해결 보고.
+- **블록 컨테이너**: `block.getComponent('minecraft:inventory').container`(상자, 통, 화로 — 제련 가속 가능; 많은 블록 스캔은 틱당 제한). 큰 상자는 크기 54(단일 27)이지만 어느 이웃인지는 알 수 없다 → 슬롯 0에 고유 마커(무작위 DP/lore) 후 이웃 확인(같은 마커면 오탐), 또는 `sibling` 방향 상태를 가진 커스텀 상자. 루트는 슬롯 0부터 채워지므로 분산은 직접. 블록 복사 시 상자 내용·표지판 텍스트는 별도 복사.
+- **세계 생성 상자 루트 후킹 불가**: 플레이어가 놓은 상자는 `playerInteractWithBlock` + DP, 또는 `single_block_feature`로 `may_attach_to.bottom: [chest]`인 투명 블록을 함께 배치해 상호작용 시 읽기(새 청크에서만). 이미 생성된 콘텐츠는 새 애드온의 영향을 받지 않는다.
+- **컨테이너 UI 강제 열기 불가**(상자/화로/엔티티 인벤토리, 어떤 UI가 열려 있는지도 모름): 우회는 플레이어 위치에 인벤토리 엔티티(아이템을 들고 있지 않으면 제거; 내용은 플레이어 DP에 JSON), 상자 마인카트, 플레이어 앞으로 텔레포트하는 투명 엔티티(옛 Rubedo 방식은 렉), Herobrine Chest-UI 같은 상자형 폼, 커스텀 서버 소프트웨어의 가짜 인벤토리. 76칸 숨은 컨테이너 엔티티를 상자 UI로 쓰는 설계는 커서·드롭·스폰·피격 이벤트를 모두 처리해야 버튼 아이템 복제를 막을 수 있다(엔티티 인벤토리 크기는 생성 후 고정). 인벤토리 안 가짜 버튼: 텍스처 없는 아이템 + 이름(호버) + `entityContainerOpened/Closed`, `playerInventoryItemChange`, `entityItemDrop`, `cursor_inventory` 폴링.
+- **제작**: 제작 이벤트·크래프팅 그리드 아이템 감지 없음(JSON UI는 `#item_id_aux`로 볼 수 있음). 인벤토리 변경 diff, 결과물을 더미 아이템으로 두고 교체하는 방식. 레시피 검증/관리 API 없음 → bedrock-samples recipes 파싱(바닐라 레시피 파일이 전부는 아님), "Recipe Registry"/"Bedrock Registry" 애드온, 재귀 제작 트리 github.com/Efficient123/recursive-crafting(객체 키 조회, 순환 가드), Crafter에 `replaceitem`으로 넣고 레드스톤으로 결과를 읽는 런타임 방법(5~10틱, 공유 레시피는 실패). 레시피는 이름/lore를 매칭할 수 없고 아이템 태그만(예: `minecraft:coals`). 커스텀 제작대는 `crafting_table` 블록 컴포넌트 + 태그(3x3만), 커스텀 화로는 엔티티 상자 우회. 바닐라 화로/제작대의 제작·제련 이벤트 없음.
+
+#### 루트 테이블 (LootTableManager)
+
+- **사용**: `world.getLootTableManager().getLootTable("folder/name")` → `generateLootFromTable(table, tool?)`가 `ItemStack[]`(인챈트·데이터는 반환된 스택을 그대로 써야 유지, `new ItemStack(typeId, amount)`로 다시 만들면 소실) → 각각 `dimension.spawnItem`. `generateLootFromBlock(block, tool)`은 도구 인챈트(행운)를 반영. 런타임에 테이블 생성 불가. 실험 기능이 아니며 stable(문서의 beta 표기는 오류). `LootTableFunction`도 존재. 활용: 갑옷 장식(`set_armor_trim`; 커스텀 갑옷에도 동작), 염색, 불길한 병(`set_ominous_bottle`), 블록 data 값이 있는 아이템, 바닐라 몹 루트 적용(EntityDie에서). `loot spawn` 커맨드의 `match_tool`은 도구 인자 필요. 바닐라 시련 금고 테이블은 다시 만들면 인챈트를 잃는다.
+- **버그(2026-04)**: 커스텀 아이템/블록의 `LootItem.name` undefined(MCPE-238050), `LootItem`에 `conditions` 없음(MCPE-238052), `LootPool.rolls`/`bonusRolls`가 쓸 만한 `NumberRange`를 주지 않음(MCPE-238055/238056); LootItemConditions는 동작. 복제한 ItemStack의 dyeable 컴포넌트 크래시는 수정됨(MCPE-237909). `Dimension#spawnXP`는 없다.
+- **바닐라 블록 드롭(묘목 확률 등)** 은 루트 테이블로 바꿀 수 없어 파괴 감지 → 확률 계산 → 아이템 스폰. `/replaceitem block`으로 블록이 떨어뜨릴 내용을 바꿀 수 있다는 언급. 커스텀 블록 드롭을 막으려면 빈 루트 테이블 + 스크립트 드롭.
+

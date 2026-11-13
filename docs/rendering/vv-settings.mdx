@@ -1,0 +1,167 @@
+---
+title: VV 설정 파일
+description: 키프레임 JSON과 바이옴 연결, 컬러 그레이딩·톤매핑, 자동 노출, lighting, atmosphere, 물, 그림자, 반사, 게임 내부 설정, HDR 큐브맵, 업스케일링과 성능
+sidebar_position: 10
+sources: [private-research, ms-learn, bedrock-samples]
+---
+
+# VV 설정 파일
+
+## 개념: 설정 파일과 키프레임
+
+Vibrant Visuals는 팩의 JSON 설정 파일로 분위기를 정한다. 텍스처 세트가 개별 블록·엔티티의 표면을 정의한다면, 조명과 효과는 폴더별 JSON(`atmospherics`, `color_grading`, `lighting`, `fog`, `water` 등)과 키프레임이 정한다. 시간대에 따라 바뀌는 값에는 **키프레임** 문법을 쓴다. 키는 하루 중 시각을 나타내는 0(정오)에서 1(다음 정오, 24시간 뒤)까지의 숫자이고, 값은 키프레임으로 바꾸려는 매개변수 값이다. 키프레임이 주어지면 엔진이 인게임 시간에 따라 값 사이를 선형 보간한다(출처: ms-learn, Key Frame JSON Syntax).
+
+```json
+{
+  "format_version": "1.21.40",
+  "minecraft:lighting_settings": {
+    "description": { "identifier": "my_pack:default_lighting" },
+    "directional_lights": {
+      "sun": {
+        "illuminance": { "0.0": 100000.0, "0.25": 20000.0, "0.35": 400.0, "0.5": 1.0, "0.65": 400.0 },
+        "color": [255.0, 255.0, 255.0, 255.0]
+      },
+      "moon": { "illuminance": 0.27, "color": [255.0, 255.0, 255.0, 255.0] },
+      "orbital_offset_degrees": 0.0
+    },
+    "emissive": { "desaturation": 0.1 },
+    "ambient": { "illuminance": 0.02, "color": "#ffffffff" }
+  }
+}
+```
+
+위는 MS Learn 예시를 줄인 것이다(정오 0.0, 일몰 0.25, 자정 0.5). 단, 이 예의 `illuminance` 100000(럭스)은 커뮤니티에서 "문서 오류"로 보고된 값이라 실제로는 작은 float만 받는다(아래 lighting 절). 아래 규칙은 커뮤니티 조사에서 모은 것이다(출처: 비공개 조사).
+
+## 클라이언트 바이옴과 설정 파일 연결
+
+- **바이옴별 파일**: water, color_grading, atmosphere, lighting 설정은 바이옴 기반이다. client biome JSON이 컬러 그레이딩, lighting, atmosphere 파일 식별자를 참조한다. "default" 바이옴 파일은 아무 효과가 없으므로 바이옴마다 파일(예: `plains.client_biome.json`)이 필요하다. 모든 바이옴을 마음에 드는 하나처럼 보이게 하려면 각 client biome의 식별자를 그 설정으로 바꾼다. 잘못된 바이옴 식별자는 오류를 내지 않으니 콘텐츠 로그를 확인한다.
+- **전역 기본값 덮어쓰기**: `minecraft:` 네임스페이스 식별자(`minecraft:default_water`, `minecraft:default_color_grading`)로 전 바이옴 기본값을 덮어쓴다. lighting 기본값은 이 방법으로 덮어쓸 수 없다. `color_grading/color_grading.json`만 둔 팩은 톤매퍼만 바뀌었으므로 바이옴별 지정이 필요해 보였다.
+- **lighting 파일 참조**: 종류별 lighting json이 하나뿐이면 바이옴마다 참조할 필요가 없고 차원별 파일은 `client_biome.json`에서 참조한다. 참조된 lighting 파일이 모두 완전하고 일관돼야 `orbital_offset_degrees`가 동작한 사례가 있다.
+- **늪 바이옴의 태양 각도 리셋**: 바닐라 늪(과 맹그로브, 메사)은 자체 lighting 식별자와 태양 위치를 가지고 있어서 태양 각도를 되돌린다. Microsoft samples의 biomes 폴더에서 그 바이옴의 `client_biome` 파일을 복사하고 lighting 식별자를 내 설정으로 바꾸면 전역 각도가 적용된다. 테스트할 때는 게임 전체를 다시 시작한다.
+- **바이옴별 항목**: orbital offset과 atmospherics는 이제 바이옴별로 설정할 수 있다(예전에는 어디서나 0으로 고정). 수면 색은 client biome이, 수중 색은 fog가 정한다.
+- **샘플**: atmosphere/lighting/color grading JSON의 시작점은 microsoft/minecraft-samples의 `deferred_lighting_starter`(다소 오래됨)이고, 게임 설치 폴더의 기본 VV 설정(`...\MinecraftForWindows\data\resource_packs\1.21.90`)이 실제 기본값이다. bedrock-samples에는 텍스처만 있고 VV 설정이 없다.
+
+## 컬러 그레이딩과 톤매핑
+
+- **JSON 구조**(format_version 1.21.90, 예: 식별자 `my_pack:default_color_grading`):
+
+```
+minecraft:color_grading_settings
+  color_grading
+    midtones   {contrast, gamma, offset, saturation, gain}   각 [r,g,b]
+    highlights {highlights_min, enabled, contrast, gain, gamma, offset, saturation}
+    shadows    {shadows_max, enabled, contrast, gain, gamma, offset, saturation}
+  temperature  {temperature, type: "color_temperature" 또는 "white_balance"}
+  tone_mapping {operator: "hable"}
+```
+
+한 노트(2026-01)는 키를 `midtonesMax`, `highlightsMin`, `shadowsMax`처럼 camelCase로 적었고 다른 노트(2026-04)는 `highlights_min`, `shadows_max`로 적었다. 정확한 철자는 샘플에서 확인한다. `conflicting`
+- **권장 값**: `shadows_max`는 약 0.3(0.3~0.4)이 적당하고 0이면 화면이 지나치게 타 버린다. `highlights_min`은 12~20(보통 약 20, catgamer는 16)이 적당하고 1이나 4처럼 낮으면 색이 강하게 클램프되고 밴딩이 생긴다. 채도는 1.2면 과포화이니 1.04~1.1을 쓴다. 탈색된 세계는 채도 0.35부터 시작한다. midtones, highlights, shadows는 함께 조정하고 hex보다 RGB를 쓴다.
+- **날카로운 경계·밴딩(파란 고리 등)**: `highlights_min`이 1 근처이거나 `shadows_max`가 1 근처인 분할 그레이딩 때문인 경우가 많다. `highlights_min`을 올리고 `shadows_max`를 0.3~0.4로 두거나, 다른 팩 설정을 하나씩 붙여 넣어 이분 탐색하거나, 톤매퍼를 바꿔 본다. 질문자가 해결을 확인했다. VV는 원래 밴딩에 취약하다. 어두운 구석의 파란 틴트는 그림자 그레이딩을 꺼서 해결했다.
+- **온도 방향**: `color_temperature`는 K가 높을수록 **차가워지고**(흑체 방식, 문서에 "warmer"라고 쓰인 문장은 틀림) `white_balance`는 K가 높을수록 따뜻해진다. 6500을 중립으로 많이 쓰고 추운 바이옴에는 더 차가운 온도를 쓴다. 1.21.120/.130 프리뷰에서 테스트됐다. `confirmed`
+- **전역 전용 항목**: `color_temperature`를 쓰려면 전역(기본) 컬러 그레이딩에서 온도 그레이딩을 켜고 타입을 `color_temperature`로 해야 한다. 그렇지 않으면 바이옴별 설정을 무시하고 전역 white_balance로 떨어진다. 톤매핑 operator와 온도 타입은 전역에서만 적용되고 나머지 그레이딩 값은 바이옴별로 적용된다. 온도는 키프레임할 수 없으니 태양·하늘 색을 바꾼다.
+- **값 범위 제한**: 컬러 그레이딩 값에 범위 제한이 생겼다(예: 채도 -9999 불가). 필름 네거티브·적외선 룩에 쓰던 극단 값을 막은 것이고 이유는 성능과 플랫폼 안정성이었다. 잘못된 값은 조용히 기본 그레이딩으로 떨어진다.
+- **VV 톤매퍼**: `generic`(Mojang 커스텀), `reinhard`, `reinhard_luminance`, `reinhard_luma`, `hable`(= uncharted2), `aces`(라이선스를 피한 단순화 ACES Fitted로 완전한 ACES 1.0이 아님)가 있다. AgX, Lottes, Uchimura는 없고 팩으로 강제할 수 없다(톤매퍼는 VV 머티리얼 안에 있고 수정은 비공식). 기본 톤매퍼가 generic이라는 노트와 Reinhard라는 노트가 있다. `conflicting`
+- **톤매퍼 비교**:
+  - ACES: 컬러 그레이딩에서 채도·대비를 크게 올려도 날아가지 않는 유일한 operator다. 대신 밝은 빨강은 주황으로, 파랑은 보라로 색상이 틀어지는데 블룸이 이를 완화한다. 밝은 발광체의 색 틀어짐은 RTX에 맞춘 MER 발광 값이 너무 높아서이므로 그레이딩으로 감추지 말고 VV용 발광 값을 낮추라는 권고가 있었다. ACES용으로 맞춘 그레이딩은 다른 톤매퍼에서 나빠 보인다.
+  - Reinhard/Hable: 채도를 올리면 뭉개지거나 날아간다(Hable은 채도를 추가하지 않으면 괜찮음). Hable은 더 필름 같고 색 재현이 흥미로우며 덜 날아간다. reinhard_luma는 reinhard와 비슷하고 reinhard_luminance는 평이 나쁘다. reinhard, reinhard_luma, hable은 서로 비슷해 보인다.
+  - generic: "반-색상 이동" 동작 때문에 하늘 밴딩이 두드러지고, 매우 높은 휘도의 분홍 영역에 칙칙한 띠가 생기며, 빨강·SSS 블록에서 fog를 덮어쓴다.
+  - 인기 팩은 대부분 hable이나 aces를 쓰고 Reinhard Luma도 쓴다. Cat RTX/Cat Visuals는 ACES에서 Hable로 바꿨다. 한 멤버는 AgX 흉내로 reinhard에 대비·채도를 올리는 방법을 쓰지만 대부분 반대한다.
+- **하늘 밴딩 원인**: VV는 모바일 성능을 위해 RGB16F가 아닌 저정밀 `R11F_G11F_B10F` 버퍼에 렌더링한다. 해결하려면 Bayer 디더링이나 정밀도 상향이 필요하다. Hable은 밴딩이 거의 없고 Reinhard_luma가 비슷하며 ACES는 날아가고 바랜 느낌이 난다. Rayleigh strength가 10보다 낮을 때의 밴딩은 디스플레이·휴대폰 문제인 경우가 많으니 브라우저로도 확인한다.
+- **다른 톤매퍼 재현(veka.)**: veka.의 WIP 도구가 임의의 셰이더 톤맵 코드를 VV 컬러 그레이딩 설정으로 바꿔 준다(톤매퍼와 온도 타입을 오차 최소화로 최적화). 공유된 `.json` 설정은 AgX default/punchy, Sildur's Vibrant, Lottes(입력 x0.5, 거의 1:1), Hejl-Burgess-Dawson(x0.2), Escheridia Lottes 변형(x0.5), Uchimura(감마 보정 필요), OpenDRT, Complementary Reimagined, Khronos PBR Neutral, AceX(ACES 2.0 피팅 곡선)다. 대부분 Reinhard 기반 설정이 가장 가까웠고 generic이 최악이었다. VV의 바랜 느낌은 톤매핑보다 조명 탓이 크다. 비교 방법은 화면 절반에 커스텀 톤맵을 적용하는 커스텀 `ColorPostProcessing.material.bin`이었다.
+- **노출과 톤매퍼 순서**: 노출·자동 노출은 톤매핑 전에 적용되므로 톤매퍼 선택과 관계없다. 태양 지오메트리 밝기는 휘도 단위로 약 30이고 그레이딩 최적화는 10까지의 범위로 했다.
+- **그 외 팁**: 그림자를 진하게 하려면 그레이딩의 `gain`과 `gamma`를 조정한다. "완전한 어둠"(광원 없으면 거의 검정)은 대비를 조정해야 하고 midtones만으로는 부족하다. 극단적 대비나 아주 진한 그림자는 피한다. 날카로운 god ray에도 그런 값은 필요 없다.
+
+## 자동 노출 (auto exposure)
+
+- **위치**: 자동 노출은 게임 `data/renderer` 폴더의 `tone_mapping.json`과 `average_luminance.json`이 제어한다(예: `C:\XboxGames\Minecraft for Windows\Content\data\renderer`). 리소스 팩에서도 모바일·콘솔에서도 바꿀 수 없다는 것이 다수 의견이고 팩 제작자들의 흔한 불만이다. 2025-12에는 팩에서 `average_luminance.json`을 덮어쓸 수 있었고 밝은 곳은 노출을 유지하면서 어두운 곳을 과하게 밝히지 않도록 조정하면 VV가 크게 좋아졌다는 보고가 있었다. `conflicting`(최신 보고는 팩으로 불가)
+- **키**: `min_log_luminance` -3.0, `log_luminance_range` 20.0, `low_percent` 80.0, `high_percent` 100.0, `adaptive_time_coefficient`, `light_adaptation`, `dark_adaptation`. quirkyplague의 경험적 해석에 따르면 첫 값은 전체 노출(음수, -1.0 어둡게, -8.0 아주 밝게), 3번째·4번째는 밝은/어두운 영역 보정, 마지막 세 값은 적응 속도이며 `log_luminance_range`의 효과는 모른다. `single report`
+- **현황**: 노출 매개변수는 공개되지 않았고 Mojang(aajabrams)이 톤매핑 노출 공개를 계획 보드에 올렸다. 재작업(DTP 이후)으로 자동 노출이 강해져 어두운 밤을 만들기 어려워졌다. "낮은 바래고 밤은 너무 어둡다"는 자동 노출이 충분히 적응하지 않아서일 수 있다. 자동 노출 끄기 토글을 요청하는 피드백 글이 있다. RTX의 자동 노출은 하늘을 포함하지 않아서 RTX 하늘이 아주 밝다. 자동 노출은 fog도 무시하므로 fog가 짙은 프리셋(Infectious)은 화면이 하얗게 날아간다.
+
+## lighting 설정과 키프레임
+
+- **구조**: `minecraft:lighting_settings`(format 1.21.80): `directional_lights.orbital.sun`과 `.moon`(각각 `illuminance`, `color`), `orbital_offset_degrees`, `directional_lights.flash`(`illuminance`, `color`), `emissive.desaturation`, `ambient`(`illuminance`, `color`), `sky.intensity`. `orbital_offset_degrees`(태양 각도)는 `lighting/global.json`에 있고 기본값 0이며 생략할 수 있다. `emissive.desaturation`은 발광의 채도를 줄이는 설정이다.
+- **키프레임 범위**: 시간대는 0.0~1.0이고 0.75~1.0이 일출에서 정오, 0.0~0.25가 정오에서 일몰이다. 값이 상수면 키프레임 맵을 생략할 수 있고 키프레임을 쓰면 최소 0.0과 1.0을 정의한다. End에는 시간이 없어 사실상 키프레임 0.0이 적용된다. 시간에서 키프레임으로의 변환은 다음과 같다.
+
+```
+ang = fract(timeOfDay / 24000.0 - 0.25);
+ang = ang + (cos(ang * PI) * -0.5 + 0.5 - ang) / 3.0;
+```
+
+결과에 360(도)이나 2*PI(라디안)를 곱하면 태양 각도다. 유용한 `/time set` 값은 0(6:30), 1000 낮, 6000 정오, 11000 일몰 전환, 12000/12500 황혼, 13500 밤, 18000 자정이다.
+- **"expected keyframes" 오류**: 도움이 안 되는 메시지지만 실제로는 값이 범위를 벗어났다는 뜻이다. orbital `illuminance`는 문서 예시의 럭스 값(120000 등)이 아니라 작은 float(약 0.0~100.0)만 받는다(문서 오류는 2025-11-20 Mojang에 보고). 음수 오프셋(-23.5)도 이 오류를 냈다. lighting.json 값이 1 미만이거나 20 초과면 렌더 깨짐 아티팩트가 난다는 추정도 있다. `confirmed`
+- **sky intensity**: 키프레임 가능한 skylight intensity가 2026-01-08 무렵 프리뷰에 추가됐다(예: 23500에서 골든아워, 정오 밝게, 밤 그림자·구름 어둡게, 달 illuminance 1~3). 예: `"sky": {"intensity": {"0.000000":0.85,"0.190000":0.55,"0.215000":0.2,"0.230000":0.1, ..., "0.827000":0.55}}`. 최댓값은 1이다. 1 미만이면 하늘·물 반사가 모두 줄고 물에 기름·흰색 느낌이 생긴다(`"sky": {"intensity": 1}`로 해결). 2026-04-30 프리뷰부터 fog/lighting 키프레임이 생겼으니 시간대별로 조정하면 된다. 제안된 값은 0.4(Nether 0.1~0.4)이고 키프레임 전에는 어두운 밤에 0.2가 필요했다. 반사와 어두운 밤 사이의 트레이드오프다.
+- **skylight 색과 ambient**: skylight 색은 lighting 파일의 `sky` 필드가 아니라 client biome의 `sky_color`에서 온다. ambient는 일부러 키프레임하지 않았다(동굴이 시간에 따라 어두워지고 덮어쓸 일반 동굴 바이옴이 없기 때문). ambient skylight가 태양 illuminance에 비례하므로 예전에는 낮을 어둡게 하지 않고는 밤을 어둡게 할 수 없었다.
+- **깜깜한 동굴·진짜 어둠**: VV에는 빛 레벨별 밝기 조절이 없다. 유일한 수단은 lighting 폴더의 ambient(강도와 색을 0)인데 밤도 약간 어두워진다. Java의 "hardcore darkness"(빛 레벨 0에서 검정)는 텍스처로 할 수 없다.
+- **"전역 조명 없음" 근사**: 태양·달 색을 0이 아닌 아주 작은 값으로 두고 skylight를 올린다. 그림자를 완전히 없앨 수는 없고 태양은 파티클로 흉내 낸다.
+- **음수 태양 각도**: 키프레임으로 가능하지만 불안정하다: `"orbital_offset_degrees": {"0.000001": 359, "0.000000": 0.0, "0.215000": 325.0, "0.500000": 325.0, "0.70000": 45.0}`. 태양 기울기는 orbital offset으로 움직이고 태양 텍스처 자체를 회전하려면 고해상도 텍스처에 회전을 구워 넣어야 한다. 태양·달 궤도를 바꿔도 하늘 자체에는 보통 영향이 없다.
+- **End/Nether**: End에서 `sun_mie_strength`는 보이는 효과가 없고 태양·달 illuminance는 End 하늘을 밝히지 않지만 Nether에는 영향을 준다. End flash 빛은 `directional_lights.flash`로 설정할 수 있다는 보고(2026-01)와, format 1.21.80에서 `lighting/global.json`의 flash 휘도·색이 동작하지 않았고 End flash를 끄는 팩 토글이 없다는 보고(2025-12)가 있다. End skylight는 평평한 흰/회색 조명으로 하드코딩된 것으로 보인다.
+
+## atmosphere(대기)와 하늘
+
+- **구조**: `minecraft:atmosphere_settings`(format 1.21.40): `description.identifier`, `sky_zenith_color`, `sky_horizon_color`(키프레임 "0.0"~"1.0"에서 [r,g,b]), `horizon_blend_stops`(`min`, `start`, `mie_start`, `max`), `rayleigh_strength`, `sun_mie_strength`, `moon_mie_strength`, `sun_glare_shape`. 하늘 색은 시간대별 atmosphere 설정에서 오고 air/fog 색에서 오지 않는다. JSON 키는 `atmospherics`다(`atmospherics_configuration`이 아니다). `"cloud_lighting_enabled": false`로 구름 조명을 끈다.
+- **atmospherics 오류**: `atmospherics.json`에 format version이 없으면 "[Lighting][error] no valid version", 있으면 "[Rendering][error] Identifier already exists in resource pack"이 났다(미해결).
+- **하얗게 날아간 낮 하늘**: Rayleigh 강도를 낮추고 atmosphere 색을 흰색에서 멀리 둔다. 경험 많은 제작자는 Rayleigh를 대부분 1.0 아래, 최대 1.2로 둔다. 초보자의 문제가 즉시 해결됐다. 하늘을 탈색·어둡게 하면 노란 햇빛이 드러난다. fog는 어떤 것이든 채도 높은 파란 하늘을 바래게 한다.
+- **하늘의 날카로운 직선**: 태양·달 각도가 아니라 수평선 블렌딩 때문이다. `mie_start`는 `horizon_blend_stops.min` 기준으로 계산된다. mie_start가 min보다 훨씬 낮으면 mie 산란이 태양 위치에 붙고, min에 가까우면 수평선 쪽으로 고정되며, min보다 크면 수평선에 머물다가 태양 쪽으로 휘어 올라간다. 값이 너무 가까우면 아티팩트가 생기고 horizon min/max가 너무 가까우면 수평선-천정 그라데이션이 없어진다. 다른 멤버는 `moon_mie_strength`에서 원인을 찾았다. Editor 모드에서 보였고 월드를 다시 불러오자 사라졌다.
+- **fog가 하늘을 덮지 않음**: client biome의 `sky_color`를 fog 색과 같게 하거나 atmosphere를 수정한다(client biome 컴포넌트로 연결).
+- **스크립트 Atmospherics API**: server-graphics 베타에 별도로 있다(`Atmospherics.setSkyHorizonColor`).
+- **구름**: VV 구름은 하드코딩돼 있고 얇으며 투명도를 지원하지 않고 하늘 색을 따르지 않는다. 커스텀 셰이더 없이는 3D 구름을 만들 수 없다. 한 제작자는 512x512 Perlin 노이즈 구름 텍스처를 썼다. 바닐라 VV 구름 그림자가 너무 크면 그림자 설정으로 블러한다(가우시안 블러).
+- **태양·달 텍스처**: 기본 VV 태양·달은 글로우가 픽셀처럼 보이고 외곽선이 생긴다. 크고 부드러운 텍스처로 해결되지만 해상도가 높아야 한다. "squircle" 태양이 갱신되지 않은 원인은 일반 `resource_packs` 폴더에 남은 오래된 팩이었으니 `development_resource_packs`에서 개발한다.
+
+## 물
+
+- **물 설정**: water 설정 파일(`biome_water_color_contribution`, Microsoft Learn watercustomization)은 VV 쪽이고 fog 파일은 RTX 쪽이다. 둘은 합칠 수 없다. water 설정은 client_biome의 바이옴 물 색과 VV 입자 농도를 섞으며 1.21.120보다 새 프리뷰가 필요하고 자체 `format_version`이 있다. 바닐라 `water.json`(1.21.120)은 바이옴 물 색 기여를 쓰지 않아서 사실상 수영장 물이다. 늪·버섯 들판에서 `biome_water_color_contribution`을 켜면 물이 검게 됐다(버그).
+- **수중 fog 밀도**: fog 파일에서 설정하지 않고 water 설정의 입자 농도(chlorophyll/CDOM)가 정한다. 0으로 해도 거의 변하지 않는다(VV 수중 fog는 원래 짙음). 예전 매개변수로는 낮출 수 없고 설정에서 fog를 끄는 수밖에 없다. fog 파일의 water fog 항목은 수중 조명 색만 바꾼다. 밀도·scattering·absorption 변경이 효과가 없었던 것은 버그로 추정된다. 볼륨(volumetric) 블록 라이트 옵션은 우윳빛 수중 fog를 없앤다.
+- **파도**: 커스텀 파도는 `minecraft:default_water`에서 `waves->enabled`가 true여야 한다. `sample width` 매개변수는 제거됐고(GDK 1.21.12x 무렵) 파도가 부드러워졌으며 흐르는 물의 파도 반사는 꺼졌다. 바이옴 경계의 이상한 파도는 블렌딩이 불완전해서이므로 그 지역 모든 바이옴(모든 바다 변형)에 똑같은 물 설정을 주는 것이 유일한 해결이다(확인됨). 2026-08-06 프리뷰의 새 `material.bin` `WaterSimulation`은 물리 기반 파도와 경계 아티팩트 수정을 암시한다.
+- **반사와 한계**: VV 물 반사율은 texture set의 MER roughness(파랑)가 정한다. VV SSR은 물에서만 동작한다(얼음은 무광). VV 물은 사인파 노멀 맵만 쓰고 시차·POM 파도(SDGP에는 있었음), 굴절, SSAO, AA, 날씨 커스터마이즈가 없다. 수중 흡수·감쇠, 물 distance fog 조절이 없고 Snell's window 선명도가 나쁘다. 커스틱은 물속 블록의 윗면에만 렌더링되고 플레이어 시점 기반이다. 물 블록 그림자는 오래전에 제거됐고 수면의 흰 그림자 아티팩트는 약 2년 된 엔진 버그다. 수조에서는 물이 거의 투명해진다.
+- **물 셰이딩 버그 우회**: client_biome 하늘 색을 검정으로 하면 물 셰이딩 버그는 사라지지만 그림자가 망가진다. 하늘 아래에 직접 있지 않은 물에는 하늘 반사가 렌더링되지 않는다(우윳빛). render distance fog가 하늘 lightmap의 영향을 받던 문제는 1.21.120에서 고쳐졌다. VV 물은 커스텀 머티리얼 엔티티 뒤에 렌더링되지만 Fancy에서는 그렇지 않다. 바닐라 물을 머티리얼로 덮어쓰는 방법은 VV 밖에서만 된다.
+- **물 위의 얇은 줄(PBR 팩)**: Mojang 버그다. 우회책은 정지 물 플립북을 아틀라스 타일 3개(`a_still_water_grey_1`~`3`에서 `textures/blocks/water_still_grey_left`, `water_still_grey`, `water_still_grey_right`, 처음과 끝은 정확한 복사본)로 `flipbook_textures.json`(`ticks_per_frame: 2`)과 `terrain_texture.json`에 정의하거나 바닐라 물 텍스처를 쓰거나 해상도를 조정하는 것이다.
+- **용암**: 용암은 커스텀 VV 물처럼 흐름 애니메이션을 부드럽게 할 수 없고(리텍스처 필요) 기본 발광 값이 없다.
+
+## 그림자
+
+- **해상도와 texel_size**: VV 그림자 맵은 항상 고정 2048이고 올릴 수 없다. `minecraft:shadow_settings`의 `texel_size`(`shadow_style`: `blocky_shadows`/`soft_shadows`)는 해상도가 아니라 blocky 그림자·반사가 스냅되는 픽셀 격자일 뿐이고(최대 1024) 성능도 바꾸지 않는다. 1024 설정은 불안정하고 512는 안정적이라는 주장은 반박됐다. `confirmed`(해상도 부분)
+- **설정 위치**: 그림자 설정은 게임 파일(`<install>/data/render(er)`, shadow config, LODs, 예: PC ultra)에 있어서 리소스 팩으로 바꿀 수 없고 한 PC에서만 로컬로 바꿀 수 있다(Android는 APK 추출, 한 사용자에게는 안 됨). `cascade_pcf_width`를 2~3으로 낮추면 soft shadow가 선명해진다. cascade bias를 낮추면 peter-panning은 줄지만 acne가 생긴다. 업데이트 후 shadow acne에는 커스텀 `shadow_configuration.pc.json`(Windows, 그림자 품질 Ultra)이 공유됐다.
+- **캐스케이드 동작**: Mojang의 첫 캐스케이드가 가장 부드럽고 거리가 멀수록 날카로워진다(일반적인 방식의 반대). PCF 폭 때문에 "ultra"가 "high"보다 흐릿해 보인다. 그림자 범위는 128블록이고 PCSS는 없다(PCSS는 가변 반그림자를 주지만 약 15% 비용이라 모바일에 나쁨). VV는 균일하게 부드럽게 하는 PCF 그림자 맵과 shadow bias로 인한 peter-panning을 쓰고, RTX는 거리에 따라 부드러워지는 광선 추적 그림자를 쓴다.
+- **성능**: `soft_shadows`(PCF 반그림자)는 유리를 통해 볼 때 FPS를 약 30% 깎는다(유리 수조를 볼 때 FPS 급락 버그 2025-12-03). 큰 물을 볼 때도 FPS가 떨어진다.
+- **1인칭 그림자**: 1인칭 플레이어 그림자 품질은 VV 문제다. visible bounds가 큰 커스텀 플레이어 지오메트리(예: Actions & Stuff)는 그림자 맵에서 플레이어를 작게 만들어 1인칭 soft shadow를 흐리게 한다(커스텀 geo를 끄면 해결).
+- **투명 물체**: 디퍼드 렌더링은 유리, 물, 얼음, 잎, 머리카락 같은 투명 물체를 제대로 처리할 수 없어서 Mojang은 투명체에 포워드 렌더링을 섞는다. 해와 땅 사이의 투명 커스텀 블록은 VV 그림자를 거의 만들지 않고 완전 불투명 텍스처만 VV 햇빛을 막는다. 유리 색 그림자는 미지원이고 가능성이 낮다(색 그림자는 물만). 알파 테스트·불투명 파티클은 그림자를 드리운다.
+- **블록 그림자·AO 한계**: VV 조명은 바닐라 조명처럼 동작해서 블록이 드리우는 진짜 차폐 그림자가 없다. 차폐 그림자에는 레이 트레이싱이나 포인트 라이트가 필요하고 SSAO/GTAO는 근사일 뿐이다. 바닐라 AO는 VV에서 조명 후에 적용돼(albedo처럼 취급) 블록 가장자리에서 햇빛을 어둡게 하며 원래는 조명 전에 적용해야 한다. VV에는 SSAO가 없다.
+- **엔티티와 그림자**: VV에서는 엔티티에 그림자가 드리우는 것을 막을 수 없다(non-VV는 가능). 엔티티의 그림자 상호작용을 끄려면 `DisableDepthWrite` 머티리얼을 쓰는데 교차하는 지오메트리의 그리기 순서가 깨질 수 있다. 평평한 바닐라 아이템은 그림자가 렌더링되지 않는다.
+- **light-leak 반창고**: AO·lightmap 기반의 스카이라이트 감쇠가 프리뷰에서 지상의 skylight를 과하게 줄였다. 그림자 거리 설정이 그림자 아티팩트에 영향을 준다.
+
+## 반사 (SSR, IBL)
+
+- **SSR 동작**: SSR은 Hi-Z 버퍼를 쓰고 반 해상도로 렌더링한 뒤 밉, 업스케일하고 픽셀 격자에 스냅한다(VV 반사가 픽셀처럼 보이는 이유이며 "disabled pixelation"은 1024 격자로 스냅할 뿐). 해상도는 화면의 약 50%에 TAAU 스케일을 곱한 값이고 거리가 멀수록 낮아진다. 화면 공간이라 화면 가장자리에서 반사가 사라진다(별도 반사 FOV 제안).
+- **매끈한 반사 되찾기**: `shadows.json`의 `texel_size`를 1024 정도로 올리고 soft shadow를 쓰면 반사가 고해상도처럼 보인다(Prizma의 방식). 여전히 픽셀 고정을 본 사용자도 있다.
+- **거칠기 무시**: VV 반사는 roughness와 관계없이 항상 거울 같고(specular만 변함) 완전한 거울만 지원한다. 거친 반사는 디노이징이 필요해서 없고 진짜 거울이나 1인칭 플레이어 반사는 불가능하다. 물 외의 평면 반사(planar reflection)는 비싸서 현실성이 없다. 거친 반사 흉내에는 고해상도 무작위 방향 노멀 맵(192x192)이 쓰인다.
+- **하늘·구름 반사**: 사실상 약 5초마다만 갱신되는 구운 큐브맵(IBL)이고 의도된 성능 트레이드오프다.
+- **Nether 금속**: 지붕이 있는데도 Nether 금속이 하늘을 반사한다. atmosphere 하늘 색을 검정으로 하고 sky intensity를 바꿔도 사라지지 않았고 ambient만 조명에 영향을 줬다. IBL 페이드는 아래 `start_ibl_fade_light_level`과 `end_ibl_fade_light_level`을 본다.
+- **콘솔·플랫폼**: 반사 `linear_search_step_count`는 약 200이 필요하다(Series S는 최대 100, PS4는 200, 250~300 제안도 있음). 콘솔 "ultra" 반사는 PC "medium"과 같고 Series S 반사가 PS4보다 나쁘다(MCPE-230030). 플랫폼별 `reflection_configuration.console_2.<quality>.json`은 하나로 통합됐다. Android는 하드웨어·RAM 때문에 반사가 흐리고 제한된다. 반사 설정 json의 색 정밀도 설정은 IBL에만 영향을 줄 것으로 추정된다(`unverified`).
+
+## deferred_shading_parameters와 게임 내부 설정 파일
+
+- **`deferred_shading_parameters`**(모두 숫자): `block_light_indirect_contribution_multiplier`(정적 라이트 밝기), `sky_light_indirect_contribution_multiplier`(ambient 하늘 빛), `ibl_indirect_contribution_multiplier`(하늘 반사), `volumetric_fog_min_ambient_value`(완전한 어둠 속 fog 조명), `emissive_brightness_multiplier`(PBR 발광), `end_portal_emissive_multiplier`, `start_ibl_fade_light_level`(15)과 `end_ibl_fade_light_level`(12)(하늘 반사가 사라지기 시작하고 끝나는 빛 레벨).
+- **`transitioning_ambient_scalar`**(2026-09-22 프리뷰): 포인트 라이트가 활성일 때 간접·블록 라이트 기여를 스케일한다. 기본 0.65이고 0이면 틴티드 글라스가 블록 라이트를 막는 것처럼 동작한다. 커뮤니티는 0.3~0.5를 선호한다. Mojang에 따르면 직접광과 간접광 항이 분리돼 단계적으로 바뀌며 기존 블록 라이트는 선형 감쇠이고 포인트 라이트는 사실적 감쇠다.
+- **게임 설치 폴더 설정**: `C:/XboxGames/Minecraft For Windows/Content/data/renderer/`(WindowsApps가 아닌 XboxGames)에 있다. `platform_configs/pc`에 품질·성능 설정(`render_distance_configuration`, shadows, reflections, volumetric fog, clouds)이 있고 머티리얼은 `.../renderer/materials`에 있다. 원본을 백업한다. `[2, 4, 6, 8, 64]` 같은 목록에서 쉼표 하나가 빠지면 조용히 깨진다. 이 편집은 리소스 팩으로 할 수 없다.
+- **기타 값**: `deferred_lighting_configuration.shared.json`에 `optimize_gamma_correction`과 local exposure 항목이 있다(다음 절 참조).
+
+## 큐브맵, HDR, 메인 메뉴 파노라마
+
+- **큐브맵**: VV 큐브맵 JSON은 리소스 팩의 `cubemaps/<name>.json`에 두고 큐브맵 PNG 6장을 참조한다. VV의 커스텀 스카이박스는 바닐라처럼 동작하고(엔티티 불필요) fog·조명에 영향을 주는 큐브맵 매개변수가 있다. HDRI는 6면 큐브맵으로 변환해야 하고 새 노출 매개변수 덕에 HDRI를 쓸 만해졌다. 커스텀 큐브맵은 태양과 날씨를 덮으며 그 위에 태양을 그리는 방법은 없다.
+- **`.hdr` 텍스처**: Bedrock 어디서나 지원된다(VV HDR 메인 메뉴 큐브맵을 위해 처음 추가, 바닐라 예: bedrock-samples의 `textures/ui/panoramahdr_0.hdr`). 1.0을 넘는 값을 담을 수 있어 albedo로 쓰면 받은 것보다 많이 반사하는 가짜 글로우가 된다(블룸에만 영향, 어둠 속 빛은 아님). 엔티티·어태처블(아마 아이템도)에서 블룸을 일으킬 수 있다. Photoshop/GIMP로 내보낼 수 있다. HDR PNG(cICP/cLLi 청크)도 유효한 PNG 기능이다. Marketplace에서는 `.hdr` 이미지가 허용되지 않는다.
+- **HDR 큐브맵 캡처(veka 워크플로, 2026-06-07)**:
+  1. Python 준비: `pip.exe install numpy pillow`(쉼표 없이, cmd에서). 스레드에 첨부된 스크립트가 정사각형으로 자르고, 역톤매핑하고, 선택적으로 축소하고, 밝기를 스케일한 뒤 무손실 압축 `.hdr`로 출력한다.
+  2. `C:\XboxGames\Minecraft for Windows\Content\data\renderer\tone_mapping.json`에서 `min_luminance`와 `max_luminance`를 같은 값(밤 약 1, 낮 약 4, 음수도 가능)으로 두고 스크립트의 `LUMINANCE_EV100`을 맞춘다.
+  3. 블룸 끄기, 디스플레이 밝기 100%(기본으로 리셋), 제공된 컬러 그레이딩 적용(VV 팩에서 전부 교체), `/effect @s invisibility infinite 1 true`, FOV 90(`/camera @s fov_set 90`), UI 없는 전체 화면.
+  4. `/camera @s set minecraft:free pos ~~1.62~ rot 0 0`으로 시작해 yaw 90, 180, 270, 그다음 `rot -90 0`과 `rot 90 0`으로 6장을 `panoramahdr_0`~`5`로 찍는다.
+  - 한계: local exposure가 여전히 밝기에 영향을 주고 8비트 스크린숏은 밴딩이 생긴다.
+  - 개선(2026-09-05): `deferred_lighting_configuration.shared.json`에서 `optimize_gamma_correction`과 local exposure를 false로, `average_luminance.json`에서 `low_percent`와 `high_percent`를 둘 다 80.0으로 두면 색 이음매가 사라진다. 파노라마는 업데이트로 깨지지 않아야 하고 non-VV 파노라마는 같은 절차에서 정사각형으로 자르기만 하면 된다. v26.52에서 커스텀 파노라마가 깨졌다는 보고가 있다.
+
+## 업스케일링, 화질, 성능
+
+- **업스케일링**: VV는 TAA와 bilinear만 있다. TAAU는 1.21.80부터 흐려졌고(CAS 요청) 지금도 몇 년 전보다 흐리다. Bilinear가 TAAU보다 싸고 일부에게는 더 선명하다. Mojang은 2026-05-12 프리뷰에서 TAA 지터 버그를 고쳤다. 네이티브 해상도에서 ReShade FXAA를 대안으로 쓴 사례가 있다. TAAU는 End 하늘의 반전·늘어난 아티팩트와 잘못된 별 색을 만든다(bilinear는 괜찮음).
+- **렌더 스케일**: VV 렌더 스케일과 rescale 설정은 곱해진다(50% x 0.33이면 아주 낮은 내부 해상도, volumetric fog는 그 절반). 콘솔은 반사 설정이 PC보다 낮고 렌더 거리 상한도 낮으며 해상도 슬라이더는 축소만 한다. VV는 렌더 거리를 제한한다(예: 바닐라 96 대 VV 28).
+- **VSync**: VV에는 노출돼 있지 않으므로 `options.txt`에서 `gfx_vsync`를 0으로 한다(`%appdata%/minecraftbedrock/users/<id>/games/com.mojang`, `minecraftpe` 하위 폴더도). 끄면 VV FPS가 좋아진 사례가 있고 VSync는 특히 레이 트레이싱에서 성능을 크게 떨어뜨린다. VV 성능은 불규칙하다(90~180 FPS 변동).
+- **투명 처리 비용**: 디퍼드 렌더링은 투명 처리에서 매우 느리다. 테스트에서 비 파티클의 GPU 시간이 VV 없이 1.6 ms, VV에서 20 ms 이상(비 없이 VV 5 ms)이었다. 투명 머티리얼을 피하고 화면 크기와 겹침을 줄인다. 예를 들어 파티클 수를 절반으로 하고 불투명도를 두 배로 하고, 빈 공간이 많은 큰 파티클보다 한 덩어리씩 보이는 작은 파티클을 여러 개 쓰는 편이 낫다. VV에서는 작은 파티클을 **더 많이** 쓰는 편이 나을 수 있다.
+- **기타 버그**: 26.0 무렵 모바일 "DX11 fallback" 렌더 손상은 전체 화면 해제, 게임 종료, 재실행, 전체 화면으로 고친다. 프리뷰의 UI·텍스처 손상(조준점 없음, 잘못된 텍스처)은 동기화 버그로 26.20.21에서 완화됐고 우회책은 프레임 제한이었다. 2026-01-27에 1인칭 불 같은 래스터 오버레이가 선형 RGB(밴딩)에서 sRGB로 바뀌었다.

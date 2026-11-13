@@ -1,0 +1,265 @@
+---
+title: "바닐라 화면 수정"
+description: "modifications 문법, 속성 덮어쓰기, 재선언, 감싸기와 다른 팩과의 공존 규칙(MOD-01~MOD-25)"
+sidebar_position: 3
+sources:
+  - repo-guide
+  - repo-survey
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+  - private-research
+  - cinnabar
+  - bedrock-core
+  - advancementpack
+  - private-research
+  - chest-ui
+  - upgrader
+  - repo-small-packs
+---
+
+## 개념: 바닐라를 고치는 세 가지 길
+
+바닐라 화면은 리소스팩이 통째로 교체하지 않는다. 게임은 바닐라 `ui/` 파일 위에 팩들의 같은 경로 파일을 팩 순서대로 쌓아 병합한다. 그래서 "무엇을 어떻게 적느냐"에 따라 다른 팩과 공존하는지가 갈린다.
+
+Bedrock Wiki의 모범 사례는 세 가지 원칙으로 요약된다(출처: bedrock-wiki, Best Practices).
+
+1. **필요한 것만 고친다.** JSON UI는 버전이 매겨지지 않아 Mojang이 바닐라를 고치면 팩이 깨질 수 있다. XP 막대 그림자를 끄려면 라벨 정의 전체를 복사하지 말고 바꿀 속성만 적는다. 바닐라 파일 전체를 복사해 넣는 것은 잘못된 방식이다.
+
+   ```json
+   { "progress_text_label": { "shadow": false } }
+   ```
+
+2. **수정 전략을 쓴다.** 바닐라 루트 패널의 `controls`에 직접 내 컨트롤을 다시 적으면(바닐라 항목을 모두 복사해야 한다) 바닐라 이름이 바뀔 때 깨진다. `modifications`로 끼운다.
+
+   ```json
+   {
+     "root_panel": {
+       "modifications": [
+         { "array_name": "controls", "operation": "insert_front",
+           "value": [ { "custom_ui@namespace.custom_ui": {} } ] }
+       ]
+     }
+   }
+   ```
+
+3. **깊은 트리와 여러 진입점을 피한다.** 깊은 컨트롤은 경로 키(`"panel_with_label_and_bg/bg_image": { "size": [...] }`)로 고칠 수 있지만, 가리키는 자식이 없으면 리소스팩 오류가 남는다(UI는 정상 동작). 가능하면 정의 자체를 덮어쓰고(`"label": { "color": [0.5, 0.5, 0.5] }`), 내 컨트롤을 붙이는 진입점은 한 곳으로 모은다(MOD-15).
+
+### `modifications`의 연산 11가지
+
+위키가 문서화한 연산 목록이다. 엔진의 이름표도 정확히 이 11개다(MOD-23).
+
+<Excerpt src="bedrock-wiki" title="Intro to JSON UI, Modifications" path="docs/json-ui/json-ui-intro.md">
+
+| Modification    | Description                                 |
+| --------------- | ------------------------------------------- |
+| `insert_back`   | **insert** at end of array                  |
+| `insert_front`  | **insert** at start of array                |
+| `insert_after`  | **insert** after target in array            |
+| `insert_before` | **insert** before target in array           |
+| `move_back`     | **move** target to end of array             |
+| `move_front`    | **move** target to start of array           |
+| `move_after`    | **move** target after second target         |
+| `move_before`   | **move** target before second target        |
+| `swap`          | **swap** first target with second target    |
+| `replace`       | **replace** first target with second target |
+| `remove`        | **remove** target                           |
+
+Add the new `foo` control below the `second_target` control from the list:
+
+```json
+{
+    "control_name": "second_target",
+    "operation": "insert_after",
+    "value": [ { "foo@example.bar": {} } ]
+}
+```
+
+Move the existing `#example_binding_1` binding below the `#example_binding_2` binding from the list:
+
+```json
+{
+    "array_name": "bindings",
+    "operation": "move_after",
+    "where": { "binding_name": "#example_binding_2" },
+    "target": { "binding_name": "#example_binding_1" }
+}
+```
+
+Swap the position of the existing `#example_binding_1` and `#example_binding_2` bindings:
+
+```json
+{
+    "array_name": "bindings",
+    "operation": "swap",
+    "where": { "binding_name": "#example_binding_1" },
+    "target": { "binding_name": "#example_binding_2" }
+}
+```
+
+</Excerpt>
+
+위키 예제의 읽는 법: 컨트롤을 기준으로 삼을 때는 `control_name`, 바인딩을 기준으로 삼을 때는 `array_name: "bindings"`와 `where`를 쓰고, 두 번째 기준이 필요한 `move_after`·`move_before`·`swap`은 `target`(엔진은 `target_control`을 먼저 읽는다, MOD-24)을 쓴다. 이 프로젝트에서 게임 동작이 확인된 것은 `insert_back`, `insert_front`, `remove`뿐이다(MOD-01, MOD-14).
+
+### 같은 경로 파일에 쓰는 세 가지 형태의 한 장 예제
+
+```jsonc
+// RP/ui/hud_screen.json  (바닐라와 같은 경로)
+{
+  // (1) 속성 덮어쓰기: 같은 이름 정의에 바꿀 속성만 적는다. 나중 팩이 이긴다
+  "progress_text_label": { "shadow": false },
+
+  // (2) 경로 키: 깊은 자식의 속성만 덮어쓴다(자식이 없으면 Content Log 오류)
+  "hud_content/root_panel/some_child": { "alpha": 0.5 },
+
+  // (3) modifications: 배열에 넣고 뺀다. 팩 순서대로 누적된다
+  "root_panel": {
+    "modifications": [
+      { "array_name": "controls", "operation": "insert_back",
+        "value": [ { "my_layer@my_ns.layer": {} } ] }
+    ]
+  }
+}
+```
+
+(1)과 (2)는 같은 속성을 여러 팩이 쓰면 하나만 남고, (3)만 누적된다는 것이 아래 규칙의 핵심이다.
+
+## 규칙
+
+리소스팩 UI 작업의 대부분은 바닐라 화면(HUD, 서버 폼, 상자, NPC 대화 등)에 무언가를 끼워 넣는 일이다. 방법은 셋이다.
+
+| 방법 | 쓰는 법 | 다른 팩과 공존 | 대표 사례 |
+| --- | --- | --- | --- |
+| `modifications` | 같은 경로 파일에서 배열(`controls`, `bindings`)에 넣고 빼기 | 팩 순서대로 **누적**된다 | BC 폼 훅, AP HUD |
+| 속성 덮어쓰기 | 같은 경로 파일에 같은 이름 정의나 경로 키로 속성만 적기 | 같은 속성이면 **나중 팩이 이긴다** | BA `control_ids` 교체, AP `in_bed_screen` |
+| 재선언 | 같은 경로 파일에서 화면 정의를 `@기반`부터 다시 쓰기 | 한쪽만 남는다 | AP `npc_screen`, BC `small_chest_screen` |
+
+공존이 중요하면 위에서 아래 순서로 고른다.
+
+### 2.1 `modifications` 문법
+
+```jsonc
+"root_panel": {
+  "modifications": [
+    { "array_name": "bindings", "operation": "remove",
+      "where": { "binding_name": "#hud_visible" } },
+    { "array_name": "bindings", "operation": "insert_front",
+      "value": [ { "binding_type": "global", "binding_name": "#hud_visible" } ] },
+    { "array_name": "controls", "operation": "insert_back",
+      "value": [ { "my_layer@my_ns.layer": {} } ] }
+  ]
+}
+```
+
+- **[MOD-01]** `modifications`는 `array_name`, `operation`, `value`(넣을 항목 배열), `where`(지울 항목을 찾는 조건)로 쓴다. 이 프로젝트 출처에서 확인된 `operation`은 `insert_back`, `insert_front`, `remove`다. 바닐라 자신은 `modifications`를 한 번도 쓰지 않는다(팩 전용 기능). 엔진의 연산 이름표는 11가지이고(MOD-23), 나머지 8가지의 게임 동작은 이 프로젝트 출처에서 확인되지 않았다(MOD-14). `{작동팩, 코드, 바닐라}` (출처: AP-samples hud_screen.json, BA 2장, BC 4.1, VN 0회, NB-01)
+- **[MOD-02]** `modifications`는 **파일 경로 단위**로 해석된다. 바닐라 파일과 같은 경로의 사본에 쓴 것만 바닐라 정의에 적용되고, 여러 팩의 것이 팩 순서대로 쌓인다. 다른 경로 파일에 쓰면, 팩 자신의 namespace 정의는 새 정의로 읽혀 원래 정의를 대체하고(`Type not specified`, `Unknown property [modifications]`), 바닐라 정의는 조용히 무시된다(FILE-22). Cinnabar 재구성은 이 구분 없이 namespace와 이름만으로 합치지만, 실측을 따른다(충돌 C-46). `{실측}` (출처: BC-facts, 충돌 C-46)
+- **[MOD-03]** 게임에서 `modifications`가 닿은 배열은 `controls`와 `bindings`이고, `variables`를 지정하면 무시되었다. 엔진은 `array_name`을 고정 목록으로 거르지 않으므로(MOD-25) `button_mappings` 같은 다른 배열도 해석은 되지만 효과는 실측되지 않았다(충돌 C-64). `target_control` 키는 엔진이 실제로 읽는다(MOD-24). `{실측, 코드, 충돌}` (출처: BC-facts, NB-02, NB-03, 충돌 C-10, 충돌 C-64)
+- **[MOD-04]** 대상이 **직접 선언하지 않고 상속만 받은 배열**에 insert하면 새 배열이 생겨 상속받은 내용을 가린다(바닐라 내용이 통째로 사라짐). 그래서 배열을 직접 선언한 정의에 넣는다. 상속받은 배열이 원래 없는 정의(예: 바인딩이 없는 `hud_title_text`의 `bindings`)에 넣는 것은 문제없다. `{실측, 작동팩}` (출처: BC-facts, AP-samples hud_screen.json)
+- **[MOD-05]** 파생 정의에서 **상속받은 자식 컨트롤**을 `remove`하면 로그도 없이 그 파일의 수정 전체가 적용되지 않는다. 반면 정의가 직접 가진 **바인딩 항목**을 `where`로 지정해 `remove`하는 것은 동작한다. 설정·인벤토리 화면에는 지우면 안 되는 필수 토글도 있다(MOD-16). Cinnabar 재구성은 진단만 남기고 나머지를 적용하지만, 실측을 따른다(충돌 C-47). `{실측, 작동팩}` (출처: BC-facts, AP 4.4, BW-doc, 충돌 C-47)
+- **[MOD-06]** 바닐라 컨트롤은 지우지 말고 **바인딩으로 숨긴다.** 숨김 조건을 `#visible` view 바인딩으로 덧붙이거나, 감싼 패널의 가시성으로 가린다. 설정·인벤토리 화면의 필수 토글은 빼면 개발 빌드에서 assert가 나므로 숨기더라도 남긴다(MOD-16). `{실측, 작동팩}` (출처: BC 6.3-7, BA 2장, AP 4.4, BW-doc)
+
+### 2.2 바닐라 가시성 조건에 내 조건 더하기
+
+- **[MOD-07]** 바닐라 `#visible` 바인딩을 내 조건과 AND로 묶으려면 원래 바인딩을 `remove`(`where`로 지정)한 뒤 `insert_front`로 원래 값과 내 값을 다시 읽어 합친다. `{작동팩}` (출처: AP 4.4, AP-samples chat_screen.json)
+
+```jsonc
+"messages_text": { "modifications": [
+  { "array_name": "bindings", "operation": "remove",
+    "where": { "binding_name": "#chat_visible", "binding_name_override": "#visible" } },
+  { "array_name": "bindings", "operation": "insert_front", "value": [
+    { "binding_type": "global", "binding_name": "#chat_visible" },
+    { "binding_type": "global", "binding_name": "#text" },
+    { "binding_type": "view", "source_property_name": "(('%.5s' * #text) = 'myui:')", "target_property_name": "#is_mine" },
+    { "binding_type": "view", "source_property_name": "(#chat_visible and (not #is_mine))", "target_property_name": "#visible" } ] } ] }
+```
+
+- **[MOD-08]** 원래 `#visible` 바인딩이 없는 정의라면 `insert_back`으로 view 바인딩만 덧붙여도 숨길 수 있다(바닐라 `long_form`·`custom_form`에 제목 접두사 검사를 붙이는 방식). `{코드}` (출처: BC 4.1-(1), BW-form, BW-intro)
+
+### 2.3 감싸기: UI 팩과 부딪히지 않는 방법
+
+- **[MOD-09]** 바닐라 정의를 직접 고치지 않고 **감싼다.** `"래퍼": { "controls": [ { "long_form@server_form.long_form": {} } ] }`는 다른 UI 팩이 `long_form`을 통째로 바꿔도 최종 병합 결과를 참조하므로, 래퍼에 건 가시성 조건이 살아남는다. BA는 2.0.2에서 이 구조로 "UI 팩과 함께 쓰면 화면이 뒤섞이는" 문제를 팩 순서와 무관하게 고쳤다. `{작동팩}` (출처: BA 2장)
+- **[MOD-10]** 바닐라 템플릿에 기능을 더할 때는 **기본값이 꺼진 슬롯**으로 넣는다. 예: `common_buttons.focus_border`에 `"$show_hover_content|default": false`와 `ignored`로 감싼 자식을 추가하면, 그 변수를 켠 버튼에만 영향이 간다. `{작동팩}` (출처: AP 4.8)
+
+```jsonc
+// ui/ui_template_buttons.json (바닐라 경로)
+"focus_border": {
+  "$show_hover_content|default": false,
+  "$hover_content|default": "common.empty_panel",
+  "controls": [ { "hover_slot@common.empty_panel": {
+    "ignored": "(not $show_hover_content)",
+    "controls": [ { "content@$hover_content": { "visible": "($hover_state or $pressed_state)" } } ] } } ]
+}
+```
+
+### 2.4 재선언과 화면 내용 바꾸기
+
+- **[MOD-11]** 화면의 내용을 통째로 바꾸려면 화면 정의를 같은 경로 파일에서 재선언해 `$screen_content`를 바꾼다. 바닐라도 `shulker_box_screen@chest.small_chest_screen`, `barrel_screen@chest.small_chest_screen`처럼 같은 방식으로 화면을 만든다. `{바닐라, 실측}` (출처: VN chest_screen.json:240·258, BC 4.3-(2), BC-facts)
+- **[MOD-12]** 화면 정의를 재선언하면 같은 화면을 재선언하는 다른 팩과는 한쪽만 남는다. 일반 NPC 대화 같은 바닐라 기능도 재선언한 속성(`render_game_behind` 등)을 함께 받는다. 꼭 필요할 때만 쓰고, 바닐라 내용을 감싸 두어 원래 기능이 계속 동작하게 한다. `{작동팩, 추론}` (출처: AP 4.2)
+- **[MOD-13]** 여러 애드온이 같은 바닐라 화면에 붙어야 하면 **아무 정의도 하지 않는 `modifications`만** 쓴다. 바닐라 파일에 정의(속성 덮어쓰기 포함)를 쓰면 다른 팩의 같은 정의와 덮어쓰기 경쟁을 한다. `{실측, 추론}` (출처: BC 6.3-9, BC-facts, BW-best)
+
+### 2.5 고르는 법 요약
+
+1. 숨기기만 하면 된다 → `bindings`에 view 바인딩 추가(MOD-08) 또는 기존 조건에 AND(MOD-07).
+2. 내 컨트롤을 끼운다 → 배열을 **직접 선언한** 정의의 `controls`에 `insert_back`(MOD-04).
+3. 다른 UI 팩이 같은 바닐라 정의를 바꿀 가능성이 높다 → 감싸기(MOD-09).
+4. 화면 전체를 다른 내용으로 → 재선언(MOD-11), 바닐라 내용은 감싸서 보존.
+5. 템플릿 확장 → 기본 꺼짐 슬롯(MOD-10).
+
+### 2.6 Bedrock Wiki 대조로 더한 규칙
+
+위키(BW) 문서를 바닐라 1.26.50.4와 대조해 더한 규칙이다. 위키 문장만 있는 것은 `미검증`, 위키의 게임 스크린샷이 있는 것은 `실측`(제3자 기록)으로 표시했다.
+
+- **[MOD-14]** 위키가 문서화한 `operation`은 11가지다: `insert_back`, `insert_front`, `insert_after`, `insert_before`, `move_back`, `move_front`, `move_after`, `move_before`, `swap`, `replace`, `remove`. 기준 항목은 `controls`에서는 `"control_name": "이름"`, `bindings`에서는 `"where": { "binding_name": "#x" }`로 찾고, 두 번째 기준이 필요한 `move_after`·`move_before`·`swap`은 `"target": { … }`을 쓴다. `replace`는 `where`로 찾은 항목을 `value`로 바꾼다. 이 프로젝트 출처에서 동작이 확인된 것은 `insert_back`, `insert_front`, `remove`뿐이므로 나머지는 실험 화면에서 확인하고 쓴다(DBG-04). 엔진의 연산 이름표도 정확히 이 11가지이고(MOD-23), 두 번째 기준은 `target_control`을 먼저, 없으면 `target`을 읽는다(MOD-24). 이름과 키는 엔진에서 확인되었지만 각 연산의 게임 동작은 아직 실측되지 않았다. `{미검증, 코드}` (출처: NB-01, NB-02, 충돌 C-39)
+- **[MOD-15]** 바닐라 화면에 붙는 지점(진입점)은 **한 곳**으로 모은다. 여러 하위 컨트롤에 각각 `insert`하면 그중 하나의 이름만 바뀌어도 일부가 깨지고, 디버깅할 곳이 늘어난다. 내 컨트롤은 진입점 하나에 넣은 래퍼 패널 안에 둔다. `{추론}` (출처: BW-best, BW-hud)
+- **[MOD-16]** 설정 화면과 인벤토리 화면에는 엔진이 반드시 있다고 가정하는 토글이 있다(설정의 접근성 탭, 인벤토리의 construction·equipment·items·nature 탭 등). 화면을 통째로 바꾸면서 이 토글을 빼면 개발 빌드에서 assert가 난다. 숨기더라도 남겨 둔다(MOD-06). `{미검증}` (출처: BW-doc "HardCoded Toggles")
+
+### 2.7 Cinnabar 엔진 재구성으로 더한 규칙
+
+Cinnabar(`CN`)는 26.30 네이티브 클라이언트의 JSON UI 해석기를 재구성한 Rust 코드다. 수준은 `코드`이고, `CN-run`은 이 프로젝트가 그 평가기를 직접 실행한 결과다. 게임 실측과 다르면 실측을 따른다(충돌 C-41~C-47).
+
+- **[MOD-17]** `modifications`는 같은 항목의 일반 속성 병합이 끝난 **뒤에** 적용된다. 한 번의 `modifications` 안에서 뒤 연산은 원래 원소만 고를 수 있어, 앞에서 넣은 원소를 같은 목록에서 다시 옮기거나 지울 수 없다. `{코드}` (출처: CN)
+- **[MOD-18]** `where`가 객체면 **멤버 하나라도 같은** 첫 원소를 고른다(전부 같을 필요 없음). `where: {}`는 아무것도 고르지 않고, 조건이 없으면 첫 원소를 고른다. 지울 바인딩은 고유한 멤버(`binding_name`)로 지정한다. `{코드}` (출처: CN)
+- **[MOD-19]** 같은 경로 재선언에서 기존과 **다른 `@base`**를 적으면 기존 정의(타입, 팩토리, 바인딩)가 버려지고 새 정의가 된다. 바닐라 정의의 속성만 바꿀 때는 `@`를 적지 않는다. `{코드}` (출처: CN)
+
+### 2.8 엔진 동작 분석으로 더한 규칙
+
+Android 1.26.52.3 클라이언트의 네이티브 라이브러리를 분석해 읽은 것이다(`NB`). 재구성이 아닌 실제 컴파일 결과라 `CN`보다 직접적이지만 수준은 `코드`다. 게임 실측과 다르면 실측을 따른다.
+
+- **[MOD-23]** 엔진의 `operation` 이름표는 MOD-14의 11개가 전부다(번호 1~11). 이름은 정확히 같아야 하고, 그 밖의 연산은 없다. 각 연산의 게임 동작은 여전히 실측이 필요하다(MOD-14). `{코드}` (출처: NB-01)
+- **[MOD-24]** 연산 항목의 두 번째 기준은 **`target_control`(문자열)을 먼저** 읽고, 없을 때만 `target`을 읽는다. 엔진이 읽는 항목 키는 `array_name`, `control_name`, `operation`, `where`, `target_control`, `target`, `value`다. MOD-03의 "`target_control`은 근거가 없다"는 해석 단계에서는 틀렸다. `{코드}` (출처: NB-02)
+- **[MOD-25]** `array_name`은 고정 목록과 비교하지 않고 정의에서 **같은 이름의 멤버**를 찾아 배열이면 대상으로 쓴다. `array_name`이 비어 있고 `control_name`이 문자열이면 `"controls"`로 채우므로, 컨트롤 연산은 `array_name`을 생략해도 된다. 그래서 해석 단계에서는 `controls`·`bindings` 밖의 배열도 대상이 될 수 있지만, `variables`가 무시됐다는 실측(MOD-03)과 어긋나 효과는 확인되지 않았다. `{코드, 충돌}` (출처: NB-03, 충돌 C-64)
+
+## 커뮤니티 보고로 더한 사실 (커뮤니티)
+
+(출처: 비공개 조사) 모두 보고 수준이다.
+
+- 연산은 `insert_back`·`insert_front`·`remove`가 확인되었고, 커뮤니티는 `replace`와 `where` 필터도 쓴다. 같은 컨트롤을 `remove`한 뒤 `replace`하면 실패하는데, 한 번의 `modifications` 안에서 앞 연산이 넣은 원소를 뒤 연산이 다시 고르지 못하는 성질(MOD-17)과 같다.
+- 바닐라 화면에 내용을 덧붙이는 관용: 바닐라 namespace를 그대로 두고 슬롯 변수를 채운다. 예: `"inventory_screen": { "$additional_screen_content": "crafting.custom_panel" }`. 완성되면 `$screen_content`로 화면을 통째로 바꾼다(MOD-11).
+- **D-05 충돌(미해결)**: 같은 바닐라 요소를 여러 팩이 `modifications`하면 위 팩만 이긴다는 보고가 여럿이다. 가이드는 `modifications`가 팩 순서대로 누적된다는 실측(MOD-02)을 따른다. 보고된 사례가 속성 덮어쓰기나 `replace`를 섞은 것인지 재측정이 필요하다.
+- Marketplace 애드온은 바닐라 UI 파일을 못 고친다(월드 템플릿은 된다, D-23).
+
+## 반영안(미적용)
+
+새 조사에서 나온 제안이다. 본문에는 아직 합쳐지지 않았고 번호는 병합 기록의 최종 번호다.
+
+- **[MOD-20]** (반영안) Marketplace 협력형 애드온 공식 지침은 `ui/`와 `font/` 파일 덮어쓰기를 금지한다(여러 애드온이 같은 자산을 함께 고칠 수 없어서). 협력형으로 낼 팩은 MOD-13의 `modifications`조차 피하고 JSON UI 밖의 우회를 먼저 고른다. `{추론}` (출처: ms-learn, Guidelines for Building Cooperative Add-Ons) 실측이 아니라 정책 문서이므로 실제 심사에서 `modifications`만 쓴 팩도 거부되는지는 확인이 필요하다.
+- **[MOD-21]** (반영안) 같은 경로에서 `server_form.long_form`의 `controls`를 바꾸는 서버 폼 팩(Chest-UI, upgrader)은 서로 공존하지 못한다. 두 팩 모두 `long_form`을 같은 경로에서 `@` 없이 재선언하고(`type: panel`, `controls` 두 개) 제목 접두사 검사식으로 바닐라 모양과 자기 화면을 가른다. 팩 순서상 나중 것의 `controls`만 남는다(FILE-21). 공존이 필요하면 MOD-09 감싸기나 MOD-13 `modifications`만 쓰기로 바꾼다. `{작동팩, 추론}` (출처: jua-chest-ui, jua-upgrader)
+- **[MOD-22]** (반영안) 여러 바닐라 컨트롤이 함께 쓰는 텍스처를 교체할 때는 원본을 `_original` 같은 다른 이름으로 복사하고, 바꾸지 않을 컨트롤은 같은 경로 UI 파일의 경로 키(`"부모/자식": {"texture": "…_original"}`)로 사본에 다시 연결한다. `{작동팩}` (출처: jua-small-packs)
+- **보강안(미적용)**: MOD-01에 연산 사용 실적(이 프로젝트 출처에서 `insert_back` 11, `insert_front` 4, `remove` 3)을, MOD-02·MOD-04·MOD-13에 같은 경로 파일 병합 판정(C-50)과 협력형 지침 근거를, MOD-14에 중국판 문서의 서술을 더한다.
+
+## 충돌 판정 (이 장의 규칙과 관련된 것)
+
+| ID | 주제 | 주장과 근거 | 판정 |
+| --- | --- | --- | --- |
+| C-10 | `modifications` 대상 | MJ 저장소 스펙은 `button_mappings` 배열과 `target_control` 키를 말하고, bedrock-core 실측은 `controls`, `bindings`만 닿고 `variables`는 무시된다고 한다. 엔진은 `target_control`을 실제로 읽고(NB-02) `array_name`을 고정 목록으로 거르지 않는다(NB-03) | 부분 해소: `target_control` 키는 맞다. 배열 범위는 C-64로 넘긴다 |
+| C-39 | `modifications` 연산 | 이 프로젝트 출처는 `insert_back`, `insert_front`, `remove`만 확인, 위키는 11가지와 `control_name`, `target` 키. 바닐라는 `modifications`를 쓰지 않는다. 엔진 이름표가 같은 11가지(NB-01) | 이름은 확정. 나머지 8가지의 게임 동작은 미검증 |
+| C-46 | 재선언·`modifications`의 범위 | 실측은 경로 단위, Cinnabar는 namespace와 이름만으로 합친다 | 실측 우선: MOD-02 유지 |
+| C-47 | 상속받은 자식 `remove` | 실측은 파일 전체 수정이 조용히 무효, Cinnabar는 진단만 남기고 나머지 적용 | 실측 우선: MOD-05 유지 |
+| C-64 | `modifications`가 닿는 배열 | 실측은 `controls`·`bindings`뿐이고 `variables`는 무시. 엔진 해석은 같은 이름 멤버를 찾으므로 어느 배열이든 해석된다(NB-03). 변수가 그보다 먼저 확정되어 효과가 없을 수 있다 | 미해소: `controls`·`bindings` 밖은 실측 전에 쓰지 않는다 |
+
+## 실측이 필요한 항목
+
+- `insert_after`, `insert_before`, `move_*`, `swap`, `replace`의 실제 동작(MOD-14, C-39).
+- 여러 팩이 같은 바닐라 요소에 `modifications`를 걸 때 누적되는지(D-05).
+- `button_mappings` 등 `controls`·`bindings` 밖 배열에 효과가 있는지(C-64).

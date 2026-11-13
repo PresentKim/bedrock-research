@@ -1,0 +1,158 @@
+---
+title: "서브팩, 팩 설정, capabilities"
+description: "서브팩과 메모리 티어, manifest v3 팩 설정, capabilities, Vibrant Visuals 호환 manifest"
+sidebar_position: 7
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+---
+
+## 서브팩
+
+### 개념
+
+서브팩은 한 팩 안에서 플레이어가 고를 수 있는 변형이다. 원래는 한 리소스팩에 여러 텍스처 해상도를 넣어 메모리가 작은 기기가 작은 텍스처를 읽게 하려는 기능이다. 선택된 서브팩 폴더의 파일이 **팩 루트의 같은 경로 파일을 덮어쓴다**. 서브팩에 없는 파일은 루트 것이 그대로 로드된다. (출처: bedrock-wiki, concepts/manifest; ms-learn, Documents/BuildingSubpacks.md)
+
+예: `RP/textures/wiki/entities/ghost.png`와 `RP/subpacks/pack_1/textures/wiki/entities/ghost.png`가 둘 다 있으면 `pack_1`이 켜졌을 때 뒤의 것이 쓰인다.
+
+### 만드는 법
+
+1. 팩 루트에 `subpacks` 폴더를 만든다.
+2. 그 안에 서브팩마다 폴더를 만든다. 이름은 짧게 한다(경로 길이 제한).
+3. 각 폴더는 일반 팩과 같은 구조다. 서브팩마다 manifest는 필요 없다.
+4. 루트 manifest의 `subpacks` 배열에 등록한다.
+
+| 필드 | 필수 | 설명 |
+|---|---|---|
+| `folder_name` | 예 | `subpacks/` 안의 폴더 이름 |
+| `name` | 예 | 슬라이더에 보이는 이름. 현지화 불가 |
+| `memory_tier` | 예 | 선택에 필요한 최소 기기 메모리. 단위 0.25 GB(250 MB). `4`는 1 GB. 앞으로 `memory_performance_tier`로 대체 예정 |
+| `memory_performance_tier` | 아니오 | 1~5 플랫폼 티어. manifest format 3 필요, 아직 실험적 |
+
+```json
+{
+  "format_version": 3,
+  "header": { "name": "Pack Name", "description": "Pack Description",
+              "uuid": "2fc2dd6f-86cb-4370-af70-21490a1ae471", "version": "1.0.0",
+              "min_engine_version": "1.26.40" },
+  "modules": [ { "type": "resources", "uuid": "f6821b4a-1854-44fc-a8a4-0c2847ffda46", "version": "1.0.0" } ],
+  "metadata": { "authors": ["Your Name"] },
+  "subpacks": [
+    { "folder_name": "subpack_1", "name": "Low Resolution",  "memory_tier": 0,  "memory_performance_tier": 1 },
+    { "folder_name": "subpack_2", "name": "High Resolution", "memory_tier": 12, "memory_performance_tier": 3 }
+  ]
+}
+```
+
+MS Learn 예제는 `settings`에 `label`을 여러 개 넣어 팩과 서브팩 설명을 단락별로 보여 준다. 여러 단락은 `type`/`text` 쌍을 여러 개 쓴다(`name`과 `text`는 번역할 수 없다).
+
+### 메모리 티어 표
+
+| 성능 티어 | 대표 플랫폼 | `memory_tier` | 기기 메모리 |
+|---|---|---|---|
+| 1 | Nintendo Switch | 11 이하 | 2~4 GB |
+| 2 | PS4, PS4 Pro, Xbox One, Xbox One S, 모바일 대부분(MS 문서: 60%) | 12~16 | 4~5 GB |
+| 3 | Xbox One X, Xbox Series S | 18~20 | 6~8 GB |
+| 4 | Xbox Series X, PS5 | 24~28 | 8~12 GB |
+| 5 | PS5 Pro, PC 대부분(MS 문서: 70%) | 32 이상 | 12 GB 초과 |
+
+### 선택 규칙
+
+- 기본값은 기기가 만족하는 **가장 높은 티어**의 서브팩이다. 같은 티어가 여럿이면 배열의 **마지막**이다. 티어가 같은 서브팩을 두지 않는 것이 좋다.
+- 플레이어는 팩 설정(톱니 아이콘)의 슬라이더로 바꾼다. 기기가 지원하는 티어까지만 이동할 수 있고, 기본값보다 한 단계 낮은 것까지 선택할 수 있다(PS5 Pro는 기본 5, 수동으로 4).
+- 서브팩이 하나여도 슬라이더에는 "서브팩"과 "서브팩 없음" 두 위치가 생긴다. "서브팩 없음"은 루트만 로드한다.
+- 월드 밖의 팩 설정에서만 고를 수 있고 월드 안에서는 못 바꾼다. 사용 중인 서브팩은 BP에서 감지할 수 없다.
+
+### 커뮤니티 보고
+
+- **구조**: manifest `"subpacks": [{"folder_name": "...", "name": "...", "memory_tier": 0}]`, 폴더는 `subpacks/<name>/`, 서브팩마다 manifest 불필요. 서브팩 파일이 기본 팩의 같은 경로 파일을 덮어쓴다. 월드 밖의 팩 설정에서만 선택 가능하고 월드 안에서는 바꿀 수 없다. 키 이름은 글에 따라 `memory_tier`/`memory_performance_tier`로 달랐다. 위키: https://wiki.bedrock.dev/concepts/subpacks
+- **기본 선택**: 기기가 지원하는 가장 높은 memory tier, 동률이면 배열의 마지막.
+- **BP 서브팩 함정** *(상충)*: 한 사례는 RP가 BP에 의존하면 BP 서브팩 전환이 깨져 의존성을 제거해 해결. 26.13 시기 다른 보고는 BP 서브팩이 BP가 RP에 의존할 때만 적용되며, 설정을 떠나면 슬라이더가 애드온을 꺼버리고 항상 마지막 서브팩으로 돌아간다고 했다.
+- **블록 텍스처를 담은 서브팩**은 각 서브팩에 `blocks.json`/텍스처가 없으면 깨진다(미해결). 서브팩 폴더 밖 파일을 읽지 못하는 문제는 2026-07-05 베타/핫픽스의 새 버그로 의심. 루트 기본값에 이름을 붙일 수 없음.
+- **BP 서브팩은 지원되지 않고 BP 설정 기능이 계획 중**이라는 2026-01 언급이 있으나, 이후 위 BP 서브팩 사용 사례들이 있다.
+- **CurseForge 같은 비 Marketplace 팩**은 서브팩 폴더를 바꿔 끼우는 방식으로 편집 가능.
+
+## 팩 설정 (manifest v3 settings)
+
+### 개념
+
+팩 설정은 팩에 옵션 화면을 붙인다. 라벨, 토글, 슬라이더, 드롭다운을 둘 수 있다. 팩 목록의 톱니 아이콘이나 게임 중 Settings에서 연다. **RP 설정은 플레이어별**로 저장되어 Molang으로 읽고, **BP 설정은 월드별**로 저장되어 Script API로 읽는다. 스킨팩은 설정을 둘 수 없다. 요구 조건: manifest format 3(format 2에서는 무시), `min_engine_version` 1.21.130 이상, 스크립트 방식은 `@minecraft/server`의 `world.getPackSettings()`. `settings`는 **순서 있는** 배열이다. (출처: bedrock-wiki, concepts/manifest)
+
+| 타입 | 필드 |
+|---|---|
+| `label` | `type`, `text`(`§` 서식 코드 지원) |
+| `toggle` | `type`, `name`(네임스페이스 권장, 예 `wiki:show_text`), `text`, `default`(불리언) |
+| `slider` | `type`, `name`, `text`, `min`, `max`, `step`, `default`(숫자) |
+| `dropdown` | `type`, `name`, `text`, `options`(`name`과 `text` 객체 배열), `default`(선택지의 `name`) |
+
+```json
+"settings": [
+  { "type": "label", "text": "Text Settings" },
+  { "type": "toggle", "name": "wiki:show_text", "text": "Show Text", "default": true },
+  { "type": "slider", "name": "wiki:text_scale", "text": "Text Scale",
+    "min": 0.5, "max": 2.0, "step": 0.1, "default": 1.0 },
+  { "type": "dropdown", "name": "wiki:text", "text": "Text Options",
+    "options": [ { "name": "text_1", "text": "This is text 1" },
+                 { "name": "text_2", "text": "This is text 2" } ],
+    "default": "text_2" }
+]
+```
+
+RP에서는 Molang 질의로 읽는다. 렌더 컨트롤러, 애니메이션, 애니메이션 컨트롤러, 파티클, 엔티티 정의 어디서나 된다.
+
+```molang
+query.is_pack_setting_enabled('wiki:show_text')
+query.get_pack_setting('wiki:text_scale')
+query.is_pack_setting_selected('wiki:text', 'text_2')
+```
+
+BP에서는 스크립트로 읽는다. 토글은 불리언, 슬라이더는 숫자, 드롭다운은 선택지 `name` 문자열이다.
+
+```js
+import { world } from "@minecraft/server";
+const settings = world.getPackSettings();
+if (settings["wiki:show_text"] === true) {
+  world.sendMessage(`Scale ${settings["wiki:text_scale"]}, option ${settings["wiki:text"]}`);
+}
+```
+
+### 커뮤니티 보고
+
+- **설정 타입**: label, toggle, slider(숫자), dropdown(문자열), 그리고 프리뷰의 `multiselect`(2026-08 등장, 최대 20개 토글을 하나로 묶는다고 설명되나 실제로는 dropdown처럼 동작: 버그 또는 미완성). 텍스트 입력은 나올 가능성이 낮다.
+- **읽는 법**: RP Molang `query.is_pack_setting_enabled('ns:id')`(2025-10-29 기준 실험 아님, `get_pack_setting`보다 권장), BP 스크립트 `World.getPackSettings`(베타). 토글은 월드 안에서 attachables·애니메이션·Molang에 영향을 주고 JS 설정도 바꿀 수 있다. 사용 중인 서브팩은 BP에서 감지할 수 없다.
+- **파티클에서 설정을 실시간 반영**하려면 `emitter_lifetime_once`(시작 시 1회 평가) 대신 `emitter_lifetime_expression`을 쓴다.
+- **멀티플레이에서는 개별 설정 불가**하고 글로벌 리소스 설정이 우선한다. 클라이언트별 적용 여부는 미해결.
+- 문서: https://learn.microsoft.com/en-us/minecraft/creator/reference/content/addonsreference/packmanifest?view=minecraft-bedrock-stable#settings---manifest-version-3-experimental , https://learn.microsoft.com/en-us/minecraft/creator/documents/addons/custompacksettings?view=minecraft-bedrock-stable . Mojang은 레퍼런스 문서가 자동 갱신되지 않는다고 밝혔다.
+
+## capabilities
+
+`capabilities`는 팩이 켜는 선택 엔진 기능의 문자열 배열이다. (출처: bedrock-wiki, concepts/manifest)
+
+| capability | 팩 | 설명 |
+|---|---|---|
+| `pbr` | RP | 물리 기반 렌더링 자산을 담는다. 활성 중에도 Vibrant Visuals를 켤 수 있다 |
+| `raytraced` | RP | 레이트레이싱 자산. 지원 기기에서 켠다(커뮤니티에서는 RTX용 `raytracing`이라고도 부른다) |
+| `script_eval` | BP | 스크립트의 `eval()`, `Function()` 허용. 권장하지 않음 |
+| `chemistry` | BP·RP | Education Edition 화학 동작 |
+| `editorExtension` | BP·RP | Minecraft Editor 확장 팩 |
+| `experimental_custom_ui` | RP | 옛 HTML 기반 UI의 잔재. 효과 없음 |
+
+```json
+"capabilities": ["pbr"]
+```
+
+## Vibrant Visuals 호환 manifest
+
+> 재질, 렌더링, 셰이더 상세는 rendering 섹션이 담당한다. 여기서는 manifest와 직결된 사실만 둔다.
+
+- **VV는 RP manifest에 최상위 `"capabilities": ["pbr"]`(배열)이 있어야 유지**된다. 없으면 Fancy로 전환되며 툴팁 "Vibrant Visuals requires a supported device and is not compatible with Marketplace Texture Packs or Worlds". manifest capability만 필요하고 MER/텍스처 세트는 점진적으로 추가 가능. "raytracing"은 RTX용, `pbr`은 VV용. 비 Marketplace 애드온 공통. 문서: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/vvresourcepacks , https://wiki.bedrock.dev/guide/project-setup#rp-manifest *(확인됨)*
+- **min_engine_version과의 관계** *(상충)*: 오래된 min_engine(예: 1.19.60, 1.21.40)의 팩은 레거시로 취급되어 capability 없이도 VV가 동작하며, `pbr`이 있는데도 min_engine 1.21.120에서 VV가 사라졌다가 1.19.60으로 내려 복구된 사례들이 있다. 반면 2026-05 보고는 VV 버튼/PBR을 켜려면 `pbr` + `min_engine_version` [1,21,120] 이상이 필요하다고 했다. 두 방법 모두 시도할 것.
+- **`pbr`을 선언한 팩이 VV를 렌더할 수 없는 기기(GPU 미지원)에서 아예 로드되지 않은** 보고(2025-10, 약 7명): VV 콘텐츠를 별도 RP로 배포 권장. 권장 min engine 1.21.90 / 1.21.120.
+- **커스텀 블록 팩에 `pbr`을 넣자 `minecraft:material_instances` 텍스처에서 `Missing referenced asset red_rod`** 오류가 났고, 제거해도 PBR 텍스처는 적용되었다(문서가 낡은 듯).
+- **Marketplace 맵/서버는 기본적으로 VV를 끈다**(제작자가 명시적으로 capability 추가 필요). 실수로 PBR 시스템 전체가 꺼져 RTX PBR도 동작하지 않는다. Marketplace에는 "최근 업데이트" 요구가 없어 오래된 팩 다수가 VV를 쓸 수 없다.
+- **텍스처 세트**: 참조할 때 `.png` 접미사를 뺀다. VV에는 `mer` 레이어만 필수(노멀/높이맵은 선택). 텍스처 대신 채널별 상수 예: `{"format_version":"1.21.30","minecraft:texture_set":{"color":"leaves_spruce","metalness_emissive_roughness_subsurface":[0,0,0,128]}}`. 텍스처 세트로 파티클/아이템/블록이 VV에서 빛난다. PBR 문서: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/pbroverview?view=minecraft-bedrock-stable
+- **로컬 조명**: `local_lighting/local_lighting.json`(format 1.21.120)에 블록별 `light_color`, `light_type`(`point_light`/`static_light`), 예 `"minecraft:copper_lantern": {"light_color": [45,175,102], "light_type": "point_light"}`. `pbr` capability와 (당시) Render Dragon Features for Creators 토글 필요. static light는 26.10에서 실험 해제. 바닐라 사본은 게임 설치 RP의 `experimental` 폴더.
+- **VV 팩은 셰이더가 아니라 리소스팩**이다. MS Learn의 Mojang VV 팩 템플릿에서 시작.
+- **물 파일 편집 팩이 "No ZIP found"로 로드되지 않던** 문제는 mcpack을 `development_resource_packs`에 수동으로 풀어 해결. 서브팩 변경 시 팩이 사라지는 문제, 대기(atmospherics) 오류는 콘텐츠 로그 확인.
+- **재질 문서**(.material.bin 아닌 종류): https://learn.microsoft.com/en-us/minecraft/creator/documents/material-files?view=minecraft-bedrock-stable ("몇 군데 틀림"). 26.0 프리뷰(2026-02-03 무렵)부터 RP의 `materials.index.json` 로딩이 제거되었다.

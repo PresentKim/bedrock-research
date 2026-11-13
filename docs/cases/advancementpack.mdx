@@ -1,0 +1,129 @@
+---
+title: "AdvancementPack (r4isen1920)"
+description: "NPC 대화 화면 위에 HUD를 겹쳐 그리는 발전과제 UI. 팩토리 변수 ignored, 채팅 토스트, 고정 오프셋 파싱의 표본 사례"
+sidebar_position: 1
+sources:
+  - advancementpack
+  - repo-guide
+  - bedrock-wiki
+---
+
+## 이것은 무엇인가
+
+AdvancementPack은 r4isen1920이 만든 마인크래프트 배드락용 "발전과제" 애드온이다. 자바 에디션처럼 탭이 있는 발전과제 창과 달성 토스트를 리소스팩 JSON UI와 스크립트로 구현한다. 분석 대상은 v4.2(CurseForge 업로드 2024-06-04, `min_engine_version` 1.20.80, 월드 실험 기능 Beta APIs 필요)이고 저장소 HEAD는 `0a79929`다. 저장소 `LICENSE`를 열어 확인한 라이선스는 MIT(Copyright 2024 r4isen1920)이므로 코드 발췌가 가능하다(출처: cs-advancementpack). HEAD(2025-12-29)는 스크립트를 Scripts 2.0으로 다시 썼을 뿐 UI 파일은 v4.2와 공백을 빼면 같다.
+
+이 팩이 중요한 이유는 BedrockAdvancements나 bedrock-core가 쓰는 서버 폼을 전혀 쓰지 않기 때문이다. 화면 데이터를 "폼이 아닌 곳"으로 보내는 방법의 표본이다.
+
+## 어떻게 동작하나
+
+화면에 필요한 데이터는 세 채널로 나뉜다.
+
+| 채널 | 보내는 것 | UI에서 받는 곳 |
+| --- | --- | --- |
+| NPC 대화문 `#dialogtext` | 화면 ID(`_r4ui:story_tab` 등) | `npc_interact_screen`이 창, 탭, 배경을 그린다 |
+| HUD 타이틀(`setTitle`) | 탭 이름과 달성한 항목 이름 목록 | HUD 오버레이가 아이콘, 선, 스크롤을 그린다 |
+| 채팅(`sendMessage`) | 토스트 한 건의 고정 폭 레코드 | HUD 채팅 팩토리가 토스트를 쌓는다 |
+
+모든 데이터 문자열은 접두사 `_r4ui:`로 시작한다. 바닐라 UI는 이 접두사가 있을 때 숨고, 커스텀 UI는 있을 때만 나타난다. 숨은 NPC 엔티티(scale 0, 무적)를 플레이어 위 8블록에 소환해 두고 `dialogue open` 명령으로 대화 화면을 연다.
+
+## 핵심 기법
+
+### 1. NPC 화면 위에 HUD 겹치기
+
+NPC 대화 화면이 클라이언트에 주는 데이터는 대화문 한 줄과 버튼 이름 목록뿐이라 플레이어별 달성 목록을 싣기 어렵다. 그래서 달성 목록은 타이틀로 보내고 HUD가 그린다. 아래 화면에는 `force_render_below: true`, `screen_draws_last: false`를, HUD에는 `screen_draws_last: true`를 준다. HUD에는 `always_accepts_input: true`도 필요하다. 작성자 메모에 따르면 마우스가 있을 때만 호버와 스크롤이 동작하고 터치·컨트롤러는 확인되지 않았다.
+
+### 2. 팩토리가 주는 `$title_text`로 생성 단위 분기
+
+`hud_title_text_factory`가 만든 컨트롤은 `$title_text`를 변수로 받는다. 작성자는 `$title_text|default`로 기본값을 두고 그 값을 `ignored`와 `variables.requires`의 식에 쓴다.
+
+```jsonc
+"story_tab@advancement_items_story_tab": {
+  "ignored": "(($var_title_text - 'story_tab:') = $var_title_text)"   // 'story_tab:'이 없으면 만들지 않는다
+},
+"mine_stone@advancement_item_base": {
+  "$unlock_condition": "(not (($var_title_text - 'mine_stone.1b;') = $var_title_text))"
+}
+```
+
+변수는 컨트롤 생성 시 한 번 정해지므로 안 보이는 탭과 아이템을 아예 만들지 않는다(바인딩 `#visible`은 만든 뒤 평가). 타이틀이 바뀌면 팩토리가 컨트롤을 다시 만들어서 탭 전환마다 스크립트가 `setTitle`을 다시 보낸다. 데이터 형식은 `_r4ui:<탭>:<이름>.1b;<이름>.1b;…`이고 `(#s - 'X') = #s`로 포함 여부를 검사한다. 이름 뒤에 `.1b;` 종결자를 붙여 접미사가 겹쳐 오인되는 일을 막는다(137개 이름에 겹치는 쌍이 없음을 확인).
+
+### 3. 바닐라 `#visible`에 조건을 AND로 붙이기
+
+다음은 저장소 HEAD의 실제 `hud_screen.json` 일부다.
+
+<Excerpt src="advancementpack" title="AdvancementPack, hud_screen.json" path="packs/RP/ui/hud_screen.json">
+
+```json
+"root_panel": {
+  "modifications": [
+    { "array_name": "bindings", "operation": "remove",
+      "where": { "binding_name": "#hud_visible" } },
+    { "array_name": "bindings", "operation": "insert_front",
+      "value": [
+        { "binding_type": "global", "binding_name": "#hud_visible" },
+        { "binding_type": "global", "binding_name": "#hud_title_text_string" },
+        { "binding_type": "view",
+          "source_property_name": "((#hud_title_text_string - '_r4ui:') = #hud_title_text_string)",
+          "target_property_name": "#not_showing_custom_hud" },
+        { "binding_type": "view",
+          "source_property_name": "(#hud_visible and #not_showing_custom_hud)",
+          "target_property_name": "#visible" }
+      ] }
+  ]
+}
+```
+
+</Excerpt>
+
+원래 `#visible` 바인딩을 지우고 같은 값을 다시 읽어 내 조건과 묶는다. 커스텀 UI는 `root_panel`이 아니라 `$screen_bg_content`(`root_panel_bg`)에 두어 바닐라 HUD를 숨겨도 토스트와 오버레이가 남는다.
+
+### 4. NPC 화면을 감싸서 전환
+
+`npc_screen`을 재정의하되 바닐라 `npc_screen_contents`를 그대로 감싸 두고 `#dialogtext`에 따라 내 화면과 바닐라 화면의 가시성을 전환한다. `"controls": "$target_control"`처럼 컨트롤 배열을 변수로 넘기는 슬롯 패턴을 쓴다. 단점은 `npc_screen` 전체를 재정의해 다른 팩과 한쪽만 남고, 일반 NPC 대화도 `render_game_behind` 등의 설정을 함께 받는다는 점이다.
+
+### 5. 탭은 대화 버튼 컬렉션이고 이름으로 모양을 고른다
+
+대화 버튼 이름(`tab.story` 등)을 탭 ID로 쓰고, 슬롯마다 6가지 탭 모양을 모두 두어 `(#student_button_text = 'tab.story')`로 하나만 보이게 한다. 선택된 탭은 `$is_tab_selected`가 켜진 복사본을 겹치고 `button_mappings` 항목에 `"ignored": "$is_tab_selected"`를 주어 누르지 못하게 한다(배열 원소 단위 `ignored`). 탭 전환과 실제 닫힘은 대화의 `on_close_commands`와 태그(`has_screen_opened`)로 구분한다.
+
+### 6. 채팅 팩토리로 토스트 여러 개
+
+타이틀 채널은 하나라 토스트가 겹치면 덮이지만 채팅은 메시지마다 컨트롤이 생긴다. 바닐라 HUD 채팅과 같은 팩토리 이름(`chat_item_factory`)을 다른 위치에 하나 더 선언해 같은 데이터로 두 번째 목록을 만들고, 원래 채팅에서는 두 곳(채팅 화면 `messages_text`, HUD `chat_grid_item`)에서 숨긴다. 토스트 레코드는 고정 오프셋으로 자른다.
+
+```
+_r4ui:toast_0.header.01.body.006.slideshow_0.textures/items/iron_ingot
+```
+
+| 필드 | 추출 식 |
+| --- | --- |
+| 템플릿 | `('%.7s' * (#text - ('%.6s' * #text)))` |
+| 헤더(lang 키) | `('r4ui.toast' + ('%.10s' * (#text - ('%.13s' * #text))))` |
+| 아이콘 | `(#text - ('%.45s' * #text))` |
+
+잘라낸 번호에 lang 키 접두를 붙여 `localize` 라벨에 넣으므로 번역은 RP lang(28개 언어)이 맡는다. 사라질 때는 `size` 애니메이션으로 높이를 0까지 줄여 스택이 당겨지게 한다.
+
+### 7. 기타
+
+- 아이콘은 `$v > 'a'`(문자열이면 이미지)와 `$v > 0`(숫자면 `inventory_item_renderer`, 값은 `ID × 65536`)로 컨트롤을 골라 변수 하나로 경로와 숫자 ID를 모두 받는다.
+- 바닐라 `common_buttons.focus_border`에 `$show_hover_content|default: false` 슬롯을 더해 호버 툴팁을 넣는다. 다른 바닐라 버튼에는 영향이 없다.
+- `_ui_defs.json`에 `.r4ui` 확장자 파일 4개를 등록해도 로드된다. 연결선은 탭별로 미리 그린 PNG 한 장이다.
+- 경로 키(`"recipe_unlocked_popup/input_panel/label_panel/horizontal_padding_1": { "size": [3.75, 9] }`)로 바닐라 깊은 요소만 덮는다.
+
+## 알려진 함정
+
+- 다른 애드온이 `setTitle`하면 오버레이가 사라지고, `_r4ui:`로 시작하는 채팅은 숨겨진다(데이터 채널 공유).
+- `destroy_at_end: "chat_grid_item"`이 팩토리가 만든 컨트롤 이름 `modified_item`과 달라 실제로 파괴되는지 불확실하다.
+- 바닐라 `npc_screen`, HUD 루트, 채팅 두 곳, `focus_border`를 넓게 수정하므로 다른 UI 팩과 충돌할 수 있다.
+
+## 우리 규칙과의 관계
+
+| 규칙 ID | 관계 |
+| --- | --- |
+| FILE-02, FILE-14, FILE-18, FILE-19, FILE-20 | `.r4ui` 확장자, 컨트롤 배열 변수, 배열 원소 `ignored`, 문자열·숫자 판별, 경로 키가 이 팩에서 나왔다(지지) |
+| FILE-17, FILE-34 | 팩토리 변수 `$title_text`를 생성 시점에 `ignored`로 거르는 근거. `ignored`는 자기 선언이 아니라 바깥 스코프를 본다(`category_tab_icon`의 자식) |
+| MOD-07, MOD-10, MOD-12 | `#visible` 교체, 기본값 꺼진 슬롯, `npc_screen` 재선언의 공존 문제 |
+| BND-06, BND-15, HOST-14, HOST-15 | `once` 바인딩, `#propagateAlpha` 바인딩, 타이틀은 단일 채널이라 겹치는 알림은 채팅으로, 접두사 프로토콜 |
+| LAY-22, LAY-23, LAY-27, LAY-28 | `allow_clipping: false` 툴팁, 어두운 이미지, 9-slice, 타일 배경 |
+
+## 비교
+
+BedrockAdvancements는 서버 폼 `long_form`을 감싸고 스페이서로 좌표를 계산하며 토스트를 타이틀 채널로 보낸다. bedrock-core는 서버 폼과 상자 컨테이너를 쓰고 JSX를 컴파일한다. AdvancementPack은 판정을 생성 시점(`ignored`)에 하므로 컨트롤이 적지만, 새 항목을 넣으려면 UI JSON을 직접 고쳐야 한다. 겹칠 수 있는 알림은 채팅, 최신 값 하나면 되는 상태는 타이틀이 맞다. [BedrockAdvancements](./bedrockadvancements.mdx), [bedrock-core](./bedrock-core.mdx) 페이지와 함께 읽는다.

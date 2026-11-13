@@ -1,0 +1,74 @@
+---
+title: 안개와 하늘
+description: fog JSON(레거시 distance fog와 VV volumetric fog), god ray 튜닝, /fog 명령, 스카이박스, 카메라 페이드, 디더링과 접근성 페이드
+sidebar_position: 12
+sources: [private-research, ms-learn, bedrock-samples]
+---
+
+# 안개와 하늘
+
+## 개념
+
+Bedrock의 fog 파일은 리소스 팩 `fogs/`의 `minecraft:fog_settings` JSON이다. 식별자(`description.identifier`)는 네임스페이스를 포함해야 하고, 클라이언트 바이옴(client biome)이 그 식별자를 가리켜 바이옴에 적용한다. 설정은 두 갈래다. **distance fog**는 카메라가 있는 매질(공기 `air`, 물 `water`, 용암 `lava`, 용암 저항 효과 중 `lava_resistance`, 가루눈 `powder_snow`, 날씨 중 `weather`)별로 `fog_start`, `fog_end`, `fog_color`를 주고, `render_distance_type`이 `fixed`면 블록 단위 거리, `render`면 현재 렌더 거리에 곱한 값으로 해석한다. `transition_fog`(`init_fog`)는 다른 매질에 들어갈 때 바이옴의 distance fog로 천천히 전환하는 추가 fog다. **volumetric fog**(VV 전용)는 밀도, 매질 계수(scattering, absorption), 위상 함수 비대칭 `henyey_greenstein_g`로 빛줄기(god ray)를 만든다(출처: ms-learn, `minecraft:fogs` 레퍼런스).
+
+레거시 형식(format 1.16.100) 예:
+
+```json
+{
+  "format_version": "1.16.100",
+  "minecraft:fog_settings": {
+    "description": { "identifier": "my_pack:thick_air" },
+    "distance": {
+      "air": { "fog_start": 0.2, "fog_end": 0.9, "fog_color": "#b7c3d8", "render_distance_type": "render" },
+      "water": { "fog_start": 0, "fog_end": 40, "fog_color": "#1c4d6b", "render_distance_type": "fixed" }
+    }
+  }
+}
+```
+
+VV 형식(format 1.21.90)은 같은 파일에 `volumetric`을 더한다.
+
+```json
+"volumetric": {
+  "density": {
+    "air": { "max_density": 1.5, "uniform": false, "max_density_height": 80, "zero_density_height": 130 },
+    "water": { "max_density": 0.15, "uniform": true }
+  },
+  "media_coefficients": {
+    "air": { "scattering": [1, 1, 1], "absorption": [1, 1, 1] }
+  },
+  "henyey_greenstein_g": { "air": 0.65, "water": 0.3 }
+}
+```
+
+바닐라 fog 샘플은 bedrock-samples `resource_pack/fogs`에 있다. 아래는 커뮤니티 조사에서 모은 규칙이다(출처: 비공개 조사).
+
+## VV volumetric fog
+
+- **fog JSON 구조**(format_version 1.21.90): `distance`(air, water, weather: `fog_start`, `fog_end`, `fog_color`, `render_distance_type: "render"`), `volumetric.density`(air: `max_density`, `uniform`, `max_density_height`, `zero_density_height`. water: `max_density`, `uniform`. weather), `volumetric.media_coefficients`(air, water, cloud: scattering[rgb], absorption[rgb]), `henyey_greenstein_g`(air, water). 예: air `max_density` 1.5, `max_density_height` 80, `zero_density_height` 130, `uniform` false. 더 짙은 변형: `max_density` 0.15, `zero_density_height` 87, `max_density_height` 30. 높은 Y가 짙으면 `max_density`를 낮춘다.
+- **God ray**: volumetric 밀도를 올리고 `henyey_greenstein_g`를 0.65 정도로 둔다(더 고른 fog는 0.35, 0.75 초과는 역효과). 값이 높을수록 fog가 빛 쪽으로 모이고 god ray가 날카로워진다. 날카로움은 밀도에도 달려 있어서 선명하지만 짙지 않은 fog가 필요하다. god ray 밀도로는 0.001~0.09를 쓰고 0.45 이상은 방사능처럼 보인다. 한 사용자의 실패는 값이 아니라 바이옴 fog 파일의 구조 오류였다. 이중 로브(전방 0.65와 후방 -0.25)가 더 나은 설계라는 제안도 있었다. 기본 RTX는 0.4, Better RTX 기본은 0.075를 쓰고 RTX에서는 팩으로 설정할 수 없다(VV 전용 키).
+- **색**: VV에서는 scattering이 fog 색을 거의 바꾸지 않고 absorption이 바꾼다(RTX에서는 scattering이 색을 바꾸고 아주 작은 값이 필요함). fog 색은 `scattering`과 `absorption`을 같게(1,1,1 = 흰색) 유지한다. absorption은 강한 설정이다(RTX fog는 빨강·초록 absorption 2 이상). volumetric fog는 하늘을 더 파랗게 물들일 수 있다. "시네마틱" fog는 스크린샷용으로 아주 짙은 volumetric이라 게임 플레이에는 나쁘다.
+- **VV distance fog**: 항상 하늘 색과 같다(Nether/End에서는 flash가 없으면 검정). End flash 동안에만 자기 색으로 렌더링되므로 보라색 커스텀 distance fog는 VV에서 재현할 수 없고 나머지는 바닐라처럼 동작한다. `{"render_distance_type":"fixed","fog_start":16,"fog_end":1024,"fog_color":"#b7c3d8"}` 같은 고정 fog는 VV에서 더 나빠 보이므로 모드별 fog(서브팩이나 스크립트)를 따로 두거나, `fog_start`를 멀리 밀거나, distance fog 범위를 넓힌다. `fog_end`를 낮추면 수중에서 하늘이 보였다. fog는 지상 플레이 시점에서 판단한다.
+- **블록 빛과 volumetric fog**: 블록·포인트 라이트는 일부러 volumetric fog와 분리됐다(1.20.80~1.21.80 무렵에는 동작). 26.10 stable부터 정적 라이트(flood-fill 블록 라이트)와 색 있는 블록 라이트가 volumetric fog에 영향을 준다. 그 기여도는 내부 값 `block_light_indirect_contribution_multiplier` = 0.05로 스케일된다(Mojang 개발자는 로컬에서 200.0을 썼고 팩용 전용 배율 공개를 검토했으나 약속은 없음). volumetric fog는 광원이 없으면 거의 보이지 않는다.
+- **동굴과 End**: distance/volumetric fog는 동굴(스카이라이트 0)에서 제대로 동작하지 않는다. End에서는 End flash만 fog를 밝힌다. Ender Dragon이 살아 있는 동안 End fog가 더 강하고 죽으면 바뀐다(2026-04-21 프리뷰 관찰).
+- **Nether fog**: 수평선·천정 그라데이션 색은 뚜렷한 수평선을 만들어서 단색을 선호한다. 바닐라 Nether에 volumetric 밀도 0.04, fog end 320블록이 보기 좋았다.
+- **아침 안개와 비**: 새벽에 태양을 약간 밝게 하면(노출 문제가 줄어듦) fog가 밝아지고 높이 기반 fog도 도움이 된다(낮은 태양이 짙은 fog를 통과). light shaft를 일출·일몰로만 제한할 수는 없어서 그 시간대에 얇은 fog와 밝은 태양을 쓰는 것이 최선이다. 비는 커스터마이즈할 수 없고 VV가 꺼진 것처럼 보이므로 비가 올 때 volumetric을 조정하는 것이 최선의 우회다.
+- **키프레임 fog**: 2026-04-30 무렵 프리뷰부터 volumetric fog 밀도·scattering·absorption을 키프레임할 수 있어서 밤 fog를 따로 조정할 수 있다. VV용으로 추가됐지만 RTX에서도 동작한다(RTX에서 distance fog는 동작하지 않음).
+- **튜닝 요령**: 태양 illuminance, HG g 값, 명확한 높이·밀도를 함께 맞추고 컬러 그레이딩으로 fog를 강조하면 장면이 막히지 않는다. 한 제작자는 그레이딩 트릭으로 fog를 3배 적게 쓰고도 같은 선명함을 냈다. 오픈소스 예시는 stephenle19/LerianX-Visuals다.
+- **실행 중 fog 변경**: 런타임에 atmosphere/fog를 토글하는 방법(블러드문 등)은 알려지지 않았고 조건별 fog 교체는 리소스 팩만으로는 안 되며 애드온이 필요하다. 커스텀 달 텍스처가 우회책이다. 명령어 방식은 아래 `/fog`를 본다. `/fog @a push minecraft:fog_warped_forest fog1`은 Fancy에서는 하늘을 물들이지만 VV에서는 아니다.
+- **볼 수 없는 것**: VV에 피사계 심도(DOF)는 없다(Windows 전용 ReShade가 대안이고 RTX는 모드가 필요). 위시리스트에는 volumetric fog용 조정 가능한 ambient 항(예전 VV에 있었음, scattering만 쓰면 평평함), `fog_start_height`와 월드 공간 fog 블렌딩, 포인트 라이트와 태양의 HG 매개변수 분리가 있다. 배너 위에서 fog가 각도에 따라 잘못 렌더링된다.
+
+## 레거시 fog (VV 외, 공통)
+
+- **fog JSON(레거시)**: `minecraft:fog_settings`(format 1.16.100)는 `distance.air/water/weather`에 `fog_start`, `fog_end`, `fog_color`, `render_distance_type`을 두고 water는 `transition_fog`를 지원한다. fog 색 밝기는 조절되지 않는다(`#FF9900`과 `#5A3600`이 같아 보임). 바닐라 fog 파일(리소스 팩 `fog/`)은 VV 없이도 수중 fog 속성을 설정할 수 있다. 실명 fog 거리는 설정할 수 없다. 커스텀 fog가 모바일에서 가끔 버벅인다.
+- **바닐라 fog 수정**: 식별자 `minecraft:...`로는 편집할 수 없으니("identifier minecraft cannot be used") 자체 식별자로 새 fog를 만들고 client biome(`fog_identifier`)을 그쪽으로 가리킨다. `biomes/`의 client biome 파일은 여전히 바이옴마다 `fog_identifier`를 쓰고 예전 `biomes_client.json`은 더 이상 쓰이지 않는다고 한다. client biome `fog_appearance`가 fog 설정 파일을 가리킨다. 비 fog 파일을 추가해 바닐라 fog를 덮어쓰는 것, client_biomes에 `weather` fog를 추가하는 것은 효과가 없었다(미해결).
+- **fog 완전 제거**: `fog_start` 999, `fog_end` 1000이면 사실상 fog가 사라진다는 보고(2026-09)와, 큰 값이나 같은 값으로는 제거되지 않고(fixed든 render distance 타입이든) 셰이더가 필요하다는 보고(2026-09)가 있다. `conflicting`
+- **동적 fog**: `/fog <player> push <fog_id> <user_id>`, `pop <user_id>`, `remove <user_id>`(플레이어별 스택)로 바꾼다. 이 명령을 감싼 TS 래퍼 클래스가 공유됐다. fog 적용 후 하늘 색을 즉시 바꾸는 방법은 모른다(기본은 페이드 전환).
+- **스카이박스**: 커스텀 바이옴으로는 하늘 색만 바꿀 수 있다(PNG·큐브맵은 아직 안 됨, 커스텀 차원 피드백 2026-10). 스카이박스는 동적으로 바꿀 수 없고 서버에서 커스텀 차원 하늘, End 하늘, 스카이박스를 바꾸는 방법도 알려지지 않았다. VV 큐브맵은 [VV 설정 파일](./vv-settings.mdx), 머티리얼로 fog 없는 스카이박스는 [머티리얼과 셰이더](./materials-and-shaders.mdx)의 멀티패스를 본다. 비를 눈으로 바꾸는 것은 시각적으로만(텍스처) 된다. 구름 움직임 토글 질문은 답이 없었다.
+- **큰 모델과 fog**: 큰 모델이 렌더 거리와 별개로 fog를 무시하게 하는 방법은 답이 없었다. 빛 레벨에 따라 숨기는 깔끔한 방법도 없다.
+- **카메라 페이드**: 스크립트 API `fade`는 RGB만 있고 불투명 오버레이이며 유지 시간 최대 10초이고 알파가 없다. 카메라 컷신은 Camera API(`player.camera`)를 쓴다.
+
+## 디더링(접근성 페이드)
+
+- GDK 릴리스(2025-10-31 무렵) 이후 카메라가 가까우면 엔티티, 어태처블, 블록이 본마다 불투명·투명 픽셀이 번갈아 나오는 디더링으로 사라진다. 설정의 접근성에서 끌 수 있고 끄자 "모델이 없다·비친다"는 보고가 해결됐다. 깊이 정렬, 비용, 무작위 투명 그리기 순서 때문에 반투명을 쓰지 않았다고 한다.
+- 디더링은 VFX를 깨뜨리고 2026-01에 손 아이템으로 확대됐으며 Poppy Playtime과 A&S 같은 팩은 막판 수정을 하거나 사용자에게 끄라고 안내해야 했다. 2025-12-15 정식판에서 `entity_alphablend`나 `entity_beam_additive`를 쓴 1인칭 어태처블이 부분 알파를 잃었다(50% 근처에서 잘림). 이런 문제에는 디더링 끄기를 가장 먼저 시도한다. GDK 업데이트 후 화면 애니메이션(설정, 비디오)이 UI 렉을 일으켰고 업데이트 때 UI 설정이 모두 리셋됐다. `confirmed`

@@ -1,0 +1,152 @@
+---
+title: 모달 폼 multiselect 행
+description: 모달 폼(custom_form)의 체크박스 목록 행 multiselect를 서버에서 쓸 수 있는지, JSON 꼴, 응답, 바닐라 UI와 바이너리 스키마, 실측 결과와 서버별 주의
+sidebar_position: 3
+sources: [repo-multiselect, ms-learn, bedrock-samples, bedrock-wiki]
+---
+
+`multiselect`는 서버 폼 JSON(`custom_form`)에 있는 행 종류의 하나로, 옵션마다 체크박스를 보여 주는 다중 선택 목록이다. 드롭다운이 하나만 고르는 것이라면 multiselect는 여러 개를 고른다. 검증 표기는 `{실측}`(게임에서 확인), `{코드}`(바이너리·타입 정의에서 읽음), `{바닐라}`(바닐라 팩에서 읽음), `{추론}`이다 (출처: repo-multiselect).
+
+## 한 줄 결론
+
+서버에서 쓸 수 있다. 다만 Script API로는 안 되고, 폼 JSON을 직접 보내는 서버(Dragonfly·PocketMine·Nukkit 계열, 프록시)만 된다. `content`에 `{"type":"multiselect","text":…,"options":[…],"default":[번호…]}`를 넣으면 1.26.52 클라이언트가 체크박스 목록으로 그리고, 응답 배열의 그 자리에 고른 번호 배열(`[0,2]`)을 돌려준다. 아무것도 고르지 않으면 `[]`가 아니라 `null`이다.
+
+## 1. 결론표
+
+| 질문 | 답 | 근거 |
+| --- | --- | --- |
+| 클라이언트가 그리나 | 그린다. `text`가 머리 버튼 글이 되고, 누르면 체크박스 목록이 펼쳐진다 | `{실측}` |
+| 응답 형식 | 고른 옵션 번호(0부터)의 배열. 하나도 안 고르면 `null`. 실측은 늘 위에서부터 차례로 골라서 배열 순서가 번호 순인지 누른 순인지는 가리지 못했다 | `{실측}` |
+| 기본 선택 | `"default": [0,2]`(드롭다운처럼 단수형 키, 값은 번호 배열)가 체크를 미리 넣는다. `"defaults"`는 무시된다 | `{실측}` |
+| 옵션 수 | 25개도 모두 그려지고 스크롤된다(`[[0,24]]`). 20개 제한은 이 판에 없다 | `{실측}` |
+| 한 폼에 여러 개 | 된다. 응답은 행 순서대로 `[null,[2]]` | `{실측}` |
+| 다른 행과 섞기 | 된다. 자리는 `content` 순서를 따른다(`[true,null,1,null]`) | `{실측}` |
+| Script API | 없음. `ModalFormData`에도 새 `CustomForm`(DDUI)에도 multiselect가 없다 | `{코드}` |
+| Dragonfly `form.Custom` | 못 넣는다. `form.Element`가 비공개 메서드를 요구한다. 원시 패킷으로 보내고 응답도 직접 읽는다 | `{코드}` |
+| 리소스팩 | 바닐라 1.26.50 `server_form.json`이 `custom_form` 팩토리에 `"multiselect": "@server_form.custom_multiselect"`를 둔다 | `{바닐라}` |
+
+## 2. 행 JSON의 꼴
+
+| 키 | 값 | 필수 | 실측 |
+| --- | --- | --- | --- |
+| `type` | `"multiselect"` | 예 | 그려짐 |
+| `text` | 문자열. 1.26.50 바닐라 UI에서는 머리 버튼에 쓰인다 | 예 | 그려짐 |
+| `options` | 문자열 배열. 체크박스 하나가 한 항목 | 예 | 3·4·25개 그려짐 |
+| `default` | 정수 배열(0부터 센 옵션 번호). 이 번호가 켜진 채 열린다. 생략하면 모두 꺼짐 | 아니오 | 확인(MS2) |
+| `tooltip` | 문자열 | 아니오 | 오류 없음, 화면은 확인 못 함 |
+| `defaults` | 바이너리 스키마의 이름 | - | 무시됨(MS1). 쓰지 않는다 |
+
+다른 행과 섞은 설정 폼 예다. 시험 서버로 보낸 그대로는 아니고 실측한 동작을 한 폼에 모았다.
+
+```json
+{
+  "type": "custom_form",
+  "title": "알림 설정",
+  "content": [
+    { "type": "toggle", "text": "알림 받기", "default": true },
+    {
+      "type": "multiselect",
+      "text": "받을 알림",
+      "options": ["채팅", "거래", "친구 요청", "이벤트"],
+      "default": [0, 2]
+    },
+    { "type": "dropdown", "text": "언어", "options": ["한국어", "English"], "default": 0 },
+    { "type": "label", "text": "고른 뒤 보내기를 누르세요" }
+  ]
+}
+```
+
+받는 값은 `content` 행마다 한 자리인 배열이다. 라벨 자리는 `null`이다.
+
+| 플레이어가 한 일 | `ResponseData` | 근거 |
+| --- | --- | --- |
+| 아무것도 바꾸지 않고 보내기 | `[true,[0,2],0,null]` | 기본 체크가 그대로 온다 |
+| "거래"만 남기고 보내기 | `[true,[1],0,null]` | 고른 번호만 온다 |
+| 받을 알림을 모두 끄고 보내기 | `[true,null,0,null]` | 빈 선택은 `[]`가 아니라 `null` |
+
+창을 닫으면 `ResponseData` 없이 `CancelReason`이 온다(다른 모달 폼과 같은 패킷 규칙, multiselect 폼으로 따로 확인하지는 않았다). 응답 끝의 줄바꿈은 파싱 전에 걷는다.
+
+## 3. 바닐라 UI
+
+- 1.26.50.4 `server_form.json`의 `generated_contents` 팩토리(컬렉션 `custom_form`)가 `multiselect`를 `custom_multiselect`로 잇는다.
+- `custom_multiselect`는 세로 스택이다. 머리는 드롭다운 모양 토글 버튼(`settings_common.options_dropdown_toggle_control`, 상태 바인딩 `#custom_multiselect`, 글 `#custom_text`)이다. 몸은 `#custom_multiselect`를 `#visible`로 받는 스택이고 안에 체크박스 팩토리(컬렉션 `custom_multiselect`, 길이 `#custom_multiselect_length`)가 있다.
+- 체크박스(`custom_multiselect_checkbox`)는 상태 `#custom_multiselect_toggled`, 글 `#custom_multiselect_text`, `collection_details`를 쓰고 `$radio_toggle_group: false`라 라디오가 아니다.
+- 드롭다운과 달리 1.26.50에는 위쪽 라벨이 없다. 섞은 폼 실측에서 드롭다운은 위 라벨에 `text`, 버튼에 고른 옵션이 보였고 multiselect는 버튼에 `text`만 보였다.
+- **1.26.60.29 프리뷰에서 바뀐다**: `custom_multiselect`가 `settings_common.option_generic`을 상속해 위쪽 라벨(`#custom_text`)과 툴팁(`#custom_tooltip_text`)을 갖고, 머리 버튼 글은 새 바인딩 `#multiselect_option_text`가 된다. 이 판 클라이언트는 실측하지 않았다.
+- 바인딩 이름들은 바이너리에 문자열로 없다(해시로 들어간 듯). 바인딩 쪽은 바이너리에서 찾지 못했다 (출처: bedrock-samples 1.26.50.4와 프리뷰 1.26.60.29, 사실만 옮김).
+
+## 4. Script API에는 없다
+
+`@minecraft/server-ui` 타입 정의를 npm에서 받아 찾았다. `multiselect` 문자열이 한 번도 없다.
+
+| 판 | `ModalFormData` 메서드 | `CustomForm`(DDUI) 메서드 |
+| --- | --- | --- |
+| 2.4.0-beta.1.26.60-preview.30 | divider, dropdown, header, label, slider, submitButton, textField, title, toggle | button, closeButton, divider, dropdown, header, image, label, multiButtonRow, slider, spacer, textField, toggle |
+| 2.4.0-rc.1.26.70-preview.21, 2.5.0-beta.1.26.70-preview.21 | 같음 | 같음 |
+
+MS Learn의 모듈 문서(`a9fd1c0`, 2.5.0-beta.1.26.70-preview.24까지)와 변경 내역에도 multiselect가 없다. 변경 내역은 `multiButtonRow`, `image`, `button1~3WithOptions` 같은 것만 더했다. BDS의 스크립트 팩으로는 multiselect 폼을 만들 수 없다. 스크립트 팩에서 다중 선택이 필요하면 `ModalFormData`의 토글 여러 개로 대신한다.
+
+```js
+// 대안: 옵션마다 토글 하나
+const opts = ["채팅", "거래", "친구 요청", "이벤트"];
+const f = new ModalFormData().title("알림 설정");
+opts.forEach((o, i) => f.toggle(o, { defaultValue: i === 0 || i === 2 }));
+f.show(player).then((r) => {
+  if (r.canceled) return;
+  const picked = opts.filter((_, i) => r.formValues[i]);
+});
+```
+
+## 5. 클라이언트 바이너리 (`NB-16`, Android 1.26.52.3)
+
+- 클라이언트에는 서버 폼 JSON의 스키마(설명 문자열이 붙은 cereal 스키마)가 있다. 행 종류 스키마에서 `type`("Type of control used")의 값은 `label`, `toggle`, `slider`, `step_slider`, `dropdown`, `multiselect`, `input`, `header`, `divider` 아홉 개다.
+- 행 종류별 스키마 여섯 개가 `tooltip`을 갖는다. 그중 하나는 `options`(문자열 배열), `defaults`(정수 배열), `tooltip`을 갖고, 드롭다운 스키마는 `default`(정수), `options`, `tooltip`을 갖는다. 이 둘만 `control_locked`가 없다.
+- **스키마와 실제 해석이 다르다**: 스키마는 `defaults`라고 적지만 실측에서 `defaults`는 무시되고 단수형 `default`에 번호 배열을 줘야 체크가 들어갔다. 스키마는 문서·검증용이고 실제 해석은 다른 경로로 하는 것으로 보인다 `{추론}`.
+- 실행 파일에서 `multiselect` 글자는 이 스키마의 하나뿐이다(그 밖은 팩 manifest 설정 `MultiSelectSetting` 쪽). Mojang 비공개 바이너리를 개인 참고용으로 읽은 것이라 동작만 적는다.
+
+## 6. 실측
+
+**방법.** 클라이언트는 Windows 1.26.52(`Microsoft.MinecraftUWP 1.26.5203.0`), 서버 리소스팩 없음(바닐라 UI). 서버는 인증을 끈 Dragonfly 패치본(포트 19140)으로, `ModalFormRequest`를 원시로 쓰고 `ModalFormResponse`를 Dragonfly보다 먼저 가로채 그대로 기록했다. `/ms <n>` 명령으로 아래 변형을 보냈다. 시험 코드는 Go이고 비공개 모듈에 기대므로 다른 곳에서는 모듈 경로를 바꿔야 한다.
+
+| 폼 | 보낸 행 | 한 일 | 응답 |
+| --- | --- | --- | --- |
+| MS1 | `options:["A","B","C"], defaults:[0,2]` | 펼쳐 보니 모두 꺼짐, 그대로 보냄 | `[null]` |
+| MS0 | `options:["A","B","C"]` | A·C 체크 | `[[0,2]]` |
+| MS2 | `options:["A","B","C"], default:[0,2]` | A·C가 이미 켜져 있음, 그대로 보냄 | `[[0,2]]` |
+| MS1 다시 | 위 MS1 | 직전 폼과 상관없이 모두 꺼짐(상태가 남은 것이 아님) | `[null]` |
+| MS3 | toggle(default true), multiselect(`defaults:[1]`, `tooltip`), dropdown(default 1), label | 손대지 않고 보냄 | `[true,null,1,null]` |
+| MS4 | `options` 25개 | o1·o25 체크(스크롤바로 내림) | `[[0,24]]` |
+| MS6 | multiselect 두 개 | 두 번째의 E(번호 2) 체크 | `[null,[2]]` |
+
+주고받은 줄 그대로(줄바꿈만 뺌)다.
+
+```text
+SEND     {"type":"custom_form","title":"MS0 options only","content":[{"type":"multiselect","text":"pick","options":["A","B","C"]}]}
+RESPONSE [[0,2]]            ← A·C 체크
+
+SEND     {"type":"custom_form","title":"MS2 default [0,2]","content":[{"type":"multiselect","text":"pick","options":["A","B","C"],"default":[0,2]}]}
+RESPONSE [[0,2]]            ← 열 때부터 A·C가 켜져 있었고 그대로 보냄
+
+SEND     {"type":"custom_form","title":"MS1 defaults [0,2]","content":[{"type":"multiselect","text":"pick","options":["A","B","C"],"defaults":[0,2]}]}
+RESPONSE [null]             ← 모두 꺼진 채 열림(defaults 무시)
+
+SEND     {"type":"custom_form","title":"MS6 two","content":[{"type":"multiselect","text":"first","options":["A","B"],"defaults":[0]},{"type":"multiselect","text":"second","options":["C","D","E"],"defaults":[2]}]}
+RESPONSE [null,[2]]         ← 두 번째의 E만 체크
+```
+
+- MS3를 처음 보냈을 때는 `[false,null,1,null]`이었다. 그때 화면의 토글이 실제로 꺼져 있었고, 다시 보냈을 때 켜진 채 `true`로 왔다. 자동 입력이 토글을 건드린 것으로 보고 multiselect와 무관하다고 판단했다 `{추론}`.
+- 머리 버튼은 누르면 목록을 펼치고 다시 누르면 접는다. 접은 뒤에 체크가 남는지는 확인하지 않았다. `tooltip`이 화면에 어떻게 보이는지도 확인하지 않았다.
+
+## 7. 서버에서 쓸 때의 규칙
+
+1. **JSON**: 2절의 꼴로 쓴다. 기본 체크는 `default`(번호 배열)다.
+2. **응답 검증**: 그 자리 값은 `null` 또는 정수 배열이다. `null`을 빈 선택으로 바꾸고, 번호가 옵션 범위 안인지, 중복이 없는지 서버가 검사한다(클라이언트 응답은 믿지 않는다). 순서에 기대지 말고 정렬해서 쓴다.
+3. **Dragonfly**: `form.Custom`에 넣을 수 없다. 원시 `packet.ModalFormRequest`를 보내고, Dragonfly가 보낸 폼이 아니므로 `ModalFormResponse`도 Dragonfly가 처리하기 전에 가로채 직접 읽는다. 시험 코드는 패킷 훅의 `WritePacket`과 `OnClientPacket`을 썼다.
+4. **PocketMine·Nukkit 계열**: 폼을 JSON으로 직렬화하는 구조라 요소 클래스를 하나 더 만들면 된다. 다만 폼 라이브러리가 응답 값을 요소 종류별로 검사하면 `null`·배열을 받게 고쳐야 한다(라이브러리별로 확인하지 않았다).
+5. **클라이언트 판**: 바닐라 UI에 `multiselect`가 들어온 1.26.50 이상에서만 확인했다. 더 오래된 클라이언트는 팩토리에 이 종류가 없다. 엔진 오류 문구 `FactoryComponent::create - {} was not found in the control_id list!`로 보아 그 행만 빠질 것으로 보이나 확인하지 않았다 `{추론}`. 응답 배열에서 그 자리 값이 어떻게 오는지도 모른다. 판을 섞어 받는 서버는 접속한 클라이언트 판을 보고 보낼지 정한다.
+6. **서버 리소스팩**: 모달 폼의 `generated_contents` 팩토리를 자기 것으로 바꾸는 팩은 `control_ids`에 `multiselect`를 넣어야 그려진다. 바닐라 UI를 그대로 쓰면 신경 쓸 것이 없다.
+7. **1.26.60 이후**: 프리뷰 바닐라가 multiselect를 라벨 + 요약 버튼 꼴로 바꾸고 있다. 이 행을 다시 그리는 팩은 판이 바뀔 때 다시 확인한다.
+
+## 8. 팩 설정의 multiselect와 혼동하지 않기
+
+`manifest.json` 3.0.0의 팩 설정(`settings`)에도 `multiselect` 종류가 있다(`MultiSelectSetting`, Molang `query.is_pack_setting_selected`). 커뮤니티 보고의 "드롭다운처럼 동작한다"는 이 팩 설정 이야기다. 서버 폼의 multiselect와는 다른 기능이고, 바이너리의 `multiselect {} default value {} is not in options` 같은 검사 문구도 팩 manifest 검사 쪽이다. 팩 설정은 [팩 manifest](../basics/manifest.mdx)에서 다룬다.

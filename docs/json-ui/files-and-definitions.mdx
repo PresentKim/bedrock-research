@@ -1,0 +1,252 @@
+---
+title: "파일과 정의"
+description: "UI 파일 등록, namespace, 상속과 변수, ignored, 경로 키, property_bag 규칙(FILE-01~FILE-43)과 반영안"
+sidebar_position: 2
+sources:
+  - repo-guide
+  - repo-survey
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+  - private-research
+  - cinnabar
+  - bedrock-core
+  - advancementpack
+  - private-research
+  - mcbejsonuimasterai
+  - private-research
+  - netease-docs
+  - starlibv2
+  - jsonencryptor
+  - repo-small-packs
+  - chest-ui
+  - upgrader
+---
+
+## 개념: UI 파일은 어떻게 하나의 화면이 되나
+
+JSON UI는 게임의 화면을 데이터로 기술하는 방식이다. 바닐라 리소스팩의 `ui/` 폴더에 화면(`hud_screen.json`, `inventory_screen.json` 등), 템플릿(`ui_common.json`, `ui_template_*.json`), 시스템 파일(`_ui_defs.json`, `_global_variables.json`)이 들어 있고, 내 리소스팩이 같은 이름·경로의 파일이나 새 파일을 더하면 게임이 이를 바닐라와 합쳐 읽는다(출처: bedrock-wiki, ms-learn).
+
+구성 요소는 다섯 가지다.
+
+| 구성 요소 | 하는 일 |
+| --- | --- |
+| 파일 | namespace 하나를 가진다. 내용은 정의의 모음이다 |
+| 정의(컨트롤) | 키 하나가 정의 하나다. `type`, `size`, `controls` 같은 속성을 가진다 |
+| 상속 `@` | 다른 정의를 기반으로 삼고 속성을 덮어쓴다 |
+| 변수 `$` | 정의에 값을 넘기는 통로다. 로드·생성 시점에 한 번 정해진다 |
+| `ignored`, `variables` | 어떤 컨트롤을 만들지, 어떤 변수 값을 쓸지 생성 시점에 정한다 |
+
+### 가장 작은 동작 예제
+
+새 화면 요소를 하나 만들어 바닐라 HUD에 붙이는 최소 구성이다. 파일 세 개로 끝난다.
+
+```jsonc
+// RP/ui/_ui_defs.json  : 새 파일만 등록한다
+{ "ui_defs": [ "ui/my_addon/badge.json" ] }
+```
+
+```jsonc
+// RP/ui/my_addon/badge.json : namespace 하나, 정의 여러 개
+{
+  "namespace": "my_addon",
+
+  // 재사용 템플릿. $color는 기본값이 있고 위에서 덮어쓸 수 있다
+  "badge": {
+    "type": "image",
+    "texture": "textures/ui/white_icon",
+    "$color|default": [1, 1, 1],
+    "color": "$color",
+    "size": [16, 16]
+  },
+
+  // 상속: 위 정의를 받아 색만 바꾼 변형
+  "red_badge@my_addon.badge": { "$color": [1, 0, 0] }
+}
+```
+
+```jsonc
+// RP/ui/hud_screen.json : 바닐라와 같은 경로. 등록하지 않는다.
+// modifications로 root_panel 앞에 끼운다(자세한 규칙은 바닐라 화면 수정 페이지)
+{
+  "root_panel": {
+    "modifications": [
+      { "array_name": "controls", "operation": "insert_front",
+        "value": [ { "my_badge@my_addon.red_badge": {} } ] }
+    ]
+  }
+}
+```
+
+이 세 파일이 아래 규칙 대부분의 배경이다. `red_badge@my_addon.badge`의 `@`가 상속(FILE-06), `my_badge@my_addon.red_badge`가 인스턴스화 지점(FILE-08), `$color|default`가 기본값이 있는 변수(FILE-09)다.
+
+### Bedrock Wiki의 기본 설명
+
+<Excerpt src="bedrock-wiki" title="Intro to JSON UI" path="docs/json-ui/json-ui-intro.md">
+
+The `_ui_defs.json` file references all JSON UI files in an array. Make sure to append the full filepath of the UI you are referencing, including the file extension (e.g. `*.json`), from the resource pack root folder. Only reference new UI files you have added in your pack. You don't need to reference vanilla files nor other third-party JSON UI files, as it automatically gets merged with other packs. You may append custom file extensions other than `*.json`, so long as the file contents are valid and written in JSON.
+
+```json
+{
+    "ui_defs": ["ui/button.json", "my_ui/main_menu.json"]
+}
+```
+
+Variables stored in `_global_variables.json` are constant and one-sided. And therefore, you cannot modify the default variable in one namespace to be then used by the other.
+
+When referencing elements from different namespaces, it must have the following format:
+
+```json
+"[element_name]@[namespace_reference].[element_name_reference]"
+```
+
+</Excerpt>
+
+위키는 `ui/` 밖 경로도 된다고 쓰지만 이 프로젝트에서는 확인되지 않았다(FILE-25).
+
+### Microsoft Learn의 파일 레퍼런스
+
+MS Learn의 JSON UI 레퍼런스(`minecraft-creator` 커밋 a9fd1c0, 2025-02-11 기준, AI 보조 작성이라고 문서에 표시됨)는 시스템 파일 셋을 이렇게 설명한다(출처: ms-learn).
+
+- `_ui_defs.json`: 게임이 로드할 UI 화면 파일 목록이다. 사용자 정의 화면이 인식되려면 필요하다. 속성은 `ui_defs`(문자열 배열) 하나이고, 경로는 리소스팩 루트 기준이며 보통 `ui/`로 시작한다. 예: `["ui/my_screen.json","ui/my_common_elements.json"]`.
+- UI 화면 파일: `namespace` 하나와 정의들로 이루어진다. JSON 키(`namespace` 제외) 하나가 UI 요소 하나이고, `my_button@common.button`처럼 `@`로 상속하며 `$` 변수를 덮어쓸 수 있다.
+- `_global_variables.json`: 모든 화면이 쓰는 전역 변수다. 이름은 `$`로 시작하고 색은 `[r, g, b]` 또는 `[r, g, b, a]`(0.0~1.0)로 쓴다. 예: `"$button_text_color": [1, 1, 1]`, `"$background_color": [0.2, 0.2, 0.2, 0.8]`.
+- 이 레퍼런스의 일부 이름·타입 목록(`nine_slice_buttom`, 값이 비어 있는 enum 표 등)은 바닐라 사용 실적과 다르다. 판정은 아래 충돌 C-60에 있다.
+
+## 규칙
+
+JSON UI는 리소스팩 `ui/` 폴더의 JSON 파일들로 이루어진다. 파일 하나는 namespace 하나이고, 그 안의 키 하나하나가 **컨트롤 정의**다. 정의는 다른 정의를 상속(`@`)하고, 변수(`$`)로 값을 받아 재사용된다.
+
+### 1.1 파일 등록과 로드
+
+- **[FILE-01]** 새 UI 파일은 `ui/_ui_defs.json`의 `ui_defs` 배열에 경로를 등록해야 로드된다. 바닐라와 같은 경로의 파일(`ui/hud_screen.json` 등)은 바닐라가 이미 등록했으므로 다시 등록하지 않는다. `{바닐라, 작동팩}` (출처: VN _ui_defs.json, AP-samples _ui_defs.json, BA, BW-intro)
+- **[FILE-02]** 등록한 파일의 확장자는 `.json`이 아니어도 로드된다(예: `ui/adv/_screen.r4ui`). `{작동팩}` (출처: AP 4.9, BW-intro)
+- **[FILE-03]** UI 파일은 `//`, `/* */` 주석을 허용하는 JSON이다. `{바닐라, 작동팩}` (출처: VN 모든 파일 머리 주석, AP-samples)
+- **[FILE-04]** `ui/_global_variables.json`은 등록 없이 자동으로 로드되고, 여기 정의한 `$변수`는 모든 파일에서 쓸 수 있다. 바닐라도 `_ui_defs.json`에 이 파일을 등록하지 않는다. `{바닐라, 작동팩}` (출처: VN _ui_defs.json·_global_variables.json, AP, MJ 식과 연산자 장, BW-intro)
+- **[FILE-05]** 새 파일은 `"namespace": "이름"`을 하나 가진다. 바닐라와 같은 경로의 병합용 파일은 namespace를 생략해도 바닐라의 namespace로 동작한다. 검사 도구가 이를 오류로 잡는 것은 오탐이다. `{작동팩, 추론}` (출처: AP-samples hud_screen.json, MJ 식과 연산자 장)
+
+```jsonc
+// ui/_ui_defs.json
+{ "ui_defs": [ "ui/my_addon/screen.json", "ui/my_addon/toast.json" ] }
+```
+
+### 1.2 정의, 참조, 상속
+
+- **[FILE-06]** `"이름@namespace.기반": { … }`은 `기반`을 상속해 새 정의를 만들고 속성을 덮어쓴다. 같은 파일 안의 정의는 namespace 없이 `@기반`으로도 참조한다. `{바닐라}` (출처: VN 전반)
+- **[FILE-07]** 다른 파일의 정의는 `namespace.이름`으로 참조한다. 정의 위치는 그 정의를 소유한 **파일**로 정해지므로, 같은 namespace라도 다른 파일에 같은 이름을 쓰면 다른 정의로 취급된다. `{실측}` (출처: BC-facts)
+- **[FILE-08]** 컨트롤 배열 안의 항목 `{ "자식이름@ns.정의": { …덮어쓸 속성… } }`이 **인스턴스화 지점**이다. `collection_index`처럼 인스턴스화 지점에서만 받는 속성이 있다(컬렉션과 팩토리 장). `{바닐라, 실측}` (출처: VN, BC-facts)
+
+### 1.3 변수
+
+- **[FILE-09]** `$이름`이 변수다. 정의 안에 `"$x": 값`으로 두거나 참조 지점에서 넘긴다. `"$x|default": 값`은 위(참조 지점)에서 넘기지 않았을 때만 쓰는 기본값이다. `{바닐라}` (출처: VN `|default` 3,419회)
+- **[FILE-10]** 일반 속성의 변수 치환은 **값 전체가 변수일 때만** 된다. `"text": "$title"`은 되고 `"text": "제목: $title"`은 `$`가 그대로 찍힌다. 조합이 필요하면 변수 식을 쓴다(FILE-11). `{실측}` (출처: BC-facts)
+- **[FILE-11]** 변수 값에는 괄호 식을 쓸 수 있다. 바닐라는 이것으로 바인딩 이름, 텍스처 경로, 컨트롤 이름을 조립한다. 예: `"$toggle_state_binding_name": "('#' + $dropdown_name)"`. `{바닐라, 작동팩}` (출처: VN ui_common.json:1126, AP 4.3·4.9)
+- **[FILE-12]** 엔진이 미리 넣어 주는 변수가 있다. 예: `$education_edition`, `$is_ps4`, `$pre_release`(플랫폼·빌드), 상자 화면의 `$container_title`, HUD 팩토리가 만드는 컨트롤의 `$actionbar_text`·`$title_fade_in_time`. `{바닐라, 실측}` (출처: VN ignored 사용 상위 값, VN hud_screen.json:2158·2170, BC-facts)
+- **[FILE-13]** `variables` 배열의 각 항목은 `"requires": "<$변수 식>"`이 참일 때 그 항목의 변수를 적용한다. 배열 대신 **단일 객체**로 써도 된다. `{바닐라, 작동팩}` (출처: VN 배열 274회·객체 4회 예 realms_settings_screen.json:2557, AP 4.6, BW-doc)
+- **[FILE-14]** 컨트롤 배열도 변수로 넘길 수 있다: `"controls": "$target_control"`. 템플릿에 "자식 슬롯"을 만드는 방법이다. `{바닐라, 작동팩}` (출처: VN 14회 예 persona_cast_character_screen.json:14, AP 4.2, BW-intro)
+- **[FILE-15]** `"자식@$변수"`로 변수가 가리키는 정의를 마운트할 수 있다. 바닐라는 참조 지점에서 넘긴 변수로도 413회 쓴다(예: `content@$button_content`). 단 bedrock-core 상자 라우터의 한 구성(`$gate|default`를 선언한 호스트를 다른 `$gate`로 두 번 참조)에서는 아무것도 안 그려진 실측이 있다. 마운트가 안 되면 정의 이름을 직접 쓴다. `{바닐라, 작동팩, 충돌}` (출처: VN 413회, AP 4.8, BC-facts, 충돌 C-03, BW-intro)
+
+```jsonc
+"my_button@common_buttons.light_text_button": {
+  "$pressed_button_name": "button.form_button_click",   // 참조 지점에서 템플릿 변수 지정
+  "$button_text": "#form_button_text"
+}
+```
+
+### 1.4 생성 여부 정하기: `ignored`
+
+- **[FILE-16]** `"ignored": "<$변수 식>"`이 참이면 그 컨트롤은 **아예 생성되지 않는다**(바인딩과 레이아웃 비용도 없음). 식에는 `$변수`만 쓰고 `#바인딩`은 쓸 수 없다. `ignored`는 그 컨트롤 자신의 `$` 선언이 아니라 바깥(부모) 스코프에서 평가된다(FILE-34). `{바닐라, 실측, 코드}` (출처: VN 958회, BC-S8, BW-best, NB-10)
+- **[FILE-17]** `ignored`는 컨트롤이 **생성되는 시점에 한 번** 평가된다. 그래서 런타임 데이터로 생성을 가르려면 데이터가 변수로 들어오는 경로가 필요하다. HUD 타이틀 팩토리가 만든 컨트롤은 `$title_text`로 타이틀 문자열을 받으므로 `ignored`로 거를 수 있다. 일반 서버 폼 화면 안에는 그런 경로가 없어 생성 단위 분기에 팩토리 길이를 쓴다(컬렉션과 팩토리 장). 팩토리가 주는 변수는 만들어진 컨트롤의 바깥 스코프로 들어가므로 그 컨트롤의 최상위 `ignored`가 읽을 수 있다(FILE-34). `{작동팩, 실측, 코드, 추론}` (출처: AP 4.1, BC-S8·S11, 충돌 C-17, CN)
+- **[FILE-18]** `button_mappings`의 항목 하나처럼 **배열 원소**에도 `ignored`를 붙일 수 있다. `{바닐라, 작동팩}` (출처: VN gameplay_common.json:272, AP 4.3)
+- **[FILE-19]** `ignored`/`requires`의 변수 식에서 `$v > 'a'`는 문자열인지, `$v > 0`은 숫자인지 판별하는 데 쓰였다. `ignored`는 자기 `$` 선언과 참조 지점에서 받은 값을 보지 못하므로(FILE-34), 변수를 받는 컨트롤의 **자식**에 단다. 아래 예시가 AP 원본의 형태다. `{작동팩, 코드}` (출처: AP 4.7, CN, AP-samples _screen.r4ui:321)
+
+```jsonc
+// 참조 지점: { "icon@my_ns.icon_slot": { "$icon": "textures/items/stick" } }
+"icon_slot": { "type": "panel", "size": [ 16, 16 ],
+  "controls": [
+    { "custom_image": { "type": "image", "texture": "$icon", "ignored": "(not ($icon > 'a'))" } },
+    { "item_icon":    { "type": "custom", "renderer": "inventory_item_renderer",
+                        "property_bag": { "#item_id_aux": "$icon" }, "ignored": "(not ($icon > 0))" } } ] }
+```
+
+### 1.5 경로 키와 같은 경로 파일 병합
+
+- **[FILE-20]** 바닐라와 같은 경로 파일에 `"부모/자식/손자": { … }`처럼 **경로 키**를 쓰면 바닐라의 깊은 컨트롤 속성만 덮어쓴다. 바닐라 자신은 이 문법을 쓰지 않는다(0회). `{작동팩}` (출처: BA 2장 `main_screen_content/server_form_factory`, AP 4.9 `recipe_unlocked_popup/input_panel/label_panel/horizontal_padding_1`, BW-intro, BW-best)
+- **[FILE-21]** 바닐라와 같은 경로 파일에 바닐라와 같은 이름의 정의를 쓰면 **속성 단위로 합쳐진다**(적은 속성만 바뀐다). 예: `in_bed_screen`에 `force_render_below`, `screen_draws_last` 두 속성만 지정. 여러 팩이 같은 속성을 쓰면 팩 순서상 나중 것이 이긴다. `{작동팩, 추론}` (출처: AP-samples in_bed_screen.json·toast_screen.json, BC 6.3-9, BW-best)
+- **[FILE-22]** 바닐라 정의를 다른 이름의 파일에서 재선언하면 무시된다. 재선언은 바닐라가 소유한 경로의 파일에서만 유효하다. `{실측}` (출처: BC-facts)
+
+### 1.6 `property_bag`
+
+- **[FILE-23]** `property_bag`은 `#속성`의 초기값을 넣어 둔다. 바인딩이 아직 값을 쓰지 않은 상태의 기본값, 렌더러 입력(`#item_id_aux`), 라우팅 사전(화면 호스트와 데이터 채널 장) 등에 쓴다. `{바닐라, 작동팩}` (출처: VN 240회, AP 4.7, BC 4.1)
+- **[FILE-24]** `property_bag`에 넣은 `size`, `offset`, `alpha` 값은 적용되지 않는다. 이 셋은 바인딩만이 바꿀 수 있다. `{실측}` (출처: BC-S12)
+
+### 1.7 Bedrock Wiki 대조로 더한 규칙
+
+위키(BW) 문서를 바닐라 1.26.50.4와 대조해 더한 규칙이다. 위키 문장만 있는 것은 `미검증`, 위키의 게임 스크린샷이 있는 것은 `실측`(제3자 기록)으로 표시했다.
+
+- **[FILE-25]** `_ui_defs.json`의 경로는 리소스팩 루트부터 확장자까지 쓴 전체 경로다. 위키는 `ui/` 밖 폴더(`my_ui/main_menu.json`)도 된다고 한다. 바닐라와 이 프로젝트의 작동팩은 모두 `ui/` 아래만 쓰므로 `ui/` 밖은 확인하고 쓴다. `{미검증}` (출처: BW-intro)
+- **[FILE-26]** namespace에는 접두를 붙일 수 있다고 한다(`"namespace": "wiki:main"` → `"x@wiki:main.element"`). 바닐라 namespace와 겹칠 일을 줄이는 용도다. 바닐라와 이 프로젝트 출처에는 용례가 없다. `{미검증}` (출처: BW-best)
+- **[FILE-27]** 경로 키(`"부모/자식"`)가 가리키는 자식이 없으면 Content Log에 리소스팩 오류가 남지만 나머지 UI는 정상 동작한다. 경로 키는 바닐라 개편에 가장 먼저 깨지는 접점이므로 정의 자체를 덮어쓸 수 있으면 그쪽을 쓴다. `{미검증, 추론}` (출처: BW-best)
+- **[FILE-28]** 엔진이 넣어 주는 변수(`$actionbar_text` 등)를 식에서 쓸 때는 자기 변수로 한 번 받아 쓴다(`"$atext": "$actionbar_text"`, `"visible": "(not ($atext = 'x'))"`). 위키는 엔진 변수에 직접 비교할 수 없다고 하고, AP의 `"$title_text|default": ""` 선언도 같은 효과를 내는 것으로 보인다. `{미검증, 추론}` (출처: BW-intro, AP 4.1)
+- **[FILE-29]** 엔진이 정하는 전역 플랫폼 변수 중 바닐라 1.26.50 UI가 실제로 참조하는 것: `$pocket_edition`, `$win10_edition`, `$osx_edition`, `$console_edition`, `$education_edition`, `$is_console`, `$is_desktop`, `$is_ios`, `$is_ps4`, `$xbox_one`, `$touch`, `$pocket_screen`, `$desktop_screen`, `$is_pregame`(게임 밖 화면), `$is_publish`, `$pre_release`, `$trial`, `$store_disabled`, `$is_holographic`, `$apple_os`, `$google_os`, `$microsoft_os`, `$nx_os` 등 34개. 위키 목록 55개 중 나머지 21개(`$game_pad`, `$mouse`, `$fire_tv`, `$gear_vr` 등)는 바닐라 UI 파일에 나오지 않아 지금도 들어오는지 알 수 없다. `{바닐라}` (출처: BW-doc Global Variables, VN 전수 검색)
+
+### 1.8 Cinnabar 엔진 재구성으로 더한 규칙
+
+Cinnabar(`CN`)는 26.30 네이티브 클라이언트의 JSON UI 해석기를 재구성한 Rust 코드다. 수준은 `코드`이고, `CN-run`은 이 프로젝트가 그 평가기를 직접 실행한 결과다. 게임 실측과 다르면 실측을 따른다(충돌 C-41~C-47).
+
+- **[FILE-30]** UI 파일은 jsoncpp 규칙으로 읽는다. 주석과 앞자리 0은 되지만 **뒤따르는 쉼표와 따옴표 없는 키는 오류**다. 오류가 나면 그 앞까지 읽은 정의만 로드되고 뒤는 조용히 빠진다. 같은 경로의 첫 파일이 실패하면 뒤 팩의 덮어쓰기도 받지 않는다. `{코드}` (출처: CN)
+- **[FILE-31]** `_ui_defs.json`의 경로는 정렬된 순서로 한 번씩 읽힌다. 여러 파일이 같은 정의를 재정의하면 경로 이름순으로 마지막이 이긴다. `{코드}` (출처: CN)
+- **[FILE-32]** `@`가 없는 키에 점이 있으면 점 앞이 namespace로 읽힌다(`"spacer_9.5"` → namespace `spacer_9`, 이름 `5`). 컨트롤 이름에 점을 쓰지 않는다. `"@.이름"`은 같은 파일의 namespace다. `{코드}` (출처: CN, CN 회귀 시험 Lifeboat)
+- **[FILE-33]** `$변수` 조회는 확정값을 먼저 찾는다. 바깥 어디에든 `"$x": 값`이 있으면 안쪽의 `"$x|default"`보다 이기고, 확정값이 없을 때만 가장 가까운 `|default`를 쓴다. null은 미설정이다. `{코드}` (출처: CN, CN-run)
+- **[FILE-34]** **`ignored`는 그 컨트롤 자신의 `$` 선언을 보지 않는다.** 정의 안의 `$x|default`도, 참조 지점에서 넘긴 `"$x": true`도 자기 `ignored`에는 닿지 않고, 부모(바깥) 스코프의 값만 읽는다. 게이트 변수는 부모에 넘기고 `ignored`는 그 자식에 단다(바닐라 `focus_border`의 `hover_slot`, AP `category_tab_icon`의 자식이 이 형태). 엔진은 `ignored`를 그 컨트롤의 `variables`보다 먼저 평가한다(FILE-43). `{코드, 바닐라}` (출처: NB-10, CN·CN-run(`$x|default`·참조 지점 값), VN 146개 참조 지점 중 변수 전달 2곳, AP-samples)
+- **[FILE-35]** `ignored`의 결과가 불리언이면 그대로, 정수면 0이 아닐 때 생성 안 함, 문자열이면 생성한다. 미설정 `$변수`는 식 안에서는 null이지만 `"ignored": "$x"`처럼 통째 값이면 글자 `$x`로 남아 생성된다. `{코드}` (출처: CN)
+- **[FILE-36]** 자식 키도 변수가 될 수 있다: `{ "$slot": { …덮을 속성… } }`에서 `$slot`이 `"이름@ns.정의"`면 그 이름과 정의로 만든다. `"$name_var@ns.정의"`처럼 인스턴스 이름만 변수로 줄 수도 있다. `{바닐라, 코드}` (출처: VN 83회 예 ui_template_tabs.json `base_tab`, CN)
+- **[FILE-37]** 상속에서 파생 정의가 적은 속성은 **객체여도 통째로** 기반 것을 대체한다. 반면 같은 경로 파일의 재선언(FILE-21)은 객체 값을 멤버 단위로 합친다. `property_bag` 일부만 바꾸려면 재선언, 전부 바꾸려면 상속이다. `{코드}` (출처: CN)
+- **[FILE-38]** 최상위 정의의 `"속성": null`은 기반 값을 지우지만, 컨트롤 배열 안 인라인 참조의 `null`은 기반 값을 그대로 둔다. `{코드}` (출처: CN)
+
+### 1.9 엔진 동작 분석으로 더한 규칙
+
+Android 1.26.52.3 클라이언트의 네이티브 라이브러리를 분석해 읽은 것이다(`NB`). 수준은 `코드`다.
+
+- **[FILE-43]** 엔진은 컨트롤마다 **`ignored`를 가장 먼저** 평가하고, 참이면 그 컨트롤의 `variables` 적용을 포함한 나머지 처리를 하지 않는다. 그래서 자기 `variables`(조건부 변수 포함)로 정한 값은 자기 `ignored`에 닿지 않는다(FILE-34). `ignored`에 실수·배열·객체를 넣으면 `An invalid value was provided for "ignored" field.` 오류다. `variables`는 객체 하나 또는 객체 배열을 받고, 배열 안 객체가 아닌 항목은 건너뛴다. `{코드}` (출처: NB-10)
+
+## 커뮤니티 보고로 더한 사실 (커뮤니티)
+
+조사 기간 2025-10~2026-10의 커뮤니티 대화에서 위 규칙과 맞물린 내용이다(출처: 비공개 조사). 모두 보고 수준이고 게임에서 다시 측정하지는 않았다.
+
+- 설정 > 전역 리소스에서 팩에 빨간 표시가 뜨면 UI 파일의 JSON 오류다. 오류가 나면 그 파일의 뒷부분이 빠진다는 보고(커뮤니티는 파일 전체가 무시된다고도 함)와 앞부분까지는 읽힌다는 코드 근거(FILE-30)가 있다. 어느 쪽이든 그 파일 뒷부분은 없다고 보고 오류를 고친다.
+- 템플릿을 상속한 컨트롤에 `bindings`를 직접 쓰면 기반의 바인딩이 모두 사라진다(`scroll_grid`가 컬렉션 바인딩을 잃은 사례). FILE-37과 같은 현상이다. 덧붙이려면 `modifications`를 쓴다.
+- `variables`의 `requires`는 화면이 로드될 때 한 번만 평가되고 `$변수`만 볼 수 있다. `#바인딩`은 글자로 읽힌다(FILE-13, FILE-16과 같은 결론).
+- `ignored`는 자기 스코프 변수는 못 보고 조상 변수만 본다는 보고가 FILE-34와 같다.
+- 플랫폼 변수 `$touch`, `$pocket_screen`, `$desktop_screen`은 로드 시점 값이라 마우스를 뽑아도 재시작해야 바뀐다. `$pocket_screen`은 "모바일"이 아니라 pocket UI 프로필이다(FILE-29). 서버 폼 안에서 `$touch`를 쓸 수 없다는 보고가 한 건 있다(D-18, 서버 폼에서 쓸 때 확인).
+
+## 반영안(미적용)
+
+아래는 새 자료 조사에서 나온 규칙 제안이다. 본문 장(위)에는 아직 합쳐지지 않았고, 번호는 병합 기록이 정한 최종 번호다. 수준 표기를 그대로 믿지 말고 `미검증`은 쓰기 전에 실측한다.
+
+- **[FILE-39]** (반영안) 같은 `controls` 배열 안의 형제 이름(`@` 앞)은 서로 다르게 짓는다. 2025년 4월 무렵 버전부터 중복 이름이 JSON UI 오류를 낸다는 보고가 있고(StarLibV2 1.0.3.3), 바닐라 1.26.50의 `controls` 배열 5,084개(재집계)에는 중복이 하나도 없다. `padding`처럼 흔한 이름은 `padding_top`, `padding_bottom`으로 나눈다. `{작동팩, 바닐라}` (출처: jua-starlibv2, bedrock-samples) 실측 과제: 같은 이름 형제를 두면 1.26.50 Content Log에 무엇이 남고 둘 다 생성되는지.
+- **[FILE-40]** (반영안) 키와 문자열 값의 `\uXXXX` 이스케이프는 읽을 때 원래 글자로 풀린다. 이스케이프로 바꾼 파일은 크기만 커지고 의미(식의 바이트 수, 비교, 포함 검사)는 같으며 누구나 JSON 파서로 되돌릴 수 있어, 숨길 목적이면 효과가 없다. 다섯 자리 이스케이프 버그와 서로게이트 쌍 문제를 보고한 작은 팩 도구가 있다. `{코드, 미검증}` (출처: jua-jsonencryptor, jua-small-packs) 실측 과제: `"type"` 키와 `"label"` 값을 `\u` 이스케이프로 적은 정의가 동작하는지, BMP 밖 이모지를 서로게이트 쌍으로 적은 라벨이 그려지는지.
+- **[FILE-41]** (반영안) 바닐라 1.26.50 UI는 namespace 하나를 파일 하나에만 둔다. 한 namespace의 정의를 여러 파일로 나눠도 참조가 풀린다는 난독화기의 주장이 있지만 기록은 없다. 나눌 이유가 없으면 namespace당 파일 하나를 유지한다. `{바닐라, 미검증}` (출처: bedrock-samples, jua-jsonencryptor) 실측 과제: 같은 namespace `x`를 두 파일에 나눠 `x.a`(파일 1)가 `x.b`(파일 2)를 참조할 때 풀리는지.
+- **[FILE-42]** (반영안) namespace 없는 `@이름`은 문맥에 따라 다른 namespace에서 찾아진다. 최상위 정의가 다른 namespace를 상속해도 그 안의 짧은 이름은 **파일 namespace**에서 찾아지는 용례가 바닐라에 43건이고(`trade_screen_pocket.json:349`), 컨트롤 배열 안에서 다른 namespace를 상속한 **인스턴스**(`"x@common.close_button": { "controls": [...] }`) 아래의 짧은 이름은 **기반 namespace**에서 찾아지는 용례가 3건이다(`command_block_screen.json:1010-1038`의 `default@close_button_panel`은 `common`에만 있다). 두 namespace에 같은 이름이 있을 때 우선순위는 알 수 없으므로 다른 namespace를 상속한 컨트롤 안에서는 항상 `ns.이름`을 적는다. FILE-06에는 이 예외를 덧붙이는 보강이 함께 제안되었다. `{바닐라, 충돌}` (출처: jua-netease-docs, bedrock-samples) 충돌 C-55와 연결된다.
+- **보강안(미적용)**: FILE-02에 `.jsonc`(StarLibV2), `.zip`(JsonEncryptor), `.atemp`(작은 팩 `ui/global.atemp`) 확장자 실례를 더한다(`.atemp`가 26.x에서 읽히는지는 미확인). FILE-25에 `ui/` 밖 등록 실례로 팩 루트 `config.json`(작은 팩, 1.20.71 시절이라 1.21 이후에도 되는지 미확인)을 더하고 수준을 `미검증`에서 `작동팩, 미검증`으로 올린다. FILE-20에는 경로 키를 텍스처 재연결에 쓴 실례 7곳(작은 팩)을, FILE-21에는 `server_form.long_form`의 `controls`를 재선언하는 서버 폼 팩(Chest-UI, upgrader)끼리 나중 팩의 것만 남는 경쟁 실례를 더한다. FILE-30에는 jsoncpp 규칙과 JSON 난독화기의 주석 처리를 맞춘 설명을, FILE-04·13에는 중국판 문서의 병합 서술을(확인되지 않았다는 문구와 함께) 더한다.
+
+## 충돌 판정 (이 장의 규칙과 관련된 것)
+
+출처끼리 주장이 달랐던 곳의 판정이다. 판정 칸의 `해소`는 한쪽이 확정, `부분 해소`는 범위를 나눠 둘 다 맞음, `미해결`은 실측 필요다.
+
+| ID | 주제 | 주장과 근거 | 판정 |
+| --- | --- | --- | --- |
+| C-03 | `자식@$변수` 마운트 | bedrock-core 실측은 참조 지점이 넘긴 `$gate`로 마운트하면 아무것도 안 그려진다고 했고, AP는 `content@$hover_content`로 동작한다. 바닐라는 413회 쓰고 대부분 참조 지점 변수다(`content@$button_content`). BC의 실패는 상자 라우터의 한 구성(`$gate\|default`를 선언한 호스트를 두 번 참조)에서 나왔고 원인은 분리되지 않았다 | 부분 해소: 일반적으로 동작한다. 그 구성에서 실패하면 정의 이름을 직접 쓴다(FILE-15) |
+| C-17 | `ignored` 평가 시점 | BC-S8은 로드 시점이라 팩 단위 분기만 가능하다고 했고 AP는 팩토리가 주는 `$title_text`로 런타임 데이터를 분기했다. 둘 다 "생성 시점에 `$변수`로 평가"로 설명되고, 차이는 런타임 데이터가 변수로 들어오는 경로가 있느냐다 | 부분 해소: 생성 시점 평가(FILE-17) |
+| C-46 | 재선언과 `modifications`의 범위 | 실측은 다른 경로 파일의 재선언은 무시, `modifications`는 경로 단위라고 한다. Cinnabar는 namespace와 이름이 같으면 어느 파일이든 합친다(단순화) | 실측 우선: FILE-22 유지 |
+| C-50 | 바닐라 같은 경로 팩 파일은 병합인가 대체인가 | 팩 파일의 같은 이름 정의는 속성 단위로 합쳐진다(FILE-21) | 해소: 병합 |
+| C-55 | namespace 없는 `@이름`의 해석 | 인라인 상속 아래는 기반 namespace, 최상위 상속 아래는 파일 namespace로 찾는 용례가 모두 바닐라에 있다. Cinnabar는 항상 파일 namespace로 찾는다 | 미해결: 항상 `ns.이름`을 적는다(FILE-42) |
+| C-57 | 바닐라 경로 사본의 `_ui_defs` 등록 | 등록하지 않아도 된다(FILE-01) | 해소: 불필요 |
+| C-60 | MS Learn 레퍼런스의 타입·속성 목록 | AI 보조 작성 문서라 `nine_slice_buttom`, 값이 비어 있는 enum 표 등이 있다 | 해소: 바닐라 사용 실적을 채택한다(LAY-01) |
+
+## 실측이 필요한 항목
+
+- 참조 지점의 `"$hide": true`가 정의의 `"ignored": "$hide"`를 켜는지(FILE-34, 코드 근거로는 켜지 않는다).
+- 한 namespace를 두 파일에 나누는 것(FILE-41), `\u` 이스케이프(FILE-40), 같은 이름 형제(FILE-39), `ui/` 밖·`.atemp` 등록(FILE-25, FILE-39 보강).
+- 같은 이름을 두 namespace에 두고 최상위 상속과 인라인 상속에서 어느 쪽이 붙는지(FILE-42, C-55).

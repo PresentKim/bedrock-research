@@ -1,0 +1,146 @@
+---
+title: 페이지 환경
+description: 게임 중 Ore UI 페이지가 불러올 수 있는 리소스, 받는 입력, 서버로 가는 길, 엔진 기능, Gameface 한계, 기기별 문제.
+sidebar_position: 4
+sources:
+  - repo-ore-ui-loading
+  - private-research
+  - gameface-docs
+  - gameface-guide
+  - venice-unleashed-docs
+  - bedrock-protocol-docs
+  - gophertunnel
+  - bedrock-wiki
+---
+
+# 페이지 환경
+
+연구 서버 서버(연구 서버)의 시험 화면과 렌더러를 만들며 실제 클라이언트에서 본 것이다. 환경은 Windows 1.26.52(2026-10-27)이고 엔진 기능은 Windows 1.26.60.5(2026-10-28)다. iOS·iPad는 따로 적었다. 표기에 `{기록}`은 연구 서버 문서에 사실로 적혀 있으나 측정 조건이 남지 않은 것이다. (출처: repo-ore-ui-loading, private-research)
+
+## 0. 개념: Gameface 페이지는 브라우저가 아니다
+
+Ore UI 페이지는 Coherent Gameface 안에서 돈다. Chromium 기반 웹 UI와 비슷해 보이지만 게임용으로 줄인 엔진이라 없는 기능이 많다. 같은 엔진으로 Venice Unleashed(Frostbite 모드)가 옮겨 간 경험(출처: venice-unleashed-docs)과 Gameface 문서(출처: gameface-guide)가 알려 주는 일반 사실은 다음과 같다.
+
+- CSS: 그리드와 표 레이아웃을 지원하지 않는다. `display: inline`, `inline-block`도 지원하지 않는다. `:nth-last-child` 같은 고급 선택자도 안 된다.
+- CSS 변수: 쓸 수 있지만 `border: solid var(--w) var(--c)` 같은 단축 속성 안에서는 안 된다. `border-style`, `border-width`, `border-color`를 풀어 쓴다.
+- HTML: `<audio>`는 지원하지 않는다(소리는 `<video>`에 webm으로 넣는다). `<input>`은 text, button, password만 된다. `<canvas>`는 2D 문맥만 되고 WebGL은 없다. 지원하지 않는 요소는 화면에서 보이지 않는다.
+- 글꼴: TrueType·OpenType 계열(`.ttf`, `.ttc`, `.otf`, `.otc`)만 된다.
+- GIF: `<img>`로만 움직인다. `background-image`, `border-image`, `mask-image`의 GIF는 움직이지 않는다. GIF는 모든 프레임을 미리 메모리에 올리므로 128×128 이하, 30프레임 이하를 권한다.
+- 영상: `<video>`는 WebM 컨테이너, VP8 또는 VP9 영상, 소리는 Vorbis 한 트랙만 된다. 속성은 `src`, `autoplay`, `loop`, `muted`, `preload="auto"`. 소리는 엔진에 PCM으로 넘겨져 엔진의 볼륨 설정을 따른다.
+
+wav를 `<video>`용 webm으로 바꾸는 예(출처: venice-unleashed-docs):
+
+```bash
+ffmpeg -i input.wav -c:a libvorbis -b:a 128k -f webm output.webm
+```
+
+이 저장소의 실측과 맞춘 결과는 이 페이지 10장 미디어에 있다. 글꼴 파일은 설치본 `data/gui/dist/hbui/fonts/`에서 읽고, Ore UI는 `Minecraft-Seven.ttf`와 `Minecraft-Seven-v4.ttf`를 쓴다(출처: bedrock-wiki, fonts). JSON UI의 유니코드 글리프 표는 Ore UI에 적용되지 않는다.
+
+## 1. 페이지가 불러올 수 있는 리소스 `{실측}`
+
+페이지 주소는 `ui://./hbui/gameplay.html`, `origin`은 `ui://.`이다. `fetch`는 없고(`undefined`), `XMLHttpRequest`·`Blob`·`URL.createObjectURL`은 있다. 시험 화면은 길마다 방법을 하나씩 차례로 해 보고(방법마다 4초) 통과 여부를 서버로 보낸다. 스크립트는 `window.__ouiRes(태그)`를 부르면, 스타일시트는 `.oui-res-probe`의 폭이 13px가 되면, HTML은 `oui-res-html`이 들어 있으면 통과다.
+
+| 길 | 방법 | 결과 |
+| --- | --- | --- |
+| 데이터 저장소로 보낸 글 | `eval`(전역) | 된다 |
+| | `new Function` | 된다 |
+| | 인라인 `<script>`(글을 `textContent`로) | 된다(`onload`도 온다) |
+| | `data:` 스크립트 | 안 된다(`onerror`) |
+| | `blob:` 스크립트 | `new Blob([글], {type})`이 `TypeError`(인자 둘을 받는 생성자 없음). 인자 하나는 확인 안 됨 |
+| | `<style>` | 확인 안 됨(Gameface는 다음 프레임에 배치하므로 붙인 직후에 재면 안 된다. 0.3초 뒤에 잰다) |
+| | `data:` 스타일시트 | 안 된다(`onerror`) |
+| | `innerHTML` | 된다 |
+| 암호화 팩의 `hbui/` 파일 | `<script src="/hbui/...">` | 된다 |
+| | `<link href="/hbui/...">` | `onload`는 온다. 스타일이 들었는지는 확인 안 됨 |
+| | `XMLHttpRequest` `/hbui/...` | 된다(200) |
+| | `XMLHttpRequest` `pack://hbui/...` | 된다(200) |
+| HTTP(접속한 호스트의 게임 포트, 다음 포트) | `<script src>`, `<link>`, `<img>` | 안 된다(`onerror`) |
+| | `XMLHttpRequest` | 안 된다(상태 404, 0바이트) |
+
+- HTTP는 두 포트 모두 서버에 요청이 하나도 오지 않았다. 시험 서버는 화면이 열린 동안만 HTTP 서버를 돌리고(응답에 `Access-Control-Allow-Origin: *`), 받은 요청의 포트·경로·`Origin`·`Referer`·`User-Agent`를 기록한다. XHR의 404는 서버가 아니라 게임의 리소스 처리기가 낸 것이다. 클라이언트는 페이지에서 http 주소로 네트워크 요청을 보내지 않는다. 요청이 서버에 닿았는데 페이지에서 실패하면 페이지 쪽(출처 규칙)이 막은 것이고, 요청이 오지 않으면 클라이언트가 보내지도 않은 것이다.
+- "Ore UI는 접속한 서버와 같은 출처의 리소스를 허용한다"는 말은 이 결과와 맞지 않고 출처도 찾지 못했다. 페이지의 출처(`ui://.`)는 서버 호스트와 다르다. 인터넷 주소의 `<img>`·`<video>`도 실패했다. `https`와 웹소켓은 시험하지 않았다(서버에 인증서가 없다). 포트를 열지 못하면(게임 포트는 UDP라 같은 번호의 TCP는 보통 비어 있다) 사유가 화면에 보인다.
+- Gameface 문서도 `XMLHttpRequest`는 게임의 리소스 처리기로 간다고 적었고, `fetch`는 Window API 목록에 없다(출처: gameface-docs).
+- 정리: 서버가 코드를 넣는 길은 둘이다. (1) 암호화 팩의 `hbui/` 파일을 `<script src>`·XHR로 불러오기, (2) 데이터 저장소로 보낸 글을 `eval`·`new Function`·인라인 `<script>`·`innerHTML`로 쓰기. (2)는 팩을 바꾸지 않고 접속 중에 코드를 보낸다.
+- 팩은 `hbui/oui-probe.*`처럼 렌더러와 같은 암호화 팩에 두었다. 마켓 팩과 같은 방식으로 암호화해도 `manifest.json`·`pack_icon.png`는 평문으로 둔다. 키를 클라이언트에 주므로 접속하는 클라이언트는 풀 수 있다. 암호화는 Ore UI를 여는 조건일 뿐 보호가 아니다.
+
+## 2. 입력 이벤트(마우스·키보드) `{실측}`
+
+시험 화면은 `document` 캡처 단계에서 마우스(`mousedown`·`mouseup`·`click`·`dblclick`·`contextmenu`), 휠, 키(`keydown`·`keyup`·`keypress`), 터치, 포인터(`pointerdown` 등), 포커스, 글 입력(`input`·`change`·`composition*`), `visibilitychange`, 창의 `resize`·`gamepadconnected`를 받아 줄로 서버에 보낸다. 이동 이벤트는 개수만 센다. 게임패드는 0.1초마다 `navigator.getGamepads()`로 읽는다. 같은 줄이 이어지면 `xN`으로 센다. 결과(Windows, 마우스·키보드):
+
+- `mousemove`는 온다(2371회). `pointermove`는 0회라 포인터 이벤트는 오지 않는 것으로 보인다. `scroll`은 온다.
+- `click`은 스크롤 손잡이에서 한 번 왔다(`button=0 buttons=0 detail=undefined`). 일반 `div`에는 오지 않으므로 누름은 `mousedown`으로 받는다. 어느 요소에 `click`이 오는지는 확인 안 됨.
+- 오른쪽 버튼은 `mousedown`·`mouseup`에 `button=2`로 온다(2026-11-04). `contextmenu` 줄은 없었다.
+- Alt를 누르고 있으면 `keydown key= code=Alt keyCode=18 repeat=true`가 이어진다. `key`는 비어 있다.
+- 휠, 포커스, 글 입력·IME 조합, 게임패드는 Alt 반복 줄에 밀려 결과가 남지 않았다(확인 안 됨).
+- 터치 기기는 탭에 `mousedown`을 보내지만 손가락이 움직이는 동안 `mousemove`는 보내지 않는다. 스크롤 막대 끌기와 화면 끌기는 `touchstart`·`touchmove`도 받아 `touches[0]`에서 좌표를 읽는다 `{기록}`.
+- 화면이 열린 동안 클라이언트는 `ServerBoundDiagnostics`를 계속 보냈다(157개). `ScriptMessage`는 오지 않았다.
+- 휴대폰 뒤로 버튼은 페이지에 키로 오지 않았다. Android `KEYCODE_BACK` 4, 브라우저 뒤로 166, `GoBack`, `BrowserBack`을 모두 닫기로 받게 해 두었다.
+
+## 3. 페이지에서 서버로 가는 길
+
+- 데이터 저장소 쓰기(`vanillaDduiDataStoreSetCommandGroup.setDataStorePathString` 등)를 부르면 클라이언트가 `ServerBoundDataStore` 패킷으로 보낸다. 이벤트마다 한 줄씩 700줄을 보내도 모두 서버에 닿았다 `{실측}`.
+- 실행 중 `window.__commands__`에는 명령 그룹이 40개 있다. 번들이 쓰는 것 말고도 렐름·저장소·설정(`vanilla_menus_update_settings`, `coreOptionsCommandGroup`)·파티 채팅(`vanilla_partyChatCommandGroup`: `setIsOpen`, `setComposedMessage`, `sendComposedMessage`)·`editorTelemetryCommandGroup`(`fireScriptAction`) 등이 있다. 게임 채팅, 슬래시 명령, `ScriptMessage`를 보내는 이름은 없다. `fireScriptAction`의 인자와 하는 일은 확인 안 됨 `{실측}`.
+- 게임 중 번들이 쓰는 명령 그룹은 `coreTranslate`, `coreScreenReader`, `sound`, `coreApplication`, `coreHaptics`, `coreOptions`, `vanillaGameplayContainerAPICommands`, `vanillaGameplayLocalPlayerRespawnCommand`, `vanillaGameplayLeaveGameCommandGroup`, `vanillaGameplayLocalPlayerWakeUpCommand`, `vanillaDduiDataStoreSetCommandGroup`(`setDataStorePathString`·`Number`·`Bool`, `dataStoreButtonPress`, `dataStoreCloseButtonPress`), `vanillaCoreDduiContentLogCommandGroup`이다. 메뉴 번들에도 스크립트 이벤트·채팅·슬래시 명령을 보내는 그룹은 없다 `{코드}`. 8Crafter의 Ore UI 형 정의에도 없다(파티 채팅만 있다) `{문서}`.
+- **`ScriptMessage`**(ID 177, 예전 이름 `ScriptCustomEvent`)는 식별자(문자열)와 데이터를 싣는 패킷이다. Mojang 문서는 "클라이언트와 서버 사이의 사용자 메시지"라고만 적었고(출처: bedrock-protocol-docs), gophertunnel은 양방향 패킷으로 두고 GameTest용으로 추정한다(출처: gophertunnel). 서버는 받을 수 있다(Dragonfly는 처리하지 않지만 리스너를 감싸 가로챌 수 있다). 페이지에서 보내는 길은 찾지 못했다. 바닐라 클라이언트가 이 패킷을 보내는 경우가 있는지, `/scriptevent`와 이어지는지는 확인 안 됨. 클라이언트가 친 `/scriptevent`는 다른 명령처럼 `CommandRequest`로 간다.
+- 정리: 페이지에서 서버로 가는 길은 데이터 저장소(`ServerBoundDataStore`)와 DDUI 화면 닫기(`ServerBoundDataDrivenScreenClosed`)다.
+- 화면을 바꿔 열면 클라이언트는 앞 폼의 닫힘을 새 폼이 열린 뒤에 알린다. `FormID`를 폼마다 새로 쓰고, 닫힘 패킷의 `FormID`가 지금 폼과 같을 때만 닫힘으로 처리한다. 데이터 인스턴스(`custom_form_data_1`)는 모든 폼이 같이 써도 된다 `{기록}`.
+
+## 4. 페이지가 쓸 수 있는 엔진 기능 `{실측, Windows 1.26.60.5}`
+
+서버가 보낸 JS로 불러 본 결과다. 아래 예는 모두 페이지의 전역에서 부르는 형태다.
+
+```js
+// 효과음
+window.__commands__.soundCommandGroup.play("random.click", 1, 1);
+// 번역 (클라이언트 언어)
+window.__commands__.coreTranslateCommandGroup.translate("item.diamond.name");
+```
+
+(실제 호출은 [DDUI 가이드](./ddui-server-guide.mdx)의 `callable`을 항목에 묶어 부르는 방식이다.)
+
+- **설정**: 설정 화면의 설정을 읽고(`vanilla.menus.settings{Boolean,Option,Number,String}Query(id)`) 쓴다(`vanilla_menus_update_settings`의 `updateBoolean`·`updateOption`·`updateNumber`·`updateString`(id, 값)). id는 `vanilla.menus.settingsGroupQuery("settings-tabs-groups")` 아래 트리의 이름이고 664개다. 쓴 값은 기기에 저장되는 게임 옵션이라 서버를 나간 뒤에도 남는다. 예: UI 프로필 `video.ui_profile`(0 클래식), 콘텐츠 로그 `creator.contentLog.gui.enable`·`creator.contentLog.gui.showErrors`·`creator.contentLog.file.enable`, `creator.scriptDiagnostic.enableClient`.
+- **효과음**: `soundCommandGroup.play(이름, 볼륨, 피치)`가 소리를 낸다(`random.click`, `note.bass`, `ui.drawer_open`). 팩 사운드 이름은 확인 안 됨.
+- **번역**: `coreTranslateCommandGroup.translate(키)`가 클라이언트 언어의 글을 돌려준다(바닐라 키와 팩 `texts/*.lang` 키 모두). 둘째 인자로 배열을 준 호출은 `undefined`였다. `formatDate(초)`는 `10/28/26`, `getHowLongAgoAsString(초)`는 `1h ago`를 돌려준다.
+- **클립보드**: facet `vanilla.clipboard`의 `copyToClipboard(글)`이 복사한다(Windows). 다른 기기는 확인 안 됨.
+- **큰 UI**: `vanillaExtraLargeUICommandGroup.setExtraLargeUIEnabled(bool)`이 바로 바꾼다.
+- **읽을 수 있는 것**: `core.device.platform`은 `{type, inputMethods}`, `vanilla.inGame`은 `isInGame`·`isInMultiplayerSession`, `vanilla.buildSettings`는 게임 버전과 빌드 종류다. `core.staticFeatureFlag(id)`는 `{enabled}`를 돌려준다.
+- **안 되는 것**: 화면 낭독 `coreScreenReaderCommandGroup.read`(TTS 꺼짐), 캔버스(`getContext` 없음). `core.input`·`core.device.display`·`core.locale`·`core.deviceInformation` 쿼리와 `vanilla.userAccount`·`vanilla.editor`(`navigateUri`)·`vanilla.share`·`vanilla.webBrowserFacet` facet은 답이 오지 않았다. `core.safeZone`은 쿼리가 아니라 facet으로 받는다(`facet:request`를 보내고 `facet:updated:core.safeZone`을 받는다. `query:subscribe/core.safeZone`으로는 답이 없다) `{코드}`.
+- **페이지**: SVG 요소는 만들어진다. `requestAnimationFrame`·`performance.now`가 있다. `localStorage`는 서버를 나갔다 다시 들어와도 남지만 게임을 다시 켜면 사라진다. `engine`에는 `on`·`off`·`trigger`·`call`·`translate`·`createJSModel`·`updateWholeModel`·`synchronizeModels`·`createVirtualList`·`registerBindingAttribute` 등이 있다(Gameface 데이터 바인딩).
+- **주의**: `window.__commands__`에는 플레이어에게 해가 되는 명령도 있다(`vanillaWorldStorageCommandGroup.deleteWorld`, `vanillaRealmsDeleteCommandGroup.deleteRealm`, `vanilla_menus_xal_environment.clearUserCredentials`, `personaCommands.equipDefaultSkin`, `coreApplicationCommandGroup.exit`). 암호화 팩으로 페이지를 바꾸는 서버는 이것을 부를 수 있다는 뜻이다 `{추론}`.
+
+## 5. 서버가 설정을 정해 두는 방식 `{기록}`
+
+한 Dragonfly 기반 서버는 접속한 동안 몇 가지 설정을 정한다. 동의한 플레이어는 UI 프로필을 클래식(`video.ui_profile` 0)으로, 운영자가 아닌 플레이어는 콘텐츠 로그를 끈다. 설정은 다음에 열리는 DDUI 화면 루트와 함께 가고, 페이지가 값이 다를 때만 쓰고, 쓴 뒤에도 값을 지켜보아 플레이어가 바꾸면 되돌린다. 자세한 것은 [한 Dragonfly 기반 서버 적용 사례](./server-case.mdx)에 있다.
+
+## 6. 바닐라 컨테이너 화면 `{코드}`
+
+게임 번들과 바닐라 팩에는 컨테이너 DDUI 화면 18개(`minecraft:inventory_screen`, `workbench_screen`, `furnace_screen`, 상자류, `base_layout`)가 있다. 그 가운데 11개 레이아웃은 데이터 저장소 `container`를 읽는다([아이콘과 컨테이너](./geo-item-and-containers.mdx)).
+
+- 레이아웃은 데이터 저장소 `minecraft` / `container`의 `slots.<모음>[i]`(`armorContainer`, `offhandContainer`, `craftingInputContainer` 등)를 읽는다.
+- 바닐라 슬롯(`Container.Slot`)은 엔진 쿼리 `vanillaGameplayContainerItemQuery(모음 번호, 칸)`으로 아이템을 읽는다. 모음 번호는 핫바 28, 인벤토리 29, 갑옷 6, 보조손 34, 커서 59다.
+- 누름은 엔진 명령 `vanillaGameplayContainerAPICommands`(`handleSlotMousePress(버튼, 모음, 칸, ...)`, `takeAllItems`, `placeOneItem`, `splitMultipleItems` 등)로 보낸다.
+
+## 7. 기기와 판에 묶인 것 `{기록}`
+
+- **번들 이름과 글꼴 이름**: 게임이 업데이트되면 `gameplay.html`의 바닐라 번들 파일 이름(해시)을 설치본과 맞춘다. 틀리면 게임 중 Ore UI 전체가 뜨지 않는다. 팩 CSS가 `@font-face`로 게임 글꼴 파일을 가리키면 그 이름도 함께 맞춘다.
+- **iPad**: Gameface는 절대 위치 상자의 퍼센트를 부모(`body`) 크기로 푼다. iPad에서는 `body` 높이가 0이라 퍼센트로 잡은 창이 위쪽 띠로 접혔다. 화면 크기 상자는 `vw`·`vh`로 잡는다.
+- **iOS**: 팩의 `hbui` 폴더가 게임의 것을 통째로 대신해, `gameplay.html`이 잇는 바닐라 CSS가 불러와지지 않는다. 그 `@font-face`, `body` 높이, 번들이 정하는 `--localeSpecificNotoSansFonts`가 없다. 그래서 글꼴은 팩 CSS가 `ui://hbui/fonts`(iOS에서도 열린다)로 직접 선언하고 글꼴 목록에 이름으로 적는다. 한글 줄은 Noto Sans KR을 먼저 둔다. 화면은 바닐라 CSS·JS에 기대지 않는다.
+- **글꼴이 섞인 줄**: Gameface는 색 구간(`span`)을 기준선이 아니라 위쪽에 맞춰 늘어놓는다. 그래서 Minecraft 글꼴 구간이 Noto 글꼴 구간보다 위에 뜬다. ASCII가 아닌 글자가 하나라도 있는 줄은 줄 전체를 Noto 글꼴로 그린다.
+- **팩 UUID**: 다른 서버의 팩과 `header.uuid`·모듈 `uuid`가 겹치면 클라이언트 캐시가 섞인다.
+
+## 8. GUI 배율과 안전 영역
+
+- 바닐라 게임 페이지가 `html` 글자 크기를 5 × GUI 배율(px)로 정한다(번들 `gameplay-*.js`의 `guiScale` 공급자). 그래서 `rem`으로 쓴 크기는 비디오 설정의 GUI 배율을 따로 읽지 않아도 따라간다. 1 GUI 픽셀은 `0.2rem`이다.
+- 안전 영역(가로·세로 0.9~1)과 화면 위치(가로·세로 -0.1~0.1)는 facet `core.safeZone`으로 온다. 바닐라와 같은 식으로 네 변의 여백(px)을 구해 body의 `--oui-safe-top`·`right`·`bottom`·`left`에 두고, 창 크기가 바뀌면 다시 구한다 `{코드, 기록}`.
+
+## 9. 문자열과 번역
+
+- 글 속의 클라이언트 표식(아이템 이름, 날짜)은 페이지가 클라이언트 언어로 바꿔 그린다. 서버 문구의 `§` 색은 어두운 바탕 기준이므로 창 위 글은 어두운 변형 색으로 바꾼다([UI 스타일](./style.mdx)).
+
+## 10. 미디어 `{실측, Windows 1.26.52, 2026-10-24}`
+
+DDUI 시험 화면의 "미디어" 탭이 인터넷(https, http)과 팩(`/hbui/media/`)의 `<img>`, `<video>`, `<audio>`를 불러와 칸마다 요소 이벤트를 보여 준다.
+
+- 인터넷 주소는 모두 실패했다. `<img>`는 `error`, `<video>`는 `error=2`(네트워크)였다. 팩의 GIF(`/hbui/media/spin.gif`)는 그려졌다.
+- Gameface의 `<img>`에는 `naturalWidth`가 없다(`undefined`).
+- 영상은 WebM(VP8·VP9, 소리 Vorbis 하나)만 지원하고 `<audio>`는 지원하지 않는다는 앞의 문서와 맞춰, 팩에 MDN 예제 `flower.webm`(CC0, VP8 + Vorbis)을 넣고 음소거 자동재생과 소리 켜고 재생 버튼 두 칸을 두었다. 이 두 칸은 아직 게임에서 돌리지 않았다.

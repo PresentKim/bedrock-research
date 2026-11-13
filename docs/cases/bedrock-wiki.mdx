@@ -1,0 +1,124 @@
+---
+title: "Bedrock Wiki JSON UI 문서"
+description: "Bedrock Wiki JSON UI 섹션 10개 문서의 요지, 이 프로젝트 규칙과 일치하는 것과 다른 것, 위키 사전을 쓸 때의 주의"
+sidebar_position: 5
+sources:
+  - bedrock-wiki
+  - bedrock-samples
+  - repo-guide
+---
+
+## 이것은 무엇인가
+
+Bedrock Wiki(wiki.bedrock.dev)는 Bedrock OSS 기여자들이 쓰는 커뮤니티 문서다. JSON UI 섹션은 문서 10개(약 300KB)이고 그중 194KB짜리 `json-ui-documentation.md`가 속성·버튼 ID·컬렉션·바인딩 이름 사전이다. 이 페이지의 기준은 위키 저장소 `Bedrock-OSS/bedrock-wiki` 커밋 `0930b39`이며, 원래 분석은 `1d12a90`(2026-10-20)에서 했다. 위키 본문과 이미지는 CC BY 4.0, 코드 예제는 MIT라 `Excerpt`로 옮길 수 있다(출처: bedrock-wiki). 바닐라 대조는 `bedrock-samples` `46ba6ea`(1.26.50.4)로 했다.
+
+검증 수준을 붙이는 방법: 위키 문장만 있으면 `미검증`, 위키가 게임 스크린샷으로 결과를 보여 주면 `실측`(제3자 기록이고 이 프로젝트가 다시 측정하지는 않았다), 바닐라에도 같은 이름·값이 쓰이면 `바닐라`를 함께 붙인다.
+
+## 페이지별 요지
+
+| 위키 문서 | 약어 | 내용 |
+| --- | --- | --- |
+| Intro to JSON UI | `BW-intro` | 파일 종류, namespace와 `@`, 타입, 애니메이션, 연산자 표, 변수, 바인딩, 조건부 렌더링(액션바 팩토리, 타이틀), 문자열 서식 지정자, 버튼 매핑, `modifications` 11개 연산 |
+| Best Practices | `BW-best` | JSON UI는 버전이 없다. 바꿀 속성만 쓰기, `modifications`, 깊은 경로 키 피하기, 진입점 하나, 성능(`ignored: true`는 삭제와 같고 `visible: false`는 아니다) |
+| JSON UI Documentation | `BW-doc` | 타입별 허용 속성표, Control/Layout/Data Binding/Grid/Text/Sprite/Input/Focus/Button/Toggle/Slider/Scroll/Custom Render/Screen 속성, 앵커 설명, `variables`, `property_bag`, 전역 변수 55개, 하이퍼링크 목록, 버튼 ID |
+| Dynamic Content Generation | `BW-dyn` | 팩토리(`control_name`은 정수 길이, `control_ids`는 문자열 배열 길이), 그리드, 주의 사항 |
+| Modifying Server Forms | `BW-form` | `server_form_factory`를 쓰는 두 번째 팩토리를 `insert_back`하고 바닐라 폼에 제목 포함 검사 숨김 바인딩 |
+| Buttons and Toggles | `BW-btn` | 바닐라 버튼·토글 템플릿 재사용, 호버 텍스트, 버튼으로 애니메이션 재생 |
+| Preserve Title Texts | `BW-title` | `property_bag` + `visibility_changed`로 키워드가 든 타이틀만 기억하는 래치 |
+| Type Conversion | `BW-type` | 문자열↔숫자, float→정수, 불리언→숫자 변환 |
+| Adding HUD Elements | `BW-hud` | `root_panel`에 `insert_front`로 HUD 요소 추가 |
+| Aseprite Animations | `BW-ase` | 배열 형식 JSON 내보내기와 `aseprite_flip_book` |
+
+## 위키가 가장 크게 더한 것
+
+### 1. `property_bag` 사전 조회가 스크린샷으로 확인되었다
+
+위키 `BW-dyn`은 `control_ids`를 가진 팩토리에 문자열 배열을 `#collection_length`로 주면 배열 순서대로 컨트롤이 생긴다고 설명하고 결과 화면을 싣는다. 식에서는 배열을 만들 수 없으므로 `property_bag`에 미리 둔 배열 중 하나를 문자열 연결로 고른다.
+
+<Excerpt src="bedrock-wiki" title="Dynamic Content Generation" path="docs/json-ui/dynamic-content-generation.md">
+
+```json
+{
+  "apple_factory": {
+    "type": "stack_panel",
+    "size": [ "100%cm", "100%c" ],
+    "factory": {
+      "name": "hud_apple_factory",
+      "control_ids": { "apple": "hud.hud_apple", "label": "hud.hud_label" }
+    },
+    "property_bag": {
+      "#list1": [ "apple", "label" ],
+      "#list2": [ "label", "apple" ]
+    },
+    "bindings": [
+      { "binding_name": "#hud_title_text_string", "binding_name_override": "#choice" },
+      { "binding_type": "view",
+        "source_property_name": "('#list' + #choice)",
+        "target_property_name": "#collection_length" }
+    ]
+  }
+}
+```
+
+In the bindings, we fetch the title string and store it in `#choice`, which is an integer representing the list to be selected. Then using `('#list' + #choice)`, we construct the name of the list and that list is then overridden to `#collection_length`.
+
+</Excerpt>
+
+bedrock-core의 라우터(`('#route_' + #title_text)`)와 같은 메커니즘이므로(COL-22, COL-23), 코드·테스트로만 확인되던 [bedrock-core](./bedrock-core.mdx) 라우터 의미가 스크린샷 수준으로 뒷받침된다.
+
+### 2. `* 1` 숫자 변환은 버전이 바뀌며 깨졌다
+
+위키가 2026-10-05에 `BW-type`에 주석을 더했다.
+
+<Excerpt src="bedrock-wiki" title="Type Conversion" path="docs/json-ui/type-conversion.md">
+
+Starting from some version of minecraft the `#str * 1` and `#str * #float` conversions no longer work, however you can still use `0 + #str` method.
+
+</Excerpt>
+
+bedrock-core S12(2026-09-17, 1.26.50 공개 다음 날)가 `(#v * 1)`을 0으로 측정한 것과 맞는다. 그래서 `* 1`이 되었다는 기록(BA, AP, S9)과 안 된다는 기록(S12)의 충돌 C-04·C-24는 출처끼리의 다툼이 아니라 **버전 변화**로 설명된다. 안전한 변환은 `(#v - 0)`이다(EXP-16). 위키 `BW-best`의 성능 예제가 `* 1`을 쓰는 것은 위키 내부 모순이다(C-40).
+
+### 3. `modifications` 연산 11가지와 값 보존 래치
+
+연산 목록은 [바닐라 화면 수정](../json-ui/modifying-vanilla.mdx) 페이지에 `Excerpt`로 옮겼다. 래치(BND-18)는 크기 0 패널의 `property_bag`에 `"#saved": ""`를 두고 가시성이 바뀌는 순간에만 원본을 복사해, HUD 타이틀 중 키워드가 든 마지막 값을 다른 타이틀이 와도 유지한다. 커뮤니티에서는 이 패턴이 표준으로 확인되었다.
+
+## 우리 규칙과 일치하는 것
+
+| 가이드 규칙 | 위키 근거 |
+| --- | --- |
+| FILE-01, FILE-02, FILE-04 | 새 파일만 등록, `.json` 아닌 확장자도 가능, `_global_variables.json` |
+| FILE-13, FILE-14, FILE-15 | `variables`는 단일 객체나 배열, `requires`는 `$`만 받음, `자식@$변수` |
+| FILE-16, COL-10 | `ignored: true`는 삭제와 같고 `visible: false`는 계속 평가됨 |
+| FILE-20, FILE-21 | 경로 키, 속성 단위 병합(`"progress_text_label": { "shadow": false }`) |
+| MOD-08, MOD-13 | 원래 `#visible`이 없으면 `insert_back`, 공존은 `modifications` |
+| BND-02, BND-08, BND-16 | `binding_type` 생략은 전역, `source_control_name`, `binding_name_override` |
+| EXP-03, EXP-07, EXP-09, EXP-19 | `>=` 대안, 포함 검사, 바이트 단위(2025-09-18 수정), 불리언 1/0 |
+| COL-14, COL-17, HOST-05 | 두 번째 엔진 팩토리, 엔진 팩토리가 변수로 데이터 전달 |
+| ANI-12, ANI-15 | 팩토리 재생성 시 애니메이션 재시작, Aseprite 플립북 |
+
+## 위키와 다른 것, 위키 오류
+
+위키의 사전은 범위가 넓지만 오래된 항목과 오기가 섞여 있어 바닐라와 양방향으로 대조해 쓴다(DBG-07).
+
+| 항목 | 위키 | 바닐라 1.26.50.4 | 판단 |
+| --- | --- | --- | --- |
+| `localize` 기본값 | `false` | `false` 명시 31회, `true` 1회 | 위키 오류(C-32) |
+| 타입 `scrollbar_track` | 있음 | 0회, `scroll_track` 1회 | 위키 오기(C-34) |
+| 애니메이션 `clip` | 있음 | 0회 | 미검증(C-38) |
+| 이모지 바이트 | 3 | UTF-8은 4 | 위키 오류(C-35) |
+| `grid_fill_direction` | `vertical`, `horizontal`, `none` | `vertical` 2회만 | 근거 없음 |
+| `grid_rescaling_type` | `none` 포함 3값 | `horizontal` 21, `vertical` 1 | `none` 근거 없음 |
+| `input_mode_condition` | `not_gaze` 등 | `gamepad` 7, `gamepad_and_not_gaze` 4, `not_gamepad` 1 | `gamepad` 누락, `not_gaze` 근거 없음 |
+| `clip_direction` | `center` 포함 5값 | `left`, `down`, `up`, `right` | `center` 근거 없음 |
+| 이징 | 32 | 14(모두 위키 목록 안) | 18개는 바닐라 근거 없음 |
+| 렌더러 | 41 | 43 | 7개 위키 단독, 9개 바닐라 단독 |
+| 버튼 ID | 268 | 876 | 위키 42개는 바닐라에 없음(제거된 화면), 바닐라 649개는 위키에 없음 |
+| 전역 변수 | 55 | 34개만 UI 파일이 참조 | 21개는 확인 불가(FILE-29) |
+| `size: "default"` | `"100%"`와 같다 | 타입마다 다름 | 부분 해소(C-36) |
+| `#size_binding`의 `use_anchored_offset` 필요 | 필요 | 바닐라 유일 용례는 함께 씀 | 미해결(C-37) |
+| 숫자 아이템 ID 안정 범위 | 1.26.50 기준 -1246~851 안정, 852~883 밀림 | 가이드는 256 이상이 밀린다고 기록 | 버전 변화로 해소(C-33) |
+| `modifications` 예제 | `move_front`가 `value`로 대상을 지정 | — | 다른 예제는 `where`/`control_name`을 씀. 이 예제는 신뢰하지 않는다 |
+
+## 위키 사전을 쓰는 법
+
+`BW-doc`의 표는 값 사전을 넓히는 재료로 쓸 만하지만 바닐라 사용 횟수 칸을 채우는 방식으로만 옮긴다. 속성 사전(Focus 16개, Input 10, Text Edit, Slider 16, Scroll View 12, Screen 19개와 `screen_draws_last`, `force_render_below`), 렌더러 전용 속성(`gradient_renderer`의 `gradient_direction`, `color1`, `color2`; `progress_bar_renderer`의 `primary_color`, `secondary_color`; `paper_doll_renderer`의 `rotation`, `use_selected_skin`), 설정 화면 토글 표(토글 이름, 상태 바인딩, 활성 바인딩)가 유용하다. 화면별 버튼 ID·컬렉션 이름은 그 화면 파일이 바닐라에 아직 있는지부터 확인한다. 게임에서 확인하면 미검증을 풀 수 있는 것은 `modifications`의 `insert_after`·`replace`, `(0 + #v)` 변환, `#size_binding`과 `use_anchored_offset`, 래치 패턴, 그리드의 숨은 항목 공간, 버튼 ID로 애니메이션 재생이다.

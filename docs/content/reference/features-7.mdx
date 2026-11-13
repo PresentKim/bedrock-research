@@ -1,0 +1,379 @@
+---
+title: 피처와 피처 룰 레퍼런스 (7/14)
+description: MS Learn 피처 문서와 레퍼런스.
+sidebar_position: 49
+sources:
+  - ms-learn
+---
+
+# 피처와 피처 룰 레퍼런스 (7/14)
+
+MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 레퍼런스를 발췌한 쪽이다. 원문의 상대 링크는 제거했다.
+
+(출처: ms-learn, `creator/Reference/Content/FeaturesReference/Examples/Features/minecraftSingle_block_feature.md`)
+
+
+### Features Documentation - minecraft:single_block_feature
+
+`minecraft:single_block_feature` places a single block in the world. The `places_block` field supports a single block or a list of weighted blocks, where the weight defines how likely it is for that block to be selected. The `may_attach_to` and `may_replace` fields are allowlists which specify where the block can be placed. If these fields are omitted, the block can be placed anywhere. The `may_not_attach_to` field is a denylist that specifies what blocks can't be close to the placement location. The `randomize_rotation` field will randomize the block's cardinal orientation. The block's internal survivability and placement rules can optionally be enforced with the `enforce_survivability_rules` and `enforce_placement_rules` fields. These rules are specified per-block and are typically designed to produce high quality gameplay or natural behavior. However, enabling this enforcement may make it harder to debug placement failures.
+
+Succeeds if: The block is successfully placed in the world.
+
+Fails if: The block fails to be placed.
+
+Example use: Placing a single pumpkin or carved pumpkin block where carved pumpkins are less likely to appear.
+
+##### Schema
+
+```json
+ object "minecraft:single_block_feature" : opt 
+  { 
+    object "description" 
+    { 
+      string "identifier" // The name of this feature in the form 'namespace_name:feature_name'. 'feature_name' must match the filename. 
+    } 
+    "places_block" // Reference to the block to be placed. 
+    bool "enforce_placement_rules" // If true, enforce the block's canPlace check. 
+    bool "enforce_survivability_rules" // If true, enforce the block's canSurvive check. 
+    object "may_attach_to" : opt 
+    { 
+      int "min_sides_must_attach"<1-4> : opt 
+      bool "auto_rotate" : opt // Automatically rotate the block to attach sensibly. 
+      "top" : opt 
+      array "top" : opt 
+      { 
+        "<any array element>" 
+      } 
+      "bottom" : opt 
+      array "bottom" : opt 
+      { 
+                   "<any array element>" 
+      } 
+      "north" : opt 
+      array "north" : opt 
+      { 
+        "<any array element>" 
+      } 
+      "east" : opt 
+      array "east" : opt 
+      { 
+        "<any array element>" 
+      } 
+      "south" : opt 
+      array "south" : opt 
+      { 
+        "<any array element>" 
+      } 
+      "west" : opt 
+      array "west" : opt 
+      { 
+        "<any array element>" 
+      } 
+      "all" : opt 
+      array "all" : opt 
+      { 
+        "<any array element>" 
+      } 
+        "sides" : opt 
+        array "sides" : opt 
+      { 
+        "<any array element>" 
+      } 
+    } 
+      array "may_replace" : opt 
+    { 
+      "<any array element>" : opt // A list of blocks that may be replaced during placement. Omit this field to allow any block to be replaced. 
+    } 
+  } 
+```
+
+
+##### Example - Placing a single pumpkin block
+
+```json
+{
+  "format_version": "1.21.40",
+  "minecraft:single_block_feature": {
+    "description": {
+      "identifier": "example:single_pumpkin_feature"
+    },
+    "places_block": [
+      {
+        "block": "minecraft:pumpkin",
+        "weight": 5
+      },
+      {
+        "block": "minecraft:carved_pumpkin",
+        "weight": 1
+      }
+    ],
+    "randomize_rotation": true,
+    "enforce_survivability_rules": true,
+    "enforce_placement_rules": true,
+    "may_attach_to": {
+      "auto_rotate": false,
+      "min_sides_must_attach": 1,
+      "south": [
+        "minecraft:grass",
+        "minecraft:dirt"
+      ]
+    },
+    "may_not_attach_to": {
+      "south": {
+        "name": "minecraft:dirt",
+        "states": {
+          "dirt_type": "coarse"
+        }
+      }
+    }
+  }
+}
+```
+
+##### Example - Placing a single carved pumpkin
+
+Feature that places a randomly rotated single pumpkin or carved pumpkin block where carved pumpkins are less likely to appear.
+
+```json
+{ 
+  "format_version": "1.21.40", 
+  "minecraft:single_block_feature": { 
+    "description": { 
+      "identifier": "example:single_pumpkin_feature" 
+    }, 
+    "places_block": [ 
+      { 
+        "block": "minecraft:pumpkin", 
+        "weight": 5 
+      }, 
+      { 
+        "block": "minecraft:carved_pumpkin", 
+        "weight": 1 
+      } 
+    ], 
+    "randomize_rotation": true, 
+    "enforce_survivability_rules": true, 
+    "enforce_placement_rules": true, 
+    "may_attach_to": { 
+      "auto_rotate": false, 
+      "min_sides_must_attach": 1, 
+      "south": [ 
+        "minecraft:grass", 
+        "minecraft:dirt" 
+      ] 
+    }, 
+    "may_not_attach_to": { 
+      "south": { 
+        "name": "minecraft:dirt", 
+        "states": { 
+          "dirt_type": "coarse" 
+        } 
+      }, 
+      "diagonal": [ 
+        "minecraft:stone", 
+        "minecraft:gravel" 
+      ] 
+    } 
+  } 
+} 
+```
+
+##### Example
+
+Feature that supports either a single block or an array of weighted block descriptors.
+
+```json
+{ 
+  "format_version": "1.21.30", 
+  "minecraft:single_block_feature": { 
+    "description": { 
+      "identifier": "test:my_block_feature" 
+    }, 
+    "places_block": [ 
+      { 
+        "block": "minecraft:bee_nest", 
+        "weight": 2 
+      }, 
+      { 
+        "block": { 
+          "name": "minecraft:beehive", 
+          "states": { 
+            "honey_level": 5 
+          } 
+        }, 
+        "weight" :  1.5 
+      }, 
+      { 
+        "block": { 
+          "name": "minecraft:beehive", 
+          "states": { 
+            "honey_level": 0 
+          } 
+        }, 
+        "weight" : 5 
+      } 
+    ], 
+    "may_attach_to": { 
+      "bottom": { 
+        "name": "minecraft:grass" 
+      } 
+    } 
+  } 
+} 
+```
+
+
+
+(출처: ms-learn, `creator/Reference/Content/FeaturesReference/Examples/Features/minecraftSnap_to_surface_feature.md`)
+
+
+### Features Documentation - minecraft:snap_to_surface_feature
+
+`minecraft:snap_to_surface_feature` snaps the y-value of a feature placement pos to the floor or the ceiling within the provided `vertical_search_range`. The placement biome is preserved. If the snap position goes outside of the placement biome, placement will fail.
+
+##### Schema
+
+```json
+object "minecraft:snap_to_surface_feature" : opt
+{
+  object "description"
+  {
+    string "identifier" // The name of this feature in the form 'namespace_name:feature_name'. 'feature_name' must match the filename.
+  }
+  feature_reference "feature_to_snap" // Named reference of feature to be snapped
+  int "vertical_search_range" // Range to search for a floor or ceiling for snapping the feature.
+  string "surface" : opt // Defines the surface that the y-value of the placement position will be snapped to. Valid values: 'ceiling', 'floor' and 'random_horizontal'
+  bool "allow_air_placement" : opt // Determines whether the feature can snap through air blocks. Defaults to true.
+  bool "allow_underwater_placement" : opt // Determines whether the feature can snap through water blocks. Defaults to false.
+}
+```
+
+##### Example
+
+Define a feature that snaps the `cave_vine_feature` to the ceiling
+
+```json
+{
+  "format_version": "1.13.0",
+  "minecraft:snap_to_surface_feature": {
+    "description": {
+      "identifier": "example:cave_vine_snapped_to_ceiling_feature"
+    },
+    "feature_to_snap":  "example:cave_vine_feature",
+    "vertical_search_range":  12,
+    "surface": "ceiling",
+    "allowed_surface_blocks": {
+      {
+        "name": "minecraft:cobblestone"
+      }
+    }
+  }
+}
+```
+
+
+(출처: ms-learn, `creator/Reference/Content/FeaturesReference/Examples/Features/minecraftStructure_template_feature.md`)
+
+
+### Features Documentation - minecraft:structure_template_feature
+
+`minecraft:structure_template_feature` places a structure in the world. The structure must be stored as a .mcstructure file in the "structures" subdirectory of a behavior pack. It is possible to reference structures that are part of other behavior packs, they do not need to come from the same behavior pack as this feature. Constraints can be defined to specify where the structure is allowed to be placed. During placement, the feature will search for a position within the `adjustment_radius` that satisfies all constraints. If none are found, the structure will not be placed.
+
+**Succeeds if**
+The structure is placed in the world.
+
+**Fails if**
+The structure fails to be placed within the world.
+
+##### Schema
+
+```json
+object "minecraft:structure_template_feature" : opt
+{
+  object "description"
+  {
+    string "identifier" // The name of this feature in the form 'namespace_name:feature_name'. 'feature_name' must match the filename.
+  }
+  structure_reference "structure_name" // Reference to the structure to be placed.
+  int "adjustment_radius"<0-16> : opt // How far the structure is allowed to move when searching for a valid placement position. Search is radial, stopping when the nearest valid position is found. Defaults to 0 if omitted.
+  enumerated_value "facing_direction"<"north", "south", "east", "west", "random"> : opt // Direction the structure will face when placed in the world. Defaults to "random" if omitted.
+  object "constraints" // Specific constraints that must be satisfied when placing this structure.
+  {
+    object "grounded" : opt // When specified, ensures the structure is on the ground.
+    object "unburied" : opt // When specified, ensures the structure has air above it.
+    object "block_intersection" : opt // When specified, ensures the structure only intersects with allowlisted blocks.
+    {
+      array "block_allowlist"
+      {
+        "<any array element>" : opt // List of blocks the owning structure is allowed to intersect with.
+      }
+    }
+  }
+}
+```
+
+##### Example
+
+Place a hot air balloon structure that "floats" in the air
+
+```json
+{
+  "format_version": "1.13.0",
+  "minecraft:structure_template_feature": {
+    "description": {
+      "identifier": "example:hot_air_balloon_feature"
+    },
+    "structure_name": "example:hot_air_balloon",
+    "adjustment_radius": 8,
+    "facing_direction": "random",
+    "constraints": {
+      "unburied": {},
+      "block_intersection": {
+        "block_allowlist": [
+          "minecraft:air"
+        ]
+      }
+    }
+  }
+}
+```
+
+
+(출처: ms-learn, `creator/Reference/Content/FeaturesReference/Examples/Features/minecraftSurface_Relative_threshold_feature.md`)
+
+
+### Features Documentation - minecraft:surface_relative_threshold_feature
+
+`minecraft:surface_relative_threshold_feature` determines whether the provided position is below the estimated surface level of the world, and places a feature if so.If the provided position is above configured surface or the surface is not available, placement will fail. This feature only works for Overworld generators using world generation 1.18 or later.
+
+##### Schema
+
+```json
+object "minecraft:surface_relative_threshold_feature" : opt
+{
+  object "description"
+  {
+    string "identifier" // The name of this feature in the form 'namespace_name:feature_name'. 'feature_name' must match the filename.
+  }
+  feature_reference "feature_to_place" // Named reference of feature to be placed
+  int "minimum_distance_below_surface" : opt // The minimum number of blocks required to be between the estimated surface level and a valid place for this feature. Defaults to zero.
+}
+```
+
+##### Example
+
+Define a feature that places the `underwater_magma_snap_to_surface_feature`, if the given position is at least two blocks below estimated surface level.**
+
+```json
+{
+    "format_version": "1.13.0",
+    "minecraft:surface_relative_threshold_feature": {
+    "description": {
+      "identifier": "example:underwater_magma_underground_feature"
+    },
+    "feature_to_place": "log_decoration_feature" ,
+    "minimum_distance_below_surface": 2
+  }
+}
+```
+

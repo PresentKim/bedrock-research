@@ -1,0 +1,536 @@
+---
+title: 엔티티 컴포넌트 레퍼런스(주요 항목) (11/15)
+description: MS Learn 엔티티 컴포넌트·이벤트·필터 목록과 주요 컴포넌트.
+sidebar_position: 100
+sources:
+  - ms-learn
+---
+
+# 엔티티 컴포넌트 레퍼런스(주요 항목) (11/15)
+
+MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 레퍼런스를 발췌한 쪽이다. 원문의 상대 링크는 제거했다.
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_environment_sensor.md`)
+
+
+### Entity Documentation - minecraft:environment_sensor
+
+Creates a trigger based on environment conditions.
+
+
+#### Environment Sensor Properties
+
+|Name       |Default Value |Type |Description |Example Values |
+|:----------|:-------------|:----|:-----------|:------------- |
+| triggers | *not set* | Array of objects | The list of triggers that fire when the environment conditions match the given filter criteria. Can be an array of trigger objects or a single trigger object. | Breeze: `[{"event":"minecraft:stop_playing_idle_ground_sound","filters":{"all_of":[{"subject":"self","test":"on_ground","value":true},{"subject":"self","test":"has_target","value":true},{"domain":"minecraft:is_playing_idle_ground_sound","operator":"==","test":"bool_property"}]}},{"event":"minecraft:start_playing_idle_ground_sound","filters":{"all_of":[{"domain":"minecraft:is_playing_idle_ground_sound","operator":"!=","test":"bool_property"},{"any_of":[{"subject":"self","test":"on_ground","value":false},{"subject":"self","test":"has_target","value":false}]}]}}]`, Cave Spider: `{"event":"minecraft:become_neutral","filters":{"operator":">","test":"is_brightness","value":0.49}}`, `{"event":"minecraft:become_hostile","filters":{"operator":"<","test":"is_brightness","value":0.49}}` | 
+| triggers (as Object) | *not set* | Object |  |  | 
+
+#### Samples
+
+#### Breeze
+
+
+```json
+"minecraft:environment_sensor": {
+  "triggers": [
+    {
+      "event": "minecraft:stop_playing_idle_ground_sound",
+      "filters": {
+        "all_of": [
+          {
+            "subject": "self",
+            "test": "on_ground",
+            "value": true
+          },
+          {
+            "subject": "self",
+            "test": "has_target",
+            "value": true
+          },
+          {
+            "domain": "minecraft:is_playing_idle_ground_sound",
+            "operator": "==",
+            "test": "bool_property"
+          }
+        ]
+      }
+    },
+    {
+      "event": "minecraft:start_playing_idle_ground_sound",
+      "filters": {
+        "all_of": [
+          {
+            "domain": "minecraft:is_playing_idle_ground_sound",
+            "operator": "!=",
+            "test": "bool_property"
+          },
+          {
+            "any_of": [
+              {
+                "subject": "self",
+                "test": "on_ground",
+                "value": false
+              },
+              {
+                "subject": "self",
+                "test": "has_target",
+                "value": false
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+#### Cave Spider
+
+At /minecraft:entity/component_groups/minecraft:spider_hostile/minecraft:environment_sensor/: 
+
+```json
+"minecraft:environment_sensor": {
+  "triggers": {
+    "event": "minecraft:become_neutral",
+    "filters": {
+      "operator": ">",
+      "test": "is_brightness",
+      "value": 0.49
+    }
+  }
+}
+```
+
+At /minecraft:entity/component_groups/minecraft:spider_neutral/minecraft:environment_sensor/: 
+
+```json
+"minecraft:environment_sensor": {
+  "triggers": {
+    "event": "minecraft:become_hostile",
+    "filters": {
+      "operator": "<",
+      "test": "is_brightness",
+      "value": 0.49
+    }
+  }
+}
+```
+
+#### Dolphin
+
+At /minecraft:entity/component_groups/dolphin_swimming_navigation/minecraft:environment_sensor/: 
+
+```json
+"minecraft:environment_sensor": {
+  "triggers": [
+    {
+      "filters": {
+        "all_of": [
+          {
+            "test": "on_ground",
+            "operator": "==",
+            "value": true
+          },
+          {
+            "test": "in_water",
+            "operator": "!=",
+            "value": true
+          }
+        ]
+      },
+      "event": "navigation_on_land"
+    }
+  ]
+}
+```
+
+At /minecraft:entity/component_groups/dolphin_on_land_in_rain/minecraft:environment_sensor/: 
+
+```json
+"minecraft:environment_sensor": {
+  "triggers": [
+    {
+      "filters": {
+        "test": "in_water",
+        "operator": "==",
+        "value": true
+      },
+      "event": "navigation_off_land"
+    },
+    {
+      "filters": {
+        "test": "in_water_or_rain",
+        "operator": "!=",
+        "value": true
+      },
+      "event": "start_dryingout"
+    }
+  ]
+}
+```
+
+#### Drowned
+
+At /minecraft:entity/component_groups/minecraft:look_to_start_transformations/minecraft:environment_sensor/: 
+
+```json
+"minecraft:environment_sensor": {
+  "triggers": [
+    {
+      "event": "minecraft:start_transforming_into_zombie",
+      "filters": {
+        "all_of": [
+          {
+            "test": "in_block",
+            "value": "minecraft:powder_snow"
+          },
+          {
+            "test": "has_equipment_tag",
+            "domain": "armor",
+            "operator": "not",
+            "value": "minecraft:leather_tier"
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+At /minecraft:entity/component_groups/minecraft:start_zombie_transformation/minecraft:environment_sensor/: 
+
+```json
+"minecraft:environment_sensor": {
+  "triggers": [
+    {
+      "event": "minecraft:stop_transforming",
+      "filters": {
+        "any_of": [
+          {
+            "test": "in_block",
+            "operator": "not",
+            "value": "minecraft:powder_snow"
+          },
+          {
+            "test": "has_equipment_tag",
+            "domain": "armor",
+            "value": "minecraft:leather_tier"
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+#### Player
+
+
+```json
+"minecraft:environment_sensor": {
+  "triggers": {
+    "event": "minecraft:gain_raid_omen",
+    "filters": {
+      "all_of": [
+        {
+          "subject": "self",
+          "test": "has_mob_effect",
+          "value": "bad_omen"
+        },
+        {
+          "subject": "self",
+          "test": "is_in_village",
+          "value": true
+        }
+      ]
+    }
+  }
+}
+```
+
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_knockback_resistance.md`)
+
+
+### Entity Documentation - minecraft:knockback_resistance
+
+Determines an entity's resistance to knockback from melee attacks. A value of 0.0 means no resistance, while 1.0 provides full immunity to knockback (like iron golems).
+
+> [!Note]
+> In format version 1.26.20, `value` now accepts negative numbers down to a minimum of `-2`. Negative values amplify knockback applied to the entity instead of diminishing it.
+
+#### Alternate Simple Representations
+
+This item can also be represented as a `Decimal number`.
+
+
+#### Knockback Resistance Properties
+
+|Name       |Default Value |Type |Description |Example Values |
+|:----------|:-------------|:----|:-----------|:------------- |
+| max | *not set* | Decimal number | Maximum potential knockback resistance for this entity. | Ender Dragon: `100` | 
+| value | *not set* | Decimal number | The amount of knockback resistance, from 0.0 (none) to 1.0 (full immunity). | Armor Stand: `1`, Ender Dragon: `100` | 
+
+#### Samples
+
+#### Armor Stand
+
+
+```json
+"minecraft:knockback_resistance": {
+  "value": 1
+}
+```
+
+#### Breeze
+
+
+```json
+"minecraft:knockback_resistance": {
+  "value": 0
+}
+```
+
+#### Ender Dragon
+
+
+```json
+"minecraft:knockback_resistance": {
+  "max": 100,
+  "value": 100
+}
+```
+
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_breedable.md`)
+
+
+### Entity Documentation - minecraft:breedable
+
+Allows an entity to establish a way to get into the love state used for breeding.
+
+> [!Note]
+> This component is commonly used in conjunction with the 'minecraft:behavior.breed' component.
+
+> [!Note]
+> In 1.21.130 the `transform_to_item` field on each entry of `breed_items` was renamed to `result_item`. The new field is defined per-item, so different breed items can transform into different result items on use.
+
+> [!Note]
+> In 1.26.0 the offspring-related fields were split out into the separate `minecraft:offspring_data` component. `minecraft:breedable` now contains only love-state, taming/health requirements, and pregnancy-flow data; the new `minecraft:offspring_data` component is required to actually spawn the child entity.
+
+
+#### Breedable Properties
+
+|Name       |Default Value |Type |Description |Example Values |
+|:----------|:-------------|:----|:-----------|:------------- |
+| allow_sitting | false | Boolean true/false | If true, entities can breed while sitting |  | 
+| blend_attributes | true | Boolean true/false | If true, the entities will blend their attributes in the offspring after they breed. For example, horses blend their health, movement, and jump_strength in their offspring. |  | 
+| breed_cooldown | 60 | Decimal number | Time in seconds before the Entity can breed again. |  | 
+| breed_items | *not set* | Array of strings | The list of items that can be used to get the entity into the 'love' state. Can be a single item or an array. | Chicken: `["wheat_seeds","beetroot_seeds","melon_seeds","pumpkin_seeds","pitcher_pod","torchflower_seeds"]`, Cow: `["wheat"]`, Frog: `["slime_ball"]` | 
+| breed_items (as String) | *not set* | String |  |  | 
+| breeds_with | *not set* | Array of Breeds With items | The entity definitions that this entity can breed with. Can be a single object or an array. | Chicken: `{"minecraft:chicken":{}}`, Cow: `{"minecraft:cow":{}}`, Frog: `{"minecraft:frog":{"event":"become_pregnant","target":"self"}}` | 
+| breeds_with (as Object) | *not set* | Breeds With (Breed With Single) item |  |  | 
+| causes_pregnancy | false | Boolean true/false | If true, the entity will become pregnant instead of spawning a baby. | Frog: `true` | 
+| combine_parent_colors | false | Boolean true/false | If true and no color mutation occurs, the baby's `minecraft:color` is set to a blend of the parents' colors (following DyeItem combination rules). |  | 
+| deny_parents_variant | *not set* | Deny Parents Variant item | Determines how likely the baby of parents with the same variant will deny that variant and take a random variant within the given range instead. |  | 
+| environment_requirements | *not set* | Array of Environment Requirements items | The list of nearby block requirements to get the entity into the 'love' state. |  | 
+| extra_baby_chance | 0 | Percent Range | Chance that up to 16 babies will spawn. |  | 
+| inherit_tamed | *not set* | Boolean true/false | If true, the babies will be automatically tamed if its parents are. |  | 
+| love_filters | *not set* | Minecraft filter | The filters to run when attempting to fall in love. |  | 
+| mutation_factor | *not set* | Mutation Factor item | Determines how likely the babies are to NOT inherit one of their parent's variances. |  | 
+| require_full_health | false | Boolean true/false | If true, the entity needs to be at full health before it can breed. |  | 
+| require_tame | true | Boolean true/false | If true, the entities need to be tamed first before they can breed. | Llama: `true` | 
+
+##### combine_parent_colors
+
+If true and no color mutation occurs, the baby's `minecraft:color` is set to a blend of the parents' colors (following DyeItem combination rules). If the parents' colors aren't compatible, the baby inherits one parent's color at random. This item requires a format version of at least 1.21.60.
+
+
+##### Breeds With
+
+#### Breeds With Properties
+
+**JSON path:** `breeds_with`
+
+|Name       |Default Value |Type |Description |
+|:----------|:-------------|:----|:-----------|
+| baby_type | *not set* | String | The entity definition of this entity's babies. | 
+| breed_event | *not set* | String | Event to run when this entity breeds. Can be a simple event name string or a trigger object with event and optional filters. | 
+| breed_event (as Object) | *not set* | Object |  | 
+| mate_type | *not set* | String from a list of choices | The entity definition that this entity can mate with. | 
+
+##### Breeds With (Breed With Single)
+
+Same structure as Breeds With.
+
+
+##### Deny Parents Variant
+
+#### Deny Parents Variant Properties
+
+**JSON path:** `deny_parents_variant`
+
+|Name       |Default Value |Type |Description |
+|:----------|:-------------|:----|:-----------|
+| chance | *not set* | Decimal number | The percentage chance of denying the parents' variant. | 
+| max_variant | *not set* | String | The inclusive maximum of the variant range. | 
+| min_variant | *not set* | String | The inclusive minimum of the variant range. | 
+
+##### Environment Requirements
+
+#### Environment Requirements Properties
+
+**JSON path:** `environment_requirements`
+
+|Name       |Default Value |Type |Description |
+|:----------|:-------------|:----|:-----------|
+| block_types | *not set* | Array of strings | The block types required nearby for the entity to breed. | 
+| count | *not set* | Integer number | The number of the required block types nearby for the entity to breed. | 
+| radius | *not set* | Decimal number | How many blocks radius from the mob's center to search in for the required blocks. Bounded between 0 and 16. | 
+
+##### Mutation Factor
+
+#### Mutation Factor Properties
+
+**JSON path:** `mutation_factor`
+
+|Name       |Default Value |Type |Description |
+|:----------|:-------------|:----|:-----------|
+| color | *not set* | Percent Range | The percentage chance of denying the parents' variant. | 
+| color (as Decimal number) | *not set* | Decimal number |  | 
+| extra_variant | *not set* | Percent Range | The percentage chance of a mutation on the entity's extra variant type. | 
+| extra_variant (as Decimal number) | *not set* | Decimal number |  | 
+| variant | *not set* | Percent Range | The percentage chance of a mutation on the entity's variant type. | 
+| variant (as Decimal number) | *not set* | Decimal number |  | 
+
+#### Samples
+
+#### Chicken
+
+
+```json
+"minecraft:breedable": {
+  "require_tame": false,
+  "breeds_with": {
+    "minecraft:chicken": {}
+  },
+  "breed_items": [
+    "wheat_seeds",
+    "beetroot_seeds",
+    "melon_seeds",
+    "pumpkin_seeds",
+    "pitcher_pod",
+    "torchflower_seeds"
+  ]
+}
+```
+
+#### Cow
+
+
+```json
+"minecraft:breedable": {
+  "require_tame": false,
+  "breed_items": [
+    "wheat"
+  ],
+  "breeds_with": {
+    "minecraft:cow": {}
+  }
+}
+```
+
+#### Frog
+
+
+```json
+"minecraft:breedable": {
+  "breed_items": [
+    "slime_ball"
+  ],
+  "breeds_with": {
+    "minecraft:frog": {
+      "event": "become_pregnant",
+      "target": "self"
+    }
+  },
+  "causes_pregnancy": true,
+  "require_tame": false
+}
+```
+
+#### Goat
+
+
+```json
+"minecraft:breedable": {
+  "require_tame": false,
+  "breed_items": [
+    "wheat"
+  ],
+  "breeds_with": {
+    "minecraft:goat": {}
+  }
+}
+```
+
+#### Llama
+
+
+```json
+"minecraft:breedable": {
+  "require_tame": true,
+  "breeds_with": {
+    "minecraft:llama": {}
+  },
+  "breed_items": [
+    "hay_block"
+  ]
+}
+```
+
+
+(출처: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_pushable.md`)
+
+
+### Entity Documentation - minecraft:pushable
+
+Defines what can push an entity between other entities and pistons.
+
+> [!Note]
+> In 1.26.10 this component was split into `minecraft:pushable_by_block` (pistons and Shulker Boxes, equivalent to `is_pushable_by_piston: true`) and `minecraft:pushable_by_entity` (other entities, equivalent to `is_pushable: true`). The original `minecraft:pushable` component is no longer parsed.
+
+> [!Note]
+> This item no longer works after format versions of at least 1.26.10.
+
+
+#### Pushable Properties
+
+|Name       |Default Value |Type |Description |Example Values |
+|:----------|:-------------|:----|:-----------|:------------- |
+| is_pushable | true | Boolean true/false | Whether the entity can be pushed by other entities. | Allay: `true` | 
+| is_pushable_by_piston | true | Boolean true/false | Whether the entity can be pushed by pistons safely. | Allay: `true` | 
+
+#### Samples
+
+#### Allay
+
+
+```json
+"minecraft:pushable": {
+  "is_pushable": true,
+  "is_pushable_by_piston": true
+}
+```
+
+#### Armor Stand
+
+
+```json
+"minecraft:pushable": {
+  "is_pushable": false,
+  "is_pushable_by_piston": true
+}
+```
+

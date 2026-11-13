@@ -1,0 +1,147 @@
+---
+title: "JSON UI 개요"
+description: "JSON UI가 무엇인지, 규칙 ID와 검증 수준을 어떻게 읽는지, 출처 약어와 레지스트리 id의 대응, 가장 중요한 규칙 20개"
+sidebar_position: 1
+sources:
+  - repo-guide
+  - repo-survey
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+  - bedrock-core
+  - private-research
+  - advancementpack
+  - mcbejsonuimasterai
+  - cinnabar
+  - netease-docs
+  - private-research
+---
+
+# JSON UI 개요
+
+기준 버전: 바닐라 리소스팩 v1.26.50.4(Mojang `bedrock-samples` 커밋 `46ba6ea`, 2026-09-16). 이 섹션의 규칙은 대부분 이 판의 바닐라 `ui/` 파일 207개를 전수 검색해 대조한 것이다(출처: repo-guide, bedrock-samples).
+
+## JSON UI란
+
+JSON UI는 마인크래프트 배드락의 리소스팩 `ui/` 폴더에 있는 JSON 파일로 게임 화면(HUD, 인벤토리, 서버 폼, 상자, NPC 대화 등)을 기술하는 데이터 기반 UI다. 팩이 바닐라 파일과 같은 경로의 파일을 더하거나 새 파일을 등록하면 화면의 모양과 일부 동작을 바꿀 수 있다(출처: bedrock-wiki, ms-learn).
+
+| 알아 둘 점 | 내용 |
+| --- | --- |
+| 구성 | 파일 하나가 namespace 하나이고 키 하나가 컨트롤 정의다. 정의는 `@`로 상속하고 `$`로 변수를 받는다 |
+| 데이터 | 엔진이 주는 `#속성`을 바인딩으로 컨트롤 속성에 연결하고, 식으로 계산한다 |
+| 한계 | 3D 위치를 따라가는 표시, Ore UI로 옮겨 간 화면은 JSON UI로 만들거나 고칠 수 없다(ALT-01, ALT-11) |
+| 버전 | JSON UI에는 버전이 없다. Mojang이 바닐라를 바꾸면 팩이 깨질 수 있어 고친 부분을 최소화한다 |
+| 전망 | Bedrock Wiki는 JSON UI가 Ore UI로 대체되는 중이라 JSON UI를 쓰는 애드온이 앞으로 깨질 수 있다고 경고한다(출처: bedrock-wiki) |
+
+가장 짧은 시작: 새 파일을 만들고 `ui/_ui_defs.json`에 등록한 뒤(FILE-01), 바닐라 화면에는 `modifications`로 끼운다(MOD-01). 단계별 예제는 [파일과 정의](./files-and-definitions.mdx)와 [바닐라 화면 수정](./modifying-vanilla.mdx)에 있다.
+
+## 페이지 지도
+
+| 페이지 | 다루는 것 | 규칙 ID |
+| --- | --- | --- |
+| [파일과 정의](./files-and-definitions.mdx) | 파일 등록, namespace, `@` 상속, `$` 변수, `variables`, `ignored`, 경로 키, `property_bag` | FILE |
+| [바닐라 화면 수정](./modifying-vanilla.mdx) | `modifications` 11개 연산, 속성 덮어쓰기, 재선언, 감싸기, 다른 팩과 공존 | MOD |
+| [컨트롤과 레이아웃](./controls-and-layout.mdx) | 컨트롤 타입, 크기 키워드, 앵커, 스택, 레이어, 클리핑, 그리드, 스크롤, 9-slice | LAY |
+| [바인딩](./bindings.mdx) | 바인딩 종류와 조건, view 바인딩, 다른 컨트롤 읽기, 엔진 속성 | BND |
+| [식과 연산자](./expressions.mdx) | 연산자 표, 문자열 자르기, 타입 변환, 위험한 식, 평가기 실행 결과 | EXP |
+| [컬렉션과 팩토리](./collections-and-factory.mdx) | 컬렉션 주소 지정, 팩토리 두 모양, 폼 행 번호, 그리드(6.0~6.8절) | COL |
+| [팩토리 종합과 StarLibV2 키 배치](./factory-synthesis.mdx) | 팩토리 정보 종합, 키 게이트와 2차원 배치, 근거 표기(6.9~6.10절) | COL |
+| [입력, 버튼, 토글](./input-buttons-toggles.mdx) | `button_mappings`, 버튼 ID, 토글 8상태, 라디오 탭, 포커스, 상자 입력 | INP |
+| [텍스트와 현지화](./text-and-localization.mdx) | 라벨 속성, lang 파일, 번역 키 조립, 색 코드, 글꼴 | TXT |
+| [이미지와 애니메이션](./images-and-animation.mdx) | `image` 속성, 진행 막대, `anim_type`과 easing, 플립북, 종이 인형 | ANI |
+| [화면 호스트와 데이터 채널](./screen-hosts-and-data.mdx) | 서버 폼, 모달 폼, 상자, NPC 대화, HUD가 스크립트 데이터를 받는 규칙 | HOST |
+| [패턴 레시피](./recipes.mdx) | 서버 폼 최소 구성, 데이터 소스, 고정 폭 레코드 등 레시피 1~6 | PAT |
+| [패턴 레시피 (2)](./recipes-toast-and-widgets.mdx) | 탭, 토스트, 진행 막대, 아이콘, 호버 레시피 7~12와 반영안 | PAT |
+| [JSON UI가 맞지 않을 때](./alternatives.mdx) | 파티클 글리프, Ore UI 등 JSON UI 밖의 선택지 | ALT |
+| [디버깅, 검증, 버전 관리](./debugging-and-versions.mdx) | 로그 읽기, 증상표, 스키마의 함정, 바닐라 대조, 1.26.50 변경 | DBG |
+| [값 사전](./value-dictionary.mdx) | 바닐라 UI 파일의 속성별 리터럴 값 사용 횟수와 공식 enum 대조 | 표 |
+| [충돌 판정표](./conflicts.mdx) | 출처끼리 주장이 다른 곳(C-01~C-64)의 판정 | C |
+| [커뮤니티 보고와 대조](./community-reports.mdx) | 가이드와 커뮤니티 보고를 맞춰 본 대조표(D-01~D-28)와 커뮤니티 UI 노트 | D |
+| [커뮤니티 노트: 데이터 채널, HUD, 식, 레이아웃](./community-reports-hud-and-expressions.mdx) | 커뮤니티 보고 상세: 워크플로, 바인딩, 식, HUD, 레이아웃 | D |
+| [커뮤니티 노트: 화면별](./community-reports-screens.mdx) | 커뮤니티 보고 상세: 서버 폼, 상자, 바닐라 화면, DDUI, Ore UI | D |
+| [커뮤니티 노트: 한계, 버전 연표, 도구, 미해결](./community-reports-versions-and-bugs.mdx) | 커뮤니티 보고 상세: 제한과 우회법, 연표, 미해결 질문 | D |
+
+페이지의 규칙이 다른 페이지의 규칙을 가리킬 때는 ID만 적는다.
+
+## 규칙 ID와 충돌·재현 번호
+
+- 규칙 ID는 `영문 장약어-번호`(예: `FILE-06`)다. 규칙을 인용할 때 ID를 함께 적는다. 검증 수준이 `충돌`이나 `미검증`인 규칙은 결과물에 그대로 단정하지 말고 "확인 필요"로 표시한다.
+- `C-번호`는 출처끼리 주장이 달랐던 충돌 판정이다. 판정은 `해소`(한쪽 확정), `부분 해소`(범위를 나눠 둘 다 맞음), `미해결`(실측 필요)이고, 이 섹션의 각 페이지 끝에 해당 판정을 옮겨 두었다.
+- `D-번호`는 커뮤니티 1년치 대화와 가이드를 맞춰 본 결과의 항목이다. 커뮤니티 보고는 규칙에 직접 넣지 않고 각 페이지의 "커뮤니티 보고" 절에 따로 적는다.
+- 페이지의 "반영안(미적용)" 절은 새 자료 조사에서 나온 규칙 제안이다. 병합 기록이 정한 최종 번호를 쓰지만 본문 규칙에는 아직 합쳐지지 않았다.
+
+## 검증 수준
+
+모든 규칙 끝의 `{…}`가 검증 수준이고 `(출처: …)`가 근거다. 여러 수준이 함께 붙을 수 있다.
+
+| 표기 | 뜻 | 신뢰도 |
+| --- | --- | --- |
+| `실측` | 게임 안에서 측정한 기록이 있다(주로 bedrock-core 저자의 스파이크 기록). 이 프로젝트에서 다시 측정하지는 않았다 | 높음 |
+| `바닐라` | 바닐라 1.26.50.4 리소스팩 `ui/` 207개 파일에서 실제로 쓰인다. 횟수는 이번 전수 검색 결과다 | 높음(이름·구조), 의미는 별도 |
+| `작동팩` | 배포되어 동작하는 팩(BedrockAdvancements 2.0.3, AdvancementPack v4.2 등)이 그렇게 쓴다 | 중상 |
+| `코드` | 소스, 컴파일 결과, 스크립트를 읽어 확인했다. 게임 동작까지는 보장하지 않는다. 실제 클라이언트를 분석한 `NB`가 가장 직접적인 코드 근거이고, 그다음이 네이티브 클라이언트를 재구성한 Cinnabar(`CN`)다. `NB`가 읽지 못한 식·변수 규칙은 `CN`이 가장 직접적이다 | 중(`NB`와 `CN`의 식·변수 규칙은 중상) |
+| `추론` | 위 근거들로부터 판단했다 | 낮음 |
+| `미검증` | 어느 출처가 주장했지만 근거가 확인되지 않았다 | 쓰기 전 실측 필요 |
+| `충돌` | 출처끼리 다르고 완전히 해소되지 않았다. 판정 근거는 각 페이지 끝의 충돌 판정 표에 있다 | 쓰기 전 실측 필요 |
+
+판정 우선순위는 **실측 > 바닐라 > 작동팩 > 코드 > 추론**이다. 같은 수준끼리 다르면 더 나중의 측정을 따르고, 그래도 다르면 `충돌`로 남긴다. 엔진 바이너리를 직접 읽은 `NB`가 확인한 내용은 출처를 `NB`로만 적고, `NB`가 읽지 못한 식·변수 규칙은 Cinnabar(`CN`)가 가장 직접적인 코드 근거다. 실측·바닐라·작동팩은 근거의 종류가 달라 그대로 둔다.
+
+주의: 바닐라 1.26.50.4의 바인딩 식은 `not`, `and`, `or`, `=`, `+`만 쓴다. 문자열 자르기, 문자열 빼기, 산술, 대소 비교는 바닐라에 한 번도 나오지 않으므로 **식 규칙은 바닐라로 판정할 수 없고 실측과 작동팩이 근거**다.
+
+## 출처 약어와 레지스트리 id
+
+규칙 끝 `(출처: …)`의 약어와 이 위키 출처 표의 id는 다음과 같이 대응한다. 라이선스 때문에 `redistribute: false`인 자료는 문장·코드를 옮기지 않고 사실만 한국어로 다시 썼다.
+
+| 약어 | 자료 | 레지스트리 id |
+| --- | --- | --- |
+| `BC`, `BC-S1`…`BC-S14`, `BC-facts`, `BC-rules` | bedrock-core(`@bedrock-core/ui` 0.12.1, JSX를 JSON UI로 컴파일). 저자의 인게임 실측 기록(S1~S14, facts, rendering rules) | `jua-bedrock-core` |
+| `BA`, `BA-원본` | BedrockAdvancements 2.0.3(서버 폼 재스킨, 고정 폭 레코드). 원본 `ui/*.json`은 All rights reserved | `jua-bedrockadvancements` |
+| `AP`, `AP-samples` | AdvancementPack v4.2(NPC 대화와 HUD 오버레이) | `jua-advancementpack` |
+| `MJ` | mcbejsonuimasterAI(AI용 스킬·도구, 라이선스 없음) | `jua-mcbejsonuimasterai` |
+| `BW`, `BW-intro`, `BW-best`, `BW-doc`, `BW-dyn`, `BW-form`, `BW-btn`, `BW-title`, `BW-type`, `BW-hud`, `BW-ase`, `BW-ids`, `BW-font` | Bedrock Wiki JSON UI 문서(Intro, Best Practices, JSON UI Documentation, Dynamic Content Generation, Modifying Server Forms, Buttons and Toggles, Preserve Title Texts, Type Conversion, Adding HUD Elements, Aseprite Animations, Numerical Item IDs, Fonts) | `bedrock-wiki` |
+| `TP` | 이 가이드의 게임 실측(2026-10-20, Windows 1.26.52, 테스트 팩) | `repo-guide` |
+| `VN` | 바닐라 리소스팩 `resource_pack/ui` v1.26.50.4 전수 검색. `VN 파일:줄`은 그 위치 | `bedrock-samples` |
+| `CN`, `CN-run` | Cinnabar(`crates/json-ui`, 26.30 네이티브 클라이언트 재구성) 분석과 그 평가기를 직접 실행한 결과 | `jua-cinnabar` |
+| `NB` | 네이티브 클라이언트 엔진 동작 분석(Android 1.26.52.3 네이티브 클라이언트 라이브러리, 분석 도구). `NB-01`…은 발견 번호 | `private-research` |
+| `NE` | NetEase(중국판) 개발자 문서의 UI 장 분석(라이선스 없음, 사실만) | `jua-netease-docs` |
+| `DF` | 연구 서버 서버(Dragonfly Go 서버) 실측(Windows 1.26.52, 2026-10-19~22) | `jua-연구 서버` |
+| `ML` | Microsoft Learn(Minecraft Creator) 문서, 해당 페이지에는 Update 노트와 협력형 지침 포함 | `ms-learn` |
+| `CU`, `UP`, `SP`, `SLB`, `ASJ`, `JEN`, `JF`, `UIS`, `LG`, `WZ` | 새 자료 조사의 반영안 출처: Chest-UI, upgrader, 작은 팩 6개, StarLibV2, AsaJS, JsonEncryptor, JsonForge, JSON UI 스키마 4종, json-ui-examples, bedrock-json-ui-editor | `jua-chest-ui`, `jua-upgrader`, `jua-small-packs`, `jua-starlibv2`, `jua-asajs`, `jua-jsonencryptor`, `jua-jsonforge`, `jua-jsonui-schemas`, `jua-json-ui-examples`, `jua-bedrock-json-ui-editor` |
+| 커뮤니티 | 커뮤니티 1년치 정리(2025-10~2026-10) | `private-research` |
+| `DI`, `OUC`, `OL`, `MS` | 파티클 팩, Ore UI Customizer, Ore UI 로딩 조사, 모달 폼 multiselect 조사. 이 섹션의 네 페이지는 직접 인용하지 않는다 | 해당 섹션 페이지의 출처 표 |
+
+가이드와 위키 원문은 `bedrock-wiki` 0930b39(이 위키 기준)로 다시 확인했다. 원 가이드가 기록한 위키 커밋은 `1d12a90`이다. 라이선스 요약: `BW`는 CC BY 4.0이라 출처와 함께 사실을 한국어로 다시 썼고 일부는 `Excerpt`로 옮겼다. `BA`는 재배포 금지라 기법만 옮겼다. `MJ`, `NE`는 라이선스가 없어 사실만 옮겼다. `CN`은 비상업 라이선스라 동작 규칙만 다시 썼다(Cinnabar 편집기·평가기는 비상업 목적에만 쓴다, DBG-21). `NB`는 Mojang의 비공개 바이너리를 개인 참고용으로 읽은 것이라 분석한 코드는 옮기지 않고 동작만 다시 썼다.
+
+## 가장 중요한 규칙 20개
+
+처음 만들기 전에 이것만은 알아야 한다. 괄호는 규칙 ID이고, 근거는 각 규칙이 있는 페이지에 있다.
+
+1. 바닐라 파일을 고칠 때는 **같은 경로 파일에 `modifications`만** 쓴다. 다른 경로에 쓴 `modifications`는 무시되거나 정의를 대체한다. (MOD-02)
+2. 바닐라 컨트롤은 **지우지 말고 바인딩으로 숨긴다.** 상속받은 자식을 `remove`하면 그 파일의 수정 전체가 조용히 사라진다. (MOD-05)
+3. 상속만 받은 배열에 `insert`하면 상속받은 내용이 통째로 가려진다. 배열을 직접 선언한 정의에 넣는다. (MOD-04)
+4. 식에는 `%`, `>=`, `<=`가 **없다**(`!=`도 근거가 없으니 `(not (a = b))`를 쓴다). `=`, `<`, `>`, `not`, `and`, `or`, `+`, `-`, `*`, `/`만 쓴다. 소수 리터럴은 `.3`처럼 점으로 시작해야 실수다(`0.3`은 정수 0). 범위는 `(a < #v < b)`가 아니라 `((a < #v) and (#v < b))`로 쓴다. (EXP-01) (EXP-27) (EXP-28)
+5. `'%.Ns' * #문자열`은 앞 **N바이트**(UTF-8)를 자른다. 한글은 3바이트다. (EXP-09)
+6. 식에 `#속성`이 하나도 없으면 그 컨트롤의 바인딩 **전체**가 버려진다. 상수는 `((#v = #v) * 40)`처럼 쓴다. (BND-05)
+7. `#visible`은 기본값이 `true`라서, 식이 실패하면 "항상 보임"이 된다. (BND-09)
+8. `visible: false`는 그리기만 막는다. **생성과 레이아웃은 막지 못한다.** 생성을 막으려면 `ignored`(생성 시 변수) 또는 길이가 0인 팩토리를 쓴다. `ignored`는 자기 `$` 선언이 아니라 부모 스코프에서 평가되므로 게이트 변수는 부모에 넘기고 `ignored`는 자식에 단다. (COL-10) (FILE-34)
+9. `collection_name`은 `stack_panel`, `grid`, `collection_panel`에만, `collection_index`는 부모 `controls` 안의 참조 지점에만 쓴다. (COL-01) (COL-02)
+10. 서버 폼 버튼이 눌린 것으로 집계되려면 **버튼 자신에** `collection_details` 바인딩이 있어야 한다. 없으면 스크립트에는 `canceled`로 온다. (COL-04)
+11. 액션 폼 엔트리는 전부 `button()`으로 보낸다. `label()`을 섞으면 컬렉션 인덱스와 `selection` 번호가 어긋난다. (COL-19)
+12. 바인딩된 값은 **바인딩한 컨트롤의 것**이다. 자식이 쓰려면 자식이 직접 바인딩하거나 view 바인딩으로 복사한다. (BND-04)
+13. 라벨은 기본으로 현지화된다. 리터럴은 `"localize": false`. 숫자 바인딩은 문자열과 이어 붙여야 보이고, 문자열 + 소수는 아무것도 안 나온다. (TXT-01) (TXT-06)
+14. 토글은 **8개 상태 컨트롤을 모두** 정의한다. 빠진 상태로 들어가면 컨트롤이 사라진다. (INP-10)
+15. 스택 패널은 숨은 자식에 공간을 주지 않는다. 조건부 행, 비트 스페이서 좌표가 이 성질을 쓴다. [LAY-04]
+16. 정적 컨트롤의 위치는 바인딩할 수 없다. **앞에 둔 spacer의 크기**를 바인딩해 민다. [LAY-05]
+17. 제목·타이틀·채팅을 데이터 채널로 쓸 때는 길고 고유한 접두사를 붙이고, 같은 접두사로 바닐라 표시는 숨기고 커스텀 표시는 켠다. (HOST-15)
+18. HUD 타이틀은 채널이 하나라 다른 애드온의 `setTitle`에 덮인다. 겹칠 수 있는 알림은 채팅 팩토리를 쓴다. (HOST-14)
+19. 3D 위치를 따라가야 하는 표시(머리 위 숫자 등)는 JSON UI로 만들 수 없다. 파티클이나 엔티티를 쓴다. (ALT-01)
+20. 실험은 한 번에 하나씩 바꾸고, 로그에서 그 화면이 실제로 열렸는지부터 확인한다. "될 것 같은 것"보다 "되는 것을 복사"한다. (DBG-02)
+
+## 범위와 한계
+
+- 이 섹션의 규칙은 대부분 이번에 다시 게임으로 측정하지 않았다. `실측`은 원 출처의 측정 기록이다. `충돌`과 `미검증` 항목은 각 페이지 끝의 "실측이 필요한 항목"에 모았다.
+- Bedrock Wiki(`BW`) 문서는 바닐라와 대조해 넣었다. 위키 문장만 있는 규칙은 `미검증`이다.
+- Cinnabar(`CN`) 근거는 게임이 아니라 26.30 클라이언트 재구성 코드다. 실측과 다른 곳(C-43~C-47)은 실측을 따랐다.
+- 평문 리소스팩은 Ore UI 화면을 고칠 수 없다. 루트에 빈 `content.zipe`를 둔 팩(서버 없이 로컬)이나 서버가 암호화해 보낸 팩은 게임 중 Ore UI 페이지를 바꿀 수 있다(ALT-11).
+- 버전이 바뀌면 바닐라를 다시 대조한다(DBG 규칙). 개별 규칙의 근거 판은 이 개요 첫머리의 1.26.50.4다.

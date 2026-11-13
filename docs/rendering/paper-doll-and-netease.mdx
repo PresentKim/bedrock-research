@@ -1,0 +1,230 @@
+---
+title: 종이 인형과 NetEase 골격 모델
+description: 국제판 paper_doll_renderer의 속성과 제약, 중국판(NetEase) 골격 모델 리소스와 netease_paper_doll_renderer, 국제판에 그 기능이 없다는 근거
+sidebar_position: 13
+sources: [netease-mcdocs, private-research, bedrock-samples, repo-guide, private-research]
+---
+
+# 종이 인형과 NetEase 골격 모델
+
+이 페이지는 NetEase(중국판) 문서의 골격 모델과 UI 종이 인형 기능을, 국제판(바닐라 1.26.50.4와 Android 1.26.52.3 바이너리)과 대조해 정리한다. NetEase 문서에는 라이선스 표기가 없어 문장과 코드를 옮기지 않고 사실만 한국어로 다시 썼다. 아래 JSON과 Python 예시는 이 위키에서 새로 쓴 것이다(출처: netease-docs).
+
+표기: `{중국판}`은 중국판 전용(국제판 엔진에 없음), `{바닐라}`는 국제판 바닐라에서 확인, `{코드}`는 바이너리 문자열로 확인한 것이다.
+
+## 요약
+
+- NetEase의 **골격 모델**(skeletal model)은 FBX에서 변환한 뼈대·메시·애니메이션 JSON을 `mod_resource/models/netease_models.json`에 이름으로 등록하고, Python `model` 컴포넌트로 엔티티 모델을 바꾸거나 UI 종이 인형에 그리는 `{중국판}` 전용 기능이다. 국제판의 `geometry`, `animation`, `render_controllers`(리소스 팩 엔티티 정의)와는 별개 체계다.
+- UI에 3D 모델을 그리는 렌더러는 두 가지다. 바닐라에도 있는 `paper_doll_renderer`에 NetEase가 덧붙인 `modelname`, `modelsize`, `animation` 속성, 그리고 NetEase 전용 `netease_paper_doll_renderer`(엔티티, 플레이어, 골격 모델, 블록 지오메트리)다.
+- **국제판에는 둘 다 없다.** 국제판 클라이언트 바이너리 328MB에 `netease` 문자열이 0개이고, `skeleton_model_name`, `netease_paper_doll`, `modelname`, `modelsize`, `screen_scale`, `init_rot_y`, `render_depth`도 0개다(NB-12 `{코드}`). 바닐라도 이 속성들을 한 번도 쓰지 않는다.
+- 국제판 `paper_doll_renderer`는 **플레이어 스킨(페르소나)만** 그린다. 커스텀 엔티티·모델을 UI에 띄우려는 국제판 팩은 이 렌더러로 할 수 없다(가이드 ANI-35, ANI-36).
+
+## 국제판 paper_doll_renderer `{바닐라}`
+
+**개념**: `"type": "custom"`과 `"renderer": "paper_doll_renderer"`를 가진 컨트롤은 엔진이 가진 플레이어 스킨을 3D로 그린다. 그릴 스킨은 엔진이 화면에 주는 바인딩(`#paper_doll_skin`(일시정지 화면), `#skin_index`(스킨 팩), `#classic_skin_index`(스토어 컬렉션), `$button_model_type`(페르소나 팝업))으로 받으며, 팩이 다른 모델을 고를 방법이 아니다.
+
+바닐라 1.26.50.4에서 이 렌더러를 쓰는 곳은 13곳이다: `day_one_experience_screen.json`, `expanded_skin_pack_screen.json`(2곳), `pause_screen.json`, `persona_SDL.json`(3곳), `persona_cast_character_screen.json`, `persona_popups.json`, `skin_pack_pdp.json`, `start_screen.json`, `store_promo_timeline_screen.json`(2곳).
+
+| 속성 | 횟수 | 값 | 뜻(용례로 판단) |
+| --- | --- | --- | --- |
+| `use_selected_skin` | 12 | 모두 `false` | `false`면 선택한 스킨이 아니라 바인딩으로 받은 스킨을 그린다(추론) |
+| `rotation` | 8 | `gesture_x` 6, `auto` 1, 변수 1 | `gesture_x`는 끌어서 돌리기, `auto`는 저절로 돎 |
+| `camera_tilt_degrees` | 8 | 모두 `-10` | 카메라를 아래로 10도 기울임 |
+| `starting_rotation` | 8 | 모두 `30` | 처음 몸 방향(도) |
+| `enable_scissor_test` | 4 | 모두 `true` | 컨트롤 영역 밖을 자름 |
+| `property_bag.#skin_rotation` | 2 | `true` | `day_one_experience_screen.json`이 `rotation: auto`와 함께 씀 |
+| `animation_reset_name`, `anims` | 10 | 화면 전환 크기 애니메이션 | 일반 컨트롤 속성 |
+
+끌어서 돌리기는 일시정지 화면(`pause_screen.json`)에서 이렇게 이어진다. (1) `input_panel`(`skin_viewer_panel`, 인스턴스 이름 `viewer_panel`)에 `"gesture_tracking_button": "button.turn_doll"`을 주고, `button_mappings`로 `button.menu_select`를 `button.turn_doll`에 잇는다. (2) 종이 인형에 `"rotation": "gesture_x"`를 주고, view 바인딩 두 개로 `viewer_panel`의 `#gesture_delta_source`와 `#gesture_mouse_delta_x`를 같은 이름으로 받는다. 그래서 `gesture_x`는 `input_panel`과 함께 써야 끌기가 먹는다.
+
+```json
+{
+  "skin_viewer": {
+    "type": "input_panel",
+    "gesture_tracking_button": "button.turn_doll",
+    "button_mappings": [ { "from_button_id": "button.menu_select", "to_button_id": "button.turn_doll", "mapping_type": "pressed" } ]
+  },
+  "doll": {
+    "type": "custom",
+    "renderer": "paper_doll_renderer",
+    "rotation": "gesture_x",
+    "starting_rotation": 30,
+    "camera_tilt_degrees": -10,
+    "use_selected_skin": false
+  }
+}
+```
+
+위 예시는 게임에서 확인하지 않은 예제다. 이 위키에서 속성 용례를 모아 새로 쓴 것이며 실제 바인딩 이름과 `button_mappings` 세부는 바닐라 `pause_screen.json`과 맞춰 확인해야 한다 `{실측 필요}`.
+
+국제판 팩 제작자를 위한 정리:
+
+- UI에 커스텀 3D 모델이나 엔티티를 띄우는 방법은 국제판 JSON UI에 없다. `netease_paper_doll_renderer`, `modelname`, `skeleton_model_name`을 쓰지 않는다. 쓰면 렌더러가 없거나 속성이 무시된다(콘텐츠 로그에 어떻게 나오는지는 실측하지 않았다).
+- 국제판 종이 인형으로는 엔진이 정한 플레이어 스킨만 그릴 수 있다. 회전 방식과 각도(`rotation`, `camera_tilt_degrees`, `starting_rotation`)는 바닐라 값으로 조절할 수 있다.
+- 3D 표현이 꼭 필요하면 월드 안의 엔티티(커스텀 지오메트리)나 파티클을 쓴다(ALT-01).
+- NetEase 편집기가 만든 UI JSON을 국제판으로 옮길 때는 종이 인형 컨트롤을 지우거나 텍스처 이미지로 바꾼다(가이드 DBG-23 후보와 같은 정리).
+- 페이퍼돌에서 엔티티 쿼리·파티클·렌더 컨트롤러가 어떻게 동작하는지(`has_property doesn't have an actor` 등)는 [렌더 컨트롤러](./render-controllers.mdx)와 [파티클](./particles.mdx)을 본다.
+
+## 골격 모델 리소스 `{중국판}`
+
+### 만드는 순서
+
+1. 3ds Max나 Blender로 뼈대와 애니메이션을 만들고 FBX로 내보낸다.
+2. MC Studio 레벨 편집기의 "리소스 가져오기"로 FBX를 마인크래프트 모델 JSON으로 바꾼다. 지금은 편집기가 경로 등록, 폴더 배치, 텍스처 지정을 자동으로 한다. 손으로 고칠 때만 아래를 참고한다.
+3. 결과물 배치:
+
+| 파일 | 위치 |
+| --- | --- |
+| 모델 등록 표 | `mod_resource/models/netease_models.json` |
+| 뼈대 | `mod_resource/models/skeleton/<이름>_skeleton.json` |
+| 메시 | `mod_resource/models/mesh/<이름>_mesh….json` |
+| 애니메이션 | `mod_resource/models/animation/…` |
+| 텍스처 | `mod_resource/textures/models/<재질 이름>.png` |
+
+메시 파일이 재질 이름을 갖고 그 이름이 곧 `textures/models/` 아래 텍스처 파일 이름이다. 애니메이션 이름은 영어 단어, 병음, 숫자, 밑줄로만 짓는다.
+
+### `netease_models.json` 항목
+
+최상위 객체의 **키가 모델 이름**이다(`name` 키는 없다). Python `SetModel("이름")`과 UI의 `skeleton_model_name`이 이 키를 가리킨다.
+
+```json
+{
+  "my_fox": {
+    "skeleton": "skeleton/my_fox_skeleton.json",
+    "mesh": "mesh/my_fox_mesh.json",
+    "animation": { "idle": "animation/my_fox_idle.json", "walk": "animation/my_fox_walk.json" },
+    "arm_model": "my_fox_fp",
+    "material": "entity_for_skeleton",
+    "material_cpu": "entity_for_skeleton_cpu",
+    "texture": { "tex1": "my_fox_glow" },
+    "frame_anim": { "row": 8, "col": 4, "frames": 32, "time": 5 }
+  }
+}
+```
+
+| 키 | 뜻 |
+| --- | --- |
+| `skeleton`, `mesh` | 뼈대와 메시 JSON 경로(`models/` 기준) |
+| `animation` | 애니메이션 이름에서 파일 경로로 가는 사전. 이름이 `PlayAnim`과 UI `animation`의 값이다 |
+| `arm_model` | 1인칭 팔 모델 이름 |
+| `frame_anim` | 텍스처 프레임 애니메이션 |
+| `material` | GPU 스키닝 재질 이름. 거의 모든 기기가 이것을 쓴다. 2.8부터 **배열**도 받아 여러 패스로 차례로 그린다(기본 재질 다음에 외곽선 재질 등) |
+| `material_cpu` | CPU 스키닝 재질. 큰 버텍스 셰이더 uniform을 지원하지 않는 일부 Android 기기만 쓴다. `USE_SKINNING`과 `BoneId0`가 없는 재질이다 |
+| `texture` | 추가 텍스처 슬롯 `tex0`~`tex3`(값은 `textures/models/` 아래 이름, 확장자 없음). `tex0`은 메시 재질 텍스처를 덮으므로 메시에 텍스처가 없을 때만 쓴다. 프래그먼트 셰이더에서 `TEXTURE_0`~`TEXTURE_3`으로 받는다 |
+| `useSplitMeshes` | 기본 `false`. `true`면 뼈마다 따로 메시로 그려 뼈별 재질·숨기기가 된다. 그리기 횟수가 늘므로 필요할 때만 켠다(2.8+) |
+| `splitBonesGroup` | 뼈 이름에서 `{ material, material_cpu, texture }`로 가는 사전. 뼈 이름은 뼈대 JSON과 대소문자까지 같아야 한다(예: `Bip001 Head`) |
+| `dy_load` | 예시에만 나오고 설명이 없다(동적 로드로 보인다, 추론) |
+
+- 재질은 `resource_pack/materials/entity.material`에 정의한다. 우선순위는 재질이 뼈의 `material`, 그다음 몸 전체 `material`이고, 텍스처는 뼈의 `texture`, 그 뼈 메시의 재질 텍스처, 몸 전체 텍스처 순이다.
+- 반투명: 모델은 기본이 불투명이라 `gl_FragColor.a`가 효과가 없다. 재질에 Blend(`blendSrc: SourceAlpha`, `blendDst: OneMinusSrcAlpha`)를 선언해야 알파가 먹는다. 재질 문법 자체는 [머티리얼과 셰이더](./materials-and-shaders.mdx)를 본다.
+
+### Python 호출
+
+```python
+# 새로 쓴 예시. "my_fox"는 netease_models.json의 키
+model = self.CreateComponent(playerId, "Minecraft", "model")
+model.SetModel("my_fox")
+model.PlayAnim("walk", True)   # 둘째 인자 True면 반복
+```
+
+뼈 하나 숨기기는 `clientApi.GetEngineCompFactory().CreateModel(entityId)`로 얻은 컴포넌트의 `SetModelPartVisible(modelId, "Bip001 Head", False)`이며 `useSplitMeshes: true`가 필요하다.
+
+### 1인칭 모델
+
+1인칭 팔은 별도 뼈대·애니메이션 세트로 만들고(예: `steve_fp`) 3인칭 모델의 `arm_model`에 그 이름을 적는다. 애니메이션 이름은 3인칭과 같게 짓는다. 1인칭에서 손이 비었거나 든 아이템이 숨겨졌을 때 1인칭 모델이 보인다. 3인칭 모델에 애니메이션을 틀면 1인칭 모델도 같은 이름을 튼다. `arm_model`이 없으면 같은 조건에서 1인칭에 아무 모델도 보이지 않는다.
+
+### 텍스처 프레임 애니메이션
+
+뼈 애니메이션 없이 텍스처만 바꿔 움직이는 방식이며 별도 코드가 필요 없다. 텍스처 한 장에 프레임을 격자로 깔고 재생 순서는 왼쪽 위에서 가로로, 다음 줄로, 오른쪽 아래까지다. `frame_anim`은 `row`(행), `col`(열), `frames`(전체 프레임 수, `row x col`보다 작아도 된다), `time`(한 바퀴 초, 끝나면 반복)을 받는다. 메모리에서 텍스처 가로·세로는 **위쪽 2의 거듭제곱**으로 올라간다(200은 256). 256x256 프레임 30개를 6행x5열로 깔면 1280x1536이 2048x2048이 되지만, 8행x4열(1024x2048)로 깔면 32칸에 메모리는 절반이다. 격자 모양을 2의 거듭제곱에 맞춘다.
+
+## UI 종이 인형 렌더러 `{중국판}`
+
+### `paper_doll`에 붙은 NetEase 속성
+
+NetEase UI 편집기의 "종이 인형" 컨트롤은 `"type": "custom", "renderer": "paper_doll_renderer"`에 다음 속성을 쓴다. 편집기에서 "바닐라 모델"(기본 `steve`)과 "FBX 모델"(골격 모델) 중 고른다.
+
+| 속성 | 기본 | 뜻 |
+| --- | --- | --- |
+| `modelname` | `""` | 그릴 골격 모델 이름. Python `SetUiModel`로 바꿀 수 있다고 적혀 있다 |
+| `animation` | `""` | 재생할 애니메이션 |
+| `animation_looped` | `true` | 반복 여부 |
+| `modelsize` | `1.0` | 크기 배율. 편집기에서는 0~100 정수 |
+| `enable_scissor_test` | `false` | 컨트롤 영역 밖을 자름 |
+
+국제판 대조: 렌더러 이름과 `enable_scissor_test`는 바닐라에도 있다. `modelname`, `modelsize`, `animation`, `animation_looped`는 바닐라 `paper_doll_renderer` 13곳에서 0회이고 `modelname`과 `modelsize`는 바이너리에도 없다(NB-12). ModAPI 「UI控件」 목차에서도 `SetUiModel`은 찾지 못했다(문서 안 불일치).
+
+### `netease_paper_doll_renderer`
+
+엔티티, 플레이어, 골격 모델, 블록 지오메트리를 그린다. JSON에서는 렌더러와 초기 자세만 정하고 **무엇을 그릴지는 Python으로 정한다**.
+
+```json
+{
+  "my_doll": {
+    "type": "custom",
+    "renderer": "netease_paper_doll_renderer",
+    "size": [100, 100],
+    "layer": 22,
+    "rotation": "gesture_x",
+    "init_rot_y": 60.0,
+    "screen_scale": 1.0,
+    "enable_scissor_test": false
+  }
+}
+```
+
+| 속성 | 기본 | 뜻 | Python 인자 |
+| --- | --- | --- | --- |
+| `rotation` | `none` | `none` 고정, `auto` 저절로 돎, `gesture_x` 끌어서 세로축(Y) 회전, `freedom_gesture` 세 축 자유 회전 | 없음 |
+| `init_rot_x`, `init_rot_y`, `init_rot_z` | 없음 | 각 축 초기 각도(도) | 같은 이름 |
+| `screen_scale` | `1` | 컨트롤 `size` 기준 배율 | `scale` |
+| `skeleton_model_name` | `""` | 골격 모델 이름 | 같은 이름 |
+| `animation` | `idle` | 골격 애니메이션 이름 | 같은 이름 |
+| `animation_looped` | `true` | 반복 | 같은 이름 |
+| `entity_identifier` | `""` | 엔티티 식별자(예: `minecraft:cat`) | 같은 이름 |
+
+`gesture_x`와 `freedom_gesture`는 `input_panel`과 함께 있어야 끌기가 먹는다. 문제별 대처: 위치가 어긋나면 UI 위치를, 너무 크거나 작으면 UI 크기나 `scale`을, 잘리면 `render_depth`나 `layer`를 고친다. Molang 식 때문에 깨지면 식을 고친다.
+
+### `NeteasePaperDollUIControl` (ModAPI)
+
+`ScreenNode.GetBaseUIControl(경로).asNeteasePaperDoll()`로 얻는다. 메서드는 모두 클라이언트 쪽이고 인자 사전 하나를 받아 성공 여부(`bool`)를 돌려준다.
+
+| 메서드 | 그리는 것 | 인자 |
+| --- | --- | --- |
+| `RenderEntity` | 엔티티·플레이어 | `entity_id`(문자열, 있으면 우선) 또는 `entity_identifier`, `scale`(1.0), `render_depth`(플레이어 -50, 일반 생물 -15), `init_rot_x/y/z`, `molang_dict`(문자열에서 실수), `rotation_axis` |
+| `RenderSkeletonModel` | 엔티티 없이 골격 모델 | `skeleton_model_name`, `animation`(`idle`), `animation_looped`(True), `scale`, `render_depth`, `init_rot_x/y/z`, `molang_dict`, `rotation_axis`, `light_direction` |
+| `RenderBlockGeometryModel` | 블록 팔레트로 만든 지오메트리 | `block_geometry_model_name`(`CombineBlockPaletteToGeometry`의 반환값), `scale`, `init_rot_x/y/z`, `molang_dict`, `rotation_axis` |
+| `GetModelId` | 그리는 골격 모델 ID(`int`) | 없음. 실패하면 -1 |
+
+- `rotation_axis`(예: `(0, 1, 0)`)는 컨트롤의 `rotation`이 `freedom_gesture`일 때만 쓴다.
+- `light_direction`은 `(x, y, z)` 각 -1, 0, 1로 빛 방향(좌우, 위아래, 앞뒤)을 정한다. 생략하면 아래에서 비춘다. 커스텀 재질 모델에는 효과가 없고 일부 저사양 Android에서는 지원하지 않는다.
+- `GetModelId`는 `Render…` 직후에 부르지 않는다(모델이 아직 없을 수 있다). 얻은 ID로 다른 골격 모델을 뼈에 붙이거나(`BindModelToModel`), 프레임 애니메이션(`CreateFrameAniSkeletonBind`)과 파티클(`CreateParticleSkeletonBind`)을 붙인다.
+- `RenderBlockGeometryModel`은 게임에 들어올 때마다 다시 불러야 한다. 팔레트를 저장하려면 `SerializeBlockPalette`와 `DeserializeBlockPalette`로 보관했다가 지오메트리를 다시 만든다.
+- 전체 예시는 NetEase 샘플 `UIDemoMod`, `NeteasePaperDollDemoMod`에 있다고 적혀 있다.
+
+```python
+# 새로 쓴 예시
+doll = self.GetBaseUIControl("/panel/my_doll").asNeteasePaperDoll()
+doll.RenderSkeletonModel({
+    "skeleton_model_name": "my_fox",
+    "animation": "idle",
+    "scale": 0.5,
+    "init_rot_y": 60,
+})
+```
+
+## 국제판에서 이 기능이 없는 근거
+
+| 근거 | 내용 |
+| --- | --- |
+| 바이너리 문자열 (NB-12) | Android 1.26.52.3 네이티브 클라이언트 라이브러리 전체에 `netease`와 `NetEase` 0개. `netease_paper_doll`, `skeleton_model_name`, `netease_models`, `modelname`, `modelsize`, `screen_scale`, `init_rot_y`, `render_depth`, `freedom_gesture` 0개 |
+| 바닐라 (VN) | `netease_paper_doll_renderer` 0회. `paper_doll_renderer` 13곳에 `modelname`, `modelsize`, `animation`, `animation_looped` 0회 |
+| 리소스 경로 | 국제판 리소스 팩에는 `mod_resource/` 폴더 체계가 없고 모델은 `models/entity/*.geo.json`, 애니메이션은 `animations/*.json`이다(Bedrock 일반 규약) |
+| Python | 국제판에는 Python ModAPI가 없다. `CreateComponent`, `asNeteasePaperDoll` 같은 호출을 할 곳이 없다 |
+
+한계: 짧은 이름(`paper_doll_renderer`, `gesture_x`)은 바닐라가 쓰는데도 문자열 검색에서 0개였다. 그래서 짧은 속성 하나하나가 없다고 단정하지는 않는다. 결론은 `netease` 0개와 긴 이름들에 기댄다.
+
+## 확인하지 못한 것
+
+- 국제판 `use_selected_skin`, `camera_tilt_degrees`, `starting_rotation`의 기본값. 바이너리의 `PaperDollPropertyBagSource`와 `PaperDollResolvedUIDefSource` 함수를 읽지 않았다(NB-12).
+- 국제판에서 `netease_paper_doll_renderer`를 쓴 컨트롤이 빈 영역으로 남는지, 콘텐츠 로그 경고를 남기는지.
+- NetEase 「骨骼模型的使用」 옛 경로의 10절 뒤 마지막 부분(약 1,600자)과 `dy_load`의 뜻.
+- NetEase 문서가 말하는 `SetUiModel`의 실제 위치(ModAPI 「UI控件」 목차에 없음).

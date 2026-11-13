@@ -1,0 +1,232 @@
+---
+title: "이벤트와 전투"
+description: "world/system 이벤트 구독 규칙, 개명된 이벤트, 입장·상호작용·아이템·전투 이벤트와 entityHurt, 넉백"
+sidebar_position: 3
+sources:
+  - private-research
+  - ms-learn
+  - bedrock-samples
+---
+
+## 이벤트의 네 갈래
+
+이벤트는 "구독(subscribe)한 콜백이 이벤트 객체를 받는" 방식으로 쓴다. 공식 문서는 이벤트를 네 묶음으로 나눈다(출처: ms-learn, `creator/Documents/scripting/events.md`).
+
+| 묶음 | 시점 | 예 |
+|---|---|---|
+| `world.beforeEvents` | 동작이 일어나기 직전. 취소 가능, 월드 변경 불가 | 블록 파괴, 아이템 사용, 플레이어 퇴장 |
+| `world.afterEvents` | 동작이 일어난 직후 | 컨테이너 열림, 버튼 누름, 엔티티 사망 |
+| `system.beforeEvents` | 게임 시작과 종료 전 | `startup`, `shutdown`, `watchdogTerminate` |
+| `system.afterEvents` | `/scriptevent` 명령 | `scriptEventReceive` |
+
+`before` 계열 콜백은 restricted execution이라 월드 상태를 바꾸는 API를 부르면 오류가 난다. 변경이 필요하면 `system.run`으로 미룬다.
+
+```javascript
+import { world, system, GameMode, ItemStack } from "@minecraft/server";
+
+// 커스텀 블록 `custom:slab`을 서바이벌에서 부수면 아이템을 떨군다
+world.beforeEvents.playerBreakBlock.subscribe((eventData) => {
+  const { block, player } = eventData;
+  const blockId = block.typeId;
+  const { x, y, z } = block.location;
+  if (block.hasTag("custom:slab") && player.getGameMode() === GameMode.Survival) {
+    system.run(() => {
+      player.dimension.spawnItem(new ItemStack(blockId, 1), { x, y, z });
+    });
+  }
+});
+```
+
+콜백은 이벤트 객체 하나를 받는다. `cancel`은 반드시 `event.cancel = true`로 쓰고 구조분해로 받지 않는다. 채팅 취소의 공식 예는 다음과 같으며(beta 전용 이벤트), 메시지에 `cancel`이 있으면 막는다.
+
+```javascript
+world.beforeEvents.chatSend.subscribe((eventData) => {
+  if (eventData.message.includes("cancel")) eventData.cancel = true;
+});
+```
+
+## 필터와 구독 해제
+
+두 번째 인자로 서버 측 필터를 줄 수 있어 효율적이다.
+
+```javascript
+world.afterEvents.entityHurt.subscribe(
+  (e) => world.sendMessage(`${e.hurtEntity.typeId} 피해 ${e.damage}`),
+  { entityFilter: { type: "minecraft:wolf" }, allowedDamageCauses: ["entityAttack"] }  // 필터 옵션 예시
+);
+
+const handler = world.afterEvents.playerSpawn.subscribe((e) => { /* ... */ });
+world.afterEvents.playerSpawn.unsubscribe(handler);  // 같은 참조가 필요하다
+```
+
+## 플레이어 입장 처리
+
+`playerJoin`에는 Player 객체가 없고 id와 이름뿐이다. 첫 입장 처리는 `playerSpawn`과 `initialSpawn`을 쓴다.
+
+```javascript
+world.afterEvents.playerSpawn.subscribe(({ player, initialSpawn }) => {
+  if (!initialSpawn) return;                       // 리스폰은 건너뛴다
+  system.runTimeout(() => {
+    if (player.isValid) player.sendMessage("어서 오세요");   // 로딩 중 메시지 유실 방지로 지연
+  }, 40);
+});
+```
+
+## `/scriptevent`와 스크립트 이벤트
+
+`system.afterEvents.scriptEventReceive`는 `/scriptevent <messageId> <message>` 명령과 `system.sendScriptEvent(id, message)`에 반응한다. 플레이어, 다른 스크립트, NPC, 명령 블록이 모두 보낼 수 있어 애드온 간 메시지에 쓴다. 이벤트 객체의 속성은 `id`, `message`, `initiator`(NPC 대화를 연 엔티티), `sourceBlock`(명령 블록), `sourceEntity`(NPC), `sourceType`(`Block`, `Entity`, `NPCDialogue`, `Server`)이다. `Server`는 서버 콘솔이나 `runCommand` API에서 온 경우다(출처: ms-learn, `events.md`).
+
+```javascript
+system.afterEvents.scriptEventReceive.subscribe((ev) => {
+  if (ev.id !== "my:ping") return;
+  world.sendMessage(`ping: ${ev.message} (${ev.sourceType})`);
+});
+// /scriptevent my:ping hello
+```
+
+## after 이벤트 처리 순서
+
+같은 틱에 발생한 after 이벤트는 엔진이 정한 고정 순서로 전달된다. Mojang의 순서표(bedrock-samples의 `engine-after-events-ordering.json`)는 모듈 버전별 목록이며, 예를 들어 1.3.0에서는 `ButtonPush`, `LeverAction`, `PlayerJoin`, `PlayerSpawn`, `PlayerLeave` 순이고, 1.4.0에서는 `ScriptEventCommandMessage`가 가장 앞에 오고 `EntityHitEntity`, `EntityHurt`, `EntityHealthChanged`, `EntityDie`, 아이템 사용 계열, `PlayerJoin/Spawn/Leave`, `PressurePlatePush/Pop`, `TargetBlockHit`, `TripWireTrip`이 이어진다(출처: bedrock-samples).
+
+## 커뮤니티 노트
+
+아래는 커뮤니티 조사에서 모은 이벤트·전투 동작의 세부와 함정이다.
+
+
+`*confirmed*`, `*single report*`, `**conflicting**`은 보고의 신뢰도 표시다. 이 페이지의 근거는 커뮤니티 보고이며 Mojang 공식 문서와 다를 수 있다.
+
+### 이벤트
+
+#### 구독 일반
+
+- **콜백은 이벤트 객체 하나를 받는다**: `world.afterEvents.x.subscribe((event) => {...})`, 구조분해 `({ player })` 가능. 일부 이벤트는 속성 대신 메서드를 노출(`ProjectileHitEntityAfterEvent.getEntityHit()`, `getImpactedBlocks()`). `(damage, hurtEntity) =>`처럼 여러 인자를 받는 시그니처는 틀림. `world`/`system`은 인스턴스이며 export되는 `player` 변수는 없다.
+- **before에서 `cancel` 구조분해 금지**: `({cancel}) => { cancel = true }`는 사본만 바꾼다. 항상 `event.cancel = true`.
+- **unsubscribe**: `subscribe()`는 넘긴 콜백을 반환하며 `unsubscribe(sameReference)`에 같은 참조가 필요. 토글 가능한 모듈, 엔티티 수명 한정 리스너, 일회성 핸들러에 쓴다. 이벤트 콜백 안에서 다른 이벤트를 구독하지 말 것(핸들러 누적·누수).
+- **필터 옵션은 두 번째 인자**: `entityHurt.subscribe(cb, { entityFilter: { type: "minecraft:wolf" } })`, `{ entityFilter: { tags: ["parrying"] } }`, `{ allowedDamageCauses: [...] }`, `entityHealthChanged`의 `{entityTypes:["minecraft:player"]}`, `playerButtonInput`의 `{buttons:[InputButton.Jump], state: ButtonState.Pressed}`. 서버측 필터라 효율적.
+- **같은 이벤트 다중 구독**: 모든 핸들러가 실행된다. 측정 가능한 성능 문제는 없지만 typeId 키 객체 맵으로 디스패치(`handlers[typeId]?.(event)`)하거나 하나로 합치는 것이 정돈된 방법. 한 파일에서 같은 이벤트를 여러 번 구독해 동작이 꼬인 사례도 있음.
+- **취소는 before만**: after 이벤트는 취소 불가, 모든 after에 before 짝이 있지는 않다. before 이벤트 목록: `https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/minecraft/server/worldbeforeevents` . 커스텀 before/after 이벤트는 만들 수 없다(C++↔QuickJS 브리지).
+- **여러 팩이 같은 before를 구독**: 한 팩의 취소가 다른 팩 핸들러 실행을 막지 않고(나중 핸들러는 `cancel`이 이미 설정된 것을 봄), 팩 순서와 무관하게 결과는 OR. 팩 안에서는 구독 순서. 각 핸들러가 `cancel`을 설정하면 마지막 대입이 결정한다는 보고도 있다(**conflicting**: OR vs 마지막 대입).
+- **after 이벤트 순서표**: `https://github.com/Mojang/bedrock-samples/blob/main/metadata/engine_modules/engine-after-events-ordering.json` . 같은 틱 안에서 StartBreak → Break 또는 Cancel 순서는 보장. 윈드차지 폭발 vs 화살 명중처럼 순서가 섞일 수 있다.
+
+#### 이름이 바뀌거나 사라진 이벤트 (마이그레이션 표)
+
+| 옛 이름 | 현재 |
+|---|---|
+| `world.events.beforeChat` / `world.event.beforeChat` | `world.beforeEvents.chatSend` (beta) |
+| `world.beforeEvents.worldInitialize` / `afterEvents.worldInitialize` | 등록은 `system.beforeEvents.startup`, 월드 코드는 `world.afterEvents.worldLoad` |
+| `blockBreak` / `blockPlace` | `playerBreakBlock` / `playerPlaceBlock` |
+| `itemUseOn` (world 이벤트) | `playerInteractWithBlock` (before/after), `itemStartUseOn` |
+| `world.beforeEvents.playerSendMessage` | (제거) `chatSend` |
+| `propertyRegistry.registerEntityTypeDynamicProperties`, `DynamicPropertiesDefinition` | 선언 없이 `setDynamicProperty` |
+| 블록 컴포넌트 `onPlayerDestroy` (v1) | `onPlayerBreak` (v2) |
+| `minecraft:custom_components` 배열 (1.21.90 이전 포맷) | 컴포넌트 이름을 `components`에 직접 |
+| 피스톤 before 이벤트 | 제거됨, `afterEvents.pistonActivate`만 |
+
+`cannot read property 'subscribe' of undefined`는 제거/개명된 이벤트이거나 beta 전용 이벤트를 stable 모듈로 쓴 경우다. 매 릴리스 changelog의 "Script API technical" 섹션을 확인할 것.
+
+#### 접속, 스폰, 퇴장
+
+- **`playerJoin`에는 Player 객체가 없다**: `playerId`/`playerName`만(`playerId`도 엔티티 `player.id`와 매칭이 안 된 사례). 첫 입장 처리는 `world.afterEvents.playerSpawn` + `event.initialSpawn === true`(리스폰은 false). `initialSpawn`은 "세션당" 매 입장마다 true이며 평생 첫 입장이 아니다 → 진짜 첫 입장은 태그/DP 플래그.
+- **로딩 완료 이벤트 없음**: `playerSpawn`은 클라이언트 렌더 전에 발생해 메시지/폼이 누락될 수 있다. 입장 후 최대 1분간 메시지를 못 보는 경우도. 우회: ~20~100틱 지연 후 `isValid` 확인, `world.getAllPlayers().includes(player)`가 될 때까지 폴링(+~25틱), 이동 감지(작은 impulse 후 위치 변화), 입력 권한(Camera/Movement) 50틱 비활성, 폼 `UserBusy` 재시도, BDS면 server-net `SetLocalPlayerAsInitializedPacket`. `playerDimensionChange`, `isValid`, `isChunkLoaded`, 입력 권한은 로딩 화면 중에도 true라 판별 불가.
+- **퇴장**: `world.beforeEvents.playerLeave`(2.7.0-beta에 PlayerLeaveBeforeEvent)는 early-execution 호출만 허용(DP 쓰기 OK, `system.run`은 너무 늦음). 크래시/타임아웃 시 핸들이 이미 파괴돼 있을 수 있어 캐시를 주기적으로 재조정. 싱글플레이어 호스트가 월드를 닫으면 leave가 발생하지 않는다. 플레이어별 Map은 leave에서 삭제.
+- **입장/퇴장 메시지**: 스크립트로 제거 불가(`beforeEvents.playerJoin` 취소도 안 숨김). RP `.lang`의 `multiplayer.player.joined` 등을 비우거나 JSON UI로 숨김. BDS 외(로컬/Realms)에서는 이것뿐. 커스텀 메시지: `pauseNotification.title.onePlayer=%s joined your game!` + `{translate, with:[name]}`.
+- **사망 중 플레이어**: 사망 화면 동안 `player.isValid`는 false(즉시 리스폰이어도 ~1틱), 채팅창을 열면 무기한 사망 상태일 수 있다. 사망 시 태그/점수 변경 불가, `@a`가 찾지 못함 → DP(사망 중에도 동작) 또는 `playerSpawn`에서 처리.
+
+#### 블록·엔티티 상호작용
+
+- **`playerInteractWithBlock`**: before는 우클릭마다(누르는 동안 반복, 설치 시에도) 발생 → `event.isFirstEvent`로 필터(없으면 아이템 이중 소모, 폼 중복). after는 실제 상호작용이 있는 블록에서만. before를 취소하면 블록 설치·수면·캠프파이어 요리 등도 취소되고 `playerPlaceBlock` before/after도 발생하지 않는다(상호작용이 먼저 처리됨; 클라이언트에 잠깐 블록이 보이고 팔은 흔들림). `itemStack`(not `item`)은 이벤트에 있으며 빈손이면 undefined, before에서는 읽기 전용. "aligned/snappable placement"(누른 채 이동)는 air/up 면으로 interact를 발생시킬 수 있다.
+- **상호작용은 막고 설치는 허용**: 깔끔한 방법 없음. 손에 든 것이 블록(`BlockTypes.get(itemStack.typeId)`)이거나 웅크림이면 취소하지 않는 휴리스틱(버튼에 흙 들고 누르면 오판). 블록 컴포넌트 `onPlayerInteract`는 그 블록 위에 웅크림 없이 설치하는 것을 막으므로, 통나무 껍질 벗기기처럼 다른 블록을 붙여야 하는 경우 `world.beforeEvents.playerInteractWithBlock` + `system.run`이 낫다. 커스텀 블록은 상호작용 가능해져 팔을 흔든다.
+- **엔티티 상호작용**: `afterEvents.playerInteractWithEntity`는 상호작용이 실제로 일어날 때만(`minecraft:interact` 보유 또는 테이밍/먹이 성공; 철 골렘·워든 등은 before에서만). 모두 잡으려면 before + `system.run`. Beta APIs 없이 발생하지 않았던 사례도 있다.
+- **방향**: `blockFace` North/South가 `playerInteractWithBlock`에서 뒤바뀌어 보인다는 보고(교환해서 사용). 벨 울림 판정은 after interact + (웅크리지 않음 또는 빈손/도끼/괭이) 조합, `toggle_bit` 비교는 버그.
+- **물·용암 양동이**: `itemUse` 취소로는 막히지 않고 `playerInteractWithBlock` before 취소가 동작(물 담기 가능 블록은 `isWaterlogged` 추가 확인). 액체 설치 취소 후 클라이언트에만 침수가 보이는 desync는 블록 상태를 토글해 갱신. 양동이 설치 위치는 `itemStartUseOn` + `blockFace`로 계산(`playerPlaceBlock`은 양동이 미포함). 커스텀 블록 `onPlayerInteract`는 양동이를 들면 발생하지 않는다.
+- **기타**: 상자 열기는 블록 상호작용 이벤트. `blockContainerOpened` after는 `event.openSource.entity`(event.player 없음).
+
+#### 블록 파괴·설치
+
+- **`playerBreakBlock` after에서는 블록이 이미 공기**: `event.brokenBlockPermutation.type.id` 사용(또는 before에서 캡처 후 `system.run`). `block.typeId`가 `block.type.id`보다 싸다(문자열만). 드롭을 막으려면 `beforeEvents.playerBreakBlock` 취소. before의 아이템 속성은 `itemStack`.
+- **드롭 수정 불가**: after 이벤트에 drops가 없다. 우회: (1) 파괴 후 주변 아이템 엔티티를 찾아 제거하고 커스텀 루트 생성(`getEntitiesAtBlockLocation`은 ~50% 불안정), (2) 파괴를 취소하고 `world.getLootTableManager().generateLootFromBlock(block, tool)`(블록이 남아 있어야 결과가 나옴; 행운 등 도구 인챈트 반영) 후 직접 제거 — 취소 시 클라이언트 시각 버그 가능, (3) 구조물 트릭(블록 저장 → 공허에 배치 → `setblock ... destroy` → 아이템 수집). 섬세한 손길 드롭은 루트 테이블을 우회하며 before 취소로도 드롭이 막히지 않았다는 보고(2025-11). 행운/광석 드롭은 직접 재구현.
+- **블록을 "플레이어처럼" 부수는 API 없음**: `/setblock`/`/fill ... destroy`를 쓰면 파티클·드롭이 나오지만 커스텀 `onPlayerBreak`는 발생하지 않는다.
+- **모든 출처의 파괴 감지 불가**(피스톤, 물, 폭발, setblock, 위더): 커스텀 블록만 `onBreak`로 가능. 위더는 이벤트 없음, TNT/해골은 폭발 이벤트. `/fill`, `/clone`, `/kill`은 가로챌 수 없다.
+- **`playerPlaceBlock` before**: beta 전용(2026-03 최신 beta, 2026-08 `2.10.0-beta.1.26.44-stable`; 안정 2.9.0은 after만). 커스텀 블록은 `beforeOnPlayerPlace` 컴포넌트로 대체. 피스톤으로 밀린 블록은 설치 검사를 우회. 설치 전에 `playerInteractWithBlock`이 먼저 발생하므로 "아이템으로 설치했는가"는 같은 틱 비교로 판단.
+- **파괴 진행도**: `playerStartBreakingBlock`(진행도 없음), 새 이벤트의 `breakProgress`(0~1)는 취소된 파괴에서만; 시작 + 취소/파괴를 조합. `entityHitBlock`도 파괴 시작 감지. 진행도 설정 API 없음(엔티티 오버레이 우회).
+
+#### 아이템 사용
+
+- **이벤트 구분**: `itemUse`(우클릭 시작 1회, 사용 불가 아이템 포함, 쿨다운 중에도 발생), `itemStartUse`/`itemStopUse`(누름/뗌), `itemReleaseUse`(차징 아이템 발사), `itemCompleteUse`(먹기/마시기 완료), `itemStartUseOn`. 이벤트 객체는 `event.source`(not `player`). stop/release는 사용 가능한(chargeable/food/bow/throwable) 아이템에서만 발생하므로 바닐라 검은 커스텀 복제 아이템이 필요.
+- **누르고 있기**: `itemStartUse`에서 `runInterval` 시작(Map에 `source.id` 키), `itemStopUse`에서 `clearRun`. 성능상 최선은 시작 틱 저장 후 정지 시 차이 계산. ~2틱 안에 멈추지 않으면 "홀드"로 판정. 계속 쓰는 아이템 트릭: `minecraft:use_modifiers`(큰 `use_duration`, `movement_modifier` 1) + `minecraft:throwable`(긴 draw duration) + `minecraft:projectile`(format 1.21.90) 또는 `minecraft:food` + `use_modifiers`(format 1.26.30). 사용 중 아이템 lore/DP를 계속 바꾸면 `itemStopUse`가 누락된다.
+- **차징 취소**: `world.beforeEvents.itemUse`로 활 발사 취소 가능, `afterEvents.itemStartUse`는 불가. 빈 `world.beforeEvents.itemUse` 리스너만 등록해도 번들 드롭/우클릭이 깨지는 버그(2026-08, 2026-10 재보고). 먹기 취소 API 없음(슬롯 전환/장비 제거 트릭은 desync·삭제 위험).
+- **쇠뇌**: 전용 이벤트 없음, 장전 상태(`minecraft:charged_item`) 비공개. 완료 사용 시 "장전됨"을 기록하고 다음 사용을 발사로 간주(아이템 DP는 슬롯에 되돌려 써야 유지). shooter/throwable 컴포넌트는 스크립트에 비공개.
+- **커스텀 아이템 컴포넌트 `onUse`가 엔티티 조준 시 멈춤**(26.20 이후, `minecraft:interact_button`이 있을 때) → 해당 컴포넌트 제거.
+
+#### 입력과 클릭 감지
+
+- **`world.afterEvents.playerButtonInput`**: `{player, button, newButtonState}`, `InputButton`은 Jump와 Sneak뿐(WASD·공격·스프린트 없음), 자동 점프는 미발생. 터치의 `InputButton.Sneak`는 1틱 펄스.
+- **`player.inputInfo`**: `getButtonState(InputButton.Jump) === ButtonState.Pressed`, `getMovementVector()`(Vector2 x,y; 입력 권한으로 이동을 막아도 갱신되므로 드론/탈것 조작에 유용), `lastInputModeUsed`.
+- **상태 속성**: `isSneaking`, `isSprinting`(읽기 전용, 이동 비활성 시 무용), `isJumping`(비계 오르기 중 true), `isOnGround`, `isFalling`, `isClimbing`(사다리만), `isInWater`, `isGliding`(읽기 전용), `isSleeping`. 웅크림 이벤트는 `entityStartSneaking`만(~2026-05 추가, stop 없음) → 매 틱 폴링도 충분히 싸다. 수면 시작 이벤트 없음(`isSleeping` 폴링).
+- **점프 감지(자동 점프 포함)**: 한 `runInterval`에서 `isJumping`, `!isOnGround && !isInWater && !isClimbing`, 수직 속도 좁은 범위(비계 Y 속도 `0.15000152587890625`; float은 `===` 금지), 지면 복귀 시 캐시 리셋. 넉백(방패, 낚싯대, 급류, 슬라임)은 오탐 가능. 수동 점프만이면 `playerButtonInput`.
+- **스윙/좌클릭**: `world.afterEvents.playerSwingStart`(`player`, `heldItemStack`, `swingSource`: Attack/Build/Drop 등, `EntitySwingSource`)로 허공 펀치 감지. 2025-12~2026-02엔 beta 전용(stable 1.9.0에선 undefined), 2026-04 무렵 안정 API로 사용됨(*unverified* 시점). 상호작용 포함 모든 스윙에 발생, 약 6 cps로 제한(CPS 계산엔 `entityHitEntity`가 정확), 모바일은 블록/엔티티를 치지 않으면 스윙이 없음(새 터치 스킴의 공격 버튼은 동작). 취소할 before 이벤트 없음, 스윙 애니메이션 강제 실행 API 없음. 블록 정보가 없어 모바일에서 레이캐스트가 빗나가면 `playerStartBreakingBlock` 사용. 초기에 `playerSwing`(2025-12)이라는 이름도 언급됨.
+- **우클릭 허공(빈손)**: 감지 불가(블록·엔티티·아이템 대상 필요). 우회: 스윙 시 임시 아이템 지급 후 그 `itemUse`. 좌클릭 유지 시간: API 없음(player.json + 애니메이션 컨트롤러로만). 가운데 클릭·커스텀 키 없음 → PC 키보드 단축키에 `/scriptevent shortcut:a` 바인딩(PC 전용) 또는 커스텀 커맨드, 모바일은 HUD 버튼(PC에선 못 누름, 액션 폼을 깨뜨리는 불안정 보고).
+- **핫바를 버튼으로**: `playerHotbarSelectedSlotChange`(`newSlotSelected`, `itemStack`, 2.7.0)에서 `player.selectedSlotIndex = 0`으로 되돌리고 아이템별 기능 실행. 핫바 축소도 같은 방식. 핸들러에서 슬롯을 바꾸면 다시 이벤트가 발생하니 무한 루프 방지.
+
+#### 인벤토리·드롭·픽업 이벤트
+
+- **`world.afterEvents.playerInventoryItemChange`**(stable): `beforeItemStack`/`itemStack`, 빈 슬롯 픽업 시 before가 undefined, 드롭 시 itemStack undefined → `?.typeId`. 스택 단위로 묶여 발생. 장비(갑옷) 슬롯은 미포함 → 갑옷 착용 이벤트 없음(5~20틱 폴링). 월드 로드/입장 시 아이템마다 발생, `/reload`에선 아님. 플레이어 전용(엔티티/블록 인벤토리 변경 이벤트 없음 → 10~20틱 슬롯 폴링). before 버전 없음. lore 설정 시 재귀 루프 주의.
+- **`world.afterEvents.entityItemDrop`**: `items`는 아이템 *엔티티* 배열 → `entity.getComponent('minecraft:item').itemStack`. `for...of`가 throw하는 오래된 버그 → `Array.from(items)`/`forEach`. 몹 루트 드롭에도 발생(`inventory` 컴포넌트 드롭만; 장비·디스펜서 제외), `entitySpawn` 다음에 발생. 플레이어 사망 시 장비 슬롯(갑옷, 그리고 회전 0 판정상 주손 포함)은 빠진다 → 갑옷만 있으면 발생 안 함. ItemStack 사본의 `nameTag` 변경은 안 되므로 아이템 엔티티에 설정. 26.10에서 안정화.
+- **`world.beforeEvents.entityItemPickup`**: `cancel` 가능(픽업 지연), `event.item`은 아이템 엔티티(`typeId`는 항상 `minecraft:item`) → `item.getComponent("minecraft:item").itemStack`. 아이템 엔티티의 `amount`는 읽기 전용 사본이므로 취소 → 엔티티 제거 → 새 스택 지급. 호퍼 마인카트에는 발생 안 함. after 버전도 있음(ItemStack 반환). `dimension.spawnItem()` 아이템은 impulse를 줘도 즉시 주워진다.
+- **컨테이너 UI**: `EntityContainerOpenedAfterEvent` / `EntityContainerClosedAfterEvent`(프리뷰 beta 2026-04, 인벤토리 포함 컨테이너 UI에만), `blockContainerOpened`. "GUI 열림" 불리언은 없다. 상자 로그: 열 때 스냅샷 + 인벤토리 변경 diff.
+
+#### 전투·투사체·사망 이벤트
+
+- **`afterEvents.entityHitEntity`**: `damagingEntity`, `hitEntity`(근접만, 화살 제외), before/취소 없음. 공격자 게임모드 읽기 가능.
+- **`afterEvents.entityHurt`**: `hurtEntity`(not `entity`), `damage`, `damageSource.cause`/`damagingEntity`/`damagingProjectile`. 데미지 0도 발생, 회복이 hurt를 발생시켰다는 보고.
+- **`projectileHitEntity`/`projectileHitBlock`**: `projectile`, `getEntityHit()?.entity`(EntityHitInformation), `getBlockHit()?.block`, `location`, `dimension`. `ev.source`는 undefined일 수 있고, 명중 후엔 `projectile` 컴포넌트 `owner`도 실패 → `entitySpawn`에서 owner를 읽어 DP로 복사하거나 per-tick Map에 속도까지 캐시. 정면 충돌 시 `projectileHitBlock`이 두 번 발생 → `projectile.id` Set으로 중복 제거, `remove()` 전 `isValid`. 박힘 방지는 `destroy_on_hit: false` 후 직접 `remove()`. 엔티티 JSON `definition_event`보다 스크립트 이벤트 권장.
+- **`afterEvents.entityDie`**: `deadEntity`, `damageSource.damagingEntity`(undefined 가능, null 체크), `damagingProjectile`, `cause`. 공격자 해석: `damagingEntity ?? damagingProjectile?.source`. `entity.remove()`는 사망이 아니다. 눈덩이/달걀(remove_on_hit)은 발생, 화살/윈드차지는 아님. 제거된 투사체는 `getComponent` 실패. `/kill`은 cause None 또는 SelfDestruct. 바닐라 사망 메시지는 읽기/편집 불가(gamerule `showDeathMessages` 끄고 직접 전송). 플레이어 근접 킬에서 처리가 불안정했던 미해결 보고.
+- **"죽기 전" 이벤트 없음**: `beforeEvents.entityRemove`는 위치는 주지만 엔티티 읽기가 자주 실패하고 취소 불가, 시뮬레이션 거리 이탈(언로드)에도 발생. 사망 방지는 `entityHurt` before + 치명 판정.
+
+#### 기타 이벤트
+
+- **`system.afterEvents.scriptEventReceive`**(world가 아님): `{id, message, sourceType, initiator, sourceEntity, sourceBlock}`, `ScriptEventSource.Block|Entity|NPCDialogue|Server`. `/scriptevent ns:id msg` 또는 `system.sendScriptEvent(id, message)`. 엔티티 JSON `queue_command`로 스크립트에 신호(예: `scriptevent agg:dragon 2`). NPC 대화 버튼에서도 사용.
+- **`afterEvents.dataDrivenEntityTrigger`**: `{entity, eventId}`, 모든 엔티티 JSON 이벤트(예: `minecraft:entity_spawned`)에 발생하므로 필터. `getModifiers()`(DefinitionModifier)로 추가/제거된 컴포넌트 그룹 확인(컴포넌트 그룹 소속 자체는 조회 불가).
+- **`entitySpawn`**: 스크립트 스폰에도 발생(스폰 직후 설정한 nameTag가 핸들러에서 아직 안 보일 수 있음 → 무한 스폰 루프 가드). `initializationCause === EntityInitializationCause.Transformed`로 좀비 주민 치료 결과 획득(`minecraft:entity_transformed` 트리거보다 나음). `Loaded` cause는 동작 안 함 → `entityLoad`(스폰 시엔 미발생). 마을 주민/골렘 "Event", 플레이어 제작 눈골렘/위더 "Spawned".
+- **`afterEvents.pistonActivate`**: `isExpanding`(false=수축), `block`은 피스톤. `getAttachedBlocksLocations()`는 `runTimeout` 전에 호출, 이동 중 블록은 `moving_block`이라 ~2틱 후 facing 방향 오프셋으로 실제 위치 계산(facing_direction 인덱스 [down, up, south(+z), north(-z), east(+x), west(-x)]). `getAttachedBlocks()`는 `moving_block`/피스톤 팔을 반환. before 이벤트는 제거됐고 슬라임/모래 등 때문에 클레임 보호가 불완전(피스톤 비활성화한 서버도).
+- **폭발**: `explosion` before는 after를 확장(`getImpactedBlocks()`, before에 `setImpactedBlocks`), 위치는 없음(소스 엔티티 위치 또는 블록 무게중심 사용), 블록 목록이 빌 수 있다. 메서드 구조분해 금지. 윈드차지 폭발도 폭발 데미지로 처리.
+- **효과**: `effectAdd`(before/after) `{entity, effectType}` — before의 `effectType`은 typeId가 아닌 현지화된 표시 문자열("Mining Fatigue"), 이미 걸린 효과 재추가 시 미발생, `removeEffect` 후 `Effect` 인스턴스 무효, before 안에서 `EffectTypes.get()`은 throw. 마녀 물약 감지에 사용.
+- **체력/회복**: `world.afterEvents.entityHealthChanged`(oldValue/newValue; 저체력 효과에 인터벌보다 나음), `entityHeal` before/after(2025-12 프리뷰; before 취소는 2.8.0-beta 기준 beta 전용; `EntityHealCause`/`HealReason` `SelfHeal`, `TotemOfUndying`은 26.20.23-24).
+- **차원/날씨/기타**: `playerDimensionChange`(after만, 포털 차단 불가; 되돌릴 땐 `fromLocation`보다 기본 스폰), `weatherChange`(dimension 문자열이 `overworld`/`Overworld`로 대소문자 불일치 → `DimensionTypes.get(id)?.typeId`나 정규화), `pressurePlatePush`(`source`, before 없음, 이미 서 있는 판에 두 번째 플레이어는 미발생), `afterPlayerUseNameTag`(프리뷰 2026-03), `EntityUpgradeAfterEvent`(엔티티 버저닝 `https://learn.microsoft.com/en-us/minecraft/creator/documents/entity-versioning`), `packSettingChange`(커스텀 팩 설정, 실험), `system.beforeEvents.shutdown`.
+
+#### 존재하지 않는 이벤트 (2026-10 기준 보고)
+
+이동(`playerMove`), 점프(`entityJump`), 웅크림 해제, 수면 시작, 태그 추가/제거, 인벤토리 화면 열기, 제작(크래프팅/제련), 거래(주민), 낚시 성공, 바이옴 변경, 탑승, 월드 저장, `/fill` 가로채기, 돌 생성기, 몹이 몹 먹기, 작물 짓밟기 취소, 크리티컬 히트, 경험치 구슬 픽업, 커서 아이템 변경, 청크 최초 생성, 엔티티 인벤토리 변경, 구조물 진입, 좀비의 주민 타깃팅, `entityHitEntity`/`entityHitBlock` before, 스윙 취소, 피스톤 before, 차원 변경 before, 압력판 before. 대부분 폴링(`runInterval`)이나 인벤토리 diff, 커스텀 블록/아이템 컴포넌트, 엔티티 JSON 이벤트 → `scriptevent`로 우회한다.
+
+### 데미지와 전투
+
+#### `world.beforeEvents.entityHurt` (EntityHurtBeforeEvent)
+
+- **연혁**: 2025-12-03 프리뷰(1.21.13x / 26.0.23, server 2.6.0-beta)에 추가 → 2026-02 안정판 Minecraft에서 Beta APIs로 사용 가능 → @minecraft/server 2.6.0(약 1.26.10)에서 안정(2026-04-19 확인). 그 이전 stable 1.21.131 등에서는 `cannot read property 'subscribe' of undefined`이었고 대안은 `damage_sensor`/player.json 편집. *confirmed*
+- **필드**: `hurtEntity`, `damage`(쓰기 가능, 저항 등 적용 후 최종값: 4뎀 vs 저항 IV → 0.8; 원래 데미지는 없음; 정수로 반올림된다는 보고와 좀비류는 자연 방어로 ~0.94라는 보고가 공존), `damageSource`(`cause`, `damagingEntity`, `damagingProjectile`; `/damage`나 원인 없는 스크립트 데미지는 cause undefined), `cancel`. 데미지 변경에 `system.run` 불필요.
+- **체력 값 함정**: 핸들러 안 `health.currentValue`는 이미 데미지가 반영된 값 → 원래 값은 `+ event.damage`. 먼저 취소한 뒤 체력을 읽어야 한다는 보고. 치명 판정: `health.currentValue - damage <= 0`(+ `/kill`은 `damage === effectiveMax`), 토템 소지 확인.
+- **취소가 막는 것/못 막는 것**: 데미지, 갑옷/인벤토리 내구도 감소, `/kill`(`selfDestruct`, 불사 엔티티 가능)은 막는다. 넉백은 처음엔 막지 못했고(2025-12~2026-02), 2026-03-24 프리뷰 수정 후 스프린트/인챈트/메이스/투사체 넉백까지 막게 됐다가 "넉백이 완전히 깨졌다"는 보고, 이후 테스트(2026-04, 2026-07)에서는 취소 시 넉백도 막힘. 화염 부여 점화(`system.run`으로 `extinguishFire`해도 반 칸 손실), 몹 어그로, 타격 시 효과, 메이스 스매시, 무적 프레임 판정, 피격 플래시는 못 막는다. 비생물 엔티티(마인카트, 갑옷 거치대)에는 발생 안 함(MCPE-174388). 부수효과를 막으려면 `beforeEvents.playerItemAttackEntity`류. (**conflicting**: 시점별 넉백 동작)
+- **`damage = 0` vs `cancel`**: `damage = 0`은 히트 플래시·크리티컬·넉백을 유지(넉백이 과장돼 보이면 `system.run(() => hurtEntity.clearVelocity())`), 착지 파티클 유지. cancel은 피드백이 늦고 다른 스크립트와 충돌할 수 있다.
+- **무적 프레임 버그**: before에서 `damage`를 낮추면 무적 타이머가 깨져 매 틱 데미지가 들어가던 문제는 2026-06-06 프리뷰에서 수정 확인. 1.0 미만으로 낮추면 i-frame이 생기지 않는다는 보고, i-frame 중에는 데미지를 바꾸지 않으면 이벤트 자체가 미발생한다는 보고(미해결). 바닐라에서도 i-frame 중 더 큰 데미지는 들어간다.
+- **재적용 루프**: 같은 핸들러에서 취소 후 `applyDamage`하면 무한 루프 → 가드 변수 또는 DP(before에서 설정 가능) 사용.
+- **활용 레시피**: 커스텀 토템(주손/보조손 토템 + `damage >= currentValue` → 취소, `system.run`에서 슬롯 비우고 `setCurrentValue`), 낙하 무효(`damageSource.cause === "fall"` → `damage = 0`/cancel), 화염 무효(`fireTick`, `fire`, `lava`는 별개 cause), 태그 기반 무적, 팀 데미지(양쪽 `team:` 태그 비교, 캐시 불필요), 근접 데미지 배율(`ev.damage += 5`), 공격 비활성(`damagingEntity instanceof Player` + 주손 확인), 슬라임→마그마 큐브 변환(치명 취소 후 다음 틱 교체), 커스텀 사망(취소 → 관전 모드 → 인벤토리를 컨테이너 엔티티로 → 무덤 위치 DP). 피해량을 키우면 토템을 뚫는다는 보고(*unverified*).
+- **유효 체력 측정**: 리스너를 걸고 `applyDamage(x, {cause})` → `event.damage` 기록 → 취소 → 해제. effectiveHP = health / (dealt/input).
+
+#### `applyDamage`, 무적 프레임, 방어
+
+- **`entity.applyDamage(amount, {cause, damagingEntity, damagingProjectile})`**: `cause`는 문자열이 아니라 `EntityDamageCause.projectile` 같은 enum. cause가 projectile이면 `damagingProjectile` 필요(없으면 오류; Mojang은 버그/미구현으로 보고 MCPE 신고 요청). 데미지 이벤트와 하드코딩된 0.5초 i-frame을 유발해 근접 직후 추가 데미지는 원래 데미지보다 크지 않으면 삼켜진다. 작은 값은 1로 올림, 방어구는 이미 처리됨, 체력 직접 설정은 i-frame을 우회하지만 킬 귀속이 사라진다. cause `override`는 i-frame과 방어구/저항을 모두 무시. 엔더 드래곤은 `applyDamage`가 다중 파트 로직에 막히므로 health 컴포넌트로.
+- **i-frame**: 10틱 창. 스크립트에서 몹별 마지막 피격 틱을 추적. 피격 애니메이션만 재생하는 API 없음.
+- **방어 공식**(역설계): `dmg * (1 - min(20, max(def/5, def - 4*dmg/(toughness+8)))/25)`, 저항은 레벨당 20%(5레벨 면역). 방어 수치는 `equippable.totalArmor`/`totalToughness`(플레이어만). 개별 갑옷 아이템의 방어 수치는 읽기 불가.
+- **커스텀 PvP(구버전 방식)**: 나약함 효과로 바닐라 데미지를 무효화하고 직접 데미지/넉백 적용(1.18.0 stable에서도 동작), 또는 무기 JSON 데미지 0 + 스크립트 치유 후 `applyDamage`. player.json `damage_sensor`는 다른 애드온과 충돌.
+- **크리티컬 판정**: hurt 이벤트로는 불가 → `entityHitEntity`에서 `isFalling && !isOnGround && !isClimbing && !isInWater && !riding && !blindness && !isSprinting`(활공도 `isFalling`). 예: `https://github.com/Visual1mpact/Paradox_AntiCheat/blob/rewrite/penrose/modules/criticals.ts`
+- **방패/메이스**: 메이스 스매시는 방패 무시(하드코딩). 방패 흉내: `isSneaking && getItemCooldown("minecraft:shield")==0`, Molang `q.is_blocking`(탑승 시에도 방패 올라감). 참고 코드 `https://github.com/azurite-bedrock/Sweep-N-Slash` .
+- **토템 감지**: `entityHealthChanged`에서 oldValue&lt;=0 && newValue>0 + 인벤토리 토템(구버전), 신버전은 `entityHeal`의 전용 토템 cause 후 체력 1. 옛 "음수 데미지 hurt" 트릭은 2026-03 무렵 사라짐. `/kill`과 공허 데미지는 토템이 터지지 않음. 토템 팝 연출만 따로 발생시킬 수 없음(토템 지급 후 큰 magic 데미지). stirante가 스레드 첫 글에 감지 레시피를 유지.
+
+#### 넉백과 속도
+
+- **`applyKnockback`**: 2.0부터 `entity.applyKnockback({x, z}, verticalStrength)`(VectorXZ에 수평 세기를 곱해 넣음). 옛 4인자 `(dirX, dirZ, horizontal, vertical)`은 "Incorrect number of arguments ... Expected 2, received 4"/no effect(1.21.60 이전 형식). 공식 문서 예제가 낡았던 적이 있다. 2026-07에도 4인자 사용 보고가 있으나 구버전 API로 보인다(**conflicting**, *single report*). 현재 넉백을 덮어쓰고(누적 안 됨), 공중 타격 넉백엔 `applyImpulse`보다 낫다. 경로탐색 중 엔티티는 방향을 되돌리므로 경로 컴포넌트 그룹을 잠시 제거.
+- **`applyImpulse(Vector3)`**: 속도에 더함(누적), 플레이어에도 stable에서 동작. 지상에서 y 성분이 있으면 튀어오를 수 있다. 월드/Realms의 비호스트에게는 서버 위치 보정 때문에 덜컹거림(BDS는 server-authoritative movement 설정 완화). `clearVelocity()`로 속도 제거, `getVelocity()`(`player.velocity` 대체). `applyImpulse`/`shoot` 속도 단위는 블록/틱.
+- **넉백 제거/대체**: 0 넉백으로 덮어쓰기, 속도 저장 → `clearVelocity` → 재적용, 다음 틱 `clearVelocity`, 피격 후 제자리 텔레포트(어색함), entityHitEntity에서 반대 넉백. player.json에 넉백 배율이 생겼다.
+- **이동 속도**: `getComponent("minecraft:movement").setCurrentValue(v)`(기본 ~0.1, 절대값이며 스프린트·효과가 리셋하므로 매 틱 재적용), `resetToDefaultValue()`, `underwater_movement` 등 attribute 컴포넌트. 속도/느림 효과는 FOV를 바꾼다(카메라 줌 없이 느리게 하는 깔끔한 방법 없음). 문서: `https://stirante.com/script/server/2.10.0/classes/EntityMovementComponent.html`
+- **공중 고정/비행**: 매 틱 텔레포트(가장 쌈), 반대 속도 impulse(끊김), 투명 무중력 엔티티 탑승 + 입력 권한 비활성. 비행 시스템: 태그 게이트 + `applyKnockback`/`applyImpulse` 시선 방향 + 느린 낙하. 엘리트라식 비행 가능(멀티에선 안티치트 영향). `mayfly` API 없음(`ability` 커맨드는 Education 전용). 중력 변경 불가(`minecraft:gravitation_force`는 AI 환각).
+

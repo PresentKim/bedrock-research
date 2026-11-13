@@ -1,0 +1,150 @@
+---
+title: 모델과 지오메트리
+description: 엔티티 지오메트리 파일의 폴더·이름 규칙, 포맷 버전, 로케이터, 컬링과 보이는 범위, 메시 모델, 성능, 플레이어 모델
+sidebar_position: 1
+sources: [private-research, bedrock-wiki, ms-learn]
+---
+
+# 모델과 지오메트리
+
+엔티티 모델은 리소스 팩 `models/entity/*.geo.json`에 있는 지오메트리다. 클라이언트 엔티티가 `geometry` 짧은 이름으로 가리키고 렌더 컨트롤러가 어느 지오메트리를 그릴지 고른다. 아래는 커뮤니티 조사에서 모은 규칙과 함정이다(출처: 비공개 조사). 어태처블(손에 든 3D 아이템)은 [어태처블과 아이템 렌더링](./attachables-and-items.mdx), 블록 모델은 [블록 렌더링](./block-rendering.mdx)을 본다.
+
+## 개념: 짧은 이름으로 이어지는 세 파일
+
+엔티티의 겉모습은 세 파일이 나눠 맡는다. 리소스 팩 엔티티 파일(`entity/*.json`, 클라이언트 엔티티)은 자산을 **짧은 이름(shortname)** 으로 가져오기만 하고, 렌더 컨트롤러가 그 짧은 이름을 골라 조합하며, 지오메트리 파일이 본과 큐브의 모양을 정의한다. 지오메트리는 엔티티 파일에서 식별자로 참조한다. 시각 문제의 흔한 원인은 이 짧은 이름의 오타다(출처: bedrock-wiki, `entities/entity-intro-rp`).
+
+```json
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "wiki:example",
+      "materials": { "default": "entity_alphatest" },
+      "textures": { "default": "textures/entity/example" },
+      "geometry": { "default": "geometry.example" },
+      "render_controllers": ["controller.render.default"],
+      "animations": {},
+      "scripts": {},
+      "sound_effects": {},
+      "particle_effects": {},
+      "enable_attachables": false
+    }
+  }
+}
+```
+
+지오메트리 파일은 이렇게 생긴다. 본마다 피벗과 큐브(`origin`, `size`, `uv`)를 둔다.
+
+```json
+{
+  "format_version": "1.12.0",
+  "minecraft:geometry": [
+    {
+      "description": {
+        "identifier": "geometry.example",
+        "texture_width": 64,
+        "texture_height": 64,
+        "visible_bounds_width": 2,
+        "visible_bounds_height": 2.5,
+        "visible_bounds_offset": [0, 1.25, 0]
+      },
+      "bones": [
+        { "name": "body", "pivot": [0, 12, 0],
+          "cubes": [ { "origin": [-4, 12, -2], "size": [8, 12, 4], "uv": [16, 16] } ] }
+      ]
+    }
+  ]
+}
+```
+
+엔티티 파일의 각 키(`materials`, `textures`, `geometry`, `render_controllers`, `animations`, `scripts`, `sound_effects`, `particle_effects`, `spawn_egg`, `enable_attachables`, `hide_armor`)의 역할은 해당 페이지에서 다룬다. 아래는 커뮤니티 조사에서 모은 규칙과 함정이다.
+
+## 폴더와 식별자
+
+- 지오메트리는 `models/entity/*.geo.json`에 둬야 한다. `models/` 바로 아래에 두면 플레이어 지오메트리를 찾지 못한다.
+- "geometry not found"는 잘못된 폴더나 JSON 오류(쉼표 누락, 지운 큐브)다. 클라이언트 엔티티에 갑옷 렌더 컨트롤러와 `geometry` 블록(armor.head 등)을 과하게 넣어 실패한 사례는 `render_controllers: ["controller.render.default"]`로 줄여 해결했다. geo 식별자가 `unknow` 같은 값이면 모델이 보이지 않았다.
+- 리소스 팩 엔티티 파일은 폴더 이름이 `entity`여야 로드된다.
+- Blockbench는 엔티티 지오메트리를 `format_version` 1.12로 내보내며, 이것이 맞으니 바꾸지 않는다. 포맷 버전은 게임 버전이 아니다(출처: bedrock-wiki, `guide/format-version`).
+- "child 'identifier' not valid here"는 `identifier`가 잘못된 포맷 버전이나 위치의 `minecraft:geometry`의 `description`에 있다는 뜻이다.
+
+## 이름 규칙
+
+- 본과 그룹 이름에 공백이나 이상한 기호가 있으면(예: `Bottom Cushion`) 엔티티가 렌더링되지 않는다. `BottomCushion`처럼 붙여 쓴다. 클라이언트 엔티티의 빈 `sound` 블록도 엔티티를 깨뜨렸다.
+- 바닐라 인간형의 손 아이템 본은 `rightItem`, `leftItem`이다. 이름이 틀리면 팔다리가 사라진다.
+- 바닐라와 같은 본 이름이 문제를 일으키면 이름을 바꾼다. 엔더맨 교체에서는 모든 본 이름 끝에 `2`를 붙여 해결했다. 반대로 플레이어와 같은 본 이름(`rightItem`, `leftItem`, head 등)을 쓰면 바닐라 인간형·플레이어 애니메이션을 재사용할 수 있다.
+- 애니메이션과 본 이름은 소문자, 공백 없이 쓴다([애니메이션과 컨트롤러](./animations-and-controllers.mdx)).
+
+## 투명하게 렌더링되는 엔티티
+
+- 텍스처 크기가 지오메트리의 `texture_width`·`texture_height`와 맞지 않거나 머티리얼이 틀리면 엔티티가 투명하게 렌더링될 수 있다(미해결 사례 있음). 엔티티 텍스처로 쓴 PNG가 512x512(2의 거듭제곱)로 바뀌기 전까지 잘못 보인 사례가 있다.
+- 새 큐브에는 자기 텍스처가 필요하고, 크기를 바꾼 큐브는 기존 텍스처의 UV를 왜곡한다. 한 면에만 이미지를 넣으려면 면별 UV나 큐브별 텍스처가 필요하다. Blockbench에서 칠한 뒤 큐브를 추가하면 UV가 겹치므로 텍스처를 키우고 UV를 수동(auto UV 끄기)으로 정한다.
+- Blockbench에서 보이지 않거나 깨진 텍스처는 알파가 0이 아닌 거의 투명한 픽셀 때문일 수 있다. 색 선택기로 확인한다. Blockbench 렌더링은 게임과 정확히 같지 않고, 하드웨어 가속을 끄면 깜빡이는 텍스처가 고쳐진다. 애니메이션 불일치는 대개 잘못된 geo 파일이다.
+
+## 보이는 범위와 컬링
+
+- 컬링에는 지오메트리의 `visible_bounds_width`, `visible_bounds_height`, `visible_bounds_offset`이 필요하다. 화면 밖에서 모델이 사라지면 `visible_bounds_*`를 키우거나, 클라이언트 엔티티 `scripts`에 `should_update_bones_and_effects_offscreen` 또는 `should_update_effects_offscreen`을 설정해 프러스텀 컬링을 끈다.
+- `should_update_bones_and_effects_offscreen: true`는 히트박스가 화면 밖이어도 모델을 렌더링하지만 약 64 m 렌더 범위에 묶인다.
+
+## 먼 거리 렌더링
+
+- 큰 엔티티는 히트박스가 시야를 벗어나면 사라진다(렌더 거리가 히트박스·엔티티에 묶인다). 멀리서도 렌더링되는 것은 엔더 드래곤뿐인데 `runtime_identifier`로 된다는 주장, 안 된다는 보고, 1.17에서 패치됐다는 주장이 엇갈린다(`conflicting`).
+- 대안: 프록시 엔티티를 플레이어 가까이로 오프셋하는 애니메이션, 프록시 텔레포트, `minecraft:ender_dragon` 정체성과 컴포넌트 그룹. 큰 히트박스에는 상한이 있어서 아주 큰 표지판에는 연결된 엔티티 여러 개가 필요하다. `query.client_max_render_distance`는 엔티티 전용 컨텍스트 밖에서 쓸 수 없다(오류).
+- LOD 쿼리: `query.lod_index(d1, d2, d3, ...)`는 액터가 카메라(로컬 플레이어)로부터 어느 거리 구간에 있는지의 인덱스를 돌려준다(d1 미만이면 0, 마지막 너머면 N). 성능을 위해 저해상도 텍스처·지오메트리로 바꾸는 용도이고, 먼 엔티티를 만드는 용도가 아니다. 예: `(q.lod_index(2, 5, 10)+1)/3`.
+- 엔티티 페이드(디더링)는 설정의 접근성 전역 토글이고 엔티티별로 바꿀 수 없다([안개와 하늘](./fog-and-sky.mdx)의 디더링 절).
+
+## 로케이터
+
+- 한 모델 안에서 로케이터 이름은 유일해야 한다. 동시에 로드되지 않는 다른 모델에서도 같은 이름은 "already has a locator with the same name"을 낸다.
+- 한 엔티티의 여러 지오메트리가 같은 이름(`armor_offset.default_neck`, `lead`)을 쓰면 충돌하고(파티클이 원점에 생긴다) 지오메트리별로 이름을 바꿔야 한다(예: `..._neck2`). 최상위 렌더 컨트롤러의 로케이터만 쓰이고 다중 로케이터는 지원되지 않는다. `v.gender_index == 0 ? geometry.female : geometry.male`처럼 하거나 별도 렌더 컨트롤러·모델을 쓴다.
+- 리드 위치가 떠 있는 문제(로케이터 이름 `lead`, MCPE-184865)는 렌더 컨트롤러로 여러 지오메트리를 오가던 엔티티를 별도 엔티티로 나눠 해결했다.
+- 2025-11 빌드에서 플레이어와 어태처블의 엔티티 로케이터가 깨졌다(로케이터에서 파티클이 나오지 않음). `rightItem`은 rightHand의 자식이고 독립적인 장비 로케이터는 없다. 커스텀 플레이어 geo에서는 팔이 게임에서는 body의 자식이지만 samples에서는 아니다.
+- 파티클과 연결하는 방법은 [파티클](./particles.mdx)을 본다.
+
+## 메시(poly mesh) 모델
+
+- Blockbench의 "Meshy" 플러그인이 메시를 `geo.json`(Bedrock 엔티티 형식)으로 내보낸다. 메시는 기본 지원이 아니라서 완벽하지 않고, tri-mesh는 아직 제대로 지원되지 않으며, poly mesh는 폐기가 계획돼 어태처블 메시가 보이지 않게 될 수 있다. Marketplace에서는 polymesh가 허용되지 않는다. 스킨 용어로 "4D"는 커스텀 지오메트리 스킨, "5D"는 polymesh다.
+- 크기: 모델 797개가 83.4 MB였고 VV 출시 후 콘솔이 서버 접속에 어려움을 겪었다. JSON을 축소하고, 메시 객체마다 그룹을 두고(1.5 MB 모델이 787 KB로 줄었다), Blockbench를 갱신한다(2026-04에 내보내기 크기가 220 KB에서 89 KB로 줄어든 사례).
+- 너무 밝고 반짝이면 Meshy에서 "Skip Mesh Normals"를 끈다(켜면 노멀이 위를 향한다). 끄면 이상한 그림자가 생길 수 있다. 이상한 메시 엔티티의 그림자는 버텍스 스캔 건너뛰기 옵션이나 노멀 반전으로 고친다.
+- 2026-01 말부터 저폴리 메시 모델이 Fancy에서 부드러운 셰이딩으로 렌더링된다(VV와 Simple에서는 정상 평면). 해결책은 없고, 한 사람은 면 디밍 때문으로 보며 머티리얼의 `"-defines": ["FANCY"]`가 이를 끈다고 했다(프리셋 머티리얼 중에는 없다).
+
+## 큐브 수와 성능
+
+- 큐브가 너무 많은 모델은 게임을 느리게 한다. 플레이어 엔티티 지오메트리 파일 합계(텍스처 제외)는 약 1.15 MB 이하로 유지한다. 넘으면 렉 스파이크가 생기고(플레이어만 해당) 렌더 컨트롤러에서 참조하지 않아도 지오메트리가 로드되어 스파이크가 난다.
+- 그룹과 본이 많을수록 느리므로 최소로 하고, 축소(minify)한 JSON이 약간 더 빨랐다.
+- 블록을 엔티티로 배치하는 방법(렌더 컨트롤러당 블록 본 8개를 애니메이션으로 오프셋)은 별도 블로그에 정리돼 있다(출처: private-research에 모은 링크 theaddonn/Blogs `block_as_entities`).
+
+## 변환과 추출
+
+- Java 모델은 형식이 달라 바로 쓸 수 없으므로 Blockbench에서 변환한다. Marketplace 애드온 모델은 추출할 수 없으니 다시 만들어야 한다.
+- GeyserMC Rainbow로 Java에서 Bedrock으로 옮기면 애니메이션 아이템 텍스처가 사라진다(어태처블의 프레임별 텍스처로 수동 수정).
+
+## 플레이어 관련
+
+- 플레이어 클라이언트 엔티티(`player.entity.json`)를 고치면 페르소나 스킨이 꺼져 모두 Steve가 된다(임포트·Marketplace 스킨은 예외이고, min engine version을 추가하면 커스텀 스킨이 지원된다).
+- 최신 bedrock-samples 플레이어 클라이언트 엔티티(1.21.130.3)가 깨졌거나 오래됐다는 보고가 있으니 설치된 게임 폴더의 파일을 쓴다.
+- 엔티티는 플레이어 스킨을 쓸 수 없고 애드온은 스킨을 읽을 수 없다. 이벤트별 커스텀 플레이어 스킨은 불가능하다.
+- 스킨 바깥 레이어는 별도 본(`leftLeg`와 `leftPants`)이라 얇은 갑옷에 맞추려면 스케일을 0이나 작게 애니메이션한다.
+- 페이퍼돌(일시정지 화면)은 `player.json` 변수와 쿼리를 무시해서 추가 지오메트리·텍스처를 모두 그리거나 하나도 그리지 않는다([종이 인형과 NetEase](./paper-doll-and-netease.mdx)).
+- NPC 텍스처 교체는 팩의 `textures/entity/npc/`(74개)다.
+- 플레이어 모델 지오메트리 이름은 `mobs.json`의 `geometry.humanoid.custom`(넓은 팔)과 `geometry.humanoid.customSlim`이다.
+
+## 기타 모델 팁
+
+- 화살 같은 투사체 모델은 렌더 컨트롤러와 `animation.arrow.move` 스타일 회전을 쓴다.
+- 떨어진 아이템을 평평하게 보이게 하려면 클라이언트 엔티티 id `minecraft:item`에 회전 애니메이션을 쓴다. 아이템 스프라이트 엔티티는 `geometry.item_sprite`, 눈덩이 머티리얼, `animation.actor.billboard`를 쓴다.
+- Blockbench "title generator" 플러그인으로 3D 제목 텍스트를 만들고, 평면 빌보드를 `query.camera_rotation_x`와 `query.camera_rotation_y + 180`으로 회전한다.
+- 한 모델에 텍스처 2~3개(카모/스킨)를 쓰는 트릭이 공유됐고, 커스텀 철 골렘 투명 텍스처와 변형은 미해결이다.
+
+## 바닐라 엔티티 덮어쓰기
+
+- `minecraft:` 네임스페이스로 이름 붙인 엔티티는 바닐라를 덮어쓴다. 바닐라 husk와 vex는 수정한 엔티티 파일을 무시할 수 있다.
+- 26.0의 아기 몹(주민, 피글린) 모델 변경으로 팩의 옛 커스텀 엔티티 코드가 깨졌다.
+- 갑옷 거치대가 든 아이템은 리소스 팩만으로 숨길 수 없다(스케일, 오프셋, `part_visibility`, `hand_item_scale_offset`, 피벗 수정이 모두 실패했다). 다른 경우에는 스케일보다 part visibility가 낫다.
+
+## 카메라
+
+리소스 팩의 카메라 파일은 1.18.30에서 제거됐다고 하므로(한 멤버) 탑승 카메라를 리소스 팩에서 옮길 수 없다. 잘못된 탑승 시점에 대한 시각 해킹은 `q.is_riding_any_entity_of_type`를 쓰는 플레이어 애니메이션 컨트롤러뿐이다.
+
+## AI 모델링
+
+Blockbench MCP와 스킬(mcbemodelingmasterAI)을 AI 에이전트와 함께 쓴 보고가 있다. 정적 모델은 괜찮고, 애니메이션은 프레임별 분석이라 나쁘며, 단순한 바퀴·날개 애니메이션은 된다.

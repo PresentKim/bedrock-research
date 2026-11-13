@@ -1,0 +1,148 @@
+---
+title: "커스텀 커맨드"
+description: "customCommandRegistry 등록, 매개변수, 권한 문제와 우회"
+sidebar_position: 6
+sources:
+  - private-research
+  - ms-learn
+  - bedrock-wiki
+---
+
+## 개념
+
+스크립트로 `/creator:hello` 같은 자기만의 슬래시 커맨드를 만들 수 있다. 이 커맨드는 스크립트 API 전체와 자유로운 로직을 쓸 수 있어 초기화·테스트 도구, 서버 관리 명령, 빌더 보조 기능에 알맞다. 등록은 `system.beforeEvents.startup`의 `customCommandRegistry`로 하고, 이름에는 `namespace:commandname` 형태의 네임스페이스가 필수다(출처: ms-learn, `creator/Documents/scripting/custom-commands.md`).
+
+## 등록 예제
+
+```javascript
+import { system, world, CustomCommandParamType, CustomCommandPermissionLevel, CustomCommandStatus } from "@minecraft/server";
+
+system.beforeEvents.startup.subscribe((init) => {
+  init.customCommandRegistry.registerCommand(
+    {
+      name: "creator:hellocustomcommand",
+      description: "Celebration size",
+      permissionLevel: CustomCommandPermissionLevel.GameDirectors,
+      optionalParameters: [{ type: CustomCommandParamType.Integer, name: "celebrationSize" }],
+    },
+    helloCustomCommand
+  );
+});
+
+function helloCustomCommand(origin, celebrationSize) {
+  // 콜백은 restricted execution이다. 월드 변경은 미룬다.
+  system.run(() => {
+    for (const player of world.getPlayers()) {
+      player.dimension.createExplosion(player.location, celebrationSize ?? 1);
+    }
+  });
+  return { status: CustomCommandStatus.Success, message: "펑!" };
+}
+```
+
+등록 정의의 필드는 다음과 같다.
+
+| 필드 | 설명 |
+|---|---|
+| `name` | 네임스페이스가 붙은 커맨드 이름 |
+| `description` | 자동 완성에 표시되는 설명 |
+| `permissionLevel` | 실행 가능한 권한 수준 |
+| `mandatoryParameters` | 필수 매개변수(앞쪽 순서) |
+| `optionalParameters` | 선택 매개변수(뒤쪽 순서) |
+
+## 권한 수준
+
+| 수준 | 의미 |
+|---|---|
+| `Any` | 어느 플레이어나 환경이든 실행 가능 |
+| `GameDirectors` | "Operator Commands" 권한 플레이어, 그리고 커맨드 블록·스크립트 같은 자동화 환경 |
+| `Admin` | Operator 권한 플레이어만. 자동화(커맨드, 스크립트)에서는 쓸 수 없다 |
+| `Host` | 게임 소유자(호스트)만 |
+| `Owner` | 전용 서버 콘솔에서만 |
+
+## 매개변수 타입과 열거형
+
+콜백은 `(origin, ...args)`로 호출되고, 선택 매개변수를 생략하면 `undefined`가 들어온다.
+
+| 매개변수 타입 | 스크립트에 전달되는 값 |
+|---|---|
+| `BlockType` | `BlockType` |
+| `Boolean` | `boolean` |
+| `EntitySelector` | `Entity[]` |
+| `Float`, `Integer` | `number` |
+| `ItemType` | `ItemType` |
+| `Position` | `Vector3` |
+| `PlayerSelector` | `Player[]` |
+| `String` | `string` |
+
+열거형은 먼저 `registerEnum`으로 등록하고, 매개변수 이름을 그 열거형 이름과 같게 한다.
+
+```javascript
+system.beforeEvents.startup.subscribe((init) => {
+  const reg = init.customCommandRegistry;
+  reg.registerEnum("creator:my_enum", ["foo", "bar", "baz"]);
+  reg.registerCommand(
+    {
+      name: "creator:pick",
+      description: "열거형 예",
+      permissionLevel: CustomCommandPermissionLevel.Any,
+      mandatoryParameters: [{ type: CustomCommandParamType.Enum, name: "creator:my_enum" }],
+    },
+    (origin, choice) => ({ status: CustomCommandStatus.Success, message: `선택: ${choice}` })
+  );
+});
+```
+
+## 커뮤니티 노트
+
+아래는 커뮤니티 조사로 모은 권한 버그, Realms 제한, 하위 커맨드 우회법이다.
+
+
+`*confirmed*`, `*single report*`, `**conflicting**`은 보고의 신뢰도 표시다. 이 페이지의 근거는 커뮤니티 보고이며 Mojang 공식 문서와 다를 수 있다.
+
+### 커스텀 커맨드
+
+#### 등록과 기본 형태
+
+- **연혁**: Preview 1.21.80.22부터 .9x 동안 beta, 1.21.100에서 안정(@minecraft/server 2.1.0). 오래된 버전에서는 `Could not find export 'CommandPermissionLevel'/'CustomCommandParamType'`. 문서: `https://wiki.bedrock.dev/scripting/custom-commands` , `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/custom-commands`
+- **기본 코드**:
+
+```js
+import { system, CommandPermissionLevel, CustomCommandParamType, CustomCommandStatus } from "@minecraft/server";
+system.beforeEvents.startup.subscribe(({ customCommandRegistry }) => {
+  customCommandRegistry.registerEnum("wiki:mode", ["on", "off"]);          // enum 먼저
+  customCommandRegistry.registerCommand({
+    name: "wiki:goto", description: "...",
+    permissionLevel: CommandPermissionLevel.Any,   // Any | GameDirectors | Admin | Host | Owner
+    cheatsRequired: false,                          // 기본값 true → 치트 없는 월드/Realms에서 사라짐
+    mandatoryParameters: [{ name: "wiki:mode", type: CustomCommandParamType.Enum }],
+    optionalParameters: [{ name: "target", type: CustomCommandParamType.PlayerSelector }],
+  }, (origin, mode, targets) => {
+    system.run(() => origin.sourceEntity?.teleport({ x: 0, y: 80, z: 0 })); // 쓰기는 system.run
+    return { status: CustomCommandStatus.Success, message: "ok" };
+  });
+});
+```
+
+- **이름**: 네임스페이스 필수(`ns:cmd`). 다른 팩·바닐라 별칭과 충돌하지 않으면 접두사 없는 별칭이 자동 생성되어 `/cmd`로도 입력 가능(충돌 시 먼저 로드된 팩이 가짐, `/ns:cmd` 필요). 네임스페이스 버전을 숨길 수 없고 권한 수준으로만 숨김. 팩마다 고유 접두사 사용(`const name = n => \`prefix:$&#123;n&#125;\``). 같은 이름을 두 팩이 등록하면 하나만 이긴다.
+- **등록 시점**: startup에서만. 런타임 등록(비밀번호로 잠금 해제 등) 불가. 매개변수를 바꾸면 `/reload`가 아니라 월드 완전 재시작 필요(`cannot change parameters ... during reload`). 함수 파일 안에서의 사용은 `/reload` 없이 동작.
+- **콜백 시그니처**: `(origin, ...args)` — 매개변수가 순서대로(필수 → 선택) 별도 인자로 온다(배열/객체 아님). 별칭 사용 시 커맨드 이름이 args에 포함된다는 보고. `origin.sourceEntity`(Entity, 콘솔·커맨드 블록이면 undefined; `instanceof Player`로 확인; 문자열과 비교하지 말 것), `origin.sourceType`, `origin.initiator`, `origin.sourceBlock`. `origin.player`/`origin.target`은 없다.
+- **반환값**: 동기적으로 `{status: CustomCommandStatus.Success|Failure, message?}` 또는 undefined. async 콜백(Promise 반환) 불가 → `system.run(async () => ...)` 후 Success 반환. 폼은 `form.show(...).then(...)`을 걸고 바로 반환, 오류는 `sendMessage`. `message`는 문자열(Error 객체 금지, `` `$&#123;err.message&#125;` ``), 512자 제한(초과 시 월드 크래시 보고), `%`는 번역 마커라 `%%`로 이스케이프(`%gui.confirm` 같은 키는 동작하나 추가 인자 불가). `Failure`(not `Fail`)를 메시지 없이 반환하면 빈 메시지(버그). `sendMessage`와 함께 쓰면 메시지가 두 번. 26.70에서 `message`가 RawMessage를 받음.
+- **실행**: 커스텀 커맨드도 `runCommand`로 실행 가능, 커맨드 결과 텍스트는 `runCommand`가 반환하지 않음. 커스텀 커맨드 실행은 채팅창을 닫으므로 그 직후 폼을 띄우기 좋다(채팅 `!prefix` 방식은 채팅창이 열려 있어 `UserBusy`).
+- **래퍼/도구**: `command-wrapper`(npm, github.com/Aevarkan/command-wrapper; `defineParameter`, `defineCommand`, `new CommandRegister("prefix", CommandPermissionLevel.GameDirectors, true)`; enum은 `as const`; 번들링 필요, 가이드 `https://wiki.aevarkan.dev/dev/mc-bundling`), 등록을 한 startup 콜백으로 묶는 `CustomCommand` 클래스, GUI 빌더 `https://leowascoding.github.io/studio/html/custom-commands.html`
+
+#### 매개변수
+
+- **타입**: `String`, `Integer`, `Float`류, `Boolean`, `Enum`, `PlayerSelector`, `EntitySelector`, 위치 등. `PlayerSelector`는 `Player[]`(빈 배열 가능, `JSON.stringify`하면 `{id,typeId}`만). enum 값은 문자열로 온다.
+- **enum**: `registerEnum("ns:name", [...])`을 커맨드보다 먼저, 매개변수 `name`이 enum 이름(네임스페이스 포함)과 정확히 같아야 한다(`enumName` 필드가 있다는 보고와 없다는 보고가 공존 — **conflicting**; 확실한 방법은 param `name` = enum 이름, 따라서 enum 이름은 커맨드 간 고유). Jayly 문서의 네임스페이스 없는 enum 예제는 틀렸다.
+- **없는 것**: 하위 커맨드/오버로드/조건부 매개변수(특정 enum 값에만 선택 인자), 별칭 숨김, 혼합(number|string)·any·command 타입, 나머지 문자열(greedy) 인자 — String은 한 토큰(공백 포함 시 따옴표), 숫자를 String에 넣을 때도 따옴표. 우회: 선택 String 인자 N개 이어 붙이기, `_`로 구분 후 `split`, String으로 받아 직접 파싱(`~`/`~N` 상대좌표 직접 처리), 별도 커맨드, `!prefix` 채팅 커맨드. Mojang: "파서가 취약하다", 일정 없음. 바닐라 커맨드 동작 재정의 불가(권한만). (한 보고자의 "enum으로 하위 커맨드 가능" 주장은 *unverified*)
+- **`execute in <dim>`**: `CommandOrigin`에 차원이 없어 `execute in` 문맥을 못 받는다(`origin.sourceEntity?.dimension`/`sourceBlock` 또는 차원 인자 사용). `execute as/at/positioned`는 동작.
+
+#### 권한 문제
+
+- **MCPE-230568**: 셀렉터 매개변수(PlayerSelector/EntitySelector)가 있는 커맨드를 비-OP가 쓰면 플레이어 이름을 직접 입력해도 `<insufficient permissions for selector expansion>`(`permissionLevel: Any`라도). 2025-11부터 2026-05 이후까지 미해결. 우회: String 매개변수로 이름 받아 직접 조회, 또는 스크립트에서 권한 처리. `PlayerSelector` + Integer 조합이 `cheatsRequired: false`로 바꾼 뒤에야 동작했다는 보고도. *confirmed*
+- **Realms/서버의 OP는 GameDirectors로 매핑**: `CommandPermissionLevel.Admin` 이상은 Realms 소유자·OP에게도 동작하지 않거나 숨겨진다(Aternos에서도 `Admin` + `cheatsRequired:true` 실패). `GameDirectors` 사용 — 단 커맨드 블록도 실행할 수 있으므로 origin을 확인. 실행 시 태그로 추가 검사.
+- **커맨드 vs `scriptevent`**: `/scriptevent`는 커맨드 이름을 소비하지 않고 사용자에게 숨겨지며 재로드 없이 바뀌므로 팩 내부/팩 간 호출에 적합. 커스텀 커맨드는 Realms에서 동작(beta `chatSend`보다 이식성 높음).
+- **기타**: 스크립트는 `op` 등 고권한 커맨드를 실행할 수 없다(백도어 방지). `player.commandPermissionLevel`은 쓰기 가능(`Any`로 내리면 OP 커맨드 접근 제거, 배지는 남음), `deop`은 불가. `/transfer`는 일반 월드에서도 동작하지만 host보다 높은 권한이 필요. 스크립트 커맨드는 GameDirectors 수준으로 실행되며 `/connect`는 실행 불가. Education의 `education.json`은 모든 플레이어의 커맨드를 숨기므로 커스텀 커맨드로 교사용 기능을 게이트.
+- **문제 해결**: 새 커맨드가 안 보이면 팩이 월드에 적용되지 않았거나 잘못된 폴더(격리 빌드). 한 번 네임스페이스 형태로 호출한 뒤에야 동작한 사례(버그 의심).
+

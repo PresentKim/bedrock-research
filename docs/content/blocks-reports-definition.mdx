@@ -1,0 +1,144 @@
+---
+title: "블록 커뮤니티 보고 - 정의와 커스텀 컴포넌트"
+description: "format_version, 파일·이름, 로그, 커스텀 컴포넌트 훅, 상태·트레이트·퍼뮤테이션, 멀티블록, 블록 엔티티에 대한 커뮤니티 보고 상세."
+sidebar_position: 20
+sources:
+  - private-research
+---
+
+# 블록 커뮤니티 보고 - 정의와 커스텀 컴포넌트
+
+커뮤니티 조사(2025-10-22 ~ 2026-10-23)에서 본 페이지의 앞 문서가 요약하지 못한 개별 보고를 모았다. 각 항목 끝의 `[uNNN 날짜]`는 조사 노트 번호와 보고 날짜이고, `(single report)`는 한 사람만 보고한 내용이다.
+
+#### format_version
+
+- **블록 파일의 format_version만 중요**: 커스텀 컴포넌트와 새 기능은 블록 JSON의 `format_version`으로 열린다. 매니페스트 `min_engine_version`은 BP의 Molang/명령에만 영향을 주므로 최신으로 유지한다. 1.21.90 블록은 숫자만 1.26.0으로 올려도 새 트레이트가 동작했다(1.21.90~26.0 사이에 형식이 바뀐 컴포넌트는 없다). Realm이 아직 그 버전이 아니면 무시되거나 실패한다.
+- **format_version별 효과(ciosciaa 정리, 체인지로그는 자주 틀림)**: 1.19.10 map color/flammability, 1.19.20 friction, 1.19.40 geometry + material_instances, 1.19.50 collision + crafting table, 1.19.60 display name, selection, adjacency filter, 1.19.80 transformation, 1.20.10 geometry의 Molang bone visibility, 1.21.30 mining destructibility hardness override, 1.21.70 intrinsic particles + `isotropic`, 1.21.90 UV lock + destruction particle count, 1.21.110 texture variations의 atlas tile, 1.21.120 alpha 기반 tint masking, 1.26 하드코딩 full-block 아랫면 회전 수정, 1.26.20 trailing comma, tags 컴포넌트, block entity 컴포넌트, geometry의 visual rotation 상태 바인딩, lava flammability, 퍼뮤테이션 조건의 versioned Molang, flower-pot 표시 수정, 식별자/상태 이름 검증 완화, placement_direction/geometry 검증 강화, 퍼뮤테이션 내 flower_pottable 금지, redstone producer는 root에도 있어야 퍼뮤테이션에 둘 수 있음, 1.26.30 instrument sound 컴포넌트. 다중 충돌 박스는 1.20.80에서도 동작했다(버그 수정은 1.26.30). Blockception은 tags 컴포넌트를 모든 버전에 제안하지만 실제로는 버전에 묶여 있다.
+- **1.26.20 새 파서**: `ambient_occlusion` boolean이 제거되고 0-10 숫자를 받는다(boolean을 쓰면 엉뚱한 "invalid string" 오류). 오류 메시지에 위치 정보가 없다. 1.26.20에는 아이템 오버라이드가 있는 블록에 `menu_category`가 잘못 필수였다("Menu Category should not have an empty value", 우회 `"menu_category": {"category": "none"}`, 2026-03-31까지 수정). 1.21.130 같은 예전 버전으로 내리면 로드는 되지만 새 컴포넌트를 잃으므로 권장하지 않는다.
+- **`components` 밖의 컴포넌트는 조용히 무시된다**: 예를 들어 `"minecraft:collision_box": false`를 `components` 밖에 두면 오류 없이 단위 큐브 충돌이 된다. `components` 안의 `"minecraft:collision_box": false`는 안정판과 프리뷰 모두에서 동작한다.
+- **1.16.100식 문법은 폐기**: 1.21.10+ 형식을 쓴다. 1.16 시절 블록은 마이그레이션 전까지 "?" / "update block"으로 보인다(1.21.130 사용 권장).
+
+#### 레거시 이름 변경
+
+- `minecraft:entity_collision` → `minecraft:collision_box`, `minecraft:block_light_dampening` → `minecraft:light_dampening`, `minecraft:pick_collision` → `minecraft:selection_box`, `minecraft:block_light_emission` → `minecraft:light_emission`, `minecraft:destroy_time` → `minecraft:destructible_by_mining.seconds_to_destroy`, `minecraft:rotation` → `minecraft:transformation`, `minecraft:block_property` 쿼리 → `q.block_state`, `properties` → `states`(1.20.30에 이름 변경, 되돌릴 계획 없음). `minecraft:ticking`은 존재하지 않고 `minecraft:tick`이다. 블록 아이콘의 `minecraft:foil`은 아이템 `minecraft:glint`가 됐다. 블록 이벤트(`events`, `minecraft:on_placed`, `set_block_state`)는 2024년경 제거됐으니 스크립트를 쓴다.
+
+#### 파일 위치와 이름
+
+- **텍스처 매핑 파일**: `terrain_texture.json`(단수)과 `item_texture.json`은 `RP/textures/`에 둔다(팩 루트 아님). 경로에 `.png` 확장자를 넣으면 PBR 텍스처 세트가 깨진다. 잘못된 JSON이나 UTF-8-SIG(BOM) 파일은 "failed to parse"가 된다.
+- **lang 키**: 블록은 `tile.<ns>:<id>.name`(블록은 `.name` 유지), 아이템은 `item.<ns>:<id>.name`이다. 식별자에 대문자를 쓰지 않는다.
+- **menu_category**: `description` 바로 안에 둔다(`traits` 안이 아님). 값은 소문자다(`"Construction"`이나 `menu_catagory` 오타는 조용히 크리에이티브에서 숨긴다). `category` 키는 블록에 존재한 적이 없다. 숨기려면 `"none"`을 쓰거나 생략한다(`hidden`은 무효). 생략은 프리뷰 26.20.23부터 다시 허용됐다. `replace_block_item`을 쓰면 아이템의 menu_category가 우선한다. `register_to_creative_menu`는 1.26.20에서 동작을 멈췄다. 그룹 예: `minecraft:itemGroup.name.slab`.
+- **traits 위치**: `traits`는 `description` 안에 둔다.
+- **하위 폴더**: `blocks/` 하위 폴더도 보통 동작한다. 한 사용자는 파일을 `blocks/` 바로 아래로 옮기자 `light_emission`이 동작했지만 일반적인지는 확인되지 않았다(다른 사례의 원인은 bridge.가 저장하지 않은 것). (single report)
+- **Light emission 최소 예(1.26.30에서 유효)**: `"minecraft:geometry": {"identifier":"minecraft:geometry.full_block"}`, `material_instances`, `"minecraft:light_emission": 15`. 철자는 `light_dampening`이다("damping" 아님).
+
+#### 콘텐츠 로그 읽기
+
+- **블록 오류의 순서**: 첫 줄은 블록이 무효라는 것, 둘째는 어느 컴포넌트, 셋째는 이유(진짜 원인), 넷째는 format_version에 맞지 않는 데이터다. "Unexpected version for the loaded data"는 보통 앞선 진짜 오류에 딸려 나오므로 로그를 위로 올려 본다. 2026-03 프리뷰와 1.26.x에서는 무해한 버그로도 나타났다.
+- **누락 레지스트리 경고**: 팩이 켜지지 않았거나 완전히 리로드되지 않은 경우다. 월드를 재시작하거나 팩을 뺐다가 다시 넣는다. 지오메트리/텍스처를 바꾼 뒤에는 development 팩에 두고 `/reload all`을 쓴다.
+- **편집기 오탐**: Blockception VS Code 확장은 `minecraft:geometry.full_block`과 `wool`/`carpet` 블록 필터("mcbehaviorpack.blocks.missing")를 잘못 표시한다. bridge. 스키마는 `block_face`, 정수 `count`, 숫자 `ambient_occlusion`을 잘못 거부한다. bridge.는 2025-12에 고장 보고가 있었다. AI 챗봇은 Bedrock 애드온 주제에서 환각이 많다.
+
+#### 등록
+
+- **v2 등록 방식**: 
+  ```js
+  import { system } from "@minecraft/server";
+  system.beforeEvents.startup.subscribe(({ blockComponentRegistry }) => {
+    blockComponentRegistry.registerCustomComponent("ns:id", { onPlace(e) {}, onTick(e) {} });
+  });
+  ```
+  블록 JSON에는 `"ns:id": {}`를 `components`에 직접 쓴다. 필요 조건은 블록 format 1.21.90+, BP 매니페스트의 `@minecraft/server` 2.0.0+, 그리고 `modules`의 script 항목(`{"type":"script","language":"javascript","entry":"scripts/main.js",...}`)이다. 컴포넌트 파일은 엔트리 파일에서 import해야 한다. 한 보고자 노트는 `minecraft:custom_components` 배열이 필요하다고 적었지만, 이는 1.21.90 이후 무효인 옛 형식이다.
+- **매니페스트 버전 충돌**: gametest 의존성 버전이 충돌하면 스크립트 로딩이 깨진다. 당시 안정판 기준 `@minecraft/server` `2.7.0`, server-ui `2.0.0`을 쓰고, 쓰지 않는 `@minecraft/server-gametest`는 뺀다. (single report)
+- **"child 'x:y' not valid here" / "component found in input but not present in Schema"**: 원인은 컴포넌트가 API로 등록되지 않음, 잘못된 레지스트리(itemComponentRegistry)에 등록, 옛 format_version(예 1.20.80), 매니페스트에 script 모듈 없음, 스크립트 오류나 잘못된 import, 한 폴더의 여러 매니페스트 중 하나다. `minecraft:geometry` 밖에 둔 `bone_visibility`도 같은 오류를 낸다. 가짜 `minecraft:components` 객체로 감싸는 것은 해결책이 아니다.
+- **등록 타이밍**: `system.run(() => import("./main"))`처럼 main을 한 틱 늦게 import하면 startup 등록이 깨진다. 스크립트 오류가 하나라도 있으면 블록/아이템 컴포넌트가 붙지 않을 수 있다. `/reload`로는 startup이 다시 실행되지 않는다.
+- **기타 경고**: "Block custom component 'x' is not being used by a block"은 format_version이나 위치가 잘못됐다는 뜻이다. "component used on block but not registered in script"는 미등록이거나 `@minecraft/server` 메타데이터 버전이 잘못된 경우다. 2026-03 블록 스키마 변경 직후 모든 커스텀 컴포넌트에 `No transformer found for component ... Cannot downgrade from modern slice to legacy component`가 났다(MCPE-237057). 그 시기 Upcoming Creator Features를 켠 베타에서는 커스텀 컴포넌트를 쓸 수 없었다.
+- **파라미터 중첩**: 커스텀 컴포넌트 파라미터의 중첩 깊이는 최대 2다. `tag`도 유효한 커스텀 컴포넌트 네임스페이스다.
+
+#### 훅
+
+- **사용 가능한 훅**: `onPlace`, `onTick`, `onRandomTick`, `onPlayerInteract`, `beforeOnPlayerInteract`, `onPlayerBreak`(이전 `onPlayerDestroy`), `onBreak`, `onStepOn`, `onStepOff`, `onEntityFallOn`, `beforeOnPlayerPlace`, `onRedstoneUpdate`. `beforeEvents.blockTick`, `permutation.getMaterial()`, `onEntityStepOn`, `onEntityInside`는 존재하지 않는다.
+- **onBreak**: 1.21.130에서 실험으로 나왔다. `brokenBlockPermutation`과 `entitySource`를 주며 피스톤, 폭발, 지지 상실로 깨질 때도 발생한다. 2칸짜리 블록의 양쪽을 부수거나 폭발 전용 루트를 만들 때, 그리고 부서진 블록 상태를 보존할 때 쓴다. 생존성(survivability) 실패로 부서질 때는 발생하지 않는다(MCPE-240755).
+- **onPlayerInteract**: 그 블록에 대고 하는 일반 사용과 설치를 막는다(웅크려야 설치 가능). 바닐라의 상호작용 조건이 이식되지 않았고 버그로 취급되지 않는다. 한 퍼뮤테이션에만 있어도 모든 퍼뮤테이션이 상호작용 가능해진다(MCPE-225746). 활성 커스텀 컴포넌트가 하나라도 있으면 블록이 interactable이 된다. 막지 않으려면 `world.beforeEvents.playerInteractWithBlock`을 쓰고 `system.run` 안에서 처리한다(after 이벤트는 interactable 블록에서만 발생).
+- **beforeOnPlayerPlace**: `e.permutationToPlace`를 바꾸거나 `e.cancel = true`로 막는다(물 위 설치 금지 등). 이 훅을 쓰면 클라이언트 예측이 꺼져 빠른 브리징이 어려워진다. 퍼뮤테이션 안에 두면 예측이 억제되지 않았다(MCPE-238017, 2026-05-19경 수정, opaque/blend만 해당). `replace_block_item` 블록에서는 블록이 놓인 뒤에 실행된다. 아이템이 놓은 블록은 이 훅을 부르지 않는다는 보고도 있다.
+- **onPlace 주의**: 모든 설치에서 발생한다. 같은 틱에 부서지면 `e.block`이 `minecraft:air`일 수 있다(after 이벤트는 나중 상태를 반영). 이웃이 자리 잡기 전에 실행될 수 있으니 `system.run`으로 늦춘다.
+- **틱 타이머**: `minecraft:tick`은 개수 제한이 없고 지연이 있는 queued tick을 지원하지만, 한 블록이 틱 타이머를 둘 가질 수는 없다. 성능을 위해 `onRandomTick`을 선호한다(작물 성장, 낙엽 파티클). 바닐라 잎 파티클은 randomtickspeed를 무시해서 둘을 동시에 맞출 수 없다. 틱을 끄려면 상태 하나와 퍼뮤테이션 둘(하나만 `minecraft:tick` 포함)을 쓴다.
+- **스케줄 틱 처리량**: 청크-차원 쌍마다 틱당 100개 블록만 scheduled-tick 동작을 실행하고, 나머지는 순환하며 카운트다운은 모두 줄어든다(4틱 블록 400개는 8틱 후 안정).
+- **틱 성능**: 한 구역에 압력판 30여 개가 블록 `onTick`을 쓰자 10-15ms 스파이크가 났다. 플레이어 쪽 틱(플레이어 발밑 블록 검사)이나 projectile hit 이벤트를 권장한다. 모든 인스턴스를 찾을 때는 `onTick`으로 위치 레지스트리를 만드는 것이 현실적이다(차원 검색은 비현실적).
+- **퍼뮤테이션 변경의 부작용**: 놓인 블록의 퍼뮤테이션을 `onTick`/레드스톤 클럭으로 바꾸면 그 틱 동안 플레이어가 그 블록에 대고 설치할 수 없다(오래된 문제).
+- **손 흔들기**: 블록 컴포넌트 이벤트 절반은 손 흔들기 애니메이션을 강제한다.
+
+#### 퍼뮤테이션과 커스텀 컴포넌트 버그(MCPE-234714)
+
+- **증상**: 매칭되는 퍼뮤테이션 중 마지막(가장 아래) 퍼뮤테이션의 커스텀 컴포넌트만 적용되고, 다른 곳에 정의한 것은 무시된다(하나의 `minecraft:custom_components` 값으로 합쳐지는 것으로 추정). 루트와 기본 퍼뮤테이션 양쪽에 있으면 퍼뮤테이션 쪽만 읽힌다. 다른 컴포넌트나 틱도 깨질 수 있다. 우회법은 모든 퍼뮤테이션에 모든 커스텀 컴포넌트를 정의하는 것이다. 2026-10 기준 미해결.
+
+#### 상태
+
+- **규칙**: 상태 이름에는 네임스페이스가 필요하다(`gen:type`). 없으면 `Identifier must have a namespace / Failed to create Block State Description`가 난다. 상태당 값은 최대 16개이고, 정수 범위는 `{"values":{"min":0,"max":15}}`로, 문자열·불리언 배열도 가능하다. 더 필요하면 상태를 둘 쓴다. 상태 문자열 길이 제한은 확인되지 않았다(1000자 유효, 채팅은 약 450자에서 크래시).
+- **비트마스크**: 이끼/스컬크 덩굴처럼 6면을 붙이려면 면을 1,2,4,8,16,32로 두고 합 1-63을 쓴다. 1비트 상태 8개로 바이트를 흉내 낼 수 있다.
+- **모든 조합이 생성된다**: 블록은 상태의 모든 퍼뮤테이션을 항상 만든다. 값이 더 적은 바닐라 상태를 재사용할 수 없다. 기존 월드에서 바뀐 상태는 틱이 돌 때만 갱신된다.
+- **블록 컴포넌트는 저장되지 않는다**: 컴포넌트는 퍼뮤테이션(식별자 + 상태값)에서 파생되며, 저장되는 것은 `minecraft:tick`의 queued tick뿐이다. `block.setTexture`는 없고 서버는 텍스처 개념이 없다. 스크립트로 지오메트리를 바꾸려면 상태에 퍼뮤테이션을 묶고 `block.setPermutation`을 쓴다.
+- **스크립트 API 쪽**: 많은 상태 값은 문자열이다(`turtle_egg_count: "one_egg"`, 계단 `minecraft:corner`의 `inner_left` 등). `BlockStates.get(name).validValues`로 값 목록을 얻지만 `stone_type`, `sand_type`, `dirt_type`, `old_leaf_type` 같은 평탄화된 레거시 타입은 `[]`를 준다. `BlockPermutation.getAllStates()`는 현재 값만 준다. `BlockStates.getAll`은 임의의 합집합이고 `color`, `old_log_type` 같은 폐기 상태도 호환용으로 노출된다(Script API 3.0 전까지 고칠 수 없음).
+- **상태는 블록 타입별로 지역적**: `mojang-blocks.json`은 공유 상태를 나열하지만(예 `rail_direction`은 `rail`과 `activator_rail`이 함께 쓰지만 activator_rail에는 회전 값이 없음) 모든 조합을 만들면 존재하지 않는 퍼뮤테이션이 생긴다. `BlockPermutation#withState`를 시도해 실패를 건너뛰는 방법이 있다. 레거시 상태는 팔레트 해시에서 뺀다. Mojang(mammerla)은 타입별 유효 상태를 기록하는 중앙 자료가 엔진에 없어 추가 메타데이터는 나오지 않는다고 답했다. 메타데이터에 없지만 팔레트와 Script API에 있는 내부 블록: chalkboard(전용 방향 상태 0-15), client_request_placeholder_block, deprecated_anvil, deprecated_purpur_block_1/2, end_gateway, glowingobsidian, info_update, info_update2, invisible_bedrock, moving_block, netherreactor, reserved6, stonecutter.
+- **데이터 값**: 아이템 데이터 값은 `testfor`/`give`에서 동작하지만 블록 데이터 값은 동작하지 않는다. 블록 aux ID는 고정이고, 아이템 숫자 ID는 런타임에 배정된다(256 넘는 바닐라 ID는 애드온 콘텐츠에 밀리고, 일부 바닐라 블록은 안정적인 음수 ID를 가진다. 예: sulfur 약 -1125). `beacon.item_renderer`의 3D 블록 렌더링에는 그 ID가 필요하다.
+- **명령 자동완성**: 숫자 상태 값을 0부터 다시 매긴다(MCPE-236301).
+
+#### 퍼뮤테이션 규칙과 한도
+
+- **작성 규칙**: 컴포넌트는 퍼뮤테이션끼리나 base와 겹쳐도 되지만 같은 조건을 반복하지 않는다. 퍼뮤테이션은 기능별로 따로 둬도 되며(회전 4 + 텍스처 2) 데카르트 곱일 필요가 없다. 조건에는 `&&`, `||`, 괄호를 쓸 수 있다. 같은 결과는 `||`로 합친다. 조건은 자기 상태만 볼 수 있고 이웃은 보지 못한다. 예: `"condition": "q.block_state('mistvale:growth') < 7"`.
+- **퍼뮤테이션 한도**: 블록 타입당 최대 65,536 퍼뮤테이션이다(별도의 두 번째 한도도 있음, 바닐라는 약 16,000). 한 애드온은 바닐라를 포함해 블록 32,767개까지 등록할 수 있다. 월드 전체 퍼뮤테이션 경고도 있다(한 애드온 40k, "framed blocks" 약 93,220). 연결 텍스처 블록은 한도를 넘는다. 텍스처를 상태로 바꾸는 애드온은 숫자 상태 하나를 X,Y 그리드로 매핑하거나 엔티티를 쓰라는 제안을 받았다.
+- **상태 대 별도 블록**: 상태와 별도 블록 사이에 의미 있는 성능 차이는 없다는 의견과, 레드스톤·조명(겹반블록 등)에는 별도 블록이 낫다는 의견이 있다. 변형마다 자체 아이템이 필요한지로 정한다. 색 40개(양모, 콘크리트식)는 별도 파일이 낫다. 트레이트도 상태처럼 퍼뮤테이션 수에 계산될 가능성이 크다. Kaioga는 placement-position 트레이트가 상태 6개를 더해 퍼뮤테이션을 두 배로 만든다며 회전을 상태 + 스크립트로 처리한다.
+
+#### 방향 트레이트
+
+- **트레이트 예**:
+  ```json
+  "traits": {
+    "minecraft:placement_direction": {"enabled_states": ["minecraft:cardinal_direction"], "y_rotation_offset": 180},
+    "minecraft:placement_position": {"enabled_states": ["minecraft:block_face"]}
+  }
+  ```
+  트레이트 없이 `q.block_state('minecraft:block_face')`를 쓰면 "making use of non-registered block state"가 난다.
+- **placement_direction 대 placement_position**: `placement_direction`(`minecraft:cardinal_direction` N/E/S/W 또는 `minecraft:facing_direction`)은 플레이어가 보는 방향에 따르며 화로식이다. `placement_position`(`minecraft:block_face`, `minecraft:vertical_half`)은 클릭한 면에 따르며 통나무/기둥식이다. 모델 앞면은 north를 향하게 만들고 `y_rotation_offset: 180`을 준다. `y_rotation_offset`은 하드코딩된 `enabled_states` 일부에서만 지원된다. corner+cardinal에서는 cardinal을 포함하지 않으면 실패한다(MCPE-240709, 의도된 동작).
+- **기둥 회전 퍼뮤테이션**: `q.block_state('minecraft:block_face')`에 따라 `minecraft:transformation` rotation을 west/east `[0,0,90]`, north/south `[90,0,0]`, up/down `[0,0,0]`으로 준다. 다른 예시는 up `[90,0,0]`, east `[0,-90,0]`이다. 템플릿: https://github.com/Kaioga5/Kaioga-s-Block-Templates/tree/main/templates/1.20.80/logs.
+- **`/setblock` 방향**: `block_face` 트레이트 블록을 `/setblock`으로 놓으면 기본 `down`이 된다(바닐라 item frame도 같음). cardinal 블록도 손으로 놓을 때와 다르게 향하므로 상태를 명시한다. `cardinal_direction` 순서(NWSE)가 예상과 달라 west는 -90/270이 아니다. 블록의 `north()/south()/east()/west()`는 `cardinal_direction`과 무관하게 월드 기준 이웃이다.
+- **N-way / 16방향 회전**: `minecraft:sixteen_way_rotation` / `n_way_visual_rotation`은 2026-08-04 안정판으로 확인됐다(https://wiki.bedrock.dev/blocks/n-way-rotation#sixteen-way-rotation, 머리 https://wiki.bedrock.dev/blocks/custom-heads). 퍼뮤테이션 안에서는 쓸 수 없고, 지오메트리를 덮는 퍼뮤테이션은 이를 지운다. 하드코딩 full-block 모델에서는 동작하지 않는다. 원격 플레이어/BDS/Realms에서 회전이 보이지 않던 버그(MCPE-241952)는 26.60.28/29에 수정됐다고 하지만 2026-09-28에도 Realms에서 안 된다는 보고가 있다. 구조물 회전을 따르지 않는다(MCPE-243539, 2026-10-08). 16방향의 y rotation offset 무효 문제는 수정됐다.
+- **랜덤 회전**: 수련잎식 텍스처는 material instance `"isotropic": true`로 위치 기반 무작위 회전을 준다. 설치마다 무작위로 하려면 `beforeOnPlayerPlace`에서 `e.permutationToPlace = e.permutationToPlace.withState("minecraft:cardinal_direction", directions[Math.floor(Math.random()*4)])`를 쓴다. 모델 변형도 같은 방식으로 상태를 정한다.
+- **구조물 회전**: 블록 트레이트를 쓰지 않는(상태 기반 회전) 커스텀 방향 블록은 구조물로 저장해 회전하면 잘못 돈다. 스크립트로 놓은 파이프/연결 블록은 구조물 로드 후 연결 상태를 다시 계산해야 한다(미해결).
+
+#### 연결과 계단 트레이트
+
+- **`minecraft:connection` 트레이트**: `enabled_states: ["minecraft:cardinal_connections"]`가 자동 관리되는 `minecraft:connection_north/south/east/west` 상태를 더한다. `bone_visibility`나 퍼뮤테이션에서 스크립트 없이 쓸 수 있고, 클라이언트에서 스크립트 방식보다 빠르게 반영된다. 상하 연결은 없고, 비슷한 블록이나 태그로 제한할 수 없다. 바닐라 풀블록, `connection_rule` 없는 커스텀 블록, "none"이 아닌 규칙에 `minecraft:has_fence_connections` 태그가 있는 블록에 연결된다. Mojang(Brock)은 임시 해법이며 voxel shape로 확장할 예정이라고 했다. `y_rotation_offset`을 쓰면 오프셋 없는 블록과 연결이 깨진다. 퍼뮤테이션에 connection 트레이트나 `has_fence_connections` 태그를 두면 게임이 크래시한다(MCPE-236302).
+  ```json
+  "minecraft:geometry": {"identifier":"geometry.fence","bone_visibility":{"north":"q.block_state('minecraft:connection_north')","centre":"true"}}
+  ```
+- **`minecraft:corner_and_cardinal_direction`**: `placement_direction`의 enabled state로 쓰며 4방향 x 5코너(none, inner_left, outer_left, inner_right, outer_right) = 20 퍼뮤테이션이고 `minecraft:corner` 상태를 더한다. `blocks_to_corner_with`에는 블록 ID 목록이나 `{"tags":"q.any_tag('mytag')"}`(Molang)를 준다. `minecraft:cornerable_block` 태그는 없으니 커스텀 태그나 자기 ID를 쓴다. 바닐라 계단과의 연결은 26.0에서 Beta APIs 실험이 필요했고 2026-04에도 미연결 버그가 남아 있었다. inner 조각 옆에서 corner가 none이 되던 버그(MCPE-232019)는 26.10에 수정됐다. 문서: https://wiki.bedrock.dev/blocks/block-traits#placement-direction.
+- **`minecraft:vertical_half`**: `placement_position` enabled state로 반블록 위/아래를 정한다.
+- **커스텀 계단 트레이트 버그**: 2025-12에는 계단용 내장 트레이트가 버그가 있다는 보고가 있었다(이후 26.0에서 안정).
+
+### 멀티블록(`minecraft:multi_block`)
+
+- **정의**: `"traits": {"minecraft:multi_block": {"enabled_states":["minecraft:multi_block_part"], "parts": 2, "direction": "up"}}`. 문서: https://learn.microsoft.com/en-us/minecraft/creator/documents/multi-blocks?view=minecraft-bedrock-stable, https://wiki.bedrock.dev/blocks/multi-blocks.
+- **안정화 경과(버전 일부 conflicting)**: 수직 멀티블록은 1.26.40 안정 예정이었지만 빠졌다(안정판에서 'no parser available for version 1.26.40' 오류). Mojang은 1.26.50 릴리스에서 안정이라고 했다(문서 2026-08-04 갱신). 1.26.20 안정판에서 format_version 1.26.20 이상이면 실수로 Upcoming Creator Features 게이트가 풀렸다가 2026-05 핫픽스됐다. 1.26.10/1.26.20 형식은 실험이 필요했다. 수평 멀티블록(침대)은 1.26.40 프리뷰 실험을 거쳐 26.50에 안정됐고 그에 맞는 format_version이 필요하다. 한 보고자는 26.40 안정이라고 적었고 한 보고자는 26.21에 아직 beta API라고 적었다. 최종 안정은 26.50으로 본다.
+- **필수와 제한**: `minecraft:movable`을 반드시 정의해야 한다(immovable 또는 popped, 피스톤 이동 미지원). `placement_filter`, `replaceable`, `random_offset`, `movable`, `precipitation_interactions`, `minecraft:block_entity`는 root 전용이다(퍼뮤테이션에 두면 "Component ... is not valid in multi block permutations"). block_entity는 처음엔 금지였다가 약 1.26.50에 다시 유효해졌고 부품당 하나씩 붙는다. `precipitation_interactions`를 퍼뮤테이션에 두면 26.30.25부터 블록 전체가 로드되지 않는다. 방향 트레이트는 `cardinal_direction`만 동작한다(connection, placement_position, n-way 미지원). 수평 멀티블록의 random offset은 금지될 예정이다.
+- **방향**: `placement_direction`이 `cardinal_direction`을 켜면 트레이트의 `direction`은 무시되고 배치 방향(`y_rotation_offset` 포함)을 따른다. 추가 퍼뮤테이션은 필요 없다. 한 축만 지원하므로 3D/다축은 스크립트로 만든다. 다른 direction 값은 받아들여지지만 아무 효과가 없다.
+- **동작**: 기본 부품을 놓으면 나머지가 놓인다. 기본이 아닌 부품을 `setblock`/`fill`로 놓으면 실패한다(이전엔 조용히, 2026-03-11 수정). 어느 부품을 부수든 전부 부서지고, 먼저 부서진 부품의 루트만 떨어진다. 부품마다 루트를 다르게 할 수 있으니 `q.block_state('minecraft:multi_block_part')` 조건 퍼뮤테이션에 루트를 둔다. 문은 항상 아래 부품에서 떨어진다. `onBreak`는 한 번 발생하고 `onPlayerBreak`는 발생하지 않는다. 비기본 부품은 설치 시 엔티티 충돌 검사를 건너뛴다(자바 침대와 같음). `Dimension#fillBlocks`는 `/fill`과 다르게 동작한다. 각 부품은 pending tick 하나로 계산된다.
+- **상태 변경(시기별 변화)**: 2026-04에는 part 0의 상태를 바꾸면 다른 부품도 맞춰졌고 다른 부품을 바꾸면 파괴되며 "failed to set property"가 났다. 2026-05(1.26.20 무렵)부터는 같은 틱에 모든 부품의 상태를 바꿔야 하며, part 0만 바꾸면 블록이 깨진다. Mojang(brozef92)은 스크립트/명령으로 부품 하나씩 설정하는 것은 의도적으로 막았다고 했다. `beforeOnPlayerPlace`의 `permutationToPlace`는 모든 부품을 갱신한다.
+- **스크립트**: `block.setType(typeId)`는 기본 퍼뮤테이션(첫 부품)을 놓아 전체를 만든다. `setPermutation()`은 한 부품만 놓고, part 0에 쓰면 클라이언트에 유령 부품만 생긴다. 상태를 바꾸려면 `block.getParts()`(순서 보장)로 각 부품에 설정한다:
+  ```js
+  part.setPermutation(BlockPermutation.resolve(part.typeId, {...states, "minecraft:multi_block_part": part.getState("minecraft:multi_block_part")}));
+  ```
+  랜덤 틱에서는 `minecraft:multi_block_part`를 읽어 0이 아니면 건너뛰는 식으로 쓴다. 바닐라 문은 위쪽 상태만 바꾸는 레거시 방식이다.
+- **블록 엔티티와 인벤토리**: 부품마다 별도 블록 엔티티가 붙고 동기화되지 않는다(바닐라 겹상자도 연결된 엔티티 2개). 인벤토리 변경을 감지할 방법이 없어 두 플레이어가 다른 부품을 쓰면 복제 위험이 있다. 비루트 부품에서 `PlayerBreakBlockBeforeEvent`를 취소하면 상태가 어긋난다.
+- **기타 버그**: 선택 박스를 끈 부품은 외곽선 계산에서 16x16x16으로 취급된다. 커스텀 멀티블록으로 `fill ... replace bed[...]`를 채팅에서 실행하면 크래시할 수 있다(명령 블록이나 함수에서는 조용히 동작). 선택 박스가 없으면 외곽선이 없던 버그(MCPE-237089)는 수정됐고, random offset 버그는 MCPE-237071, survivability(MCPE-237498)는 수정됐다. 26.20 프리뷰에서 멀티블록과 placement filter 버그가 수정됐다.
+- **멀티블록과 화분**: 지오메트리/머티리얼을 퍼뮤테이션에만 정의한 멀티블록은 root에 `minecraft:flower_pottable`이 있으면 오류가 난다(MCPE-237910, 의도된 동작으로 판정됐지만 논란).
+- **voxel shape와 외곽선**: Mojang은 블록 경계 밖 외곽선에는 멀티블록 + voxel shape를 쓰는 것을 의도한다고 했다.
+- **제안 단계**: 커스텀 상태의 `multi_part_sync` / `forwarded_states` 플래그와 스크립트 상태 변경 이벤트는 brozef92의 할 일 목록에 있다.
+
+### 블록 엔티티, 컨테이너, 동적 속성
+
+- **`minecraft:block_entity`**: 프리뷰 26.30.28에 들어왔다. 26.40에서 실험, 26.50에서 블록 엔티티 자체(동적 속성 저장)는 실험이 아니게 됐고 `container {slot_count}`는 여전히 실험이다. UI는 통(barrel)식뿐이며(JSON UI로 수정 가능) 상자 렌더링과 호퍼 흡입은 없다. 그전에는 블록에 동적 속성이 없었고 피스톤 이동 이벤트도 없었다.
+- **할 수 없는 것**: 낙하 블록(하드코딩된 `minecraft:falling_block` 엔티티)과 애니메이션은 만들 수 없다. 상자 열림 애니메이션은 상태와 퍼뮤테이션으로 지오메트리를 단계별로 바꿔 흉내 낸다(뻣뻣함). 멀티블록이 블록 엔티티 하나를 공유하는 것도 아직 안 된다. 커스텀 UI를 블록 엔티티 컨테이너에 연결하는 방법은 확인되지 않았다(슬롯 1의 특정 이름 아이템으로 UI를 띄웠다는 소문만 있음).
+- **버그**: 레드스톤 업데이트 뒤 스크립트로 컨테이너 아이템을 바꾸면 열린 UI가 닫힌다(26.50, 버그로 추정). 눈에 묻힌(snowlogged) 컨테이너 블록 엔티티는 아이템을 떨어뜨린다.
+- **아이템으로 옮기기**: 루트 함수 `carry_over_block_entity_data`에 `dynamic_properties:true`를 주면 블록 동적 속성이 아이템으로 넘어간다(26.40, Upcoming Creator Features).
+- **블록 엔티티 이전의 저장 방법**: 블록별 데이터는 월드나 엔티티 동적 속성에 둔다(스크립트 리로드와 재시작 후에도 유지). 엔티티 기반 저장은 블록이 많으면 렉이 생기고 `/kill @e`로 사라진다. clone/fill은 가로챌 수 없다.
+- **아이템 표시**: 블록 엔티티는 attachable로 아이템을 보여줄 수 있다(블록인 척하는 엔티티, 뼈와 슬롯을 수동 매핑). Mojang은 커스텀 블록 컨테이너를 작업 중이라고 했다.
+- **요청**: `minecraft:ender_chest`/`spawner` 컴포넌트 API가 요청됐다.

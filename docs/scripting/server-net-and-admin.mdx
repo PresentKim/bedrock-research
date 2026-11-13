@@ -1,0 +1,165 @@
+---
+title: "server-ui, server-net, server-admin, GameTest"
+description: "server-ui 폼과 DDUI, BDS 전용 server-net·server-admin, 애드온 간 IPC, GameTest와 Editor"
+sidebar_position: 8
+sources:
+  - private-research
+  - ms-learn
+  - bedrock-wiki
+---
+
+## server-ui 폼 요약
+
+`@minecraft/server-ui`는 플레이어에게 폼을 띄우는 모듈이다. `ActionFormData`(버튼 목록), `ModalFormData`(슬라이더, 토글, 드롭다운, 텍스트 입력), `MessageFormData`(두 버튼 확인창)가 있고, 모두 `new XxxFormData().title(...)...show(player)`로 쓰며 결과는 Promise로 돌려받는다. `ActionFormData`는 `title`, `body`, `button(text, iconPath)`, `header`, `label`, `divider`를, `ModalFormData`는 `textField`, `slider`, `dropdown`, `toggle`, `submitButton` 등을 가진다(출처: ms-learn, `creator/ScriptAPI/minecraft/server-ui/ActionFormData.md`, `ModalFormData.md`).
+
+```javascript
+import { ActionFormData } from "@minecraft/server-ui";
+
+const form = new ActionFormData()
+  .title("메뉴")
+  .body("고르세요")
+  .button("시작", "textures/items/diamond");
+form.show(player).then((res) => {
+  if (res.canceled) return;           // 취소 또는 UserBusy
+  player.sendMessage(`선택: ${res.selection}`);
+});
+```
+
+폼 `show`는 월드 변경 호출이라 `before` 이벤트에서 직접 부를 수 없고, 입장 직후나 폼이 겹칠 때 `UserBusy`로 취소될 수 있으니 지연과 재시도를 둔다. 폼의 상세 사용법(모달 폼, 다중 선택, 서버 폼 리스킨)은 [모달 폼](../server-ui/modal-forms.mdx) 페이지에 정리돼 있다. 아래 노트에는 폼과 DDUI(데이터 기반 UI)에 대한 커뮤니티 조사 요약이 있다.
+
+## BDS 전용 모듈과 권한
+
+`@minecraft/server-net`(HTTP, WebSocket)과 `@minecraft/server-admin`(변수와 비밀)은 Bedrock Dedicated Server(BDS)에서만 쓸 수 있고 Realms나 로컬 월드에서는 쓸 수 없다. 둘 다 experimental(Beta APIs) 모듈이다. 스크립트 모듈 허용 목록은 서버의 `config/default/permissions.json`이다(출처: ms-learn, `creator/Documents/BedrockServer/scripting.md`).
+
+```json
+{
+  "allowed_modules": [
+    "@minecraft/server-gametest",
+    "@minecraft/server",
+    "@minecraft/server-ui",
+    "@minecraft/server-admin",
+    "@minecraft/server-editor"
+  ]
+}
+```
+
+`config` 폴더는 서버를 처음 실행할 때 생기고, 하위 `default` 폴더가 모든 모듈의 기본 설정이다. 스크립트 모듈별로 다르게 주려면 `config`에 그 모듈 UUID와 같은 이름의 폴더를 만들고 거기에 `permissions.json`을 둔다. 공식은 `default`의 파일을 최소로 유지하라고 권한다.
+
+## server-admin: 변수와 비밀
+
+관리자가 JSON을 직접 편집하지 않고 값을 바꾸게 하려면 `variables.json`을 `config/default` 또는 모듈 UUID 폴더에 둔다.
+
+```json
+{ "mobSpawnRate": 22 }
+```
+
+```javascript
+import { variables, secrets } from "@minecraft/server-admin";
+const spawnRate = variables.get("mobSpawnRate");
+```
+
+`secrets.json`은 인증 토큰 같은 민감한 값을 담으며, 스크립트 전역에서 읽을 수 없고 `server-net`의 `HttpHeader` 같은 특정 객체 안에서 실행 시점에 풀린다(`secrets.get()`을 헤더 값으로 쓴다).
+
+## server-net: HTTP 요청
+
+```javascript
+import { http, HttpRequest, HttpHeader, HttpRequestMethod } from "@minecraft/server-net";
+import { secrets } from "@minecraft/server-admin";
+
+const req = new HttpRequest("http://localhost:3000/updateScore");
+req.body = JSON.stringify({ score: 22 });
+req.method = HttpRequestMethod.Post;
+req.headers = [
+  new HttpHeader("Content-Type", "application/json"),
+  new HttpHeader("auth", secrets.get("authtoken")),
+];
+const res = await http.request(req);          // Promise<HttpResponse>
+```
+
+`HttpRequest`는 `body`, `headers`, `method`, `timeout` 속성과 `setBody`, `setHeaders`, `setMethod`, `setTimeout`, `addHeader` 메서드를 가지며, 오류 클래스로 `HttpRequestLimitExceededError`, `RequestBodyTooLargeError`, `TLSOnlyError`, `UriNotAllowedError` 등이 있다(출처: ms-learn, `creator/ScriptAPI/minecraft/server-net/HttpRequest.md`). `WebSocket`, `WebSocketClient`와 패킷 수신·송신 before 이벤트(`PacketReceiveBeforeEventSignal`)도 이 모듈에 있다.
+
+## 애드온 간 통신과 GameTest
+
+애드온끼리 스크립트를 import할 수는 없으므로 `system.sendScriptEvent(id, message)`와 `scriptEventReceive`로 메시지를 주고받는다(앞의 이벤트 페이지 참고). `@minecraft/server-gametest`는 stable 버전이 없는 가장 오래된 모듈이며 콘텐츠 제작자용이 아니라 테스트용이다. `server-editor`는 에디터 프로젝트 월드에서만 쓴다(출처: bedrock-wiki, `scripting/api-modules.md`).
+
+## 커뮤니티 노트
+
+아래는 커뮤니티 조사로 모은 DDUI, server-ui 세부, BDS 운영, IPC, GameTest, Editor 정보다.
+
+
+`*confirmed*`, `*single report*`, `**conflicting**`은 보고의 신뢰도 표시다. 이 페이지의 근거는 커뮤니티 보고이며 Mojang 공식 문서와 다를 수 있다.
+
+### UI: server-ui 폼, DDUI, JSON UI 연동
+
+#### ActionFormData / ModalFormData / MessageFormData
+
+- **ActionFormData**: `.title().body().button(text, iconPath).show(player).then(r => r.canceled / r.selection)`. `body`는 rawtext 허용. 버튼은 인덱스만 반환하며 클릭 후 열린 채 유지 불가(재표시 재귀), 툴팁/호버 없음. 본문 + 버튼 하나 = 단일 버튼 메시지. 아이콘은 RP 텍스처 경로만(확장자 포함 `textures/ui/x.png`가 필요했던 사례; URL 이미지는 Endstone 플러그인 URL-Image-Fix/endweave 필요), 아이템 텍스처 경로는 스크립트로 얻을 수 없다. 문서: `https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/minecraft/server-ui/actionformdata?view=minecraft-bedrock-stable`
+- **ModalFormData**: `.textField(label, placeholder, { defaultValue, tooltip })`(2.x에서 세 번째 인자는 객체; 값은 문자열이므로 `split(" ").map(Number)`, defaultValue는 string/RawMessage), `.dropdown(label, options, { defaultValueIndex })`(null 배열은 오류), `.toggle(label, { defaultValue })`, `.slider(label, min, max, { defaultValue, valueStep })`(숫자를 넘기면 "Native type conversion failed ... ModalFormDataSliderOptions"; 정수 단계만 → 스케일링; `valueStep` 0.1이 0에 고정되는 버그 2026-08), `.header()/.label()/.divider()`. 응답은 `response.canceled`(not `isCanceled`/`cancelled`), `response.formValues[i]` — label/header/divider도 자리를 차지해 undefined가 들어가므로(하위 호환을 위해 되돌림) 위치로 인덱싱하거나 `v != null`(느슨한 비교; `!== null`은 undefined를 못 거름)로 필터. AI 코드가 `{ defaultValue }` 객체 요구를 놓치는 일이 잦다. 텍스트 필드 길이 제한과 가운데 정렬은 JSON UI로.
+- **show 타이밍**: before 이벤트, 커맨드 콜백, 채팅 맥락에서 바로 `show`하지 말고 `system.run`(채팅창이 열려 있으면 표시 안 됨). 다른 UI가 열려 있으면 `response.canceled && response.cancelationReason === FormCancelationReason.UserBusy`(문자열 `"UserBusy"`, PascalCase; `UserClosed`도 있음; `@minecraft/server-ui`에서 import)이고 `selection`은 undefined → `selection`을 보기 전에 사유를 확인하고 `runTimeout`(~20틱) 재시도하는 `forceShow` 패턴. 입장 환영 폼도 같은 방식. 폼은 모듈 최상위가 아니라 핸들러 안에서 생성. 정적 폼은 초기화 때 한 번 만들기(번역 폼 표시가 ~400 ms 스파이크, 특히 development_* 폴더).
+- **확인 대화상자**: async 함수에서 `return (await form.show(player)).selection === 0`(`.then` 안의 return은 바깥 함수를 반환하지 않음).
+- **강제 닫기**: `uiManager.closeAllForms(player)`(server-ui; 2026-04엔 beta, 2026-07 stable) — 타이머 "영상"/이미지 폼 자동 닫기, `form.show(player).finally(...)`로 정리. 선택적 닫기는 UserBusy 처리 필요.
+- **커뮤니티 확장**: Herobrine643928/Chest-UI(`ChestFormData('large'|'small').title().button(slot, name, lore[], texture, amount).pattern([...]).show(player)`, `./extensions/forms.js`, server-ui의 일부가 아님; 최신 버전에서 텍스처가 깨지면 chest-server_form.json의 `#item_id_aux` 바인딩 `(#form_button_texture * 1)`을 `((#form_button_texture - (#form_button_texture % 65536)) / 65536)`로 교체; 새 바닐라 아이템마다 typeIdToID 수동 추가, 커스텀 아이템 텍스처 누락 가능; 포크 `https://github.com/Herobrine643928/Chest-UI/forks` ; typeIds 목록 `https://github.com/Herobrine643928/Chest-UI/blob/main/BP/scripts/extensions/typeIds.js`), Sprixvy/Chest-Form(`inventory.json`이 인벤토리 절반을 클릭 가능하게; `type`은 `container`/`inventory`, 슬롯 0부터). 아이콘용 aux id: `(itemId << 16) | (enchanted ? 1<<15 : 0)`(블록만 렌더된 미해결 보고). 서버들은 폼 제목에 특수 `§` 접두사를 넣어 JSON UI 레이아웃을 고른다(예: `custom_nephelia:skills_ui` 그리드 — 빈 칸은 `form.button("")`). NPC dialogue.json → server-ui 변환 diag2form.js. 폼 텍스트에서 lang 키는 `{translate:"key"}` 또는 평문 `%key` 접두사.
+
+#### DDUI (Data-Driven UI: `CustomForm`, `MessageBox`, `Observable*`, `uiManager`)
+
+- **연혁과 요구사항**: Preview 1.26.10.21/22(server-ui `2.1.0-beta`, server `2.7.0-beta`)에 도입(더 오래된 프리뷰는 `Could not find export 'CustomForm'`). min_engine_version [1,21,110]+, 의존성 beta. 26.10/26.11 정식판에서 Beta APIs로 사용 가능 → 1.26.30에서 server-ui v2.1.0으로 안정화(`https://learn.microsoft.com/en-us/minecraft/creator/documents/update1.26.30?view=minecraft-bedrock-stable#released-minecraftserver-ui-v210`), 안정 API라 Marketplace에서 사용 가능. 2026-08 문법이 타입 엄격으로 변경, DDUI 레이아웃은 2026-08까지 미출시. 문서: `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/intro-to-ddui?view=minecraft-bedrock-stable` . Ore UI 소스: `https://github.com/Mojang/ore-ui` . *confirmed*
+- **BDS**: `config/default/permissions.json`의 `allowed_modules`에 `"@minecraft/server-ui"`, 월드에 Beta APIs(안정화 전). 클라이언트 월드를 복사하는 대신 BDS가 만든 월드로 해결된 사례.
+- **생성자 변화**: 초기 `CustomForm.create(player, title)`, `Observable.create(value, {clientWritable})` → 26.30+ `new CustomForm(player, title)`(26.30 미만은 `.create`; 잘못 쓰면 "Invalid constructor called"/"not a function"). `Observable`은 `ObservableNumber`/`ObservableBoolean`/`ObservableString`으로 분리(`new ObservableString("", {clientWritable: true})`, `Observable` export는 사라짐). 번역/rawtext 라벨용 `ObservableUIRawMessage`(라벨만; textField 값은 문자열 관찰값). 타입 엄격: `0 === 1` 같은 불리언 식은 오류였고 `false` 리터럴은 동작한 보고. `clientWritable` 관찰값은 생성 후 변경 불가(새로 생성).
+- **기본 사용**: `new CustomForm(player, "Title").label(...).button(text, cb, opts).closeButton().show()`. `show()`는 Promise(닫힐 때 `.then`, 오류 `.catch`; `form.then`은 오류). 요소: `label`, `header`, `divider`, `spacer`(크기 인자 없음, 줄마다 필요), `button(text, cb, {visible, disabled, tooltip, imageDetails})`, `textField(label, obs, {description, disabled})`, `slider(label, obs, min, max, {step, description, disabled, visible})`(float 허용), `toggle`, `dropdown(label, obs<number>, [{label, value}])`(obs는 숫자 인덱스), `closeButton()`, `image(src, packUuid, {width: 0..1, visible})`, `multiButtonRow`(26.60 preview, server-ui 2.4.0-beta, 미안정). 제목·라벨·버튼 텍스트는 `{translate, with}` RawMessage 허용, `player.translate()` 같은 건 없다.
+- **반응성**: 관찰값 자체를 넘겨야 갱신된다(`.label(obs)`; `obs.getData()+"..."`는 한 번만 평가, 문자열과 섞으면 `[object Object]`). 라벨 관찰값은 문자열이어야 함(숫자면 `Unexpected data type ... Expected string and received number`) → 두 번째 문자열 관찰값을 `subscribe`에서 갱신. 라벨 하나에 관찰값 하나(이어붙이기 불가). `visible: selected.getData() === x`도 한 번 평가 → 요소마다 `Observable<boolean>`을 두고 subscribe에서 `setData`. `!obs` 연산자 없음(`!obs.getData()`), 서로 토글하는 버튼은 불리언 관찰값 둘을 subscribe로 동기화. 자기 subscribe 안에서 `setData`하면 overflow 오류 → `system.run`으로 감쌈(가드로도 안 됨). `Observable.unsubscribe(handle)`은 프리뷰부터 동작하지 않음(계속 호출됨; 누수 여부 불명).
+- **플레이어별 데이터**: 관찰값은 폼에 묶이지 않아 여러 플레이어 폼에서 공유하면 동기화된다 → `Map<playerId, Observable>`, 쓰기 가능한 관찰값을 플레이어별로 만들고 공유 관찰값을 갱신. DDUI는 열린 상태에서 갱신 가능(ActionFormData는 불가), 단 표시 후 요소 추가 불가 → 숨긴 요소를 미리 만들고 `visible` 토글 + 동적 버튼 텍스트. 드롭다운 항목도 동적 추가/삭제 불가. 검색창: `clientWritable` 텍스트필드 관찰값을 subscribe해 미리 만든 버튼들의 `visible`을 `text.includes(query)`로 설정(subscribe 안에서 버튼 생성 금지). 수천 항목은 ~7개 버튼 풀 + 페이지네이션(1400 버튼은 느렸지만 크래시 없음). 파생 관찰값 페이지네이션 예: `https://gist.github.com/IanSSenne/7c6b0293f7d78628b714a6b8e032fffd` , 가시성 체인 헬퍼: `https://github.com/NaKeRNarolino/ReHeart-of-the-Universe/blob/main/packs%2FBP%2Fscripts%2Futils%2Futils.ts#L159-L214` . CustomForm은 재스타일 불가. 관찰값을 숨기는 래퍼(`form.textField`, `.visible`, `.label`)도 공유됨.
+- **폼 전환/닫기**: 저장한 인스턴스에서 `form.close()`(클래스 정적 호출 불가; 전부 한 체인으로 쓰면 콜백 안에서 const가 undefined), `uiManager.closeAllForms(player)`. 닫은 직후 다른 CustomForm을 열면 "cannot show form because another is open" → 최소 1틱(사람에 따라 6~15틱) `runTimeout`, 또는 한 폼에 두 페이지를 넣고 `visible` 전환. 플레이어당 한 번에 폼 하나. `canShow`를 "플레이어 완전 로드" 판정에 쓰는 사례. 서버 크래시/watchdog 시 DDUI 폼이 클라이언트를 소프트락시키던 문제는 ~2026-03-10 수정. 첫 버튼이 키보드 포커스를 받아 W/스페이스/엔터로 눌릴 수 있다(접근성, 의도된 동작).
+- **텍스트**: `§` 색 코드는 label/header/title에서만 동작(button/toggle/dropdown 텍스트는 불가), `§l`/`§o` 무효, `§k`는 점으로, 파티 채팅 색 `§w` 미지원(2026-05), 글리프/이모지는 박스로 표시(CustomForm 글리프 미지원). 줄바꿈 `\n`은 2026-04-08부터 동작(그 전엔 `<br>`, `\r`, `~LINEBREAK~` 모두 무시 — 줄바꿈 가능한 문자 나열로 우회). 기본 간격이 좁아 `.spacer()` 사용, 왼쪽 정렬 고정. 라벨 줄바꿈 시 잘림/겹침, 아랍어 렌더 오류. 픽셀 아트: `§a█`(U+2588), Block Elements로 2x2 서브픽셀(Bad Apple 40x30), 줄당 ~20자. 게임/미니맵/레이캐스터는 매 프레임 큰 라벨 문자열을 다시 만드는 방식, WASD는 텍스트필드로 입력(포커스 강제 API 없음).
+- **버튼 이벤트**: 왼쪽 클릭/릴리스만(롱프레스·호버·우클릭·마우스 버튼 인자 없음), `disabled:true`일 땐 툴팁 없음.
+- **이미지**(26.40 preview, 버튼 이미지는 26.60 stable 보고): `form.image('textures/items/stick.png', packUuid, {width, visible})`, gif 가능, 버튼 `imageDetails: { imageSrc, imagePackId }`. Ore UI는 직접 파일 경로라 확장자 포함. ~26.40.30부터 바닐라 팩 텍스처(빈 uuid 또는 `66c6e9a8-3093-462a-9c36-dbb052165822`) 참조 불가 → 자기 RP로 복사하고 RP 헤더 uuid 사용. 처음엔 느리게 로드되고 캐시됨, 크기 제한 미확인, 아이템/블록 렌더 미지원.
+- **닫기 버튼**: 일부 26.30 빌드에서 `closeButton()`과 모서리 X가 모두 표시(26.40.20 수정), 초기엔 `closeButton()`이 필요했다. 닫기 버튼 위치를 커스텀 뒤로가기 버튼에 재사용 불가.
+- **성능·한계**: `visible:false`도 레이아웃에 남는다, 버튼 100개는 바닐라 ActionForm보다 느리고 2500개는 ~1분 + 스크롤 fps 저하, 관찰값 수 자체(7 vs 500)는 큰 비용이 아니지만 요소·구독자가 많으면 렉, 열기/닫기 애니메이션 지연, JSON UI보다 느림. 기존 화면(인벤토리, HUD)에 UI 추가 불가, 컨테이너/인벤토리 슬롯 미지원(Mojang: 컨테이너 컴포넌트 계획). 스플릿스크린에서 DDUI가 입력을 깨뜨림(26.50 preview 수정). QuickJS는 에뮬레이터용으로 너무 느리다.
+
+#### JSON UI와의 데이터 전달
+
+- **스크립트 → JSON UI 채널**: 데이터를 직접 넣는 API는 없다. `player.onScreenDisplay.setTitle(text, {fadeInDuration:0, stayDuration:0, fadeOutDuration:0})`(모두 0이면 배경 잔상 없음; 커맨드 `/title @s times 0 0 0`), `setActionBar`, `/titleraw`, 채팅, 폼 제목/버튼 텍스트/텍스처 문자열, 컨테이너 화면의 아이템 이름/lore/내구도. `setTitle('§z')` + `updateSubtitle(...)`로 보존 HUD 요소 구동. 같은 틱에 여러 `setTitle`은 보존 타이틀 패널에서 버려지므로 틱당 하나씩 큐(`runTimeout(..., index)` 또는 DP 기반 큐). 입장/퇴장 시 타이틀 재전송, 슬롯 데이터는 플레이어 DP. 숫자만 있는 버튼 텍스트는 JSON UI가 수식으로 취급 → `§z` 접두사. DP는 JSON UI에서 읽을 수 없다.
+- **JSON UI → 스크립트 채널 없음**: 버튼 클릭을 스크립트가 읽을 수 없다(서버 폼 제외). 클라이언트 RP 데이터를 BP로 보낼 수 없다(websocket 언급). 클라이언트측 스크립팅은 계획 없음(`@minecraft/client` 없음). 커스텀 블록이 커스텀 화면을 열 수 없음(이벤트로 서버 폼을 열거나 인벤토리 엔티티). JaylyDev/interpreter(GPL-3.0)는 JSON UI로 큰 여러 줄 텍스트 박스. `entity.id`는 `live_horse_renderer` 등 UI 렌더러에 넘길 엔티티 UUID.
+
+
+### 네트워크, 서버, 애드온 간 통신
+
+#### `@minecraft/server-net` (BDS 전용)
+
+- **환경**: BDS에서만 존재(로컬 월드·Realms·Education 불가; Realms에서 HTTP 불가). 서버 `config/default/permissions.json`의 `allowed_modules`에 추가하지 않으면 "Module is unrecognized/not configured". 존재하지 않는 모듈을 import하면 catch 이전에 스크립트 전체가 비활성(선택적 의존성 미지원, 매니페스트 v3 optional 모듈은 계획). BDS Preview 다운로드에는 보안상(악성 애드온의 무단 네트워크 접근) server-net이 빠져 있다(debug-utilities는 포함). Mojang은 server-net을 stable로 만들 계획이지만 전용 서버 전용.
+- **환경 감지**: `await import("@minecraft/server-net").catch(() => null)` 후 `beforeEvents.packetReceive` 존재 확인(일반 `try { import }`는 매니페스트가 먼저 throw해서 안 됨; 매니페스트에 의존성을 넣으면 그 환경 외에선 팩이 실패하므로 중복 팩 필요했음). Host 권한 플레이어가 없으면 BDS/Realm.
+- **HTTP**: `HttpRequest`, `HttpRequestMethod.Post`, 헤더 `Content-Type: application/json`, node:http 비슷. PATCH 추가 요청 → 추가됨. `setTimeout`/`timeout`이 느린 요청을 중단하지 못했다. "InternalHttpRequestError ... 0x80072efd"는 연결 실패, POST 문제는 오래된 타입이 원인이었다. 커뮤니티 웹훅 전송(`@everyone`/`@here` 정리), 반대 방향은 봇 토큰으로 커뮤니티 REST 폴링. 라이브러리: `https://github.com/m0lc14kk/WebhookAPI` , github.com/oliverperzyk/WebhookAPI .
+- **WebSocket**: 26.20/21 preview에서 server-net에 추가(beta). BDS에서 `InternalWebSocketError 'not a socket'`(2026-03), 1.26.23.1에서 `websocket.connect(uri, headers)` 두 인자 거부(모듈/버전 불일치) 보고. 로컬 LLM 연결 가능.
+- **패킷**: `beforeEvents.packetReceive.subscribe(e => { e.cancel = true; }, { monitoredPacketIds: [PacketId.CommandRequestPacket] })`로 클라이언트 슬래시 커맨드 차단(모든 커맨드 기능 비활성, 등록 해제는 아님), `PacketSendBeforeEvent`. `ServerboundLoadingScreenPacket`(설정/해제 두 번 발생)은 취소 불가. packetReceive로 채팅 내용은 못 읽는다.
+- **외부 DB 예**: MongoDB HTTP 브리지 `https://github.com/NetherGate-LLC/NetherGate-Bridge` (IP 허용목록, 연결 문자열을 클라이언트에 배포 금지), Firebase/Supabase `https://github.com/colemad/Web-database` .
+
+#### `@minecraft/server-admin`
+
+- **기능**: `transferPlayer(player, {hostname, port})`(다른 서버/월드로 이동; beta), `kickPlayer`, `beforeEvents.asyncPlayerJoin`(playerJoin보다 일찍 발생, 핸들러는 Promise 반환 `(arg)=>Promise<void>`, `xuid`/`persistentId` 제공, player 객체 없음 → 플랫폼 킥은 `playerSpawn` + `platformType` + `kickPlayer`), 서버 변수/비밀(BDS 전용; process env는 못 읽음).
+- **Realms**: 문서상 BDS 전용이나 `transferPlayer`는 Realms에서 동작한다는 확인이 여럿(로컬에서 동작하는 유일한 함수라는 보고도). Realms 관련 변경: `https://help.minecraft.net/hc/en-us/articles/43490711924109-Update-Changes-to-Server-Admin-Scripting-Module` . Realms/월드에선 킥에 `kick` 커맨드(`runCommand("kick @s reason")`가 다시 동작). Realm 간 플레이어 전송은 불가 보고.
+
+#### BDS·Realms 운영 메모
+
+- BDS에는 플러그인이 없고 애드온이 실행된다(플러그인은 Endstone 등 커스텀 소프트웨어). Endstone은 NPC 스킨, URL 이미지, 컨테이너 UI, XUID 등 바닐라 스크립트로 안 되는 것을 지원. 커맨드 비활성화는 `config/commands.json`(서버 전용; `/me`, `/kill`). 모듈 UUID 이름의 config 폴더가 필요.
+- 메모리: BDS 서버 메모리가 청크 할당으로 시간당 50~100 MB 증가하는 건 정상, 스크립트 증가는 ~0이어야 한다. 사례: 플레이어별 Map 미정리 + 매 틱 사이드바 갱신 + 매 틱 `ping` promise 대기 + 바람/노이즈 시스템으로 150~200 MB/h → 50 MB/h.
+- Realm 팩 업데이트가 불안정: 팩 버전 올리기 → Realm에서 팩 제거 → 저장 → 월드 선택으로 나가기 → 재추가, `development_*`에서 먼저 제거. `/packstack server verbose exclude-vanilla`로 로드 확인, 스크립트는 `/reload all`. 반영 확인용으로 설명/버전 문자열을 바꾸거나 버전 출력 커맨드. 리소스 팩은 클라이언트에 캐시되므로 버전을 올린다.
+- BDS에서 생존 모드 빠른 블록 설치(브리징) 시 블록이 사라지는 엔진 버그 의심, Windows BDS `/listd` 크래시, 서브청크의 커스텀 엔티티 소실 보고(미해결). 플레이어 데이터 손상(`world/db`)으로 특정 플레이어 접속 시 서버 크래시 → Bedrock-World-Editor, Bedrock Tool Chest, Chunker, Amulet.
+- `world.broadcastClientMessage`/`player.postClientMessage`는 ScriptMessagePacket을 클라이언트로 보낸다(바닐라는 무시; 커스텀 클라이언트/프록시용). IP/VPN 감지는 프록시(gophertunnel, WaterdogPE)로만.
+
+#### Realms·로컬 월드에서 외부와 통신
+
+- 스크립트에서 WebSocket/HTTP 불가. `/connect` 또는 `/wsserver host:port`(설정에서 암호화 요구 해제)는 클라이언트가 실행하는 커맨드이며 스크립트의 `runCommand`로는 실행할 수 없고 `successCount`가 항상 0. 요청 형식: `{header:{requestId, messagePurpose:'commandRequest', version:1, messageType:'commandRequest'}, body:{commandLine}}`(`https://www.s-anand.net/blog/programming-minecraft-with-websockets/`). MCWSS 특성: 상태 코드는 음수 HRESULT(`-2147352576` "Command cannot be executed on a source!"), ~100개 이상 큐잉 시 무응답(요청마다 고유 GUID), 월드 로드 전 커맨드 전송은 크래시, 틱당 커맨드 수 제한(5개)이 안정적, 1.21.120+에서 불안정 보고.
+- **Hive Mind API**(`https://github.com/TrayePlays/Hive-Mind-Api-Public` , 백엔드 `https://github.com/TrayePlays/Hive-Mind-Debugger`): 스크립트 디버거 연결을 이용해 beta 없이 월드에서 server-net 비슷한 HTTP/웹 DB 기능; 패킷 취소 불가, 디버거 연결은 암호화되지 않으므로 비밀은 직접 암호화. 디버거 채널(`/script debugger connect`)로 커맨드 지연 없이 스크립트를 직접 실행할 수도 있다(디버거 프로토콜 필요). Realm 데이터 반출은 외부 봇(NetherNet 지원 필요)이나 시뮬레이트 플레이어의 `/connect` 아이디어 정도.
+
+#### 애드온 간 통신 (IPC)
+
+- **격리**: 각 BP는 자체 JS 런타임(전역·함수 공유 불가, 서브팩도 격리), DP도 팩별. 채널은 `system.sendScriptEvent(id, message)` / `/scriptevent` + `system.afterEvents.scriptEventReceive`(1틱 지연, 순서 보장·유실 없음, 틱당 양을 고려해 한 JSON 메시지로 묶기). 스코어보드로 하지 말 것. 메시지 길이 제한 2048자는 1.21.101에서 제거(그 전엔 초과 시 조용히 버려짐) — 2026-08에도 2048이라는 보고가 있으나 구정보로 보임(**conflicting**), 큰 문자열은 렉.
+- **MCBE-IPC**(`https://github.com/OmniacDev/MCBE-IPC` , 단일 파일, 양쪽 모두 포함): `IPC.send`/`IPC.handle`/invoke, 타입 바이너리 직렬화 `PROTO.*`(`PROTO.Object({...})`, `Float64`, `UVarInt32`, 스프레드로 스키마 확장, `PROTO.Cached(serializer, depth)` 직렬화 LRU 캐시 2026-03-18, v3.2.1에서 `Serializer`/`Deserializer` 분리, v3.1.4부터 직렬화 타입 강제). 채널은 브로드캐스트. 바이트를 UTF-16 문자당 2개로 패킹, 헤더만 MIPS hex. 직렬화는 `system.runJob` 제너레이터(동기로 ~11 KB+ 처리 시 watchdog). async generator가 없어 `IPC.handle`은 async 함수를 받지 않음(제너레이터를 promise로 감싸는 우회). v3.3.0에서 동시 invoke가 첫 응답으로 모두 resolve되던 버그 수정(guid 상관 플래그), v3.3.1 리스너 건너뜀 수정. 문서는 비공식 DeepWiki `https://deepwiki.com/OmniacDev/MCBE-IPC/` , DirectIPC `https://github.com/OmniacDev/DirectIPC` .
+- **대안**: @mcbe-mods/ipc(`https://github.com/mcbe-mods/ipc`; JSON + LZ-string base64, 네임스페이스 채널, 런타임 검증 없는 제네릭 캐스트 — 벤치마크 공정성 논쟁), Flatbuffers(TextEncoder 폴리필로 동작), AddonAPIKit(`https://github.com/ForestOfLight/AddonAPIKit` , MCBE-IPC 래퍼 `AddonAPIServer`/`AddonAPICaller`, 사용 예 `https://github.com/ForestOfLight/Construct/tree/dev/packs/BP/scripts/API`), 로드 시 `{name, uuid, semver, url, data}`를 scriptevent로 알리는 호환성 아이디어와 `https://github.com/Bedrock-OSS/add-on-registry` . 여러 팩이 같은 로직을 공유하면 IPC로 한 팩만 등록하게.
+
+### GameTest, SimulatedPlayer, Editor
+
+- **SimulatedPlayer**: 생성자 없음 → `import { spawnSimulatedPlayer } from "@minecraft/server-gametest"; spawnSimulatedPlayer(locationWithDimension, "Name", GameMode.Creative)`가 테스트 밖에서도 동작. 완전한 플레이어 엔티티라 멀티 호환성 테스트, PvP 봇(1.0.0-beta), NPC에 사용. `@minecraft/server-gametest`를 import하지 않은 다른 팩에서는 `getAllPlayers()`에 undefined로 보이므로 각 팩에서 import, `instanceof gametest.SimulatedPlayer`로 필터. 커맨드 실행 가능, 입장/퇴장 이벤트 없음, 채팅 불가. `lookAt` 미지원(`lookAtBlock/lookAtEntity/lookAtLocation`; 텔레포트 피치 리셋), 주손/보조손이 월드 재로드 전까지 갱신 안 됨, `attackEntity`가 조용히 데미지를 멈춤(팩 재복사로 해결), 진짜 플레이어를 못 때림(버그 의심). 스킨: `PlayerSkinData`/`setSkin`(1.26.60-preview.21)은 기본/캐릭터 생성기 스킨이나 온라인 플레이어·persona UUID만(커스텀 이미지 불가). 실제 플레이어가 SimulatedPlayer를 타면 스킨을 흉내 내는 스크립트 제어 엔티티가 된다(뒤로 이동은 말처럼 감속, 머리 회전 제한, 말 체력바, 플레이어당 하나).
+- **GameTest**: `Test.walkTo(entity, loc, speed)`는 구조물 박스 안에서만. `setBeforeBatchCallback`/`setAfterBatchCallback`, `system.run` 안에서 등록한 테스트는 조용히 미등록. GameTest 모듈 사용이 몹 스폰을 끄고 불을 유지시킨다는 미해결 보고, 일부 모드에서 시간·몹 스폰을 의도적으로 멈춘다는 질문. Regolith `gametests` 필터가 `data/gametests` 아래 중복 node_modules를 만들어 타입이 꼬인 사례. server-gametest는 2026-07에도 `1.0.0-beta`.
+- **테스트 자동화**: vitest/jest로 `@minecraft/*` 모의(`Bedrock-OSS/minecraft-server-jest`는 init/early-execution/read-only 모드 포함), 자동화는 BDS가 최선. `Block.prototype.getComponent` 몽키패치, Entity 프로토타입 추가는 애드온에서 괜찮다. 예외는 타입 없이 "can throw"라 `try/catch` + `instanceof`; `isValid` 검사를 강제하는 린트 규칙은 개발 중.
+- **`@minecraft/server-editor`**: Editor 월드에서만 실행되며, 의존하면 일반 월드에서 "skipping dependency ... not an editor world"로 애드온 전체가 멈춘다(try/catch, `system.isEditorWorld` + 동적 import 모두 불가 — 매니페스트 모듈이 스크립트보다 먼저 로드). 선택적 모듈 의존성(manifest v3)이 계획돼 있음. 가이드 평면 API(UI 미출시), fillBiomes류는 다른 모듈. Editor 구조물/고스트 블록 미리보기는 BP에서 쓸 수 없다. `server-editor-bindings`, `server-editor-private-bindings`도 게임에 존재.
+

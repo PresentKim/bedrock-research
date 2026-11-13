@@ -1,0 +1,242 @@
+---
+title: "편집기, 언어 서버, 디버거"
+description: "VS Code 확장, Blockception, jsonui-lsp, Mojang 디버거, bridge., 모바일 개발 환경"
+sidebar_position: 1
+sources:
+  - private-research
+  - ms-learn
+  - blockception-schemas
+  - jsonui-lsp
+  - minecraft-debugger
+  - bridge-editor
+  - repo-tool-analyses
+---
+
+이 페이지는 애드온 JSON과 스크립트를 쓰는 편집기, 언어 서버, 디버거를 다룬다. 도구마다 하는 일, 설치와 사용법, 한계, 라이선스를 적는다. 결론부터 말하면 일반 애드온은 VS Code, Blockception 확장, npm 타입 패키지의 조합이 가장 무난하고(출처: 비공개 조사), JSON UI는 jsonui-lsp가 입력 보조를, Mojang 디버거가 스크립트 디버깅을 맡는다.
+
+| 도구 | 하는 일 | 라이선스 |
+|---|---|---|
+| Blockception 확장 | 애드온 전체 JSON 스키마 검증, 언어 서버, 린트 | 스키마 BSD-3-Clause |
+| jsonui-lsp | JSON UI 자동 완성, 정의 이동, 참조 찾기, 색 표시 | MIT |
+| Minecraft Bedrock Debugger | 스크립트 중단점, 프로파일러, 진단 | MIT |
+| bridge. | 애드온 전용 편집기(웹, 데스크톱) | GPL-3.0 |
+| Lantern, Command Checker 등 | 파일 묶기, mcfunction 검사 | 확장마다 다름 |
+
+## Blockception VS Code 확장과 스키마
+
+**하는 일.** Blockception Ltd의 "Minecraft Bedrock Development" 확장은 manifest, 엔티티, 블록, 아이템, 애니메이션 컨트롤러, 파티클, mcfunction 등을 스키마로 검증하고 자동 완성한다. 스키마 저장소는 `Blockception/Minecraft-bedrock-json-schemas`(BSD-3-Clause, Copyright 2020 Blockception Ltd, 조사 기준 커밋 `e04436c`)이고 `behavior`, `resource`, `general`, `language`, `skinpacks` 폴더에 나뉘어 있다. 스키마 원본은 `source/`에 손으로 쓰고 액션이 줄여서 폴더별 스키마로 내보낸다(출처: tool-blockception-schemas, `README.md`).
+
+**설치.** VS Code 마켓플레이스에서 확장 id `blockceptionltd.blockceptionvscodeminecraftbedrockdevelopmentextension`을 설치한다. Open VSX에는 없으므로 VSCodium은 릴리스의 `.vsix`를 직접 설치한다.
+
+**스키마만 따로 쓰기.** 스키마 저장소의 `vscode-settings.example.json`을 프로젝트 `.vscode/settings.json`으로 복사하면 VS Code가 `json.schemas`로 검증한다. 직접 한 항목을 적는다면 이런 모양이다.
+
+```json
+{
+  "json.schemas": [
+    {
+      "fileMatch": ["manifest.json"],
+      "url": "https://raw.githubusercontent.com/Blockception/Minecraft-bedrock-json-schemas/main/general/manifest.json"
+    }
+  ]
+}
+```
+
+Neovim(jsonls), JetBrains, Sublime Text 설정법은 저장소의 `docs/guide/ide_setup.md`에 있고, Neovim은 `lspconfig.jsonls.setup`의 `settings.json.schemas`에 같은 항목(`description`, `fileMatch`, `url`)을 넣는 방식이다(출처: tool-blockception-schemas, `docs/guide/ide_setup.md`).
+
+**한계.** 아래 커뮤니티 노트에 정리한 대로 게임에서는 유효한 문법을 오류로 표시하기도 하므로 최종 판단은 게임 콘텐츠 로그로 한다. 편집기 언어 모드를 `jsonc`로 하면 주석 경고가 사라진다.
+
+## jsonui-lsp: JSON UI 입력 보조
+
+**하는 일.** CoolLoong의 VS Code 확장 `CoolLoong.jsonui-support`(표시 이름 jsonui-lsp)다. VS Code 클라이언트와 Rust 언어 서버(tower-lsp, tree-sitter JSON 파서)로 이루어지고 기능은 컨트롤 타입·속성·바인딩 값 자동 완성, `이름@namespace.base`의 정의로 이동과 참조 찾기, `color` 배열의 색 견본이다. 진단(오류 밑줄), 호버 설명, 미리보기, 식 검사는 없으므로 "검증 도구"가 아니라 "입력 보조 도구"다(출처: tool-repo-analyses, jsonui-lsp 분석).
+
+**설치.** VS Code 마켓플레이스에서 `CoolLoong.jsonui-support`를 설치한다. 확장은 `json` 언어 파일을 열 때 활성화되고(`onLanguage:json`), 엔진 요구는 VS Code 1.66 이상이다. 설정은 `jsonui-support.log.level`과 `jsonui-support.options.auto_append_suffix`(값 뒤 쉼표 자동 추가) 두 가지다. 소스에서 빌드하려면 rust, nodejs, bun이 필요하고 `bun i -D webpack-cli`, `bun i` 후 F5로 디버그한다(출처: tool-jsonui-lsp, `README.md`, `package.json`).
+
+**동작 방식.** 작업 공간의 모든 `.json` 파일을 색인한다(최대 8개씩 병렬). 바닐라 `ui/` 전체에서 "namespace → 최상위 컨트롤 → 타입과 `$변수` 목록(상속 체인 포함)"을 뽑은 사전 `vanillapack_define_<버전>.json`(약 2 MB)을 내장하고, 워크플로가 Mojang `bedrock-samples`의 새 태그를 6시간마다 확인해 갱신한다.
+
+**한계.**
+- 마켓플레이스 판(v0.3.1)은 바닐라 1.21.120.4 사전을 묶었고, main 소스는 1.26.50.4 사전이다. 최신 사전을 쓰려면 main을 직접 빌드한다.
+- 속성 이름·값 사전은 손으로 쓴 것이라 바닐라 속성 277종 중 124종(`button_mappings`, `factory`, `grid_position`, `anims`, `collection_index`, `focus_*` 등)을 제안하지 않는다.
+- namespace 하나에 파일 하나만 대응시켜, 같은 namespace를 쓰는 파일이 둘이면 나중 것만 찾는다.
+
+**라이선스.** MIT. `LICENSE`에는 원 템플릿 저작자 `IWANABETHATGUY`(2022)가 적혀 있다.
+
+## Mojang Minecraft Bedrock Debugger
+
+**하는 일.** 마인크래프트에서 도는 JavaScript를 VS Code에서 디버깅하는 확장(`mojang-studios.minecraft-debugger`)이다. 중단점, 한 줄씩 실행, Locals 창, Watch, 성능 진단, 슬래시 커맨드 실행을 지원하고, 변수 값 변경과 immediate mode는 지원하지 않는다(출처: tool-minecraft-debugger, `README.md`, MIT, Copyright Microsoft Corporation, 커밋 `ac0b589`).
+
+**설정.** Windows에서 클라이언트가 같은 PC의 VS Code에 붙으려면 한 번 관리자 권한으로 루프백 예외를 건다.
+
+```powershell
+CheckNetIsolation.exe LoopbackExempt -a -p=S-1-15-2-1958404141-86561845-1752920682-3514627264-368642714-62675701-733520436
+```
+
+프리뷰는 SID가 다르다(`S-1-15-2-424268864-5579737-879501358-346833251-474568803-887069379-4040235476`). 팩 루트의 `.vscode/launch.json`에는 이렇게 적는다.
+
+```json
+{
+  "version": "0.3.0",
+  "configurations": [
+    {
+      "type": "minecraft-js",
+      "request": "attach",
+      "name": "Debug with Minecraft",
+      "mode": "connect",
+      "targetModuleUuid": "<스크립트 모듈 UUID>",
+      "localRoot": "${workspaceFolder}/",
+      "port": 19144
+    }
+  ]
+}
+```
+
+VS Code에서 F5로 시작한 뒤 게임에서 `/script debugger connect`를 실행한다. 번들러를 쓰면 `localRoot` 대신 `sourceMapRoot`와 `generatedSourceRoot`를 쓴다. 자세한 흐름과 프로파일러는 [디버깅과 도구](../scripting/debugging-and-tooling.mdx) 페이지에 있다.
+
+**한계.** 다시 연결한 뒤에는 중단점을 다시 켜야 하고, 26.40 안팎에서 attach가 반복 실패해 `listen` 모드가 필요했던 보고가 아래 노트에 있다.
+
+## bridge.
+
+**하는 일.** 애드온 전용 편집기로, 프로젝트 폴더 구조(RP·BP·모델·텍스처를 한 폴더에), 파일 종류별 자동 완성, 컴파일 플러그인, mcfunction 생성 기능이 있다. 웹 앱(`editor.bridge-core.app`)과 Tauri 데스크톱 앱 둘 다 같은 소스(`bridge-core/editor`)에서 나온다. 라이선스는 GPL-3.0이다(출처: tool-bridge-editor, `LICENSE`, 커밋 `8eaccaf`).
+
+**한계.** 업데이트가 늦고(애니메이션 미리보기 없음, format_version 1.26.20 이상 미지원 보고), `.mcstructure`(NBT)를 읽지 못하며, 스크립트 지원이 일부만 있다. 상세는 아래 노트에 있다.
+
+## 커뮤니티 노트
+
+아래는 커뮤니티 조사로 모은 편집기, 확장, 모바일 개발, TypeScript 도구의 세부와 보고된 버그다.
+
+`(confirmed)`, `(single report)`, `(conflicting)` 같은 말은 보고의 신뢰도 표시다.
+
+### 개발 환경과 편집기
+
+#### 편집기 선택
+- **데스크톱 표준**: 숙련자는 raw VS Code를 쓰고, com.mojang 폴더를 directory junction으로 연결해 둔다. bridge. v2는 초보자에게 무난하다. MCreator에는 Bedrock 옵션이 없다.
+- **추천 조합**: VS Code + Blockception 확장 + npm 타입 패키지 조합이 스크립팅에서 bridge.보다 낫다(JSON은 확장이, JS는 npm 모듈이 맡는다). 초보자용으로는 Blockbench + VS Code나 bridge. v2를 권한다.
+- **VS Code JSON 검증 오류는 틀릴 수 있다**: 게임 안 content log를 믿어라. Blockception도 문서에는 없지만 게임에서는 유효한 문법을 오류로 표시할 때가 있다. 그럴 때는 그냥 테스트해 본다(tryitands.ee).
+- **Bedrock JSON은 주석을 허용한다**: 편집기 언어 모드를 `jsonc`로 바꾸면 경고 밑줄이 사라진다.
+- **bridge.식 아이템/블록 JSON 자동완성을 그대로 주는 VS Code 확장은 없다**(2026-05-22 기준).
+- **Zed 편집기**: helix 모드와 multibuffer가 있어 VS Code 대체로 거론된다. 확장은 아직 빈약하다. Bedrock JSON 스키마를 쓰려면 Blockception VS Code 플러그인 `package.json`의 스키마 목록을 복사해 `lsp.json-language-server.settings.json.schemas`에 넣고, 예를 들어 `https://raw.githubusercontent.com/Blockception/Minecraft-bedrock-json-schemas/refs/heads/main//behavior/animation_controllers/animation_controller.json`을 가리키게 한다. JSON UI 편집 환경으로도 언급됐다. (single report)
+- **VS Code 팁**: 예전 기본 테마는 "Preferences: Color Theme"에서 Dark Modern을 고르면 돌아온다. 터미널 sticky scroll은 Terminal > Integrated > Sticky Scroll Enabled에서 끈다.
+
+#### Blockception VS Code 확장 (Minecraft Bedrock Development)
+- **식별자와 저장소**: 확장 id `blockceptionltd.blockceptionvscodeminecraftbedrockdevelopmentextension`, 언어 서버 `https://github.com/Blockception/minecraft-bedrock-language-server` , JSON 스키마 `https://github.com/Blockception/Minecraft-bedrock-json-schemas` (자동 생성이 아니라 손으로 작성한다). 2025-12-10에 설치 10만 회를 넘겼다.
+- **스키마의 출처**: bedrock-samples의 `metadata/schemas`와 `documentation`을 바탕으로 만든다.
+- **Open VSX에는 없다**: Blockception 회사와의 합의가 필요해서다. 우회법은 releases의 `.vsix`를 직접 설치하거나, VSIX Manager 확장(`https://github.com/zokugun/vscode-vsix-manager`)에 `"vsix.extensions": ["github:Blockception/minecraft-bedrock-language-server@0.0.41"]`를 설정하는 것이다. 엔진 요구가 `^1.120.0`으로 올라 VSCodium 1.105 같은 구버전에서는 최신 릴리스를 설치할 수 없다.
+- **진단 끄기**: 줄 단위나 파일 루트에 주석을 달아 무시한다(`mc-disable`, 9.0.13, 2026-01-05~06). 문서: `https://github.com/Blockception/minecraft-bedrock-language-server/blob/main/documentation/mc-disable.md`
+- **`.mclint` 린팅(9.1.6, alpha)**: 워크스페이스 루트의 `.mclint`로 네임스페이스, 식별자 형식, 허용 네임스페이스를 강제한다. 문서: `https://github.com/Blockception/minecraft-bedrock-language-server/blob/main/documentation/project/MCLint.md`
+- **배포 파이프라인**: 게시에 쓰던 Azure DevOps 전역 PAT가 2026-12-01에 만료되어 `@vscode/vsce` trusted publishing(OIDC)으로 옮기는 중이다. npm 패키지는 GitHub OIDC trusted publishing으로 낸다. 9.0.4는 실수로 JSON 스키마 없이 나갔다가 곧 고쳐졌다. 2026-01에는 `npm i bc-minecraft-bedrock-vanilla-data`가 `@blockception/packages-shared` 404로 실패한 적이 있다.
+- **알려진 버그**
+  - JSON 경고가 잠깐 깜빡이면 "Microsoft Edge Tools for VS Code"를 `v2.1.7`로 내린다.
+  - "Processing diagnostic queue failed. Error: Invalid arguments"가 나면 파일 전체의 진단이 사라진다. 원인 추정(AI 분석, unverified): 빈 노드 `{}`의 position이 undefined라 `character: NaN`이 된다. 재현: 파티클의 `"minecraft:emitter_shape_point": {}`. 9.1.4에서 RP 애니메이션 컨트롤러를 저장할 때도 났다.
+  - 9.0.21에서 "command 'bc.minecraft.export.pack' already exists"가 났다. 2026-03-17에 고쳐졌다.
+  - 공백이 든 파일명을 거부한다(issue #165). conditions 없는 feature rule에서는 "Cannot read properties of undefined (reading 'placement_pass')"가 난다(9.1.17).
+  - `minecraft:geometry.full_block`을 잘못 오류로 표시한다.
+  - format_version `1.26.0`에서 custom component 검사가 오탐했다(스키마 PR #551에서 수정). 엔티티 `all_of`/`none_of`/`any_of` 배열에 제안이 안 뜬다(issue #599).
+  - 가끔 재시작이 필요하고, 엉뚱한 줄을 강조할 때가 있다.
+  - Hytale manifest가 같은 워크스페이스에 있으면 Minecraft manifest로 인식한다. 워크스페이스별로 확장을 끄거나 VS Code 프로필을 쓴다.
+- **스키마 정확도 메모**
+  - `load_on_low_memory`는 1.16부터 sound_definitions에서 제거됐다.
+  - 애니메이션 컨트롤러에서 `context.owning_entity`를 모른다고 나오는데, Molang 컨텍스트가 리소스 종류별로 다르기 때문이다.
+  - manifest 모듈의 `entry`는 MS manifest 레퍼런스에는 없다(스크립팅 소개에만 나온다).
+  - 1.26.10에 추가된 항목(예: `minecraft:pushable_by_block`)은 2026-03-29에야 반영됐다.
+  - format version을 바꾸면 구식 컴포넌트를 표시해 준다.
+  - 일부 블록 컴포넌트는 버전 게이팅이 빠져 있다.
+- **spawn rule의 `minecraft:weight`**: 스키마는 0..100, 문서는 "priority"라고 하지만 바닐라 husk가 240을 쓰고, 10배 테스트를 해 보면 상대 가중치로 동작한다. 문서가 틀렸을 가능성이 높다. 메인테이너는 바닐라 예시가 있는 동작만 지원한다.
+- **Molang 지원**: Molang 도움말을 주지만, Mojang이 공개한 Molang 쿼리 매핑(`bds-docs/.../mojang-molang-queries.json`)은 아직 들여오지 않았다. 삼항식에 괄호를 붙여 표시하던 문제는 표시만의 문제였고 2026-04-16에 고쳐졌다.
+- **오류 코드 문서**: `https://github.com/Blockception/Minecraft-Error-Codes` 는 최신이 아니다.
+
+#### bridge.
+- **사이트와 웹 앱**: `https://bridge-core.app/` , 웹 편집기 `https://editor.bridge-core.app/` . 모바일에서 동작하고(iPhone에서는 홈 화면 PWA), 스크립트 정의 자동완성과 mcfunction 생성 기능이 있다. 모바일에서는 com.mojang에 연결할 수 없다.
+- **릴리스**: v2.8 nightly(`https://nightly.bridge-core.app/` , 2025-11-29), v3.0.0 프리릴리스(2026-05-11, `https://github.com/bridge-core/editor/releases/tag/v3.0.0` , 약 3년 작업, 980+ 커밋). v3 재작성 PR은 약 962개 파일을 고치고 3.5만 줄을 지웠다(스키마 폴더 포함). 원저자 Solvedev는 2025년 말부터 연락이 없고, outercloud가 관리한다.
+- **업데이트가 늦다**: 2025-12에 "망가졌다"는 보고가 있었다. 애니메이션 미리보기가 없고, 새 스크립트 타입과 item-catalog 템플릿이 없으며, format_version 1.26.20+를 지원하지 않는다(2026-08). 스키마가 `block_face`, `ambient_occlusion` 숫자, `count` 정수를 거부한다. texture_set `color` 자동완성이 틀렸다. 엔티티 프로퍼티 범위에서 float `0.0`을 `0`으로 컴파일한다.
+- **manifest의 `generated_with`**: manifest에 `generated_with` 메타데이터(예: `bridge 2.7.52, dash 0.11.7`)를 넣는다. 모듈 버전은 `"beta"`를 쓴다.
+- **스크립트 entry**: 사용자가 `scripts/main.js` 같은 entry 파일을 manifest의 `entry`와 맞춰 직접 만들어야 한다. 없거나 비어 있으면 "could not load main"이 난다. TypeScript 지원은 일부만 있다.
+- **파일 아이콘과 확장자**: 아이콘 색으로 BP(빨강)와 RP(파랑) 애니메이션 컨트롤러를 구분한다. 잘못된 폴더에 있으면 빨강으로 보이는데, 디렉터리를 `RP/animation_controllers`로 직접 지정해 고친다. 모바일 편집기에서는 RP 애니메이션 컨트롤러를 `name.ac`로 만든다. 튜토리얼: `https://youtu.be/5wq_mw5AzIM`
+- **`.mcstructure` 파일(NBT)을 읽지 못한다**: 열면 깨진 내용이 보이므로 편집하지 않는다.
+- **모바일 성능**: Android 11+에서 무겁고 느리다(import/export 단계).
+- **업데이트 뒤 "error parsing entity"**: 게임 업데이트 뒤에 나면 팩을 다시 import해서 해결한다.
+- **암호화 팩**: bridge.가 암호화 팩을 자동 복호화한다는 주장은 반박됐다(**conflicting**).
+- **플러그인 생태계의 한계**: 외부 라이브러리(예: Vue Flow)를 번들한 플러그인은 배포하기 어렵다. plugins 저장소와 문서가 `.vue` 소스 형태 게시를 전제하기 때문이다. iframe API(`https://bridge-core.app/extensions/iframe-api/index.html`)가 가장 가까운 대안이다.
+- **bridge-core Molang 라이브러리**: `lib/env/math.ts`의 `dieRoll`/`dieRollInt`는 2026-09-09 기준 미완성이다.
+- **import 문제 문의처**: bridge. 서버로 간다.
+
+#### 기타 VS Code 확장
+- **Mojang Minecraft Debugger** (`mojang-studios.minecraft-debugger`): 브레이크포인트, 스크립트 프로파일링, `diagnosis` 명령(라이브 성능 진단), 패킷/전환 정보를 준다. 다시 연결한 뒤에는 브레이크포인트를 다시 켜야 한다. 그러지 않으면 alt-tab할 때 월드가 멈추거나 크래시한다. 1.21.120 직후 브레이크포인트에서 게임이 얼어붙었다는 보고가 있다(single report). 설정 예: `type: minecraft-js`, `request: attach`, `mode: listen|connect`, `targetModuleUuid`, `localRoot`, `port`. npm을 쓰려면 PowerShell 실행 정책을 고쳐야 할 수 있다. 문서: `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/developer-tools?view=minecraft-bedrock-stable`
+- **Neovim용 디버거 포크**: `https://github.com/Paperweightt/minecraft-debugger` (임의 코드 브레이크포인트, 성능 진단 없음).
+- **Lantern** (`Hatchibombotar.bedrock-file-grouper`, `https://github.com/Hatchibombotar/lantern` , MIT): 디스크의 파일을 옮기지 않고 사이드바에서 엔티티/아이템/블록별로 묶는다. `BP/entities` 아래 폴더가 그룹이 된다.
+  - v0.3.0: 바닐라 엔티티 가져오기
+  - v0.4.0: 스크립트 링크(`@lantern-links-entities`/`@lantern-links-items` codelens). keyyard PR의 `// @lantern ["custom:goblin"]`와 `// @lantern:region` 문법도 있다. const로 만든 id는 인식하지 못한다.
+  - v0.5.0: 블록과 assets 폴더
+  - v0.6.0: 외부 저장소에서 스니펫 가져오기
+- **명령·구조물 확장**: MCBE Command Checker(`Tomocraft.mcbe-command-checker`, mcfunction 검증), MCStructure Preview(`Tomocraft.mcstructure-preview`, 블록 상태 회전과 커스텀 블록 미지원).
+- **애니메이션 컨트롤러 그래프 미리보기**: `pixelmancer.controller-view`.
+- **2026-07에 추천된 확장 목록**: Minecraft Bedrock Glyph Viewer(`Nicita3.minecraft-bedrock-glyph-viewer`), `Nobuwu.mc-color`, `JannisX11.snowstorm`, `mojang-studios.minecraft-debugger`, `pixelmancer.controller-view`, Blockception. 픽셀 아트에는 LibreSprite를 쓴다.
+- **Bedrock Emoji Viewer** (`BeyondBedrock.bedrock-emoji-viewer`): 커스텀 글리프를 인라인으로 보여 주고, ctrl+shift+u로 선택기를 연다. bridge.와 호환되지 않는다.
+- **Bedrock Dialogue Node Editor** (`aevarkan.bedrock-dialogue-node-editor`): NPC 대화를 노드 그래프로 편집한다. v0.3.0에서 scene dock이 추가됐다. 2025-12 기준 `rawtext`를 제대로 파싱하지 못한다.
+- **ModularMC 문법 확장**: `pixelmancer.modular-mc-syntax`.
+- **JSONTE 확장**: `MCDevKit.jsonte-vscode`.
+- **featurelab 확장**: `stirante.featurelab`. 자세한 내용은 13절.
+- **Minecraft Bedrock NPM Updater**: 모듈 버전이 1.x에서 2.x로 바뀐 뒤 갱신이 멈췄다. 패치된 `dist/extension.js`가 공유됐다.
+- **npm 패키지 버전 확장**: `https://marketplace.visualstudio.com/items?itemName=idered.npm`
+- **NBT 확장**: VS Code "NBT viewer"(`Misodee.vscode-nbt`, Deepslate 기반)는 3D 미리보기를 Java `.nbt`에서만 지원한다. `.mcstructure`는 NBT 트리만 보여 준다. 구조물이나 `level.dat` 편집에 쓰인다.
+
+#### 모바일(Android) 개발
+- **파일 접근 제한**
+  - Android 11+: SAF 선택기로는 `Android/data` 권한을 줄 수 없다.
+  - Android 13: Shizuku 없이는 접근이 막힌다.
+  - Android 15/16: 게임 데이터 폴더 편집이 막힌다. ZArchiver+Shizuku 우회는 불안정하다.
+- **LeviLauncher** (`https://github.com/LiteLDev/LeviLaunchroid`): 별도 com.mojang을 써서 `development_*_packs`를 직접 편집할 수 있게 해 준다. 일반 데이터 폴더에서는 import한 팩이 non-development 폴더로 가서 갱신되지 않는다.
+  - 1.5.x부터 저장 위치는 `/storage/emulated/0/Android/media/org.levimc.launcher/minecraft/com.mojang.minecraftpe/internal/games/com.mojang`이다(`_shared/external|internal/...`도 있다).
+  - 버전 격리를 켜면 파일이 안 보일 수 있다.
+  - Acode의 "Add Path"로 연다.
+  - 구조물 export와 네이티브 Ctrl+R 리로드도 지원한다.
+- **Acode** (`https://github.com/Acode-Foundation/Acode`): 내장 LSP를 쓴다.
+  - 팩 폴더에 `npm i @minecraft/server`를 설치하고 `jsconfig.json`(`moduleResolution:node, target:ES2022, checkJs:true, include:["scripts/**/*"]`)을 둔다.
+  - LSP는 vtsls나 STDIO LSP를 쓰고 Web Worker LSP는 끈다.
+  - 일부 버전은 외부 폴더에서 LSP가 망가진다(1.12.6/1.12.9와 nightly는 동작). 2026-06 업데이트로 네이티브 TS 자동완성이 들어오면서 플러그인 대부분이 깨졌다.
+  - JSON 자동완성: `npm i @minecraft/bedrock-schemas`를 설치하고 `"$schema": "../node_modules/@minecraft/bedrock-schemas/schemas/bp/entities/index.schema.json"`을 지정한다.
+  - Minecraft Autocomplete 플러그인도 있다.
+- **Termux**: `pkg i neovim nodejs`, typescript-language-server, LazyVim을 쓴다. Shizuku가 실행 중일 때 `rish -c "<cmd>"`로 Android/data에 접근한다.
+- **기타 편집기**: Acode, QuickEdit(Android/data를 파일 단위로 열 수 있다), SPCK, kodex, Pocket Editor, MiXplorer와 ZArchiver(파일 관리)가 쓰인다.
+- **서드파티 편집기의 부작용**: manifest.json을 비우는 편집기가 있다. 팩은 `development_behavior_packs`에 두어야 자동으로 다시 로드된다.
+- **모바일 애드온 메이커 앱**: Minecraft Addon Maker(MAM), Crafty Craft 등은 광고가 많고, 16이 아닌 텍스처에서 UV가 틀리는 등 결과가 이상하다. manifest에 `generated_with`를 넣어 오류를 일으키기도 한다(지우면 된다). 일반적으로 권하지 않는다(초보자에게 권한 의견도 있다).
+- **Bedrock Tweaks 생성 팩**: Android에서 재설치 전까지 보이지 않았다. 메타데이터에 `product_type`이 있었다.
+- **반복 개발**: com.mojang이 읽기 전용이라 변경할 때마다 .mcpack을 다시 import해야 한다. USB 테더링이나 데스크톱 환경을 권한다. 웹소켓 `/connect`로 `reload`/`reload all`을 보내는 Node 컴파일러, 또는 manifest 버전 올리기 + `tsc` + zip을 하는 Python 스크립트로 자동화하기도 한다. [ui/한 보고자]
+- **모바일 친화 웹 도구**: Bridge, Blockbench, Snowstorm. 다만 Blockbench 웹은 모바일 Chrome에서 paint 메뉴를 열면 크래시가 나서 다른 브라우저로는 동작했다. Termux용 Blockbench는 Electron 빌드가 필요하고, 웹 버전은 플러그인을 지원하지 않는다.
+
+---
+
+
+### TypeScript와 Script API 개발 도구
+
+- **TS는 JS로 컴파일해야 한다**: 게임은 JS만 실행한다. `tsc --watch`나 `npx tsc --watch`로 저장할 때마다 컴파일하고 게임에서 `/reload`한다. 빌드 검사는 `npx tsc --noEmit`. TS 예제는 transform.tools/typescript-to-javascript로 JS로 바꿀 수 있다. 문서: `https://wiki.bedrock.dev/scripting/typescript`
+- **순수 JS 팩에서 자동완성**: 팩이 있는 폴더에서 `npm install @minecraft/server`를 실행한다.
+- **API 버전 확인**
+  - 게임 버전별 사용 가능한 API 버전: `https://www.npmjs.com/package/@minecraft/server?activeTab=versions`
+  - 2026-04-19 기준 최신 안정판은 `@minecraft/server` 2.6.0이고 `@minecraft/server-ui` 1.3.0과 함께 쓴다. 2026-05에는 2.7.0, 2026-07에는 2.8.0 타입이 언급됐다.
+  - 1.10.0 → 2.2.0 changelog PDF가 공유됐다(한 보고자, 버전 일부 추정).
+  - JaylyBot이 `npm i @minecraft/server@<ver>`(stable/beta/preview) 명령을 올려 주고, `/docs info <module>`과 코드 디버그 기능도 있다.
+- **커스텀 블록 상태 타입**: `@minecraft/vanilla-data`의 `BlockStateSuperset`은 type alias라서 declaration merging을 쓴다.
+  ```ts
+  type CustomStateSuperset = BlockStateSuperset & {"ns:state": string};
+  declare module "@minecraft/server" { interface BlockPermutation { getState<T extends keyof CustomStateSuperset>(...) } }
+  ```
+  간단하게는 `permutation.withState("ns:state" as keyof BlockStateSuperset, ...)`로 캐스팅한다.
+- **TS 함정**: 객체 리터럴의 속성 타입이 `string`으로 넓어진다. `readonly`, `as const`, `satisfies`를 쓴다.
+- **번들러 선택**: Microsoft starter 템플릿(ESLint+prettier, 내용이 거의 없다), rolldown, esbuild, Bun. 설치는 Bun이 npm/pnpm보다 훨씬 빠르다. `@minecraft/math`(Vector3 연산)는 번들해야 한다. 커스텀 npm 라이브러리도 같은 방식으로 쓴다(MS 문서 "Core build tasks").
+- **`@minecraft/math`의 방향**: 북쪽을 Z+로 다루지만 Bedrock에서는 -Z가 북쪽이다.
+- **코드 숨기기**: minify가 실질적인 유일한 방법이다. 난독화 도구로 shitfuscator.xyz(비공개 VM 방식)와 pack-obfuscator가 있다.
+- **타입 소스**: bedrock-apis/bds-docs(preview 브랜치)에 BDS가 생성한 타입과 JSON 스키마(ddui 포함), `@bedrock-apis/env-types`가 있다. XeroAlpha/caidlist는 gametest 소스에서 id를 수집한다. mrpatches123/patchy-testing-stable의 `update_vanilla_data.mjs`는 vanilla-data enum을 변환한다.
+- **테스트**: Bedrock-OSS/minecraft-server-jest(jest mock). IPC 같은 라이브러리는 게임 안이 아니라 vitest나 큰 데이터로 벤치마크한다(게임에서는 틱 지연이 결과를 지배한다).
+- **AI 코딩 에이전트를 쓸 때의 테스트**: E2E 테스트(Playwright, 시드된 테스트 사용자)와 손으로 쓴 테스트를 권한다. 단위 테스트만으로는 너무 쉽게 통과한다.
+- **다른 언어의 시도**
+  - Gleam → JS: 클래스와 연관 함수가 없어 포기했다.
+  - Result/Option 패턴: JS 내장이 undefined/null과 예외를 쓰니 TS에서 어색하다.
+  - arexon의 `bedoxi_server` Rust crate: Script API 바인딩을 갖춘 Rust(wasm 유사)를 돌린다.
+  - JS 함정: `const y = layer--`는 이전 값을 돌려주고 변수를 바꾼다.
+- **WebSocket(`/connect`)**: PlayerMessage 같은 이벤트를 구독할 수 있다. gist: `https://gist.github.com/jocopa3/5f718f4198f1ea91a37e3a9da468675c` . 자세한 내용은 19.4절.
+- **npm trusted publishing**: 태그를 push하면 GitHub Actions가 토큰 없이 게시한다(npm 쪽에서 한 번 설정 필요). 예시 워크플로: `https://github.com/Aevarkan/command-wrapper/blob/2dcd9101ddc35f7ee181d521844fbd545545e380/.github/workflows/publish.yml`
+  - 2026-05 npm 공급망 공격(TanStack postmortem `https://tanstack.com/blog/npm-supply-chain-compromise-postmortem`)에서는 `pull_request_target` 워크플로가 즉시 닫힌 PR로도 실행되어 Actions 캐시를 오염시켰다. 비슷한 사례: `https://github.com/nrwl/nx/security/advisories/GHSA-cxm3-wv7p-598c`
+  - 게시 파이프라인에서는 캐시를 쓰는 `pull_request_target`을 피한다. nx는 Trusted Providers 게시를 필수로 바꿨다(`https://docs.npmjs.com/trusted-publishers#supported-cicd-providers`).
+- **로컬 GitHub Actions 테스트**: `nektos/act` (`https://github.com/nektos/act`).
+
+---
+

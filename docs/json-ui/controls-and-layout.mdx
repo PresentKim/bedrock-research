@@ -1,0 +1,287 @@
+---
+title: "컨트롤과 레이아웃"
+description: "컨트롤 타입, 크기, 앵커, 스택, 레이어, 클리핑, 그리드, 9-slice 규칙(LAY-01~LAY-54)과 반영안"
+sidebar_position: 4
+sources:
+  - repo-guide
+  - repo-survey
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+  - private-research
+  - cinnabar
+  - bedrock-core
+  - advancementpack
+  - private-research
+  - mcbejsonuimasterai
+  - private-research
+  - netease-docs
+  - repo-tool-analyses
+  - jsonforge
+  - bedrock-json-ui-editor
+  - json-ui-examples
+---
+
+## 개념: 컨트롤은 트리이고, 배치는 크기·앵커·스택이 정한다
+
+화면은 컨트롤의 트리다. 부모 컨트롤의 `controls` 배열에 자식이 들어가고, 자식은 부모 안에서 크기(`size`), 기준점(`anchor_from`/`anchor_to`), 이동(`offset`), 겹침 순서(`layer`)로 놓인다. 부모가 `stack_panel`이면 자식을 한 방향으로 쌓고, `grid`면 칸에 배치한다.
+
+### 동작하는 예제
+
+화면 오른쪽 위에 붙은 정보 카드다. 세로 스택 안에 제목 라벨과 본문 라벨이 있고, 카드는 자식 크기에 맞게 줄어든다.
+
+```jsonc
+{
+  "namespace": "my_addon",
+  "info_card": {
+    "type": "panel",
+    "size": ["100%c + 8px", "100%c + 8px"],   // 자식 합 + 여백
+    "anchor_from": "top_right",               // 부모의 오른쪽 위에 붙이고
+    "anchor_to": "top_right",                 // 자기 오른쪽 위를 맞춘다
+    "offset": [-4, 4],                        // 안쪽으로 밀기(오른쪽 앵커는 음수 x가 안쪽, LAY-17)
+    "controls": [
+      { "bg": { "type": "image", "texture": "textures/ui/white_icon",
+                "color": [0, 0, 0], "alpha": 0.6, "layer": 1,
+                "size": ["100%sm", "100%sm"] } },    // 가장 큰 형제에 맞춘 배경
+      { "rows": {
+          "type": "stack_panel", "orientation": "vertical", "layer": 2,
+          "size": ["100%c", "100%c"],
+          "controls": [
+            { "title": { "type": "label", "text": "제목", "color": [1, 1, 0] } },
+            { "body":  { "type": "label", "text": "본문", "size": ["default", "default"] } }
+          ] } }
+    ]
+  }
+}
+```
+
+크기 `"100%c"`는 보이는 자식의 합, `"100%sm"`은 가장 큰 형제에 맞춤이다(LAY-03, LAY-07). 배경에 `layer`를 낮게 주어 앞뒤를 보장한다(LAY-19).
+
+### Bedrock Wiki의 속성 표 (기본값 포함)
+
+<Excerpt src="bedrock-wiki" title="JSON UI Documentation, Control and Layout properties" path="docs/json-ui/json-ui-documentation.md">
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| visible | boolean | `true` | If the UI element should be visible |
+| enabled | boolean | `true` | If true and the element or any child has the locked state then they will be in the locked state |
+| layer | int | `0` | Z-Index relative to the parent element. Higher values render above, negative values render below the parent element |
+| alpha | float | `1.0` | Alpha of the element. It will only affect the UI element. Its children will be unaffected. Use `propagate_alpha` to apply to children too |
+| propagate_alpha | boolean | `false` | If `alpha` should apply to all children as well |
+| clips_children | boolean | `false` | Cuts off visually and interactively everything beyond the boundaries of the UI element |
+| allow_clipping | boolean | `true` | If `clips_children` of an ancestor works on this element |
+| use_child_anchors | boolean | `false` | Use the `anchor_from` and `anchor_to` of the children of the UI element |
+| grid_position | Vector | | Position that the control will take inside the grid. Also allows modifying specific grid items of a hardcoded grid |
+| collection_index | int | | Index that the control takes in the collection |
+| size | Vector [width, height] | `["default", "default"]` | `"default"`, a number of pixels (`0` or `"0px"`), a percentage of the parent (`"50%"`), and sums such as `"100% - 4px"` |
+| max_size, min_size | Vector | `["default", "default"]` | Maximum and minimum size the element can have |
+| offset | Vector [x, y] | `[0, 0]` | Position relative to the parent, based on the top left corner |
+| anchor_from | enum | `center` | Anchor point in the parent element |
+| anchor_to | enum | `center` | Anchor point in the element |
+| orientation | enum | `vertical` | Direction the elements stack inside `stack_panel` (`vertical`, `horizontal`) |
+| grid_dimensions | Vector [columns, rows] | | Number of columns and rows the grid has |
+| maximum_grid_items | int | | Maximum number of items the grid will generate |
+| grid_item_template | string | | An element capable of handling collections |
+
+Anchors allow the elements to align to a certain point. `anchor_to` is the anchor point in the element that will be attached to the `anchor_from` in the parent element. For `anchor_from: center` and `anchor_to: top_left`, the top left point of the element is in the center point of the parent element.
+
+</Excerpt>
+
+주의: 위키 표의 기본값 `"default"`는 "100%"와 같다고 적혀 있지만 타입마다 다르다(LAY-03, C-36). 위키는 `grid_position`을 `[row, column]`이라 쓰지만 바닐라 대조로 `[열, 행]`이 맞다(아래 LAY-29 정정과 C-48). `grid_fill_direction`의 위키 3값 중 `vertical` 외에는 바닐라 근거가 없다(LAY-26).
+
+### Microsoft Learn의 요소 속성 레퍼런스
+
+MS Learn의 `minecraft:ui_element` 문서(커밋 a9fd1c0)는 요소 속성을 이름·타입·설명으로 나열한다(출처: ms-learn). 이 위키가 규칙으로 다루는 주요 항목은 다음과 같다.
+
+| 분류 | 속성 |
+| --- | --- |
+| 크기·배치 | `size`(`[width, height]`, 숫자는 픽셀, `'100%'`, `'fill'`, `'100%c'`, `'100%cm'`), `min_size`, `max_size`, `offset`(`[x, y]` 픽셀), `anchor_from`, `anchor_to`, `layer`(높을수록 위), `orientation` |
+| 표시 | `visible`, `alpha`(0.0~1.0), `propagate_alpha`, `color`(`[r, g, b]`), `clips_children`, `allow_clipping`, `ignored`, `shadow`, `grayscale` |
+| 텍스처 | `texture`, `uv`, `uv_size`, `tiled`, `keep_ratio`, `bilinear`, `nine_slice_left/top/right/buttom`(원문 철자 그대로), `fill` |
+| 텍스트 | `text`, `text_alignment`, `font_size`, `font_type`, `font_scale_factor`, `max_length`, `place_holder_text` |
+| 컬렉션·그리드 | `collection_name`, `grid_dimension_binding`, `grid_item_template`, `grid_rescaling_type`, `factory`, `bindings`, `variables`, `controls` |
+| 입력·포커스 | `button_mappings`(`from_button_id`, `to_button_id`, `mapping_type`, `input_mode_condition`), `focus_enabled`, `focus_change_up/down/left/right`, `default_focus_precedence`, `modal`, `consume_event`, `prevent_touch_input` |
+| 스크롤·슬라이더 | `scroll_content`, `scroll_view_port`, `scrollbar_box`, `scrollbar_track`, `scroll_speed`, `slider_range`, `slider_steps` |
+| 접근성 | `tts_control_type_order_priority`, `tts_ignore_count`, `tts_skip_message` |
+
+이 문서의 enum 표(타입, 앵커 등)는 값이 비어 있고 일부 이름(`scrollbar_track`, `nine_slice_buttom`)이 바닐라와 다르다. 타입은 바닐라 사용 실적(아래 3.1 표)으로 판단한다(LAY-01, C-34, C-60).
+
+## 규칙
+
+### 3.1 컨트롤 타입
+
+바닐라 1.26.50.4에서 `"type"`으로 쓰인 값과 횟수다(VN 전수 검색). 공식 enum(`forms/ui/ui_element.form.json`)과 다르다는 점에 주의한다.
+
+| 타입 | 바닐라 | 공식 enum | 용도 |
+| --- | ---: | :---: | --- |
+| `panel` | 4,092 | O | 빈 상자. 자식 배치, 바인딩 호스트 |
+| `stack_panel` | 1,461 | O | 자식을 한 방향으로 쌓음 |
+| `image` | 1,318 | O | 텍스처 |
+| `label` | 814 | O | 텍스트 |
+| `grid` | 132 | O | 격자, 컬렉션 |
+| `input_panel` | 108 | O | 입력(호버, 드래그, 모달) 받는 패널 |
+| `custom` | 105 | O | `renderer`로 엔진이 그리는 것 |
+| `button` | 54 | O | 버튼(대부분 템플릿 `common_buttons.*`로 씀) |
+| `factory` | 36 | **X** | 데이터 종류별로 컨트롤을 만드는 팩토리 컨트롤(컬렉션과 팩토리 장) |
+| `screen` | 7 | O | 화면 루트 |
+| `collection_panel` | 3 | **X** | 컬렉션 + 팩토리 호스트 |
+| `scroll_view`, `scrollbar_box`, `scroll_track` | 2, 1, 1 | O, O, X | 스크롤 구성 요소 |
+| `edit_box`, `toggle`, `slider`, `slider_box`, `dropdown` | 2, 1, 1, 1, 1 | O | 대부분 템플릿을 통해 씀 |
+| `tooltip_trigger`, `selection_wheel`, `label_cycler`, `image_cycler`, `grid_page_indicator`, `carousel_label` | 2, 1, 1, 1, 1, 1 | X | 특수 |
+
+- **[LAY-01]** 유효한 타입 목록은 공식 enum이 아니라 바닐라 사용 실적으로 판단한다. 공식 enum에는 `factory`, `collection_panel`, `tooltip_trigger`, `scroll_track` 등 바닐라가 쓰는 타입이 빠져 있다. 위키 타입표의 `scrollbar_track`은 오기이고(바닐라는 `scroll_track`, 충돌 C-34), 레거시 타입 `tab`, `grid_item`, `scrollbar`는 바닐라에 한 번도 없다. 위키가 레거시로 분류한 `carousel_label`은 바닐라에 1회 남아 있다. `{바닐라}` (출처: VN, BC-facts 공식 스키마 절, BW-doc)
+- **[LAY-02]** `scroll_box`는 타입이 아니라 `ui_common.json`의 **컨트롤 이름**이다. 스크롤은 직접 조립하지 말고 `common.scrolling_panel` 템플릿을 `$scrolling_content` 등의 변수로 재사용한다. `{바닐라, 작동팩}` (출처: VN server_form.json `scrolling_panel@common.scrolling_panel`, BA 식과 연산자 장, AP, MJ 4.2-2)
+
+### 3.2 크기
+
+| 표기 | 뜻 | 바닐라 |
+| --- | --- | ---: |
+| `16` 또는 `"16px"` | 픽셀 | `px` 2,606 |
+| `"50%"` | 부모 크기의 비율 | 다수 |
+| `"100%c"` | 자식 기준 크기. 스택 패널의 진행 방향에서는 **보이는 자식의 합** | 2,201 |
+| `"100%cm"` | 가장 큰 자식 | 419 |
+| `"100%sm"` | 가장 큰 형제 | 263 |
+| `"100%x"`, `"100%y"` | 자기 다른 축 크기의 비율(정사각, 비율 고정) | 162, 150 |
+| `"fill"` | 스택 패널에서 남은 공간 | 668 |
+| `"default"` | 내용의 기본 크기(라벨 텍스트 등) | 963 |
+| `"100% - 4px"`, `"100%c + 12px"` | 식 | `%c +` 288 |
+
+- **[LAY-03]** 크기 키워드는 위 표의 것을 쓴다. `%x`/`%y`의 "다른 축 기준"이라는 뜻은 바닐라 주석(`25%x * 56.25%`)과 용례로 판단한 것이다. `"default"`의 뜻은 타입마다 달라서 패널은 100%, 라벨은 텍스트 크기로 보인다(충돌 C-36). Cinnabar 재구성에서 생략한 크기는 스택 패널의 진행 축이면 `100%c`, 비율 이미지면 텍스처 비율, 나머지는 부모 크기다(LAY-38). 크기 식은 `%c` 등을 `%` 뒤에 쓴다(LAY-36). `{바닐라, 코드, 추론}` (출처: VN store_search_screen.json:64 주석, VN 전수 검색, BW-doc, CN)
+- **[LAY-04]** **스택 패널은 숨은(`#visible` false) 자식에게 공간을 주지 않는다.** 조건부 행을 접으면 아래가 올라오고, 2의 거듭제곱 크기 spacer를 켜고 끄면 합이 곧 좌표가 된다(패턴 레시피 6). `{작동팩, 실측}` (출처: BA 4장, BC-S12)
+- **[LAY-05]** 정적 컨트롤의 위치(`offset`)는 바인딩할 수 없다. 위치를 바꾸려면 **앞에 둔 spacer의 크기**를 바인딩해 스택이 다음 자식을 밀게 한다. Cinnabar 재구성은 `#offset`에 `[x, y]` 바인딩을 받지만 실측을 따른다(충돌 C-44). `{실측, 작동팩}` (출처: BC-S12, BA 4장, 충돌 C-44)
+- **[LAY-06]** `max_size`, `min_size`로 반응형을 만든다. 예: `"size": [314, "100% - 64px"]`, `"max_size": [314, 236]`이면 작은 화면에서 창 높이가 줄어든다. `{작동팩, 바닐라}` (출처: BA 식과 연산자 장, VN max_size 204회)
+- **[LAY-07]** `"100%cm"` 상자 안에 배경을 `"100%sm"`으로 두면, 안의 행이 숨을 때 상자와 배경이 함께 줄어 아래가 따라 올라온다. `{실측}` (출처: BC-S12)
+- **[LAY-08]** `"100%cm"` 패널 안에 라벨과 `"100%sm"` 버튼을 두면 버튼 히트박스가 언어마다 글자 크기에 정확히 맞는다. 같은 자리에 `"100%c"`를 쓰면 버튼이 라벨 아래로 떨어진다. `{실측}` (출처: BC-S10)
+- **[LAY-09]** 높이가 자식으로 정해지는 행에 아이콘 전용 버튼을 넣을 때는 명시적인 정사각 크기를 준다. 퍼센트 높이로는 행 높이가 정해지지 않는다. `{실측}` (출처: BC-rules)
+
+### 3.3 크기·위치·투명도 바인딩
+
+- **[LAY-10]** 크기 바인딩은 `#size_binding_x`, `#size_binding_y`에 값을 쓴다. 값은 픽셀이 아니라 **배수**다. 무엇에 곱하는지는 두 해석이 있다: 선언 크기(S12의 해석)와 부모 크기(Cinnabar 재구성: 값 v를 `v×100%`로 바꾸고, `#size_binding_x_absolute`·`_y_absolute`는 픽셀). `[1, 1]` 크기 프레임 안에 두면 값이 곧 픽셀이 된다는 S12 관측은 두 해석 모두와 맞고, 충돌 C-14는 부모 크기 쪽으로 기울었다. 선언은 `["100%", "100%"]`로 둔다. 범위를 벗어난 값이 아무것도 안 그린다는 이전 기록은 `[0, 0]` 선언 때문이었을 가능성이 높다. 바닐라의 유일한 크기 바인딩(`resizing_xp_bar_with_hotbar`)은 `use_anchored_offset: true`와 함께 쓰고, 위키도 이 속성이 필요하다고 적는다(CN은 요구하지 않음). 정적 컨트롤에서 그것 없이 된다는 S12 기록과 맞춰 볼 때까지는 둘을 함께 쓰는 편이 안전하다(충돌 C-37, LAY-14 주의). `{실측, 코드, 충돌}` (출처: BC-S6, BC-S12, 충돌 C-14, BW-doc, VN hud_screen.json:319, CN)
+- **[LAY-11]** 크기 바인딩은 **두 축을 모두** 바인딩한다. 한 축만 하면 다른 축이 0이 되어 바인딩이 안 된 것처럼 보인다. Cinnabar 재구성에서 바인딩하지 않은 축은 선언값을 유지하므로, 선언이 `[0, 0]`이면 그 축이 0으로 남는 것과 같은 현상이다(충돌 C-14). `{실측, 코드}` (출처: BC-S12, CN)
+- **[LAY-12]** 어디서 무엇을 바인딩할 수 있는지는 컨트롤이 어디서 생겼는지에 따라 다르다. 크기 바인딩에 `use_anchored_offset`이 필요한지는 미해결이다(충돌 C-37). `{실측}` (출처: BC-S12, BW-doc)
+
+| 속성 | 정적 컨트롤 | 계산 길이 팩토리가 만든 셀 | 엔진 `form_buttons` 팩토리 셀 |
+| --- | --- | --- | --- |
+| `#size_binding_x/y` | 됨 | 안 됨 | 됨 |
+| `#anchored_offset_value_x/y` (+ `use_anchored_offset: true`) | 안 됨 | 안 됨 | 됨 |
+| `"alpha": "#alpha"` | 0 또는 1만(C-45) | — | 0 또는 1만(C-45) |
+| `visible`, 텍스트, `#collection_length` | 됨 | 됨 | 됨 |
+
+- **[LAY-13]** 바인딩한 `alpha`는 0과 1만 적용된다. 반투명이 필요하면 alpha가 다른 사본을 리터럴로 만들어 하나만 보이게 한다. Cinnabar 재구성은 바인딩한 `alpha`의 숫자를 그대로 받는다. 측정 식이 `0.5` 같은 리터럴을 썼다면 그 값은 정수 0이라(EXP-27) "0과 1만"처럼 보였을 수 있으므로 `.5`로 다시 재야 한다(충돌 C-45). `{실측, 충돌}` (출처: BC-S12, CN, 충돌 C-45)
+- **[LAY-14]** 크기 바인딩 + `use_anchored_offset` + 컬렉션 셀 조합은 상자 화면에서 클라이언트를 두 번 크래시시켰다. 이 조합은 피한다. `{실측}` (출처: BC-S6)
+- **[LAY-15]** 화면이 열려 있는 동안 크기 바인딩 값이 바뀌면 다시 레이아웃되는지는 측정되지 않았다. `{미검증}` (출처: BC-S6, BC 텍스트와 현지화 장)
+
+### 3.4 앵커와 오프셋
+
+- **[LAY-16]** `anchor_from`은 부모의 기준점, `anchor_to`는 자기 기준점이다. 값은 `top_left`, `top_middle`, `top_right`, `left_middle`, `center`, `right_middle`, `bottom_left`, `bottom_middle`, `bottom_right` 9가지다. `{바닐라}` (출처: VN 9종 모두 사용, 값 사전)
+- **[LAY-17]** `offset`은 앵커 기준의 이동이며 크기와 같은 단위(픽셀, `%`, 식)를 쓴다. 예: `"offset": [0, "50%-68px"]`. `{바닐라}` (출처: VN hud_screen.json:2146)
+
+### 3.5 레이어와 그리기 순서
+
+- **[LAY-18]** `layer`는 부모에 대한 **상대값**이다. 겹치는 두 컨트롤의 앞뒤는 조상 체인 전체의 레이어를 비교해야 안다. `{실측}` (출처: BC-rules)
+- **[LAY-19]** 같은 레이어의 형제는 **배열 순서가 그리기 순서를 보장하지 않는다.** 앞뒤가 중요하면 레이어를 다르게 준다. `{실측}` (출처: BC-rules, MJ 4.2-10)
+- **[LAY-20]** 같은 데이터를 "모든 외곽선 → 모든 선 → 모든 노드 → 호버" 순으로 그려야 하면 한 아이템 안에서 레이어를 올리는 것으로는 부족하다(다음 아이템의 외곽선이 앞 아이템을 덮는다). 같은 컬렉션을 레이어가 다른 팩토리로 여러 번 그린다. `{작동팩}` (출처: BA 식과 연산자 장)
+- **[LAY-21]** 50 이상의 레이어는 바닐라에서도 흔하다. 레이어가 높다는 경고는 무시해도 된다. `{바닐라, 추론}` (출처: MJ 식과 연산자 장)
+
+### 3.6 클리핑과 오버레이
+
+- **[LAY-22]** `clips_children: true`는 자식을 자기 영역으로 자른다. 자식에 `allow_clipping: false`를 주면 조상의 클리핑을 벗어나 그린다(스크롤 영역 밖으로 나가는 툴팁). `{바닐라, 작동팩}` (출처: VN clips_children 27회·allow_clipping 7회, BA 식과 연산자 장, AP 4.8)
+- **[LAY-23]** 툴팁이 뜰 때 주변을 어둡게 하려면 아주 큰 반투명 검정 이미지(BA 4000×4000 alpha 0.3, AP 500×500 alpha 0.225)를 툴팁 뒤에 두고 `allow_clipping: false`를 준다. `{작동팩}` (출처: BA 식과 연산자 장, AP 4.8)
+- **[LAY-24]** 텍스트 폭에 맞춘 배경이 필요하면 `alpha: 0`인 측정용 라벨로 부모를 `"100%c"`/`"100%cm"`로 키우고, 보이는 라벨은 그 위에 따로 그린다. `{작동팩}` (출처: BA 식과 연산자 장)
+
+### 3.7 그리드
+
+- **[LAY-25]** 그리드는 `grid_dimensions`(고정 크기) 또는 `grid_dimension_binding`(바인딩 크기), `grid_item_template`, `maximum_grid_items`로 만든다. `{바닐라}` (출처: VN 속성 키 기준 37·79·117·11회)
+- **[LAY-26]** `grid_fill_direction`은 바닐라에서 `vertical`만 쓴다. `left_to_right` 같은 값은 근거가 없다. `grid_rescaling_type`은 바닐라에서 `horizontal`(21), `vertical`(1)만 쓰고, 공식 enum의 `none`은 쓰지 않는다. 위키가 적은 `grid_fill_direction` 3값(`vertical`, `horizontal`, `none`)도 `vertical` 외에는 바닐라 근거가 없다. `grid_rescaling_type: "vertical"`은 크래시 경고가 있다(LAY-32). `{바닐라}` (출처: VN, MJ 4.2-3·4, BW-doc, BW-dyn)
+
+### 3.8 9-slice와 타일
+
+- **[LAY-27]** 9-slice는 텍스처 파일 옆에 같은 이름의 `.json`을 두고 `nineslice_size`(`[왼, 위, 오른, 아래]` 또는 한 값)와 `base_size`를 적는다. 바닐라 UI JSON은 `nineslice_size`를 리터럴 속성으로 쓰지 않고, 바인딩(`#banner_nineslice_size` → `#nineslice_size`)으로 1회 쓴다. `{작동팩, 바닐라}` (출처: BA 식과 연산자 장, AP 4.9, VN start_screen.json:1639)
+- **[LAY-28]** 반복 배경은 image에 `"tiled": true`를 준다. `{바닐라, 작동팩}` (출처: VN 44회, AP 4.9, BA 식과 연산자 장)
+
+### 3.9 Bedrock Wiki 대조로 더한 규칙
+
+위키(BW) 문서를 바닐라 1.26.50.4와 대조해 더한 규칙이다. 위키 문장만 있는 것은 `미검증`, 위키의 게임 스크린샷이 있는 것은 `실측`(제3자 기록)으로 표시했다.
+
+- **[LAY-29]** 그리드 칸에 정적 자식을 직접 놓으려면 자식에 `"grid_position": [행, 열]`을 준다(0부터). 바닐라도 71회 쓰고, 엔진이 만든 그리드의 특정 칸을 덮어쓰는 데도 쓴다. `{바닐라, 실측}` (출처: VN, BW-doc Control 표, BW-dyn 스크린샷)
+- **[LAY-30]** 개수가 바인딩으로 정해지는 그리드는 `grid_rescaling_type: "horizontal"`과 고정 폭을 주고 `#maximum_grid_items`(또는 `maximum_grid_items`)로 개수를 정한다. 열 수는 `floor(그리드 폭 / 템플릿 폭)`이다(160px ÷ 32px = 5열, 개수 15 → 3행). 높이는 `"100%c"`로 둔다. `{실측}` (출처: BW-dyn 스크린샷)
+- **[LAY-31]** **그리드는 숨은(`visible` false) 항목에도 자리를 준다.** 스택 패널(LAY-04)과 반대라서, 조건부 항목을 그리드에 두면 빈칸이 생긴다. 접혀야 하는 목록은 스택 패널로 만든다. Cinnabar 재구성에서도 그리드 칸 위치가 인덱스로 정해져 숨은 칸이 자리를 차지한다. `{코드, 미검증}` (출처: BW-dyn "Useful Information", CN)
+- **[LAY-32]** `grid_rescaling_type: "vertical"`은 게임을 크래시시킬 수 있다는 경고가 있다. 바닐라는 1회(`store_item_list_screen.json`) 쓴다. 새로 만들 때는 `horizontal`을 쓴다. `{미검증, 바닐라}` (출처: BW-dyn, VN)
+- **[LAY-33]** `alpha`는 그 컨트롤만 투명하게 하고 자식에는 전파되지 않는다. 자식까지 함께 투명하게 하려면 `propagate_alpha: true`를 준다(BND-15). `layer`는 음수도 되며 부모보다 아래에 그린다. `{미검증, 바닐라}` (출처: BW-doc Control 표)
+
+### 3.10 Cinnabar 엔진 재구성으로 더한 규칙
+
+Cinnabar(`CN`)는 26.30 네이티브 클라이언트의 JSON UI 해석기를 재구성한 Rust 코드다. 수준은 `코드`이고, `CN-run`은 이 프로젝트가 그 평가기를 직접 실행한 결과다. 게임 실측과 다르면 실측을 따른다(충돌 C-41~C-47).
+
+- **[LAY-34]** 크기 키워드 `"fill"`, `"default"`는 소문자 그대로일 때만 키워드다. 단위 없는 숫자 문자열(`"10"`)은 0이 된다. 숫자로 쓰거나 `"10px"`로 쓴다. `{코드}` (출처: CN-run)
+- **[LAY-35]** 크기 식의 부호는 다음 부호까지 이어진다: `"100% - 10px 5px"`는 100% − 15px. 항마다 부호를 쓴다. `{코드}` (출처: CN-run)
+- **[LAY-36]** `%c`, `%cm`, `%sm`은 `%` **뒤에** 쓴다. 바닐라 progress_screen.json의 `"100c%"`, `"50c%"`는 부모 기준 `%`로 읽힌다. `{바닐라, 코드}` (출처: VN progress_screen.json:21·31·48, CN-run)
+- **[LAY-37]** `%cm`과 `%sm`은 계수를 무시하고 최대값 자체다. `"50%cm"`도 가장 큰 자식 크기다. 절반이 필요하면 감싼 패널에서 다시 `%`로 줄인다. `{코드}` (출처: CN-run, CN 테스트 G06·G07)
+- **[LAY-38]** 스택 패널의 자식은 `offset`을 무시하고, `use_child_anchors: true`가 없으면 앵커도 무시한다. 생략한 스택 패널의 진행 축 크기는 `100%c`다. `{코드}` (출처: CN 테스트 S04, CN)
+- **[LAY-39]** 최소·최대가 충돌하면(`min > max`) 큰 값은 최대로 잘린다. 스택 진행 축 밖의 `fill`은 0이다. `{코드}` (출처: CN)
+- **[LAY-40]** 스택 `use_priority: true`는 자식 합이 넘칠 때 `priority`가 낮은 자식부터 남기고(0 이하는 항상 남김) 들어가지 않는 자식을 숨긴다. `{코드}` (출처: CN 테스트 S05)
+- **[LAY-41]** 그리드 칸은 자기 `anchor`·`offset`을 무시한다. 템플릿 그리드는 행 우선 생성 순서로 칸을 채우고 용량을 넘는 칸은 만들지 않는다. `{코드}` (출처: CN 테스트 D01·D08)
+- **[LAY-42]** 스크롤 뷰는 역할 컨트롤(뷰포트, 내용, 트랙, 박스, 바 패널)을 이름으로 너비 우선 검색하므로 트리 안 위치는 자유지만, 넷 중 하나라도 없으면 스크롤하지 않는다. 박스는 트랙의 10% 이상이고 내용이 들어맞으면 바 패널이 숨는다. `{코드}` (출처: CN 테스트 V02·V07·V06)
+- **[LAY-43]** 앵커 값은 이름에 `left`·`right`·`top`·`bottom`이 들어 있는지로 판정하고 기본은 `center`다. `{코드}` (출처: CN)
+
+### 3.11 연구 서버 서버 실측으로 더한 규칙
+
+연구 서버 서버(`DF`)를 만들며 Windows 1.26.52 에서 실측한 것이다. 서버 폼 하나로 여러 화면을 그리는 구조에서 얻었다.
+
+- **[LAY-51]** 두 열을 가로 `stack_panel`에 세로 스택 둘로 넣으면 높이가 0이 됐다. `panel`(높이 `100%cm`) 안에 왼쪽 위·오른쪽 위로 붙인 세로 스택 둘을 둔다. `{실측}` (출처: DF)
+- **[LAY-52]** 왼쪽 판과 오른쪽 상세를 가로 스택에 두면 `100%c`는 두 높이를 더했고 `100%cm`은 오른쪽 상세를 접었다. 판들을 `panel` 안에 왼쪽 위 기준과 `offset`으로 두고 그 `panel`의 `100%c`(자식 범위)를 쓴다. `{실측}` (출처: DF)
+- **[LAY-53]** 창 높이를 `100%c`로 내용에 맞추면 창과 내용이 서로를 참조해 무너졌다(버튼이 창 밖으로). 서버 폼 창은 고정 픽셀 크기로 두고, 넘치는 내용은 안쪽 `scrolling_panel`이나 서버의 쪽 나누기로 처리한다. 휴대폰은 UI를 크게 그리므로 바닐라 인벤토리(326×166)보다 큰 창은 화면에 들어가지 않는다. `{실측}` (출처: DF)
+- **[LAY-54]** 목록 칸을 내용 높이(`100%c + 8px`)로 두면 빈 목록은 얇은 막대가 되고 긴 목록은 창 밖으로 나갔다. 목록 칸은 창 높이로 고정하고 그 안에 `common.scrolling_panel`을 둔다. 버튼 칸을 고정 높이로 두면 위에 본문이 붙을 때 스크롤바가 생기므로 `stack_panel` `100%c`로 버튼만큼만 차지하게 한다. `{실측}` (출처: DF)
+
+## 커뮤니티 보고로 더한 사실 (커뮤니티)
+
+(출처: 비공개 조사) 모두 보고 수준이다.
+
+- 글자 컨트롤의 타입은 `text`가 아니라 `label`이다. 앵커 값은 `left_middle`이지 `middle_left`가 아니다(LAY-16).
+- `"default"` 크기는 타입마다 다르다: 패널 100%, 라벨 텍스트 크기, 스택 패널 `["100%","100%c"]`, 그리드 `["100%c","100%c"]`(LAY-03, LAY-38과 같다). 단위 없는 문자열 `"10"`은 `Dangling number` 오류를 낸다는 보고가 있고 Cinnabar는 0으로 읽는다(LAY-34).
+- 숨긴 그리드 항목이 공간을 차지한다는 보고가 여럿이라 LAY-31의 `미검증`은 사실상 확인되었다(D-14). 늘 숨길 버튼(탭, 뒤로)은 컬렉션 끝에 둔다(COL-35).
+- 스택 패널 안에서 아래 정렬은 첫 자식으로 `["100%","fill"]` 패널을 넣어 남은 공간을 먹게 한다.
+- 움직이는 위치가 필요하면 `use_anchored_offset: true`와 `#anchored_offset_value_x/y`(부모 크기 대비 비율)를 쓴다. 고정 크기 부모와 왼쪽 위 앵커가 가장 안정적이다. `offset` 배열에 view 바인딩을 걸었다는 보고와 안 됐다는 보고가 엇갈린다(D-15, LAY-05).
+- `#size_binding_x/y`는 "부모 대비 비율(2.5는 250%), 픽셀은 `_absolute`"라는 보고가 있어 Cinnabar 해석(LAY-10)을 뒷받침한다. 컨트롤에 `"size": [0, 0]` 같은 명시적 자리표시 크기가 있어야 하고 값은 숫자여야 하며 잘못된 값은 크래시라는 보고가 있다. `#anchored_offset_value_*_absolute`는 있다·없다 보고가 섞여 쓰지 않는다(D-22).
+- 바인딩한 `#alpha`는 0.75가 안 보이는 등 불안정하다는 보고가 있어 중간 투명도는 애니메이션이나 색으로 낸다(D-16, LAY-13).
+- 그리드 속성 이름은 `grid_dimensions`다(`grid_dimension`이면 타입 오류). 서브픽셀 틈이 창 모드에서 생기는 일이 있다. GUI 스케일은 읽을 수도 무시할 수도 없으므로 고정 픽셀보다 `%`를 쓴다.
+- 스크롤: `common.scrolling_panel`의 변수를 쓰고 `$scrolling_pane_size`는 `size`에 명시해야 적용되며, 스크롤바 숨기기는 `"$scroll_bar_and_track_size": [0,0]`이다(LAY-02, LAY-42).
+- 휴대폰은 UI를 크게 그려 화면 높이가 약 200px로 작다. 서버 폼 창은 고정 픽셀로 두고 넘치는 내용은 안쪽 스크롤로 처리한다(LAY-53, LAY-54).
+
+## 반영안(미적용)
+
+새 조사에서 나온 제안이다. 본문에는 아직 합쳐지지 않았고 번호는 병합 기록의 최종 번호다.
+
+- **[LAY-44]** (반영안) 크기·위치 식에는 `+`와 `-`만 쓴다. 바닐라 크기 문자열 551종(12,806회, 재집계 원소 12,712개)에 `*`, `/`는 한 번도 없고, Mojang은 비율 계산을 주석으로 해 둔 뒤 결과 계수를 적는다(`store_common.json:5870`의 `"34.628%x + 2px"`, `store_search_screen.json:64` 주석). 소수 계수(`56.25%x`, `1.1249px`)와 음수 항(`"-50% + 10px"`)은 쓴다. `{바닐라}` (출처: jua-jsonui-schemas, bedrock-samples) 실측 과제: 크기 식에 `*`를 쓰면(`"50% * 2"`) 무시되는지 오류인지.
+- **[LAY-45]** (반영안) `anchor_from`과 `anchor_to`는 함께 적는다. 바닐라는 2,997곳 중 2,985곳(99.6%)에서 둘 다 적고 그중 106곳은 서로 다르다(하나만 적은 곳 12곳, 각 6). 생략했을 때의 기본값은 도구마다 다르게 가정한다(JsonForge·Cinnabar는 `center`, w1zardz 편집기는 `anchor_to`가 `anchor_from`과 같다고 본다). `{바닐라, 코드}` (출처: jua-jsonforge, jua-bedrock-json-ui-editor, jua-cinnabar, bedrock-samples)
+- **[LAY-46]** (반영안) `"100%c"` 부모 안의 자식에 같은 축 `%` 크기를 주지 않는다. 자식 크기가 부모를, 부모 크기가 자식을 정하는 순환이 되어 아무것도 그려지지 않는다는 도구 저자의 기록이 있다. 내용 패널의 자식은 픽셀이나 `default`로 준다. 병합 기록은 근거를 엔진 코드가 아니라 편집기 저자의 주석으로 보고 수준을 `바닐라, 미검증`(바닐라 0/1,972 집계가 근거)으로 낮췄다. (출처: jua-jsonforge, bedrock-samples) 같은 병합에서 LAY-17에 "오른쪽·아래 앵커여도 축은 뒤집히지 않는다"는 보강(C-49 해소)이 함께 제안되었다: 바닐라 206개 파일 분포에서 오른쪽 앵커 x는 음수 104 대 양수 37, 아래 앵커 y는 음수 190 대 양수 45이고 `common.close_button`이 `top_right` 앵커에 `[-2, 2]`를 쓴다(`ui_common.json:3239-3246`).
+- **[LAY-47]** (반영안) 화면의 UI 픽셀 크기는 고정값이 아니다. 창 크기와 GUI 배율에 따라 달라지고 시각 편집기들도 서로 다른 값을 가정한다(w1zardz 427×240·520×240·320×240, JsonForge 384×216). 고정 px는 정수 배율을 곱해 그려지고, 바닐라 레이아웃은 최소 가상 화면을 포켓 320×210, 데스크톱 376×250으로 가정한다(`ui_common.json:6380`, `6430` 주석). 최상위 창을 이 크기 안에 두면 어떤 해상도에서도 잘리지 않는다. 화면 가장자리에 붙는 요소는 해당 모서리 앵커와 작은 픽셀 offset으로 놓는다. 단 1.26.0에서 배율 체계가 바뀌어(최소 배율은 최대의 절반, 휴대 기기는 DPI 기반) 배율 계산식 자체는 1.26.50에서 다시 확인해야 한다(MS Learn Update1.26.0). `{바닐라, 미검증}` (출처: jua-netease-docs, ms-learn, jua-bedrock-json-ui-editor, jua-jsonforge)
+- **[LAY-48]** (반영안) `common.scrolling_panel`은 `$touch`에 따라 `scroll_touch`(터치)와 `scroll_mouse`(마우스) 하위 트리 중 하나만 만든다(`ui_common.json:4718-4750`). 스크롤 내용까지의 경로와 크기 변수(`_touch` 짝)가 입력 모드마다 다르므로, 경로 키나 `source_control_name`으로 스크롤 안을 가리키면 두 경로를 다 고려하거나 인스턴스에 `"$touch": true`를 넘겨 한쪽으로 고정한다(`resource_packs_screen.json:2685`도 그렇게 한다). `{바닐라}` (출처: jua-netease-docs, bedrock-samples)
+- **[LAY-49]** (반영안) `#anchored_offset_value_x/y`는 `use_anchored_offset: true`인 컨트롤에서 값 곱하기 부모 크기만큼 앵커 방향으로 민다. `anchor_from`이 `center`면 효과가 없다. 정적 컨트롤에서 쓰려면 모서리·가장자리 앵커를 준다. `{코드, 미검증, 충돌}` (출처: jua-cinnabar, jua-json-ui-examples, jua-bedrock-core) 충돌 C-61.
+- **[LAY-50]** (반영안) 엔진 컬렉션 그리드(`hotbar_items` 등)를 다른 모양으로 그릴 때는 바닐라 정의를 복사하면서 `grid_dimension_binding` 속성 자체를 지우고 `grid_dimensions`를 고정한다. `bindings`만 비우면 Cinnabar 모델에서는 차원 바인딩이 자동으로 다시 붙는다. `{코드, 미검증, 충돌}` (출처: jua-cinnabar, jua-json-ui-examples, bedrock-samples) 충돌 C-62.
+- **정정(적용 대상)**: LAY-29의 `grid_position`은 `[열, 행]`이다(C-48 해소). 근거는 `inventory_screen.json:1200`(3×3 제작 칸의 `crafting_input_item_top_mid`가 `[1, 0]`, `mid_left`가 `[0, 1]`), `trade_screen.json:327`(`[4, 1]` 그리드의 자식이 `[0, 0]`~`[3, 0]`), `inventory_screen.json:1054`(갑옷 `[1, 4]` 그리드의 자식이 `[0, 0]`~`[0, 3]`)다.
+- **보강안(미적용)**: LAY-02에 `scrolling_panel`의 `$touch` 분기를, LAY-03에 `wrap_content` 바닐라 0회를, LAY-10·LAY-12 표에 중국판 문서의 세 번째 근거(C-37)를, LAY-18·LAY-33에 위키·NE의 `layer` 설명을, LAY-27에 Mojira 기록을, LAY-40에 바닐라 `#priority` 바인딩 3회(`store_common.json:732·8239·8503`, 부모 스택이 `use_priority: true`)와 MS Learn Update1.26.0 서술을 더한다. 시각 편집기의 미리보기가 엔진 규칙과 다르다는 주의(편집기가 `%c`와 스택 배치를 근사한다)는 디버깅 장으로 옮긴다.
+
+## 충돌 판정 (이 장의 규칙과 관련된 것)
+
+| ID | 주제 | 주장과 근거 | 판정 |
+| --- | --- | --- | --- |
+| C-14 | `#size_binding` 단위 | S6은 선언 크기의 0~1 비율, S12는 부모 크기의 배수(`[1,1]` 프레임 안이면 픽셀). S6 실패는 `[0,0]` 선언 때문이었음이 S6 본문에도 있고 S12가 나중이다. Cinnabar는 값 v를 `v×100%`(부모 기준)로, `_absolute` 접미 바인딩은 픽셀로 바꾼다 | 부분 해소: 배수다. 부모 크기 쪽으로 기운다(코드). 상한은 미확인 |
+| C-34 | 컨트롤 타입 `scrollbar_track` | 위키 타입표는 타입이라 쓰지만 바닐라는 `scroll_track` 1회, `scrollbar_track` 0회 | 해소: `scroll_track`, 위키 오기 |
+| C-36 | `size: "default"` | 위키는 `"100%"`와 같다고 한다. 바닐라 963회 중 다수가 라벨 축이다. Cinnabar에서 생략한 크기는 스택 진행 축이면 `100%c`, 비율 이미지면 텍스처 비율, 나머지는 부모 크기 | 부분 해소(추론, 코드): 타입과 축마다 다르다 |
+| C-37 | `#size_binding`의 조건 | 위키는 `use_anchored_offset` 필요, S12는 정적 컨트롤에서 됨. 바닐라의 유일한 크기 바인딩(`hud_screen.json:319`)은 `use_anchored_offset: true`와 함께 쓴다. Cinnabar는 요구하지 않지만 관대한 구현일 수 있다. NE가 세 번째 근거 | 미해결: S12 실험 설정 확인 필요. 그 전까지는 함께 쓴다(LAY-14 크래시 조합 주의) |
+| C-43 | `#`가 없는 바인딩 식 | 실측은 `bindings` 배열 전체가 버려진다, Cinnabar는 그 바인딩 하나만 | 실측 우선(BND-05) |
+| C-44 | 정적 `offset` 바인딩 | 실측은 안 됨(LAY-05), Cinnabar는 `#offset`에 `[x, y]`를 받는다. 생성 위치(정적, 팩토리)에 따른 차이일 수 있다 | 실측 우선: LAY-05 유지 |
+| C-45 | 바인딩한 `alpha` | 실측은 0과 1만, Cinnabar는 숫자를 그대로 받는다. 측정 식이 `0.5` 리터럴을 썼다면 정수 0이 되어 그렇게 보였을 수 있다 | 미해결: `.5`로 재측정 |
+| C-48 | `grid_position` 축 순서 | 바닐라 세 곳 대조 | 해소: `[열, 행]` |
+| C-49 | 오른쪽·아래 앵커의 offset 부호 | 바닐라 분포와 `common.close_button` | 해소: 뒤집히지 않는다 |
+| C-56 | `resolve_sibling_scope` 없을 때 검색 범위 | 화면 루트부터 너비 우선(Cinnabar, 바닐라) | 해소: Cinnabar·바닐라 쪽 |
+| C-61, C-62 | 정적 `#anchored_offset_value`, `grid_dimension_binding`을 남긴 그리드 | 위 LAY-49, LAY-50 | 미해결 |
+
+## 실측이 필요한 항목
+
+- 크기 바인딩의 상한과 열린 화면에서의 재레이아웃(C-14, LAY-15), `use_anchored_offset` 필요 여부(C-37).
+- `"100c%"`가 부모 기준인지, `"50%cm"`가 가장 큰 자식 그대로인지(LAY-36, LAY-37).
+- 바인딩 `#alpha`에 `.5`를 주면 반투명인지(C-45), `top_left` 앵커 정적 패널의 `#anchored_offset_value`(C-61).
+- 그리드가 숨은 항목에 자리를 주는지(LAY-31), `100%c` 부모 안 `100%` 자식이 그려지는지(LAY-46), `[376, 250]` 패널이 잘리기 시작하는 창 크기와 GUI 배율의 관계(LAY-47).

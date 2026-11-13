@@ -1,0 +1,139 @@
+---
+title: "파일 형식: lang, JSON 주석, mcfunction 외"
+description: ".lang 현지화 파일, JSON과 주석 규칙, .mcfunction, 스플래시·글리프, 텍스처·사운드 정의 위치, .mcstructure, JSON 숫자 형식"
+sidebar_position: 9
+sources:
+  - private-research
+  - bedrock-wiki
+  - repo-guide
+---
+
+## JSON과 주석
+
+### 개념
+
+애드온 파일 대부분은 JSON이다. 키는 문자열이고 값은 숫자, 문자열, 불리언, 배열, 객체다. 게임의 JSON 파서는 엄격한 표준 JSON이 아니라 jsoncpp 계열이라 **`//`와 `/* */` 주석을 허용**한다. 에디터(VS Code 등)는 주석에 경고를 낼 수 있지만 게임에서는 대체로 동작한다. (출처: repo-guide, FILE-03; private-research)
+
+```jsonc
+{
+  // 한 줄 주석
+  "format_version": "1.21.0", /* 블록 주석 */
+  "minecraft:item": { "description": { "identifier": "wiki:ruby" } }
+}
+```
+
+### 규칙
+
+- `{바닐라, 작동팩}` UI 파일은 `//`, `/* */` 주석을 허용하는 JSON이다(FILE-03).
+- `{코드}` UI 파일은 jsoncpp 규칙으로 읽는다. 주석과 앞자리 0은 되지만 **뒤따르는 쉼표와 따옴표 없는 키는 오류**다. 오류가 나면 그 앞까지 읽은 정의만 로드되고 뒤는 조용히 빠진다. 같은 경로의 첫 파일이 실패하면 뒤 팩의 덮어쓰기도 받지 않는다(FILE-30).
+- 블록 주석은 키 콜론 뒤, 값 뒤, 배열 원소 사이, 파일 끝 어디든 올 수 있다. 난독화기가 이를 이용한다.
+- 등록한 파일의 확장자는 `.json`이 아니어도 로드된다(FILE-02, 예: `ui/adv/_screen.r4ui`).
+- 끝의 쉼표, 닫는 괄호 과다, 곡선 따옴표가 파일 전체를 깨뜨린다. 블록 JSON은 26.20부터 후행 쉼표를 허용했다.
+- 챗봇이 만든 애드온 파일은 자주 틀린다. MS 문서, bedrock.dev, wiki.bedrock.dev를 기준으로 삼는다.
+
+### JSON 숫자 타입
+
+게임이 `1.0`과 `1`을 구분해야 할 때가 있는데 JS `JSON.stringify`는 `.0`을 버린다. 원래 숫자 타입과 키 순서를 보존하는 직렬화기(예: jsonte)나 Python `json.dumps`(구분 보존)를 쓴다.
+
+## .lang 현지화 파일
+
+### 개념
+
+Minecraft는 내부 **번역 키**에 언어별 값을 붙이는 방식으로 현지화한다. 커스텀 엔티티·아이템·블록의 번역 키는 게임이 만들고, 값은 우리가 리소스팩에서 채운다. `.lang`은 `texts/` 폴더에 둔다. BP에 둬도 되지만 바꿀 수 있는 것은 manifest의 이름과 설명뿐이다. (출처: bedrock-wiki, text/text-intro)
+
+<Excerpt src="bedrock-wiki" title="Intro to Text & Localization" path="docs/text/text-intro.md">
+
+```lang
+wiki.example_translation.line_1=The first line!
+wiki.example_translation.line_2=Some more information following the first line.
+```
+
+</Excerpt>
+
+### 문법
+
+- `키=값` 한 줄이다. 값 안의 줄바꿈은 `\n` 또는 `~LINEBREAK~`로 쓴다.
+- 주석은 `##`이다. 줄 주석과 줄 끝 주석 모두 되며 줄 끝 주석 앞 공백은 잘리지 않으므로 들여쓰기는 탭을 쓴다.
+- 치환: 순서 있는 `%1`, `%2` 또는 순서 없는 `%s`. 바닐라는 게임이 채우고 플레이어는 `/tellraw` 같은 rawtext 명령으로 채운다.
+
+```lang
+## Translator note: I thought this would be funny to put here.
+item.flint_and_steel.name=Flint and Steve	##[sic]
+commands.op.success=Opped: %s
+immersive_reader.book_page_header=Page %1 of %2
+wiki.example_translation.multiline=The first line!\nThe second line!
+```
+
+### 언어 등록과 사용처
+
+`texts/languages.json`에 바꿀 언어 배열을 둔다. 주요 언어는 `en_US`와 `en_GB`처럼 모두 만드는 것이 좋다.
+
+```json
+["en_US", "en_GB", "fr_FR"]
+```
+
+글로벌 리소스팩에서는 커스텀 언어를 추가할 수 있다. `languages.json`에 `["xx_XX", "yy_YY"]`를 두고 `language_names.json`에 표시 이름을 둔다. 팩을 끄기 전에 먼저 다른 언어로 바꾸지 않으면 게임이 크래시한다.
+
+```json
+[
+  ["xx_XX", "New Language (Custom Language #1)"],
+  ["yy_YY", "Wiki-Speak (Custom Language #2)"]
+]
+```
+
+현지화는 팩 이름·설명, 엔티티·아이템·블록 이름, 책 페이지, 표지판, `/tellraw`와 `/titleraw`, 대화 텍스트에 쓸 수 있다. 모루로 바꾼 이름은 번역할 수 없다. Microsoft가 번역하는 `.lang`은 주석 앞에 탭, 줄바꿈 CR+LF, 중복 키 없음, 문자열마다 주석이 필요하다(LangUtil 도구).
+
+바닐라 지원 언어 29종: id_ID, da_DK, de_DE, en_GB, en_US, es_ES, es_MX, fr_CA, fr_FR, it_IT, hu_HU, nl_NL, nb_NO, pl_PL, pt_BR, pt_PT, sk_SK, fi_FI, sv_SE, tr_TR, cs_CZ, el_GR, bg_BG, ru_RU, uk_UA, ja_JP, zh_CN, zh_TW, ko_KR.
+
+### 규칙과 보고
+
+- **아이템/엔티티 이름은 RP `texts/en_US.lang`**(BP 번역은 BP manifest용뿐). 키: 엔티티 `entity.<id>.name`, 블록 `tile.<ns:id>.name`(블록에도 `minecraft:display_name` 동작), 스폰 알 `item.spawn_egg.entity.<id>.name`, 바닐라 아이템 `item.wooden_pickaxe.name`. 이름이 없으면 컨테이너 제목이 "Unknown"으로 나온다(*low confidence per caveats*, 이름표 + lang으로 변경 가능). 보스바 이름도 엔티티 lang에서. 클라이언트가 쓰는 모든 언어 파일을 생성하라.
+- **팩 이름/설명 번역**: manifest의 name/description에 `pack.name`, `pack.description`을 넣고 BP와 RP 양쪽 lang에 정의.
+- **정적 툴팁(26.50)**: `tile.<namespace:id>.tooltip=text`. 바닐라 스탯 lore/툴팁 줄은 하드코딩, 속성 툴팁 간격(attribute.modifier.*)도 하드코딩.
+- **`%`는 형식 문자**: lang에서는 `%%`로 리터럴, 표시 이름에서는 전각 `％`(U+FF05)로 우회. 줄바꿈은 lang에서 이제 동작하지만 `name=` 셀렉터로 매칭할 수 없다. 키에 줄바꿈이 섞이면 "Invalid lang file format. New line character was found while parsing key".
+- **`%key` 참조**: 커스텀 키에 동작, 바닐라 아이템은 `%item.<name>.name`(네임스페이스 없이). 커스텀 아이템은 미해결.
+- **스크립트에서**: `{translate: "key", with: [...]}` rawtext 또는 평문 `%key`. lang은 RP에 있고 클라이언트별 언어로 해석된다. `pauseNotification.title.onePlayer=%s joined your game!` 같은 기존 키를 `translate` + `with`로 재활용해 문자열 치환. 마법부여 번역 키 API는 없다. 주민 랜덤 이름은 스크립트에서 번역 불가.
+- **참가/퇴장 메시지**는 lang 키(`multiplayer.player.joined=%s joined the game`)를 RP에서 덮어써 비울 수 있다. 빈 문자열은 빈 줄을 남긴다(채팅 메시지 숨김은 JSON UI `messages_text/text` 바인딩).
+- **언어 팩**: `texts/languages.json`, `language_names.json`, `.lang` 추가. 업적 로컬라이제이션은 미해결, 아랍어는 공식 언어가 아니다. 상점 탭 키 예: `store.editorial.tab.about`.
+- **스플래시 텍스트**: 팩 루트 `splashes.json` `{"canMerge":true,"splashes":["text"]}`, `canMerge:false`는 바닐라 교체, 빈 목록 + false는 비활성화. https://wiki.bedrock.dev/text/splashes#editing-splashes . `loading_messages.json`도 존재.
+- **커스텀 글리프/이모지**: `font/glyph_E1.png`(페이지 E1, 위치 예 E100), 페이지당 256x256(512/1024면 아이콘이 더 크게 보임), 2의 거듭제곱 크기 격자. E2→E3로 이름을 바꿔 페이지 추가. Noto Sans는 이모지를 망가뜨리니 Mojangles 사용. 문서: https://wiki.bedrock.dev/text/custom-emojis , HUD용 https://wiki.bedrock.dev/text/emojis#hud . 무료 CC0 스코어보드 아이콘 세트 V2 공유됨.
+
+## .mcfunction과 tick.json
+
+`.mcfunction`은 한 줄에 명령 하나인 텍스트 파일이다. `functions/` 폴더에 둔다. (출처: 비공개 조사)
+
+- **줄바꿈은 LF**(CRLF 아님), 명령은 `/`로 시작하지 않는다. 어기면 함수가 조용히 나타나지 않는다. bridge.로 만들거나 기존 함수를 복사하면 피할 수 있다. *(확인됨)*
+- **BP manifest/format이 1.17.0을 넘으면 `#` 주석이 동작하지 않으며** 로드에 실패한 함수는 목록에 나오지 않는다.
+- **"Unexpected @a / @e" 오류나 `execute` 파싱 실패**는 manifest가 1.19.50 이전 문법으로 파싱되기 때문이다. `"format_version": 2` + `"min_engine_version": [1,19,50]` 이상(최신 권장)으로 고치거나 옛 문법 `execute @a[...] ~ ~ ~ tp ...`을 쓴다. 옛→새 변환: `execute @a ~ ~ ~ <cmd>` = `execute as @a at @s positioned ~ ~ ~ run <cmd>`, `detect ~ ~ ~ air` = `if block ~ ~ ~ air`. 옛 위키 튜토리얼은 1.19.50 이전 문법이었다. https://wiki.bedrock.dev/commands/new-execute
+- **`tick.json`**은 `functions/`에 두고 매 틱 실행할 함수를 나열한다. 여러 애드온의 tick.json 함수는 동시에 실행된다. 문서: learn.microsoft.com "tickjsonintroduction".
+- **조건부 체인 없음**: `execute if/unless`나 스코어보드로 대신한다.
+- **`/schedule`은 함수 안에서 사용 가능**(unknown syntax는 팩 버전에 따름). `/schedule on_area_loaded`는 청크 로드를 기다린다.
+- **스크립트에서 함수 호출**: `player.runCommand('function name')`. tick.json 폴링은 이벤트 기반 스크립트보다 느리다. 스크립트에서 허용되지 않는 명령(`/place`)을 담은 함수는 스크립트로 실행해도 돌지 않는다. `/op`, `/connect`는 스크립트 엔진에서 실패한다.
+- **NPC/대화 JSON의 명령 문자열**은 내부 따옴표를 이스케이프: `"on_open_commands": ["/tellraw @a {\"rawtext\":[{\"text\":\"hi\"}]}"]`. 2026-01에 NPC 대화 텍스트의 `{"selector":"@initiator"}`/`score` rawtext가 동작하지 않는다는 보고.
+- **아이템 사용 트리거 함수가 조용히 실패**한 원인은 잘못된 `execute` 문법이었다.
+
+## 텍스처·사운드 정의 파일 위치
+
+- **RP 파일 위치**: `textures/terrain_texture.json`(블록, `atlas.terrain`, 밉맵+패딩), `textures/item_texture.json`(`atlas.items`), RP 루트 `blocks.json`, `textures/flipbook_textures.json`, `*.texture_set.json`(`_mer.png`). 배너/방패 아틀라스는 수정 불가.
+- **shortname**: `terrain_texture.json`에 정의된 shortname을 참조하며 "Missing referenced asset ns:x"는 shortname이 정의되지 않았다는 뜻. `blocks.json`은 텍스처에 네임스페이스를 쓰지 않는다. `wiki:name`처럼 콜론이 든 shortname은 대체로 동작하지만 item_texture에서 콘텐츠 로그 오류가 계속된 보고가 있어 `namespace.texture_name` 대안. `minecraft:icon` 오류 "Missing referenced asset wiki:ectoplasm"는 item_texture.json 키/경로 불일치.
+- **`variations`**(terrain_texture.json)는 항목마다 `weight`가 없으면 항상 첫 텍스처. 거미줄 같은 `cross_texture` 블록은 `blocks.json`의 `blockshape` 항목도 필요(Android에서는 동작, PC에서 첫 변형만 나온 미해결 사례). https://learn.microsoft.com/en-us/minecraft/creator/documents/variationsblocktexture?view=minecraft-bedrock-stable
+- **`blocks.json` `blockshape`**는 deprecated 시스템, "tree"/"terracotta" 등은 문서화 안 됨, `rows`/`seagrass`는 틴트가 잘 안 됨, blocks 항목은 파괴 파티클/휴대 텍스처에만 영향. 바닐라 블록 모델은 지원되지 않는다(커스텀 블록만). https://wiki.bedrock.dev/blocks/block-shapes
+- **블록 컬링 오류** `rules[0] -> condition ... not present in the Schema`(block_culling/glass.json)는 해당 버전 미지원 키.
+- **휴대 텍스처**(왁스칠 구리 등): 아이템 정의를 추가하면 인벤토리 텍스처가 설치 텍스처와 달라진다.
+- **아이템 제거**는 BP 아이템 JSON과 RP 정의를 둘 다 지워야 null 아이템이 남지 않는다.
+- **`entity.material`** 파일은 .json 확장자가 없고 이름이 중요하다.
+
+## 사운드 파일 구조
+
+- **`RP/sounds.json`**(엔티티 이벤트, 블록 사운드 등) + **`RP/sounds/sound_definitions.json`** + .ogg 파일. `sound_definitions.json`은 `sounds/` 폴더 안(`sound/` 아님)에 있어야 하며, 여러 사용자가 파일을 이곳으로 옮기거나 다시 써서 무음 `/playsound`를 해결했다. format_version은 `"1.14.0"`("1.14.00" 아님). `sounds` 항목 경로는 확장자 없이(`sounds/track1`). `max_dist` 사용에는 format 1.20.20 필요(MCPE-154378). `[Sound][error] no valid version passed by the caller or found in the input`은 format_version 확인(미해결). *(확인됨)*
+- **정의 예**: `{"format_version":"1.14.0","sound_definitions":{"x.music.a_familiar_room":{"category":"music","sounds":[{"name":"sounds/music/game/a_familiar_room","volume":1.0,"stream":true}]}}}`. 여러 사운드의 가중 랜덤: `name`, `volume`, `weight`, `is3D`, `min_distance`/`max_distance`. `min_distance`/`max_distance`에 정수를 쓰면 깨지므로 실수(예: `900.0`). 기본 가청 거리는 약 65블록이며 volume을 올리면 범위가 늘어난다. `sounds.json`에서 스트리밍 표시 가능.
+
+## 기타 데이터 파일
+
+- **아이템 그룹**: BP `item_catalog/crafting_item_catalog.json`(format 1.21.60, `group_identifier.name`은 `itemGroup.name.x` 형식). "created with the group set to 'minecraft:myee:..'" 경고(네임스페이스 자동 접두)는 미해결. 커스텀 그룹이 한 번 클릭으로 열리지 않는 버그 관찰. 26.10에서 카탈로그의 모든 표기가 오류를 냈다. 26.50.27부터 커스텀 그룹 식별자에 네임스페이스 필수.
+- **글로벌 리소스팩의 스타터 시드 파일**은 빠른 월드 생성을 취소하지 않고는 적용되지 않아 커스텀 팩에선 쓸모가 적다.
+- **커스텀 카메라 스플라인**: 1.26.0 변경 로그에 BP `camera/splines` 디렉터리 로딩이 있으며 저장 형식은 미상.
+- **스폰 규칙**: `rarity` 필드는 문서화되지 않음(docs issue 976), 바닐라 몹 스폰을 끄려면 spawn_rules 덮어쓰기, 스폰 규칙은 월드 프로퍼티를 읽을 수 없다. 시련 스포너 몹 조정은 spawn_rules deny 필터. 태그 형식: 블록 `"tag:ns:x": {}`(1.26.20 이전), 아이템/바이옴 `minecraft:tags`. 바닐라 태그 목록: https://wiki.bedrock.dev/items/item-tags#list-of-vanilla-tags , https://wiki.bedrock.dev/blocks/block-tags#list-of-vanilla-tags
+- **피처 규칙 프로세서 식별자**: 문서의 두 식별자가 틀렸고 올바른 것은 `minecraft:blockstate_match`, `minecraft:random_blockstate_match`(Mojang이 2025-12-07 문서 수정). 콘텐츠 로그는 이 오류를 잘라서 보여준다. scatter feature `iterations`는 Molang을 받는다. 블록 permutation `condition`은 여러 `q.block_state(...)`를 `&&`/`||`로 결합 가능.
+- **`.mcstructure` 형식 버전 2**(v1보다 작음)가 26.50.24에서 도입.
+- **JSON 숫자 타입**: 게임이 `1.0`과 `1`을 구분해야 할 때가 있는데 JS `JSON.stringify`는 `.0`을 버린다. jsonte처럼 원래 숫자 타입과 키 순서를 보존하는 직렬화기를 쓰거나 Python `json.dumps`(구분 보존).

@@ -1,0 +1,158 @@
+---
+title: Ore UI 페이지 바꾸기
+description: 암호화 팩 만들기, content.zipe 로컬 팩, gameplay.html 바꿔치기, 주입 시험, 로컬 탐침 팩 결과.
+sidebar_position: 3
+sources:
+  - repo-ore-ui-loading
+---
+
+# Ore UI 페이지 바꾸기
+
+[로딩 경로](./loading-paths.mdx)에서 본 대로 Ore UI 파일은 신뢰된 팩에서만 바뀐다. 이 페이지는 신뢰된 팩을 실제로 만드는 방법 두 가지(서버가 암호화해 보내기, 로컬 폴더에 `content.zipe` 두기)와 그 위에서 `gameplay.html`을 바꾸는 방법을 다룬다. (출처: repo-ore-ui-loading)
+
+## 1. 방법 A: 서버가 암호화 팩을 보낸다 `{실측, 코드}`
+
+### 개념
+
+서버는 리소스팩 목록(`ResourcePacksInfo`)에 콘텐츠 키를 실어 팩을 보낸다. 마켓플레이스 팩이 이 방식이다. 클라이언트는 키로 팩을 풀고, 암호화 접근 전략으로 열어 신뢰한다. 키는 아무 32바이트여도 된다. 서명이나 UUID는 보지 않는다.
+
+### 형식(마켓플레이스 형식)
+
+- `contents.json`
+  - 0~3바이트: 버전 0
+  - 4~7바이트: 마법수 `0x9BCFB9FC`(little endian)
+  - 0x10: 콘텐츠 ID(팩 UUID)의 길이 바이트와 문자열
+  - 0x100부터: 파일 목록 JSON `{"content":[{"path","key"}]}`를 콘텐츠 키로 AES-256-CFB8 암호화한 것(IV = 키 앞 16바이트)
+- `manifest.json`, `pack_icon.png`는 평문으로 둔다.
+- 나머지 파일은 파일마다 무작위 32바이트 키로 같은 방식(AES-256-CFB8, IV = 그 키 앞 16바이트)으로 암호화하고, 그 키를 `contents.json`의 목록에 적는다.
+
+### 예: 시험 서버 실행
+
+```bash
+# samples/ouitest 에서. 두 번째 인자가 32바이트 콘텐츠 키다.
+go run . ../probe-pack OreUiProbeContentKey0123456789AB
+```
+
+접속 뒤 `/die`로 Ore UI 사망 화면을 열면 팩의 CSS가 적용된다. gophertunnel에서는 `pack.WithContentKey`로 키를 지정한다.
+
+### 규칙
+
+- 같은 팩을 평문으로 보내면 Ore UI 파일을 바꾸지 못한다.
+- 팩 파일을 고치면 **팩 버전을 올린다.** 같은 UUID·버전이면 클라이언트가 받아 둔 것을 쓴다.
+- 다른 서버의 팩과 `header.uuid`·모듈 `uuid`가 겹치면 클라이언트 캐시가 섞인다. 렌더러 팩을 옮겨 쓸 때 UUID를 새로 만든다.
+- 팩 안 위치는 `hbui/<파일>`이다. 사본을 팩 루트나 `gui/dist/hbui/`에 둘 필요는 없다(2026-10-24 실측: `hbui/`에만 두어도 바뀌었다).
+- 암호화는 Ore UI를 여는 조건일 뿐 보호가 아니다. 키를 클라이언트에 주므로 접속하는 클라이언트는 팩을 풀 수 있다(`bedrockpack steal` 같은 도구).
+
+## 2. 방법 B: `content.zipe` 로컬 팩 `{실측, 2026-10-27}`
+
+### 개념
+
+서버가 없어도 된다. 평문 팩 폴더에 `content.zipe`라는 파일을 두면 엔진은 그 폴더를 `DirectoryPackWithEncryptionAccessStrategy`로 열고(키 없이 평문을 읽는다), 이 전략은 언제나 신뢰된다.
+
+### 예
+
+```text
+my-ore-ui-pack/
+  manifest.json
+  content.zipe          0바이트 빈 파일이어도 된다
+  hbui/gameplay-theme-....css
+```
+
+다른 팩을 이 형식으로 감싸는 도구는 시험 프로그램의 `wrap` 명령이다.
+
+```bash
+go run . wrap ../deathdebug-pack out
+```
+
+`out/<이름>/`(폴더 팩)와 `out/<이름>.mcpack`(맨 위에 파일이 바로 있는 zip)이 생긴다. 원본 파일은 평문 그대로 두고 0바이트 `content.zipe`만 더한다. 팩 JS를 고친 뒤에는 manifest 버전을 올린다.
+
+### 탐침 변형과 결과 (Windows 1.26.52)
+
+헤더: 0~3 `0`, 4~7 `0x9BCFB9FC`(LE), 0x10에 콘텐츠 ID 길이 바이트와 팩 UUID, 0x100바이트까지 0. 변형마다 UUID와 배경색이 다르다. 모든 변형에는 `hbui/`, `gui/dist/hbui/`, 팩 루트의 배경색 CSS 한 줄, 밝은 버튼 글자를 빨강으로 바꾸는 `ui/_global_variables.json`(팩 파일이 읽히는지 보는 표시), JSON UI 사망 화면 패널을 숨기는 `ui/death_screen.json`이 들어 있다.
+
+| 변형 | 형태 | 노리는 경로 | 배경 | 결과 |
+| --- | --- | --- | --- | --- |
+| `localprobe-listing` | `contents.json` = 헤더 + 평문 목록(키 없음) | `EncryptedFileAccessStrategy` | 자홍 | 바뀌지 않음 |
+| `localprobe-header` | `contents.json` = 헤더 256바이트뿐 | `EncryptedFileAccessStrategy` | 하늘 | 바뀌지 않음 |
+| `localprobe-zipe` | `content.zipe` = 헤더 + 평문 zip | `DirectoryPackWithEncryptionAccessStrategy` | 노랑 | **바뀜** |
+| `localprobe-mcpack.mcpack` | listing과 같은 내용의 zip | `ZippedEncryptedFilesAccessStrategy` | 주황 | 바뀌지 않음 |
+| `localprobe-zipe-manifest` | zipe와 같되 안의 zip에 `manifest.json`만 | Directory 암호화 | 초록 | **바뀜** |
+| `localprobe-zipe-empty` | `content.zipe` = 헤더 256바이트뿐 | Directory 암호화 | 파랑 | **바뀜** |
+| `localprobe-zipe-magic256` | 256바이트, 4~7 마법수 말고 모두 0 | 같음 | 빨강 | 따로 확인 안 함 |
+| `localprobe-zipe-magic8` | 8바이트 `00000000 FCB9CF9B` | 같음 | 하양 | 따로 확인 안 함 |
+| `localprobe-zipe-blank` | `content.zipe` = 0바이트 | 같음 | 검정 | **바뀜** |
+
+해석
+
+- `content.zipe` 안의 내용은 상관없다. 엔진은 파일이 있는지만 보고 접근 전략을 고르고, 파일은 팩 폴더의 평문을 읽는다. 팩 파일 종류 판정은 첫 256바이트를 읽어 256바이트 미만이거나 콘텐츠 ID 길이가 맞지 않으면 암호화 파일로 보지 않는다 `{코드}`. 그런데 빈 파일이 작동했으므로 폴더 팩의 `content.zipe` 검사는 이 판정을 거치지 않고 존재만 본다 `{실측, 추론}`.
+- 헤더를 `contents.json`에 단 팩과 `.mcpack` 안의 `contents.json`은 바뀌지 않았다.
+- `.mcpack`으로 가져올 때는 zip 맨 위에 `manifest.json`과 `content.zipe`가 바로 있어야 한다. 폴더를 통째로 압축해 한 단계 깊어진 `.mcpack`은 아무 메시지 없이 가져오기가 되지 않았다.
+- 키 없는 암호화 팩의 키를 클라이언트가 얻을 곳은 없다(서버 키, 엔타이틀먼트, 내장 표만 본다). 이 시험은 키 없이 암호화 전략이 만들어졌을 때 무슨 일이 생기는지 본 것이다.
+- 시험 순서(Windows): 한 번에 한 변형만 켠다. 폴더 변형은 `%APPDATA%\Minecraft Bedrock\Users\Shared\games\com.mojang\resource_packs\`에 복사해 설정의 전역 리소스에서 켠다. 팩 목록에 보이는지, 일시정지 화면 버튼 글자가 빨강인지, 치트 월드에서 `/kill`로 연 사망 화면 배경색이 무엇인지 본다.
+
+판독표
+
+| 팩 목록 | 버튼 글자 빨강 | 사망 화면 배경 | 뜻 |
+| --- | --- | --- | --- |
+| 보임 | 예 | 변형 색 | 키 없는 암호화 전략으로 열렸고 평문 파일을 읽었으며 신뢰되었다 |
+| 보임 | 예 | 바닐라 | 평문 전략으로 열렸다. 헤더가 무시되었다 |
+| 보임 | 아니오 | 바닐라 | 암호화 전략으로 열렸지만 키가 없어 자산 목록이 비었다 |
+| 안 보임 또는 오류 | - | - | 키 없는 암호화 팩을 로드 단계에서 거부했다 |
+
+## 3. `gameplay.html` 바꿔치기 `{실측}`
+
+### 개념
+
+게임 중 Ore UI(사망, 침대, 인벤토리, DDUI, 거래, 블록 화면)는 모두 `gameplay.html` 하나다. 신뢰된 팩의 `hbui/gameplay.html`이 설치본의 것을 대신하므로, 바닐라 HTML을 따라 쓰고 태그만 더하면 바닐라 앱은 그대로 돌고 우리 JS·CSS가 같은 페이지에서 돈다.
+
+### 예
+
+```html
+<script defer="defer" src="/hbui/gameplay-100751586307248a0527.js"></script>
+<link href="/hbui/gameplay-26927106c1834224ebc7.css" rel="stylesheet">
+<link href="/hbui/menus-theme-b1a483c329eea7188853.css" rel="stylesheet">
+<link href="/hbui/gameplay-theme-cb1e5471975ef2c1abb9.css" rel="stylesheet">
+<link href="/hbui/oui-ddui.css" rel="stylesheet">
+<script defer="defer" src="/hbui/oui-ddui.js"></script>
+```
+
+앞 네 줄이 바닐라, 뒤 두 줄이 더한 것이다.
+
+### 규칙
+
+- 바닐라 React 앱은 `#root`에 그대로 그려지고, 주입 JS는 `body`에 따로 붙는다.
+- **바닐라 번들 파일 이름에 해시가 들어 있다.** 게임이 업데이트되면 설치 폴더 `data/gui/dist/hbui/gameplay.html`을 보고 이름을 맞춘다. 틀리면 게임 중 Ore UI 전체가 안 뜬다. `gameplay-theme-*.css` 같은 기존 파일만 덮는 방법도 이름에 묶이기는 마찬가지다. 서버는 설치본을 볼 수 없으므로 판마다 수동으로 맞춘다.
+- 팩 CSS가 `@font-face`로 게임 글꼴(`ui://hbui/fonts/...`)을 가리키면 그 이름도 함께 맞춘다.
+- `gameplay.html`을 모든 게임 중 Ore UI 화면이 쓰므로 주입 JS는 그 화면들 전부에서 돈다. HUD는 Ore UI가 아니라서 닿지 않는다.
+- 주입 JS는 바닐라 번들과 같은 페이지에서 도므로 엔진 facet(`engine.trigger("facet:request", ...)`)에도 닿을 것이다 `{추론, 시험하지 않음}`.
+
+## 4. 주입 시험: 직접 만든 HTML·JS·CSS 띄우기 `{실측}`
+
+주입 팩은 바닐라 JS·CSS를 그대로 불러온 뒤 `/hbui/oui-inject.css`와 `/hbui/oui-inject.js`를 덧붙인다.
+
+```bash
+go run . ../inject-pack OreUiProbeContentKey0123456789AB
+```
+
+| 패널 요소 | 확인한 것 |
+| --- | --- |
+| 노란 테두리 패널, 제목, 글 | HTML 삽입과 CSS(flex, `border-radius`, `rgba`) |
+| 초 단위 시계, 진행 막대 | `setInterval`과 DOM 갱신이 계속 돈다 |
+| Click 버튼과 클릭 수 | 마우스 `click` 이벤트, `:hover` |
+| 회전하는 아이콘 | 팩 텍스처를 `pack://textures/ui/...png`로 불러오기, `@keyframes` 애니메이션 |
+
+## 5. 디버그 사망 화면 팩 `{실측 일부}`
+
+`deathdebug-pack`은 `content.zipe` 방식으로 감싸 쓰는 디버그 팩이다. `gameplay.html`을 바꿔 바닐라 화면 위에 패널 둘을 띄우고, 아래 가운데 띠를 누르면 숨기거나 다시 띄운다.
+
+- 왼쪽: `mousedown` 버튼(카운터, 토글, 테두리 색, 상자 추가, 누른 시간, 끌기 막대, `<input>`, 예외와 거부된 Promise, `engine`·`__commands__` 정보), 미디어(팩 GIF, CSS 회전, `pack://` 바닐라 텍스처, `geo-item://`, `<audio>` 재생).
+- 오른쪽: 시간, FPS, 라우트, 창 크기, rem, UA, 마우스 좌표와 눌린 키와 게임패드, 종류별 이벤트 횟수와 최근 16줄(`mousedown`, `mouseup`, `click`, `dblclick`, `contextmenu`, `wheel`, `keydown`, `keyup`, `touch*`, `focus`, `blur`, `resize`, `hashchange`, `onerror`, `unhandledrejection`, `console.error`).
+- 라우터가 주소를 바꾸지 않아 `location`은 사망 화면에서도 `/hbui/gameplay.html#`이다 `{실측}`. 그래서 라우트로 사망 화면을 가려내지 않는다.
+- 데스크톱 브라우저에서는 바닐라 번들 없이 패널과 버튼, 키, 오류 기록이 도는 것만 확인했다. 게임 안에서는 아직 돌리지 않았다.
+
+## 6. 팩에서 바꿀 수 없는 것
+
+- 바닐라 DDUI 레이아웃(`ddui/root`)
+- 진짜 컨테이너(상자·화로·인벤토리)를 Ore UI로 여는 것
+- HUD(Ore UI가 아니다)
+- 폰트와 `routes.json`

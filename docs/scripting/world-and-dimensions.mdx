@@ -1,0 +1,180 @@
+---
+title: "월드, 블록, 차원과 효과"
+description: "Block, 청크, ticking area, 구조물, 커스텀 차원, 파티클·사운드·카메라·디버그 도형"
+sidebar_position: 5
+sources:
+  - private-research
+  - ms-learn
+---
+
+## 차원 얻기와 엔티티 조회
+
+`Dimension`은 월드 상태를 질의하고 바꾸는 중심 진입점이다(엔티티 소환, 블록 변경, 지형 기능 배치 등). 차원은 `world.getDimension("overworld")`로 얻고, 한 번 얻어 재사용하는 편이 성능에 좋다(출처: ms-learn, `creator/Documents/scripting/world-apis.md`).
+
+```javascript
+import { world } from "@minecraft/server";
+const overworld = world.getDimension("overworld");
+
+// 엔티티 조회: EntityQueryOptions로 거른다
+const skeletons = overworld.getEntities({ type: "minecraft:skeleton" });
+
+// 플레이어만
+for (const player of overworld.getPlayers()) {
+  player.runCommand("say Hello from script");
+}
+```
+
+`EntityQueryOptions`는 위치, 거리, 타입, 이름, 속성 값 등으로 거른다. `getPlayers()`에도 같은 옵션을 줄 수 있다.
+
+## 블록 읽기와 쓰기
+
+`getBlock(location)`, `getBlockAbove/Below`, `getTopmostBlock`으로 블록을 고르고, 여러 칸은 `getBlocks(volume)`으로 얻는다. 쓰기는 `setBlockType`, `setBlockPermutation`, 영역 채우기는 `fillBlocks(volume, permutation)`이다.
+
+```javascript
+const location = { x: 10, y: 64, z: 10 };
+const block = overworld.getBlock(location);      // 청크가 로드돼 있어야 한다
+const top = overworld.getTopmostBlock({ x: 10, z: 10 });
+overworld.setBlockType({ x: 15, y: 65, z: 15 }, "minecraft:diamond_block");
+
+const biome = overworld.getBiome(location);       // 바이옴 질의
+```
+
+실무 요령은 이렇다. 한 칸은 `setBlockType`, 넓은 영역은 `fillBlocks`를 쓰고, `spawnEntity`와 `spawnItem`은 로드된 청크에서만 쓴다. 플레이어 상호작용에는 `getEntities` 대신 `getPlayers`를 쓴다. 아주 큰 영역은 `system.runJob`과 임시 ticking area로 나눈다(출처: ms-learn, `world-apis.md`, `system-run-guide.md`).
+
+## 월드 전체 API
+
+`world`에는 `getAllPlayers`, `getDimension`, `getEntity(id)`, `getDay`, `getTimeOfDay/setTimeOfDay`, `getAbsoluteTime`, `getMoonPhase`, `getDifficulty`, `gameRules`, `seed`, `scoreboard`, `structureManager`, `tickingAreaManager`, `getLootTableManager`, `getPackSettings`, `playMusic/queueMusic/stopMusic` 등이 있다(출처: ms-learn, `World.md`).
+
+```javascript
+world.setTimeOfDay(1000);
+world.gameRules.doDayLightCycle = false;
+world.sendMessage({ translate: "my.pack.welcome" });
+```
+
+## 파티클, 사운드, 카메라
+
+`Dimension.spawnParticle("minecraft:...", location, molangVariables)`, `Player.playSound`, `Dimension.playSound`, `player.camera.setCamera(...)`, 화면 UI 쪽 `player.onScreenDisplay.setTitle/setActionBar`가 기본 효과 API다. 파티클과 사운드 정의 자체는 리소스 팩 쪽 데이터이고 스크립트는 그것을 호출만 한다. 월드 변경 호출이므로 `before` 이벤트에서는 `system.run`으로 미룬다.
+
+```javascript
+overworld.spawnParticle("minecraft:totem_particle", { x: 0, y: 70, z: 0 });
+player.playSound("random.levelup");
+player.onScreenDisplay.setTitle("§6환영합니다", { fadeInDuration: 10, stayDuration: 40, fadeOutDuration: 10 });
+```
+
+## 디버그 도형
+
+`@minecraft/debug-utilities`의 디버그 도형은 월드 안에 공간 정보를 그려 준다. `DebugBox`(충돌 범위, 영역), `DebugSphere`(반경), `DebugLine`(점 연결), `DebugArrow`(방향), `DebugCircle`(범위), `DebugText`(3D 라벨)가 있고, 런타임 통계는 `collectRuntimeStats()`, 플러그인 통계는 `collectPluginStats()`, 경고 임계는 `disableWatchdogTimingWarnings()`로 다룬다(출처: ms-learn, `creator/Documents/scripting/developer-tools.md`). 공개 배포용 애드온에는 쓰지 않는다.
+
+## 커스텀 차원
+
+커스텀 차원은 `system.beforeEvents.startup`에서 `dimensionRegistry`로 등록하며, 26.30에서 안정화됐다. 아래 노트가 등록 방식과 한계를 정리한다.
+
+## 커뮤니티 노트
+
+아래는 커뮤니티 조사로 모은 블록, 청크, 구조물, 효과 관련 세부와 우회법이다.
+
+
+`*confirmed*`, `*single report*`, `**conflicting**`은 보고의 신뢰도 표시다. 이 페이지의 근거는 커뮤니티 보고이며 Mojang 공식 문서와 다를 수 있다.
+
+### 블록, 차원, 청크, 구조물
+
+#### Block과 BlockPermutation
+
+- **위치**: `block.location`은 정수 모서리 → 중심은 `block.center()`/`bottomCenter()`. `block.x/y/z`가 순수 값이라 `block.location`보다 싸다는 보고와, `{x,y,z} = block` 구조분해가 여러 API 호출이니 `block.location`을 한 번 읽으라는 보고가 엇갈린다(**conflicting**; 어느 쪽이든 반복 접근은 캐시). API는 대부분 x/y/z를 가진 아무 객체나 받는다. `entity.location` 같은 속성 접근도 API 호출이다.
+- **이웃**: `above()/below()/north()/south()/east()/west()`, `offset()`. 월드 꼭대기에서 `above()`는 공기, 바닥에서 `below()`는 throw. 다음 위 공기: `block.above()?.isAir`. `Block.typeId`는 undefined가 될 수 없고 block 자체가 언로드 청크에서만 undefined.
+- **퍼뮤테이션**: `BlockPermutation.resolve(id, states)`(타입+전체 상태로 새로), `perm.withState(name, value)`(기존에서 파생), `getState`, `getAllStates()`(레코드), `block.setPermutation`, `block.setType("air")`(resolve 불필요). 상태 복사: `target.setPermutation(source.permutation)` 또는 `BlockPermutation.resolve(target.typeId, origin.permutation.getAllStates())`. 직렬화(`toJSON` 없음): `typeId + '|' + JSON.stringify(getAllStates())`. 유효값: `BlockStates.get('age').validValues`(같은 이름 상태들 합산 min/max; 반복 불가 배열) 또는 try/catch `withState`. 상태 순환 `(cur+1) % count`. 사용 중단 상태도 노출. JSON 블록 상태는 상태당 ~16개 값. 숫자 data 값 ↔ 상태 코덱: `https://gist.githubusercontent.com/WavePlayz/63a3bc1cdd8426450780b19762dc17f5/raw/minecraft-block-state-codec.js` (1.26.53, intrinsicblockstateslist 기반).
+- **블록 업데이트**: `setPermutation`/`setType`은 블록 업데이트를 일으키지 않는다(문·레버, 바닐라 다중 블록은 반쪽 문이 됨) → 공기로 바꾼 뒤 재배치. 문 같은 이중 블록은 `setType`이 실패하므로 `runCommand("setblock ...")`. 커스텀 블록의 열림/닫힘은 커스텀 컴포넌트 상태로(이벤트에서 setblock 대신).
+- **다중 블록**(`minecraft:multi_block_part`, 수직만): `block.getParts()`(자신 포함, 순서는 `multi_block_part` 상태와 같다는 관찰; 상자·침대에선 undefined), 모든 파트에 상태를 설정해야 함(`setType`/한 파트 `setPermutation`은 블록을 깨뜨리거나 복제), 회전은 각 파트 퍼뮤테이션에 `withState("minecraft:cardinal_direction", ...)`. `BlockComponentBlockBreakEvent.brokenBlockPermutation`에 `getParts()` 없음. 커스텀 문은 multi-block feature로. 상태 변경 이벤트 없음.
+- **침대**: 색 상태 없음(블록 엔티티에 저장, `localizationKey`는 항상 white; 일부 버전에서 `getItemStack().localizationKey.split('.')[2]`가 동작) → 색 침대는 구조물로만. 배치는 두 반쪽 모두: `BlockPermutation.resolve("minecraft:bed", {head_piece_bit, direction})`, direction 0..3 = south, west, north, east(머리 오프셋 z+1, x-1, z-1, x+1). 커스텀 침대용 수면 자세 텔레포트 기능이 생겼다.
+- **상태 관련 사실**: 물은 항상 `minecraft:water`(원천/흐름은 liquid depth 상태), `block.isWaterlogged`, `setWaterlogged(bool)`, `canContainLiquid("Water")`/`BlockPermutation.canContainLiquid`, `isLiquid`. 반블록 `minecraft:vertical_half`는 아래쪽과 이중이 같음(이중 반블록 id 사용). `direction`과 `cardinal_direction`은 같은 방향의 두 형식. 레버 `open_bit`, 디스펜서 `triggered_bit`, 잎 `persistent_bit`. 작물 나이 `getState('growth')`. 자연 생성 vs 설치 구분 불가(설치 시 기록). 이상한 id: `minecraft:darkoak_standing_sign`, `golden_rail`(파워 레일), `reeds`, `tropicalfish`, `zombie_villager_v2`, `closed_eyeblossom`/`open_eyeblossom`, `small_dripleaf_block`. `BlockTypes.getAll()`엔 미출시 블록도 포함.
+- **기타 Block API**: `block.hasTag/getTags`, `getLightLevel()`/`dimension.getLightLevel(pos)`(stable), `getSkyLightLevel`(아래 방향 레이캐스트이지 태양 위치 아님), `getRedstonePower`, `getMapColor()`(한때 beta, 0~1 RGB float, 많은 바닐라 블록에서 undefined; `minecraft:map_color` 컴포넌트는 일부 블록만; 1084개 블록 맵 색 정적 테이블 생성 사례), `getItemStack()`(pick-block), `localizationKey`, `SignComponent.setText(text, SignSide.Front)`/`setWaxed`(발광 setter 없음), `isAir`, `isSolid`(beta, 안정화 계획 없음 — 대안 `getBlockFromRay` `includePassableBlocks:false`나 8모서리 레이캐스트 풀블록 판정), `isValid`. 블록 충돌 박스 변경 불가(상태/퍼뮤테이션으로), 블록 동적 틴트 불가(엔티티 렌더 컨트롤러), 폭발 저항 비공개(테이블). `minecraft:replaceable`은 퍼뮤테이션으로 끌 수 없다. 연결형 테이블/의자는 `minecraft:connection_rule`.
+
+#### 블록 조회, 채우기, 레이캐스트
+
+- **`dimension.getBlocks(volume, filter, allowUnloaded)`**: ListBlockVolume 반환 → `getBlockLocationIterator()`(작은 모서리로 만든 BlockVolume은 상대 좌표를 낼 수 있어 원점을 더해야 함). 범위 내 블록 찾기의 효율적 방법(`includeTypes`). 2.8.0에서 잘린 볼륨을 반환한 보고. `containsBlock(volume, {blockFilter})`가 흑요석 없이 true를 준 사례, 침수 계단이 서브청크에 있으면 `excludeTypes`가 틀리는 버그(MCPE-241274). `CompoundBlockVolume`은 `containsBlocks`/`fillBlocks`에 못 넘긴다. 단순 볼륨 판정은 `isInside`보다 직접 계산이 빠름.
+- **`dimension.fillBlocks(volume, perm|type, { ignoreChunkBoundErrors, blockFilter: {includeTypes, includePermutations} })`**: 대량 배치의 빠른 경로(큰 호출 한 번이 작은 호출 여러 번보다 훨씬 빠름 — 비용은 네이티브 호출당). 큰 볼륨은 느리므로 청크로 잘라 `runJob`. `matchingBlock` 치환 필터 문제(미해결, 블록별 처리 권장). 그리디 병합. `cloneBlocks`는 마스크로 공기를 제외하면 렉 감소. 루프에서 `setBlockType` 반복도 가능.
+- **`getTopmostBlock({x,z}, minHeight)`**: 매우 빠름(~5 ms/청크 vs 레이캐스트 ~40 ms), 투명/비고체(잎, 거미줄, 물, 얼음)를 건너뛰고 버튼 같은 비고체를 반환할 수 있다, 네더에서는 기반암 지붕 위를 반환, 열이 로드되지 않으면 undefined. 2.8.0-beta에서도 beta라는 보고가 있다(다른 보고들은 일반적으로 사용, *unverified* 안정 상태).
+- **`dimension.getBlockFromRay(origin, dir, {maxDistance, includePassableBlocks, includeLiquidBlocks, excludeTypes})`**(World가 아니라 Dimension): `BlockRaycastHit`(`.block`, `.face`, `.faceLocation`) 또는 undefined(`?.block`). 첫 고체에서 멈추고 공기를 반환할 수 없다(공기 위치 타깃은 직접 DDA 구현). `maxDistance`는 **맨해튼 거리**(유클리드가 필요하면 직접 검사; 약 320블록 상한 보고). 아주 얇은 블록·모서리를 건너뛸 수 있고 선택 박스가 아니라 충돌 박스 기준. `includePassableBlocks:false`는 `includeLiquidBlocks:true`여도 액체를 숨긴다 → `true` + `excludeTypes`. 언로드 청크까지 가면 `LocationInUnloadedChunkError`(거리 제한/try-catch).
+- **`faceLocation` 버그**: 1.21.90부터 블록 로컬이 아니라 월드 원점 쪽 가장 가까운 모서리 기준이라 음수 좌표에서 `1 - face` 보정이 필요하고(가장자리 부정확), -x/-y/-z 면에서 틀리며 위/아래 히트를 구분 못 하는 경우가 ~1%(MCPE-236442, MCPE-227192, MCPE-223452). 우회: 면이 Up/East/South이고 해당 축 값이 0~1e-6이면 1로(1e-7은 너무 작음, 무조건 +1은 비완전 블록을 깨뜨림). `playerInteractWithBlock`의 `faceLocation`도 깨짐 보고(서랍 같은 다중 히트박스 블록이 어려움). 레이 원점은 `getHeadLocation()` + 0.1.
+
+```js
+const EPSILON = 1e-6;
+function fix(hit){ const f = hit.faceLocation;
+  if (hit.face == Direction.Up    && f.y >= 0 && f.y <= EPSILON) f.y = 1;
+  if (hit.face == Direction.East  && f.x >= 0 && f.x <= EPSILON) f.x = 1;
+  if (hit.face == Direction.South && f.z >= 0 && f.z <= EPSILON) f.z = 1;
+  return hit; }
+```
+
+- **엔티티 레이/조회**: `player.getEntitiesFromViewDirection({maxDistance, includeFamilies})`는 `{entity, distance}[]`, `getBlockFromViewDirection({maxDistance})`는 공기면 undefined. `dimension.getEntitiesFromRay`는 0을 반환한 보고가 있어 `getEntities` 볼륨이 더 신뢰성 있음. `EntityRaycastOptions`엔 `minDistance` 없음. 정밀 히트는 캐시한 AABB에 slab 방법(`https://tavianator.com/2022/ray_box_boundary.html`). 시야(FOV) 판정은 시선과 대상 벡터의 내적 vs cos(각도), 가림은 `getBlockFromRay`(`excludeTypes`로 유리 제외). 모바일은 커서 없이 조준하므로 시선 기반 히트 판정은 불안정. 스크립트로 "화면에 보이는지"는 알 수 없음.
+- **`getEntities(EntityQueryOptions)`**: `type`(하나만), `excludeTypes`(배열; `includeTypes` 없음), `families`(배열, 복수형), `tags`, `excludeTags`, `location` + `maxDistance`(`maxDistance`엔 location 필요), `volume`(dx/dy/dz처럼 최소 한 블록으로 고정돼 과선택 → 블록 위 엔티티는 `getEntitiesAtBlockLocation`), `closest`. 여러 타입은 `getEntities()` 한 번 + JS Set 필터가 타입별 반복보다 엔진 호출이 적다. `entity.matches({families:['monster']})`. 문서 `https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/minecraft/server/entityfilter` . 한 사용자는 16블록으로 제한됐다고 보고(미해결).
+
+#### 청크와 ticking area
+
+- **언로드 청크**: `getBlock`은 undefined 또는 throw(`LocationInUnloadedChunkError` → try/catch), `setBlockType` 등은 실패, 언로드 청크의 엔티티는 스크립트로 접근 불가(무효; 스코어보드 참가자는 남음). 시뮬레이션 거리(렌더 거리 아님)를 따른다. `dimension.isChunkLoaded(loc)`가 유일한 네이티브 청크 정보(적당한 비용, 빈도 제한). 기술 플레이어가 쓰는 "언로드됐지만 메모리에 있는" 청크에서는 `getBlock`이 실패하고 `getBlockFromRay`는 동작. 스펙테이터 전환 시 서버에서 청크가 잠깐 언로드될 수 있다. `/particle`은 언로드 청크에서 동작하지만 API는 아니다. 이미 로드된 청크를 언로드할 수 없다.
+- **`world.tickingAreaManager`**(TickingAreaManager): 2025-12 beta 등장 → 2026-02 2.7.0-beta → 2026-03 "이제 stable"이라는 보고(*unverified*). `createTickingArea(id, {dimension, from, to})`는 async `Promise<void>`(예전엔 TickingArea 반환; 문서·타입 불일치 시기 있음), `hasTickingArea`, `removeTickingArea`, `getAllTickingAreas`; from/to의 X/Z만 의미. 한도는 영역 수가 아니라 **팩당 틱 청크 수**(255로 보고, 약 300이라는 보고도; 겹치면 두 번 계산), `/tickingarea`의 10개 제한보다 넉넉. `/reload`나 재입장 시 API 관점에서 사라지고 월드/서버 종료 시 자동 제거. 커맨드 대신 쓰면 `runTimeout` 불필요.
+- **"생성됨 ≠ 로드됨"**: promise가 청크 로드 전에 resolve되거나 ~8틱이 걸린다. promise를 기다리지 않고 고정 3틱(2틱은 불안정) 후 작업이 400만 블록 거리에서도 동작했다는 보고, `dimension.getBlock(to)` 폴링이 8틱 → 2틱으로 빠르다는 보고. `getEntities`가 영역 안 엔티티를 놓친 버그, 영역 생성 후 `/reload` 시 옛 스크립트 메모리가 해제되지 않는 누수(MCPE-236954 보고), 1000x1000 건설이 1/10에서 멈춤(플레이어가 다가가면 재개, 미해결). `/schedule on_area_loaded`도 대안(취소 불가). TickingAreaError에 청크 수 정보 없음.
+- **패턴**: 멀리 있는/모르는 청크 → `isChunkLoaded` 확인, 아니면 임시 1청크 ticking area → 대기 → 작업 → 제거. 영역 채우기는 16x16 XZ 열(`x += 16`)씩 로드 → `fillBlocks` → 언로드, 제너레이터 기반 전역 큐(`class ChunkFiller { requests; *generator() }`). 안전 텔레포트: 임시 영역 + `getTopmostBlock` + 비고체/용암/물 건너뛰기. 엔티티를 차원 간 유지: 차원 진입 시 차원마다 ticking area 하나. `minecraft:tick_world` 엔티티(반경은 청크 단위)는 텔레포트로 간 언로드 청크를 로드하지 못했다. 스크립트로 쏜 엔더진주류 투사체는 청크를 로드하지 않는다. "청크 최초 생성" 이벤트 없음 → 청크별 DP 마커.
+- **UnloadedUtils**(github.com/Nytreon/UnloadedUtils, MIT): `StructureManager.createFromWorld`로 언로드 청크를 오류 없이 읽고, 구조물 *블록*(커맨드·StructureManager가 아님)으로 언로드 청크에 쓴다. 느림, 렌더 거리 밖 읽기 전용 청크에서는 배치가 큐에 쌓임, 완전 언로드 청크의 엔티티는 텔레포트 불가(짧은 ticking area → tp → 삭제), "읽기 전용" vs 언로드 상태를 동기적으로 구분 불가, `/reload`가 타이밍을 깨뜨림. 배경 글: `https://bedrockwiki.com/books/chunks/page/unloaded-chunks` . 커맨드 블록은 한 틱에서 스크립트보다 먼저 실행되고, scheduled-tick 단계는 청크당 100개 이벤트만 처리(나머지 대기, 커맨드 블록 굶주림 악용 위험). 구버전 청크 로더: ChunkLoader V1.2.0 github.com/gamezaSRC/ChunkLoader.
+
+#### 구조물
+
+- **`world.structureManager`**: `get(id)`, `place(id, dimension, location)`, `createFromWorld(...)`, `createEmpty`, `Structure.setBlockPermutation`, `getWorldStructureIds()`(저장/로드된 것만), `getPackStructureIds()`(2.8.0-beta; 팩 구조물 id는 폴더 이름이 네임스페이스, 기본 저장명 `mystructure`). `StructureSaveMode.World|Disk`(Disk는 영구). 바닐라 구조물은 로드 불가. 스크립트로 배치하는 구조물은 구조물 생성의 3x3 청크 제한을 받지 않지만 최대 XZ 크기는 늘릴 수 없어 여러 구조물로 분할. 아레나 복원에 구조물 블록보다 낫다. StructureManager는 stable.
+- **주의**: BP 구조물이 첫 실행 후 인식되지 않는 버그, 96x96 같은 큰 구조물은 네이티브 호출을 크래시시킬 수 있으니 jigsaw 조각으로, 로드는 비동기라 고정 틱 대기, 이전 구조물이 로드된 뒤 다음을 배치(손상 방지), 게임은 구조물을 언로드하지 않음. ticking되지 않는 청크에서는 `/structure`가 실패하고, 로드 시점에 id로 해석하므로 청크 로드 전에 같은 id로 다른 영역을 저장하면 대기 중인 모든 로드가 최신 데이터를 쓴다. 큰 맵 교체에 20~30초 → 맵별 커스텀 차원. "can't find structure"는 undefined 플레이어/이름이 원인이었던 사례. 구조물 형식 v2(26.50.24, 더 작음, 구버전 판독 불가). `/structure load ... animation`으로 렉 분산. `runCommand("place ...")`(jigsaw)는 스크립트에서 비활성.
+- **피처 배치**: `dimension.placeFeature(feature, location, true)`(나무 줄기를 놓을 수 없으면 throw, 바닐라 규칙 적용), `Dimension.placeFeatureRule()`(블로킹, 대량은 비쌈). 엔티티는 `/place`를 실행할 수 없으니 `/scriptevent`로 스크립트에 요청. 위치의 구조물 판정: `dimension.getGeneratedStructures(location)`(1.21.120 beta, 언로드면 오류; locate 불가 → 플레이어 위치 폴링).
+
+#### 커스텀 차원
+
+- **연혁**: 2026-04-08 프리뷰 beta로 `DimensionRegistry.registerCustomDimension` 도입 → 2026-06-18 무렵 beta 탈출, ~26.30 stable. 문서: `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/custom-dimension-api-tutorial?view=minecraft-bedrock-stable` , `https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/minecraft/server/dimensionregistry?view=minecraft-bedrock-experimental`
+- **사용**: `system.beforeEvents.startup.subscribe(e => e.dimensionRegistry.registerCustomDimension("ns:id"))`, 이동은 `entity.teleport(loc, { dimension })`. 매 로드마다 등록해야 하며(등록을 멈추면 무효, 다시 등록하면 건축물이 돌아옴; 등록 해제된 차원에 있던 플레이어는 오버월드로), 지형은 다시 만들 필요 없다. 데이터 삭제는 스크립트로 불가(NBT/leveldb 편집기). 단일 등록 메서드뿐(중력·대기·마찰·바이옴 선택 불가), 지형 생성 없음, 피처 미동작(2026-05), 시간·날씨는 오버월드와 공유(월드 시계는 26.50 예정). `world.getDimension`으로 커스텀 차원을 열거할 수 없다 → 26.50.26부터 `DimensionTypes.get/getAll`이 반환(startup 이후만). 아이템 사용 핸들러에서는 텔레포트가 되고 커스텀 커맨드에서는 `Dimension 'custom:test' is invalid`가 난 미해결 사례. 포털/차원 이동 직전 폼을 열면 로딩 화면이 숨겨진다.
+- **지형 흉내**: 노이즈 + `fillBlocks`로 청크별 생성, 각 청크 바닥에 기반암 마커를 두어 생성 여부를 별도 저장 없이 판정, 같은 시드면 같은 월드(DayZ 스타일 템플릿). 커스텀 스케줄러 + 배치로 렌더 거리 64청크에서 10청크/초 달성 사례. 랜딩 플랫폼은 구조물 로드로. 차원은 ItemStack 저장소로도 쓸 수 있다.
+
+#### 바이옴, 날씨, 시간, 게임룰
+
+- **바이옴**: `dimension.getBiome(location).id`(BiomeType; 2.3.0/2.4.0부터 stable, 청크 로드 필요), `findClosestBiome(location, biomeId, {boundingSize})`(beta; /locatebiome 흉내; "not a function"은 beta 미사용/게임 재시작 필요; 2026-05에 오류 보고), `BiomeTypes`(한때 beta 전용 → beta에서 `getAll()` 결과를 복사해 stable 코드에 하드코딩), 커스텀 바이옴 `BiomeTypes.get(id)`. `Biome.getTags()`/기후는 beta·비공개, 바닐라 바이옴 틴트 변경 불가. 구버전(1.14)은 environment_sensor + scriptevent.
+- **날씨**: `dimension.setWeather("Thunderstorm", ticks)`, `getWeather()`는 2.8 이후에도 beta, `isInRain` 없음, 날씨는 오버월드 전역(바이옴별 비는 멀티에서 깨짐).
+- **시간·기타 월드**: `world.getMoonPhase()`, `world.getAbsoluteTime()`, `world.getDefaultSpawnLocation()`(설정 안 했으면 0,32767,0), `player.getSpawnPoint()`(`{x,y,z,dimension}`)/`setSpawnPoint()`, `world.gameRules.spawnRadius/showDeathMessages/keepInventory/naturalRegeneration`(로케이터 바 게임룰은 `playerWaypoints`로 개명), `WorldClock`(26.50+ beta, `isPaused`는 월드 시계만 멈춤), 월드 시드(26.0 프리뷰 속성; 이전엔 비공개), `world.playMusic()`(MusicOptions fade가 오래 잘못됨). `/tick freeze` 동등 기능 없음.
+- **폭발 생성**: `dimension.createExplosion`(반경 4→5에서 비선형 점프, 모양 있는 분화구는 직접 구/타원체 블록 목록 계산), `Entity.setOnFire`.
+- **동적 조명**: 매 틱 엔티티 주변에 `minecraft:light_block`(`block_light_level`)을 배치하고 이전 위치를 지운다.
+
+
+### 시각·청각 효과: 파티클, 사운드, 카메라, 디버그 도형
+
+#### 파티클
+
+- **`dimension.spawnParticle(id, loc, MolangVariableMap)`**(모두에게)와 **`player.spawnParticle(id, loc)`**(그 플레이어에게만; 2.0.0 stable, RP만으로는 불가). 블록은 `spawnParticle`이 없으므로 `block.dimension`. 위치는 이미터 위치라 `block.location + 0.5` 보정.
+- **MolangVariableMap**: `setFloat("r", 5)` → 파티클 JSON의 `v.r`(접두사 없이 이름 지정; 불리언 없음 true=1), `setColorRGBA`, `setVector3`, `setSpeedAndDirection("variable.actor", speed, dir)` → `variable.actor.speed/direction_x..`. "unable to find member variable .x/.y/.z"는 파티클이 쓰는 변수를 넘기지 않은 것. 색을 받는 바닐라 파티클은 적다(colored_flame). 바닐라 파티클: `https://github.com/Mojang/bedrock-samples/tree/main/resource_pack/particles`
+- **한계**: 생성 후 수정 불가(이미터 엔티티 또는 재생성), 클라이언트측이라 스크립트 히트 판정과 타이밍 동기 불가(엔티티 사용), 레이 트레이싱 안 됨. 틱당 ~100~400개 이상은 클라이언트 렉 → Snowstorm 커스텀 파티클 하나로. 서버에서 플레이어를 따라가는 파티클은 지연. 스크립트는 파티클을 읽을 수 없다. `gfx:line` 단일 라인 렌더러 파티클(두께 최소 0.001, 수명 최소 0.05, `dash_count`, `projecting_cap` 0~3, `is_dashes_per_block`, `is_last_filled`).
+
+#### 애니메이션과 클라이언트 변수 전달
+
+- **`entity.playAnimation(name, {controller, blendOutTime, nextState, players, stopExpression})`**: 같은 `controller` 문자열은 이전 애니메이션을 취소, 다른 문자열은 동시 재생. 플레이어에게는 플레이어 자신의 지오메트리/애니메이션에만 영향(어태처블은 영향 없음). 애니메이션은 클라이언트측이라 스크립트가 재생 중인 것을 읽거나 멈출 수 없고, 스폰 직후 재생하면 어긋난다. 스윙 애니메이션은 하드코딩. 인자 2개.
+- **Molang 변수 주입**: `player.playAnimation("animation.x.dummy", {controller: "<unique>", stopExpression: "v.bp_x=1; return 0;"})` + 더미 애니메이션(`{"format_version":"1.10.0","animations":{"animation.x.dummy":{"animation_length":0.05}}}`)으로 클라이언트에서 Molang 실행(float만). 어태처블 쪽 `parent_setup`: `t.bp_animation = v.bp_animation ?? 0.0;`, `pre_animation`에서 `t.*` 읽기; 플레이어별은 `t.player_name='${player.name}'`과 `q.get_name` 비교. 주의: 같은 controller 이름을 재사용하면 이후 호출에서 변수가 갱신되지 않고, 무작위 이름은 컨트롤러가 쌓여 FPS가 떨어진다(30~60분 후, 복구 안 됨) → `animation_controller_${ns}_${name}_${value}`처럼 변수+값에서 이름 도출. 변수는 다시 설정할 때까지 유지(스킨 변경 시 리셋, `q.is_in_ui? 0 : {...}`로 페이퍼돌 제외), 다른 플레이어가 보려면 입장/범위 진입 시 재전송. 이 방식은 `temp` 변수 누수(버그)에 의존하므로 깨지기 쉽다. 옵션 자체는 Molang 변수를 넘기지 않으니 `/playanimation ... "v.x=1;" ctrl` 커맨드가 대안. 더 깔끔한 길은 클라이언트 동기 엔티티 속성(개수 제한) — 어태처블은 `c.owning_entity -> q.property`로 플레이어 속성을 읽어 애니메이션/렌더 컨트롤러 전환.
+- **어태처블 제한**: 파티클/사운드 로케이터는 어태처블 안에서 깨진다(플레이어 클라이언트 엔티티 사용; 첫 렌더 컨트롤러의 로케이터만 인식). 반복 playAnimation 갱신이 깨진다는 보고, 부드러운 움직임은 엔티티가 유일. 1인칭 판정은 스크립트 불가(`variable.is_first_person`, 어태처블 `c.is_first_person`).
+- **아이템 흔들림(1인칭 총)**: 매 틱 yaw 샘플 `d = ((y - prevY + 540) % 360) - 180`, 평활 `v = prev*0.4 + d*0.6`, 웅크림/2틱 이상 된 샘플/|v| &lt; 2.2°/틱 무시 → `startItemCooldown("look_left"|"look_right", 10)`. 어태처블 `pre_animation`이 `q.cooldown_time_remaining('<prefix>_look_left')`를 읽고, 상태가 자기 자신을 재시작할 수 없어 a/b 중복 상태가 필요, `c.is_first_person` 게이트, 애니메이션 길이 = 쿨다운(10틱, `hold_on_last_frame`).
+- **선택**: BP 애니메이션 컨트롤러는 트리거 기반이라 싸고, 스크립트는 상한이 높고 조합이 쉽다. 우클릭 함수 실행은 player.json 컨트롤러(`query.is_using_item && query.is_item_name_any('slot.weapon.mainhand', 'ns:item')` → `on_entry` `/function`)로도 가능. 들고 있는지는 `query.is_item_name_any`/`q.equipped_item_any_tag`. 낙하 감지: `!q.is_on_ground && q.vertical_speed` → scriptevent.
+
+#### 사운드
+
+- **`dimension.playSound`/`player.playSound`**: 볼륨 1 = 반경 16블록(넓히려면 볼륨과 sound definition `max_dist`, format 1.20.20, MCPE-154378), 피치 기본 1. 플레이어를 따라가는 소리는 sound_definitions의 `"category": "ui"`(감쇠 없음). `player.playSound` 위치 기본값에 대한 의견 불일치. `/playsound`와 볼륨이 다르다. 사운드는 `sounds/` + `sound_definitions.json`(`https://wiki.bedrock.dev/concepts/sounds`).
+- **`stopSound`**: `Player.stopSound`는 beta, stable은 `runCommand("stopsound ...")`.
+- **SoundInstance**(26.30 preview/beta, 26.40): `playSound`가 인스턴스를 반환 — 루프, 최대 길이, `stop`, `seekTo`, pause/fade, `durationInfo`(한 주간 깨짐). 위치 갱신/엔티티 부착 없음(재배치 = stop + 재생 + seekTo). RP와 BP 모두에 서버 사운드 정의 등록 필요. 가끔 무음/지연(26.50에서 수정 예정). 긴 음악은 드리프트하므로 ~5초 조각으로 분할하는 게 커뮤니티 해법. MCPE-240513(1.26.40, Linux 서버 빌드 포함): `playSound` 호출이 플레이어 JS 속성을 읽기 전용으로 만듦 → 26.50 수정, 그 전엔 `/playsound` 래핑(SoundInstance는 잃음).
+- **기타**: 던전 스타일 카메라용 사운드 리스너 전환 불가.
+
+#### 카메라
+
+- **`player.camera`**: `setCamera("minecraft:free", {location, facingLocation, rotation, easeOptions:{easeTime, easeType:"Linear"}})`(free 카메라는 차원 변경을 따라가지 않으므로 이동 후 clear → 재적용; `targetEntity`/`offsetFromTargetCenter`로 바라보기는 안 됐음), `setCamera("minecraft:first_person", {entityOffset, easeOptions})`(시각만 이동, 서버 눈 높이·상호작용 레이캐스트는 그대로 → `minecraft:scale` 외 우회 없음), `"minecraft:follow_orbit"`(`viewOffset`), `clear()`(마지막 클라이언트 시점으로 돌아갈 뿐 1인칭 강제 아님 → `setCamera('minecraft:first_person', {ease:{easeTime:0}})`), `fade({fadeColor, fadeTime:{fadeInTime, holdTime, fadeOutTime}})`(RGB만, 알파 없음, hold 최대 ~10초, 최소 0.5초), `setFov`(약 30~110, 이즈 옵션, 현재 FOV 읽기 `getFov` 없음), `attachToEntity({entity, locator: EntityAttachPoint.Head})`(beta; 3인칭/orbit 프리셋에서만 → 진짜 1인칭 관전 불가, 2026-04엔 동작 안 함 보고), `playAnimation(spline, options)`(Catmullrom/Linear 스플라인; `rotationKeyFrames`가 비면 게임 크래시, "Linear needs at least 2 control points"는 실제로 3개 필요, 회전 보간이 최단 경로가 아니므로 yaw/pitch/roll을 연속값(356, 360, 361...)으로; clear가 애니메이션을 안 지울 수 있음; 초기엔 위치만), `addShake`(beta 2.11/26.50 preview, 없으면 npm 타입이 오래된 것). 1인칭에서 쓸 수 있는 건 FOV·흔들림·페이드뿐. 롤 없음. 진짜 카메라 위치는 읽을 수 없음(Molang `query.camera_rotation`, `distance_from_camera`). 문서: `https://jaylydev.github.io/scriptapi-docs/latest/classes/_minecraft_server.Camera-1.html` , `https://learn.microsoft.com/en-us/minecraft/creator/documents/camerasystem/cameracommandintroduction?view=minecraft-bedrock-stable`
+- **탑승 카메라**: 스크립트로 카메라를 바꾸려면 실험 카메라 기능이 필요했고, 반복 카메라 커맨드가 `/camera @s clear`를 덮어쓴다. 빠른 탈것을 free 카메라 + 텔레포트로 따라가면 떨림(미해결). 사망 카메라는 제거 불가(즉시 리스폰 + 자체 연출). 인벤토리를 강제로 닫는 깔끔한 방법 없음(피해/차원 변경; `/camera fade`로는 안 닫힘).
+
+#### 디버그 도형과 TextPrimitive
+
+- **`@minecraft/debug-utilities`**(beta 전용): `DebugShape` 하위 클래스(`DebugArrow/Box/Circle/Line/Text`), `new DebugBox(minCorner)` + `bound = {x,y,z}`(크기이지 모서리 아님), `timeLeft`, 소문자 `debugDrawer.addShape(box)`. `location`은 읽기 전용이고 `setLocation()`에 dimension을 안 주면 모든 차원에 렌더 → 프로토타입 패치로 `location` setter가 `this.dimension`을 보존하게. `rotation`은 비정적 도형(box)에서 동작 안 함, `DebugText.rotation`은 `useRotation = true`로 동작. `visibleTo`(플레이어 배열, 26.0.x changelog). `depthTest`가 블록 뒤 텍스트를 숨기지 못했음. 디버그 선은 `.scale` 무시(두꺼운 선은 여러 줄 → 비쌈), 그래도 엔티티/파티클보다 싼 외곽선 수단. 비주얼 비브런트에서는 디버그 색 무시. Realms에서는 한때 설정 실수로 비활성. 문서: `https://stirante.com/script/debug-utilities/1.0.0-beta.1.26.40-preview.31/classes/DebugText.html`
+- **TextPrimitive / PrimitiveShape**(26.20 무렵, `@minecraft/server`; 2.8.0에서 beta, 프리뷰에서 stable 보고): `world.primitiveShapesManager.addText(new TextPrimitive(location, "text"), dim)`, `setText()`(한 번 만들고 Map으로 추적), `remove()`, `attachedTo = entity`(그러면 `location`은 엔티티 기준 오프셋, 예 머리 `{x:0,y:2,z:0}`; 월드 좌표를 넣으면 안 보임; 텍스트는 월드 공간 방향 고정), `scale`, `visibleTo: Player[]`, `timeLeft`, `color`(RGBA, 텍스트 알파 무시; 색마다 primitive 하나), `backgroundColorOverride`, `textBackfaceVisible`, `depthTest`(VV 켜면 불안정), 회전은 도 단위 + `useRotation = true`(회전 품질 나쁨). 월드 전체 1000개 제한, 텍스트 최대 128줄 x 128자(26.20.22/26 변경), 엔티티 회전을 따르지 않음, 그림자 없음. 엔티티 없는 떠 있는 텍스트용(렌더 거리 밖 엔티티에 붙인 텍스트는 이상하게 보임). 이름표에도 `depthTested`/렌더 거리가 백포트됨. 문서: `https://stirante.com/script/server/2.8.0/classes/TextPrimitive.html`
+
+#### Graphics, 조준 보조, 로케이터 바
+
+- **`@minecraft/server-graphics`**: Vibrant Visuals(RTX 아님) 설정 일부를 스크립트로 동적 변경. 26.40 preview.20 beta(`BiomeWater.setWavesDepth/DirectionIncrement/Frequency/FrequencyScaling/Mix/Octaves/Pull/Shape/Speed/SpeedScaling` — 팩에서 파도가 켜져 있어야 효과; 바이옴별 커스텀 물은 파도를 켤 수 없으니 `RP/water/default_water.json`에서 `depth: 0`으로 켜고 커스텀 물 파일에서 depth 재정의, 매니페스트 PBR 필요, 내보내기는 게임 버전에 맞게) → 2026-08-11 프리뷰에서 beta 탈출. 값 조정은 Editor Mode "Vibrant Visuals" 버튼. 픽셀 단위 효과(DOF, 모션 블러)는 불가능(셰이더 필요). 물/풀 틴트는 바이옴 기반이라 동적 변경 불가. 그래픽 모드별 안개는 스크립트나 서브팩. 문서: `https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/minecraft/server-graphics/minecraft-server-graphics?view=minecraft-bedrock-experimental` , changelog `https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/minecraft/server-graphics/changelog?view=minecraft-bedrock-stable` , `https://stirante.com/script/server-graphics/1.0.0-beta.1.26.40-preview.20/classes/BiomeWater.html` , `https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/watercustomization?view=minecraft-bedrock-stable`
+- **안개**: stable엔 `/fog` push/pop만(제거는 push할 때의 사용자 문자열로 pop, 안개 ID 아님; 전환 시간 설정 불가), beta에 FogSettings(`https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/minecraft/server/fogsettings?view=minecraft-bedrock-experimental`). 지역별 안개는 스크립트 + `/fog`.
+- **조준 보조(beta)**: `BP/aim_assist/presets/*.json`(`minecraft:aim_assist_preset`: `identifier`, `item_settings`, `default_item_settings`, `hand_settings`, `exclusion_list`, `liquid_targeting_list`; format 1.21.50~1.21.110)과 `BP/aim_assist/categories/categories.json`(`minecraft:aim_assist_categories`), 카메라 프리셋 `aim_assist.preset`. JSON으로는 새 카테고리를 만들 수 없음(`minecraft:bucket`, `empty_hand`, `default`만 덮어쓰기) → 빈 카테고리를 선언하고 스크립트에서 `new AimAssistCategorySettings("ns:name")`, `setBlockPriorities`, `world.getAimAssist().addCategory(...)`, 그다음 `new AimAssistPresetSettings(id)`, `setItemSettings`, `addPreset`(카테고리 먼저, `system.run` 안에서; 2.7.0-beta 테스트). 기본 프리셋 `minecraft:aim_assist_default`.
+- **로케이터 바**: `player.locatorBar.addWaypoint(...)`, `getAllWaypoints()`, `LocationWaypoint`, `WaypointTexture.Circle`, `CustomTexture`(0.0~1.0 단위, 작은 텍스처). 좌표를 가리키는 가장 성능 좋은 방법(액션바, 커스텀 나침반이 대안). 바닐라 플레이어 웨이포인트는 게임룰로만. `playerSpawn`에서 추가한 웨이포인트가 재입장 후 사라지는 문제(버그 의심 → DP에 저장 후 재추가). 문서: `https://stirante.com/script/server/2.8.0-beta.1.26.20-preview.23/classes/LocatorBar.html`
+

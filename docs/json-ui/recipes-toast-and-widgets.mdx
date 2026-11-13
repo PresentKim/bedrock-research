@@ -1,0 +1,361 @@
+---
+title: "패턴 레시피 (2): 탭, 토스트, 진행 막대, 아이콘, 호버"
+description: "라디오 토글 탭, HUD 타이틀 토스트, 채팅 토스트 쌓기, 진행 막대, 아이콘, 호버 내용 추가 등 조합 예제 6개와 반영안."
+sidebar_position: 11.5
+sources:
+  - repo-guide
+  - repo-bedrock-core
+  - private-research
+  - advancementpack
+  - bedrock-samples
+  - repo-multiselect
+  - ms-learn
+  - repo-survey
+---
+
+[패턴 레시피](./recipes.mdx)에서 이어진다. 앞 페이지의 레시피 1~6을 읽었다고 보고, 같은 공통 전제(이름은 예시이고 `ui/_ui_defs.json`에 등록해야 읽힌다)를 쓴다.
+
+## 레시피 7. 스크립트 없는 탭 (라디오 토글)
+
+- **[PAT-07]** 라디오 토글 그룹의 각 토글 `checked` 상태 컨트롤 안에 탭 내용을 넣고, 8개 상태와 토글 매핑을 모두 준다. `{실측}` (출처: BC-S4, BC 5장, BC-samples tabbed.document.json)
+
+근거: INP-10~13
+
+```jsonc
+"tab_a": { "type": "toggle", "size": [ 60, 16 ],
+  "toggle_name": "myui_tabs", "radio_toggle_group": true,
+  "toggle_group_forced_index": 0, "toggle_group_default_selected": 0,
+  "toggle_on_button": "toggle.toggle_on", "toggle_off_button": "toggle.toggle_off",
+  "button_mappings": [
+    { "from_button_id": "button.menu_select", "to_button_id": "button.menu_select", "mapping_type": "pressed" },
+    { "from_button_id": "button.menu_ok",     "to_button_id": "button.menu_ok",     "mapping_type": "focused" } ],
+  "checked_control": "on", "checked_hover_control": "on",
+  "checked_locked_control": "on", "checked_locked_hover_control": "on",
+  "unchecked_control": "off", "unchecked_hover_control": "off_hover",
+  "unchecked_locked_control": "off", "unchecked_locked_hover_control": "off",
+  "controls": [
+    { "on@myui.tab_a_header_and_pane": {} },
+    { "off@myui.tab_a_header": {} },
+    { "off_hover@myui.tab_a_header_hover": {} } ] }
+// tab_b 는 toggle_group_forced_index: 1, 같은 toggle_name
+```
+
+- `*_control` 속성은 상태별로 그릴 자식의 이름이다. 바닐라 `common.toggle`은 `"checked_control": "checked"`처럼 상태마다 다른 자식을, `storage_management.json`은 여러 상태에 같은 자식을 지정한다(VN ui_common.json:393, storage_management.json:1313). BC는 바닐라 이름(`checked`, `checked_hover` …)의 자식 8개를 둔다(BC 5장).
+
+### 완성 파일과 실행 순서
+
+```jsonc
+// RP/ui/myui/tabs.json   (_ui_defs.json 등록). 두 탭이 같은 toggle_name을 공유한다.
+{
+  "namespace": "myui",
+  "tab_header": {                                      // 탭 머리 한 칸(상태마다 색만 다르다)
+    "type": "image", "size": [ 60, 16 ], "texture": "textures/ui/button_borderless_light"
+  },
+  "tab_a": {
+    "type": "toggle", "size": [ 60, 16 ],
+    "toggle_name": "myui_tabs", "radio_toggle_group": true,
+    "toggle_group_forced_index": 0, "toggle_group_default_selected": 0,
+    "toggle_on_button": "toggle.toggle_on", "toggle_off_button": "toggle.toggle_off",
+    "button_mappings": [
+      { "from_button_id": "button.menu_select", "to_button_id": "button.menu_select", "mapping_type": "pressed" },
+      { "from_button_id": "button.menu_ok", "to_button_id": "button.menu_ok", "mapping_type": "focused" } ],
+    "checked_control": "on", "checked_hover_control": "on",
+    "checked_locked_control": "on", "checked_locked_hover_control": "on",
+    "unchecked_control": "off", "unchecked_hover_control": "off_hover",
+    "unchecked_locked_control": "off", "unchecked_locked_hover_control": "off",
+    "controls": [
+      { "on": { "type": "panel", "controls": [ { "h@myui.tab_header": {} },
+                { "pane": { "type": "label", "text": "탭 A 내용", "localize": false, "offset": [ 0, 20 ] } } ] } },
+      { "off@myui.tab_header": { "alpha": 0.5 } },
+      { "off_hover@myui.tab_header": { "alpha": 0.8 } } ]
+  },
+  "tab_b@myui.tab_a": { "toggle_group_forced_index": 1,
+    "controls": [
+      { "on": { "type": "panel", "controls": [ { "h@myui.tab_header": {} },
+                { "pane": { "type": "label", "text": "탭 B 내용", "localize": false, "offset": [ 0, 20 ] } } ] } },
+      { "off@myui.tab_header": { "alpha": 0.5 } },
+      { "off_hover@myui.tab_header": { "alpha": 0.8 } } ] },
+  "tabs_root": {
+    "type": "stack_panel", "orientation": "horizontal", "size": [ 120, "100%c" ],
+    "controls": [ { "ta@myui.tab_a": {} }, { "tb@myui.tab_b": {} } ]
+  }
+}
+```
+
+`tabs_root`를 레시피 1의 `root`의 `controls`에 넣는다. 스크립트는 필요 없다.
+
+단계 설명
+1. 같은 `toggle_name`과 `radio_toggle_group: true`인 토글은 한 그룹이 되어 하나만 켜진다. `toggle_group_forced_index`가 그룹 안 번호이고 `toggle_group_default_selected`가 기본 선택이다.
+2. `*_control` 여덟 속성이 상태(`checked`, `checked_hover`, `checked_locked`, …)마다 그릴 자식의 이름을 정한다. 위 예는 켜진 상태 네 개가 `on`, 꺼진 상태가 `off`(호버는 `off_hover`)를 가리킨다.
+3. 탭 내용을 `on` 자식 안에 둔다. 켜진 탭만 `on`이 그려지므로 내용이 스크립트 없이 전환된다. 상태가 하나라도 빠지면 호버 때 토글이 사라진다(INP-10).
+4. 이 파일의 텍스처 경로와 크기는 예시이므로 자기 팩의 이미지로 바꾼다.
+
+---
+
+## 레시피 8. HUD 타이틀로 토스트 띄우기
+
+- **[PAT-08]** HUD 내 레이어에 `hud_title_text_factory`를 하나 더 두어 토스트를 만들고, 바닐라 타이틀은 내 접두사일 때 숨긴다. 타이틀을 보낼 때마다 컨트롤이 새로 생겨 애니메이션이 처음부터 재생된다. `{작동팩}` (출처: BA 6장, AP 4.1, AP-samples hud_screen.json)
+
+근거: COL-14, HOST-26~28, ANI-12, MOD-04
+
+```jsonc
+// RP/ui/hud_screen.json
+{
+  "hud_title_text": { "modifications": [ { "array_name": "bindings", "operation": "insert_back", "value": [
+    { "binding_type": "global", "binding_name": "#hud_title_text_string" },
+    { "binding_type": "view",
+      "source_property_name": "(not (('%.8s' * #hud_title_text_string) = 'myhud:t:'))",
+      "target_property_name": "#visible" } ] } ] },
+  "root_panel": { "modifications": [ { "array_name": "controls", "operation": "insert_back", "value": [
+    { "myhud_toast_factory": { "type": "panel", "size": [ "100%", "100%" ],
+        "factory": { "name": "hud_title_text_factory",
+                     "control_ids": { "hud_title_text": "hud_title_text@myhud.toast" } } } } ] } ] }
+}
+```
+
+```jsonc
+// RP/ui/myhud/toast.json
+{ "namespace": "myhud",
+  "toast": { "type": "panel", "size": [ 160, 32 ], "anchor_from": "top_right", "anchor_to": "top_right",
+    "$title_text|default": " ",
+    "ignored": "(($title_text - 'myhud:t:') = $title_text)",    // 내 접두사가 없으면 생성 안 함
+    "anims": [ "@myhud.slide_in" ],
+    "controls": [ { "text": { "type": "label", "text": "#body", "localize": true,
+      "bindings": [
+        { "binding_type": "global", "binding_name": "#hud_title_text_string", "binding_name_override": "#raw" },
+        { "binding_type": "view", "source_property_name": "('myhud.toast.' + (#raw - 'myhud:t:'))",
+          "target_property_name": "#body" } ] } } ] },
+  "slide_in": { "anim_type": "offset", "easing": "out_back", "duration": 0.5,
+                "from": [ 200, 0 ], "to": [ 0, 0 ], "next": "@myhud.stay" },
+  "stay":     { "anim_type": "wait", "duration": 4.0, "next": "@myhud.slide_out" },
+  "slide_out":{ "anim_type": "offset", "easing": "in_back", "duration": 0.5,
+                "from": [ 0, 0 ], "to": [ 200, 0 ], "destroy_at_end": "hud_title_text" }
+}
+```
+
+- `root_panel`에 넣으면 바닐라 HUD를 숨길 때 함께 숨는다. HUD를 숨겨야 하면 `$screen_bg_content` 레이어에 둔다(HOST-26).
+- 다른 애드온이 `setTitle`을 부르면 토스트가 덮인다(HOST-14). 동시에 여러 개면 레시피 9.
+- 바닐라 `hud_title_text`에는 원래 `bindings`가 없어 insert가 안전하다(VN hud_screen.json:2267).
+- `toast`의 최상위 `ignored`는 팩토리가 바깥 스코프에 넣는 `$title_text`를 읽는다. 같은 객체의 `"$title_text|default"`는 `ignored`에 보이지 않으므로(FILE-34) 팩토리 밖에서 이 정의를 쓸 때는 게이트를 부모에 둔다.
+
+### 완성 파일과 실행 순서
+
+```js
+// BP/scripts/toast.js
+import { world, system } from "@minecraft/server";
+export function toast(player, key) { player.onScreenDisplay.setTitle("myhud:t:" + key); }
+// lang: RP/texts/ko_KR.lang 에 "myhud.toast.welcome=환영한다" 를 둔다
+system.runTimeout(() => { for (const p of world.getPlayers()) toast(p, "welcome"); }, 100);
+```
+
+위의 `hud_screen.json`과 `toast.json`이 파일 두 개다(`toast.json`은 `_ui_defs.json`에 등록). 
+
+단계 설명
+1. 스크립트가 `setTitle("myhud:t:welcome")`을 보낸다. 접두사 `myhud:t:`가 이 채널의 표식이다(HOST-15).
+2. 바닐라 `hud_title_text`에 추가한 view 바인딩이 접두사가 있으면 바닐라 타이틀을 숨긴다(`#visible` false).
+3. 내 `hud_title_text_factory`가 같은 타이틀 데이터로 `toast`를 만든다. 최상위 `ignored`가 `$title_text`에서 접두사가 없으면 컨트롤을 만들지 않는다.
+4. `toast`의 라벨은 `#hud_title_text_string`을 `#raw`로 받아 접두사를 지우고 lang 키 `myhud.toast.<키>`를 조립한다.
+5. `slide_in → stay → slide_out` 애니메이션 사슬이 돌고 마지막에 `destroy_at_end`로 컨트롤을 파괴한다. 타이틀을 다시 보낼 때마다 컨트롤이 새로 만들어져 애니메이션이 처음부터 돈다.
+
+---
+
+## 레시피 9. 채팅으로 여러 토스트 쌓기
+
+- **[PAT-09]** 내 레이어에 `chat_item_factory`를 하나 더 두고(최대 개수 지정), 내 접두사 메시지만 보이게 한다. 원래 채팅에서는 `chat_screen.json`의 `messages_text`와 HUD `chat_grid_item` 두 곳에서 숨긴다. 사라질 때 `size` 애니메이션으로 높이를 0으로 줄이면 스택이 당겨진다. `{작동팩}` (출처: AP 4.5, AP-samples hud_screen.json·chat_screen.json)
+
+근거: COL-14, COL-16, HOST-29, MOD-07, ANI-13, BND-15
+
+```jsonc
+"toast_stack": { "type": "stack_panel", "anchor_from": "top_right", "anchor_to": "top_right",
+  "factory": { "name": "chat_item_factory", "max_children_size": 8,
+               "control_ids": { "chat_item": "item@myhud.chat_toast" } } }
+// myhud.chat_toast: #chat_text(collection chat_text_grid, binding_condition once)를 읽어
+// 접두사 'myhud:c:' 일 때만 #visible. 아니면 스택에서 공간을 차지하지 않음
+```
+
+- 숨긴 일반 메시지도 `max_children_size`를 소모한다(COL-16).
+- HUD 채팅 줄 숨기기는 AP처럼 배경 `alpha: 0` + 자식으로 옮긴 배경·글자 + `#propagateAlpha` 바인딩으로 할 수 있다(BND-15).
+
+### 완성 파일과 실행 순서
+
+```jsonc
+// RP/ui/hud_screen.json  (바닐라 경로)
+{
+  "root_panel": { "modifications": [ { "array_name": "controls", "operation": "insert_back", "value": [
+    { "toast_stack": { "type": "stack_panel", "anchor_from": "top_right", "anchor_to": "top_right",
+        "size": [ 160, "100%c" ],
+        "factory": { "name": "chat_item_factory", "max_children_size": 8,
+                     "control_ids": { "chat_item": "item@myhud.chat_toast" } } } } ] } ] }
+}
+```
+
+```jsonc
+// RP/ui/myhud/chat_toast.json  (_ui_defs.json 등록)
+{
+  "namespace": "myhud",
+  "chat_toast": {
+    "type": "panel", "size": [ "100%", 14 ], "visible": false,
+    "property_bag": { "#chat_text": "" },
+    "controls": [ { "msg": { "type": "label", "size": [ "100%", 12 ], "text": "#msg", "localize": false,
+      "bindings": [ { "binding_name": "#chat_text", "binding_type": "collection", "binding_collection_name": "chat_text_grid",
+                      "binding_condition": "once", "binding_name_override": "#raw" },
+                    { "binding_type": "view", "source_property_name": "(#raw - 'myhud:c:')", "target_property_name": "#msg" } ] } } ],
+    "bindings": [
+      { "binding_name": "#chat_text", "binding_type": "collection", "binding_collection_name": "chat_text_grid", "binding_condition": "once" },
+      { "binding_type": "view", "source_property_name": "(not ((#chat_text - 'myhud:c:') = #chat_text))", "target_property_name": "#visible" } ]
+  }
+}
+```
+
+```js
+world.sendMessage("myhud:c:업적 달성");     // 채팅에 보내면 토스트 줄이 하나 쌓인다
+```
+
+단계 설명
+1. 내 `chat_item_factory`가 바닐라 채팅과 같은 데이터로 줄을 만들고 `max_children_size`가 개수 상한이다. 숨긴 일반 메시지도 이 상한을 쓴다(COL-16).
+2. 줄 하나(`chat_toast`)는 접두사 `myhud:c:`가 있을 때만 보이고, 아니면 스택에서 자리를 차지하지 않는다.
+3. 원래 채팅에서 내 메시지를 가리려면 `chat_screen.json`의 `messages_text`와 HUD의 `chat_grid_item` 두 곳에 같은 숨김 바인딩을 넣는다(HOST-29).
+4. 사라질 때 `size` 애니메이션으로 높이를 0으로 줄이면 스택이 당겨진다. 이 파일은 애니메이션을 생략했다.
+
+---
+
+## 레시피 10. 진행 막대
+
+- **[PAT-10]** 막대 이미지에 `clip_direction`을 주고 `#clip_ratio`(잘라낼 비율, 0~1)를 바인딩한다. 소수가 필요하므로 정수 연산 문제(EXP-18)를 피해 float 채널(내구도 등)을 쓰거나, 구간별 리터럴 사본을 만든다. `{바닐라, 실측, 충돌}` (출처: VN, BC-facts, BC-S14, BA 3.2)
+
+```jsonc
+"bar_fill": { "type": "image", "texture": "textures/myui/bar_fill", "size": [ 100, 5 ],
+  "clip_direction": "left", "clip_pixelperfect": true,
+  "bindings": [ { "binding_type": "view", "source_control_name": "data_source",
+                  "source_property_name": "(1 - (#cur / #max))", "target_property_name": "#clip_ratio" } ] }
+```
+
+### 완성 파일과 실행 순서
+
+```jsonc
+// RP/ui/myui/bar.json   (_ui_defs.json 등록). 엔트리 글 'N07'(현재 07, 최대 10)로 막대를 그린다.
+{
+  "namespace": "myui",
+  "bar_cell": {
+    "type": "panel", "size": [ 100, 5 ],
+    "bindings": [ { "binding_type": "collection_details", "binding_collection_name": "form_buttons" } ],
+    "controls": [
+      { "frame": { "type": "image", "texture": "textures/myui/bar_frame", "size": [ 100, 5 ] } },
+      { "bar_fill": { "type": "image", "texture": "textures/myui/bar_fill", "size": [ 100, 5 ],
+          "clip_direction": "left", "clip_pixelperfect": true,
+          "bindings": [
+            { "binding_name": "#form_button_text", "binding_name_override": "#raw",
+              "binding_type": "collection", "binding_collection_name": "form_buttons" },
+            { "binding_type": "view", "source_property_name": "(('%.3s' * #raw) - 'N')", "target_property_name": "#cur" },
+            { "binding_type": "view", "source_property_name": "((10 - (#cur - 0)) * .1)", "target_property_name": "#clip_ratio" } ] } } ]
+  }
+}
+```
+
+단계 설명
+1. `clip_direction`이 막대가 줄어드는 쪽이고 `#clip_ratio`는 잘라 낼 비율(0~1)이다.
+2. 비율이 소수여야 하므로 정수 나눗셈은 쓰지 않는다. `(1 - (#cur / #max))`는 정수끼리 나누면 정수가 되어 0 또는 1만 나온다(EXP-18, C-16). 대신 `.1`처럼 점으로 시작하는 소수 리터럴을 곱한다(EXP-27). 위 예는 최대 10 고정이라 `* .1`을 썼다.
+3. 숫자가 문자열 채널에서 오면 `- 0`으로 숫자로 바꾼다(EXP-16). `N07`의 글자 접두 `N`은 `- 'N'`으로 지운다.
+4. float 채널(내구도 `#durability`)을 그대로 쓸 수 있으면 레시피 앞 코드처럼 `source_control_name`의 데이터 소스에서 `(1 - (#cur / #max))`를 쓴다. 이 예는 게임에서 재실행하지 않았다.
+
+---
+
+## 레시피 11. 아이콘: 텍스처 경로 또는 아이템
+
+- **[PAT-11]** 변수 하나로 텍스처 경로와 숫자 아이템 ID를 함께 받고, `$v > 'a'`/`$v > 0`으로 이미지와 아이템 렌더러 중 하나만 생성한다. 런타임 문자열이면 앞 9바이트가 `textures/`인지로 고른다. `{작동팩}` (출처: AP 4.5·4.7)
+
+근거: FILE-16, FILE-19, ANI-06
+
+```jsonc
+// 참조 지점: { "icon@my_ns.icon_slot": { "$icon": "textures/items/stick" } }
+// 아이템이면 "$icon": 숫자 아이템 ID × 65536 (+ 데이터 값)
+"icon_slot": { "type": "panel", "size": [ 16, 16 ],
+  "controls": [
+    { "custom_image": { "type": "image", "texture": "$icon", "ignored": "(not ($icon > 'a'))" } },
+    { "item_icon":    { "type": "custom", "renderer": "inventory_item_renderer",
+                        "property_bag": { "#item_id_aux": "$icon" }, "ignored": "(not ($icon > 0))" } } ] }
+```
+
+- `ignored`는 자기 `$` 선언과 참조 지점에서 받은 값을 보지 못하므로 변수를 받는 컨트롤의 **자식**에 단다(FILE-34).
+- 아이템 숫자 ID는 커스텀 아이템 수에 따라 일부가 밀리므로 가능하면 텍스처 경로를 쓴다(ANI-06, C-33).
+
+### 완성 파일과 실행 순서
+
+```jsonc
+// RP/ui/myui/icon.json   (_ui_defs.json 등록)
+{
+  "namespace": "myui",
+  "icon_slot": {
+    "type": "panel", "size": [ 16, 16 ],
+    "controls": [
+      { "custom_image": { "type": "image", "texture": "$icon", "ignored": "(not ($icon > 'a'))" } },
+      { "item_icon": { "type": "custom", "renderer": "inventory_item_renderer", "layer": 2,
+                       "property_bag": { "#item_id_aux": "$icon" }, "ignored": "(not ($icon > 0))" } } ]
+  },
+  "icon_row": {
+    "type": "stack_panel", "orientation": "horizontal", "size": [ "100%c", 16 ],
+    "controls": [
+      { "stick@myui.icon_slot": { "$icon": "textures/items/stick" } },        // 텍스처 경로
+      { "apple@myui.icon_slot": { "$icon": 17301504 } } ]                   // 숫자 아이템 ID(예: 264 x 65536)
+  }
+}
+```
+
+단계 설명
+1. 변수 `$icon` 하나로 문자열(경로) 또는 숫자(아이템 aux)를 받는다. 문자열 `'textures/…'`는 `'a'`보다 크므로 `> 'a'`가 참이고 이미지가 생성된다. 숫자는 `> 0`이 참이라 아이템 렌더러가 생성된다.
+2. `ignored`는 컨트롤 자신의 `$` 선언을 보지 못하므로 변수를 받는 슬롯의 **자식**에 단다(FILE-34).
+3. 아이템 aux는 `숫자 아이템 ID × 65536`이다. 커스텀 아이템이 등록되면 일부 ID가 밀리므로 가능하면 텍스처 경로를 쓴다(ANI-06, C-33).
+4. 런타임 문자열(폼 엔트리)로 고르려면 앞 9바이트가 `textures/`인지 비교한 결과로 두 컨트롤의 `#visible`을 가른다(AP).
+
+---
+
+## 레시피 12. 바닐라 버튼 템플릿에 호버 내용 추가
+
+- **[PAT-12]** 바닐라 버튼 템플릿에 기본값이 꺼진 슬롯을 추가해 필요한 버튼만 호버 툴팁을 갖게 한다. 아래 예제가 그것이다(MOD-10). `{작동팩}` (출처: AP 4.8)
+
+근거: MOD-10
+
+```jsonc
+// ui/ui_template_buttons.json (바닐라 경로)
+"focus_border": {
+  "$show_hover_content|default": false,
+  "$hover_content|default": "common.empty_panel",
+  "controls": [ { "hover_slot@common.empty_panel": {
+    "ignored": "(not $show_hover_content)",
+    "controls": [ { "content@$hover_content": { "visible": "($hover_state or $pressed_state)" } } ] } } ]
+}
+```
+
+- 이 변수를 켠 버튼에만 영향이 간다. 호버 내용을 쓰려는 버튼에서 `"$show_hover_content": true`와 `"$hover_content": "내ns.툴팁"`을 준다.
+
+### 완성 파일과 실행 순서
+
+```jsonc
+// RP/ui/ui_template_buttons.json   (바닐라 경로. 위 focus_border 수정을 그대로 둔다)
+// 내 화면 파일에서 이 변수를 켠 버튼만 호버 내용을 갖는다.
+// RP/ui/myui/hover_button.json   (_ui_defs.json 등록)
+{
+  "namespace": "myui",
+  "tooltip": {
+    "type": "panel", "size": [ 120, 20 ], "layer": 30,
+    "controls": [ { "t": { "type": "label", "text": "저장하고 나간다", "localize": false } } ]
+  },
+  "save_button@common_buttons.light_text_button": {
+    "size": [ 100, 20 ], "$button_text": "저장",
+    "$show_hover_content": true, "$hover_content": "myui.tooltip"
+  }
+}
+```
+
+단계 설명
+1. 바닐라 `focus_border`에 `$show_hover_content|default: false`를 두면 기본값이 꺼져 있어 다른 버튼에는 영향이 없다(MOD-10).
+2. 내 버튼이 `$show_hover_content: true`와 `$hover_content: "myui.tooltip"`을 주면 그 버튼의 `focus_border`에서 `hover_slot`이 생성되고 `content@$hover_content`가 `$hover_state or $pressed_state`일 때 보인다.
+3. 변수 이름은 바닐라 버튼 템플릿 버전에 따라 다를 수 있으니 `ui_template_buttons.json`에서 확인한다.
+
+## 반영안(미적용)
+
+아래는 추가 자료 조사(survey)에서 나온 규칙 제안이다. 병합 보고서에는 번호가 매겨져 있지만 위 본문의 규칙집에는 아직 반영하지 않았다. 번호는 병합 보고서의 최종 ID이고, 근거 강도는 제안 원문의 검증 수준을 따른다. 쓰기 전에 확인한다.
+
+- **[PAT-13 반영안(미적용)]** 키로 짜는 2차원 배치: 세로 팩토리 항목마다 (1) 가로 스택의 왼쪽·오른쪽 spacer를 버튼 문자열 키로 켜서 버튼을 옆으로 밀고, (2) 그림은 높이 0 패널 안에 두고 항목 높이는 키로 끌 수 있는 sizer가 정하게 하면, "높이 없음" 키가 붙은 항목 다음 항목이 같은 줄에 놓인다. 서버는 평범한 버튼 목록만 보내고 `selection` 번호는 바뀌지 않는다. 겹친 항목끼리 눌림 영역이 겹치지 않도록 가로 spacer를 같이 준다. `{작동팩, 추론}` (출처: StarLibV2)
+- **[PAT-14 반영안(미적용)]** 상자형 서버 폼 레시피: 제목 플래그(HOST-34 반영안)로 크기 선택 → 크기별 템플릿은 전역 변수 `ignored`로 쓰는 것만 생성 → `grid` + `collection_name: form_buttons` → 칸마다 `'%.8s' = 'textures'`로 이미지와 `inventory_item_renderer` 분기(PAT-11) → 버튼 텍스트 고정 폭 머리말로 수량·내구도(EXP-11) → hover에 툴팁(INP-28). 숫자 ID는 `(#v - 0)`으로 넣는다. `{작동팩}` (출처: Chest-UI)
+- **[INP-25 반영안(미적용), 레시피로 쓸 만한 것]** 목록 검색: `common.text_edit_box`에 `$text_edit_text_control: "<이름>"`을 주고, 행 셀이 `source_control_name: "<이름>"`, `source_property_name: "#item_name"`으로 입력을 읽는다. 그다음 `((not ((#name - #item_name) = #name)) or (#item_name = ''))` → `#visible`. 비교 전 이름에서 특수문자를 빼 둔다. 숨긴 행의 공간은 COL-10을 따른다. `{작동팩, 코드}` (출처: small-packs, json-ui-examples)

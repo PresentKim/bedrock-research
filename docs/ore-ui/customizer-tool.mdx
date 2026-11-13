@@ -1,0 +1,363 @@
+---
+title: Ore UI Customizer 분석
+description: 설치 폴더의 Ore UI 번들을 문자열로 패치하는 8Crafter 도구의 구조, 테마·플러그인 형식, facet 이름 162개, 리소스팩 제작자에게 주는 의미.
+sidebar_position: 8
+sources:
+  - repo-ore-ui-customizer
+  - ore-ui-customizer-app
+---
+
+# 8Crafter Ore UI Customizer 분석
+
+이 도구는 리소스팩이 아니다. Minecraft 설치 폴더의 `data/gui/dist/hbui/`(Ore UI의 HTML·JS·CSS 번들)를 백업한 뒤 **문자열·정규식으로 직접 고쳐 다시 써 넣는다** `{확인}`. 코드를 2026-10-21에 클론(HEAD `69f6ebb`, 2026-09-21, 앱 `1.0.0-beta.33`, 내장 Customizer API `1.17.0+BUILD.18`)해 읽었고, 타입 정의는 npm `ore-ui-customizer-types@1.5.0`으로 확인했다. 앱을 실행하거나 게임에 설치해 보지는 않았다. 표기: `{확인}` 코드에서 직접 확인, `{추론}`, `{미검증}`. (출처: repo-ore-ui-customizer)
+
+## 1. 기본 정보 `{확인}`
+
+| 항목 | 값 |
+| --- | --- |
+| 저장소 | `8Crafter-Studios/Ore-UI-Customizer-App` (웹판 8crafter.com/utilities/ore-ui-customizer의 데스크톱 앱) |
+| 형태 | Electron + Vite + React(TSX). Windows·Linux·macOS |
+| 규모 | 파일 660개, 281 MB. 핵심 로직은 `src/utils/ore-ui-customizer-api.ts`(150 KB), `ore-ui-customizer-assets.ts`(173 KB), `InstallationManager.ts`(131 KB) |
+| 대상 설치본 | 공식 GDK(`C:\XboxGames\Minecraft for Windows`, Preview 포함), 구 UWP, Bedrock Launcher, LeviLauncher, Linux/macOS MCPELauncher(안드로이드 APK 기반) |
+| 라이선스 | **MIT** (Copyright (c) 2025-2026 8Crafter Studios). 예외는 6장 |
+
+## 2. 설치 파이프라인 `{확인}`
+
+```text
+버전 폴더 탐색 (config.ts 기본 경로 목록)
+  data/gui (GDK, UWP, LeviLauncher) 또는 assets/assets/gui, assets/gui (APK 기반 런처)
+    1. 원본 gui 폴더를 앱 데이터 폴더 backups/폴더명_버전.채널.dev/data/gui_vanilla_backup 로 복사
+    2. 백업을 zip으로 묶어 메모리에 올림
+    3. applyMods(zip, 설정): 아래 3~4장의 모든 수정
+    4. 결과 zip을 다시 data/gui 에 풀어 씀
+       + 표식 파일: hbui/oreUICustomizer8CrafterConfig.js, OUIC_INSTALLATION_TARGETED_MC_VERSION,
+         INSTALLING_/UNINSTALLING_ORE_UI_CUSTOMIZER(진행 중 표시), failed_plugins.json
+```
+
+- 상태 판정(`InstallationManager.ts:133~360`): 표식 파일이 있는데 `OUIC_INSTALLATION_TARGETED_MC_VERSION`이 현재 게임 버전과 다르면 **"Corrupted (By Minecraft Update)"**. GDK 자동 업데이트가 hbui를 바닐라로 되돌리거나 일부만 바꾸는 일이 실제로 있었고, 앱이 이를 감지해 "수리" 버튼을 준다.
+- 수정이 일부 실패하면 "Partially Failed Installation"으로 표시하고 실패한 항목만 빼고 나머지는 적용한다. 정규식이 새 버전의 압축 코드와 안 맞으면 생기는 일이다.
+- 리소스팩 관점: 사용자 PC마다 설치해야 하고, 서버·마켓플레이스·월드 팩으로 배포할 수 없고, 게임 업데이트마다 다시 깔아야 한다 `{추론}`.
+
+## 3. Ore UI 파일 구조 `{확인}`
+
+| 경로(`gui/dist/` 기준) | 정체 |
+| --- | --- |
+| `hbui/index.html`, `hbui/gameplay.html`, `hbui/editor*.html` | 진입 HTML. 메뉴, 게임 중 화면, 에디터 |
+| `hbui/index-<5~20자리 hex>.js` | 메뉴 화면 전체 번들(압축). 대부분의 패치 대상 |
+| `hbui/gameplay-<hex>.js`, `hbui/editor(-menu, -project)-<hex>.js` | 게임 중·에디터 번들 |
+| `hbui/menus-theme(-해시).css` | 메뉴 색 변수(`.menus` 블록의 `--colorsPrimary` 등) |
+| `hbui/gameplay-theme(-해시).css` | 게임 중 화면 테마(앱은 아직 미지원, TODO) |
+| `hbui/routes.json` | 라우트 표. `fileName`, `scope`(`in-game`, `out-of-game`), `defaultRoute`, `supportedRoutes[]`(route, regexp, params, transition) |
+| `hbui/assets/*` | 번들 이미지. 파일명의 `@`가 zip 안에서 `%40`으로 들어 있어 앱이 되돌린다 |
+| `hbui-tests/`, `hbui-docs/`, `hbui-perf/` | 개발용 번들도 같은 규칙으로 처리 |
+
+`routes.json`에 라우트 한 개를 더하는 모양(내장 플러그인 `lite-play-screen-routes`가 주입하는 값):
+
+```json
+{
+  "route": "/ouic/:menu/:tab?",
+  "modes": [],
+  "regexp": "^\\/ouic\\/([^\\/]+?)(?:\\/([^\\/]+?))?(?:\\/)?$",
+  "params": [
+    { "name": "menu", "prefix": "/", "delimiter": "/", "optional": false, "repeat": false, "pattern": "[^\\/]+?" },
+    { "name": "tab", "prefix": "/", "delimiter": "/", "optional": true, "repeat": false, "pattern": "[^\\/]+?" }
+  ],
+  "transition": "RouteSlideTransition"
+}
+```
+
+런타임: Coherent Gameface 위에서 돈다(타입에 `CoherentArrayProxy`). 통신 방식(facet, query, router 이벤트)은 [개요](./overview.mdx)에 있다. 앱이 테스트용으로 흉내 내는 쿼리 응답에서 아이템 이미지는 `"pack://textures/items/stick.png"` 형식이다.
+
+## 4. 커스터마이징 기법 `{확인}`
+
+`applyMods()`(`ore-ui-customizer-api.ts:530~2420`)가 zip 안 파일을 순회하며 아래를 순서대로 한다.
+
+### 4.1 색 교체
+
+- **단순 치환** `colorReplacements`: `{ "#3c8527": "#2763a5" }`. 키를 전부 `|`로 이은 정규식 하나로 hbui의 `.js/.css/.html` 전체에서 **문자열이 정확히 같은 곳**을 바꾼다. 기본 팔레트 키 79개(초록 계열 `#a0e081`~`#0f2b0a`, 회색 `#f4f6f9`~`#1e1e1f`, 빨강·주황·노랑·파랑·분홍·보라, `rgba(0, 0, 0, 0.1~1)`, `rgba(255, 255, 255, 0.1~0.9)` 등)가 사실상 **Ore UI 기본 팔레트 표**다.
+- **CSS 변수 교체** `advancedColorReplacements.menusTheme`: `menus-theme*.css`의 `.menus`, `.menus.realms`, `.menus.neutral90` 블록 안 `--colorsPrimary`, `--colorsSecondary`, `--colorsDestructive`, `--colorsText`, `--colorsMuted0/1`, `--colorsDisabled`, `--baseTextField*`, `--inputLegend*`, `--buttonIconKeyboardTextColor` 등의 값을 바꾼다. **기본값과 정확히 같은 값을 찾아 바꾸는 방식**이라 Mojang이 기본값을 바꾸면 조용히 실패한다.
+- `advancedColorReplacements.custom`: `menus-theme*.css` 끝에 `:root 선택자{속성:값;}`을 덧붙인다(예: `.vanilla-neutral-text` 글자색).
+- `menus-theme*.css`는 advanced만 받고 함수가 바로 반환하므로 단순 치환이 적용되지 않는다.
+
+### 4.2 압축 JS 패치(기능 추가)
+
+- 함수·변수 이름이 빌드마다 바뀌므로 먼저 `getExtractedSymbolNames()`가 압축 코드에서 **안정적인 문자열(번역 키, `data-testid`, `useFacetMap` 같은 export 이름)을 닻으로 삼아** 현재 빌드의 짧은 이름(`translationStringResolver`, `facetHolder`, `contextHolder` 등)을 뽑는다.
+- 그 이름을 끼워 넣은 정규식으로 컴포넌트 함수 전체를 찾아 **손으로 쓴 대체 함수**로 바꾼다. 예: 하드코어 토글 `disabled: false`, 실험 기능 토글 끄기 허용, 게임 모드 드롭다운에 Default·Spectator 추가, 생성기 종류(Legacy·Infinite·Flat·Void) 드롭다운, 시드 변경, 디버그 탭, 텍스트 상자 `maxLength` 일괄 변경.
+- 각 패치는 정규식 후보 여러 개를 차례로 시도하고, 대상 파일(`index-*.js`)에서 하나도 안 맞으면 `failedReplaces`에 이름을 남긴다.
+- 교훈: JSON UI 팩도 같은 원칙(안정 이름에만 기대기, 실패를 국소화하기)을 따르면 버전 변경에 덜 깨진다.
+
+### 4.3 스크립트·스타일 주입
+
+- 모든 hbui HTML의 바닐라 `script defer src="/hbui/(index, gameplay, editor)-*.js"` **앞에** 자기 스크립트 5개(`oreUICustomizer8CrafterConfig.js`, `class_path.js`, `css.js`, `JSONB.js`, `customOverlays.js`)를 넣고, `gameplay-theme*.css` 링크 뒤에 `customOverlays.css`를 넣는다. 못 찾으면 `</head>` 앞에 넣는다.
+- `customOverlays.js`(670 KB)는 `engine.on/trigger`를 가로채는 `EngineInterceptor`, facet 강제 로드(`forceLoadFacet`), 라우터 V1/V2 폴리필, 콘솔·CSS 편집기·디버그 오버레이를 게임 안에 띄운다.
+
+### 4.4 테마(`.mcouictheme` zip)
+
+| 테마 안 경로 | 처리 |
+| --- | --- |
+| `manifest.json`(json5) | `format_version: 1`, `header{name, uuid(v4), version(semver), format_version, min_engine_version?}`, `metadata{product_type: "theme", authors?, license?, url?}`, `dependencies?` |
+| `color_replacements.json`(json5) | `format_version: 1`, `colorReplacements`, `advancedColorReplacements`. 사용자 설정과 깊은 병합 |
+| `styles/**/*.css` | `gui/dist/hbui/ouic-theme-custom-styles/uuid_version/...`로 복사하고 **hbui의 모든 HTML `</head>` 앞에 `link` 주입** |
+| `textures/**` | 상대 경로 그대로 `gui/dist/...`에 복사(같은 이름이면 덮어씀). 이미지 `.gif .svg .tga .png .jpg .jpeg`, 영상 `.webm`, 폰트 `.otf .ttf` |
+
+최소 테마 예:
+
+```json
+{
+  "format_version": 1,
+  "header": {
+    "name": "Minimal Example Theme",
+    "uuid": "4f6c2a1e-8b3d-4c7a-9e21-5d0b7f3a6c11",
+    "version": "1.0.0",
+    "format_version": "1.0.0",
+    "min_engine_version": "1.17.0"
+  },
+  "metadata": { "authors": ["example"], "product_type": "theme", "license": "MIT" }
+}
+```
+
+```json
+{
+  "format_version": 1,
+  "colorReplacements": { "#3c8527": "#2763a5", "#313233": "#1f2433" },
+  "advancedColorReplacements": {
+    "menusTheme": {
+      ".menus": { "colorsPrimary": "#2763a5" },
+      ".menus.realms": { "colorsPrimary": "#7345e5" }
+    },
+    "custom": {
+      ".vanilla-neutral-text,.vanilla-neutral-text-interactive": { "color": "#e8f0ff" }
+    }
+  }
+}
+```
+
+```css
+/* styles/example.css: hbui의 모든 html head 끝에 link로 주입된다. Gameface 지원 CSS만 쓴다. */
+:root .menus { --colorsPrimary: #2763a5; }
+```
+
+`textures/hbui/assets/foo.png`는 `gui/dist/hbui/assets/foo.png`로 복사되어 같은 이름의 바닐라 에셋을 덮어쓴다. 바닐라 에셋 파일명에는 버전마다 해시가 붙을 수 있으니 대상 버전의 `gui/dist/hbui/assets`를 먼저 확인한다.
+
+### 4.5 플러그인(`.ouicplugin` zip)
+
+- `manifest.json` + JS 모듈. 모듈은 `plugin` 객체를 export하고 `actions[]`마다 `context`를 고른다.
+  - `global_before(zipFs)`: 파일 순회 전 한 번
+  - `per_text_file(text, entry, zipFs)`가 텍스트를 돌려준다: `.txt .md .js .jsx .html .css .json .jsonc .jsonl` 각각(단 `hbui/` 바로 아래 `.js/.css/.html`은 내장 패치 경로로 따로 처리)
+  - `per_binary_file(blob, entry, zipFs)`가 blob을 돌려준다
+  - `global(zipFs)`: 마지막에 한 번
+- 내장 플러그인 5개: 서버 탭 정확한 핑·최대 인원 표시, `facet-spy`, 비 Windows에서 월드 내보내기 버튼 표시, Lite Play Screen 라우트(`/ouic/:menu/:tab?`) 추가.
+- 원작자 예시 플러그인 `replace-play-with-lol`이 있다(MIT).
+
+### 4.6 미리보기·디버깅
+
+- `OreUIPreviewManager.ts`는 설치된 `gui/dist`를 Express로 로컬(포트 8927~9000)에 띄우고 xKingDark/OreUI-Viewer로 facet을 흉내 내어 Ore UI를 **게임 없이 창에서 실행**한다. `/rp/경로` 요청은 `data/resource_packs/*`(이름이 `vanilla`로 시작하는 폴더를 뒤로, `vanilla`를 맨 끝으로)에서 찾고, 확장자가 없으면 `.tga .svg .gif .png .jpg ...` 순서로 붙여 본다. 게임의 `pack://` 해석을 흉내 낸 것으로 보인다 `{추론}`.
+- `--texts-path`로 `data/resource_packs`를 넘겨 번역 문자열을 쓴다. Ore UI 문자열도 리소스팩 `texts/*.lang`에서 오는 것으로 보이나 사용자 리소스팩의 `.lang`이 Ore UI 문자열을 덮는지는 확인되지 않았다 `{미검증}`.
+
+## 5. 리소스팩 제작자에게 의미하는 것
+
+| 바꾸고 싶은 것 | 리소스팩으로 | 근거 수준 |
+| --- | --- | --- |
+| Ore UI 화면의 배치·색·동작 | 평문 팩은 불가(이 도구가 게임 파일을 직접 고치는 이유). 암호화 팩이면 가능([로딩 경로](./loading-paths.mdx)) | 확인 + 이 저장소 실측 |
+| Ore UI에 뜨는 아이템·블록 아이콘 | 됨. 엔진이 `pack://textures/...`로 넘기고 팩 스택에서 풀린다 | 이 저장소 실측으로 확인 |
+| Ore UI 번들 이미지(`hbui/assets/*`) | 평문 팩은 불가. 팩 경로가 아니라 `/hbui/assets/` 상대 경로 | 확인 |
+| Ore UI 문자열 | `.lang` 덮어쓰기로 될 수도 있음 | 미검증 |
+| JSON UI·Ore UI가 공존하는 화면 | JSON UI 쪽이 선택됐을 때만 팩 수정이 보임 | 추론(`vanilla.screenTechStack`) |
+
+- 이 도구의 처음 판단 "팩으로 Ore UI 파일 대체 경로가 없다"는 평문 팩 기준으로 맞다. 후속 실측에서 암호화 팩 경로가 확인되었다.
+- 화면 이전 확인: 어떤 화면이 Ore UI로 갔는지는 바닐라 `resource_pack/ui/*.json`에 파일이 남았는지와 함께 설치 폴더 `gui/dist/hbui/routes.json`의 `supportedRoutes`와 `gameplay-*.js`의 facet 사용을 보면 더 확실하다. `vanilla.gameplay.*` 13개 facet(화로, 컨테이너, 사망·리스폰, 침대, 좌표 HUD 등)은 게임 중 화면 일부가 이미 Ore UI 코드 경로를 갖고 있다는 신호다 `{추론}`.
+- **버전 취약성은 Ore UI 패치가 JSON UI보다 훨씬 크다**: JSON UI 팩은 요소 이름이 바뀔 때 깨지지만 Ore UI 패치는 압축 코드 모양이 조금만 바뀌어도 정규식이 실패한다. 앱이 "부분 실패"를 정상 상태로 다루는 것이 그 증거다.
+- 사용자가 "Ore UI도 리소스팩으로 바꿔 달라"고 하면: 평문 팩으로는 불가, 클라이언트 쪽 도구(이 앱 같은)를 각자 설치하거나 서버가 암호화 팩을 보내는 방식이 있다.
+
+## 6. 이 버전의 결함과 라이선스
+
+결함 `{확인}`
+
+- `getAssetsDataForThemes()`가 textures·videos·font 세 종류 모두 `textures/` 폴더에서만 찾는다. 영상·폰트도 `textures/` 아래 둬야 적용된다.
+- `validateThemeColorReplacementsObject()`가 `colorReplacements`/`advancedColorReplacements`가 **있으면** "must not be null" 오류를 낸다(조건이 뒤집힘). 다만 `validateThemeFile()`을 부르는 곳이 없어 실제 가져오기에는 영향이 없다.
+- 예시 플러그인 manifest의 `entry`(`scripts/index.js`)와 실제 파일명(`scripts/replacePlayWithLol.plugin.js`)이 다르다.
+- `menusTheme` 교체는 기본값과 정확히 같은 값만 찾으므로 게임이 기본 색을 바꾸면 조용히 아무 일도 하지 않는다.
+
+라이선스 `{확인}`
+
+- 저장소 `LICENSE`와 `package.json`은 **MIT**(Copyright (c) 2025-2026 8Crafter Studios). 타입 패키지 `ore-ui-customizer-types`도 MIT다. 출처 표기와 함께 재사용할 수 있다.
+- MIT가 아닌 동봉물: `resources/assets/oreui/fonts/consola*.ttf`(Microsoft Consolas, 재배포 불가), `resources/fonts/`의 Minecraft·Mojangles 계열 폰트(Mojang 자산), `resources/assets/oreui/class_path.ts`(Apple·Google WebKit 기반, BSD 계열 고지 유지 필요), `resources/ore-ui-viewer/`(빈 폴더. OreUI-Viewer의 라이선스는 확인하지 않음).
+- 게임 설치 파일을 고치는 행위가 Minecraft EULA와 어떻게 맞물리는지는 이 분석의 범위 밖이다.
+
+## 7. facet 이름 목록 162개
+
+게임이 `engine.trigger("facet:request", 이름)`으로 구독하는 데이터 채널 이름이다. 내장 플러그인 `facet-spy`에서 가져왔다. 버전별로 늘거나 빠질 수 있고 `// Found in dev build file.`은 개발 빌드에서만 본 이름이라는 원작자 주석이다.
+
+<Excerpt src="ore-ui-customizer-app" title="src/utils/ore-ui-customizer-assets.ts 내장 플러그인 facet-spy (이름 목록)" path="src/utils/ore-ui-customizer-assets.ts">
+
+```text
+core.animation
+core.customScaling
+core.deviceInformation
+core.featureFlags
+core.input
+core.locale
+core.performanceFacet
+core.router
+core.safeZone
+core.screenReader
+core.splitScreen
+core.social
+core.sound
+core.user
+core.vrMode // Found in dev build file.
+vanilla.achievements
+vanilla.achievementsReward
+vanilla.buildSettings
+vanilla.clipboard
+vanilla.createNewWorld
+vanilla.createPreviewRealmFacet
+vanilla.debugSettings
+vanilla.editor
+vanilla.editorInput
+vanilla.editorScripting
+vanilla.editorSelectionFacet
+vanilla.editorSettings
+vanilla.externalServerWorldList
+vanilla.followersList
+vanilla.friendsListFacet
+vanilla.friendsManagerFacet
+vanilla.gameplay.activeLevelHardcoreMode
+vanilla.gameplay.bedtime
+vanilla.gameplay.closeContainerCommand
+vanilla.gameplay.containerBlockActorType
+vanilla.gameplay.containerItemQuery
+vanilla.gameplay.containerSizeQuery
+vanilla.gameplay.furnace
+vanilla.gameplay.immediateRespawn
+vanilla.gameplay.leaveGame
+vanilla.gameplay.playerDeathInfo
+vanilla.gameplay.playerPositionHudElement
+vanilla.gameplay.playerRespawn
+vanilla.gamertagSearch
+vanilla.inbox
+vanilla.lanWorldList
+vanilla.localWorldList
+vanilla.marketplaceSuggestions
+vanilla.marketplacePassWorldTemplateList
+vanilla.networkWorldDetails
+vanilla.networkWorldJoiner
+vanilla.notificationOptions
+vanilla.notifications
+vanilla.options
+vanilla.party // Found in dev build file.
+vanilla.playerAchievements
+vanilla.playerBanned
+vanilla.playerFollowingList
+vanilla.playerLinkedPlatformProfile // Found in dev build file.
+vanilla.playermessagingservice
+vanilla.playerPermissions
+vanilla.playerProfile
+vanilla.playerReport
+vanilla.playerSocialManager
+vanilla.playerStatistics
+vanilla.privacyAndOnlineSafetyFacet
+vanilla.profanityFilter
+vanilla.realmsListFacet
+vanilla.realmSlots
+vanilla.realmsMembership
+vanilla.realmsStories.actions
+vanilla.realmsStories.localScreenshots
+vanilla.realmsStories.persistentData
+vanilla.realmsStories.players
+vanilla.realmsStories.realmData
+vanilla.realmsStories.settings
+vanilla.realmsStories.stories
+vanilla.RealmsPDPFacet
+vanilla.RealmWorldUploaderFacet
+vanilla.recentlyPlayedWithList
+vanilla.recommendedFriendsList
+vanilla.resourcePackOverrides
+vanilla.resourcePacks
+vanilla.screenshotGalleryList
+vanilla.screenSpecificOptions
+vanilla.screenTechStack
+vanilla.seedTemplates
+vanilla.share
+vanilla.simulationDistanceOptions
+vanilla.telemetry
+vanilla.thirdPartyWorldList
+vanilla.unpairedRealmsListFacet
+vanilla.userAccount
+vanilla.webBrowserFacet
+vanilla.worldCloudSyncFacet
+vanilla.worldEditor
+vanilla.worldOperations
+vanilla.worldPackages
+vanilla.worldPlayersList
+vanilla.worldStartup
+vanilla.worldTemplateList
+vanilla.worldTransfer
+vanilla.friendworldlist
+vanilla.offerRepository
+vanilla.realmsSettingsFacet
+vanilla.achievementCategories
+vanilla.blockInformation
+debug.worldTransfer
+vanilla.flatWorldPresets
+vanilla.inGame
+vanilla.playerPrivacy
+vanilla.realmsPurchase
+vanilla.realmsSubscriptionsData
+vanilla.realmsSubscriptionsMethods
+vanilla.realmsWorldContextCommands
+vanilla.realmsWorldContextQueries
+vanilla.realmsStories.sessions
+vanilla.realmsListActionsFacet
+vanilla.developerOptionsFacet
+vanilla.realmsStories.comments
+vanilla.screenshotGallery
+vanilla.playerShowcasedGallery
+vanilla.trialMode
+vanilla.featuredWorldTemplateList
+vanilla.ownedWorldTemplateList
+vanilla.worldTemplateOperations
+test.vector
+vanilla.gameplay.localPlayerWeatherLightningFacet
+vanilla.levelInfo
+vanilla.currentParty
+vanilla.partyCommands
+vanilla.worldRealmEditor // Found in dev build file.
+vanilla.worldRealmEditorCommands
+vanilla.worldRealmEditorQueries
+vanilla.realmBackupsCommands
+vanilla.realmBackupsQueries
+vanilla.realmsPurchaseCommands
+vanilla.realmsPurchaseReconcilerQueries
+vanilla.progressTracker
+vanilla.realmsWorldEditorGameRulesCommands
+vanilla.realmsWorldEditorGameRulesQueries
+vanilla.realmsWorldEditorWorldDetailsQueries
+vanilla.realmsCommitCommandsFacet
+vanilla.realmsCommitQueriesFacet
+vanilla.realmsPurchaseQueries
+vanilla.connectionErrorInfoFacet
+vanilla.partyReceivedInviteList
+vanilla.joinablePartyList
+vanilla.realmsFeatureFlags
+vanilla.realmsStories.reports
+vanilla.realmsStories.reportCommands
+vanilla.openAndCloseRealmCommandsFacet
+dev.realmsCommitCommandsFacet
+dev.realmsCommitQueriesFacet
+vanilla.newPlayerChoices
+vanilla.realmsRolesAndPermissionsQueries
+vanilla.realmsRolesAndPermissionsCommands
+vanilla.realmsPlayerListQueries
+vanilla.realmsPlayerListCommands
+vanilla.realmsWorldEditorWorldDetailsCommands
+vanilla.realmsWorldPackEditorQueries
+vanilla.realmsWorldPackEditorCommands
+```
+
+</Excerpt>
+
+## 8. 게임에서 확인할 것 `{미검증}`
+
+1. 사용자 리소스팩의 `texts/ko_KR.lang`에서 Ore UI 문자열 키를 덮으면 메뉴 문자열이 바뀌는지.
+2. 설치본의 `data/gui/dist/hbui/routes.json`과 파일 목록(어떤 화면이 Ore UI인지 실제 목록). GDK 설치 폴더 `C:\XboxGames\Minecraft for Windows\Content\data\gui`를 읽기만 하면 된다.

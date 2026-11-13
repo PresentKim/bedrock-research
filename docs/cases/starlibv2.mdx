@@ -1,0 +1,103 @@
+---
+title: "StarLibV2 (서버 폼 JSON UI 템플릿 라이브러리)"
+description: "버튼 문자열 키로 2차원 배치를 만드는 액션 폼 라이브러리. 키 게이트 부품, 런타임 서식 문자열, 클라이언트 검색 필터, 형제 이름 중복"
+sidebar_position: 15
+sources:
+  - starlibv2
+  - repo-guide
+---
+
+## 이것은 무엇인가
+
+StarLibV2는 pipa_ngry(`pipangry`)가 만든 서버 액션 폼(`form_buttons`) 템플릿 모음이다. 스스로 `server_form.json`을 덮지 않고 사용자가 자기 `server_form.json`에서 `global.*`, `style.*`, `starlib_pkg_*` 정의를 참조해 화면을 짠다. `.jsonc` 14개(약 2,700줄)를 `_ui_defs.json`이 `ui/starlib2/*.jsonc`로 등록한다. 마지막 커밋은 `6bf7875`(2025-04-30, 1.0.3.3 형제 이름 충돌 수정), 직전 릴리스는 2024-11-27 v1.0.3.2다. manifest가 없는 라이브러리라 대상 버전은 적혀 있지 않다. 클론의 `LICENSE`를 열어 확인한 라이선스는 **GPL-3.0**이다(출처: cs-starlibv2). 발췌는 라이선스가 머리에 표시된다. 같은 작성자의 JsonEncryptor(난독화기)와 GrimUI(유료 팩 쇼케이스)가 관련된다.
+
+## 기본 부품: 키 게이트
+
+라이브러리는 네 가지 "게이트 패널"로 돌아간다. 모두 `$key` 문자열을 받아 포함 검사(EXP-07)로 `#visible`과 `#enabled`를 함께 정한다.
+
+| 부품 | 읽는 값 | 보이는 조건 |
+| --- | --- | --- |
+| `binding` | 컬렉션 `#form_button_text` | 키가 있을 때 |
+| `reverse_binding` | 컬렉션 `#form_button_text` | 키가 없을 때 |
+| `title_binding` | 전역 `#title_text` | 제목에 키가 있을 때 |
+| `reverse_title_binding` | 전역 `#title_text` | 제목에 키가 없을 때 |
+
+<Excerpt src="starlibv2" title="StarLibV2, global.jsonc (binding)" path="starlib2/global.jsonc">
+
+```jsonc
+"binding": {
+    "type": "panel",
+    "$key|default": "",
+    "visible": false,
+    "enabled": false,
+    "bindings": [
+        { "binding_collection_name": "form_buttons", "binding_name": "#form_button_text", "binding_type": "collection" },
+        { "binding_type": "view",
+          "source_property_name": "(not((#form_button_text - $key) = #form_button_text))",
+          "target_property_name": "#visible" },
+        { "binding_type": "view",
+          "source_property_name": "(not((#form_button_text - $key) = #form_button_text))",
+          "target_property_name": "#enabled" }
+    ],
+    "$control|default": "global.empty_panel",
+    "controls": [ { "control@$control": {} } ]
+}
+```
+
+</Excerpt>
+
+`$key`가 바인딩 식 안에 그대로 치환되는 것은 자기 namespace 정의라 BND-12 조건을 만족하기 때문이다. 바닐라 트리에 `modifications`로 삽입한 하위 트리에서는 같은 방식이 막힌다(BND-13). `#enabled`도 함께 내리는 것은 숨긴 버튼이 포커스·입력을 받지 않게 하려는 것으로 보인다.
+
+## 화면 골격
+
+화면 템플릿은 `100%cm` 크기 패널 안에 폼을 두고 테두리 이미지를 `100%sm + 2px`로 겹친다. `controls`를 통째로 변수로 받는 슬롯(`"controls": "$forms_holder_controls"`)으로 한 화면에 폼 여러 개를 넣는다(FILE-14). 닫기 버튼은 `$pressed_button_name: "button.menu_exit"`, 탭은 바닐라 `common_toggles.light_text_toggle`을 감싼 라디오 토글이고 탭 내용은 `source_control_name`으로 그 토글의 `#toggle_state`를 읽는다(INP-19, PAT-07).
+
+## 핵심 기법
+
+### 1. 키로 짜는 2차원 배치
+
+서버가 평범한 버튼 목록만 보내도 버튼 문자열의 키로 배치를 만든다.
+
+- **가로 위치**: 항목 하나는 가로 스택 `[왼쪽 spacer][버튼(fill)][오른쪽 spacer]`이다. 두 spacer는 `binding` 게이트라 문자열에 "왼쪽 1/3", "오른쪽 1/2" 같은 키가 있을 때만 보인다. 숨은 자식은 스택에서 공간을 차지하지 않으므로(LAY-04) 키가 없으면 버튼이 전체 폭이고, 있으면 밀려 나머지 폭만 쓴다. 33.3%, 50%, 사용자 크기가 있다.
+- **높이 끄기("높이 없음")**: 항목의 그림은 높이 0짜리 버퍼 패널(`size: ["100%", 0]`) 안에 있고 항목의 높이를 실제로 만드는 sizer는 `reverse_binding`이라 "높이 없음" 키가 있으면 숨는다. 그러면 다음 항목이 같은 줄에 겹쳐 그려진다.
+- 결과: 버튼 A에 "오른쪽 1/2 spacer + 높이 없음", 버튼 B에 "왼쪽 1/2 spacer"를 주면 A는 왼쪽 반, B는 오른쪽 반에 같은 줄로 그려지고 `selection` 번호는 그대로다. sizer의 `controls`도 변수 슬롯이라 크기 키마다 정해진 높이의 spacer를 켜고 꺼 합으로 높이를 정한다(PAT-06의 변형, GrimUI의 `size3`, `size16`, `size24`, `size64`). 구분선·팁 같은 일부 부품은 "높이 없음"과 함께 쓸 수 없고 겹친 항목끼리 눌림 영역이 겹치지 않게 가로 spacer를 같이 줘야 한다(반영안 PAT-13).
+
+### 2. 런타임 서식 문자열로 구간 꺼내기
+
+`range_selection_binding`은 `$from`, `$to`(바이트 위치)를 받아 앞 `$to`바이트에서 앞 `$from`바이트를 빼고 탭 문자를 지운다. 클론의 실제 식은 다음과 같다.
+
+<Excerpt src="starlibv2" title="StarLibV2, common_button.jsonc" path="starlib2/package_button/common_button.jsonc">
+
+```jsonc
+"source_property_name": "(((('%.' + $to + 's') * #form_button_text) - (('%.' + $from + 's') * #form_button_text)) - '\t')"
+```
+
+</Excerpt>
+
+`$from`, `$to`는 생성 시점에 숫자로 치환되고 서식 문자열 조립은 식 안에서 일어난다(AsaJS도 같은 형태). **패딩 문자로 탭**을 쓰는 것은 EXP-12(빼기는 모든 출현을 지움)를 피하려는 선택으로 `$` 패딩(HOST-08)의 대안이다(반영안 EXP-40, HOST-08 보강). 2단계의 빼기는 머리 문자열이 본문에 또 있으면 함께 지우지만 고정 폭 레코드라면 실제 문제는 드물다. GrimUI는 이 방식으로 버튼 하나에 "기본 글", "옆 글", "제목", "배경 글", "팁" 다섯 구간을 싣는다.
+
+### 3. 클라이언트 검색 필터
+
+검색창은 `common.text_edit_box`를 상속하고 `$text_box_name`과 `$text_edit_text_control`을 같은 이름(기본 `search_field`)으로 준다. 바닐라 입력 템플릿은 `property_bag`에 `"#property_field": "#item_name"`(바닐라 11회)을 두어 입력 글자를 자기 `#item_name`에 쓴다. 버튼들이 `source_control_name`으로 그 값을 읽어 `(#search = '')`이거나 `#form_button_text`가 `#search`를 포함하면 보이게 한다. 서버 왕복 없는 클라이언트 필터이고, 초기값은 `property_bag`의 `#default_search`를 `binding_condition: "once"` view로 한 번 복사한다. 숨은 항목은 세로 스택에서 공간을 내주므로 목록이 줄어들고 그리드 템플릿에서는 빈칸이 남는다(LAY-31). 동작 자체는 게임에서 확인되지 않았다(반영안 INP-25).
+
+### 4. 형제 이름 중복 금지
+
+1.0.3.3 커밋 `6bf7875`는 두 파일 일곱 곳에서 같은 `controls` 배열 안의 두 번째 `padding`·`header_contents`를 `padding_top`/`padding_bottom`, `auto_padding_*`, `right_header_contents`로 바꿨고 변경 기록은 "새 버전에서의 JSON UI 오류 수정"이다. 바닐라 1.26.50.4의 `controls` 배열에는 중복 형제 이름이 하나도 없어(병합 기록의 재집계 5,084개, 처음 집계 4,626개) 같은 이름이 오류를 낼 가능성이 크다(반영안 FILE-39).
+
+### 5. `#form_button_length`
+
+버튼 팩토리는 `{ "binding_name": "#form_button_length", "binding_name_override": "#collection_length" }`, 그리드는 같은 값을 `#maximum_grid_items`에 넣는다. 바닐라 1.26.50은 이 이름을 쓰지 않는다. 연구 서버 실측은 클라이언트가 이 값을 지금까지 보인 가장 큰 폼의 버튼 수로 붙잡는다는 것을 보였다(COL-34, 반영안 COL-31 `{작동팩, 미검증}`에 수준을 보강).
+
+## 우리 규칙과의 관계
+
+| 규칙 ID | 관계 |
+| --- | --- |
+| EXP-07, EXP-12, HOST-08, HOST-09 | 포함 검사 게이트, 탭 패딩, 위치 무관 키를 레이아웃 파라미터로 확장 |
+| BND-12, BND-13 | 자기 namespace 정의의 `$key` 치환은 되고 삽입 트리는 안 됨 |
+| LAY-04, LAY-31, PAT-06 | 숨은 자식의 무공간, 그리드의 빈칸, spacer 합산 |
+| FILE-02, FILE-14, FILE-26, FILE-39(반영안) | `.jsonc` 등록, 컨트롤 슬롯 변수, 일반 namespace 위험, 형제 이름 |
+| INP-19, INP-25(반영안), COL-31(반영안), PAT-13(반영안) | 토글 상태 읽기, 검색 필터, 버튼 수, 키 기반 2차원 배치 |
+
+## 실측이 필요한 항목
+
+같은 이름 형제를 두면 Content Log에 무엇이 남고 둘 다 생성되는지, `#form_button_length`가 라벨·헤더·구분선 행을 포함하는지, 입력 중 `#item_name`이 글자마다 갱신되는지와 폼을 다시 열면 비워지는지, 높이 0 패널 밖으로 넘친 버튼이 눌리는지.

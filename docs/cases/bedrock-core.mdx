@@ -1,0 +1,108 @@
+---
+title: "bedrock-core (JSX를 JSON UI로 컴파일)"
+description: "JSX 화면을 빌드 시점에 정적 JSON UI로 컴파일하는 프레임워크. 서버 폼 호스트, 상자 호스트, 저자가 인게임에서 잰 엔진 규칙(S1~S14)의 출처"
+sidebar_position: 3
+sources:
+  - bedrock-core
+  - repo-guide
+---
+
+## 이것은 무엇인가
+
+bedrock-core(`@bedrock-core/ui`, 저자 DrAv0011, 베타)는 React 스타일 JSX로 쓴 화면을 **빌드 시점에** 정적 JSON UI로 바꾸는 프레임워크다. 런타임에 레이아웃을 그리는 것이 아니라서 게임 안에서 스크립트가 보내는 것은 폼 제목(어느 화면인지)과 엔트리 문자열 몇 개(바뀌는 값)뿐이다. 분석 기준은 저장소 `bedrock-core/ui` 커밋 `aee2bbd`(2026-10-20), 패키지 `@bedrock-core/ui` 0.12.1, `ui-compiler` 0.1.2다. 클론한 HEAD(`51d5cf2`)의 `LICENSE`를 열어 확인한 라이선스는 MIT(Copyright 2026 bedrock-core)다(출처: cs-bedrock-core).
+
+이 프로젝트에서 이 자료가 특별한 이유는 저자가 `docs/spikes/`에 **게임 안 실측 기록(S1~S14)**을 남겼기 때문이다. 우리 규칙의 `실측` 수준은 대부분 이 기록에서 온다. 저장소의 테스트 532개 중 531개가 통과함을 이 프로젝트가 직접 돌려 확인했다(실패 1개는 분석과 무관).
+
+## 어떻게 동작하나
+
+```
+*.screen.tsx ─ 빌드 머신에서 1회 렌더 ─▶ 요소 트리
+   ─ flexbox(320×210 고정 캔버스) ─▶ IR(rect, 정적 props, 필요한 메커니즘)
+   ─▶ face 문서(바인딩 없는 "생김새"만) ─ host pass ─▶ 최종 JSON UI(바인딩과 collection_index 삽입)
+게임 안: render(Screen, player) → ActionFormData.title('<헤더><addon>_<screen>')
+         → 엔트리마다 form.button('<값 문자열>') → selection 번호 = 컴파일 때 박은 collection_index
+```
+
+옛 방식(문서 사이트의 *Render pack* 페이지)은 컨트롤의 좌표·크기를 83바이트 고정 필드로 직렬화해 보내고 리소스팩이 바인딩으로 디코드하는 인터프리터였다. 저자 측정(S5)으로 서버가 화면 하나 열 때마다 50셀 14ms, 200셀 53ms를 썼으나 컴파일 방식은 0이라 현재 코드는 전부 컴파일 방식이다.
+
+"모양은 고정, 값만 바뀐다"를 지키려고 변하는 것은 소스가 밝혀야 한다. 문자열은 `<Text maxLength>`, 반복 개수는 `<List max>`, 조건부 렌더링은 `{cond && <X/>}`가 `visible` 게이트로 재작성된다. 생김새(색, 텍스처 등)는 빌드가 상태를 흔들어 보고 바뀌는 모습을 모두 그려 둔 뒤 `k<번호>` 엔트리로 하나만 보이게 한다. 패키지는 런타임(hooks), 컴파일러, flexbox 엔진, 테마 컴포넌트, 내비게이션, Regolith 필터로 나뉜다.
+
+## 핵심 기법
+
+### 1. 서버 폼 훅: modifications만, 바닐라는 숨기기
+
+바닐라 `long_form`/`custom_form`은 지우지 않고 제목 헤더로 시작하면 바인딩으로 숨긴다. 같은 경로 파일에 `modifications`만 쓰므로 여러 애드온이 팩 순서대로 공존한다. 헤더 판별은 `(not (('%.13s' * #title_text) = '<헤더13글자>'))`처럼 앞 13바이트 접두 검사다. 내 화면은 바닐라 `server_form_factory`를 빌려 `main_screen_content`에 `insert_back`한 브리지 안에 만든다.
+
+### 2. 라우터: 제목으로 화면 하나만 "생성"
+
+모든 컴파일 화면을 `visible` 게이트로 붙이면 폼을 열 때마다 모든 애드온의 모든 화면이 생성·레이아웃된다(S8 실측: 5546개 컨트롤 전체 재레이아웃, 다른 화면의 슬라이더가 생성 시점에 assert). `visible`은 그리기만 막고 생성은 막지 못하기 때문이다. 그래서 라우터는 `collection_panel` 팩토리로 선택된 화면 셀만 만든다.
+
+```jsonc
+"demo_title_selector": {
+  "type": "collection_panel",
+  "property_bag": { "#route_": [], "#route_<제목A>": ["home"], "#route_<제목B>": ["settings"] },
+  "factory": { "name": "demo_title_screen",
+               "control_ids": { "home": "demo.screen_home", "settings": "demo.screen_settings" } },
+  "bindings": [
+    { "binding_name": "#title_text", "binding_condition": "always" },
+    { "binding_type": "view", "source_property_name": "('#route_' + #title_text)",
+      "target_property_name": "#collection_length", "binding_condition": "always" } ] }
+```
+
+`'#route_' + #title_text`로 `property_bag` 키를 사전처럼 조회해 그 결과(셀 id 배열)를 `#collection_length`에 넣는다. 일치하지 않으면 빈 배열에 걸려 아무것도 만들지 않는다. 이 "문자열로 property_bag 키를 조회"하는 의미는 컴파일러 테스트와 0.12.1 배포본의 사용으로 확인한 `코드` 수준이고 게임에서 직접 확인되지는 않았다. 계산된 길이의 팩토리가 0개 또는 1개 셀을 만든다는 것은 S11에서 실측됐다.
+
+### 3. 엔트리 = 셀: `collection_index` + `collection_details`
+
+다음은 저자의 실측 기록에서 발췌한 핵심 결론이다(S1, 2026-08-27).
+
+<Excerpt src="bedrock-core" title="bedrock-core docs/spikes/S1-form-entry.md" path="docs/spikes/S1-form-entry.md">
+
+> A control the pack places itself owns a `form_buttons` entry when **the control itself** carries a `collection_details` binding on that collection, under a host supplying the `collection_index`. Without that binding the press still routes — the form closes — but arrives as `canceled`, indistinguishable from Esc.
+
+</Excerpt>
+
+그래서 런타임은 모든 엔트리를 `button()`으로 보낸다. `label()`을 섞으면 컬렉션 인덱스와 `response.selection` 번호가 어긋난다. 눌리지 않는 셀은 매핑과 `collection_details`가 없는 컨트롤일 뿐이다. 값은 `#form_button_text`에 싣는다. 플래그는 `0/1`이 아니라 `t/f` 글자로 쓰고 비교는 플래그 길이+1로 자른다(`'%.2s'`). 엔진이 식 결과의 타입을 생김새로 정해 잘라낸 `'0'`이 숫자가 되어 문자열 `'0'`과 같지 않기 때문이다. RawMessage는 클라이언트가 플레이어 언어로 해석해 바인딩에 넣어 준다(S7).
+
+### 4. 데이터 소스 패턴과 enabled 처리
+
+여러 곳에서 읽는 값은 화면 루트에 크기 0 "소스" 컨트롤을 하나 두고 각 게이트가 `source_control_name` view 바인딩으로 읽는다. 네이티브 입력(라디오 등)을 컬렉션 아이템 안에 넣지 않고 데이터만 따로 읽는 방법이기도 하다. 버튼의 enabled/disabled는 같은 face의 활성·비활성 사본을 둘 다 `t/f`로 게이트하고, 버튼 상태 머신이 소유한 가시성은 건드리지 않고 상태 경계 바깥에서 게이트한다.
+
+### 5. 모달 폼
+
+네이티브 필드(toggle, slider, dropdown, edit_box)는 엔진이 그리므로 컴파일러가 자리만 잡고 공용 어휘 템플릿을 놓는다. **S3 실측: `custom_form`의 행과 `formValues`는 1:1로 정렬**되고 `label()`도 한 행이며 응답에서는 `null`이다. 번호를 매기는 빌드 함수와 런타임 함수가 같아 어긋나지 않는다.
+
+### 6. 상자 호스트: 내구도로 식별, 스택 수량으로 글자
+
+열려 있는 동안 데이터가 바뀔 수 있는 유일한 호스트이지만 슬롯은 숫자만 공개한다. 0번 슬롯의 센티널 커스텀 아이템의 `max_durability`(32749)가 "이 상자는 컴파일 화면" 표시이고 현재 내구도가 레이아웃 키다. 바닐라 `#item_id_aux`는 커스텀 아이템이 등록되면 256 이상이 밀려 쓰지 않는다. 글자는 슬롯 하나에 한 글자로, 스택 수량 n을 `'core.ui.c.' + #channel_raw` lang 키로 바꿔 쓴다(수량 1은 `#inventory_stack_count`가 비므로 공백 글자 `§r §r`로 감싼다). 버튼 입력은 모두 `button.drop_one`으로 매핑해 18번 눌러 18번 드롭되고 커서는 변하지 않음을 실측했다(S14). 바닐라 상자 훅은 `small_chest_screen`을 재선언해 `$screen_content`를 라우터로 바꾸는 방식이고, 바닐라 `chest_label`과 `small_chest_grid`는 지우지 않고 바인딩으로 숨긴다(인덱스 호스트가 없는 컬렉션 바인딩은 0번 슬롯을 읽는 성질 이용).
+
+### 7. 클라이언트 전용 탭: 라디오 토글
+
+탭 전환과 접기/펼치기는 스크립트에 아무것도 보내지 않는다. `radio_toggle_group`과 `toggle_group_forced_index`가 있는 토글에서 **내용(pane)을 `checked` 상태 컨트롤 안에** 둔다. 8개 상태를 모두 정의해야 하고(정의 안 한 상태에 들어가면 컨트롤이 사라짐), `toggle_on_button`/`toggle_off_button`과 버튼 매핑이 없으면 클릭이 안 된다(S4).
+
+## 저자가 실측한 엔진 규칙 요약
+
+| 주제 | 내용 | 대응 규칙 |
+| --- | --- | --- |
+| 컬렉션 | `collection_name`은 `stack_panel`, `grid`에, `collection_index`는 인스턴스화 지점에만. 인덱스는 하위 트리로 상속된다 | COL-01, COL-02, COL-03 |
+| 바인딩 소유 | 바인딩한 속성은 그 컨트롤의 것이다. 두 단계 아래 라벨은 빈칸(S7) | BND-04 |
+| 팩토리 셀 | 팩토리 셀 안 바인딩은 일찍 실행되어 비어 보인다. `always`로 해결(S11) | BND-07, C-11 |
+| 식 | `%`, `>=` 없음. `'%.Ns' * #str`은 앞 N바이트. 숫자 변환은 `(#v - 0)` | EXP-02, EXP-03, EXP-09, EXP-16 |
+| 식 오류 | `#`가 없는 식은 `bindings` 배열 전체 폐기. `#visible` 기본 true라 식이 실패하면 항상 보임 | BND-05, BND-09 |
+| 변수 | 일반 속성은 값 전체가 변수일 때만 치환. 삽입 트리의 바인딩에는 `$변수` 불가 | FILE-10, BND-13 |
+| modifications | 경로 단위. 상속만 받은 배열에 insert하면 상속이 가려짐. 상속 자식 `remove`는 파일 수정 전체를 무효로 | MOD-02, MOD-04, MOD-05 |
+| 크기 바인딩 | 두 축 모두 바인딩. 정적 컨트롤의 위치는 spacer 크기로. 바인딩 `alpha`는 0과 1만 | LAY-05, LAY-10~LAY-13 |
+| 생성 | `visible`은 그리기만 막는다. 생성은 팩토리 길이 0으로 막는다(S8, S11) | COL-10 |
+| 텍스트 | 라벨은 기본 현지화. 문자열+float은 아무것도 안 나온다. 값이 공백 하나인 lang 키는 trim됨 | TXT-01, TXT-06, C-63 |
+| 토글 | 8상태 모두 정의, 내용은 `checked` 안에(S4) | INP-10 |
+| 상자 | `container_type: "container"`와 `private: false`만 `chest_screen`으로. 54칸 설정도 27칸만 그린다 | HOST 상자 절 |
+
+## 한계
+
+- 베타라 0.x에서 프로토콜이 여러 번 깨졌으므로 버전을 고정해야 한다.
+- 문서 사이트와 코드가 어긋난 곳(83바이트 고정 필드, 레이아웃 키 설명)은 코드를 따랐다.
+- 미해결: 열려 있는 동안 크기 바인딩이 바뀌면 다시 레이아웃되는지(S6 B)는 측정 전에 클라이언트가 크래시해 보류되었다(LAY-15).
+- 모든 화면이 한 `server_form`의 자식이라 다른 애드온이 같은 정의를 재선언하면 함께 깨질 수 있다.
+
+## 비교
+
+[BedrockAdvancements](./bedrockadvancements.mdx)는 특수 화면 전용 고정 폭 레코드를, [AdvancementPack](./advancementpack.mdx)은 서버 폼 대신 NPC 화면과 HUD를 쓴다. bedrock-core는 범용성과 안정성(생성 비용을 라우터로 통제)이 강점이다.

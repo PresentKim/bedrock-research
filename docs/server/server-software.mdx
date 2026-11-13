@@ -1,0 +1,157 @@
+---
+title: "서버 소프트웨어와 BDS 운영"
+description: "BDS와 커스텀 서버 소프트웨어 선택, server.properties, 권한·설정 파일, Beta APIs 켜기, 호스팅, Realms"
+sidebar_position: 1
+sources:
+  - private-research
+  - ms-learn
+  - dragonfly
+  - gophertunnel
+---
+
+## 개념: 두 가지 서버
+
+Bedrock 서버는 크게 둘이다. **BDS(Bedrock Dedicated Server)** 는 Mojang이 배포하는 공식 서버로, 바닐라 게임 로직을 그대로 돌리고 플러그인 시스템이 없으며 **애드온(BP와 스크립트)만** 돌린다. **커스텀 서버 소프트웨어**(PocketMine-MP, Dragonfly, PowerNukkitX, Serenity, Endstone 등)는 프로토콜을 직접 구현하거나 BDS를 감싸 자기 규칙으로 게임을 돌린다. 어느 쪽이든 클라이언트는 같은 Bedrock 프로토콜로 접속하므로, 리소스팩(RP)과 JSON UI는 양쪽에서 같게 동작한다. 차이는 서버 쪽 정의가 **BP JSON과 Script API**인지 **서버 언어 코드(Go, Java, Python 등)** 인지다. (출처: 비공개 조사)
+
+선택 가이드: 미니게임과 PvP, 대규모 네트워크는 커스텀 소프트웨어가 확장성이 좋지만 바닐라 서바이벌이나 테크니컬 레드스톤에는 맞지 않는다. 그런 용도와 공식 호환은 BDS가 맞다. 큰 네트워크는 모드 로더보다 BDS + 프록시를 쓰는 경향이 있다(Zeqa는 PMMP, The Hive는 커스텀 소프트웨어). 목록은 Bedrock Wiki의 servers/server-software에 있다.
+
+## server.properties (MS Learn)
+
+`server.properties`는 INI 형식(키=값, `#` 주석)이다. MS Learn 레퍼런스의 주요 키와 기본값이다. (출처: ms-learn, Documents/BedrockServer/server-properties.md)
+
+```properties
+server-name=Dedicated Server
+gamemode=survival
+force-gamemode=false
+difficulty=easy
+allow-cheats=false
+max-players=10
+online-mode=true
+allow-list=false
+server-port=19132
+server-portv6=19133
+enable-lan-visibility=true
+view-distance=32
+tick-distance=4
+player-idle-timeout=30
+max-threads=8
+level-name=Bedrock level
+default-player-permission-level=member
+texturepack-required=false
+content-log-file-enabled=false
+compression-threshold=1
+compression-algorithm=zlib
+server-authoritative-block-breaking=false
+```
+
+| 키 | 설명 |
+|---|---|
+| `gamemode` | 새 플레이어의 게임 모드. `survival`, `creative`, `adventure`. `force-gamemode=true`면 월드에 저장된 값 대신 항상 이 값을 보낸다 |
+| `difficulty` | `peaceful`, `easy`, `normal`, `hard` |
+| `online-mode` | true면 Xbox Live 인증 필수. 원격(비 LAN) 서버는 이 값과 무관하게 인증이 필요하다. 인터넷에 열면 켜 두라고 권한다 |
+| `allow-list` | true면 `allowlist.json`에 있는 플레이어만 접속 |
+| `enable-lan-visibility` | LAN 탐색에 응답한다. 켜면 `server-port`가 달라도 기본 포트 19132/19133에도 바인딩한다 |
+| `view-distance` | 허용 최대 시야 거리(청크). 5 이상. 크면 성능 영향 |
+| `tick-distance` | 플레이어 주변 몇 청크까지 틱할지. 4~12 |
+| `max-threads` | 사용할 최대 스레드. 0이거나 없으면 가능한 만큼 |
+| `default-player-permission-level` | `visitor`, `member`, `operator` |
+| `texturepack-required` | 월드의 특정 텍스처 팩을 클라이언트에 강제 |
+| `compression-threshold` | 압축할 최소 페이로드 크기(0~65535) |
+| `compression-algorithm` | `zlib` 또는 `snappy` |
+| `server-authoritative-movement-strict`, `server-authoritative-dismount-strict`, `server-authoritative-entity-interactions-strict` | 서버가 클라이언트 입력을 더 엄격하게 받는다. 지연이 크면 움직임이 영향을 받는다 |
+| `player-position-acceptance-threshold` | 클라이언트와 서버 플레이어 위치 차이 허용치(기본 0.5) |
+| `player-movement-action-direction-threshold` | 공격 방향과 시선 방향 허용 차이 0.0~1.0(기본 0.85) |
+| `server-authoritative-block-breaking` | 서버가 블록 부수기를 클라이언트와 같이 계산해 검증. 크리에이티브는 클라이언트 권한 |
+| `server-authoritative-block-breaking-range-scalar` | 부수기 범위 배율(기본 1.5, 제곱해 기본 범위에 곱한다) |
+| `chat-restriction` | `None`, `Dropped`(채팅을 버림), `Disabled`(오퍼레이터가 아니면 채팅 UI도 없음) |
+| `disable-player-interaction` | 클라이언트에 다른 플레이어를 무시하라고 알림(서버 권한 아님) |
+| `client-side-chunk-generation-enabled` | 클라이언트가 상호작용 거리 밖 시각 청크를 만들 수 있다고 알림 |
+| `block-network-ids-are-hashes` | true면 순번 대신 해시 블록 네트워크 ID를 보낸다(안정적) |
+| `disable-custom-skins` | 스토어·게임 자산이 아닌 커스텀 스킨을 끈다 |
+
+## 설정 파일과 규칙 (커뮤니티 2025-10 ~ 2026-10)
+
+### 14.1 설정 파일
+- **xKingDark gist**: `server.properties` https://gist.github.com/xKingDark/0e87c3fb30151e9f3315476d70a45ee2 , `test_config.json` https://gist.github.com/xKingDark/271dbd969345169c45915a19953ff578 , `cdn_config.json` https://gist.github.com/xKingDark/e80569d688e692ee11e161b427f6e49f . 공식 문서: https://learn.microsoft.com/en-us/minecraft/creator/documents/bedrockserver/getting-started?view=minecraft-bedrock-stable (server-properties, scripting 페이지 포함). 속성 목록: https://www.minebbs.com/threads/bedrock-dedicated-server-server-properties.32021/ . BDS 전용 문서나 채널이 없다는 불만이 많았고, BDS 채널은 2026-03-06경 생겼다.
+- **`config/default/permissions.json` `allowed_modules`**: 기본 목록 밖의 모듈(stable이어도)은 반드시 넣어야 한다. `@minecraft/server-net`은 의도적으로 기본 목록에서 빠져 있다. `@minecraft/debug-utilities`는 나중에 기본 목록에 들어갔다. DDUI에는 `@minecraft/server-ui`를 넣고, BDS 버전을 beta 모듈과 맞추고, 월드의 Beta APIs를 켠다.
+- **`config/commands.json`(문서화되지 않음, darknavi 설명)**: 명령 권한 수준을 바꾸거나 명령을 끈다.
+  ```json
+  { "permission_levels": { "?": "internal", "help": "internal", "list": "internal", "me": "internal", "say": "internal", "tell": "internal" } }
+  ```
+  - 수준: `admin`, `game_directors`(operator), `owner`, `internal`(비활성).
+  - `help`/`?`는 하드코딩돼 목록에서는 숨겨지지만 쓸 수 있다. `w`/`msg`는 `tell`을 따른다.
+  - `default` 폴더에 넣지 않는다. `default_permission_level: admin`으로 두면 관리자 명령까지 모두 사라진다.
+  - Endstone 0.10에서는 동작하지 않았다(버그).
+  - 스크립트로 바닐라 명령의 동작은 바꿀 수 없고, 누가 실행할지만 정할 수 있다.
+- **`packetratelimitconfig`**: rate-limit 유형을 하나만 지원한다. 어느 패킷 ID에 걸리는지는 리버스 엔지니어링으로 알아냈다. 명령 패킷 크래시는 완화하지만, 스크립트에서 이벤트로 받을 수는 없다(로더가 프로세스 출력을 읽어 scriptevent로 넘겨야 한다).
+- **기타 속성**
+  - `msa-gamertags-only=true`: `Player.name`이 Xbox gamertag가 된다.
+  - `script-watchdog-memory-limit=0`: 스크립트 메모리 watchdog을 끈다(Realms에서는 바꿀 수 없다).
+  - `op-permission-level`
+  - `max-threads`
+  - `server-wakeup-frequency`(기본값 200으로 추정, unverified)
+  - 2026-06부터 서버가 기본으로 `allow-list=true`로 시작한다.
+- **로그**: 스크립트 console.log/warn은 서버 콘솔로 나간다(dev 환경에서는 `content-log`를 켜야 할 수 있다). 스크립트 출력은 server.properties 설정으로 파일에 남길 수 있다. join/leave 스팸은 Node child_process 래퍼로 걸러낸다. `[Json] Damage Source not found: water`는 스크립트가 아니라 JSON/팩 문제다(알 수 없는 원인을 참조하는 damage_sensor를 찾는다). party id는 콘솔에 `Player PartyIdUpdate: ... pfid ... partyid ...`로 찍힌다(2026-04 빌드에서는 파티 접속 때 빠진다).
+- **동적 프로퍼티 경고**: 팩이 분당 약 10MB가 넘는 dynamic property를 쓰면 30초마다 경고가 나온다.
+
+### 14.2 Beta APIs와 실험 기능 켜기
+- **`test_config.json` 트릭**: 서버 루트에 `{}`를 넣은 `test_config.json`을 두고 시작하면 서버가 스스로 종료한다. 파일을 지우고 다시 시작하면 월드에 Beta APIs가 켜진 채 저장된다(AdemDev 발견). Preview 1.26.40.25에서 EDU 토글을 이 방식으로 켰더니 Chemistry RP가 빠진 것 같다는 보고가 있다.
+- **`level.dat` 직접 편집**: `experiments: {gametest:1b, upcoming_creator_features:1b, experimental_creator_cameras:1b, voxel_shapes:1b, experiments_ever_used:1b, saved_with_toggled_experiments:1b}`를 넣는다(`gametest`가 옛 Beta APIs 키다). 플래그를 모두 넣어야 하고, 그래도 가끔 실패한다. 월드 export/import 과정에서 실험이 자주 빠진다.
+- **실험 없이 만든 월드**: BDS는 실험 기능을 켜고 만든 월드가 아니면 실험 Script API를 돌리지 않는다(자동 월드 생성 시 주의). 클라이언트에서 Beta를 켜고 복사한 월드는 Docker BDS에서 실패했고, BDS에서 만든 월드는 됐다는 사례가 있다.
+- **업데이트 뒤 문제**: `ReferenceError: Module [@minecraft/server] is unrecognized`(1.21.120/121 Linux, `"2.4.0-beta"`)는 서버를 깨끗이 다시 설치하자 풀렸다. 업데이트 뒤 스크립트가 안 돌면 BDS를 재시작하고, beta API와 manifest 의존성 버전을 확인한다.
+
+## 호스팅과 배포
+
+- **호스트 의견**: OVH(가장 싸다), Hetzner(새 CPU), Bisect(약 14유로 플랜으로 동시 50명, RAM은 빠듯), Ionos, Bloom.host(비싸지만 지원이 좋다). 싼 전용 서버는 DDoS 방어를 확인한다. Aternos는 커스텀 스크립트 애드온을 지원하지 않는다(Xbox로 Aternos에 접속하면 RP 로드 실패, LAN은 동작한 사례도 있다).
+- **Docker**: Linux 배포에 권한다(Windows Docker는 느리거나 쓸 수 없다). 바닐라 이미지: https://github.com/m0lc14kk/docker-vanilla . Endstone venv와 PM2 조합은 설정이 어려웠다.
+- **ARM64**: Endstone Docker를 에뮬레이션으로 돌린다.
+  ```
+  docker pull --platform linux/amd64 endstone/endstone
+  docker run --platform linux/amd64 -p 19132:19132 -it -v ${PWD}:/home/endstone/bedrock_server --name endstone-server endstone/endstone
+  ```
+  문서: https://endstone.dev/latest/getting-started/installation/#with-docker-latest--macos--with-emulation (PR #387).
+- **Linux 배포판**: BDS Linux는 Ubuntu에서 테스트하지만 Debian 등 glibc 배포판에서 돈다. Android/Termux(bionic)에서는 호환 계층 없이 돌지 않는다.
+- **패널**: Pterodactyl 대안으로 Pelican(beta)과 다중 서버 관리 도구(https://github.com/Zentari-Network/Server-Handler/)가 있다. Pterodactyl 패널 API로 콘솔 명령을 보낼 수 있다.
+- **월드 올리기**: zip으로 올린다(아니면 BDS가 기본 바닐라 월드를 만든다). BDS 팩은 `world_behavior_packs.json`에 uuid/version을 적어야 한다. 서버에서 스크립트가 안 돌면 팩이 월드의 behavior_packs와 json에 있는지, 모듈마다 진짜 v4 UUID인지, `development_behavior_packs`에만 넣지는 않았는지 확인한다. dev 폴더의 팩은 월드에 복사되지 않고, dev 폴더 밖에 있으면 낡은 스크립트가 남는다.
+- **BDS 다운로드 링크 형식**: https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.26.52.3.zip . zip 대신 tar 배포 요청에는 답이 없었다.
+- **VPS 사이 사설 연결**: WireGuard를 권한다.
+
+## Realms와 멀티플레이
+
+- **Realms는 BDS로 돈다**: 새 블록 기능은 Realm 버전이 맞기 전에는 동작하지 않을 수 있다. 버전이 맞으면 스크립트도 돈다. Realms는 업데이트 관리가 번거로우니 팩 버전이 적용됐는지 확인한다. 다시 올릴 때는 팩 UUID를 바꾼다. 팩이 적용되지 않으면 월드 폴더에 복사하고 `world_behavior_packs.json`을 지운다.
+- **Realms 디버깅**: content log가 없다. `/reload`는 일부 Realm에서 동작한다. beta API 월드를 올리면 동작한다.
+- **권한**: Realm 소유자가 최고 권한이고, 스크립트 명령에서 `op`를 쓸 수 없다. 스크립트로 등록한 커스텀 슬래시 명령은 Realms에서 동작하지만 `CommandPermissionLevel.Admin` 이상은 실패하니 `GameDirectors`(Operator)를 쓴다(서버에서도 같을 수 있다). `cheatsRequired`의 기본값이 true라 cheats가 꺼진 Realm이나 월드에서는 안 보인다. 셀렉터 인자도 cheats가 필요했다(오래된 버그).
+- **Realms에서 못 하는 것**: server-net과 server-admin(16절), 패킷 rate limit, 스크립트 메모리 watchdog 변경.
+- **Realms에서 겪는 문제**: 모드팩의 `chatSend`로 모든 명령이 오류를 냈다(원인 미해결). 색 코드가 든 `/title` 텍스트가 일관되지 않다. 폼 입력 비교 실패는 대소문자나 오타 문제였다. 채팅이 안 보이면 Xbox 계정 개인정보/커뮤니케이션 설정을 확인한다.
+- **업적**: cheats를 켜거나, 크리에이티브 월드이거나, BP에 업적 호환 manifest 설정이 없으면 잃는다. level.db를 편집해 되살릴 수 있다. pack uuid를 바꾸거나 월드에서 빼지 않고 팩을 지우면 "pack missing/uuid changed" 오류가 난다. RP를 BP 폴더에 넣어도 마찬가지다.
+- **Realm PvP 팁**: /home과 /tpa에 쿨다운을 두고, 데미지 처리 전부(mace, spear, 투사체)를 구현한다.
+- **멀티플레이 동기화**: 많은 엔티티에 계속 `tp`를 쓰면 호스트가 아닌 플레이어에게 렉으로 보인다. 텔레포트를 줄이거나 애니메이션 기반 이동을 쓴다. 셀렉터와 fork는 플레이어 수만큼 늘어나므로 명령 비용이 커진다. 명령 블록은 ticking area로 청크를 붙잡아 둬야 한다(`/tickingarea add circle ~ ~ ~ 4 name`). BDS의 `/transfer`는 서버 콘솔에서 동작하고, 게임 안에서는 op(권한 4)가 필요하며 셀렉터를 받지 않는다.
+- **콘솔과 iOS**: PS5 같은 콘솔은 파일 접근 해킹이 없으면 마켓플레이스 애드온만 쓸 수 있다. "external server connect" 팩(zip)이 공유됐다. iOS에서 서버 폼이 HUD만 숨기고 뜨지 않을 때가 있는데, ESC로 복구된다.
+- **DDUI 소프트락**: 연결이 끊기거나 서버가 watchdog/무한 루프에 걸리면 클라이언트가 폼에 갇히던 문제는 2026-03-10에 Mojang이 고쳤다.
+- **업데이트 요일**: Minecraft 업데이트는 화요일에 나온다.
+
+
+## 서버 소프트웨어 목록과 특징
+
+- **선택 가이드**: PocketMine-MP, Dragonfly(Go), PowerNukkitX(Java), Serenity(Rust, 오픈소스) 같은 커스텀 소프트웨어는 미니게임과 PvP에서 확장성이 좋다. 하지만 바닐라 서바이벌이나 테크니컬 레드스톤에는 맞지 않는다. 그런 용도와 공식 용도는 BDS가 맞다. 큰 네트워크는 모드 로더보다 BDS + 프록시를 쓴다(Zeqa는 PMMP, The Hive는 커스텀 소프트웨어). Zeqa나 NetherGames의 전투감은 팩이 아니라 서버 소프트웨어로 흉내 낸 것이다. 목록: https://wiki.bedrock.dev/servers/server-software *(확인됨)*
+- **Endstone** (https://github.com/EndstoneMC/endstone , https://endstone.dev): BDS 위에 Python/C++ 플러그인을 얹는 래퍼이고, Script API 호환 ScriptSDK를 제공한다.
+  - ScriptSDK를 쓰려면 `plugins` 폴더에 `.whl` 플러그인이 있어야 한다.
+  - 플러그인 없이 XUID, OS, IP, 보스바, 클라이언트 측 이름표, ping, 기기 모델 정보를 준다.
+  - 패킷 차단, 크래셔 패치, 팩 암호화 기능이 있다(암호화 팩에서 "resource pack failed to load" 보고가 있다).
+  - 진짜 명령 트리(서브커맨드)를 만들 수 있다(caveats: 한 보고자의 서브커맨드 주장은 약한 근거, unverified).
+  - 약 30~40명 이하에 적합하다는 의견이 있다.
+  - BDS 파일은 Endstone의 `bedrock_server` 폴더에 복사한다.
+  - Endweave 플러그인(https://github.com/EndstoneMC/endweave)은 패킷을 번역해 새 클라이언트가 옛 서버에 접속하게 한다. BDS보다 업데이트가 늦고 camera 명령이 불완전하며, dev Endweave와 함께 쓰다 인벤토리 아이템이 무작위로 사라졌다는 보고가 있다.
+  - URL 이미지 폼 플러그인: https://github.com/zelisce/URL-Image-Fix
+  - friend-connect 플러그인: https://github.com/TheNINJALLO/endstone-broadcaster
+- **LeviLamina**: BDS 모드 로더이자 API다(클라이언트는 나중에). 헤더를 제공하고, 서버 측에서 높이 제한을 바꾸는 플러그인이 있다. BDS 업데이트보다 늦다. Android 런처가 있는 Fabric 같은 클라이언트 모딩 프레임워크로도 언급되며, 엔진 수준 모드에 권한다. LeviLauncher는 런처이자 인젝터일 뿐이다.
+- **기타**
+  - SerenityJS: Node 기반이고(QuickJS 아님) 무거운 계산에 쓰였다.
+  - Rust: bedrock-crustaceans `chorus`(https://github.com/bedrock-crustaceans/chorus), `pyrite` beta 1.7.3 월드젠 플러그인(https://github.com/bedrock-crustaceans/pyrite). 조명 엔진은 아직 없다.
+  - PocketMine: 애드온과 attachable을 지원하지 않고 RP만 된다. JSON UI는 RP로 동작하고 폼은 FormAPI 플러그인이 필요하다(제목 텍스트 바인딩으로 표시 위치를 제한한다). 커스텀 아이템은 Customies 플러그인.
+  - Dragonfly: 커스텀 검 공격 데미지 표시를 upstream PR로 고쳤다.
+- **BDS 자체**: 플러그인 시스템이 없고 애드온만 돈다. BDS 래퍼(Node나 Python)는 콘솔 출력을 읽고 scriptevent를 넣어 줄 수 있다. 그 밖에 BDS → 외부로 명령을 보내려면 server-net HTTP나 로그 tailing 헬퍼를 쓴다.
+- **Friend connect**: MCXboxBroadcast(https://github.com/MCXboxBroadcast/Broadcaster, 독립 jar 또는 Geyser 확장)는 Xbox로 방송하고 플레이어를 실제 서버로 전송한다. `bedrock-portal`과 `bedrock-protocol` npm으로 직접 만들 수도 있다. 콘솔 플레이어에게는 friend connect가 가장 좋은 방법이다(2026-05).
+- **투표**: 서버 리스트 사이트의 API를 쓴다(예: https://github.com/ItzCandra23/BedrockVote).
+- **VoiceCraft 근접 음성 채팅** (github.com/AvionBlock/VoiceCraft): v1.1.0(2025-12-18), v1.3.0(2026-01-04). 전면 재작성됐고 API 시스템이 있다. 30명 이상을 쉽게 처리하며 TPS가 떨어지기 전까지 500명 이상을 주장한다. 모바일 호스팅도 된다.
+- **채팅 브리지**: BedrockBridge(MCPEDL). 같은 Node 앱으로 BDS와 외부 채팅 서비스를 잇기도 한다.

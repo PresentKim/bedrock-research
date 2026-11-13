@@ -1,0 +1,156 @@
+---
+title: "JSON 스키마"
+description: "JSON UI 스키마 4종과 Blockception 스키마의 설치법, 결함, 바닐라 검증 결과"
+sidebar_position: 2
+sources:
+  - private-research
+  - repo-survey
+  - blockception-schemas
+  - bugrock-schemas
+  - repo-tool-analyses
+  - ms-learn
+---
+
+JSON 스키마는 VS Code 같은 편집기에서 자동 완성과 오류 밑줄을 주는 가장 흔한 "검증 도구"다. 이 페이지는 공개된 JSON UI 스키마 네 종류와, 애드온 전체를 다루는 Blockception 스키마를 어떻게 설치하고 어디까지 믿을 수 있는지 정리한다. 조사 방법은 스키마 네 종류로 바닐라 1.26.50.4의 UI 파일 205개(`_ui_defs.json`, `_global_variables.json` 제외)를 그대로 검증하는 것이었다. 바닐라는 게임이 실제로 읽는 파일이므로 바닐라에서 나는 오류는 대부분 스키마의 오탐이다(출처: tool-repo-analyses, jsonui-schemas 분석).
+
+| 스키마 | 저장소 | 라이선스 | 바닐라 205개 중 오류 난 파일 | 오류 수 |
+|---|---|---|---|---|
+| KalmeMarq Bugrock-JSON-UI-Schemas | `KalmeMarq/Bugrock-JSON-UI-Schemas` `de118a3` | 라이선스 파일 없음 | 186 | 2,224 |
+| DJStompZone MCBE-JSON-UI-Schemas | KalmeMarq의 2025-02 포크 `398d49b` | 라이선스 파일 없음 | 186 | 2,241 |
+| Blockception 최신 소스 | `Blockception/Minecraft-bedrock-json-schemas` | BSD-3-Clause | 43 | 116 |
+| Blockception 확장에 묶인 판(v8.0.46) | 같은 회사의 VS Code 확장 | BSD-3-Clause | 193 | 2,251 |
+| zelisce JSON-UI-Schemas | `zelisce/JSON-UI-Schemas` `1f7bbec` | MIT | 측정 불가 | `$ref`가 문자열을 가리켜 스키마 자체가 로드되지 않음 |
+
+## KalmeMarq 스키마 설치
+
+라이선스 파일이 없으므로 스키마 본문은 옮기지 않고 사용법만 적는다. 공개된 설정 예(README)는 `json.schemas`에 네 스키마를 파일 패턴과 함께 건다.
+
+```json
+"json.schemas": [
+  {
+    "url": "https://kalmemarq.github.io/Bugrock-JSON-UI-Schemas/ui.schema.json",
+    "fileMatch": ["*.ui.json", "*.uidx", "ui/**/*.json",
+                  "!_global_variables.json", "!_ui_defs.json", "!/textures/**/*.json"]
+  },
+  {
+    "url": "https://kalmemarq.github.io/Bugrock-JSON-UI-Schemas/ui_defs.schema.json",
+    "fileMatch": ["ui/_ui_defs.json"]
+  },
+  {
+    "url": "https://kalmemarq.github.io/Bugrock-JSON-UI-Schemas/global_variables.schema.json",
+    "fileMatch": ["ui/_global_variables.json"]
+  }
+]
+```
+
+`ui.sprite.schema.json`은 `textures/**/*.json`(9-slice 스프라이트 정의)에 걸고, `flipbook_textures.json`, `item_texture.json`, `terrain_texture.json`, `texture_list.json` 등은 제외한다. 저장소에는 `ui.schema.json`, `old_ui.schema.json`, `ui.sprite.schema.json`, `ui_defs.schema.json`, `global_variables.schema.json`이 있고 README에 화면별 도입 버전 표가 있다.
+
+## Blockception 스키마 설치
+
+BSD-3-Clause이므로 설정 조각을 옮겨도 된다. 저장소 `vscode-settings.example.json`을 `.vscode/settings.json`으로 복사하거나 `.code-workspace`의 `settings` 안에 `json.schemas` 배열을 넣는다. UI 스키마의 원본은 `source/resource/ui/`(속성마다 파일 하나)이고 빌드 결과는 `resource/ui/ui.json`이다(출처: tool-blockception-schemas, `README.md`).
+
+## 결함 요약
+
+- KalmeMarq와 DJ: 크기 식 정규식이 항 하나만 허용해 `"100% - 4px"`를 거부하고, 텍스처 정규식이 `/`를 거부한다. 바닐라에 있는 속성 이름 4개(DJ는 18개)가 스키마에 없다.
+- Blockception 최신: `additionalProperties: false`라 모르는 속성은 전부 오류이고, enum은 "아무 식별자"를 허용하는 대안 때문에 무력하며, 바닐라 속성 이름 50개가 없다. 확장에 묶인 판은 크기에 `100%c`, 음수, 식을 거부한다.
+- zelisce: 크기 정규식이 소수와 음수를 거부하고 `*`, `/`를 허용한다.
+
+## 스키마가 알려 준 엔진 사실
+
+1. `grid_position`은 `[열, 행]`(x, y)이다. 바닐라 그리드 20곳에서 `grid_dimensions`가 `[열 수, 행 수]`이고 자식의 첫 값이 열이다(예: `trade_screen.json`의 `[4, 1]` 그리드에 `[3, 0]`). 가이드 초판의 `[행, 열]`(LAY-29)은 틀렸다.
+2. 크기와 위치 식에는 `+`, `-`만 쓴다. 바닐라의 크기 문자열 551종(12,806회) 가운데 `*`나 `/`가 든 것은 0개이고, 소수 계수(`56.25%x`)와 음수(`-50% + 10px`)는 쓴다(LAY-44).
+3. 스키마 통과가 게임 허용을 뜻하지 않고, 스키마 오류가 게임 오류를 뜻하지도 않는다. 네 스키마 모두 바닐라에 오탐을 내거나 바닐라에 없는 값(`clip_direction: "dwn"`, `anchor_from: "left"`, NetEase 전용 속성)을 통과시킨다(DBG-23~25).
+4. 바닐라에도 깨진 값이 있다: `"size": [ "fill%", "100%" ]`(sidebar_navigation.json), 원소가 하나뿐인 `"size": [ "100%, 100%" ]`, 괄호가 닫히지 않은 `"ignored"` 식, 빈 `"max_size": []`. 따라서 "바닐라에 한 번 나온다"는 그 값이 유효하다는 증거가 아니다.
+
+## 쓰는 요령
+
+스키마는 오타 잡기와 자동 완성용으로 쓰고, 최종 판정은 게임의 콘텐츠 로그나 [JSON UI 테스터](./jsonui-tester.mdx)로 한다. 크기 식 오류가 한꺼번에 쏟아지면 그 스키마의 크기 정규식 문제이므로 해당 규칙만 끄거나 Blockception 최신 소스를 직접 가리킨다.
+
+## 공식 문서와 커뮤니티 문서의 오류
+
+아래 노트에는 Microsoft Learn, Bedrock Wiki, NetEase 문서를 기준으로 한 문서의 공백과 오류, 문서 기여 방법이 정리돼 있다.
+
+## 커뮤니티 노트
+
+`(confirmed)`, `(single report)`, `(conflicting)` 같은 말은 보고의 신뢰도 표시다.
+
+### 문서와 레퍼런스
+
+#### 공식 자료
+- **Microsoft Learn** (`https://learn.microsoft.com/en-us/minecraft/creator/`): 검색이 형편없다는 평이 많다. `site:learn.microsoft.com`으로 Google 검색하거나 docs GitHub 저장소를 검색한다. 오류는 `https://github.com/MicrosoftDocs/minecraft-creator/issues` 에 보고한다(예: 962 leash, 976 spawn rule rarity). 릴리스 요약 예: `https://learn.microsoft.com/en-us/minecraft/creator/documents/update1.26.40?view=minecraft-bedrock-stable`
+- **docs 팀 계획(2026-10)**: 팀이 새로 꾸려졌다. 릴리스마다 문서를 갱신하는 시스템을 만들고 있고, preview마다 갱신하는 experimental 브랜치와 릴리스마다 갱신하는 stable 브랜치를 둘 계획이다. 26.50 업데이트 요약 페이지는 2026-10-13 기준 없었다.
+- **Mojang/bedrock-samples** (`https://github.com/Mojang/bedrock-samples`): 바닐라 BP/RP가 가장 많이 쓰이고, JSON 스키마가 그다음이다. `documentation/` 폴더는 bedrock.dev의 주 원천이다.
+  - 메타데이터: `metadata/json_schemas`(엔진 자체 "Cereal" 스키마, 내부 진실), `metadata/command_modules`(현재 명령 문법), `metadata/schemas`, `metadata/vanilladata_modules/mojang-blocks.json`/`mojang-items.json`(`command_name`, `name`, `raw_id`, `serialization_id`, `serialization_name`), `mojang-biomes.json`. 메타데이터에는 `CEREAL_EDITOR_SCHEMA_TAG`가 있다.
+  - `serialization_id`는 `en_US.lang` 키와 대응하지 않는다.
+  - 메타데이터는 매 업데이트마다 aux ID 생성 등에 쓰인다.
+- **bedrock-samples의 공백(2026-08~09 보고)**
+  - 없는 것: `BP/aim_assist`, `BP/cameras/presets`, `BP/feature_rules`, `BP/features`, `BP/item_catalog`, `BP/worldgen/{structures,structure_sets,processors,template_pools}`, `RP/block_culling`, `RP/cameras`, `RP/ddui`, `RP/font`, `RP/items`, `RP/materials`, `RP/pbr`, `RP/point_lights`, `RP/shadows`, renderer 텍스처, attachable/feature 정의, chemistry와 실험 콘텐츠. worldgen 파일은 BDS 실험 폴더에 있다.
+  - 바닐라 파일이 `.brarchive`로 옮겨 가는 만큼 samples가 온전해야 할 필요가 커졌다.
+  - `behavior_pack/blocks`는 1.26.50.26 커밋(preview 브랜치)에 추가됐다. 애드온이 덮어쓸 수는 없고(`minecraft` 네임스페이스, `internal_vanilla_data`) 레퍼런스로 쓴다. Mojang은 새 블록을 기본적으로 이 방식으로 공개할 계획이다.
+- **bedrock-samples의 오류**
+  - 클라이언트 `player.json`/`player.entity`와 `player.animation.controller`가 깨져 있다. 플레이어를 수정할 때는 게임 설치본의 파일을 쓴다.
+  - iron golem RP가 없는 `controller.render.iron_golem`을 참조한다.
+  - 1.10 포맷 아이템(음식 대부분)이 남아 있다.
+  - 릴리스마다 배열 포맷이 바뀌어 diff 노이즈가 생긴다.
+  - stable의 player.json이 beta보다 늦을 수 있다.
+- **Mojang/bedrock-schemas** (`https://github.com/Mojang/bedrock-schemas` , npm `@minecraft/bedrock-schemas`, mammerla 발표 2026-03-24): JSON 스키마와 .d.ts를 제공하지만 초기 단계다.
+  - 동일한 interface/enum이 중복되고(예: `MinecraftBehaviorDigOnStartFilters`), 쓰이지 않는 enum이 있다(`MinecraftBehaviorDigControlFlags`). `VoxelShapeDocumentMinecraftVoxelShape`와 `VoxelShapeFile`이 중복된다.
+  - `npc` 컴포넌트가 없고, NPC 대화의 `scenes`를 문자열 배열로 잘못 타입 지정했다.
+  - 2026-09-20 보고: 많은 스키마의 `$id`가 `$ref`를 잘못된 위치로 보내 사실상 동작하지 않는다. manifest v3와 `aggregate_feature` 스키마가 없다. 잘못된 설명 예: `metadata/json_schemas/server/entity/1.26.50/CatchFireSubcomponentDefinition.json`.
+  - 문서용으로 다듬은 스키마는 `https://github.com/MicrosoftDocs/minecraft-creator/tree/main/content/forms` 에서 편집한다. 많은 필드가 `true`, 문자열, 객체를 모두 받아서 스키마를 느슨하게 둘 수밖에 없다.
+- **Molang 쿼리 매핑**: `https://github.com/bedrock-apis/bds-docs/blob/preview/metadata/molang_modules/mojang-molang-queries.json` (편집기 확장용).
+- **바닐라 태그**: Mojang은 공개하지 않는다. 커뮤니티 action `https://github.com/bedrock-dot-dev/vanilla-tags` (예: `stable/items.json`, v1.26.3.1)가 있다. 블록과 대부분의 아이템 태그는 데이터 기반이 아니라서 게임 안 스크립트로 덤프해야 한다. 위키 테이블(`https://wiki.bedrock.dev/assets/tables/blocks/vanilla-block-tags/tags.json`, `tags_per_block.json`, `items/vanilla-item-tags/tags.json`, `tags_per_item.json`)의 값에는 backtick 마크다운이 들어 있다. `Bedrock-OSS/bedrock-wiki-content-generator`는 바닐라 팩만 긁는다.
+- **아이템 ID 목록**: `https://learn.microsoft.com/en-us/minecraft/creator/reference/content/vanillalistingsreference/items?view=minecraft-bedrock-stable` , `https://wiki.bedrock.dev/items/item-catalog`
+- **기본 바닐라 팩**: `https://bedrock.dev/packs` . 미러로 `https://github.com/ZtechNetwork/MCBVanillaResourcePack` 도 있다.
+- **Editor changelog**: `https://github.com/Mojang/minecraft-editor/discussions` (매일 triage된다).
+
+#### 문서 자체의 오류와 공백 (2026-08 docs feedback 스레드)
+- **월드젠·데이터 문서**: 지그소 template pool 페이지가 없는 `legacy`/`list` 요소를 나열하고, 지그소 구조물 폴더명이 구식이다. 루트 테이블 적용 방법 설명이 빈약하고, 엔티티 이벤트 목록에 바닐라 이벤트가 많이 빠졌다. animationsreference/volumereference 페이지는 비었거나 404다. attachable 1.8/1.10 문서가 없다. `aggregate_feature`의 `early_out` 유효성과 순차 배치 여부에서 문서끼리 충돌한다.
+- **Script API 문서**: stable인데도 `Dimension.getBlocks`가 없다. `applyImpulse`/`applyKnockback`의 단위가 없고 `is_sleeping`은 모호하다. stable/experimental 탭이 타입과 일치하지 않고, 릴리스 전후 몇 주는 stable과 어긋난다. 예제가 금방 낡는다.
+- **파티클 사운드**: 문서는 파티클 사운드 이벤트가 `sound_definitions.json`에서 재생된다고 하지만, 실제로는 바닐라 `sounds.json`의 기존 `individual_event_sounds`만 동작했다. (single report)
+- **문서에 없는 동작**
+  - 모루에서 이름을 바꾸면 아이템 텍스처가 바뀔 수 있다(MCPE-188505).
+  - `query.lod_index`는 bedrock.dev에만 있다.
+  - custom component 매개변수는 객체 2단계까지만 중첩된다(`{"one": {"two2": {"three": "ERROR"}}}`). 오류 메시지는 이 제한을 말해 주지 않는다.
+
+#### 커뮤니티 문서
+- **Bedrock Wiki** (`https://wiki.bedrock.dev/`): 초보자 가이드의 표준이다. bedrock.dev의 일부 문서보다 최신이다.
+  - 주요 페이지: blocks-intro, block-components, custom-crops, block-permutations, block-culling, entity-intro-bp/rp, entity-events, spawn-rules, visuals/animation-effects, meta/addon-performance, scripting/scripting-intro, json-ui-intro/documentation, commands 계열(new-execute, execution-forking, scoreboard-operations 등).
+  - `llms.txt`(`https://wiki.bedrock.dev/llms.txt`): 페이지 URL을 원본 마크다운 `https://raw.githubusercontent.com/Bedrock-OSS/bedrock-wiki/refs/heads/wiki/docs/<path>.md`로 바꿔 읽을 수 있다.
+- **bedrock.dev**
+  - 2025-11-12 beta.bedrock.dev가 Next.js를 버리고 Astro로 다시 작성됐다. Next.js는 문서 HTML을 두 번(렌더 결과와 hydration용 preflight) 인라인해서 느렸다. App Router 이전은 정적 사이트와 로케일 처리에 맞지 않아 되돌렸다.
+  - 4년 넘게 갱신되지 않은 번역은 제거됐다.
+  - 버전 전환 시 다크모드 CSS 문제는 2026-02-27에 고쳐졌다.
+- **BDS-Versions** (github.com/Bedrock-OSS/BDS-Versions): 봇이 관리한다. README를 PR로 고치면 되돌려지니 README 템플릿을 고친다(약 15분 뒤 반영).
+  - 바이너리가 실제로 릴리스된 뒤에만 갱신된다. versions.json에 `cdn_root`(`https://www.minecraft.net/bedrockdedicatedserver`)를 넣는 데 메인테이너가 동의했다.
+  - 2026-07 원래 메인테이너(Mojang)가 떠난 뒤 1.26.40 태그가 없어 bedrock.dev가 1.26.30.5에 머물렀다. 2026-08-07에 릴리스나 태그 대신 저장소를 직접 clone하도록 고쳤다.
+  - #bedrock-dev-docs-updates의 문서 갱신 핑 봇은 BDS-Versions의 push/릴리스로 동작한다.
+  - 같은 릴리스라도 플랫폼별 빌드 번호가 다를 수 있다(예: Linux BDS 1.26.40.8과 사이트의 1.26.40.5).
+- **Script API 문서 미러**
+  - stirante: `https://stirante.com/script/` . 모듈/버전별 typedoc과 diff 도구가 있다(예: `/script/server/2.10.0/classes/BlockPermutation.html`, `/server/2.6.0-beta.1.26.0-preview.26/`, debug-utilities, server-ui preview). BDS를 받아 스크립트 모듈 JSON을 만들고, .d.ts로 바꾼 뒤 typedoc에 넣는다. 2026-02부터 GitHub Action으로 자동화됐다. 가끔 다운된다.
+  - jaylydev: `https://jaylydev.github.io/scriptapi-docs/latest/` . 검색, 이전 버전 보관, npm 명령, editor-private-bindings, 클래스별 TS 소스, LLM 프롬프트 페이지(`https://jaylydev.github.io/scriptapi-docs/meta/llms.html`), manifest 생성기(`https://jaylydev.github.io/manifest-generator/`)를 제공한다.
+- **기타 문서**: the-bedrock-notebook.dev(머티리얼 문서). Dingsel의 JSON UI 유튜브(`https://www.youtube.com/@Dingsel`). 영상 시리즈 `https://www.youtube.com/watch?v=QhJkCDIZ-NU` (코드 `https://skyls.de/`). 이징 레퍼런스 `https://easings.net/` .
+- **Bedrock Commands Community(BCC)**: `https://bedrockcommands.org/join` . 소유자 Zhea가 bedrock.dev 명령 쪽을 관리하고, binary-in-commands 문서가 있다. 다른 도움 커뮤니티로 "Break the Bedrock" 서버와 MCPEDL이 있다.
+- **changelog 검색**: SearchLog `https://searchlog.beyondbedrock.org` , changelog 리더 `https://minecrews.com` , preview 파일 변경 추적 `https://github.com/SmokeyStack/brarchaeology` .
+
+#### Bedrock Wiki 기여 방법
+- **이미지**: `docs/public/assets/images/<page path>/`에 두고, `<WikiImage>`에서는 `/public/...` 접두사를 뺀다(파일명만 써도 된다).
+- **리디렉션과 섹션**: 페이지 이름을 바꾸면 `redirects.yaml`(`.vitepress` 밖으로 옮겨졌다)에 항목을 추가한다. 섹션은 `section.yaml`(title, 선택적 `categories`)로 정의한다. front matter에는 `category`, `mentions`, `nav_order`, `tags`, `description`이 있다. categories가 없는 섹션에서 `category`를 지정하면 빌드 오류가 난다.
+- **스타일**: 파일 경로는 `<CodeHeader>path</CodeHeader>`로 쓰고, 제목에 `:`를 넣지 않고, 수동 `---` 구분선을 쓰지 않고, 대소문자를 일관되게 쓴다. PR 전에 로컬에서 띄워 본다. Prettier v3.4.0의 리스트 포맷 변경은 `prettier-plugin-markdown-list-tabwidth`로 되돌린다. Mermaid는 라이트/다크 테마를 지원한다.
+- **검색**: Algolia를 쓴다. 2025-11에 크롤링을 고쳤고, 2026-04에 이름에 슬래시가 든 페이지가 인덱스에서 빠졌다.
+- **저장소 크기**: 거대 GIF(최대 41.9MB)를 줄였다. `git clone --filter=blob:none`을 쓴다. 옛 `bedrock-examples` submodule 커밋을 push하지 않는다.
+- **라이선스**: MIT/CC-BY("Bedrock OSS")다. SPDX 헤더는 큰 코드 기여에만 붙이고, 그 밖의 기여자는 `mentions`에 적는다.
+- **트래픽**: 2025-12에 4.3만 클릭, 2026-04에 약 4.5만/월로 감소 추세이고 AI 크롤러가 늘었다. 기여 방향 메모: 긴 `/execute` 체인 글은 스크립팅이 있는 Bedrock에서는 쓸모가 제한적이라는 평을 받았다.
+- **서버 소프트웨어 목록 등재 기준(2026-10)**: 3개월 이상 됐고, 자체 README나 사이트가 있고, 스타 약 15개 수준이고, 최근 3개 프로토콜 버전 중 하나를 지원하거나 최근 커밋이 있고, fork 원본과 분명히 달라야 한다. Geyser 등은 "Crossplay Software" 섹션으로 옮긴다. 중단된 소프트웨어(PocketMine, Nukkit, BDSX)는 역사 기록으로 남긴다.
+
+#### 버그 리포트
+- **경로**: `https://report.bugs.mojang.com/servicedesk/customer/portal/6/` 에 보고하고, mojira.dev(`https://mojira.dev/MCPE-xxxxx`)에서 조회한다. triage에 이의가 있으면 리포트에 댓글을 달고 Mojira 커뮤니티에 알린다. 수정이 문제를 다른 곳으로 옮겼다면 새 리포트를 만들고 기존 리포트와 고쳐진 버전을 링크한다. 이미지 비교에는 Kaleidoscope를 쓴다.
+- **Mojang 입장(darknavi)**: 크리에이터 콘텐츠가 일으키는 크래시는 항상 버그이니 재현 방법과 함께 신고하라고 한다. kaylasara(Mojang)는 정리된 mojira 목록을 팀에 전달해 주겠다고 했다. experiment가 있는 이유는 망가진 동작에 의존하는 UGC를 지원하지 않기 위해서다.
+- **언급된 이슈**: MCPE-232019, MCPE-236312(`minecraft:support`가 배치를 막지 못함), MCPE-237057, MCPE-19214, MCPE-38136("Unknown was slain"), MCPE-240457(temp 변수 누수), MCPE-240513(playSound/프로퍼티), MCPE-23686(unfused TNT, Canopy ≥1.5.4가 패치), MCPE-164588, MCPE-237219(Editor 텍스트 필드).
+
+#### AI 사용
+- **신뢰도**: AI 답변은 Bedrock 명령과 Script API에서 믿기 어렵다(지어낸 fog transition, "holiday creator features가 제거됐다" 같은 주장, `runCommandAsync` 같은 deprecated API). 공식 문서를 우선한다.
+- **실제 활용 사례**: Regolith 필터, Molang 엔진, 메모리 검사기를 Claude로 만든 사례가 있다. bedrock-samples 커밋에서도 AI가 쓴 JSON UI가 보였다. Mcblend에는 전용 MCP가 필요 없고 Blender MCP(`https://www.blender.org/lab/mcp-server/`)와 Mcblend 제약을 적은 SKILL.md/AGENTS.md로 충분하다. 파티클 AI skill: `https://github.com/dotmcworld/particle-jester` . jaylydev 문서와 위키, ModularMC는 llms 페이지를 제공한다.
+
+---
+

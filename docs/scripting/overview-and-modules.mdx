@@ -1,0 +1,310 @@
+---
+title: "Script API 개요와 실행 모델"
+description: "Script API 모듈 구성, 매니페스트, TypeScript 번들링, 초기화 순서, 제한 실행, 스케줄링, QuickJS 런타임"
+sidebar_position: 1
+sources:
+  - private-research
+  - ms-learn
+  - bedrock-wiki
+---
+
+Script API는 Mojang 수정판 QuickJS 위에서 `@minecraft/server`, `@minecraft/server-ui`, `@minecraft/server-net`, `@minecraft/server-admin`, `@minecraft/server-gametest`, `@minecraft/debug-utilities`, `@minecraft/server-graphics`, `@minecraft/server-editor` 모듈로 노출된다. 이 페이지는 핵심 규칙 16개, 시작 방법, 실행 모델을 모은다. 공식 개념 문서는 Script API가 비헤이비어 팩의 `script` 모듈로 로드되며 월드 조작 코드가 서버 틱 안에서 실행된다고 설명한다(출처: ms-learn, bedrock-wiki).
+
+## 이 섹션의 페이지 지도
+
+- [개요와 실행 모델](./overview-and-modules.mdx): 매니페스트, 번들링, 초기화, 제한 실행, 스케줄링, QuickJS
+- [모듈 버전과 beta](./versions-and-beta.mdx): 버전 짝 맞추기와 릴리스별 변화
+- [이벤트와 전투](./events.mdx)
+- [엔티티, 아이템, 커스텀 컴포넌트](./entities-and-components.mdx)
+- [월드, 블록, 차원과 효과](./world-and-dimensions.mdx)
+- [커스텀 커맨드](./commands.mdx)
+- [동적 속성과 데이터 저장](./dynamic-properties-and-storage.mdx)
+- [server-ui, server-net, server-admin, GameTest](./server-net-and-admin.mdx)
+- [디버깅, 성능, 도구](./debugging-and-tooling.mdx)
+- [패턴 레시피, 알려진 제한, 미해결 질문](./pitfalls.mdx)
+
+## Script API란 무엇인가
+
+Script API는 비헤이비어 팩(BP)에 JavaScript(또는 TypeScript를 컴파일한 JavaScript)를 넣어 엔티티, 블록, 아이템, 플레이어, 월드를 제어하는 방법이다. 스크립트는 "정해진 시점이나 이벤트에 반응하는 프로그램"이고, 게임은 매 틱(1/20초)마다 스크립트 틱을 한 번 돌린다(출처: ms-learn, `creator/Documents/scripting/introduction.md`). 기능은 모듈 단위로 나뉘며, 코드는 `import { world, system } from "@minecraft/server";`처럼 모듈 이름으로 클래스를 가져온다. 가장 중요한 모듈은 `@minecraft/server`이고, 그 안의 핵심 진입점은 다음과 같다.
+
+| 클래스 | 역할 | 대표 멤버 |
+|---|---|---|
+| `world` | 월드 전체 | `getDimension`, `getAllPlayers`, `sendMessage`, `getDynamicProperty`, `scoreboard`, `afterEvents`, `beforeEvents` |
+| `system` | 틱과 스케줄링 | `currentTick`, `run`, `runTimeout`, `runInterval`, `runJob`, `clearRun`, `clearJob`, `waitTicks`, `sendScriptEvent` |
+| `Dimension` | 차원 안의 블록·엔티티 조회와 변경 | `getEntities`, `getPlayers`, `getBlock`, `spawnEntity`, `setBlockType`, `fillBlocks` |
+| `Entity`, `Player` | 엔티티와 플레이어 | `location`, `getComponent`, `addTag`, `teleport`, `applyDamage`, `runCommand` |
+| `ItemStack` | 아이템 한 묶음 | `typeId`, `amount`, `setLore`, `getComponent`, `setDynamicProperty` |
+| `Block` | 월드 안 블록 한 칸 | `typeId`, `permutation`, `setPermutation`, `getComponent` |
+
+(출처: ms-learn, `creator/ScriptAPI/minecraft/server/System.md`, `World.md`, `ItemStack.md`)
+
+## 최소 동작 예제
+
+스크립트가 돌려면 BP 매니페스트에 `script` 모듈과 `@minecraft/server` 의존성이 있어야 한다. 모듈 UUID는 새로 만들어 넣는다.
+
+```json
+{
+  "format_version": 2,
+  "header": {
+    "name": "My Script Pack",
+    "description": "Script API 예제",
+    "uuid": "00000000-0000-4000-8000-000000000001",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 21, 100]
+  },
+  "modules": [
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "00000000-0000-4000-8000-000000000002",
+      "version": [1, 0, 0],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    { "module_name": "@minecraft/server", "version": "2.4.0" }
+  ]
+}
+```
+
+`scripts/main.js`는 10초(200틱)마다 한 번 메시지를 보낸다.
+
+```javascript
+import { world, system } from "@minecraft/server";
+
+let secondsPassed = 0;
+function mainTick() {
+  if (system.currentTick % 200 === 0) {
+    secondsPassed += 10;
+    world.sendMessage("Seconds Passed: " + secondsPassed);
+  }
+  system.run(mainTick);   // 다음 틱에 같은 함수를 다시 예약한다
+}
+system.run(mainTick);
+```
+
+공식 튜토리얼은 `system.currentTick === 400`처럼 특정 틱에 의존하는 코드는 월드당 한 번만 실행되므로 조심하라고 경고한다. 게임 안에서 `/reload`를 치면 스크립트를 다시 읽어 고친 코드를 바로 확인할 수 있다(출처: ms-learn, `introduction.md`).
+
+## 실행 권한 3종
+
+스크립트는 시점마다 쓸 수 있는 API 범위(권한)가 다르다. 공식 문서의 분류는 이렇다(출처: ms-learn, `creator/Documents/scripting/execution-privilege.md`).
+
+| 권한 | 해당 시점 | 허용 범위 |
+|---|---|---|
+| restricted execution | 모든 `before` 이벤트, 커스텀 커맨드 콜백, 프로퍼티 getter | 읽기 전용과 특수 권한 API만. 월드를 바꾸는 호출은 오류 |
+| early execution | 처음 파일 로드, `system.beforeEvents.startup`, 커스텀 컴포넌트 등록 | 이벤트 구독, 스케줄러, 레지스트리 등록 정도만 |
+| default execution | `after` 이벤트, 코루틴, `system.run` 콜백 | 전체 API |
+
+예를 들어 `before` 이벤트에서 `getGameMode()`는 되지만 `setGameMode()`는 예외가 난다. `world.sendMessage()`는 특수 권한이 있어 `before`에서도 호출된다. 옛 문서의 "read-only"는 restricted execution과 같은 말이다.
+
+```javascript
+world.beforeEvents.playerBreakBlock.subscribe((e) => {
+  e.player.getGameMode();                    // 읽기: 가능
+  system.run(() => {                         // 쓰기는 미룬다
+    if (e.player.isValid) e.player.setGameMode("creative");
+  });
+});
+```
+
+## 틱 모델과 `system.run` 계열
+
+공식 가이드가 설명하는 한 틱의 순서는 이렇다. 먼저 `before` 이벤트(월드 변경 불가)가 오고, 비동기 코드, 시스템 job 큐, `system.run` 콜백과 `after` 이벤트 순회가 이어지고, 마지막에 틱 카운터가 올라간다. 베드락은 별도의 update 함수 대신 웹의 `setTimeout`/`setInterval`을 본뜬 API를 쓴다(출처: ms-learn, `creator/Documents/scripting/system-run-guide.md`).
+
+- `system.run(fn)`: 가능한 한 빨리 실행한다. `run` 콜백 안에서 다시 `run`하면 다음 틱에 실행되므로 한 틱에 무한 재귀할 수 없다. 게임 루프의 표준이다.
+- `system.runTimeout(fn, ticks)`: `0`은 가능한 한 빨리(`run` 콜백 안에서는 같은 틱, 무한 재귀 위험), `1`은 `run`과 비슷, `2`는 그다음 틱이다.
+- `system.runInterval(fn, ticks)`: `clearRun(id)`을 부를 때까지 같은 간격으로 반복한다. 값이 `1`이면 첫 실행은 다음 틱이다.
+- `system.runJob(generator)`: 제너레이터가 `yield`할 때마다 엔진이 남은 틱 시간을 보고 계속할지 정한다. 오래 걸리고 끝나는 틱이 중요하지 않은 작업용이다.
+
+```javascript
+// 게임 루프
+function update() { /* 로직 */ system.run(update); }
+system.run(update);
+
+// before 이벤트에서 월드 변경을 틱 뒤로 미루기
+world.beforeEvents.explosion.subscribe((e) => {
+  system.run(() => e.dimension.spawnEntity("minecraft:pig", { x: 1, y: 4, z: 1 }));
+});
+```
+
+이렇게 미룬 코드는 이미 이벤트가 끝난 뒤이므로 `cancel` 같은 취소 로직을 넣을 수 없다.
+
+### runJob으로 큰 작업 나누기
+
+```javascript
+import { system, world, BlockPermutation } from "@minecraft/server";
+
+function* placeCube(size, sx, sy, sz) {
+  const dim = world.getDimension("overworld");
+  const planks = BlockPermutation.resolve("minecraft:planks");
+  for (let x = sx; x < sx + size; x++)
+    for (let y = sy; y < sy + size; y++)
+      for (let z = sz; z < sz + size; z++) {
+        dim.getBlock({ x, y, z })?.setPermutation(planks);
+        yield;                       // 블록 하나마다 양보
+      }
+}
+system.runJob(placeCube(10, -2, -60, 1));   // 제너레이터 객체를 넘긴다
+```
+
+공식 권장은 반복 하나가 한 틱 시간을 넘지 않도록 잘게 `yield`하는 것이고, 반복 사이 작업량을 비슷하게 유지하는 것이다. job 시스템은 generator를 굶기지 않으며 스크립트 BP마다 틱당 최소 한 번은 반복을 실행해 준다(출처: ms-learn, `system-run-guide.md`).
+
+## Scripting V2의 시작 흐름
+
+2.0.0부터 스크립트는 월드 로딩 아주 이른 시점에 처음 실행된다. 공식 개요가 적은 순서는 이렇다(출처: ms-learn, `creator/Documents/scripting/v2-overview.md`).
+
+1. V2 스크립트 로드와 실행(early execution), 이어서 V2 promise 해소
+2. `system.beforeEvents.startup` 수신(early execution)
+3. 월드 로딩 완료까지 대기, 이후 V1 스크립트 로드(V1은 예전 타이밍 그대로)
+4. 첫 틱, 틱 끝에 모든 스크립트가 `world.afterEvents.worldLoad`(V1은 `worldInitialize`) 수신
+
+early execution에서 쓸 수 있는 API는 이벤트 `subscribe/unsubscribe`(world·system의 before/after 전부), `system.clearJob/clearRun/run/runInterval/runJob/runTimeout/waitTicks`, 그리고 `BlockComponentRegistry`와 `ItemComponentRegistry`의 `registerCustomComponent`다. 그 밖의 `world` 접근은 오류이므로 `worldLoad` 안이나 `system.run` 안으로 옮긴다.
+
+```javascript
+import { world, system } from "@minecraft/server";
+
+system.beforeEvents.startup.subscribe((init) => {
+  // 레지스트리 등록만 한다
+});
+
+world.afterEvents.worldLoad.subscribe(() => {
+  const overworld = world.getDimension("overworld");   // 여기서부터 안전
+  world.sendMessage("월드 로드 완료");
+});
+```
+
+V2는 promise 처리도 바꿨다. V1은 틱 끝에 한 번만 promise를 해소했지만, V2는 시스템 task 하나, after 이벤트 종류 하나가 끝날 때마다 해소하므로 `.then`이 같은 틱 안에서 실행되고 `await system.waitTicks(0)`도 가능하다. 아래의 "모듈 표"는 이 시점에서 어떤 모듈이 있는지 알려 준다.
+
+## 모듈 표 (Bedrock Wiki 0930b39 기준)
+
+매니페스트 `dependencies`에는 `module_name`이나 `uuid` 중 하나만 쓴다. 둘을 함께 쓰면 안 된다(출처: bedrock-wiki).
+
+| 모듈 | UUID | 옛 이름 | 처음 등장 |
+|---|---|---|---|
+| `@minecraft/common` | `77ec12b4-1b2b-4c98-8d34-d1cd63f849d5` | | Engine 1.20.40 |
+| `@minecraft/debug-utilities` | `1796ea86-0daf-4409-99ee-fd6467cf1203` | | Engine 1.20.70 |
+| `@minecraft/server` | `b26a4d4c-afdf-4690-88f8-931846312678` | `Minecraft`, `mojang-minecraft` | Engine 1.16.210 |
+| `@minecraft/server-ui` | `2bd50a27-ab5f-4f40-a596-3641627c635e` | `mojang-minecraft-ui` | Engine 1.18.20 |
+| `@minecraft/server-gametest` | `6f4b6893-1bb6-42fd-b458-7fa3d0c89616` | `GameTest`, `mojang-gametest` | Engine 1.16.210 |
+| `@minecraft/server-net` | `777b1798-13a6-401c-9cba-0cf17e31a81b` | `mojang-net` | Engine 1.19.10 |
+| `@minecraft/server-admin` | `53d7f2bf-bf9c-49c4-ad1f-7c803d947920` | `mojang-minecraft-server-admin` | Engine 1.19.10 |
+| `@minecraft/server-editor-bindings` | `8518d9c7-a1f5-4bf3-acc7-78e87df595fc` | | Engine 1.19.80 |
+| `@minecraft/server-editor` | `1d565354-296d-11ed-a261-0242ac120002` | | Engine 1.19.80 |
+
+`@minecraft/common`은 오류 클래스와 인터페이스 같은 기초 요소만 담고, `dependencies`에 적지 않아도 import할 수 있다. `server-editor`와 `server-editor-bindings`는 에디터 프로젝트로 만든 월드에서만 쓸 수 있고 후자는 문서화되지 않았다. `server-gametest`는 정식(stable) 버전이 없고 콘텐츠 제작자용이 아니다. 옛 alpha 1.x 계열은 `mojang-minecraft`, `mojang-gametest` 이름으로만 import되고 쓰지 않는다(출처: bedrock-wiki).
+
+## 커뮤니티 노트
+
+
+`*confirmed*`, `*single report*`, `**conflicting**`은 보고의 신뢰도 표시다. 이 페이지의 근거는 커뮤니티 보고이며 Mojang 공식 문서와 다를 수 있다.
+
+### 핵심 요약
+
+1. **등록은 `system.beforeEvents.startup`에서만**: 블록/아이템 커스텀 컴포넌트(`blockComponentRegistry`, `itemComponentRegistry`), 커스텀 커맨드(`customCommandRegistry`), 커스텀 차원(`dimensionRegistry`)은 모두 startup 이벤트에서 등록한다. `world.beforeEvents.worldInitialize` / `afterEvents.worldInitialize`는 2.0에서 제거됐고, 월드 접근 코드는 `world.afterEvents.worldLoad`로 옮긴다.
+2. **before 이벤트, 커맨드 콜백, startup은 "restricted(early) execution"**: 월드를 바꾸는 호출(`runCommand`, `setItem`, `spawnParticle`, `addTag`, 폼 `show` 등)은 `Native function [...] cannot be used in restricted execution` / `does not have required privileges`로 실패한다. `system.run(() => ...)`으로 미루고, 미룬 콜백 안에서 `isValid`를 다시 확인한다. after 이벤트·인터벌·커스텀 컴포넌트 콜백은 필요 없다.
+3. **2.x 마이그레이션 핵심 변경**: `runCommandAsync` 제거(→ `runCommand`), `isValid()` → `isValid` 속성, `applyKnockback(x,z,h,v)` → `applyKnockback({x,z}, vertical)`, `selectedSlot` → `selectedSlotIndex`, `GameMode` 대문자 문자열, `world.events.beforeChat` → `world.beforeEvents.chatSend`, `blockBreak` → `playerBreakBlock`, `itemUseOn` → `playerInteractWithBlock`. AI가 생성한 코드는 이 구버전 API를 자주 쓴다. *confirmed*
+4. **매니페스트 의존성 `"version": "beta"`** 는 항상 최신 beta를 가리켜 업데이트마다 버전을 고칠 필요가 없다(1.21.120 무렵 안정판에 도입). 대신 월드에 Beta APIs 실험을 켜야 하고 beta API 변경 시 깨질 수 있다. 특정 `x.y.z-beta.*` 고정 버전은 업데이트마다 깨진다. 잘못된 버전을 쓰면 콘텐츠 로그에 사용 가능한 버전 목록이 출력된다.
+5. **`world.beforeEvents.chatSend`는 2026-10 시점까지 beta 전용**: stable 모듈에서는 `cannot read property 'subscribe' of undefined`. 대안은 커스텀 커맨드.
+6. **`world.beforeEvents.entityHurt`**(EntityHurtBeforeEvent)는 2025-12 프리뷰(2.6.0-beta)에 등장해 2.6.0(약 1.26.10)에서 안정화. `cancel`과 쓰기 가능한 `damage`로 토템, 낙하 무효, 팀 데미지 등을 구현하지만 화염 부여·일부 부수 효과는 막지 못하고, 핸들러 안 `health.currentValue`는 이미 데미지가 반영된 값이다.
+7. **동적 속성(dynamic property)**: World / Entity / Player / 스택 불가 ItemStack에 string·number·boolean·Vector3 저장, 문자열 하나당 32,767 바이트, 키 개수 무제한, 팩 UUID별 샌드박스(UUID를 바꾸면 데이터가 안 보임). 객체는 `JSON.stringify`, 삭제는 `setDynamicProperty(key, undefined)`. 블록 DP는 26.50부터 `minecraft:block_entity` 필요(약 1 KB).
+8. **`minecraft:equippable` 컴포넌트는 플레이어 전용**(1년 넘게, Mojang "on radar"): 몹 장비 읽기/쓰기는 `replaceitem`/`hasitem` 커맨드와 `successCount`로 한다.
+9. **ItemStack은 복사본**: `setLore`, `setDynamicProperty`, durability 변경 후 `container.setItem(slot, item)` 또는 `setEquipment`로 되돌려 써야 저장된다. `ContainerSlot`(`container.getSlot(i)`)은 실시간으로 반영된다. 슬롯 비우기는 `setItem(slot, undefined)` (`minecraft:air` ItemStack은 유령 아이템).
+10. **커스텀 커맨드**: 이름에 네임스페이스 필수, 콜백 `(origin, ...args)`는 동기적으로 `{status, message}` 반환, 하위 커맨드·가변 문자열 인자 없음, PlayerSelector 인자는 배열이며 비-OP는 `insufficient permissions for selector expansion`(MCPE-230568, 미해결). Realms에서 `CommandPermissionLevel.Admin`은 동작하지 않으니 `GameDirectors` 사용.
+11. **플레이어 입장 처리**는 `playerJoin`(id/name만 있음)이 아니라 `playerSpawn` + `event.initialSpawn`. 다만 클라이언트가 완전히 로드됐다는 이벤트는 없어 폼 표시 등은 지연·`UserBusy` 재시도가 필요하다.
+12. **`playerInteractWithBlock` before 이벤트는 누르고 있는 동안 반복 발생** → `if (!event.isFirstEvent) return;`. after 버전은 실제 상호작용이 있는 블록에서만 발생하며, before를 취소하면 블록 설치도 취소된다.
+13. **무거운 작업은 `system.runJob(generator())`** 로 틱에 나누고(제너레이터 *객체*를 넘김), 큰 영역은 청크 단위 `fillBlocks` + 임시 ticking area. 언로드 청크 접근은 예외를 던진다.
+14. **런타임은 JIT 없는 Mojang 수정판 QuickJS**: 네이티브 getter 호출(`entity.location`, `player.name`)이 JS Map 조회보다 20~30배 느리므로 캐시하고, 이벤트 기반으로 짜고, 핫 루프에서 할당을 줄인다. `Intl`/`toLocaleString`, `TextEncoder`, WASM 없음.
+15. **server-net / server-admin은 BDS 전용**(`config/default/permissions.json`의 `allowed_modules` 필요). Realms·로컬 월드에서는 HTTP 불가, 단 `transferPlayer`는 Realms에서도 동작한다는 보고가 다수. 애드온 간 통신은 `system.sendScriptEvent` / `scriptEventReceive`(MCBE-IPC 등).
+16. **DDUI(`CustomForm`, `Observable*`)** 는 server-ui 2.1.0에서 1.26.30에 안정화. 26.30+는 `new CustomForm(player, title)`, 관찰값은 `ObservableString/Number/Boolean`으로 분리. 표시 후 요소 추가 불가(미리 만들고 `visible` 토글), 폼 연속 열기에는 최소 1틱 지연.
+
+
+### 시작하기: 매니페스트, 모듈 버전, 개발 환경
+
+#### 매니페스트 구성
+
+- **필수 구성**: BP 매니페스트에 `modules`의 `{"type": "script", "language": "javascript", "entry": "scripts/main.js"}`와 최상위 `dependencies`의 `{"module_name": "@minecraft/server", "version": "2.4.0"}`(버전은 점 구분 문자열)가 있어야 스크립트가 실행된다. `dependencies`를 `modules` 안에 넣으면 안 된다. 옛 `"script": {"api_version"}` 블록은 폐기.
+- **format_version 2 vs 3**: format_version 2에서는 `version`, `min_engine_version`이 배열 `[1,0,0]`, 3에서는 문자열. 섞으면 `TypeError: cannot read property 'startup' of undefined`가 날 수 있다.
+- **min_engine_version**: "Unexpected version for loaded data" 경고는 매니페스트 `min_engine_version`이 맞아야 해결된다(`base_game_version`은 월드 전용).
+- **팩 UUID 유지**: 동적 속성은 팩(모듈) UUID에 묶이므로 업데이트할 때 UUID가 아니라 `version`만 올린다. 같은 UUID로 .mcaddon을 재설치하면 버전이 더 높을 때만 교체된다.
+- **업적 유지**: BP 매니페스트에 `"metadata": {"product_type": "addon"}`.
+- **`script_eval` capability**: `"capabilities": ["script_eval"]`가 있어야 `new Function()`/`eval` 사용 가능(없으면 "Function from string is not supported"). 사용자 입력과 함께 쓰면 보안 위험, 비권장.
+- **매니페스트 `header.name`에 `+`** 가 있으면 디버거/진단에서 파일이 안 보인다.
+- **RP/BP 의존성 버전 불일치**(RP 1.0.1 vs BP가 1.0.0 요구)가 월드 로드 시 stack overflow 오류로 나타난 사례. (*single report*)
+- **매니페스트 생성기**: `https://jaylydev.github.io/manifest-generator/` (Jayly 본인은 자신의 생성기를 "과설계"라며 접었다고 언급).
+
+
+#### npm 타입, TypeScript, 번들링
+
+- **타입 설치**: Node.js 설치 후 애드온 폴더(또는 상위)에서 `npm init -y` → `npm i @minecraft/server @minecraft/server-ui`. beta 타입은 `@beta` 태그(`npm install @minecraft/server@beta @minecraft/server-ui@beta ...`)를 잊지 말 것. npm은 타입 전용이며 실행에는 필요 없다.
+- **정확한 버전 설치**: `npm update`는 semver 범위 안에서만 움직이므로 `npm i @minecraft/math@2.2.11`처럼 명시 설치하고, 매니페스트는 따로 갱신, `package-lock.json` 커밋. 꼬이면 `node_modules`, lock 삭제 후 재설치. `@minecraft/debug-utilities`는 `@latest`가 오래된 d.ts를 주거나 비어 있었으므로 서버 모듈에 맞는 정확한 버전(`1.0.0-beta.1.21.130-stable` 등)을 설치(`--force`가 필요했던 사례).
+- **중복 `@minecraft/server`**: server-ui가 자체 중첩 사본을 끌어오면 타입이 어긋난다. `tsconfig`의 `"paths": {"@minecraft/server": ["./node_modules/@minecraft/server"]}` 또는 `package.json` `overrides`로 server-ui, server-net, server-admin, math를 같은 버전에 고정. 예시: `https://github.com/Visual1mpact/Paradox_AntiCheat/blob/rewrite/package.json`
+- **TS는 반드시 JS로 컴파일**: 게임은 `.js`만 실행하며 `scripts/`의 `.ts`는 무시된다. 매니페스트 entry는 컴파일된 JS를 가리켜야 한다. esbuild/vite/rolldown/tsc로 번들(vite는 타입 검사 없음). 큰 코드베이스는 TS 권장, JSON 기반 시스템도 일부 작업엔 여전히 적합.
+- **tsconfig 주의**: `module/moduleResolution: nodenext`는 `exports`를 내보내 `ReferenceError: 'exports' is not defined`. `es2020` 모듈/ES2021 타깃 사용. 커뮤니티 예: target/module es2022, moduleResolution bundler, noLib, checkJs, allowJs, noEmit, types `@bedrock-apis/env-types`. `node16`에서 로컬 import가 깨진 사례는 `"module": "ES2020"`, `"moduleResolution": "Node"`로 해결. `verbatimModuleSyntax`면 `BlockStateSuperset`은 `import type`. TS/JS 혼용은 `"allowJs": true`.
+- **`@bedrock-apis/env-types`**: QuickJS 런타임 전역(target es2021 + `print`, `InternalError`, `Object.__getClass`, `String.prototype.__quote`)에 맞춘 TS 선언.
+- **타입만 있는 이름 import 금지**: 26.40 이후 `.js`에서 `ItemCustomComponent`, `StartupEvent`, `Vector3` 등 인터페이스를 `@minecraft/server`에서 import하면 "Could not find export"로 실패. `EntityQueryOptions`도 인터페이스라 TS에서 `import { type EntityQueryOptions }`.
+- **JS에서 타입 검사**: 파일 상단 `// @ts-check` + JSDoc `/** @type {import("@minecraft/server").ItemCustomComponent} */`. VS Code가 `form.show(player)` 타입을 오탐하면 `// @ts-ignore`. ESLint로 미정의 import·오타를 미리 잡을 수 있다.
+- **커스텀 ID 타입 오류**: `VanillaEntityIdentifier` 오류는 `spawnEntity<string>(...)` 또는 `as` 캐스트, 커스텀 블록 상태는 `getState("ns:state" as keyof BlockStateSuperset)`. const enum은 인라인돼 사라진다(Regolith `type_gen` 필터로 enum 파일 재생성). `getComponent`는 신버전에서 제네릭(EntityComponentReturnType).
+- **`@minecraft/vanilla-data`**(npm): `MinecraftBlockTypes`, `MinecraftItemTypes`, `MinecraftEffectTypes`, `MinecraftDimensionTypes` 등 상수 제공. `@minecraft/server`에는 없으므로 esbuild/webpack 번들러가 필요. `@minecraft/math`의 `Vector3Utils` 등도 번들 필요.
+- **`@minecraft/core-build-tasks`(just-scripts)** 는 `.env`(VS Code 검색에서 숨김)에 정의된 제품 폴더로 배포하므로 예상치 못한 UWP 경로로 갈 수 있다.
+- **경로**: Windows Store `com.mojang`은 `%localappdata%\Packages\Microsoft.MinecraftUWP_8wekyb3d8bbwe\LocalState\games\com.mojang`. 프리뷰는 "Minecraft Bedrock Preview" 쪽 `development_behavior_packs`.
+- **Bridge.**: 초보에게 스크립트 시작용으로 추천되나 스크립트 오류를 표시하지 않고, v2 텍스트 에디터 모드는 초보에게 비권장, mcaddon 내보내기 버그(v3 개발 중, 수동 내보내기), 컴파일 출력 경로를 재시작 전까지 무시한 사례.
+- **Blockception VS Code 확장**: 번들러 프로젝트 경고는 `.mcignore`로 무시(파일 경로 길이 80자 제한 때문에 npm 경로에 유용).
+- **Acode(Android)** 에 "Minecraft Autocomplete" 플러그인 있음.
+- **공급망 경고**: 2026-04-03경 axios, `plain-crypto-js@4.2.1` 침해 보고 언급 → 의존성 확인. (*single report*)
+
+#### 파일 구성과 import
+
+- **entry 하나만 실행**: 다른 파일은 `import "./other.js"`(부수효과) 또는 named import로 불러온다. import는 로드 시 한 번 해석되며 비용은 무시할 만하다. 한 모듈을 import하면 그 모듈 전체가 한 번 실행된다.
+- **import 규칙**: 상대 경로(`./`, `../`)와 `.js` 확장자 필요, `.json` import 불가(설정은 JS 객체로 export하거나 번들러 사용), 폴더 단위 import 불가(index 파일로 재-export), 다른 애드온의 스크립트 import 불가(각 팩이 격리된 런타임). `import(".")`는 게임을 크래시시킨다.
+- **순환 import**: 가져오는 쪽의 초기화 전 변수에 의존하는 코드를 import 시점에 실행하면 "undeclared" 오류. 공유 가변 상태는 `export let` + import로 가능.
+- **새 파일 추가는 재시작 필요**: 기존 파일 수정은 `/reload`(또는 재입장)로 충분하지만 파일 생성/삭제는 월드 재입장 또는 게임 재시작이 필요("Import not found"). 동적 `import()`(1.20.80부터 지원)도 게임 중 새로 만든 파일은 못 읽는다. `import(...).catch(console.error)`로 로드 오류 추적.
+- **전역 스코프 오류**: 모듈 최상위에서 예외(문법 오류, 잘못된 import, 중복 import)가 나면 main.js가 나머지 파일을 import하지 못하고 조용히 멈춘다. 잘못된 상대 경로 하나로 전체 컴포넌트 등록이 깨진 사례. 디버그 팁: import문 앞에 `console.warn`을 둬 main.js 실행 여부 확인.
+- **프로젝트 구조**: 표준은 없음. 기능 우선 또는 레지스트리 패턴(`registerBlockInteraction(typeId, handler)`), 얕게 유지. 예: `main.ts`가 `events/`, `cmds/`, `services/`, `utils/` import. 미니게임은 `onStart/onTick/onPlayerJoin/onPlayerLeave/onEnd`를 가진 추상 클래스 권장.
+
+
+### 실행 모델: 초기화, 제한 실행, 스케줄링, 런타임
+
+#### 초기화 순서
+
+- **startup → worldLoad**: `system.beforeEvents.startup`이 `worldLoad`보다 먼저 발생한다. startup에서는 레지스트리 등록만 하고, 월드 데이터(동적 속성, 스코어보드)는 읽을 수 없다.
+- **early execution**: 2.0부터 모듈 최상위 코드는 early execution이라 `world.getDimension('overworld')`, `world.getAllPlayers()`, `world.scoreboard.getObjective()`, 동적 속성 설정 등이 실패한다(최상위에서 DP 설정 시 커스텀 컴포넌트 등록까지 실패). `world.afterEvents.worldLoad`(권장) 또는 `system.run` 안에서 실행하거나 `system.run(() => import('./file.js'))`로 지연 import. 최상위 `new ActionFormData()`도 금지. `world.getAllPlayers()`는 초기화 시점엔 비어 있다.
+- **이벤트 구독은 최상위에서 해도 된다**: `worldLoad`로 감쌀 필요 없다. 단 startup subscribe를 다른 이벤트 핸들러 안에 중첩하지 말고, 컴포넌트 등록을 `system.run`으로 지연시키지 말 것. 최상위 `await system.waitTicks(1)`이 startup 컴포넌트 등록을 막았다는 주장도 있음(*single report*).
+- **`worldLoad` 특성**: `/reload`에서도 발생하고(`playerSpawn`은 아님), 매 로드마다 실행되므로 월드당 한 번만 실행하려면 월드 DP 플래그 사용. 첫 틱 이후에 발생해 상태 객체가 초기화 전에 틱될 수 있다(지연 초기화 권장). 블록 작업에는 여전히 청크 로드가 필요. 여러 구독은 구독 순서대로 실행되지만 순서가 중요하면 하나로 합칠 것. 1.13 → 2.7 이전 시 스크립트가 더 일찍 로드돼 스코어보드가 준비 안 될 수 있다.
+
+#### 제한 실행(restricted / read-only)과 `system.run`
+
+- **증상**: `Native function [World::sendMessage] cannot be used in early execution`, `Native function [Entity::teleport] cannot be used in restricted execution`, `Native function [Container::setItem] does not have required privileges`. 2.0 이후 "early execution"이 "restricted execution"으로 이름이 바뀌었다. 설명: `https://jaylydev.github.io/scriptapi-docs/features/script-privileges.html` , `https://wiki.bedrock.dev/scripting/privileges`
+- **해당 컨텍스트**: 모든 `beforeEvents` 핸들러, 커스텀 커맨드 콜백, startup, 모듈 최상위. 읽기는 대부분 허용(`getTags()`, `equippable.getEquipment()`, `world.sendMessage`, `setDynamicProperty`도 가능). 커스텀 블록/아이템 컴포넌트 콜백(`onTick`, `beforeOnPlayerPlace` 등)과 after 이벤트는 쓰기 가능. 읽기 전용 여부를 확인하는 네이티브 함수는 없다. *confirmed*
+- **수정 패턴**: `system.run(() => { if (!player.isValid) return; ... })`. `await null`/`await Promise.resolve()`로도 유효한 실행 지점에서 재개된다. 떠나는 플레이어 이름처럼 필요한 값은 `system.run` 밖에서 먼저 복사. `system.run`은 run id(숫자)를 반환하며 콜백 반환값이 아니다.
+- **`system.run` 시점**: "현재 틱 끝"에 실행된다는 설명과 "다음 틱"이라는 설명이 공존하며, 공식 문서는 부하 시 같은/다음 틱 실행을 보장하지 않는다고 명시. after 이벤트 콜백이 `system.run` 콜백보다 먼저 처리되고, 큐가 빌 때까지 처리된다. after 이벤트와 `runInterval`의 순서는 미확정. `return` 전에 큐에 넣은 `system.run`도 실행된다.
+- **비동기 순서 예**: before `playerJoin` 핸들러에서 A(동기) → C(콜백 나머지) → B(`system.run` 콜백). `await Promise.resolve()`가 앞에 있으면 A, B, D 후 C. async 함수는 첫 `await`까지 동기 실행되므로 최적화 수단이 아니며, 이미 resolve된 promise도 최소 한 번 양보한다.
+
+#### 스케줄링
+
+- **API**: `system.run(fn)`, `system.runTimeout(fn, ticks)`, `system.runInterval(fn, ticks)`, `system.clearRun(id)`, `system.waitTicks(n)`(Promise), `system.runJob(gen)`/`system.clearJob(id)`. `system.runSchedule`은 존재하지 않는다(흔한 AI 오류). `runInterval` 최소 간격 1틱, 20 Hz보다 빠른 실행 불가. *confirmed*
+- **중첩 지연은 더해진다**: `runTimeout(…,2)` 안의 `runTimeout(…,3)`은 5틱 후. `runInterval` 안에서 `runTimeout`/`runInterval`을 만들면 매 틱 누적되므로 금지 → 틱 카운터 하나 또는 바깥 스코프에 핸들 저장 후 `clearRun`. 연쇄 동작은 재귀 `runTimeout`. 인터벌 핸들을 저장해 중복 생성을 막을 것.
+- **틱 시간 vs 실제 시간**: `system.currentTick`과 `runTimeout`은 일시정지를 존중하고, `Date.now()`는 계속 흐른다. `world.getAbsoluteTime()`은 게임 내 시간(틱, time 커맨드 영향). i-frame 추적은 `currentTick`, 실시간 쿨다운은 `Date.now()`. `new Date()`가 데스크톱 기기 시간과 다를 수 있으니 UTC 타임스탬프 권장. 하위 틱 스케줄은 불가(3.5틱이 필요하면 3과 4를 번갈아).
+- **재시작에 살아남지 않음**: `runTimeout` 콜백은 월드 종료·크래시 후 사라지므로 생성한 엔티티 ID를 DP에 저장해 로드 시 정리.
+- **TPS 측정**: 실제 TPS/MSPT API는 없다. `runInterval` 콜백 간 `Date.now()` 차이를 약 100개 링버퍼에 넣어 추정(이상치 50 ms). 커스텀 TPS 표시보다 내장 프로파일러 권장.
+
+#### `system.runJob`과 제너레이터
+
+- **사용법**: `system.runJob(theJob())` — 제너레이터 *객체*를 넘긴다(`() => theJob()`이면 "Native type conversion failed ... expected Generator&lt;void,void,void>"). 반환된 id로 `system.clearJob(id)`. 루프 안에 `yield`를 둔다. 제너레이터는 값을 반환할 수 없으며 Promise로 감싼 `runJobAsync` 래퍼가 있다(`https://github.com/IMvampireXD/Script-API-Utilities/blob/main/src/utilsLib/runJob-Utils.js`).
+- **동작**: 엔진이 남은 틱 시간만큼 yield를 소비한다(바쁜 틱엔 ~3회, 빈 월드엔 ~800회). 완료 시점은 보장되지 않고 여러 job은 틱 예산을 공유한다(빨라지진 않지만 안전). 창을 내리면 job이 쌓일 수 있다. 한 틱에 끝나는 일(36칸 인벤토리 루프 등)은 동기 코드가 낫다(job은 1~2틱 지연).
+- **주기적 job 중복 방지**: 인터벌마다 job을 시작하면 동시 job이 쌓이므로 `jobRunning` 플래그 + try/finally 안 `yield*`. 재귀 flood fill은 스택 오버플로 → 제너레이터 안 반복문으로.
+- **우선순위 job 모듈**: creepycreepermw의 Jobs.js — `Jobs.queue(function*(){...}, JobPriority.HIGH|MIDDLE|LOW|LOWEST)`. HIGH는 최대한 빨리, MIDDLE/LOW는 비율 공유(MIDDLE이 더 많이), LOWEST는 상위 job이 없을 때만. 같은 tier 내 세부 우선순위는 같은 작업을 여러 번 큐에 넣어 흉내. 예: 안티-엑스레이 청크 스캐너.
+- bedrock-boost의 `PlayerPulseScheduler`는 플레이어별 작업을 틱에 분산한다.
+
+#### QuickJS 런타임 특성
+
+- **엔진**: Mojang 수정판 QuickJS(quickjs-ng 아님, `https://github.com/bellard/quickjs`). JIT 없음(콘솔/Apple이 JIT 금지 + 모든 플랫폼 동일 동작 필요). Ore UI(Gameface)는 플랫폼에 따라 V8/JSC. CPU 집약 코드(게임보이 에뮬레이터)는 SerenityJS(Node)에서 100배 빨랐다. 서버측 로직은 틱당 최대 1회 실행되고 RP Molang/애니메이션만 프레임마다 갱신. *confirmed*
+- **있는 것**: Proxy, Reflect, Symbol, BigInt, typed arrays/ArrayBuffer/SharedArrayBuffer/DataView, Promise, WeakMap/WeakSet, `print`, `console`, `Object.groupBy()`, 제너레이터. `WeakRef`/`FinalizationRegistry`는 처음엔 없었으나(2025-11 보고) 26.0.23 프리뷰(2025-12)에서 추가.
+- **없는 것**: `Intl`/`toLocaleString`(직접 숫자 포매터 작성), `TextEncoder`/`TextDecoder`(Uint8Array로 수동 UTF-8), WebAssembly(`wasm2js` 불가), iterator helpers(tc39), `RegExp.escape`, `Math.sumPrecise`(폴리필 `https://www.npmjs.com/package/math.sumprecise`), 일부 신규 Map 메서드, `findLast`(없을 수 있음, `arr.at(-1)` 사용), Atomics, 모듈 strict mode, 정상 동작하는 `with`, async generator. 클래스 존재 여부는 `https://github.com/bedrock-apis/env-types` 로 확인.
+- **네이티브 객체 특성**: 이벤트/클래스 객체의 속성은 프로토타입 getter라 열거 불가(`Object.keys(event)` 빈 배열, 스프레드 `{}`; `Object.defineProperties`로 `enumerable: true` 우회). API 메서드를 변수에 저장하거나 구조분해하면 인스턴스 바인딩이 끊겨 throw("Native function ... object bound to prototype does not exist"). 일부 네이티브 배열(`entityItemDrop`/`entityItemPickup`의 `items`, `BlockStateType.validValues`)은 `for...of` 불가 → `forEach`/`Array.from`. FormResponse는 `JSON.stringify`가 무의미. `[object Object]` 출력 때문에 `console.log`를 JSON.stringify로 덮어쓰는 경우가 흔하다.
+- **객체 확장**: `player.myProp = true` 같은 임시 속성은 세션 동안만 유지(`/reload`·퇴장 시 소실). TS에서는 인터페이스 확장/`declare module "@minecraft/server" { interface Player { stamina?: number } }`(타입만). `Player` 생성자는 protected라 상속 불가 → 프로토타입 패치(`Object.defineProperties(Player.prototype, ...)`) 또는 래퍼 클래스. `world` 객체에는 더 이상 새 속성을 추가할 수 없다("object is not extensible"). 출시 팩에서 `String.prototype` 등 내장 프로토타입 수정 금지. 버그 MCPE-240513(1.26.40): `player.playSound` 호출 후 임시 JS 속성이 undefined/read-only가 됨, 26.50에서 수정.
+- **`this` 분리**: 커스텀 컴포넌트·이벤트 핸들러로 넘긴 메서드는 `this`가 사라진다 → 화살표 함수(`(data) => this.callback(data)`)나 클로저 사용.
+- **JS 함정 모음**: `` `$&#123;&#125;` ``는 백틱에서만 보간; `if (a === x, y, z)`는 쉼표 연산자라 항상 참(→ `array.includes`); `-2 < x < 2`는 `(-2<x)<2`; `new Number(x)`는 객체라 벡터 인자를 깨뜨림(`Number(x)`); `.includes({id})`는 참조 비교라 항상 false(`.find` 사용); `forEach`는 `break` 불가; 플레이어 루프에서 `return` 대신 `continue`; 같은 객체를 반복 push하면 참조 하나만 저장; `Math`는 대문자; 비트 연산은 32비트로 잘림(`>>> 0`); `-0`과 `0`; Map 반복자는 live.
+
+#### Watchdog
+
+- 틱이 약 10,000 ms를 넘거나 긴 동기 작업(예: 큰 IPC 직렬화 ~11 KB+)이면 watchdog이 `InternalError: interrupted`로 스크립트/월드를 종료한다. `system.beforeEvents.watchdogTerminate`에서 `event.cancel = true`로 월드 종료 대신 스크립트 엔진만 종료(beta, `event.terminateReason`). `@minecraft/debug-utilities` beta에 `disableWatchdog`. Creator 설정의 watchdog 옵션도 영향. BDS 메모리 watchdog은 `server.properties`의 `script-watchdog-memory-limit=0`으로 끔(Realms 불가).
+

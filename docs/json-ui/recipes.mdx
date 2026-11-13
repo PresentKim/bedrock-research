@@ -1,0 +1,448 @@
+---
+title: 패턴 레시피
+description: 서버 폼 최소 구성, 데이터 소스, 고정 폭 레코드, 라디오 탭, HUD 토스트 등 조합 예제 12개.
+sidebar_position: 11
+sources:
+  - repo-guide
+  - repo-bedrock-core
+  - private-research
+  - advancementpack
+  - bedrock-samples
+  - repo-multiselect
+  - ms-learn
+  - repo-survey
+
+---
+
+## 개념: 레시피를 읽는 법
+
+레시피는 앞선 규칙(파일·수정·바인딩·식·컬렉션·호스트)을 한 가지 목적으로 조합한 예제다. 이름 `myui`, `myui:v1` 등은 예시이고, 코드는 이 가이드에서 새로 썼거나 MIT인 bedrock-core·AdvancementPack 샘플을 줄인 것이다. 이 장의 코드는 게임에서 다시 실행해 보지 않았다. 레시피마다 "한 줄 요약 규칙(PAT-nn) → 근거 규칙 → 코드 → 주의" 순서로 쓰고, 근거 규칙 ID로 그 규칙의 검증 수준을 따라가 신뢰도를 가늠한다.
+
+공통 전제: 새 UI 파일은 `ui/_ui_defs.json`의 `ui_defs` 배열에 경로(리소스팩 루트 기준, 보통 `ui/`로 시작)를 등록해야 읽힌다. 바닐라와 같은 경로의 파일(`ui/server_form.json`, `ui/hud_screen.json`)은 등록 없이 수정되고, 그때는 `modifications`로 바닐라 정의에 컨트롤·바인딩을 넣고 뺀다. 등록 예시는 다음과 같다(MS Learn의 `ui_defs` 문서와 같은 형식, 출처: ms-learn).
+
+```json
+{ "ui_defs": [ "ui/myui/screen.json", "ui/myhud/toast.json" ] }
+```
+
+
+
+앞 장의 규칙을 조합한 예제다. 이름(`myui`, `myui:v1` 등)은 예시이고, 코드는 이 가이드에서 새로 썼거나 MIT인 BC·AP 샘플을 줄인 것이다. **이 장의 코드 자체는 게임에서 다시 실행해 보지 않았다.** 각 레시피의 근거 규칙을 함께 적었다.
+
+---
+
+## 레시피 1. 서버 폼으로 내 화면 띄우기 (최소 구성)
+
+- **[PAT-01]** 액션 폼 커스텀 화면의 최소 구성은 ① 바닐라 `long_form`·`custom_form`을 제목 접두사로 숨기고 ② `main_screen_content`에 `server_form_factory`를 쓰는 두 번째 팩토리를 넣어 ③ 내 화면을 만드는 것이다. `{코드, 작동팩}` (출처: BC 4.1-(1), BA 2장, VN server_form.json)
+
+근거: MOD-02, MOD-08, HOST-02~05, COL-14
+
+```jsonc
+// RP/ui/server_form.json  ← 바닐라와 같은 경로. 대부분 modifications (size 한 줄만 속성 덮어쓰기)
+{
+  "namespace": "server_form",
+  "long_form": { "modifications": [ { "array_name": "bindings", "operation": "insert_back", "value": [
+    { "binding_name": "#title_text" },
+    { "binding_type": "view",
+      "source_property_name": "(not (('%.7s' * #title_text) = 'myui:v1'))",
+      "target_property_name": "#visible" } ] } ] },
+  "custom_form": { "modifications": [ { "array_name": "bindings", "operation": "insert_back", "value": [
+    { "binding_name": "#title_text" },
+    { "binding_type": "view",
+      "source_property_name": "(not (('%.7s' * #title_text) = 'myui:v1'))",
+      "target_property_name": "#visible" } ] } ] },
+  "main_screen_content": {
+    "size": [ "100%", "100%" ],               // 바닐라는 [0, 0]. 내 화면이 크기를 받도록
+    "modifications": [ { "array_name": "controls", "operation": "insert_back", "value": [
+      { "myui_bridge": { "type": "panel", "size": [ "100%", "100%" ],
+          "factory": { "name": "server_form_factory",
+                       "control_ids": { "long_form": "@myui.root" } } } } ] } ]
+  }
+}
+```
+
+```jsonc
+// RP/ui/myui/screen.json  (_ui_defs.json 에 등록)
+{
+  "namespace": "myui",
+  "root": {
+    "type": "panel", "size": [ 260, 180 ],
+    "bindings": [
+      { "binding_name": "#title_text" },
+      { "binding_type": "view",
+        "source_property_name": "(('%.7s' * #title_text) = 'myui:v1')",
+        "target_property_name": "#visible" } ],
+    "controls": [
+      { "bg@common.common_panel": {} },
+      { "buttons": { "type": "stack_panel", "size": [ "100% - 16px", "100%c" ], "offset": [ 0, 24 ],
+          "anchor_from": "top_middle", "anchor_to": "top_middle",
+          "collection_name": "form_buttons",
+          "controls": [
+            { "b0@myui.press_cell": { "collection_index": 0 } },
+            { "b1@myui.press_cell": { "collection_index": 1 } } ] } } ]
+  }
+}
+```
+
+주의
+- `long_form`의 기반(`common_dialogs.main_panel_no_buttons`)은 `bindings`가 없어서 `bindings`에 넣어도 상속 배열을 가리지 않는다(MOD-04, VN ui_template_dialogs.json:205).
+- `main_screen_content.size`는 속성 덮어쓰기라 다른 팩도 같은 값을 쓰지 않으면 나중 팩의 값이 남는다. 대부분 `100%`로 같게 쓴다.
+- UI 팩과 함께 쓸 일이 많다면 감싸기 방식(HOST-04 (나))을 고려한다.
+- 스크립트: `new ActionFormData().title('myui:v1').button('a').button('b')`.
+
+### 완성 파일과 실행 순서
+
+파일 두 개와 스크립트 한 줄이 한 벌이다. 위 `screen.json`에 쓴 `press_cell`은 레시피 2에서 정의하므로, 이 레시피만 따로 실험할 때는 `screen.json`의 `myui` 네임스페이스에 아래 정의를 더한다.
+
+```jsonc
+// RP/ui/myui/screen.json 에 추가 (b0, b1이 쓰는 셀)
+"press_cell@common_buttons.light_text_button": {
+  "size": [ "100%", 24 ],
+  "$pressed_button_name": "button.form_button_click",
+  "$button_text": "#form_button_text",
+  "$button_text_binding_type": "collection",
+  "$button_text_grid_collection_name": "form_buttons",
+  "bindings": [ { "binding_type": "collection_details", "binding_collection_name": "form_buttons" } ]
+}
+```
+
+```json
+// RP/ui/_ui_defs.json  (내 화면 파일 등록. server_form.json은 바닐라 경로라 등록하지 않는다)
+{ "ui_defs": [ "ui/myui/screen.json" ] }
+```
+
+```js
+// BP/scripts/main.js
+import { world } from "@minecraft/server";
+import { ActionFormData } from "@minecraft/server-ui";
+world.afterEvents.playerSpawn.subscribe(({ player, initialSpawn }) => {
+  if (!initialSpawn) return;
+  new ActionFormData().title("myui:v1").button("a").button("b").show(player)
+    .then((r) => { if (!r.canceled) player.sendMessage(`눌린 번호: ${r.selection}`); });
+});
+```
+
+단계 설명
+1. 스크립트가 제목 `myui:v1`로 액션 폼을 연다. 7바이트 접두사가 제목의 앞이다.
+2. 엔진은 바닐라 `third_party_server_screen`을 열고 `server_form_factory`가 `long_form`을 만든다. 팩의 `bindings` 추가로 `long_form`은 접두사가 `myui:v1`이면 `#visible`이 false가 되어 숨는다(HOST-04 가).
+3. `main_screen_content`에 넣은 두 번째 팩토리가 같은 폼 데이터로 `@myui.root`를 만든다(HOST-05). `root`는 접두사가 같을 때만 보인다.
+4. `root` 안의 `stack_panel`이 `collection_name: form_buttons`를 선언하고 자식 `b0`, `b1`이 `collection_index`로 버튼 0·1번을 잡는다.
+5. 누르면 `button.form_button_click` 매핑이 폼 응답을 보내고 스크립트가 `selection`을 받는다. `collection_details`가 없으면 `canceled`가 온다(COL-04).
+
+---
+
+## 레시피 2. 누르는 셀과 값을 읽는 셀
+
+- **[PAT-02]** 누르는 셀은 버튼 자신에 `collection_details` + `form_button_click` 매핑을, 값을 그리는 셀은 라벨 자신에 `collection` 바인딩을 둔다. `{실측, 바닐라, 코드}` (출처: BC-S1, BC-S7, BC 4.1-(3)·(4), VN server_form.json:211-246)
+
+근거: COL-04, BND-04, INP-04, TXT-01
+
+```jsonc
+"press_cell@common_buttons.light_text_button": {
+  "size": [ "100%", 24 ],
+  "$pressed_button_name": "button.form_button_click",
+  "$button_text": "#form_button_text",
+  "$button_text_binding_type": "collection",
+  "$button_text_grid_collection_name": "form_buttons",
+  "bindings": [ { "binding_type": "collection_details", "binding_collection_name": "form_buttons" } ]
+},
+"value_cell": {
+  "type": "label", "size": [ "100%", 10 ], "text": "#entry_value", "localize": false,
+  "bindings": [
+    { "binding_type": "collection_details", "binding_collection_name": "form_buttons" },
+    { "binding_name": "#form_button_text", "binding_name_override": "#entry_value",
+      "binding_type": "collection", "binding_collection_name": "form_buttons" } ]
+}
+```
+
+- 값 셀에도 `collection_details`가 있지만 매핑이 없으므로 눌리지 않는다(BC 텍스트 캐리어와 같은 형태). `label` 참조에 `collection_index`를 직접 주는 것은 출처끼리 다르므로(C-31) 값 셀은 패널로 감싸 패널 참조에 인덱스를 준다.
+- 값 셀을 쓸 때도 스크립트는 그 엔트리를 `button()`으로 보낸다(COL-19). 값 셀에는 매핑이 없으니 눌리지 않는다.
+- 템플릿 변수 이름(`$button_text_binding_type` 등)은 바닐라 버튼 템플릿 버전에 따라 다를 수 있으니 VN `ui_template_buttons.json`에서 확인한다.
+
+### 완성 파일과 실행 순서
+
+```jsonc
+// RP/ui/myui/cells.json   (_ui_defs.json 에 "ui/myui/cells.json" 등록)
+{
+  "namespace": "myui",
+  "press_cell@common_buttons.light_text_button": {
+    "size": [ "100%", 24 ],
+    "$pressed_button_name": "button.form_button_click",
+    "$button_text": "#form_button_text",
+    "$button_text_binding_type": "collection",
+    "$button_text_grid_collection_name": "form_buttons",
+    "bindings": [ { "binding_type": "collection_details", "binding_collection_name": "form_buttons" } ]
+  },
+  // 값 셀: 라벨에 collection_index를 직접 주지 않고 패널로 감싼다(C-31)
+  "value_cell": {
+    "type": "panel", "size": [ "100%", 10 ],
+    "controls": [ { "value_label": {
+      "type": "label", "size": [ "100%", 10 ], "text": "#entry_value", "localize": false,
+      "bindings": [
+        { "binding_type": "collection_details", "binding_collection_name": "form_buttons" },
+        { "binding_name": "#form_button_text", "binding_name_override": "#entry_value",
+          "binding_type": "collection", "binding_collection_name": "form_buttons" } ] } } ]
+  },
+  "panel_with_cells": {
+    "type": "stack_panel", "size": [ "100%", "100%c" ], "collection_name": "form_buttons",
+    "controls": [
+      { "press0@myui.press_cell": { "collection_index": 0 } },     // 누르는 셀(버튼 0번)
+      { "value1@myui.value_cell": { "collection_index": 1 } } ]    // 값 셀(버튼 1번 글을 읽기만)
+  }
+}
+```
+
+```js
+new ActionFormData().title("myui:v1").button("메뉴 열기").button("현재 점수 120").show(player);
+```
+
+단계 설명
+1. 스크립트는 값도 `button()`으로 보낸다. 그래서 엔트리 번호가 하나씩 차지된다(COL-19). 값 엔트리는 눌려도 아무 일도 일어나지 않는다.
+2. `press_cell`은 자신에 `collection_details`와 `form_button_click` 매핑이 있어 눌림이 `selection`으로 돌아간다(COL-04, INP-04).
+3. `value_cell`은 `collection_details`는 있지만 매핑이 없으므로 눌리지 않는다. `#form_button_text`를 `#entry_value`로 이름만 바꿔 받아 라벨이 그린다.
+4. 두 셀을 같은 `form_buttons` 스택에 두면 번호가 그대로 유지된다. 누르는 셀을 앞에 두면 값 글자 수가 변해도 버튼 번호는 변하지 않는다(HOST-07).
+
+---
+
+## 레시피 3. 값 하나를 여러 곳에서 읽기 (데이터 소스)
+
+- **[PAT-03]** 화면 루트에 크기 0짜리 데이터 소스 컨트롤을 하나 두고, 게이트들은 `source_control_name` view 바인딩으로 그 값을 읽는다. `{코드}` (출처: BC 4.1-(5), BC-samples home.document.json)
+
+```jsonc
+"flag_source_host": { "type": "stack_panel", "size": [ 0, 0 ], "collection_name": "form_buttons",
+  "controls": [ { "flag_source": { "type": "panel", "size": [ 0, 0 ], "collection_index": 3,
+    "property_bag": { "#entry_value": "f" },
+    "bindings": [ { "binding_name": "#form_button_text", "binding_name_override": "#entry_value",
+                    "binding_type": "collection", "binding_collection_name": "form_buttons" } ] } } ] },
+
+"gated_panel": { "type": "panel", "visible": "#visible", "property_bag": { "#visible": false },
+  "bindings": [ { "binding_type": "view", "source_control_name": "flag_source",
+                  "source_property_name": "(not (('%.2s' * #entry_value) = 'f'))",
+                  "target_property_name": "#visible" } ] }
+```
+
+- 플래그는 `t`/`f` 글자로, 비교는 길이+1(`%.2s`)로 한다(EXP-08, EXP-15).
+
+### 완성 파일과 실행 순서
+
+```jsonc
+// RP/ui/myui/datasource.json   (_ui_defs.json 등록, root는 레시피 1의 server_form.json이 마운트)
+{
+  "namespace": "myui",
+  "root": {
+    "type": "panel", "size": [ 260, 180 ],
+    "controls": [
+      // 1) 데이터 소스: 크기 0, 화면 루트 바로 아래
+      { "flag_source_host": { "type": "stack_panel", "size": [ 0, 0 ], "collection_name": "form_buttons",
+          "controls": [ { "flag_source": { "type": "panel", "size": [ 0, 0 ], "collection_index": 3,
+            "property_bag": { "#entry_value": "f" },
+            "bindings": [ { "binding_name": "#form_button_text", "binding_name_override": "#entry_value",
+                            "binding_type": "collection", "binding_collection_name": "form_buttons" } ] } } ] } },
+      // 2) 게이트: 데이터 소스를 이름으로 읽어 #visible 결정
+      { "gated_panel": { "type": "panel", "visible": "#visible", "property_bag": { "#visible": false },
+          "controls": [ { "msg": { "type": "label", "text": "플래그가 f가 아니다", "localize": false } } ],
+          "bindings": [ { "binding_type": "view", "source_control_name": "flag_source",
+                          "source_property_name": "(not (('%.2s' * #entry_value) = 'f'))",
+                          "target_property_name": "#visible" } ] } } ]
+  }
+}
+```
+
+```js
+// 버튼 0~2는 화면용, 3번째(인덱스 3)가 플래그 't' 또는 'f'
+new ActionFormData().title("myui:v1").button("a").button("b").button("c").button("t").show(player);
+```
+
+단계 설명
+1. 스크립트가 플래그를 마지막 버튼 글로 보낸다(`t` 또는 `f`).
+2. `flag_source`가 3번 엔트리의 글을 `#entry_value`로 받는다. 크기 0이라 보이지 않는다.
+3. 게이트들은 `source_control_name: flag_source`로 그 값을 읽어 식 하나로 `#visible`을 정한다. 같은 값을 여러 게이트가 읽어도 엔트리 바인딩은 한 곳이다.
+4. 한 글자 값은 `%.2s`(길이+1)로 비교한다(EXP-08, EXP-15). 위 식은 플래그가 `f`가 아닐 때 보인다.
+
+---
+
+## 레시피 4. 선택된 화면만 생성하기 (계산 길이 팩토리)
+
+- **[PAT-04]** `visible` 대신 `#collection_length`를 계산해 0이면 아무것도 만들지 않는 팩토리로 게이트한다. `{실측}` (출처: BC-S11, BC-S8)
+
+근거: COL-10, COL-11, BND-07, EXP-19
+
+```jsonc
+"settings_gate": {
+  "type": "collection_panel", "size": [ "100%", "100%" ],
+  "factory": { "name": "settings_cell", "control_name": "myui.settings_screen" },
+  "bindings": [
+    { "binding_name": "#title_text", "binding_condition": "always" },
+    { "binding_type": "view", "binding_condition": "always",
+      "source_property_name": "((#title_text = 'myui:v1:settings') * 1)",
+      "target_property_name": "#collection_length" } ]
+}
+```
+
+- 셀 안에서 엔트리를 읽는 바인딩에는 `binding_condition: "always"`를 준다(BND-07).
+- 화면이 많으면 BC처럼 `property_bag` 사전 조회 하나로 라우팅할 수 있다(HOST-06, 실측 필요).
+
+### 완성 파일과 실행 순서
+
+```jsonc
+// RP/ui/myui/gate.json   (_ui_defs.json 등록)
+{
+  "namespace": "myui",
+  "settings_screen": {
+    "type": "panel", "size": [ 260, 180 ],
+    "controls": [ { "title": { "type": "label", "text": "설정 화면", "localize": false } } ]
+  },
+  "settings_cell": {                      // 팩토리가 0/1개 만드는 셀
+    "type": "panel", "size": [ "100%", "100%" ],
+    "controls": [ { "screen@myui.settings_screen": {} } ]
+  },
+  "settings_gate": {
+    "type": "collection_panel", "size": [ "100%", "100%" ],
+    "factory": { "name": "settings_cell", "control_name": "myui.settings_cell" },
+    "bindings": [
+      { "binding_name": "#title_text", "binding_condition": "always" },
+      { "binding_type": "view", "binding_condition": "always",
+        "source_property_name": "((#title_text = 'myui:v1:settings') * 1)",
+        "target_property_name": "#collection_length" } ]
+  }
+}
+```
+
+레시피 1의 `main_screen_content` 팩토리가 `@myui.settings_gate`를 마운트한다(`control_ids`에서 `long_form`을 이 게이트로 가리킨다). 스크립트는 `new ActionFormData().title("myui:v1:settings")`로 연다.
+
+단계 설명
+1. 제목이 정확히 `myui:v1:settings`이면 식 `((#title_text = '…') * 1)`이 1(참)이다. 아니면 0이다.
+2. 이 값이 `#collection_length`로 들어가 팩토리가 셀을 1개 또는 0개 만든다. 0이면 화면의 컨트롤이 아예 생성되지 않으므로 `visible: false`보다 가볍다(COL-10, COL-11).
+3. 셀 안에서 엔트리를 읽는 바인딩에는 `binding_condition: "always"`를 줘 팩토리 셀 바인딩의 타이밍 문제를 피한다(BND-07).
+4. 화면이 여러 개면 게이트도 여러 개 두거나 HOST-06의 사전 조회로 하나에서 고른다.
+
+---
+
+## 레시피 5. 고정 폭 레코드에서 필드 꺼내기
+
+- **[PAT-05]** 엔트리 문자열 하나에 `[종류 5][번호 4][제목 …]`처럼 바이트 폭이 고정된 필드를 싣고, 자르기 → 빼기 → 자르기 → 패딩 제거로 꺼낸다. `{작동팩}` (출처: BA 3장, AP 4.5)
+
+근거: EXP-09, EXP-11, EXP-12, EXP-15
+
+```text
+스크립트가 보내는 값 (패딩 '$', 숫자 필드는 글자 접두)
+ITEM|N007제목$$$$$$$$$$$$$$$$$
+0    5   9 (바이트 오프셋)
+```
+
+```jsonc
+"bindings": [
+  { "binding_name": "#form_button_text", "binding_name_override": "#raw",
+    "binding_type": "collection", "binding_collection_name": "form_buttons" },
+  { "binding_type": "view", "source_property_name": "(('%.5s' * #raw) = 'ITEM|')", "target_property_name": "#is_item" },
+  { "binding_type": "view", "source_property_name": "('%.9s' * #raw)",        "target_property_name": "#head9" },
+  { "binding_type": "view", "source_property_name": "('%.5s' * #raw)",        "target_property_name": "#head5" },
+  { "binding_type": "view", "source_property_name": "('%.4s' * (#raw - #head5))", "target_property_name": "#num" },
+  { "binding_type": "view", "source_property_name": "((#raw - #head9) - '$')",    "target_property_name": "#title" },
+  { "binding_type": "view", "source_property_name": "('myui.item.' + #num)", "target_property_name": "#title_key" }
+]
+```
+
+- 번호는 글자 접두를 떼지 않고 그대로 키에 붙인다(`myui.item.N007`). 접두를 떼면 `007`이 숫자로 해석될 수 있다(EXP-15).
+- 한글 제목은 3바이트씩이므로 인코더가 UTF-8 바이트로 패딩한다.
+- `#raw - #head9`는 `#head9`와 같은 문자열을 모두 지우므로 머리 부분이 본문에 다시 나오지 않게 설계한다.
+
+### 완성 파일과 실행 순서
+
+```jsonc
+// RP/ui/myui/record.json   (_ui_defs.json 등록)
+{
+  "namespace": "myui",
+  "record_cell": {
+    "type": "panel", "size": [ "100%", 14 ],
+    "controls": [ { "title_label": { "type": "label", "text": "#title", "localize": true, "size": [ "100%", 10 ] } } ],
+    "bindings": [
+      { "binding_type": "collection_details", "binding_collection_name": "form_buttons" },
+      { "binding_name": "#form_button_text", "binding_name_override": "#raw",
+        "binding_type": "collection", "binding_collection_name": "form_buttons" },
+      { "binding_type": "view", "source_property_name": "(('%.5s' * #raw) = 'ITEM|')", "target_property_name": "#is_item" },
+      { "binding_type": "view", "source_property_name": "('%.9s' * #raw)", "target_property_name": "#head9" },
+      { "binding_type": "view", "source_property_name": "('%.5s' * #raw)", "target_property_name": "#head5" },
+      { "binding_type": "view", "source_property_name": "('%.4s' * (#raw - #head5))", "target_property_name": "#num" },
+      { "binding_type": "view", "source_property_name": "((#raw - #head9) - '$')", "target_property_name": "#title" },
+      { "binding_type": "view", "source_property_name": "('myui.item.' + #num)", "target_property_name": "#title_key" },
+      { "binding_type": "view", "source_property_name": "#is_item", "target_property_name": "#visible" } ]
+  }
+}
+```
+
+```js
+// BP/scripts/encode.js : 바이트 단위로 패딩하는 인코더(한글 3바이트)
+const enc = new TextEncoder();
+export function pad(str, bytes) {                       // 부족한 바이트를 '$'로 채운다
+  const n = bytes - enc.encode(str).length;
+  return str + "$".repeat(Math.max(0, n));
+}
+export function itemRecord(num, title) {                 // [종류 5][번호 4][제목 …]
+  return "ITEM|" + "N" + String(num).padStart(3, "0") + pad(title.replace(/[$|]/g, ""), 20);
+}
+// new ActionFormData().title("myui:v1").button(itemRecord(7, "제목")).show(player);
+```
+
+단계 설명
+1. 레코드 `ITEM|N007제목$$$…`는 앞 5바이트가 종류, 다음 4바이트가 번호(`N007`, 글자 접두로 숫자 변환을 피한다, EXP-15), 나머지가 본문이다.
+2. UI는 `'%.5s' * #raw`로 앞 5바이트를 자르고, `#raw - #head5`로 그 부분을 지운 뒤 `'%.4s'`로 다시 4바이트를 잘라 번호를 얻는다. 제목은 앞 9바이트 `#head9`를 지우고 패딩 `$`를 지운다.
+3. `#title_key`에 번호를 이어 붙여 lang 키 `myui.item.N007`을 만든다(TXT 규칙의 lang 키 조립).
+4. 스크립트가 본문에서 `$`와 `|`를 미리 제거하므로 패딩과 구분자가 본문과 섞이지 않는다(HOST-08).
+
+---
+
+## 레시피 6. 숫자를 픽셀 위치로 (비트 스페이서)
+
+- **[PAT-06]** 2의 거듭제곱 크기 spacer를 세로 스택에 쌓고 비트 토큰으로 각각 켜고 끄면, 켜진 spacer 크기의 합이 y좌표가 된다. 컨트롤 수가 비트 수만큼 늘어나므로 항목 수가 많으면 페이징한다. `{작동팩}` (출처: BA 4장)
+
+근거: LAY-04, LAY-05, HOST-09, COL-18
+
+```jsonc
+"pos_y": { "type": "stack_panel", "orientation": "vertical", "size": [ 1, "100%c" ],
+  "controls": [
+    { "y2": { "type": "panel", "size": [ 1, 4 ], "bindings": [ /* '~Yc' 포함이면 #visible */ ] } },
+    { "y1": { "type": "panel", "size": [ 1, 2 ], "bindings": [ /* '~Yb' */ ] } },
+    { "y0": { "type": "panel", "size": [ 1, 1 ], "bindings": [ /* '~Ya' */ ] } },
+    { "node@myui.node": {} } ] }
+// 각 spacer: { "binding_type": "view",
+//   "source_property_name": "(not ((#raw - '~Yc') = #raw))", "target_property_name": "#visible" }
+```
+
+- 동적 위치가 꼭 필요하지 않으면 미리 그린 이미지나 손으로 쓴 행·열 스택이 훨씬 싸다(AP 4.6).
+- 값이 숫자 하나라면 spacer 하나의 크기를 바인딩하는 방법(LAY-05, LAY-10)이 더 단순하다.
+
+### 완성 파일과 실행 순서
+
+```jsonc
+// RP/ui/myui/bitpos.json   (_ui_defs.json 등록). 라벨 노드를 y 좌표 0~7 픽셀 아래로 민다.
+{
+  "namespace": "myui",
+  "bit_spacer": {                                   // $bit_token을 받아 켜고 끄는 spacer
+    "type": "panel",
+    "bindings": [ { "binding_type": "view",
+        "source_property_name": "(not ((#raw - $bit_token) = #raw))", "target_property_name": "#visible" } ]
+  },
+  "pos_y": {
+    "type": "stack_panel", "orientation": "vertical", "size": [ 1, "100%c" ],
+    "controls": [
+      { "y2@myui.bit_spacer": { "size": [ 1, 4 ], "$bit_token": "~Yc" } },
+      { "y1@myui.bit_spacer": { "size": [ 1, 2 ], "$bit_token": "~Yb" } },
+      { "y0@myui.bit_spacer": { "size": [ 1, 1 ], "$bit_token": "~Ya" } },
+      { "node": { "type": "label", "text": "노드", "localize": false } } ]
+  }
+}
+```
+
+`#raw`는 이 컨트롤 또는 부모가 받은 문자열(예: 폼 엔트리 `#form_button_text`를 `#raw`로 바인딩한 값)이다. 스크립트는 y = 5(비트 `a`와 `c`)일 때 문자열에 `~Ya~Yc`를 넣는다.
+
+```js
+function yTokens(y) { return [0,1,2].filter(i => y & (1 << i)).map(i => "~Y" + "abc"[i]).join(""); }
+// new ActionFormData().title("myui:v1").button("제목" + yTokens(5)).show(player);
+```
+
+단계 설명
+1. 높이 1·2·4 spacer를 세로 스택에 쌓는다. 각 spacer는 자기 비트 토큰이 문자열에 포함될 때만 보인다(HOST-09, EXP-07).
+2. 켜진 spacer 높이의 합이 그 아래 `node`의 y 좌표가 된다(5 = 4 + 1).
+3. 비트 수만큼 컨트롤이 늘어난다. 항목이 많으면 페이징한다. 값이 숫자 하나뿐이면 spacer 크기를 바인딩하는 방법(LAY-05, LAY-10)이 더 단순하다.
+
+---

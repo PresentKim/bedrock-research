@@ -1,0 +1,110 @@
+---
+title: "웹 문서와 튜토리얼 조사"
+description: "Microsoft Learn 공식 진술(협력형 지침, 버전 개념 없음, 1.26.0 배율·priority, 1.26.30 색 코드), 피드백, Mojira, 영상, 다국어 자료 조사 결과"
+sidebar_position: 17
+sources:
+  - ms-learn
+  - minecraft-feedback-mojira
+  - bedrock-samples
+  - bedrock-wiki
+  - repo-guide
+---
+
+## 요약
+
+**국제판 JSON UI의 "공식 문서"는 사실상 없다.** Microsoft Learn에 JSON UI 레퍼런스 5쪽(목록 1, 컴포넌트 4)이 있지만 AI로 만든 표(`ai-usage: ai-assisted`, 2025-02-11)이다. 속성 타입이 바닐라와 다르고 NetEase 전용 속성이 섞였으며 enum 표는 값 대신 `undefined`만 나열한다. Mojang `bedrock.dev/docs/stable`에는 UI 문서가 없고(20쪽 중 0쪽) `bedrock-samples`의 `Schemas.html`에도 JSON UI 내용이 없다. 그래도 Microsoft Learn의 다른 공식 문서에는 쓸 만한 진술이 넷 있다. Microsoft Learn은 원본 저장소 `MicrosoftDocs/minecraft-creator`(분석 시 `4432fb6`, 이 위키 기준 `a9fd1c0`)의 Markdown을 읽었고 본문은 CC BY 4.0, 코드 예시는 MIT라 발췌한다(출처: ms-learn). 가치: Microsoft Learn 공식 진술 중, 나머지 하.
+
+## Microsoft Learn
+
+### 1. 협력형 애드온은 JSON UI를 덮어쓰지 않는다 (공식 정책)
+
+<Excerpt src="ms-learn" title="Guidelines for Building Cooperative Add-Ons, JSON UI and Custom Fonts overrides are disallowed" path="creator/Documents/Practices/GuidelinesForBuildingCooperativeAddons.md">
+
+Because JSON UI (i.e., files in `<resource pack name>/ui`) and fonts (i.e., files in `<resource pack name>/font`) are not overridable in a cooperative manner - such that multiple Add-Ons can customize the same asset - cooperative Add-Ons should not override any JSON UI or font glyph files.
+
+</Excerpt>
+
+이 지침은 Marketplace의 협력형 애드온을 대상으로 한다. 기존 MOD-13("여러 애드온이 같은 화면에 붙으려면 정의 없는 `modifications`만")이 기술적 우회라면 공식 정책은 더 엄격하게 **아예 건드리지 말라**고 한다. 배포처가 Marketplace 협력형이면 JSON UI 밖의 우회(액션바·타이틀 채널, 파티클, server-ui 폼)를 먼저 고른다(반영안 MOD-20 `{추론}`). 실제 심사에서 `modifications`만 쓴 팩도 거부되는지는 정책 확인이 필요하다.
+
+### 2. JSON UI에는 버전 개념이 없다 (공식)
+
+<Excerpt src="ms-learn" title="Latest Platform Version, asset versions table" path="creator/Documents/Practices/LatestPlatformVersion.md">
+
+|JSON UI|ui folder|(no versioning concept)|
+
+</Excerpt>
+
+`format_version`을 넣어도 동작이 고정되지 않는다는 DBG-15를 공식 문서가 확인한다.
+
+### 3. 1.26.0 업데이트 노트: `#priority` 바인딩과 배율 통합
+
+<Excerpt src="ms-learn" title="Update 1.26.0" path="creator/Documents/Update1.26.0.md">
+
+- Updated the priority of `stack_panel` children to be bindable
+
+### UI Scaling
+- Consolidated JSON UI and Ore UI under one scaling approach
+- Ore UI screens use full-integer scaling for sharper visuals
+- Revised scaling range: new defaults, new min/max
+- Default scale uses DPI-based detection on handheld devices
+- Minimum scale set to half the maximum scale value
+
+</Excerpt>
+
+바닐라는 이미 `#priority`를 3곳(`store_common.json:732·8239·8503`, 부모 스택이 `use_priority: true`)에서 바인딩한다. 그러므로 LAY-40의 `use_priority`·`priority`는 리터럴뿐 아니라 바인딩(`binding_name_override: "#priority"`)으로도 쓸 수 있다. 배율 변경 때문에 1.26.0 이전 자료(NetEase의 320×210 / 376×250 계산 등)로 픽셀 배율을 정했다면 다시 재야 한다(반영안 LAY-47).
+
+### 4. 1.26.30 업데이트 노트
+
+새 색 코드 `§w`(파티 채팅 파랑)가 생겼다. 바닐라 `_global_variables.json`에는 `$0_color_format`부터 `$f_color_format`까지 16개뿐이고 `$w_color_format`은 없어 전역 변수는 여전히 16개다(TXT-08). 라벨 텍스트 안의 `§w`가 JSON UI에서 칠해지는지는 실측 전까지 모른다(반영안 TXT-19 `{미검증, 바닐라}`). 또 iOS·Android에서 JSON UI 텍스트 입력 제출 후 화면 키보드가 닫히지 않던 문제가 고쳐졌다. 그 이전 버전 모바일의 이 현상은 팩 문제가 아니다.
+
+### 5. JSON UI 레퍼런스: 존재하지만 쓰면 안 된다
+
+다섯 쪽 모두 `ai-usage: ai-assisted`, `ms.date: 02/11/2025`이고 스키마에서 표를 기계적으로 뽑은 형태이며 설명은 이름에서 짐작한 문장이다. 바닐라와 대조하면 다음이 틀렸다.
+
+| 문서 주장 | 바닐라 | 판정 |
+| --- | --- | --- |
+| `font_scale_factor`는 Boolean | 숫자(`beacon_screen_pocket.json:519` `0.8`) | 틀림 |
+| `grid_item_template`는 Integer | 컨트롤 이름 문자열(`"common.pocket_ui_container_item"`) | 틀림 |
+| `locked_control`는 Boolean | 자식 이름 문자열(`"locked"`) | 틀림 |
+| `default_focus_precedence`는 Boolean | 정수(`world_section.json:211` `1`) | 틀림 |
+| `factory`는 String | 객체(`realms_allowlist.json:72`) | 틀림 |
+| `fill`은 선택지 문자열 | Boolean | 틀림 |
+| `nine_slice_buttom`, `place_holder_text`, `slider_range` | 바닐라 0회, NetEase 중국판 전용 이름과 같음 | 국제판 아님(C-60) |
+| enum 값 표 | 41줄이 모두 `undefined` | 내용 없음 |
+
+나열된 속성 대부분은 바닐라에 실제로 있다(`always_handle_pointer` 5회, `consume_event` 11회, `tts_skip_message` 13회). 하지만 타입과 의미를 믿을 수 없어 속성 이름 목록 이상으로 쓰지 않는다(DBG-05, 반영안 DBG-26).
+
+## 피드백 사이트
+
+- **"Better JSON UI"**(게시물 45026995852557, 2026-04-12, 4표, 댓글 0, Mojang 답 없음): 임의 데이터 바인딩, 수식·논리 연산, HUD 레이어 추가를 요청한다. 거꾸로 읽으면 이것들이 2026년 현재 없다는 사용자 쪽 확인이다. 제목·액션바·폼 텍스트로 우회한다는 전제와 맞는다.
+- **"Ore UI와 원래 UI를 전환하게 해 달라"**(게시물 24846048765325, 2024-03-09, 댓글 2026-06까지): 한 사용자 댓글이 원래 UI로 되돌리던 방법이 1.21.100에서 막혔다고 보고한다. 공식 확인이 없는 단일 보고라 신뢰도가 낮다(DBG-16 배경 자료로만).
+
+## Mojira
+
+새 Mojira(`bugs.mojang.com`)는 클라이언트 렌더링이라 읽지 못했고 `bugs-legacy.mojang.com`을 열람했다.
+
+- **MCPE-170343**(1.19.81, 1.20.0.23): 핫바 끝 텍스처의 9-slice `.json`이 `base_size`에 값 4개를 적어 잘못이라는 보고다. `base_size`는 `[너비, 높이]` 2개여야 한다(LAY-27 보강 근거). 값 4개를 엔진이 무시하는지 앞 두 개를 쓰는지는 보고에 없다.
+- **MCPE-66773**(여러 버전, 미해결): 리소스팩 UI가 팩을 다시 적용하기 전까지 반영되지 않는다. UI가 안 바뀌면 게임을 다시 켜는 것의 근거다(DBG-18).
+- **MCPE-152801, MCPE-154347**: 포켓 UI 일부 블록 화면의 스크롤바와 상단바가 리소스팩 텍스처를 따르지 않는다. 화면이 하드코딩 텍스처를 쓴다는 뜻일 수 있다.
+
+## 영상과 웹 도구
+
+강좌 영상(AgentMindStorm 2021-06, Dingsel 2023-12·2025-01, The Octazen 2026-07, dakonblackrose 2026-09, 쇼츠 1편)은 제목과 날짜만 적었고 내용은 보지 않았다. 웹 도구로는 9-slice 미리보기 `Nine Slice Visualiser`(`minato.beyondbedrock.org/web-apps/9slice/`)가 있다. 게임 밖에서 `nineslice_size` 값을 맞출 때 쓸 수 있으나 렌더링이 게임과 같은지는 확인하지 않았다.
+
+## 찾아봤지만 쓸 것이 없던 곳
+
+mcpedl은 UI 리소스팩 배포 글뿐이고, minecraft.how는 EasyUIBuilder 소개글이며, `mcwiki.easecation.net`의 `json-ui`는 Bedrock Wiki 사본이다. 일본어·한국어·러시아어·포르투갈어 단독 튜토리얼은 검색되지 않았고 중국어 자료는 NetEase 문서뿐이다. 커뮤니티 서버 안의 자료는 열람할 수 없었다.
+
+## 우리 규칙과의 관계
+
+| 규칙 ID | 관계 |
+| --- | --- |
+| MOD-13, MOD-20(반영안) | 공식 지침은 덮어쓰기 자체를 금지 |
+| DBG-05, DBG-15, DBG-16, DBG-18, DBG-26(반영안) | 공식 스키마·레퍼런스 불신, 버전 개념 없음, Ore UI 전환, 재적용 버그, AI 생성 문서 |
+| LAY-27, LAY-40, LAY-47(반영안) | `base_size` 값 2개, `#priority` 바인딩, 1.26.0 배율 통합 |
+| TXT-08, TXT-19(반영안) | 전역 색 변수 16개와 `§w` |
+| C-60 | 레퍼런스의 타입·목록은 바닐라를 채택 |
+
+## 실측이 필요한 항목
+
+`§w`가 1.26.30 이후 JSON UI 라벨에서 파랑으로 칠해지는지, 사용자 팩의 `#priority` 바인딩이 `use_priority` 순서를 실제로 바꾸는지, 1.26.0 이후 GUI 배율의 정수 여부와 휴대 기기 DPI 기본값, `base_size`에 값 4개를 적으면 무시되는지, 협력형 지침이 `modifications`만 쓴 팩도 거부하는지.

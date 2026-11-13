@@ -1,0 +1,164 @@
+---
+title: "모델링과 텍스처 도구: Blockbench 등"
+description: "Blockbench, Mcblend, 파티클, 텍스처와 셰이더 도구"
+sidebar_position: 6
+sources:
+  - private-research
+  - blockbench
+---
+
+모델, 애니메이션, 파티클, 텍스처를 만드는 도구를 다룬다. Bedrock의 모델은 `.geo.json`, 애니메이션은 `.animation.json`, 텍스처는 PNG/TGA다. 이 페이지는 Blockbench를 중심으로 Blender 애드온 Mcblend, 파티클 편집기, 텍스처·셰이더 도구를 정리한다.
+
+## Blockbench
+
+**하는 일.** 저폴리 모델과 픽셀 아트 텍스처용 무료 오픈소스 모델 편집기로, Minecraft Java와 Bedrock 전용 형식을 가진다. 플러그인(JavaScript)으로 기능을 확장한다. 사용자가 만든 모델, 텍스처, 애니메이션은 사용자 소유다(출처: tool-blockbench, `README.md`).
+
+**설치와 사용.** 일반 사용자는 `blockbench.net`에서 앱을 내려받거나 웹 앱을 쓴다. 소스에서 실행하려면 NodeJS를 설치하고 다음을 실행한다.
+
+```bash
+npm install
+npm run dev     # Electron으로 실행 (VS Code에서는 Ctrl+Shift+B)
+npm run serve   # 웹 앱: http://localhost:3000
+```
+
+VS Code의 Run & Debug에서 "Debug Renderer" 구성을 고르면 렌더러에 중단점을 걸 수 있다. 플러그인 작성법은 Blockbench 공식 위키의 plugin 문서를 따른다.
+
+**주요 기능.** 5.1 "Workflow Update"(2026-03-24)에서 미러 애니메이팅, JPEG/TGA/WebP 지원, UV 크기 편집기, 블록과 엔티티의 충돌·히트박스 요소(Tools > Generate Bounding Boxes, Copy Collision/Selection Component, Copy Collision/Hitbox Component), attachable 미리보기가 들어왔다. 박스는 `.geo.json`이 아니라 `.bbmodel`에 남는다. 애니메이션 export는 우클릭 후 save, 아이템 바인딩은 group의 bindings, 손에 든 모습과 GUI는 Display 탭에서 본다.
+
+**한계.** 아이템 display transform의 `embedded` 미지원과 `fit_to_frame` 처리 오류, Java 모델의 Bedrock 블록 모델 재작성 필요(큰 모델은 무효), 3D 텍스트 생성기 결과가 게임에서 검게 나오는 문제, OBJ/MTL 텍스처 연결 실패가 있다. Blockbench는 클라이언트 엔티티 파일(entity definition, 렌더 컨트롤러)을 만들지 않는다. Wizard 플러그인(Entity, Block, Item)은 편하지만 구식이다. 상세는 아래 노트에 있다.
+
+**라이선스.** 소스 코드는 GPL-3.0(`LICENSE.MD`, 커밋 `ec0b282`)이고 코드 수정은 같은 조건을 따른다. 플러그인과 테마는 오픈소스, 독점, 유료 어느 쪽으로든 낼 수 있다.
+
+## Mcblend
+
+Nusiq의 Blender 애드온으로, Blender에서 만든 모델과 애니메이션을 Bedrock 형식으로 내보낸다. 최신 Blender LTS에서만 검증한다(v12.0.1~12.0.2는 Blender 4.5, v13.0.0은 Blender 5.2 LTS). Blender 5.0에서는 export 오류, 물리 애니메이션 실패, 잘못된 모델이 나와 4.5로 되돌려야 했다. 자세한 사용법은 아래 노트에 있다.
+
+## 파티클과 텍스처 도구
+
+파티클은 Snowstorm(VS Code 확장 `JannisX11.snowstorm`, 웹 버전)이 주 편집기다. 텍스처는 PBR용 `texture_set.json`(MER 맵), 9-slice, 아틀라스와 셰이더 도구가 있다. 상세 목록과 한계는 아래 노트에 있다.
+
+## 커뮤니티 노트
+
+아래는 커뮤니티 조사로 모은 모델·애니메이션·파티클 도구와 텍스처·그래픽스·셰이더 도구 정보다.
+
+`(confirmed)`, `(single report)`, `(conflicting)` 같은 말은 보고의 신뢰도 표시다.
+
+### 모델·애니메이션·파티클 도구
+
+#### Blockbench
+- **Blockbench 5.1 "Workflow Update" (2026-03-24)**
+  - 미러 애니메이팅, JPEG/TGA/WebP 네이티브 지원, UV 크기 편집기
+  - **Bounding Box 요소**: Tools > Generate Bounding Boxes, Copy Collision/Selection Component(블록), Copy Collision/Hitbox Component(엔티티). BP 블록 파일이나 붙여 넣은 JSON에서 불러오고, Bedrock voxel shape 파일을 import/편집/저장한다. 박스는 .geo.json이 아니라 .bbmodel에 남는다.
+  - **attachable 미리보기와 애니메이션**: 플레이어 모델 위에서 1인칭과 3인칭을 다룬다. 릴리스 노트: `https://github.com/JannisX11/blockbench/releases/tag/v5.1.0-beta.2`
+- **아이템 display transform 문제**: `embedded` 미지원, 다른 gui transform이 없으면 `fit_to_frame`을 버림, 불러올 때 기본값이 틀림(`https://github.com/JannisX11/blockbench/issues/3361`). 블록의 third-person-left x translation은 -2다.
+- **Wizard 플러그인**
+  - Entity Wizard: 초보자에게 좋지만 구식이다. render/animation controller를 빠뜨리고, 말·당나귀·노새에 옛 스폰알과 새끼 모델을 쓴다.
+  - Bedrock Block Wizard: 블록 JSON과 RP texture set을 만든다. 이름 매핑이 깨진 적이 있다.
+  - Item Wizard: 갑옷과 attachable.
+  - Blockbench는 클라이언트 엔티티 파일을 만들지 않는다(Wizard는 예외일 수 있다).
+- **기능 메모**
+  - "Display" 탭: 손에 든 모습과 GUI 미리보기
+  - 머티리얼 인스턴스용 커스텀 face 이름. UV 자동 배정은 손으로 고쳐야 할 수 있다.
+  - Java 모델은 Bedrock 블록 모델로 다시 만들어야 하고, 큰 모델은 무효가 된다.
+  - per-face UV 모드(File > Project > Default UV mode)를 쓰면 스케일 조정 때 디테일 손실을 피할 수 있다.
+  - 3D 텍스트 생성기 결과는 게임에서 검게 나온다.
+  - 애니메이션 export는 우클릭 > save.
+  - group > bindings로 아이템 바인딩
+  - OBJ/MTL import의 텍스처 연결이 실패한다.
+  - asset browser 플러그인에 바닐라 파일이 있다(엔티티 애니메이션은 빠졌을 때가 있으니 bedrock-samples에서 받는다).
+  - PBR(MER) 미리보기와 texture_set 정리, attachable용 Bedrock Entity 포맷
+  - 좌석 위치 시각화 도구
+- **플러그인**: "meshy"(메시를 geo.json/poly_mesh로 직접 export), clipping mask, Medibang blend mode, UV face painter(.js로 공유), 블록 생성 플러그인.
+- **가이드**: `https://www.blockbench.net/wiki/guides/bedrock-modeling#animations`
+- **Kaioga의 충돌 박스 도구와 블록 템플릿**: `https://github.com/Kaioga5/Kaioga-s-Block-Templates` (slab, bed, concrete powder falling-block entity, glass connections).
+- **Java 도구 작성자 메모**: `visible_bounds_*` 필드는 렌더 컬링 힌트이므로 무시해도 된다.
+- **Bendables** (`https://www.diamondproduction.net/bendables`): 관절이 휘는 플레이어/엔티티 모델.
+- **기타 모델 도구**: Modelbench(Mine-imator용), FMBE(Fancy Model Block Entities)는 MBE의 현대판으로 bone/animation을 쓴다.
+
+#### Mcblend (Nusiq, Blender 애드온)
+- **Blender 호환성**: 최신 Blender LTS에서만 테스트한다.
+  - v12.0.1, v12.0.2: Blender 4.5
+  - v13.0.0(2026-08-30): Blender 5.2 LTS
+  - Blender 5.0에서는 export 오류, 물리 애니메이션 실패, 잘못된 모델이 나왔다. 4.5로 돌아가면 해결된다.
+  - 4.2는 미검증이다.
+  - 4.5.2에서 `ImportError: cannot import name 'get_mcblend_events'`가 나면 재시작한다.
+  - 새 기능 개발은 거의 멈췄다(2026-02). Blender 파티클을 Bedrock 파티클로 굽는 기능은 불가능하다고 판단됐다.
+- **"number of edges is incorrect"**: 메시가 올바른 직육면체(면 6, 모서리 12, 꼭짓점 8)가 아니라는 뜻이다. 삼각형을 사각형으로 바꾸고, merge by distance를 하고, 떨어진 꼭짓점을 찾아 지운다(꼭짓점 인덱스 표시, Ctrl+I로 선택 반전).
+- **다른 포맷(PSK 등)에서 가져온 모델**
+  - Mesh > Separate by selection으로 큐브를 나누고 F로 빈 면을 채운다.
+  - "Fix invalid UV maps"로 UV를 고친다. 이 연산자는 큐브 규칙을 만족하지 않는 객체에서 크래시할 수 있다.
+  - "Separate and Align Cubes"를 쓴다.
+  - 큐브 하나부터 export되게 만든 뒤 넓혀 간다.
+- **부모 지정**: Parent -> Bone(Ctrl+P)을 쓴다. "With Automatic Weights"는 지원하지 않는다(Minecraft에는 메시 변형이 없다). Armature modifier나 vertex group이 있으면 잘못된 설정이다. 증상은 Blockbench에 빈 bone만 보이는 것이다. Alt+P로 부모를 해제한다.
+- **cube와 polymesh**: 객체마다 cube 또는 polymesh로 표시한다. 문서: `https://mcblend.readthedocs.io/en/stable/modeling/cubes_vs_polymeshes/` . polymesh는 게임에서는 보이지만 Blockbench에서는 안 보일 수 있다. 메인테이너는 polymesh 지원이 제한적이라고 본다. 모든 면을 quad(4 꼭짓점)로 export하므로 삼각형을 기대하는 머티리얼에서는 깨질 수 있다. 뒷면은 Normals > Recalculate Outside로 고친다.
+- **병합**: Ctrl+J 후 merge by distance. Merge Models 연산자에는 제한이 있다(`https://mcblend.readthedocs.io/en/stable/modeling/merging_models/#merging-models`).
+- **가져오기**
+  - RP에서: `https://mcblend.readthedocs.io/en/stable/modeling/importing_models_from_rp/#importing-models-from-resource-packs`
+  - 파일과 텍스처에서(가짜 render controller 필요): `https://mcblend.readthedocs.io/en/stable/modeling/importing_models_from_files/#importing-and-applying-the-texture-to-the-model`
+  - 바닐라 모델의 bone은 길이가 없어 회전이 이상해 보인다.
+  - 구조물은 직접 가져올 수 없다. OBJ를 poly_mesh 모델로 바꾸는 스크립트(`models/obj/entity`, `textures/obj/entity`, 출력 `models/entity`)와 그 반대 방향 스크립트가 공유됐다.
+- **Model origin**: "armature"로 두면 아머처의 transform이 export에 반영돼 모델이 뒤집히거나 옆으로 눕는다. "world"로 바꾸고 모델과 애니메이션을 다시 export한다. bone 이름은 대소문자를 구분하는데, `TORSO`/`Torso`처럼 대소문자만 다른 쌍은 경고 없이 깨질 수 있다(12.0.0).
+- **애니메이션 export**
+  - frame 0에 rest pose를 키프레임으로 둔다. Mcblend는 frame 0과의 차이를 export한다(`https://mcblend.readthedocs.io/en/latest/animations/essential_concepts/#frame-0`).
+  - 부모 공간 기준으로 bone별로 export하고, 어느 bone이든 키프레임이 있는 시점에서 전체 포즈를 비교한다. Visual keying은 필요 없다.
+  - 추가 키프레임 패턴 `1:`, `1:4:` (`https://mcblend.readthedocs.io/en/stable/animations/extra_keyframes/`)
+  - 손실 최적화(`https://mcblend.readthedocs.io/en/stable/animations/optimizing_animations/`)는 linear 보간에서 잘 동작한다.
+  - "Skip rest poses"
+  - 물리 시뮬레이션은 bake한 뒤 armature 애니메이션으로 바꾼다(`https://mcblend.readthedocs.io/en/stable/animations/physics_simulation/`).
+  - IK는 보조 IK 아머처와 Copy Transforms 계열 제약으로 처리한다. frame 0에서 제약 활성화를 키로 잡는다(검증됨).
+  - 애니메이션 데이터는 rig 사이에 쉽게 복사되지 않는다.
+- **스케일된 부모의 자식 회전 버그**: v12.0.2에서 고쳐졌다(issue #130, 0으로 스케일된 큐브는 특수 처리).
+- **카메라 애니메이션 export (v12.1.0, 2026-06-12)**: 스크립트에서 쓸 데이터를 만든다. 문서: `https://mcblend.readthedocs.io/en/v12.1.0/camera_animations/exporting_camera_animations/`
+- **애니메이션 이름**: export한 애니메이션이 게임에서 안 돌면 이름을 바꿔야 할 수 있다(이름/식별자 문제였다).
+
+#### 파티클
+- **Snowstorm**: 웹 파티클 편집기다. 게임에서의 동작은 다를 수 있다. 플러그인 API는 없다.
+- **Oxygen 파티클 IDE** (`https://oxygen.hydrogen.exposed` , `https://github.com/dev-hydrogen/oxygen`)
+  - Snowstorm을 다시 만든 것으로, Molang 에뮬레이션이 더 정확하고 Vibrant Visuals를 지원한다.
+  - VS Code 확장(`hydrogen.oxygen-particle-editor`), 데스크톱 앱, MCP를 제공한다.
+  - 게임 연결: 웹소켓을 켜고 `/connect localhost:19131`.
+  - 0.2.0 키바인드, 0.2.1 자동 업데이트와 `t.x`/`c.x` 컨텍스트 값, 0.2.2 쿼리 샘플 일괄 설정.
+  - pre-effect 스크립트에서 설정한 temp 변수가 동작한다.
+- **미공개 파티클 경로 도구**: `minecraft:particle_motion_parametric`을 생성한다.
+
+---
+
+
+### 텍스처·그래픽스·셰이더 도구
+
+- **Texture Set Manager** (Microsoft Store `https://apps.microsoft.com/detail/9p9hp6zl1981` , `https://github.com/Cubeir/Texture-Set-Manager`): RTX/VV용 `texture_set`을 일괄 생성한다. 잎에 SSS를 만들면 반짝이게 된다(미해결).
+- **BetterRTX** (`https://bedrock.graphics/`)
+  - Preset Creator(.rtpack 출력, bedrock.graphics/creator. 2026-02에 고장, 실험적 SSS는 조악하다)
+  - DLSS 업데이트 옵션, AgX와 Lottes 프리셋. 설치에는 IObit Unlocker를 쓴다.
+  - 커뮤니티 서버는 약 5.3만 명이다.
+  - Vanilla RTX App: `https://apps.microsoft.com/detail/9N6PCRZ5V9DJ`
+- **Lazurite (veka)**: shaderc 기반 material.bin 셰이더 컴파일러이자 검사기다. `-m`으로 머티리얼을 고른다. `project` 폴더만 편집한다(`src` 스크립트가 덮어쓴다).
+  - RTX 템플릿: `https://github.com/veka0/mcrtx-shader-template` . RTXStub이 tonemapping과 bloom을 뺀 모든 것을 처리한다. 독점 RTX 코드는 공개돼 있지 않다.
+  - 26.30.32용 셰이더는 26.40 프리뷰에서 롤백된 커밋을 되돌려야 할 수 있다. 커스텀 셰이더는 Preview에서만 동작할 수 있다.
+- **셰이더와 로더**
+  - BetterRenderDragon: `https://github.com/QYCottage/BetterRenderDragon` . Windows에서 커스텀 머티리얼을 끼우는 데 쓴다. 모바일은 mb loader.
+  - 바닐라 머티리얼: `https://github.com/mcpebd/materials/releases`
+  - Newb X: `https://github.com/devendrn/newb-x-mcbe/tree/dev` (`dev` 브랜치를 쓴다. `main`은 낡아서 모든 것이 안 보인다)
+  - mirai: `https://github.com/bambosan/mirai`
+  - 그 밖에 Firmamentcraft, Strawberry Deferred, Irradia, Unbound Visuals, Vibrant Legacy, EscheridiaRT
+- **보조 도구**
+  - DLSS Swapper, DLSS Tweaks, ReShade(DoF 스크린샷), Optiscaler
+  - Shutter Encoder나 DaVinci Resolve(영상 H.264 재인코딩)
+  - looptile(`https://github.com/3merillon/looptile`, 타일링 텍스처와 caustics)
+  - GIMP(MER TGA), Krita, Ibispaint(모바일 MER)
+  - PC 성능: NVIDIA Threaded Optimization과 Prefer Maximum Performance를 켜고 dGPU를 쓰는지 확인한다.
+- **학습 자료**: The Book of Shaders, learnopengl, Bedrock Graphics 서버, poggy deferred table(`https://poggy.org/Main/Wiki/deferred_table.html`), smokey-pbr(`https://smokeystack.dev/projects/smokey-pbr`).
+- **VV 설정 검증**: JSONLint 같은 범용 검증기는 통과해도 VV 스키마에서 실패할 수 있다("unknown child schema type"). content log를 본다.
+- **텍스처와 이미지 웹 도구**
+  - image-to-item(shprojects.vercel.app/otherTools/image-to-item.html), Texture-Table 페인트(shadowgamer12k.github.io/otherTools/Texture-Table.html)
+  - textures-to-glyph(`https://minato.beyondbedrock.org/web-apps/textures-to-glyph/`), 글리프 도구(mcbeeringi.github.io/apps/mc/glyph_v1.html, darkness9373.github.io/Glyph-Maker)
+  - Icona(24x24 아이콘, `https://github.com/daniswastaken/icona`), TesserPack(이미지 최적화)
+  - MCBPB 그림 팩 빌더(`https://mcbpb.pages.dev/`), 음악 디스크 도구(`https://mc-tools.net/music-disc`), BlockMotion Studio(영상을 메뉴 배경으로, blockmotion.vercel.app)
+  - Pack Cache Converter(`https://github.com/TrayePlays/Pack-Cache-Converter`, 팩 캐시 파일명을 manifest 이름으로 바꾼다)
+  - 레시피 생성기(`https://crafting.thedestruc7i0n.ca/`, BP export, 태그, 모바일 지원)
+  - Perlin Fiddle 2.0(`https://thepixelmancer.github.io/perlin-fiddle/`)
+  - superflat 생성기(`https://superflat.crackedmagnet.com/`)
+- **블록 아이콘 렌더러**: npm `block-model-renderer`(`prepareAssets`, `renderBlock`, Node 22). 아이템 아이콘 정보: `https://github.com/Broccoli-Gang-Studios/Minecraft-Bedrock-Item-Info/` . Bedrock 블록 렌더가 어려운 이유는 바닐라 RP에 lectern 같은 블록의 모델이 없어 형태를 렌더러에 하드코딩해야 하기 때문이다.
+
+---
+

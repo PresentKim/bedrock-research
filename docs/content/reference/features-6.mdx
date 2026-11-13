@@ -1,0 +1,368 @@
+---
+title: 피처와 피처 룰 레퍼런스 (6/14)
+description: MS Learn 피처 문서와 레퍼런스.
+sidebar_position: 48
+sources:
+  - ms-learn
+---
+
+# 피처와 피처 룰 레퍼런스 (6/14)
+
+MS Learn(MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0)의 레퍼런스를 발췌한 쪽이다. 원문의 상대 링크는 제거했다.
+
+(출처: ms-learn, `creator/Reference/Content/FeaturesReference/Examples/Features/minecraftNether_cave_carver_feature.md`)
+
+
+### Features Documentation - minecraft:nether_cave_carver_feature
+
+`minecraft:nether_cave_carver_feature` carves a cave through the Nether in the current chunk, and in every chunk around the current chunk in an 8 radial pattern. This feature will also only work when placed specifically in the pass "pregeneration_pass".
+
+##### Schema
+
+```json
+object "minecraft:nether_cave_carver_feature" : opt
+{
+  object "description"
+  {
+    string "identifier" // The name of this feature in the form 'namespace_name:feature_name'. 'feature_name' must match the filename.
+  }
+  block_reference "fill_with" : opt // Reference to the block to fill the cave with.
+  molang "width_modifier" : opt // How many blocks to increase the cave radius by, from the center point of the cave.
+  int "skip_carve_chance"<1-*> : opt // The chance to skip doing the carve (1 / value).
+  int "height_limit" : opt // The height limit where we attempt to carve.
+  float_range "y_scale" : opt // The scaling in y.
+  float_range "horizontal_radius_multiplier" : opt // Horizontal radius multiplier.
+  float_range "vertical_radius_multiplier" : opt // Vertical radius multiplier.
+  float_range "floor_level" : opt // Floor Level.
+}
+```
+
+##### Example
+
+Carve nether caves normally
+
+```json
+{
+"format_version": "1.13.0",
+  "minecraft:nether_cave_carver_feature": {
+    "description": {
+      "identifier": "example:nether_cave_carver_feature"
+    },
+    "fill_with": "minecraft:air"
+    "width_modifier": 0.0
+  }
+}
+```
+
+
+(출처: ms-learn, `creator/Reference/Content/FeaturesReference/Examples/Features/minecraftOre_feature.md`)
+
+
+### Features Documentation - minecraft:ore_feature
+
+`minecraft:ore_feature` places a vein of blocks to simulate ore deposits. Despite the name, any block can be placed by this feature. During placement, existing world blocks are checked to see if they can be replaced by the new ore block based on the list in the `may_replace` field of a `replace_rules` entry. If no `may_replace` field is specified, the ore block can replace any existing block.
+
+**Succeeds if**
+At least one ore block is successfully placed.
+
+**Fails if**
+All ore block placements fail.
+
+##### Schema
+
+```json
+object "minecraft:ore_feature" : opt
+{
+  object "description"
+  {
+    string "identifier" // The name of this feature in the form 'namespace_name:feature_name'. 'feature_name' must match the filename.
+  }
+  int "count"<1-*> // The number of blocks to be placed.
+  float "discard_chance_on_air_exposure"<0.000000-1.000000> : opt // Chance of discarding placement if neighboring block is Air.
+  array "replace_rules"[1,*] : opt
+  {
+    object "<any array element>" // Collection of replace rules that will be checked in order of definition. If a rule is resolved, the rest will not be resolved for that block position.
+    {
+      "places_block" // Reference to the block to be placed.
+          array "may_replace"[1,*] : opt
+      {
+        "<any array element>" : opt // A list of blocks that may be replaced during placement. Omit this field to allow any block to be replaced.
+      }
+    }
+  }
+}
+```
+
+##### Example
+
+Malachite ore in different materials
+
+```json
+{
+  "format_version": "1.13.0",
+  "minecraft:ore_feature": {
+    "description": {
+      "identifier": "example:malachite_ore_feature"
+    },
+  "count": 12,
+  "replace_rules": [
+    {
+      "places_block": "example:malachite_ore",
+      "may_replace": [
+        "minecraft:stone"
+      ]
+    },
+    {
+      "places_block": "example:granite_malachite_ore",
+      "may_replace": [
+        "minecraft:granite"
+      ]
+    },
+    {
+      "places_block": "example:andesite_malachite_ore",
+      "may_replace": [
+        "minecraft:andesite"
+      ]
+    }
+  ]
+  }
+}
+```
+
+##### Oil deposits in the sand
+
+```json
+{
+  "format_version": "1.13.0",
+  "minecraft:ore_feature": {
+    "description": {
+      "identifier": "example:oil_deposit_feature"
+    },
+    "count": 12,
+    "replace_rules": [
+      {
+      "places_block": "example:oil_block",
+      "may_replace": [
+        "minecraft:sand"
+      ]
+      }
+    ]
+  }
+}
+```
+
+
+(출처: ms-learn, `creator/Reference/Content/FeaturesReference/Examples/Features/minecraftPartially_Exposed_blob_feature.md`)
+
+
+### Features Documentation - minecraft:partially_exposed_blob_feature
+
+`minecraft:partially_exposed_blob_feature` generates a blob of the specified block with the specified dimensions. For the most part, the blob is embedded in the specified surface, however a single side is allowed to be exposed.
+
+##### Schema
+
+```json
+object "minecraft:partially_exposed_blob_feature" : opt
+{
+  object "description"
+  {
+    string "identifier" // The name of this feature in the form 'namespace_name:feature_name'. 'feature_name' must match the filename.
+  }
+  int "placement_radius_around_floor"<1-8> // Defines the cubic radius of the blob. [1, 8]
+  float "placement_probability_per_valid_position"<0.000000-1.000000> // The probability of trying to place a block at each position within the placement bounds. [0,1]
+  string "exposed_face" : opt // Defines a block face that is allowed to be exposed to air and/or water. Other faces need to be embedded for blocks to be placed by this feature. Defaults to upwards face.
+  "places_block" // Reference to the block to be placed.
+}
+```
+
+##### Example
+
+Blobs of Magma blocks partially embedded in the floors of flooded caves
+
+```json
+{
+    "format_version": "1.13.0",
+    "minecraft:partially_exposed_blob_feature": {
+      "description": {
+        "identifier": "example:underwater_magma_feature"
+      },
+      "places_block": "minecraft:magma",
+      "placement_radius_around_floor": 1,
+      "placement_probability_per_valid_position": 0.5,
+      "exposed_face": "up"
+    }
+}
+```
+
+
+(출처: ms-learn, `creator/Reference/Content/FeaturesReference/Examples/Features/minecraftScatter_feature.md`)
+
+
+### Features Documentation - minecraft:scatter_feature
+
+`minecraft:scatter_feature` scatters a feature throughout a chunk. The `x`, `y`, and `z` fields are per-coordinate parameters. Coordinates represent an offset from the input position instead of an absolute position, and may be a single value, random distribution, or Molang expression that resolves to a numeric value. The `coordinate_eval_order` field is provided for finer control of coordinate resolution (particularly when using the `grid` distribution). `iterations` controls how many individual placements should occur if the `scatter_chance` check succeeds. The `scatter_chance` check happens once, so either all placements will run or none will.
+
+**Succeeds if**
+At least one feature placement succeeds.
+
+**Fails if**
+All feature placements fail.
+
+##### Schema
+
+```json
+object "minecraft:scatter_feature" : opt
+{
+  object "description"
+  {
+    string "identifier" // The name of this feature in the form 'namespace_name:feature_name'. 'feature_name' must match the filename.
+  }
+  feature_reference "places_feature" // Named reference of feature to be placed
+  bool "project_input_to_floor" : opt // If true, snaps the y-value of the scattered position to the terrain heightmap. If false or unset, y-value is unmodified.
+  object "distribution" // Parameters controlling the scatter of the feature. Object of type ScatterParams
+}
+```
+
+##### Example
+
+Uses "distribution" field to define the scattering settings.
+
+```json
+{
+  "format_version": "1.21.10",
+  "minecraft:scatter_feature": {
+    "description": {
+      "identifier": "example:scatter_flowers_feature"
+    },
+    "places_feature": "example:flower_feature",
+    "distribution": {
+      "iterations": 10,
+      "scatter_chance": 50.0,
+      "x": {
+        "distribution": "uniform",
+        "extent": [ 0, 15 ]
+      },
+      "y": 64,
+      "z": {
+        "distribution": "uniform",
+        "extent": [ 0, 15 ]
+      }
+    }
+  }
+}
+```
+
+
+(출처: ms-learn, `creator/Reference/Content/FeaturesReference/Examples/Features/minecraftSearch_feature.md`)
+
+
+### Features Documentation - minecraft:search_feature
+
+`minecraft:search_feature` sweeps a volume searching for a valid placement location for its referenced feature. The `search_volume` field specifies the axis-aligned bounding box that defines the boundaries of the search. The search sweeps along the axis defined by the `search_axis` field, layer by layer. For example, if `search_axis` is set to `-x`, blocks with greater x values will be checked before blocks with lower x values. Each layer is searched from the bottom-left to the top-right before moving to the next layer along the axis. By default, only one valid position must be found, but this can be altered by specifying the `required_successes` field. If fewer than the required successes are found, no placement will occur.
+
+**Succeeds if**
+The number of valid positions is equal to the value specified by `required_successes`.
+
+**Fails if**
+The number of valid positions is less than the value specified by `required_successes`.
+
+##### Schema
+
+```json
+object "minecraft:search_feature" : opt
+{
+  object "description"
+  {
+    string "identifier" // The name of this feature in the form 'namespace_name:feature_name'. 'feature_name' must match the filename.
+  }
+    feature_reference "places_feature" // Named reference of feature to be placed
+    object "search_volume" // Axis-aligned bounding box that will be searched for valid placement positions. Expressed as offsets from the input position.
+  {
+    array "min"[3] // Minimum extent of the bounding volume expressed as [ x, y, z ]
+    {
+      int "[0..0]" // x_min
+      int "[1..1]" // y_min
+      int "[2..2]" // z_min
+    }
+    array "max"[3] // Maximum extent of the bounding volume expressed as [ x, y, z ]
+    {
+      int "[0..0]" // x_max
+      int "[1..1]" // y_max
+      int "[2..2]" // z_max
+    }
+  }
+  enumerated_value "search_axis"<"-x", "+x", "-y", "+y", "-z", "+z"> // Axis that the search will sweep along through the 'search_volume'
+  int "required_successes"<1-*> : opt // Number of valid positions the search must find in order to place the referenced feature
+}
+```
+
+##### Example
+
+Attaching apples to a tree canopy
+
+```json
+{
+  "format_version": "1.13.0",
+  "minecraft:search_feature": {
+    "description": {
+      "identifier": "example:find_valid_apples_feature"
+    },
+    "places_feature": "example:apple_feature",
+    "search_volume": {
+      "min": [ -3, -3, -3 ],
+      "max": [ 3, 3, 3 ]
+    },
+    "search_axis": "-y",
+    "required_successes": 3
+  }
+}
+```
+
+
+(출처: ms-learn, `creator/Reference/Content/FeaturesReference/Examples/Features/minecraftSequence_feature.md`)
+
+
+### Features Documentation - minecraft:sequence_feature
+
+`minecraft:sequence_feature` places a collection of features sequentially, in the order they appear in data. The output position of the previous feature is used as the input position for the next. For example, a tree feature is placed at (0, 0, 0) and places blocks up to (0, 10, 0). The next feature in the sequence begins at (0, 10, 0).
+
+**Succeeds if**
+All features in the sequence are successfully placed.
+
+**Fails if**
+Any feature in the sequence fails to be placed. Features that have not yet been placed at the time of failure are skipped.
+
+##### Schema
+
+```json
+
+object "minecraft:sequence_feature" : opt
+{
+  object "description"
+  {
+    string "identifier" // The name of this feature in the form 'namespace_name:feature_name'. 'feature_name' must match the filename.
+  }
+  array "features"[1,*] // List of features to be placed in sequence. The output position of the previous feature is used as the input position to the next.
+  {
+    feature_reference "<any array element>" : opt
+  }
+}
+```
+
+##### Example: Scattering fruit throughout the canopy of a tree
+
+```json
+{
+  "format_version": 1.13.0,
+  "minecraft:sequence_feature": {
+    "description": {
+      "identifier": "example:oak_tree_then_apples_feature"
+    },
+    "features": [
+      "example:oak_tree_feature",
+      "example:scatter_apples_feature"
+    ]
+  }
+}
+```
+

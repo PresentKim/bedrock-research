@@ -1,0 +1,191 @@
+---
+title: Vibrant Visuals와 RTX
+description: VV와 레이 트레이싱의 개념, pbr capability, texture set 스키마와 MER·MERS 채널, 노멀·하이트맵, RTX와 BetterRTX
+sidebar_position: 9
+sources: [private-research, ms-learn, bedrock-wiki, bedrock-samples]
+---
+
+# Vibrant Visuals와 RTX
+
+## 개념
+
+**Vibrant Visuals**(VV)는 Bedrock의 디퍼드(deferred) 렌더링 그래픽 모드다. 방향성 조명, 볼류메트릭 안개, 대기 효과를 제공하고, 물리 기반 렌더링(PBR) 파이프라인 위에서 동작한다. 순수하게 로컬에서만 돌고 게임플레이를 바꾸지 않으므로 하위 호환된다. 설정에서 비디오, 그래픽 모드로 켠다. 모든 새 조명 기능은 선택이고 팩이 값을 주지 않으면 기본값을 쓴다. **레이 트레이싱(RTX)** 은 별도 그래픽 모드이며 같은 PBR 체계(texture set)를 일부 공유한다(출처: ms-learn, Vibrant Visuals 소개와 PBR 개요).
+
+PBR은 색 텍스처에 더해 픽셀마다 금속성, 발광, 거칠기, 노멀 또는 높이(VV에서는 추가로 SSS) 값을 가진 맵을 준다. 이 맵들이 빛과 반응하는 방식을 정한다. 팩이 PBR을 쓰려면 매니페스트에 `pbr` capability를 선언한다. 그 외 설정(톤매핑, 대기, 조명, 안개, 물)은 JSON 설정 파일이며 시간대별로 바뀌는 값은 키프레임 JSON으로 쓴다([VV 설정 파일](./vv-settings.mdx)).
+
+```json
+{
+  "format_version": 2,
+  "header": { "name": "My VV Pack", "uuid": "...", "version": [1, 0, 0], "min_engine_version": [1, 21, 90] },
+  "modules": [ { "type": "resources", "uuid": "...", "version": [1, 0, 0] } ],
+  "capabilities": ["pbr"]
+}
+```
+
+`capabilities`는 `header` 안이 아니라 `format_version`, `header`, `modules`와 같은 최상위에 있어야 한다. MS Learn(Vibrant Visuals Resource Packs)은 `min_engine_version`을 `[1, 21, 120]` 이상으로 하라고 하고, RTX용 자산은 VV용 자산의 부분집합이라 `"raytraced"` capability가 있는 팩도 VV를 활성화하지만 VV 팩에는 `"pbr"`를 쓰라고 권한다(VV는 교차 플랫폼이다). 새 capability는 RTX 파이프라인과 하위 호환되지 않는다. 그 문서의 예시 매니페스트는 `format_version`을 1로 적었고 커뮤니티 보고는 2에서 동작한다고 적었다(`conflicting`, 둘 다 동작한 것으로 보인다 `{실측 필요}`).
+
+## 활성화와 팩 호환성
+
+(출처: 비공개 조사)
+
+- **pbr capability 필수**: 위 예처럼 최상위 키여야 한다. `header` 안에 두면 VV가 계속 비활성이다. RTX도 쓰려면 RTX capability를 추가하고, RTX가 필요 없으면 `pbr`만으로 충분하다. manifest `format_version` 2에서 동작하고 `min_engine_version`도 필요하다. "VV가 갑자기 꺼졌다·아무 변화가 없다"의 대표 원인이며 `min_engine_version`만 올려서는 해결되지 않는다. `confirmed`
+- **애드온 하나가 VV를 끔**: 리소스 팩에 pbr capability가 없는 애드온 하나가 월드 전체의 VV를 끈다. 그 팩의 manifest에 추가하면 된다(MCPE-240476 관련). 애드온을 넣었더니 그래픽 모드가 조용히 Fancy로 바뀐 사례도 같은 원인이다.
+- **pbr이 있어도 안 켜지는 경우**: 팩에 다른 문제가 있으면 pbr이 있어도 VV가 켜지지 않을 수 있다(원인 미해결). 암호화된 팩의 VV 활성화 방법은 답이 없었고, 팩에서 VV를 강제로 끄는(Simple/Fancy만 허용) 방법은 없다.
+- **VV 감지**: VV의 원래 이름은 "deferred" 렌더링이며, 그래픽 모드·디퍼드 여부를 알려 주는 Molang 쿼리가 있어서 모드별로 머티리얼을 바꿀 수 있다. raytraced는 별도 설정이다. RTX 감지 쿼리도 있다.
+- **Marketplace**: Marketplace 월드는 기본적으로 VV가 꺼져 있어서 PBR/RTX Marketplace 팩의 PBR이 로드되지 않는다. 비디오 설정의 "Allow switching graphics mode"를 켜면 Marketplace RTX 맵에서도 모드 없이 VV를 켤 수 있다.
+- **RTX 팩을 VV에서 사용**: 두 모드는 거의 같은 PBR 체계(color/normal/heightmap/MER texture set)를 써서 대체로 호환된다. RTX 팩을 VV에서 쓰면 레이 트레이싱 없이 그 팩용 VV가 되고 RT 하드웨어가 필요 없어 휴대폰에서도 동작한다. 다만 아티팩트(education 블록 교체, 이상한 하늘)가 생길 수 있고 RTX용 MER 발광 값은 VV에서 너무 밝다.
+- **팩 여러 개 쌓기**: "Defined PBR" 계열 팩은 PBR을 더하는 것이 아니라 앞선 팩의 PBR, fog 등 설정을 덮어쓴다. 그래서 fog/PBR 팩을 여러 개 쌓는 것은 의미가 없다.
+- **모드 전환 글리치**: 월드 안에서 Fancy에서 VV로 바꾸면 물이 우윳빛·회색으로 깨진다. 메인 메뉴에서 VV를 먼저 켠다. 월드 안 모드 전환은 VV 글리치나 RTX 검은 스킨을 남긴다. Nether/End에서 반사를 끄거나 월드를 다시 불러오면 반사가 깨지므로 Overworld에서 한다. education 토글도 VV를 깨뜨린다.
+- **"Adjust Brightness" 수정**: 업데이트 후 월드가 전체적으로 어두워졌다면 VV를 켜고 Adjust Brightness(예: 100%)를 적용한 다음 VV를 끈다.
+- **하드웨어**: PC는 DirectX 12급 GPU가 필요하다. Mali-G76(Exynos S10+), Pixel 10(PowerVR), Snapdragon 695급은 미지원으로 보고됐고 Mali-G68/G77 이상은 지원된다고 한다. iPhone XR(3 GB RAM)은 돌아간다. 미지원 기기는 VV 옵션이 회색이다.
+- **VV 팩은 셰이더가 아님**: VV "그래픽 팩"은 설정 파일(톤매핑, atmosphere, 컬러 그레이딩)만 바꾸고 효과를 추가할 수 없다. 하늘을 바꾸는 기존 팩(커스텀 End/Overworld 하늘 서브팩)은 VV에서 깨지므로 VV atmosphere·fog 설정으로 다시 만들어야 한다.
+- **Editor 모드**: VV 설정을 실시간으로 편집할 수 있는 곳은 Editor 모드뿐이다(톤매퍼 전환, 바이옴별 VV 설정은 2026-01-14 프리뷰부터). "toggle biomes by location"은 현재 바이옴만 보여 준다. Editor는 fog나 물을 미리 보여 주지 않는다. 게임 내 설정 UI는 DDUI와 스크립팅으로 만들 수 있지만 DDUI는 서버 측이라 비헤이비어 팩이 필요하고 manifest 팩 설정·서브팩은 바꿀 수 없다.
+- **팩 설정**: 서브팩이나 Molang 같은 팩 설정은 VV 설정을 제어할 수 없다. 톤매퍼와 그림자 타입 조합마다 서브팩이 하나씩 필요하다.
+
+## PBR 텍스처 세트
+
+### 스키마 (출처: ms-learn, Texture Sets Introduction)
+
+`<색 텍스처>.texture_set.json`은 `minecraft:texture_set` 아래에 층(layer)을 둔다.
+
+| 층 | 설명 |
+| --- | --- |
+| `color` | 유일한 필수 층. RGB 3채널(알파 1.0), RGBA 4채널, 또는 4값 배열(균일 색). 클래식 파이프라인이 쓰는 유일한 층. 보통 조명이 구워져 있다 |
+| `normal` | 3채널 노멀 맵(4채널이면 넷째 무시). `heightmap`과 한 세트에 함께 정의하지 않는다 |
+| `heightmap` | 1채널 또는 균일 단일 값. VV에서 하이트맵은 아이템 같은 텍스처 기반 객체에 적용되지 않으니 노멀을 쓴다 |
+| `metalness_emissive_roughness` | MER. R 금속성, G 발광, B 거칠기. 3채널(4채널이면 넷째 무시) 또는 3값 배열. MERS와 함께 정의하지 않는다 |
+| `metalness_emissive_roughness_subsurface` | MERS. R 금속성, G 발광, B 거칠기, A SSS(subsurface). VV 전용이며 RTX에서는 값이 무시된다 |
+
+금속성과 SSS는 한 세트에서 동시에 쓸 수 없다(상호 배타). 둘 중 값이 큰 쪽이 지배한다. 예: `[64.0, 0.0, 0.0, 128.0]`은 SSS 128의 비금속이다. 금속성은 이진(금속인가 아닌가)으로 쓰기를 권하지만 부분 금속도 가능하다(물리적으로 정확하지 않지만 스타일용). 이미지 대신 균일 값을 쓸 수 있다(0~255 숫자나 숫자 벡터, 또는 RGB·ARGB 16진수, 단일 채널은 16진 두 자리). MERS 균일 값으로 텍스처 변형을 만드는 것은 지원되지 않으므로 그 경우 이미지 기반 MERS 파일이 필요하다.
+
+```json
+{
+  "format_version": "1.21.30",
+  "minecraft:texture_set": {
+    "color": "cactus_side",
+    "metalness_emissive_roughness_subsurface": "cactus_side_mers",
+    "normal": "cactus_side_normal"
+  }
+}
+```
+
+```json
+{
+  "format_version": "1.16.100",
+  "minecraft:texture_set": {
+    "color": [180, 140, 190, 255],
+    "metalness_emissive_roughness": "#FBA34C",
+    "normal": "grass_carried_normal"
+  }
+}
+```
+
+### 각 맵의 의미 (출처: ms-learn, PBR 개요)
+
+- **금속성**: 회색조. 0(순흑)은 완전한 비금속(잔디, 흙, 나무껍질), 1.0(순백)은 완전한 금속(철, 금, 구리).
+- **발광**: 0은 발광 없음, 1.0은 가장 밝게 빛남.
+- **거칠기**: 0은 가장 매끄러움(대리석, 유리, 매끄러운 플라스틱), 1.0은 가장 거침(벽돌, 나무껍질, 돌).
+- **노멀 맵**: RGB 텍스처(회색조 아님). R, G, B가 표면 법선의 X, Y, Z에 대응해 깊이와 빛 반응을 정한다. 경험이 없으면 손으로 만들지 말고 도구를 쓴다.
+- **하이트맵**: 0은 안쪽으로 최대, 1.0은 바깥쪽으로 최대, 0.5(127)는 변화 없음. 노멀 맵의 대안이지만 덜 효율적이고 표현할 수 있는 텍스처가 적다.
+- 레이 트레이싱 모드에서는 PBR 텍스처가 블록에만 지원되고, VV에서는 몹·아이템·파티클에도 적용된다.
+
+### 예제: 거울 만들기 (출처: ms-learn)
+
+`textures/blocks/iron_block.texture_set.json`을 만들고 MER에서 금속성은 높게, 거칠기는 0으로 한다.
+
+```json
+{
+  "format_version": "1.16.100",
+  "minecraft:texture_set": {
+    "color": "iron_block",
+    "metalness_emissive_roughness": "iron_block_mer"
+  }
+}
+```
+
+아래는 커뮤니티 조사의 규칙과 함정이다(출처: 비공개 조사).
+
+### 파일 형식
+
+- **파일 이름과 위치**: 정확히 `<color텍스처>.texture_set.json`("textureset"이 아님)이며 참조하는 텍스처와 같은 폴더(예: `textures/entity/`, `textures/blocks/`)에 둔다. 값은 경로나 확장자 없는 파일 이름이다(`"metalness_emissive_roughness": "mer_8"`). `color`는 `terrain_texture` 경로가 아니라 옆에 있는 파일 이름이며 bridge.의 자동완성이 잘못 제안했다. MER 맵은 `terrain_texture.json`에 등록할 필요가 없다. `confirmed`
+- 예시:
+
+```json
+{"format_version":"1.21.30","minecraft:texture_set":{"color":"acacia_trapdoor","metalness_emissive_roughness":"acacia_trapdoor_mer","heightmap":"acacia_trapdoor_h"}}
+```
+
+MERS는 `"metalness_emissive_roughness_subsurface"` 키를 쓴다(예: format 1.26.10). MER만 쓰면 subsurface 키를 뺀다. 값은 인라인 배열(`[255,0,0,0]`)로도 줄 수 있다. 하이트맵 키는 `"heightmap"`이다(`height_map`이 아니다).
+- **폴더 오타**: 블록 texture set이 안 먹은 원인이 `/block` 폴더(올바른 이름은 `blocks`)였던 사례가 있다.
+- **파일 형식**: MER/PBR 파일은 PNG나 TGA다. TGA는 알파 편집이 쉽고 값이 정확하며 PNG는 보기 편하다. GIMP는 MER TGA를 열 수 있지만 Paint.NET에서는 빈 이미지로 보인다. 한 보고에서는 하이트맵을 `.png`, MERS를 `.tga`로 썼다. Blockbench에서 PBR을 미리 보거나 편집할 수 있다(텍스처 우클릭, "Add material").
+- **폴백 값**: `minecraft:pbr_fallback_settings`(format 1.21.40)의 `global_metalness_emissive_roughness_subsurface: [0,0,255,0]`(blocks, actors, particles, items)는 PBR 텍스처가 없는 대상에만 쓰인다. `pbr.json` 스타일 값 항목으로 텍스처 대신 균일 값을 줄 수도 있다.
+- **플립북과 MER**: MER은 `flipbook_textures.json`이 아니라 `texture_set.json`에서 참조하고 파일 이름은 texture set 항목과 정확히 일치해야 한다.
+
+### 채널 의미와 값
+
+- **MER 채널**: 파란 채널은 "반전"이라 0이 매끈하고 반사, 255가 완전히 거칠다. 0이나 단색보다 40~120처럼 변화를 준다. roughness 0에 높은 metal이면 지나치게 번쩍인다. MER `[0,0,0]` 유전체는 광택 있는 흰색처럼 보이고 `#000000` MER은 유리처럼 보인다. metalness는 재질을 어둡게 하고 반사에 표면 색을 입힌다.
+- **채널별 값만 의미 있음**: "파란색" 이미지에도 초록 성분이 있으니 채널별로 확인한다. 잎에 `[0,0,0,128]`을 줬더니 금속처럼 보였고 roughness(3번째)를 200으로 올려 해결했다.
+- **발광 범위**: VV MER의 발광(G)은 0~255가 아니라 0~15로 클램프된다는 보고가 있으니 약한 발광에는 낮은 값을 쓴다. `single report`
+- **투명 픽셀**: MER의 투명 픽셀이 흰색으로 저장되면 그 부분이 빛난다("Export as"를 쓰고 quick export는 피한다). 무손실 이미지 최적화 도구가 알파 0 픽셀의 색을 지우면 MERS의 SSS가 깨진다(TesserPack 사례).
+- **반사 잔디 예시**: 16x `grass_top_mer`에 밝은 빨강(metalness)을 칠하고 그 이름으로 내보낸다. 진한 파랑과 빨강을 섞으면 유리처럼 보이지 않으면서 반사가 생긴다. MER 반사가 너무 강하면 albedo가 유리처럼 바랜다.
+- **SSS 그라데이션(잔디)**: texture set이나 Blockbench로 SSS를 켜고 위쪽 최대에서 아래쪽 0으로 가는 그라데이션을 MER 마스크 위에 칠한다. VV SSS는 스카이라이트의 영향을 받아서 스카이라이트가 낮고 햇빛이 강하면 2D 식물·몹에서 지나치게 강해 보일 수 있다. 잎 SSS/MER 생성기가 SSS 대신 금속 맵을 만들기도 한다.
+- **VV 채널**: metalness, emissive, roughness, SSS다. 폴더 구성은 Height 또는 Normal, MER, Albedo, `texture_set.json`이다. 바닐라 VV 팩의 MER은 roughness만 쓴다. 바닐라 블록·몹·아이템의 MER 세트는 바닐라 팩에서 복사할 수 있다.
+
+### 노멀 맵과 하이트맵
+
+- **하이트맵 동작**: 값은 정규화되어 있고 실제 높이 = 값 x 높이 스케일이다. 흰색 255가 높고 약 128 회색이 평면, 검정 0이 낮다. 조명만 바꾸며 POM은 없다. VV의 하이트맵은 노멀 맵처럼 쓰이므로 진짜 시차 효과에는 커스텀 셰이더가 필요하다. 높이가 반전돼 보이면 제대로 된 노멀 맵을 쓰는 편이 낫다.
+- **하이트맵에서 노멀로**: 픽셀 사이 기울기는 1/8 픽셀이다(VV 셰이더 `RenderChunkPrepass.ESSL_310.Fragment.glsl`). 16x16 하이트맵은 최소 128x128 노멀과 같고 반 픽셀 정렬까지 하면 256x256이다. 192/196이라는 수치는 근사다. 노멀은 실시간으로 계산되므로 추가 메모리가 0이다. 192x192 고해상도 노멀 맵(albedo도 192x192로)은 거친 반사를 흉내 내는 데도 쓰인다.
+- **배타성**: 한 텍스처에서 하이트맵(RTX)과 노멀 맵은 함께 쓸 수 없다. 고해상도 노멀로 하이트맵을 흉내 낼 수 있다. Bedrock 노멀 맵은 DirectX 방식이다. RTX의 평평한 노멀은 `#8080FF`이고 `#7F7FFF`는 약간 기울어 있다(정확한 중앙 127.5가 없어서 반올림됨).
+- **지원 범위**: 아이템은 노멀·MER은 지원하지만 하이트맵은 지원하지 않는다(2D 아이템 스프라이트 포함). 엔티티와 어태처블은 하이트맵을 지원하지만 "texture meshes"는 예외다. texture mesh는 블록 모델에서 조용히 나타나지 않는다(문서 없음, 버그일 수 있음). 장식 단지 윗면("decorated pot base")에는 균일 값으로도 PBR이 적용되지 않는다.
+- **저작 요령**: 색 텍스처를 휘도로 탈색하고 필요하면 반전해 하이트맵을 만든다. 그림자가 구워진 텍스처(인챈트 테이블 윗면)는 손으로 칠하거나 곡선으로 보정한다. 색 텍스처에 원래 음영·AO를 약간 남겨야 평평해 보이지 않는다. 하이트 입력을 살짝 블러하면 노멀 노이즈가 줄고 Blockbench가 만든 노멀은 노이즈가 많다. 문 손잡이처럼 튀어나온 부분은 흰색(`#ffffff`)으로 칠하고 하이트맵은 고해상도에서 잘 동작하지 않는다. 16x는 노멀을 손으로 칠할 가치가 있고(생성된 16x는 평범함) 고해상도는 생성으로 충분하다는 것이 합의였다. 노멀 맵은 조명이 없는 곳에서는 소용이 없다.
+- **자동 생성 PBR**: 스크립트로 빠르게 만들 수 있지만 손으로 보정해야 한다(광석·용광로의 금속/돌 픽셀, 양털·콘크리트 변형, 일부만 빛나는 블록). 바닐라 기반 VV 팩은 대부분 하이트맵·노멀을 바꾸고 바닐라 MER은 거의 건드리지 않는다. 노멀 맵은 측면 각도에서도 조명을 받으므로 양털·방해석이 사방에서 평평하고 밝아 보인 문제는 팩의 PBR/노멀 텍스처를 지워 해결됐다.
+- **아틀라스 하이트맵 저장 방식 변경**: 아틀라스 재작업(VV 먼저, RTX는 2026-05-06 프리뷰)으로 아틀라스가 회색조 높이 대신 RGBA 각 채널에 4방향 이웃 픽셀까지의 기울기를 저장한다. PBR 채널 여유가 없어서 새 PBR 레이어를 추가하려면 아틀라스 텍스처가 하나 더 필요하고 커스텀 POM용 높이 복원이 훨씬 어려워졌다. 보이는 결과는 같다.
+
+### PBR이 적용되지 않는 대상
+
+- **플레이어**: 플레이어 엔티티 PBR/MER은 VV에서 동작하지 않는다는 보고(하드코딩)가 있고, 반대로 steve 텍스처가 PBR을 받는다는 2025-11 보고도 있다. `conflicting`
+- **손에 든 블록**: 손에 든 블록 지오메트리에는 PBR/MER이 적용되지 않는다(기본값 metal 0, emissive 0, roughness 255). 아이콘이 있는 item override를 써야 하고(MCPE-237517) `blocks.json`으로 정의한 블록은 괜찮다. `light_emission`은 인벤토리에서도 빛난다.
+- **반투명 발광 엔티티**: VV에서 지원되지 않는다. 엔티티는 엔티티 텍스처마다 texture_set을 따로 설정해야 동작했다.
+
+## RTX와 BetterRTX
+
+(출처: 비공개 조사)
+
+### 기본 사실
+
+- **정책**: Mojang(imnotmadd)은 2025-10-23에 RTX를 제거할 계획이 없다고 밝혔다(지원 페이지의 반대 문구는 실수).
+- **플랫폼**: RTX는 모바일에 없고, 콘솔은 Xbox Series X에서만(약 25 fps) 돌아가며, PlayStation은 DX12가 없어서 안 된다. 휴대폰 RTX 스크린숏은 가짜이거나 스트리밍이다(PC에서 Sunshine/Moonlight로 스트리밍 가능). Linux에서는 동작하지 않는다(Arch/Bazzite GDK-Proton 시도 실패). 하드웨어 하한은 RTX 2050, Radeon RX 6600, 모든 Intel Arc이고 일부 AMD 내장 GPU는 느리다. `material.bin`을 고쳐 모바일로 "포팅"하는 것은 RT 파이프라인이 게임 코드에 있어서 비현실적이다. RTX는 HLSL/DirectX 전용이고 톤매핑과 블룸 머티리얼만 BGFX를 쓰며 `RTXStub.material.bin`이 BGFX를 우회한다. dxil-spirv로 셰이더를 변환할 수는 있지만 재작성이 필요하고 모바일 소프트웨어 RT도 비현실적이다.
+- **렌더링 방식**: Minecraft RTX는 경로 추적이고 완전 레이 트레이싱이다(파티클, 표지판 글씨 등만 제외, 래스터+RT 하이브리드 없음). 1차 디노이저 없이 보면 먼 곳의 그림자·노멀 디테일이 훨씬 많이 보인다. 기본 RTX는 irradiance cache(누적과 디노이즈, 저렴)를 쓰고 EscheridiaRT는 다중 광선 바운스(무차별, 프레임마다 버림, 무거움)를 쓴다. 1~3 샘플의 실시간 경로 추적 GI에는 시간 누적이 필수이고 고스팅은 temporal alpha로 조절하며 ReSTIR은 샘플을 재사용한다. 반사는 단일 바운스(비용 때문)이고 움직이면 어두운 얼룩이 생기며 디노이저와 irradiance cache가 디테일을 흐린다. 투명체·스테인드글라스에서 가장 강하다. 사전 베이크 조명은 플립북, 태양, 엔티티, 청크 로드 때문에 현실성이 없다.
+- **기본 RTX의 약점**: 톤매핑은 사실상 클램프이고, 하늘이 자동 노출에서 빠져서 올려다보면 눈부시다(한 줄 수정이라는 말이 있음). SSS 없음, 엔티티·파티클 PBR 없음, 청크 버퍼 때문에 바닐라가 아닌 지형에서 렌더 거리 24 사용 불가, 이름표 미표시, 블록 변경 깜빡임이 있다. 1인칭 지오메트리는 그림자와 반사에서 일부러 무시되고(떠 있는 팔 방지) 1인칭에서 엔티티 머티리얼도 꺼진다. 이를 고치려면 바닐라 팩의 내부 클라이언트 카메라 파일을 고쳐야 하므로 커스텀 팩으로는 불가능하다. RTX 손은 3D 물체라 높은 FOV를 따르지 않는다. RTX는 단면 렌더링을 지원하지 않아서 풀 같은 교차 모델이 이상해 보인다. SSS 채널은 읽히지만 쓰이지 않는다(VV에 SSS를 추가할 때 몰래 들어감).
+- **엔티티 PBR**: 바닐라 RTX에는 엔티티 PBR이 없고 맵이 아닌 값만 받으며 기본으로 로드되지도 않는다(셰이더 변경 필요). 리소스 팩으로 제어할 수 없다. 블록 아이템 PBR·균일 엔티티 PBR이 월드를 10~15번 재접속하면 "어쩌다 동작"한 것을 보면 지원 가능해 보이고, veka의 RTX 렌더러 셰이더팩 같은 셰이더 수정으로 커뮤니티가 블록 아이템 PBR을 추가할 수 있다. 블록 아이템 PBR 로딩(손·인벤토리 아이템)은 Mojang 변경으로 깨졌다(2026-05-26). 커스텀 RT 셰이더로도 엔티티 PBR은 안 된다.
+- **오버레이 텍스처 미지원**: 주민 옷, 배너 무늬가 빠진다. RTX 팩에서 작은 설정 변경으로 고치거나 다른 레이어 텍스처를 쓰는 별도 모델·렌더 컨트롤러를 만든다. 풀 블록(교차 텍스처)은 `blocks.json`에서 블록 셰이프를 `cross_texture`로 되돌리면 다시 제대로 렌더링된다. 알파 채널 머티리얼을 쓰는 고양이는 빛이 몸을 통과한다(그림자 없음).
+- **하늘, fog, 물**: RTX 하늘 색은 리소스 팩으로 바꿀 수 없고 distance fog가 하늘 색을 따른다. 커스텀 스카이박스·큐브맵은 RTX에서 동작하지 않고 client biome의 하늘 색도 End 외에는 안 된다. 기본 RTX 하늘은 편집 가능한 PNG 텍스처이고 창백한 RTX 하늘은 이 텍스처 탓이라 팩이 fog 설정으로 보정할 수 있다. RTX fog 키는 `"max_density"`(2, 4 사용 사례)와 `"scattering": [r,g,b]`(예 `[0.36, 0.46, 0.76]`)다. RTX 물은 color/MER/height/normal 맵을 지원하지 않는 비표준 머티리얼이라 texture set이 무의미하고 물·하늘 커스텀 노멀 맵은 팩에서 설정할 수 없다(게임 `ray_tracing` 폴더에 파일이 있음). 구름은 volumetric이고 렌더 거리 제한을 받아 약 24청크 너머는 보기 어려우며 커스텀 모양에는 팩에서 사전 계산한 노이즈 텍스처가 필요하다. 구름 옆면·아랫면이 버그다. End flash는 빛을 내지 않는 태양 같은 물체로 보이고 하늘 밝기를 바꾸며 커스텀 End flash 텍스처를 쓸 수 있다.
+- **발광**: RTX에서는 MER 발광으로 무엇이든 빛을 낼 수 있고 색은 텍스처 색에서 온다(파란 발광 영역은 파란 빛, 양초는 포인트 라이트가 아닌 순수 광선 추적 발광). 횃불, 랜턴, 엔드 막대는 포인트 라이트를 써서 발광 값과 관계없이 빛난다. VV 발광은 포인트 라이트에 의존하는데 RTX에는 횃불·랜턴·양초·엔드 막대에만 포인트 라이트가 있다. 아이템의 발광은 빛을 내지 않고 글로우만 있다. 횃불 색이 1.21.120에서 하드코딩됐다는 의견과 설정·텍스처 색을 따른다는 의견이 있다(`conflicting`). RT의 포인트 라이트는 1.21.120부터 깨졌고 1.21.130에서 절반 고쳐졌다(구리 횃불, 양초, 바다 피클 미렌더링).
+- **가짜 발광 엔티티**: 바닐라 `charged_creeper` 머티리얼을 쓰고 렌더 컨트롤러에 `"light_color_multiplier": <숫자>`(블룸에는 약 100.0)를 넣는다. 진짜 광원이 아니라 글로우만 나고 물속에서 사라지며 아주 약하게 빛난다(흰 텍스처에서 더 잘 보임). 이유(veka): charged creeper는 레이 트레이싱 후, 블룸 전에 HDR 결과 위에 그려져 블룸을 받지만 일반 래스터 물체(파티클 등)는 RT 전에 텍스처 하나에 렌더링되기 때문이다. 주변에 빛을 내 보려고 `"rtx_emissive:charged_creeper": {"-states": ["Blending"]}`가 제안됐지만 결과는 확인되지 않았다. 애드온 엔티티는 포인트 라이트로 빛을 낼 수 있지만 시야 밖이나 먼 곳(반사 포함)에서 사라지고 지상 몹에만 동작한다. 파티클은 레이 트레이싱되지 않아 RT 그림자가 없고 블룸·톤매핑 위에 렌더링되며 RTX 파이프라인에 영향을 주지 않는다.
+- **반사 엔티티 흉내**: 굴절(투명 부분과 모델·텍스처 트릭, 예: 철 골렘)로 RTX에서 흉내 낼 수 있다. VV에서는 투명하게만 보이고 일부가 깜빡인다. RTX 감지 Molang 쿼리로 RTX에서만 켠다. 반사 철 골렘·엔티티 머티리얼은 RTX RP에서는 되지만 Better RTX에서는 안 된다. 일부 TGA 이미지는 RTX가 텍스처 일부를 반투명으로 취급하게 만들고 제대로 된 SSS는 없다.
+- **태양 각도**: 기본 RTX에는 태양 각도 제어가 없다(한 번 새어 나왔다가 패치됐고 RT가 켜지면 게임이 태양 각도를 보내지 않음). 커스텀 RT 셰이더는 할 수 있다. VV 태양 각도 설정이 예전에는 RTX(태양 텍스처, 일부는 조명까지)에 영향을 줬고, RTX 팩에서 완전 투명 태양 텍스처를 지우면 "디퍼드 태양 각도"가 드러났다. 많은 RTX 매개변수가 제어 가능하지만 팩에 노출되지 않는다. 태양 각도와 손에 든 블록 PBR 버그는 패치로 막혔고 몇 년간 RTX에 추가된 기능은 fog 키프레임뿐이다.
+- **표시 버그**: 떨어지는 블록이 2026-05-18 프리뷰에서 RTX에 표시된다. 무시룸 버섯, 이름표, 떨어지는 블록이 같은 문제로 안 보이다가 최근 빌드에서 고쳐졌다(2026-05-19). 월드를 다시 불러온 뒤 분홍 글리치 텍스처는 재시작으로 해결된다. 목록화된 RTX 버그: 구름 깜빡임, 업데이트 시 청크 깜빡임, 블록 파괴 오버레이 발광, 엔드 포털 검정, 파티클, 이름.
+- **열린 Mojang 버그(2026-02-09)**: MCPE-194207 블록 파괴·설치 깜빡임, MCPE-218920 RT에서 이름표 없음(이 둘이 "가장 심각"), MCPE-227510 블록 파괴 오버레이 글리치, MCPE-227624 RT에서 포인트 라이트 제거, MCPE-191513 메인 메뉴에서 RT를 켤 수 없음, MCPE-152158 새로 실행 후 RT를 켜면 PBR 텍스처 미로드, MCPE-121850 VSync에서 RT 성능 저하.
+- **RTX 토글이 회색·고장**: `settings.txt`에서 그래픽 모드를 바꾸거나, Marketplace RTX 월드에 들어가거나, 월드에서 팩을 직접 켜고 재시도한다.
+- **아틀라스 변경 영향**: Mojang이 지형 UV 인코딩을 바꾸고 아틀라스 타일 패딩을 제거하자(아틀라스 픽셀의 75%가 패딩이었음) RTX 셰이더가 갱신되지 않아 "atlas tracing" 버그(단일 텍스처 대신 블록 아틀라스로 폴백)와 하이트맵 이음매가 생겼다. 다음 프리뷰(2026-05-01)에서 고쳐졌고 veka.가 2026-05-06에 BetterRTX에 새 UV 변경을 반영했다. 26.0.23 무렵 새 월드에서 반쪽 텍스처가 MER 데이터를 보여 주는 아틀라스 손상이 있었고 텍스처를 더 추가하는 것이 우회책이었다. RTX에서 물에 이상한 줄이 보이는 지형 아틀라스 버그의 수정은 프리뷰에서 되돌려졌다가 다시 적용됐고(2026-06-09) 팩에서 밉맵을 끄면 고쳐질 수 있다. 주로 애니메이션 텍스처에서 보이던 RTX 텍스처 버그를 Mojang이 고쳤다가 의도치 않게 되돌렸다(2026-06-02). 최신 프리뷰가 RTX 코드 수정을 다시 적용해서 셰이더 템플릿에 `Support for 26.30.32` 커밋 변경이 없으면 FPS가 나쁘다(2026-06-10).
+
+### RTX 톤매핑과 DLSS
+
+- **톤매퍼**: 기본 RTX "톤매퍼"는 장면 휘도 기반 동적 휘도 곡선과 색 변환이며 AgX가 아니다. RTX 리소스 팩은 톤매퍼를 바꿀 수 없고 BetterRTX 프리셋만 바꿀 수 있다. RTX/BetterRTX 선택지는 Vanilla, ACES, Uncharted 2, Reinhard, Uchimura, AgX, Lottes이고 BetterRTX의 "ACES"는 실제로는 Unreal Engine 4 filmic이다(라이선스 때문에 진짜 ACES 불가). AgX 프리셋은 Gilded Graphics, Interstellar, Infectious이고 나머지는 ACES·기본이다. BetterRTX 1.4는 기본 RTX 톤맵을 쓴다. RTX 톤매퍼 머티리얼은 `RTX.TonemappingPostFX.material.bin`이다.
+- **DLSS**: 게임은 DLSS 2.1.16을 탑재한다(화질이 나쁘고 RTX 50에서 문제). DLL을 직접 바꾸거나(techpowerup에서 받음, DLSS 310.4 dll은 자동으로 preset K 사용) DLSS Swapper GUI를 쓴다. 2026-04-30 프리뷰는 DLSS 310.5.3을 쓴다. 새 버전은 transformer 모델을 쓰며 DLSS Swapper로 convolutional 3.8.10으로 바꿀 수 있다. DLAA는 Bedrock RTX에 강제할 수 없다(화면 모서리에 검은 띠, DLSS 렌더 스케일을 강제로 높여도 같음). 한 개발자는 커스텀 작업으로 RTX에서 MetalFX를 동작시켰다.
+- **RTX 50 시리즈 FPS 저하**: 5090에서 60 FPS(VV는 170)였다. DLSS dll 갱신(BetterRTX의 "update DLSS" 옵션), DDU로 드라이버 재설치, RAM XMP·듀얼 채널 확인이 제안됐다.
+
+### BetterRTX와 커뮤니티 RT
+
+- **BetterRTX**: 일반적인 게임 플레이용 RTX다(웹사이트에서 프리셋 생성). Mojang의 RTX 머티리얼이 한때 암호화 없이 배포돼서 가능했고, BetterRTX는 NVIDIA·Mojang 코드가 없는 템플릿 셰이더를 제공한다. 바닐라 기반 커스텀 셰이더는 거의 불가능하다. 한계: 외부 텍스처 읽기(노이즈), BVH 변경에는 DLL 주입이 필요하고 버퍼는 약 99개다. 기능: 팩 노멀 사용, 밉맵 강제 켜기·끄기, 무지개(공식 구현 안 된 코드), 커스텀 물 노멀, 반사 디노이징 조정, Rayleigh 하늘(커스텀 하늘 텍스처를 쓰려면 Rayleigh 끄기), PBR 하늘, 애니메이션 텍스처 노이즈 안정화, 기하 노멀로 노멀을 다시 계산해 구름 수정. "Iridescence"는 커스텀 하늘, Lottes 톤맵, 공기 fog용 HG 로브 2개, 새 물, 반사 재투영 조정(고스팅 감소, 노이즈 약간 증가), 구름 그림자에 영향을 주는 구름 밀도를 담았다.
+- **버전 호환**: 26.0이 BetterRTX와 RTX PBR을 깨뜨렸다(VV를 쓸 수 없을 때 RTX PBR이 꺼짐). veka가 갱신한 `material.bin` 파일로 고쳤고 2026-02-14에 DLSS 3.8과 함께 다시 동작했다. BetterRTX 프리셋 빌더(bedrock.graphics/creator)는 2026-02에 고장이었고 26.0과 호환되지 않았다(2026-02-15). 다음 BetterRTX에 프리셋 블랙리스트가 계획됐다. 설치 중 BSOD는 설치 프로그램 쪽 문제로 26.0 무렵 고쳐졌다. 데이터가 `com.mojang\minecraftpe` 경로 아래면 BetterRTX가 `options.txt`를 찾지 못한다. 26.20.x에서 머티리얼 형식이 바뀌어 BetterRTX 팀이 갱신할 때까지 프리셋이 크래시했다.
+- **BetterRTX 동굴의 빛 샘**: MC 컬링 규칙과 BetterRTX 빛 샘 수정의 부작용 때문이다. 바닐라는 BetterRTX가 쓰지 않는 더 새로운 가시 물체 표시 기능으로 컬링 우선순위를 정한다. 동적 그림자·효과의 GI 고스팅은 RTX를 다시 쓰지 않고는 줄일 수 없다.
+- **BetterRTX의 플립북**: RGB 바다 랜턴(발광 플립북)이 가까이서만 애니메이션된 원인은 BetterRTX가 밉맵을 끄는데 팩은 밉맵을 켜 둔 것이었고 밉맵 없이 다시 임포트해 고쳤다. Cat RTX도 밉맵을 사실상 제거해 "애니메이션 버그"를 고쳤다.
+- **EscheridiaRT**(QuirkyPlague/EscheridiaRT): RTX 기능을 쓰는 오프라인 경로 추적기다. 파일을 `C:/XboxGames/Minecraft for Windows/Content/data/renderer/materials`에 복사하고(원본 백업) RTX GPU와 RTX 리소스 팩이 필요하며 실시간이 아니다.
+- **경로 추적 구름**: GPU에서 3D 노이즈를 생성하면 너무 느리고 스크립트로 파티클 기반 경로 추적을 하는 것도 불가능하다고 봤다. VV에서 커스텀 셰이더로 경로 추적을 한 데모는 이후 버전에서 깨졌다.
+
+### VV와 RTX 비교
+
+- VV는 JSON만으로 RTX를 따라잡을 수 없다. 진짜 거친 반사(SSR만 있고 항상 거울), 투명체를 통과하며 물드는 빛, 구름 투명도, 굴절, RTX 하늘, GI·색 번짐이 없고 그림자 맵 문제가 있다. GI가 약한 낮에는 비슷해 보일 수 있고 컬러 그레이딩과 하늘·태양·달 색으로 근사할 수 있지만 진짜 RTX 느낌에는 커스텀 셰이더가 필요하다.
+- VV와 RTX는 texture_set 파일을 공유하므로 바닐라 VV PBR(1.21.90부터)이 RTX에도 적용된다. fog 설정은 서로 호환되지 않는다.
+- 일반 노멀 맵은 POM 없이 조명만 바꾸고 표면은 평평하다. POM은 시야각에 따라 디테일을 가려 깊이를 흉내 내며 Bedrock에는 POM이 없다(커스텀 셰이더로만). pawslight는 고해상도 팩에서 노멀 맵과 높은 metalness/roughness를 섞어 깊이를 흉내 낸다.
+- **GI 대안**: SSGI는 화면 공간 레이 트레이싱이고 RT 없는 햇빛 GI는 reflective shadow mapping이나 LPV(light propagation volumes)로 가능하다. Java 셰이더의 커스텀 flood-fill 기법은 flood-fill 버퍼를 읽기 전에 복셀 샘플 위치를 노멀 방향으로 밀어(`samplePos += 2.5 * normal`, 노멀 맵을 원하면 텍스처 노멀을 쓰고 기하 노멀은 오프셋 문제를 일으킴) 방향성·NdotL과 GI 느낌을 흉내 내지만 모서리가 이상해진다.

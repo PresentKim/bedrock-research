@@ -1,0 +1,299 @@
+---
+title: 화면 호스트와 데이터 채널
+description: 서버 폼, 모달 폼, 상자, NPC 대화, HUD를 호스트로 삼아 스크립트 데이터를 받는 규칙(HOST-01~47).
+sidebar_position: 10
+sources:
+  - repo-guide
+  - repo-bedrock-core
+  - private-research
+  - advancementpack
+  - repo-damage-indicator
+  - mcbejsonuimasterai
+  - repo-testpack
+  - bedrock-samples
+  - private-research
+  - repo-multiselect
+  - netease-mcdocs
+  - bedrock-wiki
+  - repo-survey
+
+---
+
+## 개념: 호스트와 채널
+
+리소스팩의 JSON UI는 새 화면을 만들지 못한다. 엔진이 이미 열 줄 아는 바닐라 화면에 붙어 모양만 바꾼다. 이 화면을 **호스트**라 하고, 스크립트가 호스트에 실어 보내는 값(폼의 제목·본문·버튼 글, 타이틀·액션바·채팅 문자열, 상자 슬롯의 숫자)을 **데이터 채널**이라 한다. 설계는 "어떤 호스트가 내가 필요한 상호작용과 갱신 방식을 주는가"로 시작한다.
+
+가장 흔한 구성은 서버 폼 호스트다. 스크립트는 `ActionFormData`로 폼을 열면서 제목에 접두사를 붙인다.
+
+```js
+import { ActionFormData } from "@minecraft/server-ui";
+new ActionFormData().title("wiki_form:main").body("본문").button("확인").show(player);
+```
+
+팩 쪽(`RP/ui/server_form.json`, Bedrock Wiki의 서버 폼 수정 튜토리얼과 같은 구조)은 `main_screen_content`에 바닐라 `server_form_factory`를 이름으로 빌린 두 번째 팩토리를 더하고, 제목에 접두사가 있을 때만 내 패널을 보이게 하며, 바닐라 `long_form`에는 같은 조건의 부정을 걸어 겹침을 막는다.
+
+```jsonc
+{
+  "main_screen_content": { "modifications": [ { "array_name": "controls", "operation": "insert_back", "value": [
+    { "my_factory": { "type": "panel",           // 이름은 server_form_factory와 달라야 한다
+        "factory": { "name": "server_form_factory",   // 필수: 폼 데이터가 이 이름에 묶인다
+                     "control_ids": { "long_form": "@server_form.my_panel",
+                                      "custom_form": "@server_form.my_custom_panel" } } } } ] } ] },
+  "long_form": { "modifications": [ { "array_name": "bindings", "operation": "insert_back", "value": [
+    { "binding_name": "#title_text" },
+    { "binding_type": "view", "source_property_name": "((#title_text - 'wiki_form:') = #title_text)",
+      "target_property_name": "#visible" } ] } ] }
+}
+```
+
+모달 폼은 `server_form.json` 안에서 `custom_form`이라 불리고, 팩토리의 `control_ids`에 `long_form`과 `custom_form`을 함께 둔다. 위키는 같은 팩토리를 여러 번 두기보다 `my_panel` 하나 안에 모든 내 화면을 두라고 권한다. 이 장의 규칙은 이 뼈대 위에서 제목 판별(HOST-03), 숨기기(HOST-04), 선택된 화면만 생성(HOST-06), 엔트리를 데이터 채널로 쓰기(HOST-07), 그리고 모달 폼·상자·NPC 대화·HUD로 호스트를 넓힌 것이다. (출처: bedrock-wiki)
+
+
+
+리소스팩은 새 화면을 만들 수 없다. 이미 있는 바닐라 화면(**호스트**)에 붙고, 스크립트가 그 화면에 보내는 데이터(**채널**)로 무엇을 그릴지 정한다. 어떤 호스트를 고르느냐가 설계의 첫 결정이다.
+
+## 10.1 호스트 고르기
+
+| 호스트 | 여는 방법(스크립트) | 데이터 채널 | 열린 뒤 값 변경 | 입력 | 사례 |
+| --- | --- | --- | --- | --- | --- |
+| 액션 폼 `long_form` | `ActionFormData` | 제목 `#title_text`, 본문 `#form_text`, 엔트리 문자열·텍스처(`form_buttons`) | 불가(다시 열어야 함) | 엔트리 누름 → `selection` | BC, BA |
+| 모달 폼 `custom_form` | `ModalFormData` | 제목, 행 레이블·기본값(`custom_form`) | 불가 | 네이티브 필드, 제출 시 `formValues` | BC |
+| 상자 화면 | 커스텀 엔티티/블록 인벤토리 | 슬롯의 **숫자**(아이템 ID, 수량, 내구도, 색), 제목은 nameTag | **가능**(슬롯을 바꾸면 즉시) | 슬롯 조작, `button.drop_one` | BC |
+| NPC 대화 | `dialogue open` 명령 | 대화문 `#dialogtext`, 버튼 이름(`student_buttons_collection`) | 불가 | 대화 버튼 → 명령 | AP |
+| HUD 타이틀 | `setTitle` | `#hud_title_text_string`, 생성 컨트롤의 `$title_text` | 가능(새로 보내면 다시 생성) | `always_accepts_input` 시 마우스 호버·스크롤 | BA, AP |
+| HUD 액션바 | `setActionBar` | `$actionbar_text` | 가능 | 없음 | VN |
+| HUD 채팅 | `sendMessage` | `#chat_text`(`chat_text_grid`) | 가능, 메시지마다 컨트롤 생성 | 없음 | AP |
+
+- **[HOST-01]** 호스트는 필요한 상호작용과 데이터 갱신 방식으로 고른다. 메뉴·목록은 액션 폼, 입력 양식은 모달 폼, 열어 둔 채 값이 바뀌어야 하면 상자 화면, 알림은 HUD(타이틀=하나, 채팅=여러 개)다. 3D 위치를 따라가야 하면 JSON UI가 아니다(12장). `{작동팩, 실측, 추론}` (출처: BC 4장, BA, AP 6장, DI 5장)
+
+## 10.2 액션 폼 (`server_form.json`)
+
+바닐라 구조(1.26.50.4):
+
+```
+third_party_server_screen@common.base_screen   ($screen_content = server_form.main_screen_content)
+└ main_screen_content (panel, size [0,0])
+  └ server_form_factory  (type: factory, control_ids: long_form / custom_form)
+     ├ long_form@common_dialogs.main_panel_no_buttons   ($text_name = #title_text)
+     │  └ … long_form_dynamic_buttons_panel (factory "buttons", collection form_buttons,
+     │                                       #form_button_contents → #collection_length)
+     └ custom_form …                         (factory "buttons", collection custom_form)
+```
+
+- **[HOST-02]** 모든 서버 폼은 `server_form.third_party_server_screen` 한 화면으로 열린다. 팩은 다른 화면 파일로 라우팅할 수 없으므로, 이 화면 안에서 **제목으로 분기**한다. `{바닐라, 실측}` (출처: VN server_form.json:9-33, BC-S8)
+- **[HOST-03]** 제목 판별은 두 방식이 있다. **접두사**: `(('%.13s' * #title_text) = 'corev0009core')`. **포함**: `(not ((#title_text - 'CUSTOMUI:BA') = #title_text))`. 포함 검사는 제목 뒤에 메타데이터(개수 등)를 붙일 수 있다. 어느 쪽이든 플래그는 길고 고유하게 만든다. `{코드, 작동팩}` (출처: BC 4.1-(1), BA 2장·3.4, BW-form, BW-title)
+- **[HOST-04]** 바닐라 폼을 숨기는 방법은 둘이다. 장단점이 있으므로 상황에 맞게 고른다. `{코드, 작동팩, 추론}` (출처: BC 4.1-(1), BA 2장·10장)
+
+| | (가) 바인딩 덧붙이기 (BC) | (나) 감싸기 + `control_ids` 교체 (BA) |
+| --- | --- | --- |
+| 방법 | `long_form`·`custom_form`의 `bindings`에 "내 제목이 아니면 보임" view 바인딩을 `insert_back` | `long_form`을 숨김 래퍼로 감싸고 `main_screen_content/server_form_factory`의 `control_ids.long_form`을 래퍼로 바꿈 |
+| 다른 UI 팩이 `long_form`을 통째로 바꿈 | 그 팩의 정의에 바인딩이 붙는지는 팩 순서에 달림 | 래퍼가 최종 병합 결과를 감싸므로 안전 |
+| 같은 방식을 쓰는 다른 애드온과 | `modifications`라 누적됨 | `control_ids`는 속성 덮어쓰기라 **나중 팩만 남음** [추론] |
+
+- **[HOST-05]** 내 화면은 바닐라의 `server_form_factory`를 그대로 빌린 **두 번째 팩토리**를 `main_screen_content`에 `insert_back`해서 만든다. 둘 다 같은 폼 데이터에 반응하고, 가시성(또는 길이)으로 하나만 보인다. `{코드, 작동팩}` (출처: BC 4.1-(1), BA 2장, BW-form, BW-intro)
+- **[HOST-06]** 내 화면이 여러 개면 `visible`로 모두 붙이지 말고 **선택된 화면만 생성**한다(COL-10). bedrock-core는 `collection_panel`의 `property_bag`에 `"#route_<제목>": ["화면id"]`를 두고 `('#route_' + #title_text)`로 사전처럼 조회한 결과를 `#collection_length`에 넣어 그 셀만 만든다. 이 사전 조회는 bedrock-core에서는 코드·테스트로만 확인되었고, Bedrock Wiki 튜토리얼이 같은 메커니즘(`('#list' + #choice)`)의 결과를 게임 스크린샷으로 보여 준다(COL-23, 제3자 기록). 계산 길이로 0/1개를 만드는 것 자체는 실측되었다. `{코드, 실측}` (출처: BC 4.1-(2), BC-S11, BW-dyn 스크린샷)
+- **[HOST-07]** **엔트리 = 데이터 채널.** 액션 폼 엔트리 문자열(`#form_button_text`)에 값을 싣는다. 누르는 셀에는 `collection_details` + `form_button_click` 매핑(COL-04, INP-04)을, 값만 읽는 셀에는 매핑 없이 `collection` 바인딩을 준다(`collection_details`는 있어도 매핑이 없으면 눌리지 않는다). 누르는 셀을 먼저(문서 순서), 값 채널을 뒤에 두면 텍스트 수가 바뀌어도 버튼 번호가 바뀌지 않는다. `{실측, 코드}` (출처: BC 4.1-(3)·(4), BC-S1)
+- **[HOST-08]** **고정 폭 레코드.** 엔트리 하나에 여러 필드를 싣는다면 `[종류 4][탭 2][프레임 24]…`처럼 바이트 폭을 고정하고, 스펙 파일 하나를 인코더(스크립트)와 UI 생성기가 함께 읽는다. 패딩 문자(`$`)와 예약 문자는 본문에서 제거하고, 숫자 필드는 글자 접두(EXP-15)를 붙인다. `{작동팩}` (출처: BA 3장)
+- **[HOST-09]** **위치 무관 토큰.** 불리언 여러 개는 `~` + 대문자 그룹 + 소문자 비트(`~Fo`, `~Xa`)로 문자열 어디에나 넣고 포함 검사(EXP-07)로 읽는다. `{작동팩}` (출처: BA 3.3)
+- **[HOST-10]** 폼을 다시 열면 스크롤이 맨 위로 돌아가고 위치를 정할 방법이 없다. 탭 전환·아코디언은 "폼 제출 → 해당 상태로 다시 열기"로 만들고, 열린 섹션을 목록 맨 앞에 두어 스크롤 문제를 피한다. 다른 화면(채팅 등) 때문에 `UserBusy`로 취소되면 몇 틱 간격으로 재시도한다. `{작동팩}` (출처: BA 4장·7장)
+
+## 10.3 모달 폼
+
+- **[HOST-11]** 모달 폼의 네이티브 필드(토글, 슬라이더, 드롭다운, 입력)는 엔진이 그린다. 팩은 자리를 잡고 바닐라와 같은 바인딩(`#custom_toggle_state` 등, `collection_details`)을 가진 템플릿을 그 자리에 둔다. 제출 버튼은 팩이 그리며 `button.submit_custom_form`에 매핑한다. `{코드, 바닐라}` (출처: BC 4.2, VN server_form.json:283-321)
+- **[HOST-12]** **슬라이더는 정적으로 배치하면 안 된다.** 생성 시 상태를 검증해서, 다른 화면의 슬라이더가 숨겨진 채 생성되어도 `_setCurrentStep`/`_setPercentage` assert를 낸다. 슬라이더는 `custom_form`을 행 타입으로 라우팅하는 팩토리가 슬라이더 행이 있을 때만 만들게 한다. `{실측}` (출처: BC-S8, BC-S9)
+- **[HOST-13]** 한 모달 폼 안에서 숨긴 드롭다운(필드 0)의 선택값 `('%.4s' * #dropdown_option_text)`으로 페이지를 바꾸는 패턴이 소개되어 있다. `#custom_dropdown`은 열림 상태이지 현재 선택이 아니라는 점이 요점이다. 게임 확인 기록은 없다. `{미검증}` (출처: MJ 8장-5)
+
+## 10.4 데이터 접두사 규약
+
+- **[HOST-14]** **채널 수.** HUD 타이틀 채널은 하나라 다른 애드온이 `setTitle`을 부르면 내 오버레이·토스트가 덮인다. 채팅은 메시지마다 컨트롤이 생기므로 여러 알림이 쌓인다. 겹칠 수 있는 알림은 채팅, 최신 값 하나면 되는 상태 표시는 타이틀이 맞다. `{작동팩}` (출처: BA 6장, AP 4.5·6장)
+- **[HOST-15]** 제목·타이틀·채팅·대화문을 데이터 채널로 쓸 때는 **고유한 접두사**(`_r4ui:`, `CUSTOMHUD:ba_toast:`, `corev0009core`)를 붙이고, 같은 접두사 하나로 "바닐라 표시는 숨김, 커스텀 표시는 켬"을 동시에 정한다. 세 팩 모두 이 규약을 쓴다. 다른 애드온이 같은 접두사로 보내면 숨겨지므로 접두사는 충분히 길게 만든다. `{작동팩}` (출처: AP 3장·6장, BA 6장, BC 4.1)
+
+## 10.5 상자 화면 (`chest_screen.json`)
+
+- **[HOST-16]** 엔티티 인벤토리는 `container_type: "container"`만 `chest_screen.json`으로 가고, `private: false`여야 열린다. `inventory_size: 54`도 큰 상자가 아니라 `small_chest_screen`으로 가서 27칸만 그리지만, 그려지지 않는 칸도 바인딩으로 읽히고 실시간 갱신된다. 200칸도 동작했다. `{실측}` (출처: BC-facts)
+- **[HOST-17]** 슬롯은 **숫자만** 공개한다(`#hover_text`는 화면 전체 값, 그룹 이름은 비어 있음). 화면 식별은 커스텀 아이템의 `max_durability`(부호 있는 16비트, 1..32767)로 한다. 바닐라 `#item_id_aux`는 커스텀 아이템 수에 따라 밀리는 범위가 있고(BC 기록은 256 이상, 위키 1.26.50 표는 852~883), 빈 슬롯이나 내구도 없는 아이템은 모든 내구도 게이트에서 실패한다. `{실측, 충돌}` (출처: BC-facts, BC-S14, BC 4.3-(1), BW-ids, 부록A C-33)
+- **[HOST-18]** 상자 화면 내용은 `chest_screen.json`에서 `small_chest_screen`을 재선언해 `$screen_content`를 바꾸고(MOD-11), 바닐라 라벨·그리드는 0번 슬롯 식별값 바인딩으로 숨긴다(COL-05). 컨트롤을 직접 선언한 `small_chest_panel_top_half`에는 `insert_back`이 안전하다. 터치 화면도 같은 파일의 `pocket_containers.small_chest_panel`로 간다. `{실측, 코드}` (출처: BC 4.3-(2), BC-facts)
+- **[HOST-19]** `$container_title`은 엔티티 nameTag이고 텍스트에는 쓸 수 있지만 바인딩 식에는 못 쓴다. 라우팅은 슬롯 값으로 한다. `{실측}` (출처: BC-facts)
+- **[HOST-20]** 스크립트 쪽 주의: 슬롯을 읽기 전용으로 만드는 lock mode는 없다(폴링 후 복구가 유일). 원본을 플레이어가 든 채로 슬롯을 다시 채우면 복제된다. 커서는 `PlayerCursorInventoryComponent`로 읽고 지울 수 있지만 터치에서는 채워지지 않는다. 쌓이는 아이템에는 `setDynamicProperty`가 던지므로 lore로 표시한다. `{실측}` (출처: BC-facts)
+
+## 10.6 NPC 대화 화면 (`npc_interact_screen.json`)
+
+- **[HOST-21]** **대화문이 화면 ID다.** `#dialogtext`(전역 바인딩)를 비교해 내 화면과 바닐라 `npc_screen_contents`를 가시성으로 전환한다. 바닐라 내용을 감싸 두면 일반 NPC 대화는 계속 동작한다. 대화 파일의 `scene_tag`(명령이 여는 이름)와 `text`(UI가 보는 값)는 달라도 된다. `{작동팩}` (출처: AP 4.2)
+- **[HOST-22]** 대화 버튼(`student_buttons_collection`)을 탭·메뉴로 쓴다. 인덱스가 아니라 **버튼 이름**(`#student_button_text`)으로 모양을 고르면 대화 파일의 버튼 순서를 바꿔도 UI가 깨지지 않는다. 누르면 `button.student_button` → 대화의 명령(`/scriptevent` 등)이 실행된다. `{작동팩, 바닐라}` (출처: AP 4.3, VN npc_interact_screen.json:1180-1261)
+- **[HOST-23]** "탭 전환으로 닫힘"과 "사용자가 닫음"은 대화의 `on_close_commands`와 태그로 구분한다(탭 버튼이 태그를 붙이고, 닫힘 명령은 태그가 없을 때만 정리). `{작동팩}` (출처: AP 4.3)
+- **[HOST-24]** 대화를 열 NPC는 보이지 않는 엔티티(scale 0, 무적)를 플레이어 근처에 두고 `dialogue open @e[...] @s <scene>`으로 연다. 대화 파일의 장면 버튼은 6개 제한이 있다는 주장과, NPC 구조물 NBT로 9개까지 늘린다는 주장은 확인되지 않았다. `{작동팩, 미검증}` (출처: AP 4.2, MJ 7장)
+
+## 10.7 HUD (`hud_screen.json`)
+
+- **[HOST-25]** HUD를 다른 화면 위에 그리려면 아래 화면에 `force_render_below: true`, `screen_draws_last: false`를, HUD에 `screen_draws_last: true`를 준다(침대 화면 등 다른 화면도 같은 방식으로 아래로 보낸다). `{작동팩}` (출처: AP 3.1, AP-samples in_bed_screen.json, BW-doc)
+- **[HOST-26]** 커스텀 HUD 레이어는 바닐라 `root_panel` 안이 아니라 `common.base_screen`이 제공하는 **배경 마운트 슬롯 `$screen_bg_content`**에 둔다. 그러면 바닐라 HUD(`root_panel`)를 통째로 숨겨도 내 레이어는 남는다. `{작동팩, 바닐라}` (출처: AP 4.4, VN ui_common.json:6349·6507)
+- **[HOST-27]** HUD 타이틀 채널: 내 레이어에 `hud_title_text_factory`를 하나 더 두고, 바닐라 타이틀(`hud_title_text`)은 내 접두사일 때 숨긴다. 숨김 바인딩은 `hud_title_text` 전체에 건다. `title_frame`에만 걸면 형제인 부제(`subtitle_frame`)가 숨지 않아 텍스트가 잠깐 번쩍일 수 있다(BA 2.0.3의 알려진 문제, 2.0.5의 수정 방법은 미확인). `{작동팩, 추론}` (출처: BA 6장, AP-samples hud_screen.json)
+- **[HOST-28]** 타이틀 팩토리가 만든 컨트롤에서 `$title_text`(그리고 `$subtitle_text`, `$actionbar_text`)를 `|default`와 함께 받아 `ignored`·`variables.requires`로 판정하면, 안 보일 탭·아이템을 아예 만들지 않아 가볍다. 타이틀을 다시 보내면 컨트롤이 다시 만들어진다. `{작동팩}` (출처: AP 4.1)
+- **[HOST-29]** 채팅 채널: 바닐라 HUD 채팅과 같은 이름의 `chat_item_factory`를 내 레이어에 하나 더 두면 같은 채팅 데이터로 두 번째 목록이 생긴다. 내 메시지는 **두 곳**에서 숨긴다: 채팅 화면 `chat_screen.json`의 `messages_text`, HUD의 `chat_grid_item`(화면 위 채팅 줄). `{작동팩}` (출처: AP 4.5)
+- **[HOST-30]** HUD 액션바 컨트롤은 `hud_actionbar_text_factory`가 만들고 `$actionbar_text` 변수로 텍스트를 받는다. `root_panel`에 `hud_actionbar_text_factory` 이름의 두 번째 팩토리(`"control_ids": { "hud_actionbar_text": "hud_actionbar_text@내ns.정의" }`)를 넣으면 액션바를 보낼 때 바닐라 액션바와 함께 내 컨트롤도 만들어지고, 그 안의 라벨이 `$actionbar_text`를 그대로 받는다. `{바닐라, 실측}` (출처: VN hud_screen.json:2143-2160·3406, TP)
+- **[HOST-31]** 1.26.50에서 HUD 자막은 `subtitle_container_factory`로 바뀌었다. 자막 위치에 의존하던 HUD 수정은 다시 확인한다. `{바닐라}` (출처: VN hud_screen.json:3340, MJ 4.1)
+
+## 10.8 Bedrock Wiki 대조로 더한 규칙
+
+위키(BW) 문서를 바닐라 1.26.50.4와 대조해 더한 규칙이다. 위키 문장만 있는 것은 `미검증`, 위키의 게임 스크린샷이 있는 것은 `실측`(제3자 기록)으로 표시했다.
+
+- **[HOST-32]** 위키의 HUD 표준 방식은 `hud_screen.json`의 `root_panel`에 `insert_front`로 래퍼 패널 하나를 넣는 것이다. 래퍼에 `size`를 주지 않으면 부모(화면) 크기를 받아 자식의 앵커·퍼센트가 화면 기준으로 동작한다. 바닐라 HUD를 숨겨도(F1, `root_panel` 숨김) 남아야 하는 레이어라면 HOST-26의 `$screen_bg_content`에 둔다. `{미검증, 작동팩}` (출처: BW-hud, BW-best, AP)
+- **[HOST-33]** 여러 커스텀 폼 제목을 한 번에 제외하려면 빼기를 이어 쓴다: `((#title_text - 'formA:' - 'formB:') = #title_text)`가 참이면 바닐라 폼을 보인다. `{미검증}` (출처: BW-form)
+
+## 10.9 연구 서버 서버 실측으로 더한 규칙
+
+연구 서버 서버(`DF`, Dragonfly로 만든 Go 서버)를 만들며 Windows 1.26.52 에서 실측한 것이다. 서버 폼 하나로 여러 화면을 그리는 구조에서 얻었다.
+
+- **[HOST-43]** `third_party_server_screen`에 `"$screen_animations": []`, `"$background_animations": []`를 주면 폼이 애니메이션 없이 바로 나타난다. 창이 움직이는 동안 다음 폼이 오면 두 창이 겹쳐 보였고, 닫고 다시 여는 메뉴가 깜빡였다. `{실측}` (출처: DF)
+- **[HOST-44]** 서버 폼 뒤에 화면 틀을 그리려면 `third_party_server_screen`의 `$screen_bg_content`(안전 영역 밖, 화면 전환 때 밀리지 않음)를 바꾼다. 폼이 열려 있는 동안 HUD는 그려지지 않으므로 HUD의 틀을 폼 위에서도 보이려면 여기에도 그린다. 이 자리의 `#title_text` 바인딩은 `once`로 두면 폼 내용이 오기 전에 평가돼 안 보였다. `{실측}` (출처: DF)
+- **[HOST-45]** 사이드바 스코어보드는 타이틀과 겹치지 않는 HUD 채널이다: 목표 이름에 표식, 줄마다 부분 표식을 붙이고 `scoreboard.scoreboard_sidebar`를 화면 전체 패널로 바꿔 부분마다 `scoreboard_players` 컬렉션 스택(`#scoreboard_sidebar_size` → `#collection_length`)으로 다른 자리에 그린다. 같은 글자 줄은 클라이언트가 합치므로 뒤에 `§r`을 붙여 구분하고, 15줄까지다. `{실측}` (출처: DF)
+
+## 10.10 모달 폼 `multiselect` 실측으로 더한 규칙
+
+- **[HOST-46]** 모달 폼 `content`에 `{"type":"multiselect","text":…,"options":[문자열…],"default":[번호…]}`를 넣으면 1.26.52 클라이언트가 바닐라 UI로 그린다(`text`가 머리 버튼 글, 누르면 체크박스 목록). 응답 배열의 그 자리에는 고른 번호의 배열(`[0,2]`)이 오고, 하나도 고르지 않으면 `null`이 온다. 기본 체크는 단수형 `default`에 번호 배열로 주며, 바이너리 스키마에 적힌 `defaults`는 무시된다. 옵션 25개도 모두 그려졌고, 여러 개를 넣거나 다른 행과 섞어도 응답 자리는 `content` 순서를 따른다. Script API로는 보낼 수 없으므로 원시 `ModalFormRequest`를 보내는 서버(Dragonfly는 `form.Custom`에 못 넣어 원시 패킷으로)만 쓸 수 있다. `{실측, 코드}` (출처: MS, NB-16)
+- **[HOST-47]** 1.26.60 프리뷰 바닐라는 `custom_multiselect`를 `option_generic`으로 감싸 위쪽 라벨(`#custom_text`)·툴팁을 두고 머리 버튼 글을 `#multiselect_option_text`로 바꾼다. 1.26.50 판에는 위쪽 라벨과 툴팁 자리가 없다. 이 행을 다시 그리거나 `custom_form` 팩토리를 바꾸는 팩은 `control_ids`에 `multiselect`를 넣고 판마다 다시 확인한다. `{바닐라}` (출처: MS, VN server_form.json:294·503)
+
+## 완성 예제
+
+:::caution[게임에서 확인하지 않은 예제]
+아래 예제 A~D는 이 위키가 게임에서 실행해 확인하지 않았다. 규칙 절(HOST-xx)의 근거와 바닐라 파일 구조를 조합해 새로 쓴 것이다. 바인딩 이름, 컨트롤 이름, 컬렉션 이름은 자기 버전의 바닐라 UI 파일에서 다시 확인하고, 실제 클라이언트에서 한 번 열어 본 뒤에 쓴다. 검증 수준은 `{추론}`이다.
+:::
+
+규칙 절을 호스트별로 한 벌씩 묶은 예제다. 이름은 예시이다. 레시피 1·8·9(레시피 페이지)가 액션 폼·HUD 타이틀·채팅의 완성 파일이고, 여기서는 모달 폼, 상자 화면, NPC 대화, 액션바를 더한다.
+
+### 예제 A. 모달 폼에 내 제목 줄 얹기 (`custom_form`)
+
+```jsonc
+// RP/ui/server_form.json   (바닐라 경로)
+{
+  "custom_form": { "modifications": [ { "array_name": "bindings", "operation": "insert_back", "value": [
+    { "binding_name": "#title_text" },
+    { "binding_type": "view", "source_property_name": "((#title_text - 'mymodal:') = #title_text)",
+      "target_property_name": "#visible" } ] } ] },
+  "main_screen_content": { "modifications": [ { "array_name": "controls", "operation": "insert_back", "value": [
+    { "my_modal_factory": { "type": "panel", "size": [ "100%", "100%" ],
+        "factory": { "name": "server_form_factory",
+                     "control_ids": { "custom_form": "@server_form.my_modal_panel" } } } } ] } ] },
+  "my_modal_panel": {
+    "type": "panel", "size": [ 240, 160 ],
+    "bindings": [ { "binding_name": "#title_text" },
+      { "binding_type": "view", "source_property_name": "(not ((#title_text - 'mymodal:') = #title_text))",
+        "target_property_name": "#visible" } ],
+    "controls": [ { "bg": { "type": "image", "texture": "textures/ui/dialog_background_opaque" } },
+                  { "caption": { "type": "label", "text": "내 모달 폼", "localize": false, "offset": [ 0, 8 ],
+                                 "anchor_from": "top_middle", "anchor_to": "top_middle" } } ]
+  }
+}
+```
+
+```js
+import { ModalFormData } from "@minecraft/server-ui";
+new ModalFormData().title("mymodal:settings").toggle("효과음", { defaultValue: true }).show(player);
+```
+
+1. 바닐라 `custom_form`에 "내 접두사가 있으면 숨김" 바인딩을 더해 겹침을 막는다(HOST-04 가). 접두사 검사는 포함 방식이라 뒤에 메타데이터를 붙여도 된다(HOST-03).
+2. 모달 폼은 `control_ids`의 `custom_form` 키로 마운트한다(위키의 모달 폼 수정과 같은 구조).
+3. 네이티브 필드(토글, 슬라이더, 드롭다운, 입력)를 내 패널에 그리려면 바닐라와 같은 바인딩(`#custom_toggle_state` 등)을 가진 템플릿을 두고 제출 버튼을 `button.submit_custom_form`에 매핑한다(HOST-11). 슬라이더는 정적으로 두지 말고 슬라이더 행이 있을 때만 만들게 한다(HOST-12).
+
+### 예제 B. 상자 화면 0번 슬롯으로 내 화면 고르기
+
+```jsonc
+// BP/entities/menu_chest.json (요지): minecraft:inventory 에 container_type "container", private false, inventory_size 27
+// 스크립트: 슬롯 0에 max_durability가 777인 커스텀 아이템 'my:menu_marker'를 넣고, 슬롯 1~에 칸용 아이템을 넣는다.
+```
+
+```jsonc
+// RP/ui/chest_screen.json   (바닐라 경로)
+{
+  "small_chest_panel_top_half": { "modifications": [ { "array_name": "controls", "operation": "insert_back", "value": [
+    { "my_menu": { "type": "panel", "size": [ "100%", "100%" ], "visible": false,
+        "property_bag": { "#visible": false },
+        "controls": [ { "hello": { "type": "label", "text": "내 메뉴", "localize": false } } ],
+        "bindings": [
+          { "binding_type": "collection_details", "binding_collection_name": "container_items" },
+          { "binding_name": "#item_durability_max", "binding_type": "collection", "binding_collection_name": "container_items" },
+          { "binding_type": "view", "source_property_name": "((#item_durability_max - 0) = 777)", "target_property_name": "#visible" } ] } } ] } ] }
+}
+```
+
+1. 상자 화면은 엔티티 인벤토리가 `container_type: "container"`, `private: false`일 때 `chest_screen.json`으로 온다(HOST-16).
+2. 슬롯은 숫자만 공개하므로 커스텀 아이템의 `max_durability`(1~32767)를 화면 식별값으로 쓴다(HOST-17). 위 바인딩 이름(`#item_durability_max`)과 컬렉션 이름은 BC 실측 기록에서 가져온 예시이므로 자기 버전의 바닐라 `chest_screen.json`에서 확인한다.
+3. 바닐라 라벨·그리드는 0번 슬롯 식별값 바인딩으로 숨긴다(HOST-18, COL-05). 컨트롤을 직접 선언한 `small_chest_panel_top_half`에는 `insert_back`이 안전하다.
+4. 슬롯 값은 열려 있는 동안 바뀌면 즉시 갱신된다. 슬롯을 읽기 전용으로 잠그는 lock mode는 없다(HOST-20).
+
+### 예제 C. NPC 대화문을 화면 ID로 쓰기
+
+```jsonc
+// BP/dialogue/menu.json : scene_tag "my_menu", text "my_menu:v1", 버튼 name "Shop" -> 명령 /scriptevent my:shop
+// 스크립트: 보이지 않는 NPC 엔티티를 플레이어 근처에 두고 명령으로 연다
+//   dialogue open @e[type=my:npc,c=1] @s my_menu
+```
+
+```jsonc
+// RP/ui/npc_interact_screen.json   (바닐라 경로)
+{
+  "npc_screen_contents": { "modifications": [
+    { "control_name": "teacher", "array_name": "bindings", "operation": "insert_back", "value": [
+      { "binding_name": "#dialogtext", "binding_type": "global" },
+      { "binding_type": "view", "source_property_name": "((#dialogtext - 'my_menu:v1') = #dialogtext)",
+        "target_property_name": "#visible" } ] },
+    { "control_name": "student", "array_name": "bindings", "operation": "insert_back", "value": [
+      { "binding_name": "#dialogtext", "binding_type": "global" },
+      { "binding_type": "view", "source_property_name": "((#dialogtext - 'my_menu:v1') = #dialogtext)",
+        "target_property_name": "#visible" } ] },
+    { "array_name": "controls", "operation": "insert_back", "value": [
+      { "my_menu@npc_interact.my_menu_root": { } } ] } ] },
+  "my_menu_root": { "type": "panel", "size": [ 240, 140 ],
+    "controls": [ { "title": { "type": "label", "text": "내 NPC 화면", "localize": false } } ],
+    "bindings": [ { "binding_name": "#dialogtext", "binding_type": "global" },
+      { "binding_type": "view", "source_property_name": "(not ((#dialogtext - 'my_menu:v1') = #dialogtext))",
+        "target_property_name": "#visible" } ] }
+}
+```
+
+1. 대화 파일의 `text`(UI가 보는 값)에 표식 `my_menu:v1`을 넣는다. `scene_tag`(명령이 여는 이름)는 달라도 된다(HOST-21).
+2. 바닐라 `npc_screen_contents`는 `teacher`(편집 화면)와 `student`(대화 화면)와 닫기 안내가 든 `panel`이다. 이 중 `teacher`와 `student`의 `bindings`에 "표식이 없을 때만 보임" 조건을 더하고, 내 패널은 `npc_screen_contents`의 `controls` 끝에 `my_menu@npc_interact.my_menu_root`로 끼워 넣어 반대 조건으로 보이게 한다. `npc_screen_contents` 전체를 숨기면 안에 끼운 내 패널도 함께 숨겨지므로 자식 둘만 숨긴다. 표식이 없으면 바닐라가 그대로 보여 일반 NPC 대화는 계속 동작한다.
+3. 대화 버튼의 모양은 인덱스가 아니라 버튼 이름(`#student_button_text`)으로 고른다(HOST-22). 끼워 넣는 단계는 위 예의 세 번째 연산이다. `teacher`와 `student`라는 이름은 바닐라 `npc_screen_contents`의 `controls` 항목 이름(VN `npc_interact_screen.json` 1486~1531줄)이므로 버전이 바뀌면 다시 확인한다.
+4. 탭 전환으로 닫힌 것과 사용자가 닫은 것은 대화의 `on_close_commands`와 태그로 구분한다(HOST-23).
+
+### 예제 D. 액션바 글을 내 컨트롤로도 받기
+
+```jsonc
+// RP/ui/hud_screen.json   (바닐라 경로)
+{
+  "root_panel": { "modifications": [ { "array_name": "controls", "operation": "insert_back", "value": [
+    { "hud_actionbar_text_factory": { "type": "panel", "size": [ "100%", "100%" ],
+        "factory": { "name": "hud_actionbar_text_factory",
+                     "control_ids": { "hud_actionbar_text": "hud_actionbar_text@myhud.bar_label" } } } } ] } ] }
+}
+```
+
+```jsonc
+// RP/ui/myhud/bar_label.json   (_ui_defs.json 등록)
+{ "namespace": "myhud",
+  "bar_label": { "type": "panel", "size": [ "100%", 14 ], "anchor_from": "bottom_middle", "anchor_to": "bottom_middle",
+    "controls": [ { "t": { "type": "label", "text": "$actionbar_text", "color": [ 1, 0.8, 0.2 ] } } ] } }
+```
+
+```js
+player.onScreenDisplay.setActionBar("점수 120");
+```
+
+1. `root_panel`에 바닐라와 같은 이름 `hud_actionbar_text_factory`의 두 번째 팩토리를 넣으면, 액션바를 보낼 때 바닐라 컨트롤과 함께 내 컨트롤도 만들어진다(HOST-30).
+2. 팩토리가 만든 컨트롤 안에서 `$actionbar_text` 변수가 보낸 글을 그대로 받는다. 이 예는 바닐라 액션바도 함께 그려지므로 숨기려면 접두사 규약(HOST-15)과 바인딩을 더한다.
+
+## 반영안(미적용)
+
+아래는 추가 자료 조사(survey)에서 나온 규칙 제안이다. 병합 보고서에는 번호가 매겨져 있지만 위 본문의 규칙집에는 아직 반영하지 않았다. 번호는 병합 보고서의 최종 ID이고, 근거 강도는 제안 원문의 검증 수준을 따른다. 쓰기 전에 확인한다.
+
+- **[HOST-34 반영안(미적용)]** 제목 플래그를 **글자마다 `§`를 붙여**(`§c§h§e§s§t§5§4§r`) 만들면 모든 글자가 서식 코드로 소비되어, 리소스팩이 없거나 바닐라 모양이 보일 때도 제목에 플래그가 드러나지 않는다. 포함 검사(EXP-07)는 그대로 된다. 끝에 `§r`을 붙여 뒤 제목의 서식을 되돌린다. `{작동팩}` (출처: Chest-UI constants.js, upgrader protocol.js)
+- **[HOST-08 보강안(미적용)]** 고정 폭 필드의 패딩 문자로 **탭**(`\t`)을 쓰면 본문과 겹칠 일이 거의 없고, 꺼낸 뒤 `(조각 - '\t')`로 지운다. `$` 같은 보이는 문자를 쓰는 HOST-08의 대안이다. `{작동팩}` (출처: StarLibV2)
+- **[HOST-35 반영안(미적용)]** 제목이 `§r`처럼 정확 일치하는 값을 비교하는 규칙(TLM 제안)이 있다. 포함 검사가 아니라 `(#title_text = '정확한 값')`으로 판별할 때는 제목 앞뒤에 서식 코드나 메타데이터가 붙으면 맞지 않는다는 함정을 함께 적는다(HOST-03의 보강). `{작동팩}` (출처: 병합 보고서 TLM, EasyUIBuilder)
+- **[HOST-36 반영안(미적용)]** 화면 속성의 뜻: `render_only_when_topmost`(false면 덮여도 그림), `always_accepts_input`(true면 맨 위가 아니어도 입력), `absorbs_input`(false면 입력이 게임으로 감), `is_showing_menu`(false면 HUD처럼 상주 UI), `should_steal_mouse`(true면 커서 숨김), `render_game_behind`, `low_frequency_rendering`(저빈도 렌더), `cache_screen`(다시 열 때 빠름), `close_on_player_hurt`(피해 시 닫힘), `load_screen_immediately`, `send_telemetry`. 바닐라는 이들을 대부분 기본값의 반대로 쓴다(HUD: `is_showing_menu: false`, `should_steal_mouse: true`, `absorbs_input: false`, `low_frequency_rendering: true`). 단 `should_steal_mouse`(false 3 / true 1)와 `low_frequency_rendering`(true 3 / false 1)은 양쪽 값이 다 나온다. `{바닐라, 미검증}` (출처: NetEase 문서, VN hud_screen.json:3574, debug_screen.json:44, toast_screen.json:1775)
+- **[HOST-37 반영안(미적용)]** 내 HUD 레이어를 바닐라 `root_panel` 밖(`$screen_bg_content` 등)에 둘 때, 레이어 루트에 바닐라 `root_panel`과 같은 세 전역 바인딩(`#hud_visible`→`#visible`, `#hud_alpha`→`#alpha`, `#hud_propagate_alpha`→`#propagateAlpha`)을 달면 F1 숨김과 설정의 HUD 투명도를 따른다. `{바닐라}` (출처: VN hud_screen.json:3555, NetEase 문서)
+- **[HOST-38 반영안(미적용)]** `common.base_screen`의 `$screen_content`는 safezone 행렬 안(`variables_button_mappings_and_controls/safezone_screen_matrix/inner_matrix/safezone_screen_panel/root_screen_panel`)에 붙어 화면 안전 영역을 지키고, `$screen_bg_content`는 그 밖에 붙는다. 열기·닫기 애니메이션은 `$screen_animations`로 바꾼다: 기본은 offset+fade 8개, `[]`이면 없음, `"$background_animations"`면 alpha만(HUD는 fade 4개). (본문 HOST-43이 같은 변수를 실측했다.) `{바닐라}` (출처: VN ui_common.json:6350·6747, hud_screen.json:3580, debug_screen.json:54)
+- **[HOST-39 반영안(미적용)]** 리소스팩이 없을 때를 대비해 서버 폼의 `body`에 **폴백 안내문**("리소스팩이 꺼져 있어 기본 화면으로 보인다")을 넣고, 커스텀 화면에서는 본문을 그리지 않는다. 제목 플래그는 글자마다 `§`를 붙여 숨긴다(HOST-34 반영안). 데이터 전용 버튼에는 동작 없음(`kind: none`)을 매핑해 기본 화면에서 눌려도 무해하게 한다. `{작동팩}` (출처: upgrader protocol.js)
+- **[HOST-40 반영안(미적용)]** 다단계 화면(선택 → 연출 → 결과)은 단계마다 제목 접미 코드(`MARKER + '§1'/'§2'/'§3'`)를 바꾼 폼을 새로 열고, UI는 `(#title_text = MARKER§N)` 정확 일치로 단계 패널을 고른다. 스크립트는 연출 시간이 지나면 `uiManager.closeAllForms(player)`로 닫고 다음 폼을 연다. 폼과 폼 사이에 게임 화면이 한 프레임 보일 수 있으므로 플레이어에게 보이는 상태 변화(인벤토리 등)는 다음 폼이 열린 뒤 몇 틱 뒤에 한다. `{작동팩, 미검증}` (출처: upgrader session.js)
+- **[HOST-41 반영안(미적용)]** `hud_title_text`를 같은 경로에서 재선언하며 `alpha`를 상수로 덮으면 페이드·`destroy_at_end` 사슬이 사라져 타이틀이 다음 타이틀까지 남는다(고정 사이드바). 바닐라 타이틀 표시는 잃으므로 지금은 HOST-27 방식(팩토리를 하나 더)을 우선한다. 2023년 팩 기준. `{작동팩, 미검증}` (출처: small-packs, VN hud_screen.json:2267-2273)
+- **[HOST-42 반영안(미적용)]** 스코어보드 사이드바 목표의 표시 이름(`#objective_sidebar_name`)을 서버 → UI 채널로 쓸 수 있다: 이름이 정해진 값이면 사이드바 모양을 바꾼다. 사이드바 안에서도 `#hud_title_text_string` 전역 바인딩을 읽을 수 있다. 1.20.71 기준 팩이다. `{작동팩, 미검증}` (출처: small-packs)
+- **[HOST-33 수준 상향안(미적용)]** 여러 커스텀 폼 제목을 빼기로 이어 쓰는 HOST-33을 `미검증`에서 `작동팩`으로 올리자는 제안이 있다(TLM 제안, 작동 팩에서 쓰임).

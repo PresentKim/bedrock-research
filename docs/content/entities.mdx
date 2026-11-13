@@ -1,0 +1,557 @@
+---
+title: 엔티티 (동작 쪽)
+description: BP 엔티티의 format_version, 컴포넌트 그룹과 이벤트, 속성, 피해, AI, 이동, 탑승, 투사체, 번식, 스폰, 인벤토리, 클라이언트 애니메이션, player.json까지 정리한 실전 규칙집.
+sidebar_position: 3
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+---
+
+# 엔티티 (동작 쪽)
+
+커스텀·바닐라 엔티티의 동작을 다루는 페이지다. 렌더링 쪽(머티리얼, 파티클, 원거리 렌더링 기법)은 렌더링 섹션이 다루고, 여기에는 BP 엔티티, 클라이언트 엔티티의 동작 연결, `player.json`과 `player.entity.json`만 담는다. 근거는 2025-10-22부터 2026-10-23까지의 커뮤니티 조사 노트 53개다(출처: 비공개 조사). 문장 끝의 `(confirmed)`, `(conflicting)`, `(single report)`, `(unverified)`는 조사 당시의 검증 수준이다.
+
+엔티티는 "컴포넌트 그룹 + 이벤트 + `client_sync` 속성"으로 상태를 바꾸고, 복잡한 로직은 Script API로 넘긴다.
+
+## 개념: 컴포넌트, 컴포넌트 그룹, 이벤트
+
+BP 엔티티 파일(`BP/entities/*.json`)은 `minecraft:entity` 아래에 `description`, `components`, `component_groups`, `events` 네 덩어리를 둔다. 혼동이 가장 흔한 오류 원인이라 구분을 분명히 한다. (출처: bedrock-wiki, entity-intro-bp)
+
+- **컴포넌트**는 Mojang이 만든 기능 단위다. 직접 만들 수 없고 목록은 전부 하드코딩이다. 형식은 `"minecraft:<이름>": { 설정 }`이며 `components`에 두면 항상 켜져 있다.
+- **컴포넌트 그룹**은 컴포넌트를 담는 "폴더"다. 이름은 마음대로 짓는다(바닐라는 `minecraft:cat_persian`처럼 접미를 붙이지만 컴포넌트가 아니다). 그룹 안의 컴포넌트는 그룹이 추가되기 전에는 아무 일도 하지 않는다. 다른 엔티티의 그룹을 가져다 쓸 수 없다.
+- **이벤트**는 그룹을 추가/제거하는 문법이다. 이벤트도 엔티티마다 직접 정의해야 한다(`minecraft:ageable_grow_up`을 자기 엔티티에서 쓰려면 그룹과 이벤트를 직접 만들어야 한다). 이벤트로 추가/제거할 수 있는 것은 컴포넌트 그룹뿐이고 컴포넌트를 직접 넣고 뺄 수는 없다. 같은 컴포넌트가 이미 켜진 그룹에 있으면 나중에 추가한 그룹이 덮어쓴다.
+
+플레이어가 상호작용하면 크기가 2배가 되는 최소 예제다.
+
+```json
+{
+  "format_version": "1.26.40",
+  "minecraft:entity": {
+    "description": { "identifier": "wiki:example", "is_spawnable": true, "is_summonable": true },
+    "components": {
+      "minecraft:type_family": { "family": [ "wiki_mob" ] },
+      "minecraft:collision_box": { "width": 0.6, "height": 1.8 },
+      "minecraft:health": { "value": 20, "max": 20 },
+      "minecraft:interact": {
+        "interactions": [
+          { "on_interact": { "filters": { "test": "is_family", "subject": "other", "value": "player" },
+                             "target": "self", "event": "wiki:on_interact" } }
+        ]
+      }
+    },
+    "component_groups": {
+      "wiki:interacted": { "minecraft:scale": { "value": 2 } }
+    },
+    "events": {
+      "wiki:on_interact": { "add": { "component_groups": [ "wiki:interacted" ] } }
+    }
+  }
+}
+```
+
+이벤트가 할 수 있는 응답은 다음과 같다(출처: bedrock-wiki, entity-events).
+
+```json
+"wiki:ranged_attacker": {
+  "add": { "component_groups": [ "attacker", "ranged" ] },
+  "remove": { "component_groups": [ "standby", "melee" ] }
+},
+"wiki:execute_event": {
+  "queue_command": { "target": "self", "command": [ "summon pig", "say 돼지 등장" ] }
+},
+"minecraft:entity_spawned": {
+  "randomize": [
+    { "weight": 95, "add": { "component_groups": [ "minecraft:cow_adult" ] } },
+    { "weight": 5,  "add": { "component_groups": [ "minecraft:cow_baby" ] } }
+  ]
+}
+```
+
+`randomize`는 가중치로 항목 하나만 고른다. `queue_command`는 틱 끝에 실행된다. `sequence`는 필터를 걸어 조건부로 그룹을 바꾼다. 바닐라는 이 도구로 좀비가 물속에서 drowned로 변하는 것, 여우의 색 변형(`minecraft:fox_red`), 엔더맨의 분노 같은 동작을 만든다. 바닐라 chicken은 `minecraft:chicken_baby`/`minecraft:chicken_adult` 그룹으로 `ageable`, `breedable`, `loot`, `experience_reward`를 나누고 `climate_variant` enum 속성(`client_sync: true`)을 쓴다(출처: bedrock-samples, behavior_pack/entities/chicken.json, format 1.26.50).
+
+## 핵심 요약
+
+1. `not present in the Schema` 경고는 대부분 `format_version`이 낮아서 생긴다. 최신 값(2026-08 기준 엔티티 `1.26.40`)으로 올리고 Content Log를 켠다. 올린 뒤에는 `"minecraft:fire_immune": true` 같은 옛 형식을 `{}`로 고친다.
+2. 이벤트의 `run_command`는 `queue_command`로 바뀌었다. 이벤트로 할 수 있는 일은 명령 대기열 등록, 컴포넌트 그룹 추가/제거, 속성 설정뿐이다. 무거운 로직은 `/scriptevent`로 스크립트에 넘긴다.
+3. 컴포넌트 그룹은 덮어쓰기다. 그룹을 제거해도 기본 `components` 값으로 돌아가지 않는다. 같은 컴포넌트를 여러 그룹에 두면 하나만 동작하고, `minecraft:timer`는 엔티티당 하나만 유효하다.
+4. 리소스 팩은 태그를 읽을 수 없다. BP 속성에 `client_sync: true`를 주고 RP에서 `q.property('ns:x')`로 읽는다. 속성은 엔티티당 최대 32개다.
+5. `damage_sensor`의 `deals_damage` 값 형식은 버전마다 달라 보고가 엇갈린다. `/kill`은 피해가 아니라서 막을 수 없고 `minecraft:health`의 `min`으로 버틴다.
+6. 공격하는 몹에는 내비게이션, 이동, `follow_range`, 타기팅 goal, 공격 behavior, `minecraft:attack`이 모두 있어야 한다. 모든 `behavior.*`에는 `priority`가 필요하다(낮을수록 우선).
+7. 턱 오르기는 `minecraft:variable_max_auto_step`으로 한다. `can_climb`은 벽을 오르게 하지 않는다.
+8. 커스텀 엔티티는 약 64~70블록 밖에서 렌더링되지 않는다.
+9. 투사체는 `runtime_identifier`에 크게 의존한다. 스크립트로 쏠 때는 `projectile.owner = player` 후 `shoot()`을 쓴다. 2026-08 정식판부터 투사체 피해가 속도에 비례한다.
+10. `player.entity.json`을 덮어쓰려면 반드시 설치된 게임의 최신 바닐라 파일에서 시작한다. 여러 팩의 `player.json`은 합쳐지지 않고 하나만 적용된다.
+
+## 1. 파일 기초, format_version, 오류 해결
+
+### format_version과 스키마 오류
+
+- `found in the input, but is not present in the Schema`는 컴포넌트에 비해 엔티티 `format_version`이 낮다는 뜻인 경우가 대부분이다. `minecraft:is_sheared`, `rotation_locked_to_vehicle`, `remove_in_peaceful`, interact의 `swing`, `damage_sensor`의 `deals_damage`에서 보고됐다. 1.21.100 이상으로 올린다. 이벤트나 `minecraft:on_death` 같은 리스너를 엉뚱한 위치에 둬도 같은 경고가 난다. 이벤트는 `"events"` 안에 있어야 한다.
+- 최신 format은 대략 최신 게임 버전과 같다(2026-08-20 기준 엔티티 1.26.40, 게임 26.44). bridge.는 format 1.26.20 이상을 지원하지 않으므로 VS Code를 권한다.
+- format을 올린 뒤 엔티티가 사라지면 `"minecraft:fire_immune": true` 같은 옛 형식이 원인이다(content log: `expected an object`). Blockception VSCode 플러그인이 오래된 컴포넌트를 표시한다.
+- 반대 사례로, 쫓아오지 않던 몹이 `attack` 컴포넌트 추가와 format 1.26→1.16 변경으로 고쳐졌다는 보고가 있다. (single report)
+- `run_command`는 `queue_command`로 바꾼다. 컴포넌트가 format 1.16.0에만 있다면 Script API로 대신한다.
+- `minecraft:remove_in_peaceful`은 1.21.90.20에 추가됐다가 1.21.90.25에서 변경 기록 없이 예제에서 빠졌고 스키마 오류를 낸다. `is_sheared`와 함께 실제로 존재하는지 불확실하다. (unverified)
+- Molang은 대부분의 컴포넌트 값에 쓸 수 없다. 상수만 받고, 문자열은 0.0으로 파싱되며, `minecraft:health.max`에 `query.scoreboard`를 넣으면 엔티티가 죽는다. 값을 바꾸려면 컴포넌트 그룹을 쓴다. 필터 `value`에도 Molang 식을 쓸 수 없다.
+- `minecraft:scale`은 객체다: `{ "value": 0.5 }`.
+
+### 흔한 로드 오류
+
+- JSON 파싱 오류는 content log에 줄 번호가 나온다. `Missing ',' or '}'`는 문자 그대로 쉼표가 없거나 괄호가 남는다는 뜻이다. IDE, bridge., jsonlint로 확인한다.
+- 세부 내용 없는 `[Actor][error]-error parsing entity/x.json:`은 JSON이 정상이면 게임 재시작이나 팩 재가져오기(캐시 정리)로 풀린다.
+- 오타 오류: `child 'intitial_state' not valid here`, `overlay_colour` → `overlay_color`.
+- geometry 식별자에는 네임스페이스를 쓸 수 없다(`geometry.bm65:name`은 오류). 네임스페이스는 엔티티 `identifier`에만 쓴다. 클라이언트 엔티티 안의 애니메이션·머티리얼 이름에 네임스페이스를 붙이면 투사체도 보이지 않는다. 애니메이션 이름에는 콜론을 쓸 수 없다.
+- 폴더 이름: RP 엔티티 폴더는 `entity`(`entities`가 아님), geometry는 `models/entity/`이고 geometry ID가 클라이언트 엔티티와 일치해야 한다.
+- `.mcaddon`은 BP와 RP 폴더가 최상위에 있어야 하고 `behavior_packs`/`resource_packs` 안에 중첩되면 안 된다.
+- 오래된 팩에서 스폰 알이 사라지거나 새끼 말·토끼가 초기화되면 manifest의 `min_engine_version`을 현재 값(예: `[1,21,130]`)으로 올린다.
+- 보이지 않는 몹을 진단할 때는 Content Log GUI/File을 켜고 `controller.render.default`로 렌더 컨트롤러를 시험한다. `description` 바로 아래의 `animation_controllers` 키는 1.10.0 이상에서 유효하지 않다. 옛 format(1.8.0식) 렌더 컨트롤러는 `Error parsing render Controllers`를 낸다.
+- 바닐라 행동 파일은 bedrock-samples의 `behavior_pack/entities`가 항상 최신이다(zombie 약 600줄, wolf 약 1200줄). 다만 샘플 클라이언트 엔티티에는 빠진 것이 있다(zombie.entity.json의 컨트롤러와 spear 변수 오류, iron golem RP의 `controller.render.iron_golem` 누락). 보트 엔티티는 텍스처만 바꿀 수 있다(보트 뼈와 애니메이션은 하드코딩). 엔티티 문서의 이벤트 목록에는 바닐라 이벤트가 많이 빠져 있고 `damage_sensor` 문서에는 자료형과 버전 정보가 없다. (출처: bedrock-samples)
+- `minecraft:lightning_bolt`는 리소스 템플릿에 type_family만 있고 geometry와 애니메이션이 없다. 불이나 피해 없는 번개는 자체 모델을 가진 더미 엔티티로 만든다.
+- 서드파티 애드온 제작 앱(MAM)은 권하지 않는다. Blockbench와 수작업 JSON을 쓴다.
+
+### 엔티티 버전 업그레이드 시스템
+
+- format 1.26.20과 `use_beta_features: true`에서 `description.entity_version.upgrades: [{"upgrade_to": 1, "name": "x"}]`와 최상위 `"upgrades": {"x": {"add": {"component_groups": ["ww"]}}}`를 쓴다. 자동으로 적용되며 예전 방식보다 낫다. 2026-04 기준 이를 쓰는 바닐라 몹은 없다. (single report)
+- 예전 방식은 바닐라 wolf처럼 bool 속성 `minecraft:was_upgraded_to_1_21_100`(`client_sync` false)을 두고, `bool_property != true` 필터로 그룹을 추가하는 이벤트를 발동한 뒤 `set_property` true를 하는 것이었다.
+- 아토믹 클라이언트 엔티티가 프리뷰 1.26.70.21에 등장했다. 애니메이션은 조각마다 복제해야 하고 공유되지 않는다. (unverified)
+
+## 2. 컴포넌트 그룹, 이벤트, 타이머, 센서
+
+### 컴포넌트 그룹 의미
+
+- 추가는 덮어쓰기, 제거는 완전 제거다. `behavior.random_stroll`이 든 그룹을 제거하면 그 컴포넌트가 아예 없어지고 기본 `components` 값으로 돌아가지 않는다. 그룹에서 설정한 속도처럼 값이 남는 경우도 있으므로, 원래 값을 가진 그룹을 다시 추가했다가 제거한다.
+- 켜고 끌 행동은 `components`가 아니라 그룹에 둔다. 일반 `components`는 제거할 수 없다.
+- 같은 컴포넌트를 여러 그룹에 두면 충돌해 하나만 동작한다. 변형 9개인 moobloom처럼 interact 하나를 두고 variant로 필터링한다. 한 그룹 안에 같은 종류의 컴포넌트 두 개(내비게이션 두 개, `movement.basic` + `movement.fly`)도 둘 수 없다. `nearest_attackable_target`을 `components`와 그룹 양쪽에 두면 충돌한다.
+- 컴포넌트 그룹은 동작 전용이다. geometry나 텍스처는 렌더 컨트롤러가 properties, variant, `mark_variant`, `skin_id`로 고른다. `/event`로 렌더 컨트롤러를 지정할 수는 없다.
+- 충돌 크기와 중력 같은 값은 실행 중에 그룹 + 이벤트로만 바꿀 수 있다. 스크립트 API는 없고 NoAI도 스크립트로 설정할 수 없다.
+- `behavior.owner_hurt_by_target`을 쓰는 몹에서 다이나믹 그룹에 behavior를 넣다 deaggro가 깨진 사례는 `player_ride_tamed`, `ranged_attack`, `random_stroll`을 그룹 밖으로 옮겨 해결했다.
+- 바닐라 엔티티에서 컴포넌트를 지워도 하드코딩된 동작은 남는다(wither는 계속 공격한다). 바닐라 식별자(`minecraft:zombie`)를 BP에서 재사용해 그룹과 이벤트를 추가하고 `/event entity @s name`으로 발동하는 것은 가능하다.
+
+### 이벤트
+
+- 이벤트 참조는 `{"event": "name"}` 객체여야 한다. `randomize`(`weight`)로 무작위로 고르고 `sequence` + `filters`(`has_property`/`enum_property`)로 분기한다. (출처: bedrock-wiki, entities/entity-events)
+- `set_property` 직후 같은 `sequence`의 필터는 새 값을 보지 못한다. 별도 이벤트로 나눈다.
+- 커스텀 이벤트는 `minecraft:entity_spawned`로 스폰 때 발동하므로 기본 그룹을 여기서 설정한다.
+- 디버깅: 이벤트에 `queue_command`로 `say`를 넣어 발동 여부를 본다. 생존 모드로 때려 `hurt_by_target`을 확인한다. Content Log 기록은 설정 > 크리에이터의 Content Log History다.
+- `queue_command`의 대상 `other`는 entity_sensor 이벤트에서 동작하지 않았다. (single report)
+- 이벤트에서 스크립트 호출: `queue_command` → `scriptevent ns:id` 또는 `function name`, 스크립트는 `system.afterEvents.scriptEventReceive`(`sourceEntity`, `id`)로 받는다. 엔티티는 `/place`와 op 전용 명령을 실행할 수 없으므로 `/scriptevent` → `placeFeature`처럼 우회한다.
+- `/event entity` 명령 블록 여러 개는 각각 이벤트를 발동한다. `on_kill` 엔티티 이벤트는 고장 났다는 보고가 있다. (single report)
+- `minecraft:entity_placer`는 `"entity": "your:mob<event_name>"`로 이벤트를 발동해 변형을 스폰한다. spawn 이벤트에는 네임스페이스가 필요하다.
+
+### 타이머
+
+- `minecraft:timer`는 엔티티당 하나만 유효하다. 다른 그룹에 있어도 나중 것이 앞의 것을 덮어쓴다. 우회법은 `minecraft:ageable`(`is_baby`)을 두 번째 타이머로 쓰거나 BP 애니메이션/컨트롤러의 timeline 명령으로 다시 만드는 것이다.
+- 반복 효과: 반복 `minecraft:timer`(time 0.2) → `time_down_event` → 반경에 효과를 주는 `queue_command`. 무작위 깜빡임 같은 idle은 시간 범위를 무작위로 준 반복 타이머로 만든다. (출처: bedrock-wiki, entities/timers)
+- 엔티티별 근접 처리는 스크립트에서 모든 엔티티를 순회하지 말고, 엔티티 JSON의 timer가 이벤트를 발동하게 해서 `dimension.getPlayers({location, maxDistance})`로 확인한다.
+- N초 후 디스폰은 timer와 `instant_despawn` 그룹으로 한다.
+
+### 센서
+
+- `minecraft:entity_sensor`는 주변 엔티티를 감지한다. 점수판 값을 검사하는 필터는 없으니 태그나 속성을 쓴다. `behavior.look_at_player`에 `has_component`를 쓰면 기대대로 동작하지 않았다. "주변에 플레이어 없음"은 `distance_to_player` 필터로 만든다.
+- `minecraft:environment_sensor`는 시간대나 빛 필터로 이벤트를 발동한다. 반복 발동은 `minecraft:breathable` 같은 것을 깨뜨리므로(거품 깜빡임) 한 번만 발동하도록 필터를 건다.
+- "무언가를 들고 있는지"는 `any_slot_empty` 필터로 확인한다. 비만 맞는 상태는 `in_water_or_rain` AND NOT `in_water`다(비 오는 날 1블록 물에 서 있으면 틀린다).
+
+## 3. 속성(properties)과 변형(variant)
+
+- 정의와 사용: BP `description.properties`에 다음처럼 정의한다.
+
+```json
+{ "ns:x": { "type": "int", "range": [0, 2], "default": 0, "client_sync": true } }
+```
+
+  이벤트 `set_property` 또는 `entity.setProperty`로 설정하고 RP에서 `q.property('ns:x')`로 읽는다(렌더 컨트롤러 `Array.x[query.property('ns:x')]`, geometry 배열도 가능). `client_sync: true`가 없으면 클라이언트가 볼 수 없다. enum 속성에 `default`와 `client_sync`가 없으면 RP 쿼리가 모두 실패한다. `player.json` 속성이 실패한 원인도 이것이었다. (confirmed, 출처: bedrock-wiki entities/entity-properties)
+- 개수 제한은 엔티티당 32개다(`player.json`도 32). 값이 많은 enum/int를 몇 개만 쓰고, 불리언은 비트 압축하거나 한 숫자의 소수 자리에 여러 값을 넣거나 여러 엔티티에 나눠 담는다. float 범위 [0,200]을 200가지 변형 스위치로 쓴 사례도 있다. 픽셀 단위 파티클 스킨처럼 대량 데이터는 속성보다 Molang 변수가 빠르다.
+- float 범위 오류: `"range":[0.0,0.5]`에서 `'range' array should contain only 'float' type elements`가 날 수 있다. JSON 편집기가 `0.0`을 `0`으로 저장하기 때문이다(bridge. v2도 그렇다). 0.01처럼 정수로 보이지 않는 값을 쓴다.
+- bool 기본값은 JSON `true`다(문자열 `"true"`가 아니다).
+- bool 토글은 `"set_property": {"ns:p": "!q.property('ns:p')"}`, 순환은 `"math.mod(query.property('x') + 1, 14)"`다(Molang에는 `%`가 없다). 애니메이션 컨트롤러에서는 `query.property('ns:p') == value`로 비교한다.
+- pre_animation에서는 `v.x = query.property('ns:prop')`로 읽는다. ID에는 `.`이 아니라 `:`를 쓴다. 속성이 없는 엔티티에서 오류가 나면 `q.has_property`로 감싼다.
+- 태그는 클라이언트에서 읽을 수 없다(`has_tag`와 `query.any_tag`는 클라이언트 엔티티 쿼리가 아니다). 흐름은 BP(environment_sensor가 태그 감지) → 이벤트로 속성 설정 → RP에서 사용이다. 다이나믹 프로퍼티는 스크립트 전용이라 외형에 영향을 줄 수 없다.
+- `minecraft:variant`는 서버에서 클라이언트로 자동 동기화되고 `q.variant`로 읽는다(wolf 패턴). 이벤트에 "set_variant"는 없으니 속성을 설정하거나 `minecraft:variant`를 가진 그룹을 추가한다.
+- 기후 변형 바닐라 몹(pig, chicken, cow; format 1.21.90)은 옛 `minecraft:variant` 대신 `minecraft:climate_variant` 속성(enum temperate/warm/cold, client_sync)을 쓰며 `set_property` 이벤트로 바꾼다. `minecraft:loot`은 `set_property` 안에 넣을 수 없으니("unknown token") 변형마다 loot를 가진 그룹을 둔다.
+- 성장 단계별 모델과 텍스처는 단계마다 `minecraft:mark_variant` + `minecraft:skin_id`를 가진 그룹을 두고 커스텀 나이 이벤트로 그룹을 바꾸며 RP 렌더 컨트롤러에서 둘 다 참조한다.
+- 눈 색 예시: RP `scripts.pre_animation`에서 `query.property('ns:eye_colour')`를 인덱스로 바꾸고 `math.clamp(v.eye_index,0,9)`, 렌더 컨트롤러 `"textures": ["Array.eyes[v.eye_index]"]`. 그 렌더 컨트롤러를 엔티티의 `render_controllers`에 넣는 것을 잊은 것이 버그 원인이었다.
+- 플레이어별 외형/표시는 스크립트 `setPropertyOverrideForEntity` + bool 속성을 렌더 컨트롤러나 `part_visibility`에서 읽는다.
+- 속성은 초당 최대 20회 갱신되므로 부드럽지 않고 약 1틱 지연이 있다.
+- 스크립트에서 쓰는 속성도 BP에 정의(`type`, `default`, `client_sync`)해야 한다. `getProperty`/`setProperty`가 동작하며 float 속성으로 스케일을 조절한 사례가 있다. 바닐라 보트 변형은 읽을 수 없다.
+
+## 4. 체력, 피해, 무적
+
+### damage_sensor
+
+- `deals_damage`와 `cause`는 `on_damage` 안이 아니라 옆에 둔다. 잘못 중첩하면 `unknown child schema option type. Allowed types: 'string'`이 난다. `any_of`는 OR, `all_of`는 AND다. 서로 다른 두 원인을 `has_damage` `all_of`로 묶으면 절대 참이 되지 않는다.
+- `deals_damage` 값 형식(conflicting):
+  - 옛 format은 `"triggers":{"cause":"all","deals_damage":false}`로 무적이었다.
+  - format 1.21.50 이상(1.21.50~1.26.0에서 깨짐)에서는 `"yes" | "no" | "no_but_side_effects_apply"`이고 불리언은 제거됐다는 보고가 있다.
+  - 현재 동작하는 무적 예: `{"triggers": [{"filters": {}, "deals_damage": false}]}`. 비배열 `"no"`/`"cause":"all"`은 불안정하다.
+  - format 1.26.30에서 `"no"`가 실패해 `false`로 고쳐졌다.
+  - 투사체 통과 용도로는 `"no"`를 쓰고 `"no_but_side_effects_apply"`는 피한다(투사체가 터질 수 있다).
+  - 권장: 최신 format에서는 `false`를 먼저 시도하고 안 되면 `"no"`.
+- 근접 공격만 막고 투사체는 허용하려면 투사체 트리거를 앞에 따로 두고 다음 트리거를 쓴다.
+
+```json
+{ "on_damage": { "filters": { "test": "is_family", "subject": "other", "value": "player" } }, "deals_damage": "no" }
+```
+
+- 진영 간 투사체 통과: `cause: "projectile"` + `on_damage.filters`(`is_family` 또는 `is_owner`, subject `other`) + `"deals_damage": "no"`.
+- 태그별 PvP 차단은 subject self/damager 태그를 `all_of`로 묶는다. 폭발 피해 차단은 `cause: entity_explosion`과 `block_explosion`에 deals_damage no를 건다.
+- 마그마 블록은 `has_damage` 값 `contact`가 동작했지만 열매 덤불 피해도 같이 막았다.
+- `knockback_filters`/`damage_filters`는 `none_of`/`all_of` 목록을 받으며 배열로 여러 개 가능하다.
+- 여러 damage sensor를 동시에 쓰면 간섭한다(그룹의 `hurt`와 `hurt_2` 트리거가 서로 덮어씀). 출력이 두 개 필요하면 스크립트로 감지한다.
+- damage sensor가 피해 취소에 가장 안정적이다. 스크립트로 hurt를 취소해도 몹의 어그로나 피격 효과는 취소되지 않는다. 추락 피해 제거도 `minecraft:damage_sensor`로 한다.
+- 피해 원인(damage cause) 목록은 MS Learn의 addonentitydamagesources 레퍼런스에 있다(출처: ms-learn).
+
+### /kill, 최소 체력, 폭발
+
+- `/kill`은 피해가 아니라 damage_sensor로 막을 수 없다. `minecraft:health`에서 `"value":1,"max":1,"min":1`처럼 min을 value/max와 같게 둔다(출처: bedrock-wiki entities/invulnerable-entities). 한 사용자는 min이 동작하지 않았고 다른 사람은 공식 문서에 `min`이 없다고 했다. 대안은 사망 시 복제본을 스폰하는 것이다. (conflicting)
+- `health.min`은 죽지 않게 하지만 디스폰도 하지 않으므로 despawn 컴포넌트가 필요하다. 대안은 resistance 255다. `health.min`에 닿으면 이후 피해를 전혀 받지 않는 버그가 있다. 스크립트 KO 메커니즘: `world.beforeEvents.entityHurt`에서 치명타를 취소하고 `system.run` 안에서 `health.setCurrentValue(1)`, 필터 `{entityFilter: {families: ['dynamic_npc']}}`(families는 배열, `type`은 문자열 하나).
+- 스크립트 `entity.remove()`에 면역인 엔티티는 만들 수 없다.
+- 불사 엔티티가 TNT/폭발에 죽는 문제는 지면 1000블록 위로 옮겨 우회한 사례가 있다. (single report)
+- `minecraft:explode`는 `"breaks_blocks": false`면 피해만 주고 블록은 부수지 않는다. `power: 0`이면 효과가 없다. 화염병처럼 불을 퍼뜨리려면 `breaks_blocks: true`가 필요하다.
+- 번개에 아이템이 사라지는 것은 fire_immune로도, damage_sensor로도 막지 못했다.
+
+### 최대 체력, 넉백, 사망 연출
+
+- 최대 체력은 엔티티 JSON에서만 설정한다. 스크립트 setter는 UI를 갱신하지 않는다는 보고가 있다. 플레이어는 `player.json` 그룹에서 `minecraft:health`의 `value`와 `max`를 둘 다 설정(예: 22/22)하고 `player.triggerEvent('evt')`로 발동한다. 이 방식은 `player.json`을 수정하는 다른 애드온과 호환되지 않는다. 아주 높은 체력으로 스폰하면 즉시 죽으니 damage_sensor로 피해를 반감하거나 resistance를 쓴다.
+- 넉백: `knockback_resistance` value 1이면 넉백이 없다. 윈드 차지도 넉백이므로 같은 값으로 막고 `is_pushable:false`로는 막지 못한다. 플레이어에게는 동작하지 않는다는 보고가 있다. 질주 넉백은 따로 적용된다(해결 없음). 공격 넉백을 끄는 컴포넌트는 없으니 `entityHurt` beforeEvent를 취소하고 `applyDamage`를 쓰거나 다음 틱에 속도를 지운다.
+- 무적 프레임 중 피해는 스크립트로 체력을 설정하는 것이 유일한 우회법이다. beforeEvent에서 치명적이지 않은 hurt를 취소하고 체력을 직접 설정하되 치명타는 통과시켜 사망 메시지가 나오게 한다. 피격/사망 소리는 스크립트에 노출되지 않는다.
+- 바닐라 사망 애니메이션 취소: damage_sensor `has_damage fatal`, `deals_damage:false`, 이벤트를 쓰거나 스크립트로 취소한 뒤 `entity.remove()`한다. 몹이 죽을 때 기우는 연출은 쉽게 제거할 수 없다.
+- 경험치 드롭: `"minecraft:experience_reward": {"on_death": "query.last_hit_by_player?5:0"}`. xp_orb를 많이 스폰하기보다 속성에서 경험치를 읽는 엔티티를 스폰해 죽이는 편이 쉽다.
+- 효과 면역은 `minecraft:mob_effect_immunity` `{"mob_effects":["poison"]}`(nautilus 참고)로 한다. 공격으로 거는 효과의 증폭은 JSON으로 설정할 수 없어 스크립트를 쓴다.
+- 플레이어를 해치지 않되 수동적이지 않은 몹은 damage 0도 타격이 들어가므로 강한 Weakness나 creeper처럼 reach multiplier 0을 쓴다.
+
+## 5. AI, 타기팅, 전투
+
+### 공격 요건
+
+- 공격하는 몹에는 내비게이션(`navigation.walk`), `movement`/`movement.basic`, `follow_range`, 타기팅 goal(`nearest_attackable_target`, `hurt_by_target`), 공격 behavior(`melee_attack`, `melee_box_attack`, `ranged_attack`, `delayed_attack`), `minecraft:attack`이 모두 있어야 한다. 공격 behavior는 대상으로 이동하는 동작을 포함한다. `behavior.move_towards_target`만 있으면 다가갔다가 흥미를 잃는다. 제자리에 서 있는 공격자에도 내비게이션과 길찾기가 필요하다. (confirmed)
+- 모든 `minecraft:behavior.*`에 `priority`가 필요하며 낮을수록 우선(0이 최고)이다. 낮은 priority의 `look_at_player`는 공격을 멈추게 할 수 있다. 앉은 엔티티가 미끄러지면 sit priority를 follow/interact보다 높인다. `look_at_player`의 `probability` 0.05는 틱마다 평가되므로 눈에 띄게 하려면 0.5로 올린다.
+- 흔한 원인은 Peaceful 난이도, 타깃 필터에 `is_family` 대신 `is_player`를 쓴 경우다.
+- `nearest_attackable_target`에 `entity_types`가 없으면 히트박스에 닿는 모든 것을 공격한다. 도발당하지 않으면 플레이어를 공격하지 않게 하려면 entity_types에서 player를 빼고 `hurt_by_target`을 남긴다. 필터는 `is_family`, `subject: other`, `operator` `!=`로 포함/제외한다.
+- 벽 너머 타기팅은 `"must_see": false`와 큰 `max_dist`, 계속 쫓게 하려면 `must_reach`도 설정한다. 범위는 `minecraft:follow_range`로 제한된다(기본 16, 바닐라 좀비는 16~48 무작위가 하드코딩). `within_radius`는 시뮬레이션 거리를 따라야 하고, `must_see_forget_duration`이 너무 크면 타기팅이 깨질 수 있다. 10~12블록 밖을 못 보면 `follow_range`와 `move_towards_target`을 추가한다.
+- 속도는 `minecraft:movement`(값이 곱해짐)와 melee_attack의 `speed_multiplier`로 정한다. `nearest_attackable_target` 안의 speed multiplier는 효과가 없다.
+- 태그 기반 타기팅의 필터는 하드코딩된 태그 값만 받는다. 속성을 바꿔 제외할 수 없으니 `has_tag` 필터, 스크립트, `hurt_on_condition`을 쓴다. 네이티브 팀 타깃 지원은 없다.
+- 아군끼리 공격 방지는 `behavior.hurt_by_target` 필터에 `is_family` + `not`을 쓴다. 무리 어그로(좀비 피글린식)는 `minecraft:angry`(`broadcast_anger`)다. format 1.26.20에서는 `broadcast_anger`/`broadcast_range`/`broadcast_targets`가 동작하지 않았다는 보고가 있다.
+- `owner_hurt_target`에도 공격 컴포넌트가 필요하다. `hurt_by_target`은 첫 공격자에 고정된다. 투명/웅크린 플레이어를 무시하는 정도는 타기팅 컴포넌트의 multiplier가 정한다.
+- 명령으로 어그로 강제: `damage @s 0 entity_attack entity <target>`(근거리만). 플레이어 family를 커스텀 엔티티에 주면 낙타에 끌려가는 버그가 있다. 플레이어 어그로를 줄이려면(투명화처럼) `player.json`에서 플레이어 family를 바꾸거나 방어구 렌더 트릭을 쓴다.
+
+### 공격 모드와 특수 공격
+
+- 근접/원거리 모드 전환은 `minecraft:target_nearby_sensor`(`inside_range`, `outside_range`, `on_inside_range`/`on_outside_range` 이벤트)로 `melee_mode`/`ranged_mode` 그룹을 바꾼다(blaze, breeze, drowned 참고). 공격 도중 바뀌지 않도록 가드를 둔다.
+- 공격 여러 개는 공격마다 그룹 하나를 두고 전환 시 다른 그룹을 제거한다. `randomize`로 고르고 순찰 모드 전환에 `entity_sensor`를 반복해서 쓰지 않는다(다른 모드가 초기화됨).
+- `delayed_attack`와 `melee_attack`을 한 몹에 같이 쓰지 않는다. `behavior.delayed_attack`의 `on_attack` 이벤트는 발동하지 않는다(버그)이니 타이머 컴포넌트를 쓴다.
+- 시야 없이 쏘기(Breeze식)는 `behavior.ranged_attack` 대신 `behavior.fire_at_target`(`pre_shoot_delay`, `post_shoot_delay`, `attack_cooldown`, `attack_range`, `projectile_def`, `owner_anchor`/`owner_offset`, `target_anchor`/`target_offset`, `ranged_fov`)을 쓴다. `burst_shots`가 없으니 `minecraft:timer`와 그룹 추가 이벤트로 연사한다. wither의 사격은 하드코딩이다.
+- 대포는 `minecraft:shooter`(`def`, `power`) + `behavior.ranged_attack`이다. `move_around_target`을 같이 쓰면 떨리므로 `target_distance` 필터를 제거한다.
+- 도약은 `behavior.jump_around_target`(`jump_angles`, `prepare_jump_duration`, `jump_cooldown_duration`, `filters` `has_target`, 애니메이션 쿼리 `query.is_jump_goal_jumping`), `behavior.leap_at_target`을 쓴다. `stalk_and_pounce_on_target`은 제한적이다. 스크립트 도약의 `applyImpulse`는 거칠어 텔레포트 기반이 더 부드럽다. `applyImpulse`/`applyKnockback`은 크리에이티브 플레이어에게도 걸리니 게임모드로 거른다.
+- `behavior.sonic_boom`은 warden이 아닌 몹에서 계속 발동하니 priority와 cooldown을 조정하거나 그룹에 넣는다. 창 사용은 `behavior.use_kinetic_weapon`(zombie)이다. 바닐라에는 방패를 쓰는 몹이 없으니 스크립트와 컴포넌트로 만든다.
+- 레이저는 투사체 렉을 피하려고 작은 투명 피해 엔티티를 `summon <entity> ^^^N`으로 줄지어 놓는다.
+- 소리 사냥(warden식)은 warden 런타임 ID로 킁킁대기는 생기지만 `vibration_listener`가 반응하지 않았다(해결 없음).
+- 포탑 시야 원뿔은 시선 벡터와 머리에서 대상까지 벡터의 각 `acos(dot/(|a||b|))`를 FOV의 절반(79/2)과 비교한다. 벡터는 정규화한다. 공격 사거리는 대상 중심이 아니라 히트박스까지 잰다.
+
+### 회피, 시선, 기타 goal
+
+- `behavior.avoid_mob_type`: `target_distance` 필터는 몹에 타깃이 있을 때만 동작하고 회피는 약 3블록 안에서만 일어나는 것 같다. `max_flee`는 동작하지 않는다는 보고가 있다.
+- `behavior.look_at_entity`의 `filters`는 무시된다(가장 가까운 엔티티를 본다). 우회법은 family 필터를 건 nearest_attackable_target + look_at_target이다.
+- 알려진 behavior 버그(2026-08): `move_to_land`는 커스텀 엔티티를 무시하고, `random_look_around_and_sit`는 look time을 무시하며, 수영 내비게이션이 켜져 있으면 `avoid_water`를 무시하고, `behavior.tempt`의 on_start/on_end가 발동하지 않는다. `behavior.lay_egg`는 알 블록이 아이템으로 대체되면 크래시한다. `circle_around_anchor`는 비행 몹에서만 동작한다. `stomp_turtle_egg`는 거북 알에 하드코딩돼 있다.
+- `spawn_category` 컴포넌트는 쓰이지 않는다(철 골렘은 family `monster`로 노린다). (speculative)
+- 약탈 몹 순찰은 스폰 규칙(대장 다음 추종자)이다. 커스텀 순찰은 `minecraft:patrol_follower` 그룹, `behavior.follow_target_captain`(priority 5, speed_multiplier 0.6, within_radius 64, follow_distance 5), components의 `minecraft:is_illager_captain`으로 만든다. 스폰은 `summon custom:mob ~~~ minecraft:promote_to_illager_captain`과 `minecraft:spawn_as_patrol_follower`다. 습격은 `minecraft:can_join_raid` 컴포넌트가 있고 스폰 규칙에 `mobevent_filter`가 있다.
+- 소환 몹의 타깃 공유: 옛 `vex_copy_target`은 폐기됐다. 땅파기(sniffer식)는 `behavior.random_search_and_dig`(`target_blocks`, `item_table`, `on_*` 이벤트)다.
+- 커스텀 주민 직업 블록은 네이티브 방법이 없다. `move_to_block` + 직업 그룹 이벤트를 쓰고 블록 위치는 스크립트로 저장한다. 거래표를 갱신하려면 디스폰 후 재스폰해야 한다. `minecraft:dweller`로 주민이 침대와 작업대를 차지한다. 거래표는 쉼표 하나만 빠져도 파일 전체가 깨진다(`Failed to load trade table`). 지도 거래는 `exploration_map` 함수의 `destination`(예: `village_taiga`)을 쓴다.
+- mob griefing이 꺼지면 몹이 아이템을 줍지 않는다(1.21.44에서 동작 변경).
+
+## 6. 이동, 내비게이션, 길찾기, 물리
+
+### 턱 오르기와 점프
+
+- `minecraft:variable_max_auto_step`은 Java의 stepHeight에 해당한다. 아래처럼 쓰며 0.5625는 반 블록, 1.0은 한 블록이다. 1.2 정도면 탈것도 블록을 오른다. `minecraft:is_stackable`은 오르기를 막는다. (confirmed)
+
+```json
+"minecraft:variable_max_auto_step": { "base_value": 1.5625, "controlled_value": 1.5625, "jump_prevented_value": 0.5625 }
+```
+
+- `can_climb`은 그냥 쓰면 자동 점프도 벽 오르기도 주지 않는다. 벽 오르기에는 `navigation.climb` + `can_climb`이 필요하고 spider 런타임 ID는 충돌 박스도 바꾼다.
+- `jump.static`(conflicting): `navigation.walk` `can_jump: true`인데 1블록 턱에 오르지 않는 몹에는 `minecraft:jump.static`이 필요하다는 보고가 있고, 2026-04에 `jump.static`을 쓰던 엔티티가 오르기를 멈춰 `"minecraft:variable_max_auto_step": {}`로 고쳤다는 보고도 있다. `minecraft:jump.dynamic`은 동작하지 않았다.
+- 탈것이 반 블록에 오르려면 horse.json을 복사할 때 `minecraft:horse.jump_strength`(그리고 `input_ground_controlled` + rideable)가 필요하다. follow_owner 엔티티가 1블록 턱 앞에서 제자리 점프하면 owner 필터를 건 `follow_mob`이나 `variable_max_auto_step`을 쓴다. 크게 키운 네발 짐승은 기준 피벗이 너무 높으면 근접 공격이 빗나가고 블록을 잘 오르지 못한다.
+
+### 길찾기
+
+- 바닐라 길찾기 범위는 약 16블록이다. 먼 경로는 단계별로 옮기는 타깃이나 체크포인트를 둔다. `follow_range`로는 늘지 않는다.
+- 목적지로 걷게 하려면 목적지에 투명 타깃 엔티티를 스폰하고 몹이 그것을 노리게 한다. 스크립트에는 길찾기 API가 없다. 대신 `if block ^ ^ ^0.25 air`로 장애물을 확인하며 facing 텔레포트로 조종하거나 경로를 따라 `applyKnockback`/`applyImpulse`를 준다.
+- `behavior.move_to_block`은 권장되는 경로/웨이포인트 도구다. 블록을 웨이포인트로 놓고 `on_reach`에서 그룹을 바꿔 다음 블록 종류를 노리게 하며, 최우선순위로 두어 떨림을 막는다. 제한은 다음과 같다.
+  - 약 20블록 안만 감지한다(64는 너무 큼). 목록이 크거나 주변 블록이 많으면 아주 느리다(동굴에서 30~60초). 21개 목록은 실패했다.
+  - 충돌 박스가 `goal_radius`보다 크면 바로 앞에서 멈춘다. 충돌 박스를 줄이고 `custom_hit_test`를 쓰거나 도착 시 컴포넌트를 제거한다.
+  - flower_pot, cauldron, hopper, brewing_stand, cake는 대상이 되지 않았다. 블록 아이템이 없는 커스텀 블록도 실패할 수 있다.
+  - 아이템과 ID를 공유하는 블록은 `tile.` 접두사(`tile.ns:block`)로 잡히지만 `replace_block_item`을 쓰는 블록은 엔티티가 무시한다(`behavior.avoid_block`도).
+  - 태그 형식 `"tags": "q.any_tag('x')"`는 move_to_block에서 문서화되어 있지 않다(`behavior.tempt`의 `items`에서는 최신 버전에서 동작).
+  - 문 열기는 `move_to_block` + `on_reach`, 벌처럼 끌리게 하려면 `move_to_block` + 스폰 시 설정하는 `minecraft:home`을 쓴다.
+- `minecraft:preferred_path`: `default_block_cost`, `jump_cost`(높을수록 덜 선택되고 1이 가장 선호), `preferred_path_blocks:[{blocks,cost}]`, `max_fall_blocks`. iron golem이 쓴다.
+- `navigation.walk.blocks_to_avoid`는 `[{"tags": "query.any_tag('trapdoors')"}]`로 태그 기준 회피가 된다. 블록을 통과하게 하는 것은 불가능하다. `behavior.mount_pathing`은 탄 상태에서도 길을 찾지만 플레이어가 조종하지 않을 때만이다.
+
+### 물, 비행, 수영
+
+- 가라앉아 익사하게 하려면 `behavior.float`를 제거하거나 `navigation.*`에 `can_sink: true`를 준다. 블록을 뚫는 수중 몹에는 `underwater_movement` + `breathes_water`/`breathes_air`, `minecraft:physics` `has_gravity: true`(오징어/물고기 참고)가 필요하다.
+- 물에 갇힌 비행 엔티티는 `minecraft:underwater_movement`(value 0.5, max 0.5), `minecraft:floats_in_liquid`, `minecraft:water_movement`(drag_factor 0.8)로 푼다.
+- 비행 + 수영(parrot 기반)은 `minecraft:environment_sensor`로 비행 그룹과 수중 이동 그룹을 바꾼다. 걷기 + 비행은 parrot 복사가 템플릿이다. 커스텀 비행 몹은 phantom 행동을 복사하거나 틱마다 `entity.tryTeleport`로 움직인다. 비행 속도 API는 없고 speed 효과는 듣지 않으며 반복 `applyImpulse`/`applyKnockback`은 동작한다.
+- 떠 있는 말: `behavior.float`(priority 0), `navigation.walk`(`can_path_over_water`, `avoid_water`, `avoid_damage_blocks`), `minecraft:physics`. `minecraft:buoyant`는 배 같은 액체 위 부유용이다.
+- 수영 상태 쿼리: 육지는 `!query.is_in_water && query.is_on_ground`, 수영은 `query.is_in_water && !query.is_on_ground`. 돌고래처럼 수영하며 방향을 맞추는 것은 컴포넌트가 아니라 애니메이션 수학이다(bedrock-samples의 dolphin.animation.json).
+- Happy Ghast 업데이트 이후 떠다니는 몹이 진행 방향을 보지 않으면 `minecraft:body_rotation_always_follows_head`를 시도한다. 돌고래의 은총에 해당하는 컴포넌트는 없다.
+
+### 밀림, 물리
+
+- 피스톤이 미는 블록 위에 선 엔티티는 pushable 컴포넌트 없이도 움직인다. `minecraft:pushable`은 1.26.10부터 파싱되지 않는다. 우회: `world.afterEvents.pistonActivate`, `piston.getAttachedBlocksLocations()`, 다이나믹 프로퍼티에 저장한 위치로 되돌리는 텔레포트.
+- 물 흐름은 pushable false로 막지 못하고 `has_gravity false`면 떠내려간다. 틱마다 텔레포트하는 것이 유일한 해결책이다.
+- 드리프트는 수직 관성 때문이다. `minecraft:friction_modifier`와 `uses_uniform_air_drag`는 있지만 액체 drag 컴포넌트와 XZ 감속 컴포넌트는 없다.
+- 공 물리(1.26.30): `minecraft:bounciness`, `friction_modifier`, `air_drag_modifier`, `buoyant`(movement_type "bobbing"), `pushable_by_entity` 프리셋(`push_mode: "ball"`, 차기 속도 필드). 문서가 늦다.
+- 이동 정지는 movement 값 0이다(0이면 몹이 씰룩거린다). 스크립트는 `Entity.clearVelocity()`다.
+- 블록처럼 행동(회전/배치)은 `minecraft:body_rotation_blocked`와 `minecraft:rotation_axis_aligned`로 한다. 텔레포트 보간은 끌 수 없고 애니메이션으로 보정할 뿐이다.
+- `rail_movement` 엔티티는 레일 위로 들리므로 keep-velocity 옵션을 준 `tryTeleport`로 맞춘다. 포털 차단용 `minecraft:dimension_bound`는 양쪽 차원 모두에 영향을 준다.
+
+## 7. 탑승(rideable)과 좌석
+
+- 지면 조종은 `minecraft:input_ground_controlled`이고 `seat_count`와 `seats[].position`(0,0,0은 바닥)을 쓴다. 좌석 추가는 Blockbench가 아니라 JSON에서 한다. `min_rider_count/max_rider_count`, `family_types`로 탈 수 있는 대상을 정한다(제거하지 않으면 좀비가 말을 탄다). `getRiders` 순서는 좌석 순서와 같다.
+- `on_rider_enter_event`/`on_rider_exit_event`는 `seats` 항목 안이 아니라 `minecraft:rideable` 컴포넌트 자체에 둔다(약 1.21.100 필요).
+- 여러 좌석 탈것이 움직이지 않으면 `minecraft:rideable`에 `controlling_seat`를 설정한다(먼저 앉은 사람이 운전자가 된다).
+- 탑승자가 탈것을 조종하게 하려면 Chicken Jockey 코드를 복사하고 탑승자 회전을 잠근다. `body_rotation_always_follows_head`로 탈것이 탑승자 시선을 따라 돈다. 비 플레이어 탑승자의 조종은 해결되지 않았다.
+- 커스텀 탈것이 일정 각도를 넘으면 회전이 튄다(`lock_rider_rotation`/`minecraft:rotation_locked_to_vehicle`도 튀거나 느림). 해결책을 찾지 못했다.
+- `rider_can_select_entity`는 탈것을 때릴 수 있게 하므로 damage sensor로 취소한다. 키 큰 탑승 엔티티에는 `rider_can_interact`, `custom_hit_test`를 쓴다. 생존 모드에서는 약 6블록 높이 이상 타격이 등록되지 않는다.
+- 물에 들어가면 하차하는 문제는 좌석을 높여야 했다. 월드를 다시 불러오면 하차할 수 있으니 센서로 감지해 더미를 재스폰하고 다시 태운다.
+- 좌석이 원점에서 약 5.8블록 넘게 멀면 엔티티 인벤토리가 즉시 닫힌다(거리 검사, 해결책 없음). 탑승자의 `is_collidable`이 탈것을 밀어내는 문제도 `minecraft:physics`로 끄지 못했다.
+- 고정 좌석 여러 개는 좌석을 가진 본체와 미리 스폰한 탑승 엔티티를 쓴다. 회전 포탑은 자식 엔티티를 본체의 탑승자로 두고 플레이어를 포탑에 태운다.
+- 플레이어에게 엔티티를 태우려면 `/ride`와 parrot 계열 family(`parrot_tame`)를 쓰거나 `player.json` rideable을 수정한다. 위치와 회전은 `player.json` rideable이 정한다. 물고기 몹은 다른 엔티티를 탈 수 없다(하드코딩). 탄 엔티티는 공격, 인계철선, 피스톤, 압력판, 흐르는 물에 취약하다. 탑승자는 밀리지 않고 1인칭에서 렌더링되지 않는다.
+- 좀비 기수: `/ride ... start_riding ... teleport_rider`는 어른 좀비에게 실패하고 아기 좀비만 된다. 아기 피글린만 호글린을 탄다. Camel husk(1.21.130)는 `/summon minecraft:camel_husk ~ ~ ~ ~ ~ minecraft:spawn_with_rider`로 소환한다.
+- 말 체력 바 숨기기는 `/hud @s hide horse_health`(되돌리기 `/hud @s reset horse_health`) 또는 체력 value=max=min=1이다. 바닐라 말/낙타/돼지 좌석 위치는 행동 파일에서만 바뀐다. 리드 위치는 모델에 `lead` 로케이터를 추가한다.
+- 배/광산 수레가 엔티티를 태우지 않게 하려면 warden 런타임 ID를 쓰거나 폭을 1.375보다 크게 한다.
+- 광산 수레식 탈것은 `runtime_identifier: minecraft:minecart` + `minecraft:rail_movement`다. 곡선에서는 애니메이션으로 `q.body_y_rotation`(+90/180/270 오프셋)에 맞춰 루트 뼈를 돌린다. 큰 기차는 스크립트 + 베지어 스플라인을 권한다.
+- 비행 탈것 WASD 조종은 `minecraft:free_camera_controlled` + 애니메이션 쿼리(해결 안 됨), 탑승자 시선을 따라 시각적으로 돌리기는 `q.rider_head_x_rotation(0)`(좌석 인덱스 인자)을 쓴다. 조종 가능한 거미 탈것의 오르기는 불가능하다.
+- 소유자만 탈 수 있는 테이밍 탈것은 "탑승자가 주인" JSON 필터가 없으니 스크립트를 쓴다. Happy ghast/ghastling은 서서 탈 수 있는 이동 플랫폼이고 `"minecraft:is_collidable": {}`로 위에 설 수 있다.
+
+## 8. 투사체
+
+### 컴포넌트와 runtime_identifier
+
+- 기본 피해:
+
+```json
+"minecraft:projectile": {
+  "on_hit": { "impact_damage": { "damage": 6, "knockback": true, "destroy_on_hit": true }, "stick_in_ground": {} },
+  "power": 6.7
+}
+```
+
+  줍지 못하는 화살은 `remove_on_hit`/stick-in-ground를 쓴다.
+- 충돌 박스 없는 투사체도 피해를 준다. 크기 0인 박스로 취급되며 맞힘 여유가 틱당 0.05씩 최대 0.3블록까지 커진다. `on_hit`은 충돌 박스 없이도 발생한다. 반대로 `collision_box`를 1블록 넘게 키워도 맞힘 범위는 커지지 않는다.
+- runtime_identifier 영향:
+  - `minecraft:arrow`는 중력 0이 제대로 동작하는 유일한 경우다. owner가 존중되고 방향도 맞다.
+  - `minecraft:snowball`은 블록 배치 방해와 포물선 문제를 고치지만 다른 컴포넌트를 깨뜨린다. 스크립트에서 owner를 무시한다(damagingEntity가 투사체가 됨). 몹이 사수에게만 어그로를 갖는 데는 snowball이 필요했다는 보고도 있다. (conflicting)
+  - 바닐라 fireball 복제는 `"runtime_identifier":"arrow"`를 포함한 fireball.json과 클라이언트 엔티티를 복사한다. 스폰하자마자 터지는 커스텀 드래곤 화염구는 `"runtime_identifier": "minecraft:dragon_fireball"`로 고쳐졌다.
+  - 투사체 `isolated_physics`는 바닐라 투사체 런타임 ID와 함께 쓰면 효과가 없다(프리뷰 content 오류).
+- 런타임 ID가 필요한 컴포넌트가 따로 있으나 목록은 알려지지 않았다. 가능하면 runtime_identifier를 피한다.
+- 직선 비행은 중력 0 + `inertia`, 물속 감속은 `liquid_inertia`다. homing 플래그는 동작하지 않았다.
+- `ignored_entities`(conflicting): 바닐라 ID에는 동작하지만 커스텀 ID에는 불안정했다(실험적). 확실한 우회법은 방패 엔티티에 바닐라 `runtime_identifier`를 주고 그 바닐라 ID를 넣는 것이다. 다른 사용자는 format 1.21.40/1.26.0에서 커스텀 ID도 동작했다고 했다.
+- 방패를 통과할 때 일찍 터지는 문제는 터지지 않는 투사체 그룹으로 시작해(`minecraft:entity_spawned`에서 0.1~0.3초 타이머) 터지는 그룹으로 바꾼다.
+- 명중 시 폭발은 그룹 안의 `minecraft:explode`로 하되 흑요석과 기반암 파괴는 막을 수 없었다. `minecraft:shooter` `power` 0.2는 "즉시 제거" 버그를 냈다. `impact_damage.catch_fire`는 화염 면역 몹이 피해를 받지 않게 한다.
+- 반사: `minecraft:reflect_projectiles`(`azimuth_angle`, `reflection_scale`)는 커스텀 투사체를 반사하지 않았다. 투사체 `reflect_on_hurt`도 있다.
+- `definition_event` on_hit은 엔티티 명중에서 발동하지 않을 수 있으니 스크립트 투사체 명중 이벤트를 쓴다. 투사체 충돌은 RP에서 감지할 수 없으니 스크립트로 속성을 설정한다.
+- 2026년 8월쯤 정식 패치부터 투사체 피해가 속도에 비례한다(power 50 넘는 투사체가 약 6에서 100 이상으로 뛰었다). 스크립트로 고정 피해를 준다. 연사 총은 피해 면역 틱 때문에 맞힘을 잃으므로 면역을 무시하는 override 피해를 쓴다.
+- 화살 넉백은 커스텀 투사체나 명중 시 스크립트로 준다. 태그가 있는 플레이어를 통과시키려면 `player.json` damage_sensor에 `has_tag` 필터를 쓴다. `skin_id` 변형 투사체를 쏘려면 엔티티 파일을 따로 만든다. 투사체는 시각적으로 완벽히 동기화되지 않아 닿지 않은 것처럼 보이는 대상에 "맞고" 사라질 수 있다.
+- `minecraft:projectile`의 `offset`/`anchor`는 업데이트 후 동작이 바뀌었다는 보고가 있다. 그룹 안의 `offset`은 원거리 공격 몹이 공중에서 떨어지고 충돌을 잃게 한 원인이었다. `minecraft:shooter`의 커스텀 소리는 버그가 있다.
+
+### 방향
+
+- 진행 방향을 보게 하려면 arrow처럼 애니메이션이 필요하다. 뼈 `body` 회전 `["variable.shake_power - query.target_x_rotation","-query.target_y_rotation",0]` 또는 `["query.target_x_rotation","query.target_y_rotation",0]`, 클라이언트 엔티티 `animations`에 `anim.arrow.target_rotation`을 둔다. arrow.animation.json을 복사한다. `body_x_rotation`이 아니라 `target_x/y_rotation`을 쓴다. 수직 사격에서 `target_y_rotation`이 동작하지 않았다는 보고가 있다.
+- 스크립트로 스폰한 투사체는 `shoot()` 전에 `projectile.setRotation({x: player.getRotation().x, y: player.getRotation().y})`를 한다. 런타임 ID가 필요하고 착지 후 초기화된다.
+
+### 스크립트 발사
+
+```javascript
+const proj = entity.getComponent('projectile');
+proj.owner = player;
+proj.shoot({ x: v.x * 1.5, y: v.y * 1.5, z: v.z * 1.5 });
+```
+
+- 방향은 `player.getHeadLocation()`/`getViewDirection()`에서 계산한다. owner를 설정하면 사수가 맞지 않고 몹이 owner에게 어그로를 갖는다. `applyImpulse`보다 `shoot`을 쓴다. 변환된 투사체가 운동량을 잃으면 속도를 저장했다가 `projectile.shoot()`한다.
+- 커스텀 투사체의 `iconcrack` 명중 파티클은 아틀라스 텍스처가 잘못 나온다(해결 안 됨).
+- 창 같은 투사체(재블린)는 snowball 런타임 ID가 삼지창처럼 지속되지 않고 trident 런타임 ID는 다른 동작을 깨뜨린다. 땅에 박혀 있는 동안 약 30초마다 죽이고 다시 스폰하는 타이머로 우회한다.
+
+## 9. 번식, 테이밍, 나이
+
+- 테이밍 패턴은 `minecraft:tameable`, `minecraft:is_tamed`, `behavior.follow_owner`(priority 1, speed 1.5, start_distance 16, stop_distance 10)다. 커스텀 테이밍 엔티티에는 `is_tamed`와 `tameable`이 모두 필요하다. 바닐라 몹은 테이밍 후 `tameable`/`tame_mount`를 잃는다(의도).
+- `tame_event.event`는 배열이 아니라 문자열이다(`"event": ["x"]`는 조용히 발동하지 않는다): `"tame_event": {"event": "my_ns:enable_doors", "target": "self"}`. 테이밍 후에만 문을 열게 하려면 `navigation.*`의 `can_pass_doors`/`can_open_doors`와 `behavior.open_door`를 그룹으로 추가하고 같은 이벤트에서 기본 그룹을 제거한다.
+- 주인에게 텔레포트하지 않는 펫은 allay의 follow-owner 컴포넌트로 바꾸거나 `follow_owner` `can_teleport:false`를 쓴다.
+- 테이밍/주인 시스템은 플레이어만 대상이다. "주인을 따르는 중" 쿼리는 없으니 그룹 교체로 설정한 속성이나 센서의 `owner_distance` 필터를 쓴다.
+- 스크립트 테이밍은 스폰 후 `entity.getComponent("minecraft:tameable").tame(player)`를 쓰고 필요하면 `minecraft:on_tame`을 발동한다. 엔티티에 follow_owner, tameable, sittable(싸우려면 owner_hurt*)이 필요하다. 스크립트로 주인을 설정하면 먹이 테이밍 로직과 먹는 파티클은 건너뛰지만 하트는 나온다. 안장 얹은 말은 `spawnEntity("minecraft:horse", loc, {spawnEvent:"minecraft:spawn_tame_adult"})` 후 `replaceitem slot.saddle`로 만든다.
+- 테이밍 하트와 먹는 파티클은 하드코딩이다. 테이밍 엔티티 사망 메시지 `Unknown was slain by`는 알려진 버그 MCPE-38136이며 이름표로 우회한다.
+- `minecraft:trusting`은 몹이 도망을 멈추는 것(ocelot, fox)이고 `minecraft:tameable`은 플레이어가 주인이 되는 것(horse, wolf)이다. `sittable`이 테이밍 엔티티의 인벤토리 상호작용을 막는 것 같다(답 없음).
+- 변신(`minecraft:transformation`)을 거치면 테이밍 상태와 속성이 사라지고 새 엔티티가 체력을 가득 채운다. 체력은 그룹/이벤트로 변신할 때만 유지되고 장비는 유지된다. 우회법은 이벤트를 발동해 `dataDrivenEntityTriggerEvent`(afterEvent)에서 속성을 읽고 직접 제거 후 스폰해 속성을 다시 적용하는 것이다. `into: "ns:bull<minecraft:entity_born>"`로 이벤트를 붙일 수 있다.
+- 아기 확인은 `entity.hasComponent("minecraft:is_baby")`다. 아기가 자랐는데 번식 상태에 들어가지 않으면 성장 이벤트의 모든 `randomize` 항목 안에 어른 그룹 추가와 아기 그룹 제거를 넣고 offspring 컴포넌트도 어른 그룹에 둔다.
+- 번식 아이템은 `"breed_items": ["storm:item"]` 문자열도 된다. `breeds_with`는 바닐라 wolf에서 몹 ID를 키로 하는 객체(`"minecraft:wolf": {}`)이거나 `mate_type`/`baby_type`/`breed_event`를 가진 배열이다. 더 높은 우선순위의 회피 goal이 번식을 막을 수 있으니 breed priority를 0으로 둔다.
+- 새끼 여럿은 `spawn_entity`와 번식 이벤트로 정하고, 스크립트로 아기를 스폰할 때는 `dimension.spawnEntity(typeId, loc, { spawnEvent: "minecraft:entity_born" })`를 쓴다. 부모 몹에 스폰 알을 쓰려면 `minecraft:spawn_egg_interaction` + `offspring`(bedrock-samples cow.json)이고 사랑 모드에는 `breeds_with`가 필요하다.
+- 알 낳기: 아이템 알(닭)은 `minecraft:spawn_entity`, 블록 알(거북/개구리)은 `minecraft:behavior.lay_egg`다. `target_materials_above_block`이 물을 인식하지 않아 물속에서 알을 낳지 못하는 버그가 있다.
+- 아기 변형의 전리품은 `minecraft:ageable`이 있으면 아기용 전리품 표가 적용되지 않을 수 있으니 그룹 안에 loot 컴포넌트를 둔다. 커스텀 늑대 갑옷식 아이템은 피해 때마다 int 속성을 줄이고 0이 되면 부서지게 한 구현이 동작했다.
+- 먹이면 아이템을 뱉는 몹은 `minecraft:interact`에 `on_interact.filters`(`is_family` player, `has_equipment` hand), `use_item`, `swing`, `play_sounds`, `interact_text`, `spawn_items.table`(전리품 표 경로)를 쓴다. `minecraft:interact`가 있어야 커스텀 엔티티에서 `playerInteractWithEntity` after event가 발생한다. 웅크림 필터는 `is_sneaking`이다.
+- 리드: `minecraft:leashable`의 `on_leash`/`on_unleash`. 리드가 끊어질 때 `on_unleash`가 발동하려면 `on_unleash_interact_only: false`여야 한다. 리드 매듭 동작이 바뀌어 위키의 이동 감지 트릭이 깨졌다.
+
+## 10. 스폰 규칙, 디스폰, 지속성
+
+### 스폰 규칙
+
+- 자연 스폰에는 `spawn_rules` 파일이 필요하다(없으면 알로만 스폰). 스폰 규칙 format은 1.8.0 또는 1.13.0, `brightness_filter` light는 0~15, `minecraft:spawns_on_block_filter`는 배열이며, 시험할 때는 weight 약 200을 쓴다(1은 드묾). (출처: bedrock-wiki entities/spawn-rules)
+- 바닐라 스폰 규칙은 같은 경로로 덮어쓴다. 엔더맨 무리 40~50은 `herd` 설정에서 온다. 바닐라 좀비 스폰 규칙을 수정해도 바닐라 스폰은 멈추지 않았다. `/gamerule domobspawning false`로 끄고 커스텀 몹을 명령/스크립트로 스폰하거나 바닐라 몹을 디스폰시킨다. 특정 몹의 바닐라 스폰 규칙 파일을 지우면 버그가 생겼다(해결 안 됨).
+- `delay_filter`/`world_age_filter`는 틱이 아니라 초 단위다. `delay_filter`는 min/max 시간 후 `spawn_chance`에 따라서만 스폰을 보장한다.
+- 낮 스폰은 `population_control: monster`(와 `monster` family)가 막는다. 스포너 엔티티의 `minecraft:entity_spawned` sequence에서 `is_daytime`을 거르고 `queue_command` summon을 하는 트릭이 있다.
+- 딱 한 번만 스폰하려면 스크립트 + 다이나믹 프로퍼티(점수판보다 낫다)를 쓴다.
+- 커스텀 블록 위 스폰(conflicting): 몹은 커스텀 블록 위에 스폰하지 못한다는 보고가 있고, 커스텀 블록이 `blocks.json`에 정의돼 있거나(geometry와 material_instances 제거) `minecraft:geometry.full_block`이면 스폰 규칙상 "solid"로 본다는 보고도 있다. 커스텀 바이옴에서 커스텀 블록 위 스폰이 안 되는 것은 버그로 보고됐다(2026-03-17).
+- 기타: 용암 스폰은 `"minecraft:spawns_lava": {}`(spawns_on_surface와 같이 쓰면 깨진다는 보고), 땅 위/지하는 `minecraft:spawns_on_surface`/`spawns_underground`다. 하늘이 보이는지는 스크립트(최상단 블록 y)로 확인한다. 천장 없는 공허 네더 팩에서는 네더 몹이 스폰하지 않는다(하드코딩으로 보임). 스폰 규칙의 `minecraft:spawn_event`는 발동하지 않는다는 보고가 있다. monster `brightness_filter` 뒤에 엔진의 빛 제한이 있어 제거해도 밝은 곳에서 스폰되지 않는다. (unverified)
+- 무리 스폰은 스폰 규칙이 리더만 스폰하고 리더가 구성원을 스폰한다. 규칙 안의 `entity_spawned`는 동작하지 않으니 `minecraft:permute_type`에 `entity_type: "NS:NAME<NS:EVENT>"`를 쓴다.
+- 구조물 몹은 지그소 구조물에 저장된 몹만 함께 스폰한다(domobspawning true). 생성 후 스폰은 불가능하니 엔티티를 스폰하는 블록이나 명령 블록을 쓴다.
+- Peaceful에서는 `monster` 타입 몹이 디스폰한다. 스폰 비율 슬라이더는 불가능하다.
+- 분열 스폰(slime식, 런타임 ID 없이)은 프리뷰 26.20에서 추가됐다. slime 런타임 ID의 파티클은 지울 수 없으니 파일을 복사하고 런타임 ID를 빼고 자체 파티클을 쓴다.
+- `/summon`에는 `is_summonable` true가 필요하고 `spawnEntity` 식별자는 정확히 일치해야 한다. 변형 스폰은 그룹 + 이벤트를 정의하고 `spawnEntity(id, loc, {spawnEvent})`를 쓴다.
+
+### 디스폰과 지속성
+
+- `minecraft:persistent`는 디스폰을 막는다(시뮬레이션 거리 밖에서도). `@e`에 잡히도록 로드 상태를 유지하려면 `minecraft:persistent` + `minecraft:tick_world`를 쓴다(tick_world는 청크를 로드 상태로 유지한다).
+- `minecraft:despawn`은 무작위로 디스폰할 수 있게 할 뿐이다. 즉시 제거는 `minecraft:instant_despawn`이다. 그룹을 통한 `despawn`이 어느 버전에서 동작을 멈췄다는 보고와 `/kill`로 디스폰하지 않는다는 보고가 있다.
+- 플레이어가 떠나면 사라지는 엔티티는 `minecraft:transient`(다시 불러오면 제거되며 persistent와 충돌)다. 넓은 구역용 엔티티는 약 70블록에서 사라지며 해결책이 없다.
+
+## 11. 인벤토리, 장비, 이름, 보스바, 전리품
+
+### 인벤토리
+
+- 크기(conflicting): 최대 슬롯 256이라는 보고가 있지만 `container_type: container`에서 `inventory_size: 54`를 줘도 27칸만 보였다. 엔티티 인벤토리 UI는 최대 27칸을 보이며 상자 UI에는 커스텀 화면이 필요하다. 27칸을 넘기려면 `inventory_size`를 올리고 JSON UI에 칸을 추가한다. 플레이어 인벤토리 크기는 바꿀 수 없다.
+- `container_type`은 필수다. `behavior.pickup_items`는 "none"이 아닌 타입(예: `inventory`)이어야 동작하고 아니면 조용히 실패한다. `behavior.equip_item`과 `minecraft:shareables`도 `inventory`가 필요하다. 벌/박쥐/가스트 같은 비행 패턴 몹은 아이템을 잘 줍지 못한다.
+- `private: true`는 인벤토리를 볼 수 없게 한다.
+- 인벤토리 열기/닫기는 감지할 수 없다(이벤트 없음). interact 컴포넌트는 인벤토리 열기를 덮어쓴다. 커스텀 엔티티의 컨테이너는 스크립트로 열 수 없고 플레이어 상호작용으로만 열린다. 모달 폼으로 가짜 상자를 만든다.
+- 사망 시 인벤토리 드롭은 스크립트로 막을 수 없다(die beforeEvent에서 컨테이너를 쓸 수 없음).
+- 엔티티 인벤토리 제목이 "Unknown"이면 엔티티 이름 lang 항목이 필요하다(`tile.x.name`은 동작하지 않았다). `nameable`이 필요하다는 보고도 있다.
+
+### 장비
+
+- 장비 장착은 `minecraft:equipment`(piglin 참고)를 쓴다. 인챈트/트림 방어구는 `/loot replace entity @s slot.armor.chest 0 loot "equipment/trial_chamber_diamond"`, `queue_command`의 `replaceitem entity @s slot.armor.feet 1 id`로 준다.
+- 비 플레이어 엔티티의 장비는 스크립트로 읽거나 쓸 수 없다. `equippable` 컴포넌트는 플레이어 타입만 지원한다. `/replaceitem`을 대체로 쓴다. 다른 엔티티의 인챈트(약탈자 쇠뇌의 piercing 등)도 읽을 수 없고 스크립트로 바닐라 스폰 엔티티에 컴포넌트를 추가할 수 없다.
+- 엔티티가 아이템을 들게 하려면 스크립트로 플레이어 장비를 폴링해 replaceitem으로 적용하고 클라이언트 엔티티에 `enable_attachables: true`를 둔다. 여우식 입 아이템은 위키의 entity-holds-item 문서를 따른다. 왼손 아이템 렌더 문제는 모델 뼈 이름이나 `cape` 피벗에서 생긴다.
+- 말 갑옷과 안장 슬롯은 `minecraft:equippable` 슬롯이 `accepted_items`/`on_equip`/`on_unequip` 이벤트를 쓰며 슬롯 0은 안장, 슬롯 1은 말 갑옷이다.
+
+### 이름과 lang
+
+- lang 키는 `entity.<ns:id>.name=...`, `item.spawn_egg.entity.<ns:id>.name=...`이다(`=` 주변 공백 없음, `%` 접두사 없음, 파일은 `texts/*.lang`). 이름이 Unknown이면 게임 언어가 en_GB인데 en_US.lang만 있는 경우가 있으니 lang 파일을 모두 만든다.
+- 기본 이름표를 정하는 컴포넌트는 없다. 스폰 시 스크립트나 summon 명령을 쓴다. `minecraft:nameable` `always_show: true`로 표시한다. 클라이언트 파일이 없는 BP 전용 엔티티는 이름표가 렌더링되지 않는다. 일부 플레이어에게만 보이는 이름표는 불가능하다.
+- 항상 보이는 NPC 이름은 `minecraft:npc`(format 1.19.30)를 덮어쓰고 `"minecraft:nameable": {"always_show": true, "allow_name_tag_renaming": true}`, physics 중력/충돌 없음, `collision_box` 0, `damage_sensor` deals_damage false, `persistent`, `fire_immune`을 둔다.
+
+### 보스바와 전리품
+
+- `minecraft:boss`에서 "Unknown"이 보이면 `"name"` 필드를 추가한다. 페이즈를 바꾼 뒤 보스바를 바꾸거나 제거하려면 재접속이 필요하다. `hud_range`는 값과 상관없이 비슷한 거리에서 사라지고 다시 나타나지 않는다(시뮬레이션/렌더 거리를 올리면 나아짐). 동적 보스바는 숨긴 더미 엔티티의 체력을 `healthChanged`로 보스와 연결한다.
+- 엔티티 전리품 표는 풀마다 `rolls`와 `entries`가 필요하다. 최소 형태:
+
+```json
+{ "pools": [ { "rolls": 1, "entries": [ { "type": "item", "name": "ns:item", "weight": 1,
+  "functions": [ { "function": "set_count", "count": { "min": 1, "max": 1 } } ] } ] } ] }
+```
+
+- 떨어진 아이템 개수는 바꿀 수 없으니 디스폰하고 새 개수로 다시 스폰한다. 아이템 엔티티의 선인장 피해를 취소하면 클라이언트에서 숨겨지지만 여전히 주울 수 있는 버그가 있다.
+
+## 12. 클라이언트 엔티티 애니메이션과 컨트롤러 (동작 관점)
+
+### 연결
+
+- `animations`는 객체(짧은 이름 → ID), `scripts.animate`는 그 짧은 이름 배열(`"animate": ["controller"]`)이다. `{"controller": {}}`나 `" controller "`(공백)는 `unknown child schema option type. Allowed types: 'molang'`을 낸다. 형태가 틀리면 그림자와 충돌만 있는 투명 몹이 되고 스폰 알도 투명해진다. 손으로 고쳤다면 Blockbench에서 다시 내보낸다.
+- `animation_controllers` 자식은 format 1.8.0에서만 유효하다. 1.10.0 이상에서는 컨트롤러 ID를 `animations`에 짧은 이름으로 넣고 `animate`에서 참조한다. 컨트롤러 이름 접두사는 `controller.animation.<name>`이다.
+- 항상 재생하려면 짧은 이름을 `scripts.animate`에 넣는다. 기본 재생인 `look_at_target`에는 컨트롤러가 필요 없다. `/playanimation`으로는 되는데 게임에서 재생되지 않으면 `animate`에 컨트롤러가 빠진 것이다. 테이밍 시 한 번 재생하려면 컨트롤러 대신 클라이언트 엔티티 `scripts`에 넣는다.
+- 변수는 초기화를 `initialize`에, 갱신을 `pre_animation`에 둔다. `pre_animation`에서 만든 변수를 `initialize` 전에 쓰면 `unknown variable`이 난다. 좀비 같은 엔티티의 `variable.melee_spear_equipped` 오류는 `"scripts": {"initialize": ["variable.melee_spear_equipped = 0.0;"]}`로 고친다.
+- 애니메이션을 찾지 못하면 폴더 이름, 짧은 이름 불일치, 이름 변경을 확인한다. Blockbench 애니메이션에는 `NaN`이 들어 있을 수 있으니 `0`으로 바꾼다. `State moving not found`는 `blend_transition`이 숫자가 아니어서 생겼다.
+
+### 공격과 상태 애니메이션
+
+- 공격 트리거는 `v.attack_time > 0`(커스텀 엔티티만, 어태처블 제외), 탈출은 `!v.attack_time`이다. 긴 애니메이션이 끝나게 하려면 `q.all_animations_finished`를 같이 쓴다. `v.attack_time`은 약 0.2초뿐이므로 긴 공격 애니메이션의 정해진 시점에 맞히려면 `behavior.delayed_attack`의 `query.is_delayed_attacking`(windup 동안 계속 참)을 쓴다.
+- 무작위 공격 애니메이션: 컨트롤러 `pre_animation: ["variable.attack_rand = math.die_roll_integer(1, 0, 2);"]`, `attack_selector` 상태, `query.is_delayed_attacking && variable.attack_rand == N` 전환, `!query.is_delayed_attacking`이면 idle로 돌아간다. 걷기 변형은 진입 시 `math.random`으로 변수를 정하는 중간 상태를 둔다.
+- 피격 시 애니메이션은 네이티브로 없다(warden 런타임 ID + `query.hurt_time > 0` 트릭, 일부 엔티티에서만 동작). 원거리 충전은 `query.is_charged`/`q.is_charging`, 스크립트에서는 `entity.hasComponent(EntityComponentTypes.IsCharged)`다. 웅크림은 `query.is_sneaking`이다.
+- "달리기" 쿼리는 없다. `query.ground_speed`는 방향이 아니라 속도이고 신뢰하기 어렵다. 앞/뒤 구분은 `query.movement_direction`이나 태그/속성/스크립트 조합으로 한다. 넉백 중 이동 애니메이션을 끄려면 `query.is_moving`이 낫다.
+- 걷기 애니메이션이 마지막 포즈에서 멈추게 하려면 anim_time 갱신을 `query.modified_distance_moved / <n>`로 하고 `query.modified_move_speed > 0.01` 상태로 감싼다. `anim_time_update`(예: `q.modified_distance_moved * 0.08`)로 속도에 맞춰 늘이고 줄인다.
+- 기는 동작은 스크립트로 충돌 박스를 바꾸거나 RP만으로 1칸 위 블록을 감지하는 컨트롤러와 1블록 높이 충돌 박스를 쓴다. 착지 감지는 애니메이션 컨트롤러가 낙하/착지 스크립트 이벤트를 발동하게 한다.
+
+### 시선, 회전
+
+- 머리가 대상을 보게 하려면 `"loop": true` 애니메이션에 머리 회전 `["Math.clamp(query.target_x_rotation,-30,45)","Math.clamp(query.target_y_rotation,-45,45)",0]`, `relative_to.rotation: "entity"`를 둔다(clamp가 없으면 머리가 돈다). 서버 지연 없이 즉시 보게 하려면 `"rotation": [0, "query.rotation_to_camera(1) - this", 0]` + `relative_to: {rotation: entity}`를 쓴다. 머리 회전 애니메이션은 뼈 이름이 정확히 `head`여야 한다.
+- 빌보드는 `["query.camera_rotation(0)", "-query.body_y_rotation + query.camera_rotation(1)", 0]` 또는 `["query.camera_rotation(0)","query.camera_rotation(1)",0]`이다(바닐라 눈덩이 클라이언트 엔티티 참고).
+- 비행기 기울기 스무딩: pre_animation `v.bank = math.clamp(math.lerp(v.bank, query.yaw_speed*-1, 0.12), -30, 30)`.
+- 0과 360 사이 blend는 뒤로 튀므로 연쇄 애니메이션에서는 360을 넘는 연속 값을 유지하고 보간 차이는 ±180으로 정규화한다. `q.bone_orientation_trs().r.y`는 -90..90으로 제한된다. Euler 순서는 X, Y, Z다.
+- 탈것 시각 회전 고정은 `-q.body_y_rotation` 애니메이션 후 `query.movement_direction`, `q.position`, 삼각함수로 계산한다. 보트처럼 몸이 향하게 하는 데는 `query.ride_body_y_rotation`, `ride_body_x_rotation`, 트럭 바퀴에는 `query.rider_head_y_rotation(0)`(부호 반전)을 쓴다.
+- 탑승 중 플레이어 몸 고정은 루트 뼈 애니메이션 `"-q.body_y_rotation+math.min(math.max(math.mod(q.body_y_rotation - q.ride_body_y_rotation + 540, 360) - 180, -60), 57)"` + `override_previous_animation`이다. 서서 타게 하려면 플레이어 애니메이션 컨트롤러에서 `query.is_riding`을 `query.is_riding&&!query.is_riding_any_entity_of_type('<your:entity>')`로 바꾼다.
+
+### 기타 애니메이션 규칙
+
+- 애니메이션 경계 깜빡임: 첫 키프레임과 마지막 키프레임이 같아야 하고 마지막은 smooth가 아니라 linear로 둔다. `loop: "hold_on_last_frame"`은 마지막 포즈를 유지한다. 반복 짧은 공격 애니메이션의 timeline 이벤트가 발동하지 않으면 `loop: true`로 고친다. 부드러운 전환에는 `"blend_transition": 0.2`와 `blend_via_shortest_path`를 쓴다.
+- 같은 뼈를 건드리는 컨트롤러 두 개는 싸운다(둘 다 재생). 하나로 합치거나 조건을 건다. 같은 변수를 쓰는 애니메이션 두 개는 마지막 것이 이긴다. 축별 키프레임 보간은 분리할 수 없으니 뼈를 중첩한다(바깥 Y, 안쪽 X).
+- Molang 키프레임 보간(프레임 정의 없이): `v.time = (v.time ?? 0) + q.delta_time;`, `v.smooth_time = math.hermite_blend(v.time)`, `v.ypos = math.lerp(v.start, v.end, v.smooth_time)`. 구간식은 `v.segment = math.min(math.floor(v.t),2); v.local_t = v.t - v.segment;`다. `q.life_time`은 easing에 버그가 있을 수 있으니 자체 시간 변수를 쓴다.
+- 속성으로 애니메이션 속도를 조절하려면 `"animations": [{"dance": "v.dance"}]`처럼 변수가 속도를 결정하게 한다(`q.property` 직접 사용은 키프레임 값이 스케일됐다는 보고).
+- BP(서버) 애니메이션/컨트롤러는 명령과 Molang만 실행하고 클라이언트 애니메이션은 실행하지 않는다. `/event entity @s ...`, timeline 타임스탬프 명령, `/effect`, `/replaceitem`이 가능하다. RP 컨트롤러는 `/scriptevent`나 명령을 실행할 수 없다. BP 애니메이션 컨트롤러는 엔티티가 로드될 때마다 실행되므로 "on load" 이벤트로 쓸 수 있다. `query.scoreboard`는 BP에서만 동작한다.
+- 스폰 시 애니메이션 재생은 RP만으로 불가능하니 BP 이벤트의 `playanimation`을 쓴다. 클라이언트 변수를 BP로 보낼 수 없고(BP → 클라이언트만, 속성) 스크립트는 클라이언트 Molang 변수를 읽을 수 없다.
+- `/playanimation @p <anim> <next_state> <blend_out_time> "<stop_expression>" <controller>`. stop expression으로 변수를 설정할 수 있다(예: `playanimation @s animation.first_person.attack_rotation_item x 900 "v.attack_time=1;"`). 엔티티 리소스 파일에 소리 이벤트가 정의돼 있으면 애니메이션 소리도 재생된다. 스크립트는 재생 중인 애니메이션을 취소할 수 없으니 컨트롤러의 `q.property()` 조건이나 override true인 리셋 애니메이션을 쓴다.
+- 엔티티 소리는 애니메이션(`sound_effects`)으로 재생한다. `sounds.json`의 엔티티 이벤트(`ambient`, `hurt`, `death`, `step`)는 유효한 LevelSoundEvent 이름이어야 한다. 커스텀 엔티티 소리는 sound_definitions.json과 클라이언트 파일의 `sound_effects` 모두에 있어야 한다. 반복 소리는 `loop: true` 애니메이션에 넣는다.
+- 애니메이션 키 쿼리 참고: `query.equipped_item_all_tag('slot.weapon.mainhand','tag')`, `query.is_item_name_any('slot.weapon.mainhand', 0, 'ns:item')`, `query.entity_biome_has_any_tags`, `query.is_riding_any_entity_of_type('id')`, `query.is_in_water_or_rain`. `query.foo`는 자리표시자일 뿐 실제 쿼리가 아니다. 컨트롤러 조기 종료에는 `q.state_time`, `q.all_animations_finished`를 쓴다. 전환식 끝의 `;`나 남은 따옴표는 `unrecognized token`을 낸다.
+- 갑옷 거치대 포즈는 런타임 ID 변수에 하드코딩돼 있다(12~13개). 포즈를 늘리려면 자체 엔티티에 `pose_index` 속성과 `math.mod(...)` 이벤트를 두거나 갑옷 거치대 geo를 복사한다.
+- 뼈 이름을 플레이어와 같게(`rightItem`, `leftItem`, head 등) 하면 바닐라 휴머노이드/플레이어 애니메이션을 재사용할 수 있다. 활, 쇠뇌, 창, 방패처럼 특수하게 드는 아이템에는 클라이언트 엔티티의 `"enable_attachables": true`가 필요하다.
+- `scripts.should_update_bones_and_effects_offscreen: true`는 히트박스가 화면에 없어도 모델을 렌더링한다(여전히 약 64m 제한).
+
+## 13. 렌더 거리, 디더링, 그림자, 히트박스
+
+- 렌더 거리: 커스텀 엔티티는 약 64~70블록 밖에서 렌더링되지 않고 늘릴 수 없다. 렌더링은 히트박스가 시야에 있느냐에 묶여 있다. 뒤에 있으면 사라지는 큰 모델은 geometry description의 `visible_bounds_width/height/offset`을 키운다. ticking area와 `should_update_bones_and_effects_offscreen`은 도움이 되지 않는다. (confirmed)
+- ender dragon 런타임 ID(conflicting): ender dragon만 멀리서 렌더링된다. `minecraft:ender_dragon` 런타임 ID로 된다는 사람과 안 된다는 사람이 있고 부작용이 있다. 대안은 바닐라 ender dragon 클라이언트 엔티티를 교체하고 float 속성과 렌더 컨트롤러로 모델을 바꾸거나, 플레이어 가까이에 프록시 엔티티를 두거나, 먼 행성은 파티클로 LOD를 바꾸는 것이다(파티클은 멀리 보임).
+- 디더링(카메라 가까이에서 흐려짐)은 플레이어 접근성 설정 "mob dithering"에서 오며 팩으로 끌 수 없다. 히트박스 0으로 꺼진다는 보고가 있지만 다른 것이 깨질 수 있다.
+- 그림자 크기는 히트박스/scale 컴포넌트를 따른다. 투명화 그림자 제거에는 `minecraft:renders_when_invisible` + 무한 투명 `spell_effects`를 쓴다.
+- 충돌 박스는 width/height만 있고 x/z를 따로 줄 수 없으며 여러 개도 없다. 우회법은 투명 블록이나 블록 안으로 튀어나온 박스다. 피해 히트박스만 바꾸는 `custom_hit_test`가 있지만 고정이고 회전하지 않으며 스크립트로 감지할 수 없다. 머리 히트박스는 본체에 탄 별도 머리 엔티티가 피해를 전달하게 한다(엔티티 두 개, 성능 비용).
+- 고체 엔티티(위에 설 수 있음)는 최신 format에서 엔티티에 `"minecraft:is_collidable": {}`를 둔다. 갑옷 거치대처럼 다른 엔티티를 밀지 않는 엔티티는 알려진 방법이 없고 NPC 런타임 ID는 부작용이 있다.
+- 부위 표시(part visibility)로 숨긴 뼈도 드로우 콜을 제출한다(래스터라이저만 컬링)는 비효율 보고가 있다.
+- 지원되지 않는 것: 엔티티를 플레이어 목록 항목으로 보이게 하기(GameTest 시뮬레이션 플레이어 사용), display entity(블록 엔티티 트릭 MBE 갑옷 거치대 스케일, FMBE를 쓴다), 애드온의 플레이어 스킨 읽기(BDS에서는 외부 API가 다음 재시작 때 스킨을 변형으로 추가). 스킨을 텍스처로 쓰려면 팩에 png가 있어야 한다.
+- 모델 오류: 기하가 여러 개(어른 + 아기)이고 `head` 뼈가 있으면 `model already has a locator armor_offset.default_neck / lead ... doesn't exactly match`가 난다. 뼈 `head`를 `skull`로 바꾸거나 아기 모델에서 `lead` 로케이터를 빼거나 피벗을 정수로 한다(MCPE-218065). 모델 변형이 있는 몹에서 아이템 위치가 바뀌는 버그는 MCPE-184865다. 큰 메시의 이상한 그림자는 법선을 뒤집는다. Java 모델은 Blockbench에서 변환한다.
+- 몹 갑옷 부착 뼈: 몹은 플레이어와 다른 갑옷 어태처블 파일을 쓴다. 흉갑은 `body`, 바지는 `leftLeg`/`rightLeg`/`body`, 투구는 `head`(없으면 root)다. `context.item_slot`은 equippable 슬롯에 대응한다(`q.item_slot_to_bone_name`).
+
+## 14. 플레이어 엔티티
+
+### player.json (BP)
+
+- 여러 애드온이 각자 `player.json`을 넣으면 팩 순서에 따라 하나만 이기고 합쳐지지 않는다. 손으로 합치거나 합본 팩을 만든다. damage_sensor 수정은 애드온 사이에서 충돌한다.
+- `player.json`의 `queue_command` 이벤트는 모든 타격에 발동해 공격자 종류를 구분할 수 없다. 스크립트 `entityHurt`/`entityHitEntity`로 구분한다.
+- 플레이어 스케일은 애니메이션 밖에서 바꿀 수 없다. 태그나 속성에 따라 충돌 박스를 바꾸는 그룹과 애니메이션 스케일을 쓴다.
+- 이동 제한은 `/inputpermission set <player> movement disabled`(또는 스크립트)다. 단순한 강제 애니메이션은 `/playanimation`이나 `Entity.playAnimation`이다.
+- 커스텀 `player.json`이 회전을 깨뜨린 사례(`getRotation()`이 약 30도 안에서 흔들림)는 샘플 팩 버전으로 되돌리니 해결됐다.
+- 우클릭 감지: `player.json`의 `minecraft:player`에 BP 애니메이션 컨트롤러를 붙이고(`description.scripts.animate` + `animations`), 상태에 `on_entry: "/function ..."`, 전환 쿼리 `query.is_item_name_any('slot.weapon.mainhand','ns:item') && query.is_using_item`을 쓴다. `&&`가 없으면 들자마자 발동한다. 컨트롤러를 두 번 정의하면 content log 오류가 난다.
+- 플레이어 외형 추가는 어태처블이나 `player.json` 속성으로만 가능하다. 커스텀 장비 슬롯은 없다. 불사의 토템 효과는 팝 연출 없이 보일 수 없고 토템 팝 애니메이션은 하드코딩이다.
+
+### player.entity.json (RP)
+
+- 1.21.130 창 업데이트로 깨졌다. Mojang이 `variable.melee_spear_equipped`, 창 컨트롤러 두 개, 바뀐 1인칭 컨트롤러를 추가해, 오래된 사본으로 덮어쓰는 팩은 창 애니메이션, 휘두르기/공격, 수영, 1인칭이 깨지고 `Unknown variable`이 난다. 해결법은 설치된 게임의 최신 바닐라 파일(`...\Content\data\resource_packs\vanilla_1.21.130\entity\player.entity.json`)에서 시작해 자기 애니메이션, 스크립트, 컨트롤러를 다시 추가하는 것이다. 애니메이션 컨트롤러와 1인칭 애니메이션 파일도 같이 가져온다. (confirmed)
+- bedrock-samples가 뒤처졌던 시기가 있다. 1.21.130.3 플레이어 클라이언트 엔티티는 `first_person_item_rotation_factor`와 pre_animation/initialize가 빠져 있고 창 오류가 났다. 커뮤니티 바닐라 리소스 팩 저장소도 `variable.melee_spear_equipped`가 없었다. 게임 설치 폴더의 파일을 쓴다.
+- 창 애니메이션에 필요한 변수: 플레이어 `initialize`에 `variable.melee_spear_equipped`, `variable.first_person_item_rotation_factor = 0.625` 등. 창은 애니메이션 컨트롤러 파일이 따로 있다. 수정 후에는 게임 전체를 재시작한다. 창 어태처블 오류 `q.item_slot_to_bone_name(c.item_slot) returned a bone name that doesn't exist`는 `spear` 뼈가 없는 것으로 min_engine_version 불일치와 관련이 있다.
+- `can't find animation first_person_breathing_bob`는 animations에 `"first_person_breathing_bob": "animation.player.first_person.breathing_bob"`를 추가해 고친다. 바닐라 흔들림을 없애려면 그 애니메이션을 덮어쓴다.
+- 페르소나/캐릭터 생성기 스킨(조건부): `player.entity.json`을 덮어쓰면 페르소나 스킨이 꺼져 모두 Steve가 된다. 플레이어 클라이언트 엔티티에 `min_engine_version`을 정의하면 페르소나 렌더 컨트롤러가 삽입된다. bedrock-samples의 빈 템플릿에 `player.entity.json`이 들어 있으면 기본 스킨이 모두 Steve가 되니 지운다. 기본 스킨 텍스처는 하드코딩이다.
+- 플레이어에 렌더 컨트롤러를 추가하려면 `player.entity.json`을 덮어써야 한다(대안은 플레이어에 탄 BP 엔티티). `controller.render.player.third_person`에 추가 컨트롤러를 두고 `part_visibility`(`rightArm`, `rightSleeve`, `leftArm`, `leftSleeve`, `head`, `hat`)로 팔다리를 숨긴다. 바닐라 플레이어를 숨기려면 모든 뼈를 숨기는 `controller.render.default` 사본을 앞에 둔다(루트를 0으로 스케일하면 커스텀 팔과 아이템도 사라진다).
+- paper doll(일시정지 화면) 오류 `query.property/has_property does not have an actor`는 `!variable.is_paperdoll`/`!query.is_in_ui`로 막는다. paper doll이 보이는 동안 `/playanimation`과 파티클을 쓰면 복사본이 생긴다. 1인칭 추가 렌더 컨트롤러 조건 예: `!variable.is_paperdoll && !variable.map_face_icon && !query.is_spectator && query.property('addon:extra') != 'x'`.
+- 보이지 않는 플레이어는 유효하지 않은 렌더 컨트롤러 참조가 원인이다. `friendly name 'geometry.default' not found`는 geometry 짧은 이름과 렌더 컨트롤러 참조가 맞지 않거나 오타일 때 난다. 기본 모델은 교체할 수 없고 하나를 추가하고 기본을 숨긴다.
+- 커스텀 플레이어 모델과 아이템 위치는 `leftItem`/`rightItem` 피벗을 기본 플레이어 geo와 같게 둔다(leftItem pivot [6,15,1] 부모 leftArm, rightItem pivot [-6,15,1] 로케이터 `lead_hold`). 뼈를 옮기지 말고 애니메이션으로 위치를 옮긴다. 뼈를 추가하면 아이템 배치가 깨진다. Blockbench용 플레이어 geometry는 bedrock-samples `resource_pack/models/mobs.json`의 `humanoid.custom:geometry.humanoid`다.
+- 플레이어 애니메이션: 걷기는 `animation.player.move.arms` + `animation.player.move.legs`(NPC는 합친 `animation.humanoid.move`)다. 바닐라 휘두르기는 하드코딩이고 `v.attack_speed`/`v.attack`로 구동되며 Molang에서 읽기 전용이다. 1인칭 공격은 `animation.player.first_person.attack_rotation`이다. 채굴 속도는 haste/mining_fatigue로 바꾸고 팔은 휘두르지 않는다.
+- 1인칭에서 RP 애니메이션을 재생/중지할 때 깜빡이면 덮어쓰는 애니메이션을 player.animation.json 맨 끝에 두고 간격을 줄인다. 1인칭/3인칭은 애니메이션 상태는 따로지만 Molang 변수는 공유한다. 차단/비공개 Molang 변수를 읽는 커스텀 플레이어 컨트롤러는 타격 애니메이션과 3인칭 활을 깨뜨린다.
+- 플레이어 모델 등록 한계가 약 1.14MB라는 언급이 있다. (single report) 오프핸드 지도 위치/크기는 JSON UI가 아니라 엔티티/플레이어 파일이 정한다. 26.x "tiny takeover" 업데이트 후 옛 체력 표시 팩과 함께 쓰면 새끼 동물이 거대해 보인다.
+- 해결되지 않은 것: 엘리트라 앞으로 숙이기 보정, 탑승 위치/카메라 이동(카메라는 RP에서 바꿀 수 없음), 낙타식 좌석이 등을 따라가게 하기, 탈것/탑승자 회전 동기화.
+
+## 15. 스크립트와 엔티티 연동
+
+- 하이브리드를 권장한다. AI를 스크립트로 다시 짜기보다 엔티티 파일 속성으로 그룹을 제어하고 스크립트는 이벤트 발동과 속성/태그 설정으로 JSON AI를 구동한다.
+- 일부 플레이어에게만 애니메이션을 보이려면 `entity.playAnimation(name, { players: [...] })`로 0 스케일이나 외곽선 애니메이션을 재생한다.
+- 스크립트는 애니메이션 컨트롤러를 직접 구동할 수 없다. `playAnimation`의 `stopExpression`/controller 옵션이나 스크립트가 설정한 변수를 pre-animation Molang에서 읽는 방식(FMBE식)을 쓴다. `player.inputInfo.getMovementVector()` + `stopExpression: "v.movement_x=...; return 0;"` + 호출마다 무작위 컨트롤러 이름으로 변수를 어태처블에 밀어 넣는 방식이 동작했다(속성 방식은 약 1틱 지연). 서버 `player.playAnimation`은 3인칭만 움직인다. 바닐라 1인칭 애니메이션은 스크립트로 바꾸거나 트리거할 수 없다.
+- BP에서 어태처블/RP로 데이터 전달은 `player.setProperty(...)` 또는 Molang 어태처블 `scripts.parent_setup: "t.bp_x = v.bp_x ?? 1;"`, `pre_animation: ["v.rp_x = t.bp_x ?? 1;"]`다. 속성 방식은 다른 플레이어 애니메이션 팩과의 호환성을 깨뜨린다.
+- 붙잡기 메커니즘은 `system.runInterval`로 잡힌 플레이어를 매 틱 손 위치로 텔레포트하거나 더미에 태워 애니메이션한다. 염력은 엔티티는 `applyImpulse`, 블록은 엔티티 안에 넣고 애니메이션으로 스케일한다.
+- 피격 위치/방향은 히트박스 엔티티(비쌈), `projectileHitEntity`의 상대 위치, entityHurt + 위치 비교로 감지한다. 시선 방향 방식은 터치 플레이어에서 실패하고 공격자와 피해자 위치 사이 벡터는 동작한다.
+- 떠 있는 텍스트는 Script API TextPrimitive를 쓴다(엔티티는 충돌/밀림 문제). 클릭 감지는 `world.afterEvents.playerAttack`, 핫바 슬롯 변경은 `world.afterEvents.playerHotbarSelectedSlotChange`다. 폭발 감지는 `explosionAfterEvent`다.
+- `Entity.addEffect(effect, duration, {amplifier})`의 duration은 틱이고 JSON 컴포넌트(쿨다운 등)는 초다.
+- 바닐라 갑옷 거치대/그림/보트/광산 수레 파괴는 런타임 ID가 강제해 EntityBeforeHurt를 취소해도 막을 수 없다. 커스텀 엔티티나 모험 모드를 쓴다.
+- 플레이어 이름이나 속성에 따른 커스텀 스킨은 엔티티 속성이나 `q.variant`를 쓴다. 대상 고정 표시나 발광은 스크립트만으로 안 되고 속성으로 제어하는 발광 머티리얼을 클라이언트에서 쓴다.
+
+## 16. 블록 보조 엔티티, 더미 엔티티, 홀로그램
+
+- 블록처럼 동작하는 엔티티(인벤토리, 아이템 전시, 애니메이션, 상호작용 가구, 서랍)는 `playerPlaceBlock`에서 투명 엔티티를 스폰하고(`system.run` + `dimension.spawnEntity(id, block.center())`) 파괴할 때 죽여서 만든다. 블록마다 엔티티를 두면 많을 때 렉이 생긴다. 떨어지는 블록식 커스텀 블록은 같은 텍스처의 커스텀 엔티티가 필요하다.
+- 인벤토리를 가진 블록은 블록에 인벤토리 컴포넌트가 없으니 블록 위치에 투명 엔티티를 둔다. `minecraft:inventory`(`inventory_size`, 호퍼 상호작용을 피하려고 `container_type` `"inventory"`, `can_be_siphoned_from` 없음), `minecraft:physics` `{has_gravity:false, has_collision:false, push_towards_closest_space:false}`, 질식 방지 `minecraft:breathable`(`breathes_solids:true`, `suffocate_time:0`, `breathes_air/water/lava:true`, `generates_bubbles:false`)를 둔다. `dimension.getEntitiesAtBlockLocation`으로 찾고 블록의 `onBreak`에서 인벤토리를 떨군다. UI는 JSON UI가 필요하다.
+- 더미 엔티티는 다른 엔티티가 제거된 뒤에도 태그나 상태를 보관하기 좋다(컴포넌트가 적고 RP가 필요 없다). 투명 홀로그램 엔티티는 빈 모델(더 나음) 또는 투명 텍스처를 쓴다. 가짜 떨어진 아이템은 텍스처 없는 엔티티에 mainHand 아이템과 회전 애니메이션을 준다.
+- 경매장 패턴: 아이템 스택을 상자 엔티티에 넣어 구조물로 저장하고(`structureManager.createFromWorld(id, dim, loc, loc, {saveMode: StructureSaveMode.World, includeBlocks:false, includeEntities:true})`), UI용 표시 정보는 따로 보관한다.
+- 우는 천사 엔티티는 스크립트 FOV 검사 대신 creaking의 `look` 컴포넌트를 쓸 수 있다. 조명은 빛 블록으로 만드는 동적 조명이 불안정하고 컴포넌트는 없다. 유황 큐브가 커스텀 블록을 받아들이게 하려면 블록/아이템 태그 `minecraft:sulfur_cube_archetype_bouncy`를 쓴다.

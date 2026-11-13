@@ -1,0 +1,139 @@
+---
+title: 텍스트와 현지화
+description: 라벨 속성, lang 파일, 번역 키 조립, 색 코드, 글꼴, 서버 폼 문자열의 성질(TXT-01~24).
+sidebar_position: 8
+sources:
+  - repo-guide
+  - bedrock-samples
+  - bedrock-wiki
+  - ms-learn
+  - private-research
+  - bedrock-core
+  - advancementpack
+  - private-research
+  - cinnabar
+  - private-research
+---
+
+텍스트는 `label` 컨트롤이 그린다. 라벨은 세 가지 방법으로 글자를 얻는다. 리터럴(`"text": "안녕"`), 변수(`"text": "$title"`), 바인딩(`"text": "#form_text"`)이다. 기본으로 **현지화**되어, 글자를 번역 키로 먼저 찾고 없으면 그대로 찍는다(TXT-01).
+
+## 8.0 가장 작은 예제
+
+**예 1. 리터럴·번역·색 코드.**
+
+```json
+"title_label": { "type": "label",
+  "text": "my_pack.title",
+  "font_type": "smooth", "font_size": "large", "color": [ 1, 0.8, 0.2 ],
+  "shadow": true, "text_alignment": "center" }
+```
+
+`RP/texts/ko_KR.lang`에 키를 정의한다. 값이 없는 언어는 `en_US`로 대체된다(TXT-10).
+
+```
+my_pack.title=§l나의 팩
+```
+
+**예 2. 바인딩 글자를 그대로 찍기.** 사용자 입력·채팅·타이틀처럼 번역하면 안 되는 글자는 `localize: false`를 준다.
+
+```json
+"form_title": { "type": "label", "localize": false, "text": "#title_text",
+  "bindings": [ { "binding_type": "global", "binding_name": "#title_text" } ] }
+```
+
+**예 3. 숫자를 글자로.** 라벨은 숫자 바인딩을 직접 그리지 못하므로 문자열과 이어 붙인다(TXT-06).
+
+```json
+{ "binding_type": "view", "source_property_name": "('점수: ' + #score)", "target_property_name": "#text" }
+```
+
+## 8.0.1 라벨 속성표(MS Learn과 Bedrock Wiki)
+
+MS Learn `ui_element` 참조(`ms-learn` a9fd1c0)와 Bedrock Wiki JSON UI Documentation(0930b39)의 Text 표를 합쳐 정리했다. 기본값은 위키 표 기준이며 `localize` 기본값은 TXT-01에서 `true`로 바로잡았다(위키 표의 `false`는 오기, 부록A C-32).
+
+| 속성 | 타입 | 뜻 |
+| --- | --- | --- |
+| `text` | 문자열 | 글자. 리터럴, `#바인딩`, `$변수`, 번역 키 |
+| `color` | `[r, g, b]` (0.0~1.0) | 글자 색. 기본 `[1, 1, 1]` |
+| `locked_color`, `locked_alpha` | 색, 실수 | 부모가 `enabled: false`일 때의 색과 투명도 |
+| `shadow` | 불리언 | 글자 그림자 |
+| `font_size` | `small`, `normal`, `large`, `extra_large` | 글자 크기. 기본 `normal` |
+| `font_scale_factor` | 실수 | 글자 배율. 기본 1.0. MS Learn 표는 타입을 불리언으로 잘못 적었다 |
+| `font_type` | `default`, `rune`, `unicode`, `smooth`, `MinecraftTen` 또는 커스텀 글꼴 | 글꼴 |
+| `backup_font_type` | 글꼴 | `font_type`이 안 될 때 쓰는 글꼴 |
+| `localize` | 불리언 | `text`를 번역할지 |
+| `line_padding` | 숫자 | 줄 간격 |
+| `hide_hyphen` | 불리언 | 단어 줄바꿈 때 생기는 하이픈을 숨김 |
+| `enable_profanity_filter` | 불리언 | 욕설 필터 |
+| `text_alignment` | `left`, `center`, `right` | 정렬. 지정하지 않으면 `anchor_from`·`anchor_to`에 따라 자동 |
+| `notify_on_ellipses` | 문자열 배열 | 말줄임이 생기거나 사라지면 알릴 컨트롤 이름들. 그 컨트롤이 `#using_ellipses`를 읽는다 |
+| `wrap`, `clip` | 불리언 | 위키가 "더 이상 동작하지 않음"으로 표시한 옛 속성 |
+
+`notify_on_ellipses`는 주로 하드코딩된 글자에 쓴다. 라벨에 `"notify_on_ellipses": [ "my_button" ]`을 주고, `my_button`이 `"source_property_name": "#using_ellipses"`를 `#visible`에 바인딩하면 글자가 잘렸을 때만 버튼이 보인다(위키 예제, TXT-16).
+
+## 8.1 라벨 기본
+
+- **[TXT-01]** 라벨은 **기본으로 현지화**된다. 텍스트를 먼저 번역 키로 찾아보고, 없으면 그대로 찍는다. 리터럴로 찍어야 하는 텍스트(사용자 입력, 채팅, 타이틀 등)는 `"localize": false`를 준다. 바닐라는 `localize`를 쓸 때 거의 항상 `false`로 쓴다(31 대 1). 위키 속성표의 기본값 `false`는 오기다(부록A C-32). `&#123;실측, 바닐라&#125;` (출처: BC-facts, VN, BW-doc)
+- **[TXT-02]** 라벨의 주요 속성: `text`(리터럴, `#바인딩`, `$변수`), `color`, `font_type`, `font_size`, `font_scale_factor`, `text_alignment`(`left`, `center`, `right`), `shadow`, `enable_profanity_filter`, `localize`. `&#123;바닐라&#125;` (출처: VN hud_screen.json:2287-2310, 부록B)
+- **[TXT-03]** `font_type` 값은 `default`, `smooth`, `rune`, `unicode`, `MinecraftTen`이다. 바닐라는 `smooth`(193)와 `MinecraftTen`(21)을 주로 쓴다. `MinecraftSeven` 같은 내부 글꼴 이름을 쓰면 오류 없이 **아무것도 그리지 않는다.** `&#123;실측, 바닐라&#125;` (출처: BC 6.6-6, BC-S7, VN)
+- **[TXT-04]** `#font_type`은 엔진 예약 속성이라 쓰는 즉시 검증된다. 잘못된 별칭은 `NonAssertErrorLog`에 줄마다 남고 마켓플레이스 제출이 막힌다. `&#123;코드&#125;` (출처: BC 6.6-7)
+- **[TXT-05]** `font_size`는 `small`, `normal`, `large`, `extra_large`이고 바닐라는 공식 enum에 없는 `medium`도 4회 쓴다. `&#123;바닐라&#125;` (출처: VN, 부록B)
+- **[TXT-06]** 라벨은 **숫자 바인딩을 그대로 그리지 못한다.** 문자열과 이어 붙여 `text`에 바인딩한다: `('n=' + #raw)`. 정수만 이어 붙여지고 **문자열 + float은 아무것도 나오지 않는다.** `&#123;실측&#125;` (출처: BC-facts, BC 6.6-5, BW-type)
+- **[TXT-07]** 빈 라벨이나 `§r`만 든 `default` 크기 라벨도 높이는 한 줄이다. 0으로 접히지 않으므로 행을 없애려면 `#visible`로 숨긴다. `&#123;실측&#125;` (출처: BC-S10)
+- **[TXT-08]** `§` 색 코드는 바인딩된 텍스트에서도 유지된다. 바닐라 `_global_variables.json`에 색 코드 16색이 `$0_color_format` … `$f_color_format`으로 정의되어 있어 `"color": "$f_color_format"`처럼 쓸 수 있다. `&#123;실측, 바닐라, 작동팩&#125;` (출처: BC-S7, VN _global_variables.json:247, AP 4.9)
+
+## 8.2 lang 파일과 키 조립
+
+- **[TXT-09]** **번호만 보내고 번역은 RP가 한다.** 데이터 문자열에서 잘라 낸 조각에 키 접두를 붙여 `localize: true` 라벨에 넣는다: `('myui.toast.' + #category)`. 스크립트는 고정 폭 번호(0으로 채움)만 보낸다. 언어 28개를 지원하는 AP가 이 방식이다. `&#123;작동팩&#125;` (출처: AP 4.5, BA 6장)
+- **[TXT-10]** lang 값 규칙. `&#123;실측&#125;` (출처: BC-S10, BC-facts)
+  - 키가 비어 있으면(`key=`) 키 자체가 찍힌다. 어떤 언어 파일에 키가 없으면 en_US 값이 찍힌다.
+  - 값이 `§r`뿐이면 아무것도 그리지 않고 폭도 0이다.
+  - 값 앞뒤 공백은 유지된다. 단 **값 전체가 공백 하나**면 파서가 지워서 정의되지 않은 키가 된다. 공백 한 글자가 필요하면 `§r §r`로 감싼다.
+- **[TXT-11]** 서버 폼 엔트리 문자열의 성질: `§` 색 코드 유지, 숫자로 시작해도 문제없음, 200자도 됨, **bare 번역 키 문자열은 엔진이 번역하지 않음**, **RawMessage(`{ rawtext: [...] }`)는 클라이언트가 플레이어 언어로 번역해 바인딩에 넣어 줌**. 그래서 여러 번역 키를 합친 문장도 엔트리 하나로 보낼 수 있다. `&#123;실측&#125;` (출처: BC-S7, BC 4.1-(4))
+- **[TXT-12]** 텍스트를 직접 못 다루는 표면(상자 슬롯)에 글자를 쓰려면 **숫자 → lang 키 → 글자**로 바꾼다. 슬롯 스택 수량 n을 `('core.ui.c.' + #count)` 키로 만들고 `.lang`에 `core.ui.c.<n>=<글자>`를 둔다. 수량 1은 `#inventory_stack_count`가 비어 있으므로 공백 글자로 정한다. `&#123;실측, 코드&#125;` (출처: BC 4.3-(3), BC-facts)
+- **[TXT-13]** `'%.Ns'`는 바이트 단위라 한글 필드를 중간에서 자르면 글자가 깨진다(EXP-09). 한글이 들어가는 고정 폭 필드는 인코더가 UTF-8 바이트로 패딩한다. 색 코드 `§`는 2바이트, 이모지는 대부분 4바이트다(EXP-24). `&#123;코드, 추론&#125;` (출처: BA 3.1, BW-intro)
+- **[TXT-14]** 빈 화면 문구처럼 lang 키를 하드코딩할 때 키 이름 오타는 키 자체가 화면에 찍히는 것으로만 드러난다(AP v4.2의 `_r4ui:ancements.empty`). lang 파일과 키 목록을 기계적으로 대조한다. `&#123;작동팩, 추론&#125;` (출처: AP 5장)
+
+## 8.3 Bedrock Wiki 대조로 더한 규칙
+
+위키(BW) 문서를 바닐라 1.26.50.4와 대조해 더한 규칙이다. 위키 문장만 있는 것은 `미검증`, 위키의 게임 스크린샷이 있는 것은 `실측`(제3자 기록)으로 표시했다.
+
+- **[TXT-15]** 바닐라 `common.hover_text`에 `property_bag`의 `#hover_text`로 넣은 문자열은 현지화되지 않는다. 번역이 필요하면 툴팁 라벨을 직접 만든다. `&#123;미검증&#125;` (출처: BW-btn)
+- **[TXT-16]** 라벨 보조 속성: `line_padding`(줄 간격, 바닐라 14), `backup_font_type`(4), `hide_hyphen`(3), `locked_color`·`locked_alpha`(부모가 `enabled: false`일 때, 4·17), `notify_on_ellipses`(말줄임이 생기거나 사라지면 지정한 컨트롤의 `#using_ellipses`가 바뀜, 4). `&#123;바닐라&#125;` (출처: BW-doc Text 표, VN)
+
+## 8.4 Cinnabar 엔진 재구성으로 더한 규칙
+
+Cinnabar(`CN`)는 26.30 네이티브 클라이언트의 JSON UI 해석기를 재구성한 Rust 코드다. 수준은 `코드`이고, `CN-run`은 이 프로젝트가 그 평가기를 직접 실행한 결과다. 게임 실측과 다르면 실측을 따른다(부록A C-41~C-47).
+
+- **[TXT-17]** 현지화 라벨의 텍스트에 `%`가 있으면 `%토큰`(영문·숫자·`-`·`.`·`_`)마다 따로 번역하고, 없는 토큰은 글자 그대로 둔다. 그래서 `"50%"` 같은 글자의 `%`는 사라진다. `%`를 보여야 하면 `localize: false`. `&#123;코드&#125;` (출처: CN)
+
+## 8.5 연구 서버 서버 실측으로 더한 규칙
+
+연구 서버 서버(`DF`)를 만들며 Windows 1.26.52 에서 실측한 것이다. 서버 폼 하나로 여러 화면을 그리는 구조에서 얻었다.
+
+- **[TXT-22]** 칸 옆에 직접 그린 호버 상자는 스크롤 창에 잘렸다. 바닐라 `common.hover_text`(`hover_text_renderer`)를 버튼의 호버 상태 자식으로 두고 `#hover_text`에 버튼 글을 넣으면 포인터 옆에 잘리지 않고 뜬다. `$hover_text_max_width`가 0이면 글의 `\n`에서만 줄을 바꾸고, 150이면 한글이 다섯 글자쯤에서 꺾였다. `&#123;실측&#125;` (출처: DF)
+- **[TXT-23]** 스코어보드 줄 라벨이 번역을 거치면 `%`가 사라졌다(TXT-17을 게임에서 확인). `localize: false`. `&#123;실측&#125;` (출처: DF)
+
+## 8.6 엔진 동작 분석으로 더한 규칙
+
+Android 1.26.52.3 클라이언트의 네이티브 라이브러리를 분석해 읽은 것이다(`NB`). 수준은 `코드`다.
+
+- **[TXT-24]** `§` 색 코드의 실제 색은 `ui/_global_variables.json`의 변수 29개에서 만든다: `$0_color_format`~`$f_color_format`, `$coin_color`(`§g`), `$material_quartz_color`·`iron`·`netherite`·`redstone`·`copper`·`gold`·`emerald`·`diamond`·`lapis`·`amethyst`·`resin`(`§h`~`§v`), `$party_blue_color`(`§w`). 그래서 `§w` 색을 라벨 `color`에 쓰려면 `$party_blue_color`를 쓴다. 팩에서 이 변수를 바꾸면 `§` 색도 바뀔 것으로 보이지만 게임에서는 확인하지 않았다. 변수와 코드의 대응은 순서와 바닐라 주석으로 판단했다. `&#123;코드, 추론&#125;` (출처: NB-11, VN _global_variables.json:238-312)
+## 근거 표기와 출처 약어
+
+규칙은 `[장약어-번호]` 형식의 ID를 달고, 끝의 `{…}`는 검증 수준이다. 판정 우선순위는 `실측` > `바닐라` > `작동팩` > `코드` > `추론`이고, `미검증`과 `충돌`은 쓰기 전에 확인한다. `C-nn`은 [충돌 판정표](./conflicts.mdx)의 번호, `VN`의 값 횟수는 [값 사전](./value-dictionary.mdx)의 집계다. 다른 장의 규칙 ID(`LAY-`, `BND-`, `HOST-` 등)는 같은 JSON UI 장의 해당 페이지에 있다.
+
+| 약어 | 자료 |
+| --- | --- |
+| `VN` | 바닐라 리소스팩 `resource_pack/ui` v1.26.50.4(bedrock-samples `46ba6ea`) 전수 검색. `VN 파일:줄`은 그 위치 |
+| `BC`, `BC-S1`~`BC-S14`, `BC-facts`, `BC-rules` | bedrock-core(`@bedrock-core/ui` 0.12.1, MIT)와 저자의 인게임 실측 기록(`aee2bbd`) |
+| `BA`, `BA-원본` | BedrockAdvancements 2.0.3(All rights reserved, 기법만 옮김) |
+| `AP` | AdvancementPack v4.2(MIT) |
+| `MJ` | mcbejsonuimasterAI(라이선스 없음, 사실만 바닐라로 재확인) |
+| `BW`, `BW-intro`, `BW-dyn`, `BW-doc`, `BW-form`, `BW-btn`, `BW-type`, `BW-best`, `BW-title`, `BW-ase`, `BW-ids` | Bedrock Wiki JSON UI 문서(CC BY 4.0). 각각 Intro to JSON UI, Dynamic Content Generation, JSON UI Documentation, Modifying Server Forms, Buttons and Toggles, Type Conversion, Best Practices, Preserve Title Texts, Aseprite Animations, Numerical Item IDs |
+| `CN`, `CN-run` | Cinnabar(26.30 네이티브 클라이언트 재구성 Rust 코드)와 이 프로젝트가 그 평가기를 실행한 결과 |
+| `NB` | Android 1.26.52.3 네이티브 클라이언트 라이브러리 엔진 동작 분석(수준 `코드`) |
+| `DF` | 연구 서버 서버에서 Windows 1.26.52로 한 실측 |
+| `ASJ`, `SLB` | AsaJS 분석, StarLibV2 분석(둘 다 GPL-3.0, 기법만 한국어로 다시 씀) |
+| `MS` | 모달 폼 multiselect 조사 |
+| `NE` | NetEase(중국판) 개발자 문서 |

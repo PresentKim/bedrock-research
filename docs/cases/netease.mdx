@@ -1,0 +1,104 @@
+---
+title: "NetEase(중국판) 개발자 문서 UI 장"
+description: "중국판 JSON UI 문서를 국제판 바닐라로 재확인한 결과. 국제판에도 맞는 사실, 중국판 전용 요소, 틀린 주장의 구분"
+sidebar_position: 13
+sources:
+  - netease-docs
+  - bedrock-samples
+  - repo-guide
+---
+
+## 이것은 무엇인가
+
+NetEase(网易) 개발자 문서의 UI 관련 장은 중국판 개발자를 위한 것이라 Python ModAPI(`ScreenNode`, `ViewBinder`)와 자체 UI 편집기(MC Studio "界面编辑器", `.mcgui`)를 전제로 한다. 공식 사이트(`mc.163.com/dev/mcmanual/mc-dev/`)와 미러(`mcwiki.easecation.net`)는 클라이언트 렌더링이라 본문을 직접 받을 수 없어, 미러의 원본 저장소 `EaseCation/netease-modsdk-wiki`(HEAD `6dd1233`, 2026-06-04, 파일 8,892개)를 얕게 클론해 Markdown 원문을 읽었다. 저장소에 `LICENSE`가 없고 원문은 NetEase 저작물이라 **문장·코드를 복사하지 않고 사실만** 바닐라 1.26.50.4로 재확인해 다시 썼다(출처: cs-netease-docs). 같은 Bedrock 엔진이라 JSON 문법에는 국제판에도 맞는 사실이 상당히 있고 몇몇은 기존 가이드에 없다. 가치는 중상이다. 문서는 페이지별 날짜가 없고 중국판 클라이언트 `3.2.0.877635`가 예시 경로에 나온다.
+
+## 읽은 문서
+
+속성 레퍼런스(`30-UI说明文档`, 133 KB, 가치 상)가 중심이고 튜토리얼 `1-了解和创建JSON UI`, 바인딩(`70-UI数据绑定`), 애니메이션(`19`), 해상도 적응(`20`), 이미지 확대·9-slice(`11`), 상속·변수(`13`, `15`)를 읽었다. 튜토리얼과 레퍼런스가 서로 다른 곳이 있어 신뢰도는 높은 편이지만 일관되지는 않다.
+
+## 국제판과 중국판 구분
+
+| 구분 | 내용 | 국제판 리소스팩에서 |
+| --- | --- | --- |
+| 같은 엔진 문법 | namespace, `@` 상속, `$` 변수와 `\|default`, `variables`/`requires`, `bindings`(5종 타입, 6종 조건), view 바인딩, `button_mappings`, `modifications` 11종, `anims` | 그대로 쓴다 |
+| 바닐라에도 있는 속성 | 화면 속성 20여 개, `modal`, `contained`, `draggable`, `follows_cursor`, `texture_file_system`, `tiled_scale`, `selection_wheel` 속성, `gradient_renderer`의 `color1`/`color2`, `property_bag_for_children` | 쓴다 |
+| 중국판 전용 타입 | `combox`, `layout`, `joystick`, `stack_grid`, `rich_text`, `mul_lines`, `sixteen_nine_layout`, `anim_porecess_bar`(원문 철자) | 쓰지 않는다(바닐라 0회) |
+| 중국판 전용 속성 | `rotate_pivot`, `rotate_angle`, `is_new_nine_slice`와 `nine_slice_top/left/right/bottom`(원문 `nine_slice_buttom` 철자 포함), `is_handle_button_move_event`, `is_swallow`, `gradient_direction`, `vertical_scroll_delta`, `auto_expand` 등 | 쓰지 않는다. 편집기 출력에서 지운다 |
+| 중국판 전용 템플릿·렌더러 | `common_selection_wheels.base_selection_wheel`, `combo_box.comboBoxPanel`, `mini_map.mini_map_wrapper`, `netease_paper_doll_renderer`, 텍스처 `textures/netease/...` | 쓰지 않는다 |
+| 중국판 전용 바인딩 문법 | `%파이썬모듈.메서드`(Python 함수 호출) | 쓰지 않는다. 엔진이 모르는 ID일 뿐 |
+| 중국판 전용 도구 | 界面编辑器, UI 调试工具, F3의 "Main Scene Stack / Router History" 표시 | 국제판에는 없다. 경로 확인은 Content Log와 실험 화면(DBG-01~04) |
+
+중국판 편집기가 만든 JSON을 국제판에 옮기면 전용 속성이 섞여 `Unknown property` 로그가 남을 수 있으므로 지운다.
+
+## 국제판에도 맞는 사실 (바닐라로 재확인)
+
+### 1. namespace 없는 `@이름`은 문맥에 따라 다른 곳에서 찾아진다
+
+NE는 컨트롤 배열 안에서 다른 namespace를 상속한 인스턴스(`"minimize@common.close_button"`)의 `controls` 안에서는 짧은 `@label0`이 기반 namespace(`common.label0`)로 해석된다고 주장한다. 바닐라 207개 파일을 파싱해 짧은 참조가 어디서 풀리는지 세었다.
+
+| 감싼 가장 가까운 다른 namespace 상속 | 건수 | 이름이 있는 곳 | 예 |
+| --- | --- | --- | --- |
+| 컨트롤 배열 안의 인스턴스 | 3 | 기반 namespace(`common`)에만 | `command_block_screen.json:1010` 아래 `default@close_button_panel` |
+| 최상위 정의 | 43 | 파일 namespace에만 | `trade_screen_pocket.json:346-349` `bg@background_image` |
+| 같은 namespace 상속 | 330 | 양쪽 같은 곳 | — |
+
+두 모양이 모두 바닐라에 있으므로 엔진은 둘 다 찾는다. NE 주장은 절반만 맞고(인라인 인스턴스 아래는 기반이 기본) "안 적으면 오류"는 최상위 상속 43건과 맞지 않는다. 어느 쪽이 먼저인지는 판정할 수 없다. Cinnabar는 항상 파일 namespace로만 찾는다. 그래서 **다른 namespace를 상속한 컨트롤 안에서는 항상 `ns.이름`을 적는다**(반영안 FILE-42, 충돌 C-55).
+
+### 2. `source_control_name` 검색 범위 주장은 기각
+
+NE는 `resolve_sibling_scope`가 false면 자기와 자식에서만 찾는다고 적는다. 바닐라에서 `resolve_sibling_scope` 없이 `source_control_name`을 쓴 view 바인딩 128개를 대조하면 자손이 아닌 컨트롤을 읽는 사례가 다수 있다(예: `how_to_play_screen.json:142-146`). 기본은 루트부터 너비 우선 첫 일치다(BND-25, C-56).
+
+### 3. 바인딩 키와 기본값
+
+`binding_type` 기본 `global`, `binding_condition` 기본 `none`은 BND-02, BND-22와 같다. 그런데 튜토리얼은 "`binding_type`을 지정하지 않으면 기본은 컬렉션"이라 적어 같은 사이트의 레퍼런스와 모순이다(튜토리얼 오기, C-59). `ignored`를 바인딩 객체에도 둘 수 있다는 서술은 FILE-18과 같은 성질이다. `variables` 단일 객체는 바닐라 4회지만 `bindings` 단일 객체는 바닐라 0회(NE만).
+
+### 4. 화면(`screen`) 속성 표
+
+NE가 기본값과 의미를 적은 표다. 바닐라는 거의 항상 NE 기본값의 반대를 쓰므로 기본값 표의 간접 근거가 된다.
+
+| 속성 | NE 기본값 | 뜻 | 바닐라 사용 |
+| --- | --- | --- | --- |
+| `render_only_when_topmost` | true | false면 다른 화면에 덮여도 그린다 | false ×3 |
+| `always_accepts_input` | false | true면 맨 위가 아니어도 입력을 받는다 | true ×2 |
+| `render_game_behind` | true | false면 게임 화면이 멈춘 채 남는다 | true ×3 |
+| `absorbs_input` | true | false면 입력이 아래(게임)로 간다 | false ×2(HUD, 조준선) |
+| `is_showing_menu` | true | false면 상주 UI 취급 | false ×4 |
+| `should_steal_mouse` | false | true면 마우스 커서를 숨긴다 | `hud_screen.json` true |
+| `low_frequency_rendering` | false | 저빈도 렌더 | true ×3 |
+| `screen_draws_last` | false | 가장 나중에 그린다 | true ×2 |
+| `force_render_below` | false | true면 아래 화면도 그린다 | true ×27 |
+| `send_telemetry` | true | 원격 측정 전송 | false ×8 |
+| `cache_screen` | false | 컨트롤을 캐시해 다시 열 때 빠르게 | true ×4 |
+| `load_screen_immediately` | false | 몇 프레임 늦추지 않고 바로 로드 | `death_screen.json` true |
+| `close_on_player_hurt` | false | 피해를 입으면 화면을 닫는다 | 변수로 41회 |
+
+병합 기록은 "바닐라는 반대로만 쓴다"를 "대부분"으로 완화했다. `should_steal_mouse`(false 3 / true 1)와 `low_frequency_rendering`(true 3 / false 1)은 양쪽 값이 모두 나온다. NE는 일부 속성이 중국판 `PushScreen` 화면에서만 제대로 동작한다고 덧붙이는데 이는 중국판 생성 방식 이야기라 국제판 재선언에는 해당하지 않는다.
+
+### 5. 그 밖의 사실
+
+- **HUD 레이어의 F1 숨김**: 바닐라 `hud_screen.json` `root_panel`이 쓰는 전역 바인딩 세 개(`#hud_visible`→`#visible`, `#hud_alpha`→`#alpha`, `#hud_propagate_alpha`→`#propagateAlpha`)를 내 레이어 루트에 붙이면 HUD와 함께 숨고 투명해진다(반영안 HOST-37).
+- **`common.scrolling_panel`은 `$touch`로 `scroll_touch`/`scroll_mouse` 중 하나만 만든다**(`ui_common.json:4718-4750`). 내용 컨트롤 경로가 입력 모드에 따라 바뀌고 인스턴스에서 `$touch`를 덮으면 고정된다(반영안 LAY-48).
+- **GUI 픽셀 좌표계**: 고정 px는 정수 배율을 곱해 그려지고 배율은 화면을 포켓 320×210, 데스크톱 376×250 최소 영역으로 나눈 몫에서 정해진다(바닐라 주석이 같은 두 크기를 적음). 1.26.0에서 배율 체계가 바뀌었다는 공식 공지가 있어 재확인이 필요하다(반영안 LAY-47).
+- **이미지 맞춤**: `keep_ratio` 기본 true(비율 유지 내접), `fill: true`면 덮기(잘림), `keep_ratio: false`면 늘리기. `texture_file_system` 값 목록(`InUserPackage`, `RawPath` 등)도 있다(반영안 ANI-23, ANI-24).
+- **`input_panel`의 `modal: true`**(입력을 이 컨트롤과 자식으로 가둠, 바닐라 팝업 10곳)와 `contained` + `draggable`(드래그 범위를 부모로 제한)(반영안 INP-26).
+- **`selection_wheel` 속성**(`slice_count`, `inner_radius`, `outer_radius`, `state_controls`, `initial_button_slice`)과 `gradient_renderer`의 `color1`·`color2`(반영안 INP-27, ANI-25).
+- **`flip_book`은 스스로 반복한다**(`next`는 읽히지 않음). 바닐라 34개 중 `next`를 쓴 것은 0개, 멈출 때만 `looping: false`(3개)(반영안 ANI-26).
+
+## 틀리거나 국제판과 다른 주장
+
+튜토리얼의 "`binding_type` 생략 시 collection", 플립북 시작 프레임 키 `initial_frame`(바닐라와 Cinnabar는 `initial_uv`, C-58), "`resolve_sibling_scope`가 false면 자기와 자식만 찾는다", 바닐라 경로 사본을 `_ui_defs.json`에 등록해야 한다는 서술(불필요, C-57), 중국판 전용 요소들이다.
+
+## 우리 규칙과의 관계
+
+| 규칙 ID | 관계 |
+| --- | --- |
+| FILE-06, FILE-42(반영안), C-55 | namespace 없는 `@이름`의 해석 |
+| BND-02, BND-22, BND-25, C-56, C-59 | 바인딩 기본값과 검색 범위 |
+| HOST-25, HOST-36(반영안) | 화면 속성의 의미와 기본값 |
+| LAY-44~48(반영안), LAY-10 | GUI 배율, `scrolling_panel`의 `$touch` |
+| ANI-23~26(반영안), INP-26~27(반영안) | 이미지 맞춤, 모달, 선택 휠, 플립북 |
+| DBG-27(반영안) | 중국판 전용 이름·속성 구분 |
+
+## 한계
+
+대상 버전과 국제판 대응 버전이 적혀 있지 않다. Python ModAPI, 중국판 편집기 기능, 그리드 셀 크기 조건은 국제판과 무관하다고 보아 다루지 않았다. 중국판 전용 확장은 국제판 리소스팩에서 쓰지 않는다.

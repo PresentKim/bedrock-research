@@ -1,0 +1,130 @@
+---
+title: "Chest-UI (서버 폼을 상자 GUI로 재스킨)"
+description: "ActionFormData를 자바 서버식 상자·화로 GUI로 보이게 하는 팩. 숫자 아이템 ID와 item_id_aux 식, 보이지 않는 제목 플래그, 생성 단계 레이아웃 끄기"
+sidebar_position: 8
+sources:
+  - chest-ui
+  - bedrock-wiki
+  - repo-guide
+---
+
+## 이것은 무엇인가
+
+Chest-UI는 스크립트 API의 `ActionFormData`를 리소스팩으로 재스킨해 **자바 서버 같은 상자 GUI**(1~54칸, 화로, 플레이어 인벤토리 미러)로 보이게 하는 행동팩+리소스팩이다. 2023-07에 시작했고 마인크래프트 버전마다 숫자 아이템 ID 표를 갱신해 왔으며 마지막 갱신은 26.40(2026-08-14, 커밋 `115d95c` "26.40 Update", 커밋 112개)이다. 클론의 `License` 파일을 열어 확인한 라이선스는 **CC BY 4.0**이라 출처를 밝히면 발췌할 수 있다(출처: cs-chest-ui). 포크 `Aex66/Chest-UI`는 원본 `7dbfd13`(2026-01-06)에서 멈춘 사본으로 독자 커밋이 없고 원본보다 8커밋 뒤처져 있어 근거로는 원본만 쓴다.
+
+이 저장소의 가치는 **숫자 아이템 ID와 `#item_id_aux` 식이 버전마다 어떻게 바뀌었는지**를 커밋 단위로 보여 준다는 데 있다. manifest의 `min_engine_version`은 1.21.0이지만 ID 표가 버전마다 달라 실제 대상 버전은 커밋 메시지의 버전(26.40)이다.
+
+## 어떻게 동작하나
+
+1. 스크립트가 `ActionFormData`를 만든다. 제목 rawtext 맨 앞에 크기 플래그 `§c§h§e§s§t§2§7§r`, 버튼마다 `stack#NNdur#NN§r이름§r\n설명` 텍스트와 아이콘 문자열을 넣는다. 아이콘은 텍스처 경로이거나 숫자 문자열 `(ID + 보정) * 65536 + (인챈트 ? 32768 : 0)`이다. 인벤토리를 켜면 플레이어 인벤토리 36칸을 같은 형식의 버튼으로 뒤에 붙인다.
+2. `RP/ui/server_form.json`이 바닐라와 같은 경로에서 `long_form`을 `@` 없이 재선언해 `type: panel`과 `controls`를 바꾼다. 바닐라 모양, 상자 패널, 화로 패널이 각자 제목 포함 검사로 보인다.
+3. `chest_panel`에 1·5·9·18·27·36·45·54칸 템플릿이 있고 쓰지 않는 크기는 `_global_variables.json`의 `$disable_N_slots_layout: true`로 `ignored`되어 생성되지 않는다.
+4. 상자 칸은 `grid`(`grid_dimensions`, `collection_name: form_buttons`)가 만들고 인벤토리·핫바는 `collection_index`가 고정된 자식 36개로 만든다.
+5. 칸 하나는 `#form_button_texture`를 받아 앞 8바이트가 `textures`면 이미지를, 아니면 `inventory_item_renderer`에 `#item_id_aux`를 넣어 그린다. hover 상태에는 `hover_text_renderer` 툴팁이 붙는다.
+
+## 핵심 기법
+
+### 1. 생성 단계에서 크기별 레이아웃 끄기
+
+같은 템플릿을 8번 참조하고 각각 `"ignored": "$disable_N_slots_layout"`을 건다. 쓰지 않을 템플릿까지 만들면 54칸 × 3상태 × 렌더러가 여러 벌 생기므로 생성 자체를 막는 것이다(COL-10 원칙의 실례). 전역 변수라 어느 스코프에서나 보이므로 FILE-34와 충돌하지 않는다.
+
+<Excerpt src="chest-ui" title="Chest-UI, _global_variables.json" path="RP/ui/_global_variables.json">
+
+```jsonc
+{
+	"$show_inventory": true, // Set to false if don't want to show inventory. Not recommended for low end devices.
+	/*
+		*It is important to only enable the layouts that you're going to use and disable others to decrease lag*
+	*/
+	"$disable_furnace_ui": false,
+	"$disable_1_slots_layout": true,
+	"$disable_54_slots_layout": false
+}
+```
+
+</Excerpt>
+
+### 2. 보이지 않는 제목 플래그
+
+`§c§h§e§s§t§5§4§r`처럼 글자마다 `§`를 붙이면 모든 글자가 서식 코드로 소비되어 리소스팩이 없거나 바닐라 화면에서도 제목에 플래그가 드러나지 않는다. UI는 `(#title_text - '§c§h§e§s§t')` 포함 검사로 찾는다. 끝의 `§r`은 뒤 제목의 서식을 초기화한다(반영안 HOST-34). 같은 방식을 upgrader도 쓴다.
+
+### 3. `#item_id_aux`의 `%` 식과 그 정체
+
+현재 HEAD의 상자 칸 바인딩은 다음과 같다.
+
+<Excerpt src="chest-ui" title="Chest-UI, chest_server_form.json" path="RP/ui/chest_server_form.json">
+
+```json
+{
+    "binding_type": "view",
+    "source_property_name": "((#form_button_texture - (#form_button_texture % 65536)) / 65536)",
+    "target_property_name": "#item_id_aux"
+}
+```
+
+</Excerpt>
+
+`%`는 연산자가 아니다(EXP-02). Cinnabar 평가기로 돌리면 `(#t % 65536)`이 null이 되고 `(#t - null)`은 원래 값을 숫자로 바꾼 20054016이며, `% 묶음`이 실패한 괄호 바로 바깥의 `/ 65536`까지 적용되지 않아 결과는 `ID × 65536 (+ 32768)` 그대로가 된다. 이것이 바닐라 `#item_id_aux` 규약(ID × 65536 + 데이터)과 정확히 맞아 팩이 26.40까지 동작했다. 진짜 나머지 연산이었다면 결과는 306이라 규약과 맞지 않고 인챈트 비트도 지워진다. 다만 BC 실측대로 개발 빌드에서는 화면을 열 때마다 `Invalid expression` assert가 날 수 있고, **같은 결과를 내는 정상 식은 `(#form_button_texture - 0)`이다**(EXP-16, 반영안 EXP-38).
+
+### 4. `* 1`이 깨진 시점
+
+| 시점 | 커밋 | 식 |
+| --- | --- | --- |
+| 2023-08-09 | `022ccf2` | `(#form_button_texture * 1)` |
+| 2024-12 ~ 2025-11 | 여러 ID 갱신 커밋 | 그대로 `* 1` |
+| 2026-01-06 | `7dbfd13` "1.21.131 Update … UI will now display items properly" | 상자 칸을 `%` 식으로 교체 |
+| 2026-02-01 | `deddb15` "fix inventory issues" | 인벤토리 칸도 교체 |
+
+`* 1`의 피연산자는 원본 컬렉션 문자열이었고 2년 넘게 아이콘을 그렸다. 그러다 1.21.130 계열에서 깨졌다. 그러므로 C-04의 보조 가설이던 "버전 변화"가 실제 작동팩 기록으로 확인된다. 위키의 2026-10-05 주석과도 맞는다.
+
+### 5. 숫자 아이템 ID 표의 변화 (C-33의 근거)
+
+| 커밋 | 대상 | 밀림 경계 | 사과 | 다이아몬드 |
+| --- | --- | --- | --- | --- |
+| `8683ef1` 2025-03-28 | 1.21.70 | `ID < 256` | 278 | 328 |
+| `7dbfd13` 2026-01-06 | 1.21.131 | `ID < 256` | 285 | 335 |
+| `b5397cd` 2026-06-20 | 26.30 | `ID < 256` | 285 | 335 |
+| `115d95c` 2026-08-14 | 26.40 | `ID < 850` | 880 | 306 |
+
+26.30까지는 번들 17종, 바람 막대 등이 256 바로 뒤에 있어 256 이상 전부가 커스텀 아이템 수만큼 밀렸다. 26.40에서는 밀리는 32개(창 7종 852~858, 번들 17종 859~875, 바람 막대, 시련 열쇠 2종, 돌풍구, 사과, 발광 열매)가 표 끝(850~881)으로 옮겨졌다. 위키 26.50 표(852~883)와 합치면 C-33은 "버전 변화로 해소"다. 클론의 `forms.js`는 이 경계를 `ID < 850`으로 쓴다.
+
+<Excerpt src="chest-ui" title="Chest-UI, forms.js" path="BP/scripts/extensions/forms.js">
+
+```js
+ID === undefined ? targetTexture : ((ID + (ID < 850 ? 0 : number_of_custom_items)) * 65536) + (enchanted ? 32768 : 0)
+```
+
+</Excerpt>
+
+하위 16비트는 데이터 값이고 32768을 더하면 인챈트 반짝임이 켜진다(반영안 ANI-23). 블록(음수 ID)은 커스텀 블록으로 밀리지 않는다.
+
+### 6. 그 밖의 기법
+
+- **`collection_index`에 생성 시점 식**: `"$start_index": "(($size - '§c§h§e§s§t' - '§') * 1)"`, `"collection_index": "($start_index + 9)"`. 크기마다 시작 인덱스가 다른 고정 슬롯을 템플릿 하나로 만든다(반영안 COL-32). 여기서 `* 1`은 뺄셈 결과에 쓰여 무해하다.
+- **버튼 텍스트 고정 머리말**: `stack#64dur#10§r…`에서 수량은 `(('%.8s' * T) - ('%.6s' * T))`, 내구도는 `%.14s`와 `%.12s`의 차로 꺼낸다(EXP-11).
+- **`'§z'` 접두**: 알 수 없는 서식 코드는 화면에 보이지 않으므로 숫자로 재해석될 결과를 문자열로 유지하는 보이지 않는 접두로 쓴다(반영안 TXT-20).
+- **커서를 따라가는 툴팁**: hover 컨트롤 안에 `type: custom`, `renderer: hover_text_renderer`, `allow_clipping: false`, `layer: 30`을 두고 `#hover_text`를 바인딩한다. 바닐라도 같은 렌더러를 쓴다.
+- **따옴표 없는 단어**(`(%.14s * #form_button_text)`)가 따옴표가 있는 식과 같은 결과를 낸다. 그래도 공백·연산자에서 끊기므로 따옴표를 쓴다(반영안 EXP-41).
+
+## 문제점
+
+| 항목 | 내용 |
+| --- | --- |
+| `%` 식 | 결과는 맞지만 우연이다. 개발 빌드 assert, Marketplace 인증 실패 원인이 될 수 있다 |
+| 내구도 막대 | `"$one": 1.0`, `(($clip_max - #ratio) / $clip_max)`는 Cinnabar 모델에서 정수 0이 되어 막대가 가득 찬다. `((99 - #ratio) * .0101)`이 안전하다(EXP-27, C-53) |
+| 커스텀 아이템 수 | 다른 애드온의 커스텀 아이템을 손으로 적어야 ID 보정이 맞는다. README도 텍스처 경로를 권한다 |
+| `long_form` 재선언 | 다른 서버 폼 UI 팩(upgrader 등)과 공존할 수 없다. 나중 팩의 `controls`만 남는다(반영안 MOD-21) |
+
+## 우리 규칙과의 관계
+
+| 규칙 ID | 관계 |
+| --- | --- |
+| EXP-02, EXP-16, C-04, C-06 | `%` 식이 동작하는 것처럼 보이는 이유와 `* 1` 변화의 근거 |
+| ANI-06, HOST-17, C-33 | 숫자 ID 경계의 버전 변화 |
+| COL-06, COL-10 | 고정 인덱스 슬롯, 생성 단계에서 끄기 |
+| FILE-21, MOD-09, MOD-13 | `controls` 재선언의 경쟁과 감싸기 대안 |
+| HOST-03, EXP-07, EXP-11 | 제목 플래그와 포함 검사, 고정 폭 머리말 |
+
+## 실측이 필요한 항목
+
+`(#v - 0)`과 `%` 식이 같은 아이콘을 내는지와 Content Log의 `Invalid expression`, `"$max": 20.0` 변수가 실수로 동작하는지(C-53), 26.40·26.50에서 ID 850·851이 밀리는지, `#item_id_aux`에 32768을 더했을 때 반짝이는지, `§z`가 모든 글꼴·플랫폼에서 안 보이는지.

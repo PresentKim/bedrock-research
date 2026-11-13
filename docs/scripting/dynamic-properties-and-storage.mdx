@@ -1,0 +1,88 @@
+---
+title: "동적 속성과 데이터 저장"
+description: "dynamic property 한계, 스코어보드, 태그, ItemStack과 대용량 저장 패턴"
+sidebar_position: 7
+sources:
+  - private-research
+  - ms-learn
+---
+
+## 동적 속성(dynamic property)
+
+동적 속성은 월드, 엔티티, 플레이어, (스택 불가) ItemStack에 붙이는 영속 키-값 저장소이다. 값은 `boolean`, `number`, `string`, `Vector3` 중 하나이고, 선언 없이 바로 `setDynamicProperty(id, value)`로 쓴다. 값을 `undefined`로 주면 삭제된다. 조회·관리 메서드는 `getDynamicProperty`, `getDynamicPropertyIds`, `getDynamicPropertyTotalByteCount`(총 사용량 점검용), `clearDynamicProperties`, `setDynamicProperties`다(출처: ms-learn, `creator/ScriptAPI/minecraft/server/World.md`).
+
+```javascript
+import { world } from "@minecraft/server";
+
+// 숫자 증가 (공식 예제를 단순화)
+let n = world.getDynamicProperty("samplelibrary:number") ?? 0;
+world.setDynamicProperty("samplelibrary:number", n + 1);
+
+// 객체는 JSON 문자열로 저장한다
+const raw = world.getDynamicProperty("samplelibrary:longerjson");
+const paint = raw ? JSON.parse(raw) : { color: "purple", intensity: 0 };
+paint.intensity += 1;
+world.setDynamicProperty("samplelibrary:longerjson", JSON.stringify(paint));
+```
+
+핵심 한계는 문자열 하나당 32,767 바이트, 팩 UUID별 샌드박스(UUID를 바꾸면 이전 데이터가 안 보임)다. 그래서 업데이트할 때는 팩 UUID를 유지하고 `version`만 올린다.
+
+## 엔티티와 플레이어의 저장
+
+```javascript
+player.setDynamicProperty("my:score", 10);
+const score = player.getDynamicProperty("my:score") ?? 0;
+player.setDynamicProperty("my:score", undefined);   // 삭제
+```
+
+플레이어 DP는 사망 중에도 쓸 수 있어 사망 처리에 유용하다. ItemStack에도 쓸 수 있지만 ItemStack은 복사본이므로 쓴 뒤 슬롯에 되돌려 놓는다.
+
+```javascript
+const item = container.getItem(0);
+item.setDynamicProperty("my:owner", player.id);
+container.setItem(0, item);
+```
+
+## 선택 기준
+
+스크립트 데이터는 스코어보드보다 DP를 쓰는 편이 낫다. 스코어보드는 커맨드로 쉽게 지워지거나 고쳐지고, 큰 데이터에는 API 호출이 많고 크기 제한이 있다. 태그는 가벼운 플래그에 알맞고, 큰 구조는 DP에 여러 키로 나눠 저장한다.
+
+## 커뮤니티 노트
+
+아래는 커뮤니티 조사로 모은 블록 DP, 대용량 저장, 숨은 데이터 패턴이다.
+
+
+`*confirmed*`, `*single report*`, `**conflicting**`은 보고의 신뢰도 표시다. 이 페이지의 근거는 커뮤니티 보고이며 Mojang 공식 문서와 다를 수 있다.
+
+### 데이터 저장
+
+#### 동적 속성 (Dynamic Properties)
+
+- **대상과 타입**: World, 모든 Entity(투사체 포함)·Player, 스택 불가(max stack 1) ItemStack. 값은 string, number, boolean, Vector3만(ItemStack·컴포넌트 객체 불가 → `JSON.stringify`). 선언 없이 바로 `setDynamicProperty(key, value)`, 미설정 키는 undefined(`== false`로 비교하지 말고 `typeof` 확인). 커맨드로 설정 불가. 리소스 팩·JSON UI는 DP를 읽지 못함(시각용은 `client_sync` 엔티티 속성이나 title로 미러링). *confirmed*
+- **크기 제한**: 문자열 하나당 32,767 **바이트**("Maximum string size exceeded (x/32767) bytes"; 키도 같음), 상향 불가, 키 개수 무제한 → 큰 데이터는 여러 키로 나눈다(`id:i` 조각 + 남는 꼬리 삭제). 초기 보고의 ~65,535자는 틀림. 아이템/블록 DP는 약 1 KB라는 보고. 9e15 초과 수는 JSON 숫자로 저장 불가 → 문자열.
+- **쓰기량 경고**: "X MB of dynamic properties were saved during the last minute, exceeding the 10 MB threshold"(BDS에서 30초마다) — 경고일 뿐이지만 누수 신호. 사례: 블록 설치마다 DP를 기록한 클레임 애드온이 434,962개 항목을 남김(원 팩 안의 정리 스크립트로 제거, 팩 제거 후에도 경고 지속), 저장마다 덮어쓰지 않고 복제한 땅 클레임 스크립트가 1분에 32 MB. 바이트 카운트(월드, 콘솔, `getDynamicPropertyTotalByteCount`)는 서로 다르다. 총량 상한은 문서화돼 있지 않다.
+- **저장 방식과 성능**: DP는 LevelDB에 디스크 저장된다. 월드 DP는 한 NBT 태그에 묶여 있어 하나를 써도 전체를 다시 저장하며, 60초마다 33~55 KB를 자동 저장하자 수 초 렉이 생긴 사례. 대책: 더티 데이터만/덜 자주 저장, 파싱 결과를 메모리 캐시, 레코드당 키 하나(거대 배열 하나 금지), 20~30초마다 일괄 저장 + 퇴장 시 저장. 수백 개 정도의 월드 DP는 문제 없음. 매 틱 `getDynamicProperty`/`getScore`는 낭비 → Map 미러. (월드 DP가 "그 자체로는 렉을 안 만든다"는 보고와 위 렉 사례는 데이터량 차이)
+- **삭제**: `setDynamicProperty(key)` / `(key, undefined)`(문서엔 null이라 되어 있으나 타입상 undefined; 둘 다 삭제된다는 보고). `JSON.parse(undefined)`는 throw하므로 존재 확인 후 파싱. 일괄: `world.setDynamicProperties({k: v})`, 순회: `getDynamicPropertyIds()`.
+- **팩 UUID 샌드박스**: DP는 그 DP를 만든 BP(스크립트 모듈 UUID)에 묶인다. 다른 팩은 같은 키를 써도 충돌하지 않고 읽지도 못한다. UUID를 바꾸면 데이터가 지워지지 않고 보이지 않게 될 뿐(원래 UUID로 되돌리면 복구). Realms에서도 마찬가지. 월드 간 전송 방법 없음. 반면 태그와 스코어보드는 월드 공유.
+- **엔티티 DP는 엔티티와 함께 사라진다**(디스폰·사망; `entityRemove`에서 마지막으로 읽을 수 있음). 보존하려면 `world.setDynamicProperty(entity.id, ...)`나 엔티티를 구조물에 저장. 오프라인 플레이어의 DP는 읽거나 지울 수 없으므로 `playerId:key` 형태로 월드 DP에 두고 마지막 접속 시각으로 오래된 항목 정리, 오프라인 점수 변경은 대기열에 두었다가 입장 시 적용. 언인스톨 흐름에도 월드 저장이 낫다.
+- **ItemStack DP**: 스택 불가 아이템만. 컨테이너에서 꺼낸 ItemStack은 사본이므로 변경 후 `container.setItem(slot, item)`으로 되돌려 써야 하고, 실제로 배치/생성되는 스택에 설정해야 한다(`spawnItem` 후, 교체될 스택이 아닌 새 스택). `ItemStack.clone()`은 DP를 유지. 사용 중인 아이템에 DP를 쓰면 "사용 중" 상태가 잠길 수 있다.
+- **블록 DP**: 2026-06까지 블록에는 DP가 없어 `dimension.id:x:y:z`(차원 포함) 키로 월드 DP에 저장했다(폭발·피스톤 처리 비용; 블록 아이템의 DP는 설치 시 소실, lore로 데이터 운반 가능). 26.40에서 팩별 ~1 KB 블록 DP 한도, 1.26.50+에서 블록 JSON에 `"minecraft:block_entity": {"dynamic_properties": true}`와 format_version 1.26.50이 필요하며 `block.getComponent("dynamic_properties")`(`.get`, `.totalByteCount()`)로 접근(약 1 KB/블록, 블록 타입 변경·파괴 시 삭제 → before-break나 `playerStartBreakingBlock`에서 읽기). 드롭 아이템으로 옮기려면 루트 함수 `carry_over_block_entity_data`(`"dynamic_properties": true`, 26.40, Upcoming Creator Features), 아이템 측은 `block_actor_dynamic_properties`/`ItemBlockDynamicPropertiesComponent`(2.10). 문서: `https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/blockcomponents/minecraftblock_block_entity?view=minecraft-bedrock-stable`
+- **압축 저장 기법**: 불리언은 비트 플래그(`1<<n`, 비트 연산은 32비트로 잘림, 31비트 초과는 BigInt), 위치는 `"x:y:z/"` 문자열(16진수로 ~-50%), 객체 배열 대신 평행 배열, 압축 인코딩(`"zinc_ingot.12.13.13.9"`) + 스크립트 쪽 조회 테이블. 긴 문자열은 압축보다 여러 키로 나누는 게 빠르다는 의견과, LZ/LZW 압축(~50~75% 절감) + 청크 + 헤더 + `~tmp` 네임스페이스 단계적 쓰기(다중 키 `setDynamicProperties`는 원자적이지 않음)로 충돌에 안전하게 만드는 Paradox data-hive 방식이 공존. 압축된 레코드는 질의가 어려우니 직렬화는 DB 내부에 감출 것. LEB128 바이너리 직렬화도 제안. 약 200 ops/sec(스트레스 테스트).
+- **"첫 로드" 플래그**: 월드 DP 불리언으로 `worldLoad` 1회 실행을 보장. 일회성 스폰 플래그도 스코어보드보다 DP.
+- **DB 래퍼 패턴**: 대상과 키를 private 필드에 두고 매 접근마다 get/set + `isValid` 확인. DP를 영구 저장소, 메모리 Map을 캐시로.
+
+#### 스코어보드와 태그
+
+- **스코어보드 API**: `world.scoreboard.getObjective(id) ?? world.scoreboard.addObjective(id, displayName)`(너무 이르게 호출하면 실패 → `system.run`/월드 로드 후; 재추가 방지), `objective.setScore/addScore`(addScore는 새 합계 반환), `getScore`, `hasParticipant`, `getParticipants()`, `setObjectiveAtDisplaySlot(DisplaySlotId.Sidebar, {objective, sortOrder: ObjectiveSortOrder.Descending})`.
+- **함정**: 참가자가 없으면 `getScore`/`setScore`가 "Failed to resolve identity" 등으로 throw → `hasParticipant` 확인 또는 try/catch. 엔티티가 무효(언로드/제거)면 점수 항목이 남아 있어도 `hasParticipant(entity)`는 false → `entity.scoreboardIdentity`(무효일 때도 읽힘)를 `getParticipants()`와 비교하면 "언로드"와 "제거"를 구분하는 엔티티 존재 추적기가 된다(ScoreboardIdentity id는 재로드 후에도 유지, 제거되면 `isValid` false). 런타임에 목표/참가자가 무효가 될 수 있으니 캐시한 객체의 `isValid` 확인. 스코어는 2^31 근처가 한계(큰 수는 여러 목표로 분할). 가짜 플레이어: 문자열 참가자 상수(`".Fake.Player"`)로 `getScore`, 목표는 인터벌 밖에서 정의.
+- **선택 기준**: 스크립트 데이터는 DP 선호(스코어보드는 커맨드로 쉽게 지워지거나 편집되고, 큰 데이터에는 많은 API 호출과 크기 제한, JSON-in-scoreboard는 확장 불가). 스코어보드는 가벼운 숫자, 커맨드·rawtext 연동, 오프라인 신원 유지(래퍼 `https://github.com/AutoAsteroid/script-api-database/blob/main/scoreboard.js`)에 적합. 사이드바 숫자 숨기기: 표시명 `§h§n`. 플레이어별 스코어보드 표시 불가(title/actionbar로 흉내).
+- **태그**: 태그당 30자 제한, 개수 제한 있음, 불리언 용도. 읽기는 DP보다 ~10% 빠르고 쓰기는 ~2배 느리다(측정). `hasTag`는 정확한 태그 하나(`tags.some(t => e.hasTag(t))`, 여러 번이면 `getTags()` 한 번). 엔티티별 불리언에는 태그면 충분하다는 의견. Molang으로 태그를 볼 수 있지만(`query.all_tags`) 스크립트 DP는 못 본다.
+
+#### ItemStack과 대용량 저장
+
+- **ItemStack 무손실 보존**: DP 직렬화는 NBT 전용 데이터(셜커 내용물, 불길한 병 레벨, 염소 뿔 소리, 깃발 방패, 장식)를 잃는다. 권장: 커스텀 엔티티 인벤토리에 복제 후 `world.structureManager.createFromWorld(id, dim, loc, loc, {includeBlocks:false, includeEntities:true, saveMode: StructureSaveMode.World})`로 저장하고 엔티티 제거(메모리 캐시 + 재로드 시 구조물에서 복원), 또는 상자 구조물. 라이브러리: QIDB(실제 ItemStack 저장 필요; Map 같은 저장소, 고아 키 GC 없음; 2026-09-22에 TickingAreaManager + `ready` Promise로 이전, 고정 저장 위치 (27000,318,27000), Beta APIs 필요), Carchi777 QUICK-ITEM-DATABASE(`https://github.com/Carchi777/QUICK-ITEM-DATABASE` , 포크 `https://github.com/Aevarkan/item-database`). 엔티티 자체도 DP로 저장 불가 → 구조물(bedrock-boost `EntitySaver`: `https://github.com/Bedrock-OSS/bedrock-boost/blob/main/src/utils/EntitySaver.ts`).
+- **DB 라이브러리**: `https://github.com/AutoAsteroid/script-api-database` (`world.db`, `player.db`, server-net으로 외부 JSON 지원), KinetixDB(`https://github.com/DevelopmentKinetix/KinetixDB` , 문서형 insert/find/upsert), Paradox data-hive.ts. ~5000명의 숫자 데이터면 DP DB로 충분, 외부 DB는 지연·비용, 큰 JSON 하나는 손상 위험. 외부 HTTP DB는 콜드 스토리지로만.
+- **아주 큰 데이터**(수백만 블록): 아이템/책은 비현실적. 콘솔 로그 덤프, 구조물 연결, BDS면 server-net 외부 DB(외부 sqlite로 옮겨 TPS 저하 해결 사례). 파일 쓰기 API 없음. 데이터 내보내기는 DP를 가진 엔티티를 구조물로 저장하거나 콘텐츠 로그 복사.
+- **스택 가능한 아이템의 숨은 데이터**: lore에 서식 코드(`§0` 시퀀스)로 숫자를 인코딩하거나 만료 틱(`system.currentTick + N`)을 기록(다른 값이면 스택되지 않음). lore는 데이터 저장으로는 취약하다는 의견도.
+- **메모리 상태**: 모듈 스코프 Map/변수는 `/reload`·종료 시 사라짐(월드 퇴장/재로드까지 유지). 전역 `let`은 모든 플레이어가 공유(서버당 BP 하나). 플레이어 객체에 상태를 저장하지 말고 `player.id` 키 Map 사용(WeakMap도 가능).
+

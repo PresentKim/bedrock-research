@@ -1,0 +1,74 @@
+---
+title: "Cermada json-ui-docs (AI 생성 문서 오류 표본)"
+description: "AI가 생성한 JSON UI 입문 문서 26개 파일에서 바닐라 대조로 찾은 틀린 주장 30여 건. 문서를 믿는 범위를 정하는 시험 자료"
+sidebar_position: 7
+sources:
+  - cermada
+  - bedrock-samples
+  - repo-guide
+---
+
+## 이것은 무엇인가
+
+Cermada의 `json-ui-docs`는 JSON UI를 다루는 docsify 문서 저장소다(HEAD `629f287`, 2026-07-25, 커밋 16개, `docs/` 아래 Markdown 26개 약 4,200줄). 저장소 README가 스스로 "this documentation is AI Generated, some information may not correct"라고 경고한다. 클론에는 `LICENSE`가 없어 복사하지 않고 주장만 요약해 바닐라 `bedrock-samples` `46ba6ea`(1.26.50.4)로 검증했다(출처: cs-cermada). **이 자료에서 가져올 새 기법은 없고 오류 표본으로만 쓴다.** 맞는 부분(기본 요소 타입, 앵커 9값, `layer`, `binding_name_override`, `grayscale` 속성)도 있으나 같은 문서 안에서 서로 모순되어 독자가 가릴 수 없다.
+
+이 사례의 교훈은 사전을 양방향으로 대조하라는 것이다(DBG-07). "바닐라 이름이 문서에 있는가"로 보면 대부분 통과하지만 "문서 이름이 바닐라에 있는가"로 보면 바로 걸린다.
+
+## 틀린 주장의 다섯 유형
+
+### 1. 없는 바인딩 이름을 지어낸다
+
+`#player_health`, `#player_hunger`, `#player_max_health`, `#player_level`, `#player_experience_progress`, `#selected_hotbar_slot`, `#hotbar_slot_count`, `#is_holding_item`, `#boss_bars_visible`, `#is_showing_hud_elements`, `#craftable`, `#fill_amount` 등 12개는 바닐라에 0회다. 바닐라 HUD 체력은 렌더러가 그리고 바인딩으로 체력 숫자를 받는 경로가 없다(데이터 채널로 우회). `fill: true` + `#fill_amount`로 진행 막대를 만든다는 설명도 틀렸고 진행 막대는 `#clip_ratio` + `clip_direction`이다(ANI-03). `#texture_file_system`은 90회 쓰이지만 텍스처를 읽을 저장 위치를 정하는 값이다. grid의 `#collection_name`은 바인딩이 아니라 속성(231회)이다.
+
+### 2. 없는 파일과 잘못된 namespace
+
+| 주장 | 바닐라 사실 |
+| --- | --- |
+| `container_screens.json`(namespace `container`)에 상자·화로·제작대 | 파일 없음. 상자는 `chest_screen.json`, 화로는 `furnace_screen.json` 등 화면별 파일 |
+| `mob_effects.json`, `toast.json`, `hud_with_effects.json` | 셋 다 없음(토스트는 `toast_screen.json`) |
+| `common/common.json`, namespace `common` | 하위 폴더 없음. namespace `common`은 `ui_common.json` |
+| `inventory_screen.json`의 namespace `inventory` | `"namespace": "crafting"` |
+| `server_form.json` = NPC 대화 | 서버 폼(`ActionFormData` 등). NPC 대화는 `npc_interact_screen.json` |
+
+### 3. 없는 HUD 컨트롤 이름
+
+`hunger_bar`, `armor_bar`, `experience_bar`, `crosshair_container`, `boss_bars`, `chat_text_display`, `actionbar_text`, `hotbar_and_slot_items`, `pause_menu_content`, `hud_root_element`, `xp_bar_fill` 등 13개는 바닐라 키 0회인데 `modifications`의 대상으로 쓴다. 문서가 함께 쓰는 `hud_content`와 `root_panel`은 실제로 있다. 존재하지 않는 대상을 찍으면 수정이 적용되지 않으므로 이름은 바닐라 파일에서 복사해야 한다.
+
+### 4. 문법 오류
+
+| 주장 | 사실 |
+| --- | --- |
+| 애니메이션은 `"type": "animation"` 요소이고 `"anim_type": "flipbook"`("`flip_book`이 아니다") | 바닐라 애니메이션 정의에는 `type`이 없고 값은 `flip_book`(34회), `flipbook`은 0회. **정반대로 틀림**(ANI-08, ANI-20) |
+| `insert_before`·`insert_after`·`remove`를 `"target": "이름@ns.정의"`로 고른다 | 선택은 `control_name` 또는 `where`(MOD-01). Cinnabar 모델에서는 `target`을 move 계열의 두 번째 기준으로만 읽고 선택자가 없으면 첫 원소를 고르므로 `remove`면 엉뚱한 자식이 사라진다 |
+| `" anchor_to"`(키 앞 공백) | 다른 키로 읽혀 무시됨(오타) |
+| 입력 상자 `placeholder_text` | 0회. 바닐라는 `$place_holder_text` 변수와 `place_holder_control` |
+| `scrollbar_track_button: "scrollbar_track"`, `scrollbar_thumb_button` | `scrollbar_track_button`의 값은 버튼 ID `button.scrollbar_skip_track`(1회), `scrollbar_thumb_button`은 0회(LAY-42) |
+
+### 5. 의미 오류
+
+| 주장 | 가이드 |
+| --- | --- |
+| `anchor_from` = 요소의 점, `anchor_to` = 부모의 점 | LAY-16은 반대. 같은 문서의 reference 쪽은 맞게 적어 자기모순 |
+| panel은 기본으로 자식을 자른다 | `clips_children` 기본은 꺼짐(LAY-22) |
+| `visible: false`여도 공간을 차지하고 `enabled: false`를 줘야 빠진다 | `enabled`는 입력 활성 여부. 공간은 `visible`·`ignored`와 크기로(COL-10, FILE-17) |
+| `font_type: "MinecraftSeven"` = 픽셀 글꼴 | 내부 이름을 쓰면 아무것도 그리지 않는다(TXT-03, 실측) |
+| `nineslice_size: [top, right, bottom, left]`를 이미지 속성으로 | 사이드카 JSON에 `[왼, 위, 오른, 아래]`(LAY-27). 바닐라 UI JSON 리터럴 0회 |
+| JSON은 주석을 지원하지 않으니 `_comment` 키를 쓴다 | UI 파일은 주석이 된다(FILE-03, FILE-30). `_comment`는 0회 |
+| `textures/ui/white_square`, `textures/ui/icons` 시트 | 바닐라 UI JSON 참조 0회. `textures/ui/White`(대문자)와 `textures/ui/Black`은 있다 |
+| `min_engine_version [1, 20, 0]` | 동작은 하지만 1.21 이전 기준으로 낡음 |
+
+## 우리 규칙과의 관계
+
+이 자료에서 새 규칙이나 충돌은 나오지 않는다. 모든 오류는 기존 규칙이 이미 반박한다.
+
+| 규칙 ID | 관계 |
+| --- | --- |
+| DBG-07 | 양방향 대조의 실례. 바인딩 12개, HUD 이름 13개, 파일 5개가 문서 쪽에서 0회로 걸린다 |
+| MOD-01 | `target`을 선택자로 쓰는 문서가 있다는 주의(반영 보강안) |
+| ANI-03, ANI-08, ANI-20 | 진행 막대와 애니메이션 타입 오류의 반박 근거 |
+| LAY-16, LAY-22, LAY-27, LAY-42 | 앵커, 클리핑, 9-slice, 스크롤 구성 오류의 반박 근거 |
+| FILE-17, FILE-30, TXT-03, COL-10 | 주석, `ignored`, 글꼴, 생성 비용 |
+
+## 쓰는 법
+
+AI 생성 문서나 사전은 "문서의 이름이 바닐라에 있는지"부터 확인한다. 바닐라 사본에서 `grep -rho '"#player_health"' resource_pack/ui | wc -l`처럼 이름이 몇 번 나오는지 세고 0이면 쓰지 않는다. 설명이 아니라 바닐라 파일에서 복사한 동작하는 예제를 기준으로 삼는다.

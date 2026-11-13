@@ -1,0 +1,448 @@
+---
+title: 아이템
+description: 커스텀 아이템 JSON, 아이콘과 item_texture, 스크립트 커스텀 컴포넌트, 음식·쿨다운·도구·방어구·무기, 어태처블, 블록 아이템, 바닐라 오버라이드까지 정리한 규칙집.
+sidebar_position: 2
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+---
+
+# 아이템
+
+커스텀 아이템 정의와 동작을 다루는 페이지다. 레시피, 스미딩, 아이템 태그는 [레시피](./recipes.mdx)에 있다. 근거는 2025-10-22부터 2026-10-23까지의 커뮤니티 조사 노트(출처: 비공개 조사)와 Bedrock Wiki(커밋 0930b39)의 items 문서, bedrock-samples(15701fa9)의 바닐라 아이템 JSON이다. 검증 수준은 `(confirmed)`, `(conflicting)`, `(single report)`, `(unverified)`로 적는다.
+
+아이템은 `format_version` 1.21.90 이상과 스크립트 커스텀 컴포넌트가 기본이고, 3D로 들고 있는 모습은 어태처블로 만든다.
+
+## 핵심 요약
+
+1. 아이템 JSON의 `events`, `minecraft:on_use`, `weapon.on_hit`, 음식 `on_consume`(Holiday Creator Features)은 사라졌다. format 1.21.90 이상에서 `"ns:comp": {}`를 넣고 `system.beforeEvents.startup`의 `itemComponentRegistry.registerCustomComponent`로 등록한다.
+2. `minecraft:icon`은 `components` 안의 문자열이며 `textures/item_texture.json`의 키와 정확히 같아야 한다(소문자). 메뉴 분류는 `description.category`가 아니라 `menu_category`다.
+3. `minecraft:digger`로 채굴해도 내구도가 줄지 않는다. 스크립트로 처리하고, 블록 경도는 스크립트에서 읽을 수 없어 바닐라와 똑같이 재현할 수 없다.
+4. 3D 들고 있는 모델은 RP `attachables/`의 어태처블이다. 루트 뼈에 `"binding": "q.item_slot_to_bone_name(c.item_slot)"`를 주고 1인칭/3인칭 위치를 애니메이션으로 따로 맞춘다. `item_display_transforms`는 어태처블에 적용되지 않는다.
+5. 바닐라 아이템은 대부분 하드코딩이다. 데이터 기반인 약 77개만 JSON이 있고 옛 format(1.10)으로만 일부 컴포넌트를 덮어쓸 수 있다.
+
+## 1. 개념과 최소 예제
+
+아이템 정의는 엔티티와 비슷하게 `description`과 `components` 목록으로 이뤄진다. 다음이 크리에이티브 메뉴에 나오는 최소 아이템이다. `components`는 비어 있어도 반드시 있어야 한다. (출처: bedrock-wiki, items-intro)
+
+```json
+{
+  "format_version": "1.26.60",
+  "minecraft:item": {
+    "description": {
+      "identifier": "wiki:custom_item",
+      "menu_category": { "category": "items" }
+    },
+    "components": {}
+  }
+}
+```
+
+`identifier`는 `namespace:identifier` 형식이고 `menu_category`에는 선택 항목 `group`과 `is_hidden_in_commands`가 있다. 기능은 컴포넌트로 준다.
+
+```json
+"components": {
+  "minecraft:damage": 10,
+  "minecraft:durability": { "max_durability": 36 },
+  "minecraft:hand_equipped": true,
+  "minecraft:icon": "wiki:custom_item"
+}
+```
+
+텍스처는 짧은 이름을 `RP/textures/item_texture.json`에서 이미지에 연결한다. 이름은 `RP/texts/en_US.lang`에 적는다.
+
+```json
+{ "texture_data": { "wiki:custom_item": { "textures": "textures/items/custom_item" } } }
+```
+
+```lang
+item.wiki:custom_item=Custom Item
+```
+
+block_placer 아이템은 `minecraft:icon`을 생략하면 블록의 3D 아이콘으로 표시된다. 바닐라 창 정의(bedrock-samples의 `iron_spear.json`, format 1.21.100)는 실제 컴포넌트 구성을 보여 준다(출처: bedrock-samples).
+
+```json
+"minecraft:tags": { "tags": [ "minecraft:iron_tier", "minecraft:is_spear" ] },
+"minecraft:max_stack_size": 1,
+"minecraft:durability": { "max_durability": 250, "damage_chance": { "min": 0, "max": 100 } },
+"minecraft:repairable": { "repair_items": [
+  { "items": [ "minecraft:iron_spear" ], "repair_amount": "context.other->query.remaining_durability" },
+  { "items": [ "minecraft:iron_ingot" ], "repair_amount": "query.max_durability * 0.25" } ] },
+"minecraft:enchantable": { "slot": "melee_spear", "value": 14 },
+"minecraft:use_modifiers": { "use_duration": 72000, "emit_vibrations": false, "movement_modifier": 1.0 },
+"minecraft:cooldown": { "category": "spear", "duration": 0.95, "type": "attack" },
+"minecraft:swing_duration": { "value": 0.95 },
+"minecraft:piercing_weapon": { }
+```
+
+`cooldown.duration`과 `swing_duration.value`는 같은 값으로 맞추라는 주석이 달려 있다.
+
+## 2. format_version, 식별자, 이름
+
+### format_version
+
+- 권장 format은 1.21.90 이상(1.21.130 같은 최신값)이다. 이보다 낮으면 item missing, component not used, recipe not working이 대부분 생긴다. `1.20.5`는 유효하지 않고 `1.20.50`이 맞다. 본 것 중 가장 오래된 format은 1.10이다. format을 올리면 컴포넌트 위치가 바뀌어 `not parse`가 날 수 있으니 content log를 본다.
+- `Item is an invalid json object`는 오래된 format이나 잘못된 파일이 원인이다. 최신 format으로 다시 만들어 고친 사례가 있다. `'minecraft:item' should be a json object`면 `contents.json`을 다시 생성한다. macOS 압축이 만드는 `._portal.json`, `.DS_Store`, `__MACOSX` 쓰레기 파일도 이 오류를 내니 모든 폴더에서 지운다.
+- 1.21.90 이상에서 `description.category`가 없어졌다. `"menu_category": {"category": "nature", "group": "..."}`를 쓴다. 유효하지 않은 카테고리(예: "equipments", "commands")나 잘못된 format은 아이콘 없고 스택 64인 아이템을 만든다.
+- manifest는 스크립트를 쓸 때 `modules`에 `data`와 `script` 모듈이 둘 다 있어야 한다(data를 script로 바꾸면 아이템과 텍스처가 모두 사라진다). BP와 RP manifest의 헤더 uuid가 같으면 BP가 로드되지 않는다. 폴더 이름 오타(`recepies`)는 레시피를 조용히 무시한다. 스크립트 의존성이 틀리면 entity_placer 아이템이 소모되는 문제가 생겼다.
+- 열린 월드에서는 개발 팩의 커스텀 아이템이 다시 불러와도 등록되지 않을 수 있다. 게임을 완전히 재시작한다.
+- 식별자에는 예약된 `minecraft:` 네임스페이스를 쓰지 않는다. 엔티티, 어태처블, 아이템에 같은 식별자를 주면 충돌한다. `worldedit:brush`는 바닐라 brush와 충돌한 것으로 보이며 `brush2`로 바꾸니 정상이었다.
+
+### 이름과 로어
+
+- `minecraft:display_name`은 객체 `{"value": "..."}`이며 값은 번역 키일 수 있다. `§` 코드와 `\n`을 지원한다. lang에서는 `item.<ns:id>.name=...`이다. 줄바꿈 로어 흉내는 `item.zxx:light_soul_ring.name=§cLight Soul Ring§r\nHold on screen to activate§r`처럼 쓰고, 이름 결합은 `"%item.bucketCustomFish.name%entity.blaze.name"`이다. lang 값 끝의 공백은 잘리니 `§r`을 붙인다. `pack.name`/`pack.description`도 BP와 RP lang에서 번역된다.
+- 로어: 아이템 JSON에 `minecraft:lore` 컴포넌트는 없다. 스크립트 `ItemStack.setLore`를 `playerInventoryItemChange`에서 자동으로 쓰거나 전리품 `set_lore`를 쓴다. 제한은 약 100줄 x 약 1000자다. 바닐라 툴팁 순서는 정확히 재현할 수 없다. 이름 툴팁은 빈 이름이나 `§§`로 줄일 수 있지만 배경은 지울 수 없다. 툴팁의 인챈트 텍스트는 JSON UI로만 지운다.
+- 레시피 결과 이름: 레시피에서 `set_name`은 동작하지 않고 제작 결과 스크립트 이벤트도 없다.
+
+## 3. 아이콘과 item_texture.json
+
+- `minecraft:icon`은 `description`이 아니라 `components` 안의 문자열이다(`"minecraft:icon": "electrite_spear"`). `textures.default` 객체 형태는 쓰지 않는다. 값은 `textures/item_texture.json`의 키이고 소문자만 쓴다(대문자는 `Missing referenced asset`). 키에 네임스페이스를 넣지 않는 것이 보통이다. 네임스페이스를 썼다면 icon도 똑같이 맞춘다는 의견, `:`가 된다는 의견, `.`를 쓰라는 의견이 엇갈린다. format 1.10에는 BP 아이콘이 없고 RP 아이템 파일에서 정의한다(바닐라 `appleEnchanted`). `requires either an icon atlas or icon texture`는 아이콘이 없다는 뜻이다.
+- item_texture.json 형태:
+
+```json
+{
+  "resource_pack_name": "x",
+  "texture_name": "atlas.items",
+  "texture_data": { "key": { "textures": "textures/items/x" } }
+}
+```
+
+  `padding: 8`, `num_mip_levels: 4`를 포함하는 예도 있다. `"resource_pack_name": "vanilla"`로 넣어 깨진 사례, 쉼표 누락, 아틀라스 파일 위치 오류(모든 아이콘 사라짐)가 원인이었던 경우가 있다. 아틀라스 객체나 `texture` 형태는 스키마 경고를 낸다.
+- 아이콘이 보이지 않을 때는 RP가 월드에 적용됐는지 확인한다. BP manifest에 RP 의존성을 넣어 고친 사람이 있지만 팩끼리 서로 의존할 필요는 없다는 지적도 있다. `[item][error]-Missing icon for data-driven item`은 매핑이 잘못된 것이다.
+- 바닐라 텍스처는 RP 없이 `"minecraft:icon": "diamond"`처럼 바닐라 키를 쓸 수 있다. 다만 텍스처 배열(곡괭이 등)은 첫 번째로 기본 설정되고 인덱스를 지정할 수 없으니 자기 RP item_texture.json에 항목을 추가한다. 바닐라 텍스처 이름은 bedrock-samples resource_pack에서 찾는다(예: 바다의 심장 `textures/items/heartofthesea_closed`). 데이터 기반 번들은 텍스처 키가 따로 있다(`bundle_white`). 이름표 텍스처는 `textures/items/name_tag.png`다.
+- 16x32 스폰 알 텍스처는 반만 보인다(아틀라스가 폭을 프레임 높이로 쓴다). 크리에이티브 메뉴 등록에 아이콘이 필수는 아니다.
+
+## 4. 크리에이티브 메뉴와 아이템 카탈로그
+
+- 커스텀 그룹은 `item_catalog/crafting_item_catalog.json`에 만든다. 구조는 `minecraft:crafting_items_catalog` → `categories[].category_name`(construction/equipment/items/nature) → `groups[].group_identifier {name, icon}` → `items[]`다. `icon`은 아이템 식별자여야 하고 `menu_category`와 섞지 않는다. 카탈로그 파일은 하나만 허용된다. 확장형 그룹 설명은 위키 item-catalog 문서와 MS Learn의 `craftingitemcatalogdocumentation`에 있다.
+- `menu_category.group`에는 네임스페이스가 필요하다. 바닐라는 `minecraft:itemGroup.name.sword`, `minecraft:itemGroup.name.slab`이다. 없으면 `string must be prefixed with a namespace`가 난다.
+- 제한: 새 탭이나 커스텀 카테고리는 없다. 바닐라 아이템을 커스텀 그룹에 넣을 수 없다. 커스텀 아이템은 바닐라 뒤에 정렬되고 순서는 파일 이름을 따른다는 보고가 있다. 스폰 알은 스폰 알 그룹을 벗어날 수 없으니 커스텀 `minecraft:entity_placer` 아이템을 쓴다. `created with category 'none', now set to items` 로그가 나면 category를 items로 한다. 하위 팩의 아이템을 카탈로그 그룹 아이콘으로 쓰면 카탈로그 전체가 깨지고(MCPE-235816), 298자 이상의 그룹 이름은 게임을 크래시시킨다(MCPE-240721). 바닐라 아이템 그룹 문서에는 1.13 이후 추가된 아이템이 대부분 빠져 있다.
+- 크리에이티브에서 숨기기(conflicting): `menu_category` category `none`이 1.26.0에서 동작했다는 보고(엔티티 전용 장비 아이템)와 2026-07-17에 동작하는 방법이 없다는 보고가 있다.
+
+## 5. 커스텀 컴포넌트와 아이템 스크립트
+
+### 개념
+
+옛 아이템 이벤트(JSON `events`, `minecraft:on_use`, `minecraft:weapon`의 `on_hit`, 음식의 `on_consume` + `event`)는 Holiday Creator Features 제거와 함께 무효(`invalid component`)다. 이를 대체하는 것이 스크립트가 등록하는 커스텀 컴포넌트다. Custom Components V2는 아이템/블록 format 1.21.90 이상이 필요하고(1.21.120 권장) 정식 API라 마켓 애드온에서도 쓸 수 있다. 도끼로 때릴 때 버프를 주는 기능도 스크립트(엔티티 타격 이벤트)가 필요하다. (confirmed)
+
+아이템 쪽은 `components`에 `"ns:name": {}`(null이 아닌 아무 JSON 값, 매개변수 가능)을 바로 넣는다. 예전 `"minecraft:custom_components": ["ns:name"]`는 폐기됐다.
+
+```json
+"components": { "ns:heal_on_use": { "amount": 4 } }
+```
+
+스크립트에서 등록한다. 예전 `world.beforeEvents.worldInitialize` 패턴은 낡았다.
+
+```javascript
+import { system } from "@minecraft/server";
+
+system.beforeEvents.startup.subscribe(({ itemComponentRegistry }) => {
+  itemComponentRegistry.registerCustomComponent("ns:heal_on_use", {
+    onUse(event, { params }) {
+      event.source.addEffect("regeneration", 100, { amplifier: params.amount });
+    },
+  });
+});
+```
+
+등록 가능한 훅은 `onUse`, `onUseOn`, `onHitEntity`, `onMineBlock`, `onConsume`, `onCompleteUse`, `onBeforeDurabilityDamage`다. 메서드 축약(`onUse(event){}`)과 화살표 함수가 모두 유효하다. 내구도 훅 이름을 한 노트는 `beforeOnDurabilityDamage`로 적었으나 등록 목록에는 `onBeforeDurabilityDamage`로 있다.
+
+### 규칙
+
+- 경고 해석: `Item custom component 'x' is not being used by an item`은 스크립트에는 등록했지만 어떤 아이템에도 없다는 뜻이다(엉뚱한 파일을 수정했거나 format이 1.21.90 미만). `was not registered in script but used on an item`은 그 반대다. 둘 다 네임스페이스 오타(`ctf:` vs `cft:`)가 원인이었던 경우가 있다.
+- 매개변수: 아이템 태그는 불리언만 된다(`ItemStack.hasTag`). 숫자 값은 커스텀 컴포넌트 매개변수(`customComponentParameters.params.value`)로 넘긴다. `hasTag`에 네임스페이스가 없으면 `minecraft:`로 간주하니 커스텀 태그에는 네임스페이스를 붙인다.
+- `onHitEntity` 이벤트는 attackingEntity, hadEffect, hitEntity, itemStack을 준다. 특정 아이템으로 때림을 감지하려면 스크립트 `entityHitEntity` 후 `triggerEvent`를 쓰거나 엔티티 `damage_sensor` + `has_equipment` 필터를 쓴다.
+- 컴포넌트 없는 우클릭은 `world.afterEvents.itemUse`다. 바닐라 동작을 취소하려면(예: 바닐라 책 UI 대신 ActionForm) `world.beforeEvents.itemUse`를 취소한다. `minecraft:interact_button` 아이템은 엔티티에 쓸 때 `onUse`를 발동하지 않는다(26.30에서도). 커스텀 블록에 양동이를 쓰면 `onPlayerInteract`가 발동하지 않는다.
+- 스크립트 함정: `source.dimension.runCommand('spreadplayers ~ ~ 10 50 @s')`는 `@s`가 차원이 되어 실패하니 `source.runCommand`나 `system.run(...)`으로 감싼다. `runcommand`처럼 소문자로 쓰면 `Not a function` TypeError다. 레이캐스트는 `player.getBlockFromViewDirection()`, `getHeadLocation()`/`getViewDirection()`이다. Realms에서는 제거된 `runCommandAsync` 대신 `runCommand`를 쓴다.
+- 휘두르기 애니메이션은 스크립트로 트리거할 수 없다. 아이템에 `minecraft:throwable`(`do_swing_animation: true`) + `minecraft:projectile`을 주고 스크립트에서 사용을 취소한다(던지는 소리가 날 수 있음). 1인칭 먹기/사용 애니메이션은 하드코딩이다.
+- 스크립트로만 되는 것: 우클릭 내구도 감소, 방어구 지속 효과, 커스텀 나침반, 실크 터치식 아이템, 던지면 변하는 아이템, 활공 장비, 엘리트라 대체, 인챈트 레벨 제한/수선 조정. 방어구 효과 예는 `player.getComponent("equippable").getEquipment("Chest")` 후 `addEffect('speed', ticks, {amplifier, showParticles:false})`다. `hasitem={item=...,location=slot.armor.head}`를 쓰는 명령/함수도 되지만 스크립트에서 돌리면 성능이 나쁘다.
+- 아이템 NBT는 스크립트에 노출되지 않는다(셜커 상자 내용, 불길한 병 효과 레벨, 염소 뿔 소리). 셜커는 블록으로 설치해 `minecraft:inventory`를 읽거나 아이템 엔티티를 태워 내용물을 떨군다. `hasitem` 선택자의 `data`로 일부를 검사할 수 있다.
+- 아이템 잠금은 `item_lock` 모드 `lock_in_slot`(또는 `lock_in_inventory`)을 명령이나 스크립트로 준다. 잠금 텍스트 도배는 `gamerule showtags false`로 끈다. 모험 모드 곡괭이는 Can Destroy 속성을 가진 ItemStack을 준다.
+- 스크립트로 도구 채굴 속도를 동적으로 바꿀 수 없고 점프 높이 컴포넌트도 없다. 에임 어시스트 JSON 카테고리는 `BP/aim_assist/categories/*.json`에 카메라 프리셋과 함께 두고 켜는 시점은 스크립트가 정한다.
+
+## 6. 사용 시간, 음식, 쿨다운
+
+### 사용 이벤트
+
+- `itemStartUse`/`itemReleaseUse`/`itemStopUse`는 충전형 아이템(food, shooter, throwable)에서만 발생한다. 범용 chargeable 컴포넌트는 제거됐다. 소모를 피하려면 food를 빼고 shooter/throwable을 쓰거나 `minecraft:use_modifiers.use_duration`을 아주 크게(예: 99999999) 둔다.
+- `minecraft:use_modifiers`는 `minecraft:shooter`와 나란한 독립 컴포넌트다. 안에 중첩하거나 `minecraft_use_modifiers`로 오타를 내면 `non-zero use_duration` 오류가 난다.
+
+### 음식
+
+기본 형태:
+
+```json
+"minecraft:food": { "nutrition": 4, "saturation_modifier": 0.6 },
+"minecraft:use_animation": "eat",
+"minecraft:use_modifiers": { "use_duration": 1.6, "movement_modifier": 0.35 }
+```
+
+`saturation_modifier`는 숫자여야 한다(문자열은 1.26.13에서 `invalid numeric value`). 그 숫자는 바닐라의 saturation과 같다.
+
+- 음식 효과: 옛 방식은 format 1.10의 `minecraft:food.effects` 배열(name/chance/duration/amplifier)이며 스크립트 없이 아직 동작한다(바닐라 황금 사과 복사). 현대 방식은 format 1.21.90 이상 + `onConsume`에서 `player.addEffect(effect, durationTicks, {amplifier})`를 호출하는 커스텀 컴포넌트다. 초는 `*20`으로 틱으로 바꾸고 컴포넌트 하나를 여러 아이템에 재사용한다. 무작위 효과는 효과 배열에서 무작위 개수만큼 돈다. 새 format에는 food effects가 없다.
+- `can_always_eat: false`가 무시된다. 배가 불러도 먹을 수 있는 게임 버그다(MCPE-178647, confirmed). 유일한 우회법은 format `1.20.40` 아이템에 `minecraft:food`(`can_always_eat:false`, `nutrition`, `saturation_modifier`) + `minecraft:use_duration` + `minecraft:use_animation: "eat"`을 쓰는 것인데 커스텀 컴포넌트와 퇴비화가 꺼진다(퇴비화는 스크립트로).
+- 트림 소리는 끌 수 없다(씹기/마시기 소리는 `minecraft:use_animation`이 정한다). block_placer와 `minecraft:food`를 한 아이템에 넣으면 텍스처가 보이지 않았다(답 없음).
+
+### 쿨다운
+
+- `minecraft:cooldown`은 `category`(네임스페이스 문자열), `type`(예: `"use"`), `duration`(초)가 필요하다. 스크립트는 `player.getItemCooldown(category)`로 읽고 `player.startItemCooldown(category, ticks)`로 시작한다(category는 미리 정의할 필요가 없는 아무 문자열). `wind_charge`가 아닌 자기 category를 쓴다.
+- 자동 쿨다운은 사용 가능한 컴포넌트(shooter, throwable, food, bundle_interaction)가 있는 아이템에서만 걸린다. 범용 usable 컴포넌트는 없다. 그 밖의 아이템은 `onUse`에서 `itemStack.getComponent("minecraft:cooldown").startCooldown(player)`를 부른다. `onUse`가 쿨다운 중 발생하지 않는다는 사람과 itemUse는 발생한다는 사람이 있다. (conflicting) 사용이 끝난 뒤에만 쿨다운을 걸려면 JSON 쿨다운을 0으로 두고 `onCompleteUse`에서 `source.startItemCooldown(category, ticks)`를 부른다.
+- 쿨다운이 끝날 때 아이템이 제거된다는 보고가 있다(Mojang 변경일 수 있음, 답 없음).
+- 쿨다운을 어태처블에 보내는 신호로 쓸 수 있다: `q.cooldown_time_remaining('myaddon:toggle1')` + `player.startItemCooldown('myaddon:toggle1', 200)`. 다른 플레이어의 쿨다운은 내 클라이언트에서 0으로 읽히므로 멀티플레이에는 맞지 않는다. 공격 쿨다운을 `startItemCooldown`으로 0으로 만들 수 있다(창/돌진 아이템은 데이터 기반).
+
+## 7. 도구, 내구도, 채굴, 인챈트
+
+### digger와 채굴 속도
+
+- `minecraft:digger`는 `use_efficiency`(1.20.30부터)와 `destroy_speeds`가 필요하다. 빈 digger는 아무것도 하지 않는다.
+
+```json
+"minecraft:digger": {
+  "use_efficiency": true,
+  "destroy_speeds": [
+    { "block": { "tags": "q.any_tag('minecraft:is_pickaxe_item_destructible')" }, "speed": 7 }
+  ]
+}
+```
+
+  바닐라에 맞추려면 속도를 맞춘다(netherite 9). 아이템에 `minecraft:is_pickaxe`, `minecraft:is_tool`, `minecraft:digger` 태그도 붙인다.
+- 도구 등급: digger에는 등급 태그가 아니라 `minecraft:is_*_item_destructible` 태그를 쓴다. 드롭은 아이템 태그(`minecraft:is_pickaxe` + `minecraft:iron_tier`, `minecraft:<tier>_tier`, `minecraft:digger`)를 따른다. 커스텀 블록 파괴는 반만 구현돼 있어 바닐라 완전 복제는 불가능하다. 바닐라 블록은 커스텀 아이템의 등급을 확인하지 않아 흑요석이 어떤 경우든 떨어진다. `minecraft:diamond_tier_destructible` 블록은 나무 곡괭이로도 캘 수 있다(도구 요구 메커니즘 없음, UNSUPPORTED로 문서화). 도구별 경도 속성 이름은 바닐라에서 뒤집혀 있어 헷갈린다.
+- 엔드 포털 틀은 하드코딩으로 부서지지 않는다(digger도 소용없음). 엔티티의 블록 타격 after event에서 들고 있는 아이템과 블록을 확인해 공기로 바꾸고 아이템을 스폰한다.
+- 블록 파괴 진행 커스텀 시스템은 채굴을 취소하거나 파괴 불가 블록을 쓰고 `playerStartBreakingBlock`/`playerCancelBreakingBlock`에 계산한 runTimeout을 쓴다. 아니면 바닐라 채굴 깜빡임이 생긴다.
+
+### 내구도
+
+- digger로 채굴해도 내구도가 줄지 않는다(2025-11-05 관찰, 검은 정상적으로 줄어듦). 스크립트로 처리하되 블록 경도를 읽을 수 없어 정확한 재현은 불가능하다. 엔티티를 때리면 기본으로 줄어든다(타격당 2). `shooter`는 발사 때 내구도를 줄인다. 커스텀 컴포넌트 내구도 훅으로 제어할 수 있다. 커뮤니티 라이브러리 "Equipments Durability"(CurseForge, `DurabilityManager.js`)는 정식 API로 아이템 format 1.21.110 이상이 필요하다. 사용할 때 줄이기는 커스텀 `onUse` + durability 컴포넌트를 설정해 되돌린다. (confirmed)
+- 엘리트라처럼 부서진 아이템 메커니즘은 부서지기 전에 스크립트가 도구를 교체한다. 어태처블에서 `query.item_remaining_durability`를 쓴 사례가 있지만 어태처블 내구도 쿼리가 고장 났다는 보고도 있다.
+- 파괴되지 않는 커스텀 방어구는 durability 컴포넌트를 제거한다. 제작으로 A를 B로 바꿀 때 내구도를 유지하려면 내구도 값마다 레시피를 하나씩 두는 방법뿐이다.
+
+### 수리와 모루
+
+- `minecraft:repairable.repair_items[]`는 재료 여러 개에 각기 다른 `repair_amount`를 줄 수 있고 Molang도 된다(예: `query.max_durability * 0.25`). `context.other->query.remaining_durability`를 쓰는 결합 공식은 제작대식이라 다이아몬드 수리에는 동작하지 않는다.
+- 모루 결합은 내구도가 있으면 되고 인챈트는 `minecraft:enchantable`이 있을 때만 합쳐진다. `minecraft:durability`가 없는 아이템에 `minecraft:repairable`을 두면 결합이 깨지니 제거한다. 창은 `repairable`에 넣지 않는다(durability 컴포넌트가 바닐라처럼 모루 수리를 처리하고 커스텀 repairable은 바닐라 계산을 깨뜨림). 제작대 도구 합치기는 끌 수 없다.
+
+### 인챈트
+
+- `"minecraft:enchantable": {"slot":"axe","value":10}`에서 slot이 인챈트 종류를, value가 인챈트 수치를 정한다(금 22, 다이아 10). 이것이 있어야 `/enchant`가 동작한다(format 1.21.120). 기본 인챈트는 없으니 전리품 `enchant_with_levels`를 쓴다. 아이템을 인챈트 불가로 잘못 둔 것이 커스텀 방어구가 이상해진 원인이었던 사례가 있다.
+- 슬롯 이름: 철퇴 전용 슬롯은 없다(커스텀 철퇴는 `slot: "all"`과 스크립트 화이트리스트). `spear` 슬롯은 삼지창이고 커스텀 창(돌진)에는 `melee_spear`를 쓴다.
+- 바닐라 인챈트 상한, 금 등급 내구도, 바닐라 전리품은 바꿀 수 없으니 스크립트를 쓴다. 주민 거래는 바닐라 인챈트 레벨을 넘을 수 없어 가짜 인챈트를 스크립트로 만든다.
+
+## 8. 방어구, 트림, 염색
+
+### 착용
+
+- `minecraft:armor`는 폐기됐다. `minecraft:wearable {slot, protection}`을 쓴다(위키 custom-armor). 블록 아이템도 `minecraft:wearable {slot:"slot.armor.head"}`로 쓸 수 있다.
+- 방어구 강인함과 넉백 저항은 커스텀 아이템에 없다. 아이템 `minecraft:knockback_resistance`는 1.20.0에서 제거됐다. 스크립트(`applyKnockback`)를 쓴다. `minecraft:damage_absorption`은 있다. 커스텀 착용 소리는 데이터로 할 수 없다.
+- 방어구가 보이지 않으면 content log, 어태처블, `minecraft:enchantable`, bedrock-samples와 비교한다.
+- `slot.armor.body`가 `minecraft:wearable`에서 2026-05-02쯤 동작을 멈췄다(MCPE-238263). 몹 갑옷 아이템에서는 `slot.armor.body`로 플레이어가 착용할 수 있게 되는 오래된 버그가 있다(MCPE-183957 / MCPE-188501).
+- 크리에이티브에서 커스텀 방어구가 손에 남으면서 슬롯에도 들어간다(MCPE-240759). 착용 아이템의 불법 크기 스택을 클라이언트가 옮기지 않던 문제는 MCPE-236344로 2026-05-07에 고쳐졌다.
+- 상호작용으로 착용되지 않게 하려면 `"minecraft:block_placer": {"block":"minecraft:air","use_on":["minecraft:air"]}`를 쓴다.
+
+### 트림
+
+- 트림 가능하게 하려면 태그 `minecraft:trimmable_armors`(그리고 `minecraft:is_armor`)를 붙인다. 커스텀 트림 패턴/재료는 만들 수 없다. `minecraft:trim_templates`나 `trim_materials` 태그는 Trim Pattern Registry 오류를 내고 materials 태그는 트림을 깨뜨린다는 보고가 있다. 바닐라 트림을 쓰는 커스텀 흉갑 예는 MS Learn의 addcustomitems 문서에 있다(출처: ms-learn).
+- 트림과 염색을 같이 쓸 수 있으나 염색 + 트림 레이어에서 트림이 염료 아래에 그려진다. 트림마다 방어구 어태처블 코드에 항목이 필요하다(예: `"bolt_trim": "textures/trims/custom"`). 커스텀 geometry에 `wild_trim`, `diamond_palette` 같은 트림 팔레트를 쓰는 것은 올바른 레이어가 없으면 실패한다.
+
+### 염색
+
+- `minecraft:dyeable`은 텍스처 alpha 1 부분이 염색되지 않는다(알파 기반, 개 갑옷 참고). 플레이어가 염색하는 것을 막을 수 없다.
+- 2026년 dyeable 버그: `default_color`를 설정하고 `default`/`dyed` 텍스처가 다르면 손에 든 모습이 아이콘과 다르다(MCPE-237529). `ItemDyeableComponent#color`는 가마솥에서 염색하기 전에는 `default_color`가 있어도 `undefined`다(MCPE-237576). `#defaultColor`는 항상 `undefined`다(MCPE-237575). 바닐라 염색 아이템은 스크립트에 dyeable을 노출하지 않는다(MCPE-237577). 복제한 ItemStack 접근 크래시(MCPE-237909)는 2026-04-30에 고쳐졌다고 하나 2026-05-15에도 오류가 났다. 블록 아이템 오버라이드의 dyeable은 설치하면 색이 유지되지 않는다.
+- `q.armor_color_slot`은 방어구 슬롯에서만 동작한다. 방어구가 아닌 어태처블에 `variable.is_dyed`를 설정하는 방법과 커스텀 엔티티의 가죽 갑옷 염색 색은 해결되지 않았다.
+
+## 9. 무기
+
+### 활과 shooter
+
+커스텀 활은 `minecraft:shooter` + `minecraft:projectile` + `use_modifiers` + `use_animation: "bow"`로 만든다.
+
+```json
+"minecraft:shooter": {
+  "ammunition": [ { "item": "minecraft:arrow", "use_offhand": true, "search_inventory": true, "use_in_creative": true } ],
+  "max_draw_duration": 1.0,
+  "charge_on_draw": true,
+  "scale_power_by_draw_duration": true
+},
+"minecraft:projectile": { "projectile_entity": "ns:my_arrow" },
+"minecraft:use_modifiers": { "use_duration": 3600, "movement_modifier": 0.35 },
+"minecraft:use_animation": "bow"
+```
+
+- 탄약 아이템은 목록에 있는 그대로(화살)다. 당기는 프레임에는 렌더 컨트롤러나 어태처블 + 애니메이션 컨트롤러가 필요하고 당기는 팔 자세에는 클라이언트 플레이어 애니메이션 컨트롤러가 필요하다(바닐라를 수정하지 말고 새 애니메이션 추가). 활 1인칭 자세는 활 어태처블 애니메이션(bow.json)으로 바꾼다.
+- shooter 버그: 빠른 장전 인챈트가 장전을 반복하고 탄약이 없을 때 사용 애니메이션/이동 감속이 멈추지 않는다. 2026-04-24까지 Mojang이 일부를 고쳤다(MCPE-228333, MCPE-228332). 남은 보고는 MCPE-238363, MCPE-238365, MCPE-238331, MCPE-228331이다. `ammunition`이 `minecraft:arrow`인 커스텀 활은 물약 화살을 소모하지만 일반 화살을 쏜다(같은 ID). 바닐라 활 소리는 하드코딩이니 스크립트/애니메이션으로 재생한다.
+- shooter 제한: 투사체가 아닌 바닐라 아이템(철 조각)은 쏠 수 없다. 발사 후 지연은 하드코딩이라 자동 사격에는 스크립트가 필요하다. 무한 투사체는 컴포넌트로 불가능하다(스크립트 소환 + 속도). shooter + projectile로 커스텀 투사체 엔티티를 쏘는 것은 해결되지 않았다(throwable은 아이템을 소모).
+- 스크립트로 shooter를 재현한 템플릿(멀티샷, 내구 지원)이 있다. 1.20.60 활 템플릿은 2025-11-07에 더는 동작하지 않았다.
+
+### 쇠뇌, 창, 삼지창, 철퇴, 방패
+
+- 쇠뇌의 1인칭 당기기 애니메이션은 아이템 식별자가 정확히 `crossbow`일 때만 동작한다. 한 템플릿에서는 `ae_cb:crossbow`가 동작했지만 다른 이름이나 끝에 숫자를 붙이면 깨졌다. 쇠뇌마다 네임스페이스를 달리하거나 스크립트로 커스텀 애니메이션을 만든다. 비슷한 식별자 하드코딩이 다른 곳에도 있다(예전 커스텀 스미딩 레시피에는 `<ns>:netherite_ingot`이 필요했다).
+- 창은 바닐라 창 아이템을 쓴다. 바닐라 창 JSON은 bedrock-samples(`behavior_pack/items/*_spear.json`)에 있지만 바닐라 창 어태처블은 실제 바닐라 RP에만 있고 샘플에는 없다. 새 창은 플레이어 애니메이션을 덮어쓰는 팩의 1인칭/주먹 애니메이션도 바꿨다. 공격 사거리 커스텀용 컴포넌트는 `minecraft:piercing_weapon`(reach/creative_reach/hitbox_margin), `minecraft:swing_sounds`, `minecraft:swing_duration`, `minecraft:use_animation: spear`, `use_modifiers`이고 MS Learn에는 `kinetic_weapon`, `durability_sensor`도 있다. 바닐라 같은 창 애니메이션을 쓰려면 태그 `minecraft:is_spear`와 플레이어의 창 애니메이션 세트가 필요하다. 커스텀 삼지창 템플릿은 Script API 1.19까지 동작했고 물 밖 Riptide는 확인되지 않았다.
+- 철퇴형 아이템은 철퇴 JSON을 복사하고 모든 참조 이름을 바꾼다. 커스텀 철퇴 템플릿(스크립트 2.4.0, 실험 기능 없음)은 철퇴 인챈트를 받으려고 `slot: "all"` enchantable과 manager.js 화이트리스트를 쓰고, 타격 후 텔레포트로 낙하 피해를 취소하며, 내려찍기는 `playerSwingStart`와 범위 6, `!attacker.isOnGround`를 확인한다. 윈드 버스트 `applyImpulse`는 일관되지 않다. 돌진에는 베타 휘두르기 감지나 `variable.attack_time` 기반 `player.json` 애니메이션 컨트롤러가 필요하다.
+- 방패는 하드코딩이다. 웅크렸을 때 `player.json` damage_sensor나 스크립트로 흉내 낸다. 커스텀 방패 템플릿(Alien-Edds/Shield)은 스크립트 기반이며 1.26.10에서 @minecraft/server 2.6.0으로 정식이 됐다(막기가 안 되면 manifest의 스크립트 버전을 올린다). 방패를 더 만들려면 아이템, 블록, 어태처블, terrain texture 정의가 필요하다. 피해 감소는 매개변수화되지 않았다. 도끼, 워든, 파괴수의 기절이 동작한다. 투명 슬롯 문제는 해결되지 않았다.
+
+### 총과 투척
+
+- 아이템으로 쏘는 커스텀 투사체 총은 아이템에 `use_modifiers`를 두고 스크립트가 엔티티를 스폰해 `applyImpulse`한다(`throwable`/`projectile`은 뺀다).
+- 투척 아이템은 `minecraft:throwable`과 `minecraft:projectile`이 둘 다 필요하다. 투사체 엔티티를 쓰며 두 엔티티 파일 모두 식별자 외에는 네임스페이스를 피한다. 충전 중 파티클 방출은 커스텀 컴포넌트를 쓰거나 플레이어 RP 애니메이션을 수정한다(호환성 위험).
+- 도끼형 커스텀 도구가 블록을 변환할 때 타격 애니메이션이 없으면 `minecraft:use_animation`을 넣으라는 제안이 있었다. `minecraft:is_hoe`/`is_axe` 태그 아이템은 벗기기/갈기는 하지만 커스텀 컴포넌트 `onUseOn`을 발동하지 않는다(`is_shovel`은 발동). 소리와 파티클은 나지만 내구도 감소와 애니메이션이 없으니 스크립트가 필요하고 태그를 빼면 `onUseOn`이 돌아온다.
+- 넉백과 피해 무효화는 `entityHitEntity` + `applyKnockback`, before-hurt 이벤트에서 피해 취소로 한다. 위로 띄우기는 `entity.applyImpulse({x:0,y:0.8,z:0})`다.
+
+## 10. 어태처블
+
+### 개념과 기본 구조
+
+어태처블은 "아이템용 클라이언트 엔티티"다. 커스텀 3D 아이템은 아이템 JSON + `RP/attachables/<name>.json`(format_version 1.10.0)으로 이뤄진다. 식별자는 아이템 식별자와 같고 materials, textures, geometry, animations, `scripts.animate`, `render_controllers`를 가진다. 폴더는 `attachables`(`attachments` 아님)이며 RP에만 있다. 아이템이나 어태처블에는 BP 애니메이션 컨트롤러가 없다. 자기에게 없는 뼈는 움직일 수 없다. Blockbench "Minecraft Item Wizard" 플러그인으로 만들고 손과 3인칭을 미리 볼 수 있다.
+
+```json
+{
+  "format_version": "1.10.0",
+  "minecraft:attachable": {
+    "description": {
+      "identifier": "wiki:custom_sword",
+      "min_engine_version": "1.13.0",
+      "materials": { "default": "entity_alphatest", "enchanted": "entity_alphatest_glint" },
+      "textures": { "default": "textures/attachables/custom_sword", "enchanted": "textures/misc/enchanted_item_glint" },
+      "geometry": { "default": "geometry.custom_sword" },
+      "animations": { "hold_first_person": "animation.custom_sword.hold_first_person", "hold_third_person": "animation.custom_sword.hold_third_person" },
+      "scripts": { "animate": [ { "hold_first_person": "c.is_first_person" }, { "hold_third_person": "!c.is_first_person" } ] },
+      "render_controllers": [ "controller.render.item_default" ]
+    }
+  }
+}
+```
+
+geometry 루트 뼈에는 `"binding": "q.item_slot_to_bone_name(c.item_slot)"`를 둔다. `min_engine_version`은 최상위가 아니라 `description` 안에 둔다.
+
+### 바인딩과 위치
+
+- 아이템이 손에 붙지 않고 발치에 나타나거나 떠 있으면 geometry 뼈에 바인딩이 없는 것이다. Blockbench의 edit binding(Element → Binding)이나 geo 파일 루트 뼈(예: `root_item`)에 `"binding": "q.item_slot_to_bone_name(c.item_slot)"`(주손과 오프핸드 모두 동작) 또는 `"'rightitem'"`을 준다. 바인딩에는 geometry format_version 1.16 이상이 필요하다. 등/몸 부착은 `body`에 바인딩한다. 플레이어 팔 뼈는 `rightArm`("right arm" 아님)이고 부모 뼈 이름이 틀리면 팔 애니메이션을 따르지 않는다. (confirmed)
+- 1인칭과 3인칭은 좌표계가 다르다. 어태처블 `scripts.animate`에서는 `c.is_first_person`/`context.is_first_person`을 써야 하고 `query.is_first_person`과 `variable.is_first_person`은 동작하지 않는다(부정은 `!`). 뼈 `rightItem`의 회전/위치를 `c.is_first_person ? a : b`로 주는 것도 맞다. Blockbench 1인칭 미리보기는 시작점일 뿐이니 게임에서 축마다 이진 탐색으로 맞추고 `/reload all`로 확인한다. 예시 값: 루트 뼈 3인칭 `rotation [90,0,0]`, `position [0.5,22.5,-0.5]`, 1인칭 루트 회전 -180, 3인칭 0.
+- `item_display_transforms`(Blockbench Display 패널)는 어태처블에 효과가 없다. 어태처블 뼈는 플레이어 뼈를 기준으로 하므로 회전만 보이고 위치와 스케일은 1인칭/3인칭 애니메이션으로 준다. 블록식 `display` 변환은 블록 아이템에만 적용된다. 1인칭과 3인칭 모델을 다르게 하려면 어태처블이 필요하다.
+- 크기 키우기는 뼈를 스케일하는 애니메이션을 쓴다. 어태처블이 투명한데 오류가 없으면 기본 머티리얼(`entity_alphatest`)을 확인하고, geo의 `texture` 필드는 어태처블에 정의된 텍스처 키(예: `"default"`)를 가리켜야 한다.
+
+### 애니메이션
+
+- 애니메이션 컨트롤러는 `animations`에 `"controller": "controller.animation.x"`를 정의하고 `scripts.animate`에는 `"controller"`만 넣는다. 컨트롤러 안에서는 짧은 이름을 쓴다. 모든 것을 한꺼번에 animate하지 않는다(질주와 3인칭 애니메이션이 1인칭 위에 재생된다).
+- `/playanimation`과 `playAnimation`은 어태처블에 적용되지 않는다. 어태처블은 플레이어와 다른 엔티티로 취급된다. 우회법은 변수를 설정하는 더미 애니메이션을 재생해 컨트롤러가 읽게 하거나, BP `player.json` 엔티티 속성 + 어태처블 `"scripts":{"pre_animation":["variable.animation_a = c.owning_entity -> q.property('property:name');"]}` + `v.animation_a`로 전환(enum `== 'value'`, bool, `>= 3`)하는 것이다. 같은 방법으로 아이템별 렌더 컨트롤러나 모델도 바꿀 수 있다.
+- `v.attack_time`은 어태처블에서 바로 쓰면 동작하지 않는다. `"pre_animation": ["variable.attack_time = c.owning_entity->v.attack_time;"]`를 추가하고 플레이어 엔티티에서 `"variable.attack_time": "public"`으로 한 뒤 `v.attack_time>0` 전환을 쓴다. 값은 0~1이며 아이템으로 바꾸기 전에 시작한 휘두르기가 공격 애니메이션을 다시 재생한다. (conditional)
+- 아이템을 든 플레이어의 자세(양손 자세, 커스텀 휘두르기, 팔)는 어태처블로 바꿀 수 없다. 클라이언트 `player.entity.json`에 플레이어 애니메이션을 추가/수정한다(팔이 보이도록 렌더 컨트롤러도). 휘두르기는 `q.is_using_item` 조건 어태처블 애니메이션으로 커스텀할 수 있다. 바닐라 `animation.player.holding`을 RP에서 바꿔 팔 들기를 멈출 수 있다: `"rightarm": {"rotation": ["query.is_item_name_any('slot.weapon.mainhand','custom:item') ? 0.0 : (variable.is_holding_right ? (-this * 0.5 - 18.0) : 0.0)", 0, 0]}`. 바닐라 애니메이션을 대체하기보다 플레이어 엔티티 scripts의 `pre_animation`을 쓰는 것이 좋은 관행이다. 1인칭 커스텀 아이템 애니메이션 패턴은 `controller.animation.player.root`에 하위 컨트롤러(`player.custom_item_1st_person`)를 추가하고 `query.get_equipped_item_name`과 `variable.item_use_normalized`로 전환하는 것이다.
+- 플레이어 뼈와 같은 이름의 어태처블 뼈는 플레이어 애니메이션을 받으니 이름을 바꿔 피한다. 반대로 같은 이름을 이용해 `/playanimation`이 갑옷과 어태처블도 함께 움직이게 할 수 있다.
+- 바닐라 검을 들면 rightarm/rightitem의 1인칭 패리 애니메이션이 재생되지 않는다(하드코딩). 커스텀 검이 기본 휘두르기와 Actions & Stuff 호환을 얻으려면 태그 `minecraft:is_sword`가 필요하고 아이템 태그는 최소 format 1.20.50이 필요하다.
+- 총 애드온은 Blockbench 1인칭 뷰에서 플레이어 팔을 애니메이션해 플레이어에 적용한 뒤 팔 렌더링을 켠다. 1인칭에서 팔을 보이게 하려면 (A) 플레이어 1인칭 렌더 컨트롤러가 팔을 보이게 수정하고 애니메이션하거나 (B) 총 어태처블에 가짜 팔(Steve 팔)을 넣는다. 마켓 스타일 팩은 안정성을 위해 가짜 팔을 피한다. 이중 모델 트릭은 3인칭 모델을 rightArm 아래 뼈에, 1인칭 모델을 플레이어 뒤쪽 waist 아래에 두는 것이다. 1인칭에서는 오른손과 머리만 렌더링된다.
+- 장착 소리: `v.hold_time = q.is_item_name_any('slot.weapon.mainhand','custom:item') ? q.life_time; v.play_sound = (q.life_time - (v.hold_time??0)) > (q.delta_time+0.01)`로 애니메이션 소리 효과를 구동한다. 어태처블 애니메이션 컨트롤러는 다시 장착해도 상태가 남으니 진입할 때 타임스탬프를 저장하고 시간 차가 1을 넘으면 기본으로 돌아가는 상태로 우회한다. 들고 있는 어태처블의 숨 쉬는 흔들림은 `rightitem`의 흔들림 애니메이션 때문이며 바닐라 값은 `variable.bob_animation * math.sin(q.life_time * 45.0) * 0.5`다.
+
+### 오프핸드와 위치 문제
+
+- 오프핸드 어태처블이 주손에 보이는 것은 애니메이션이 주손 기준이기 때문이다. `c.item_slot == 'main_hand'` / `'off_hand'`로 나눈다. 1인칭 들기 애니메이션은 오프핸드용으로 미러링되지 않아 화면 밖에 있을 수 있으니 별도 오프핸드 애니메이션에서 루트 뼈를 약 12px 위로 옮긴다. 1인칭 오프핸드 모델을 숨기려면 `c.item_slot=='off_hand' && c.is_first_person`일 때 0으로 스케일한다. 토템 `animation.leftblock.first_person_wield`는 오프핸드 배치를 강제한다.
+- 오프핸드 커스텀 어태처블은 1인칭에서 렌더링되지 않는다는 보고가 있다(엔진 특수 처리로 보이며 해결 안 됨).
+- 어태처블이 손에서 어긋나는 원인은 스킨/플레이어 geometry 차이(캐릭터 생성기 스킨과 일반 스킨), 바닐라에서 복사한 1인칭 플레이어 애니메이션에 들어 있는 VR 부분(`vr` 부분을 지우니 해결)이다. Windows와 Android 빌드의 위치 차이, FOV에 따른 차이도 보고됐다.
+- 우클릭하면 어태처블 모델이 사라지는 것은 1인칭에서 `q.is_using_item` 애니메이션이 얽혀서 생긴다(답 없음). `context.owning_entity->query.camera_rotation(n)`은 3인칭에서만 동작한다.
+
+### 엔티티와의 충돌, 바닐라 오버라이드
+
+- 어태처블과 클라이언트 엔티티가 ID를 공유하면 어태처블이 우선해서 같은 ID의 엔티티(cod, salmon, rabbit)를 덮어쓴다. 엔티티이기도 한 바닐라 아이템(엔더 진주, 화살, 눈덩이, 알)에서는 같은 식별자의 클라이언트 엔티티가 어태처블을 덮어쓴다는 보고도 있다. 두 파일의 애니메이션과 모델을 똑같이 하고 `q.is_attached` / `!q.is_attached`로 부분을 나눈다(예: `{"controller.render.item_default": "query.is_attached"}`, `{"controller.render.thrown_item": "!query.is_attached"}`).
+- `c.is_first_person`은 엔티티 컨텍스트에서 쓸 수 없다. 엔티티와 공유하거나 덮어쓴 애니메이션에 들어 있으면 `unhandled request for unknown variable 'context.is_first_person'`이 난다.
+- 바닐라 아이템 어태처블 교체는 바닐라 식별자로 어태처블을 만들어 덮어쓴다(예: `minecraft:totem_of_undying`). 다른 팩(Actions & Stuff)이 이미 애니메이션하면 그 이름과 변수를 재사용하고 내 팩을 위에 둔다. A&S player.json에 덮이지 않으려면 플레이어 엔티티 애니메이션 조건에 등장하지 않는 고유한 아이템 식별자를 쓴다. RP만으로는 마켓 팩을 덮어쓸 수 없다. 바닐라 방어구의 손에 든 모습 어태처블(철 부츠) 교체는 아직 불가능하다는 보고가 있다. 바닐라 다중 텍스처 아이템(양동이)의 텍스처 인덱스는 `spawn_egg` 외에는 지정할 수 없다.
+
+### 방어구 어태처블
+
+- 바닐라 방식은 파일 두 개(손에 든 표시와 착용 레이어, 예 `netherite_helmet.json`, `netherite_helmet.player.json`)다. 착용 레이어는 `parent_setup`(예: `v.chest_layer_visible = 0.0;`), geometry `geometry.player.armor.chestplate`, materials `armor`/`armor_enchanted`, 텍스처 `textures/models/armor/...`, 렌더 컨트롤러 `controller.render.armor`를 쓴다. 한 모델로 세트 전체를 쓸 때는 part visibility로 관계없는 뼈를 숨긴다. 어태처블은 식별자당 하나뿐이라 큰 방어구 아이콘을 원하면 아이템 어태처블과 방어구 어태처블을 합쳐 렌더 컨트롤러로 geometry/텍스처를 고른다.
+- 머리 등에 붙이려면 방어구식 어태처블은 뼈 폴더 경로로 붙으니 플레이어 머리 geometry와 같은 실제 경로(예: `body/head/head/pumpkin_cubes`)에 뼈를 중첩한다. 스케일된 몹에서 `head` 뼈에 붙인 어태처블은 머리와 함께 스케일된다.
+- 착용 방어구 어태처블은 1인칭에서 보이지 않는다. 유일한 우회법은 클라이언트 플레이어 엔티티 렌더 컨트롤러를 수정하는 것이다(호환성 저하).
+- 커스텀 geometry 엔티티의 바닐라 갑옷은 RP 클라이언트 엔티티 `description`에 `"enable_attachables": true`를 둔다. 휴머노이드가 아닌 모델에는 부위별 어태처블과 geometry를 RP `attachables/`에 만든다. 한 엔티티에만 적용하려면 고유 어태처블 식별자(예: `minecraft:diamond_helmet.jenny`)와 `item` 맵 Molang 조건 `"item": {"minecraft:diamond_helmet": "query.owner_identifier == 'ns:jenny'"}`을 쓴다(바닐라 식별자를 재사용하면 그 갑옷을 입은 모든 몹이 바뀐다). 아이템 ID는 정확해야 한다(`minecraft:diamond_chestplate`). 틀리면 content log에도 나오지 않는다. 바닐라 `animation.armor.chestplate.offset`/`animation.armor.helmet.offset`을 animate하고 몸통 갑옷에는 `armor`/`armor_enchanted`, 투구에는 `entity_alphatest`/`entity_alphatest_glint`를 쓴다. 플레이어가 아닌 착용자 감지는 `q.owner_identifier != 'minecraft:player'`이고 속성으로 갑옷 부위를 숨기려면 `"part_visibility":[{"head":"q.has_property('test:your_property') ? q.property('test:your_property') != 1 : true"}]`를 쓴다.
+- 커스텀 엔티티의 염색 갑옷은 일반/염색 x 인챈트/비인챈트를 모두 다루는 커스텀 렌더 컨트롤러와 전용 머티리얼이 필요하다. 남은 미해결은 가죽 갑옷 염료 색, 네더라이트 트림, 커스텀 엔티티의 거북 투구 효과다.
+- 말 갑옷은 일부 하드코딩이다. 커스텀 말은 안장은 보이지만 슬롯 1의 갑옷이 보이지 않았다. 동작한 방법은 장착 이벤트에서 갑옷 등급별 `skin_id`를 쓰는 것이다. 바닐라 말 갑옷/안장 렌더링은 `Array.armor[variable.armor_texture_slot]`과 `query.is_saddled` part_visibility를 쓴다.
+
+### 어태처블 렌더링 제한
+
+- 로케이터는 어태처블에서 동작하지 않는다. 애니메이션 로케이터의 파티클은 로케이터가 아니라 플레이어 앞에 한 번만 생긴다(스크립트 파티클이 우회). 어태처블은 렌더 컨트롤러 기능을 다 쓸 수 없다. `uv_anim` 머티리얼 속성은 동작하지 않으니 프레임별로 그룹을 숨기고 보이거나 렌더 컨트롤러로 텍스처 프레임을 바꾼다. `ignore_lighting`은 어태처블 렌더 컨트롤러에서 동작하지 않으니 머티리얼을 바꾼다. 메시(평면 텍스처) 모델은 인챈트 반짝임을 받지 않는다. 동적 색은 렌더 컨트롤러의 색 오버레이로만 된다.
+- 두 텍스처를 항상 켜거나 오버레이하려면 렌더 컨트롤러 두 개(하나는 `Texture.default`, 다른 하나는 다른 텍스처 키)를 쓴다. 맥락별 geometry/텍스처는 `"geometry": ["(c.item_slot == 'main_hand' && c.is_first_person) ? Geometry.icon : Geometry.sword"]`처럼 삼항식을 쓴다.
+- 텍스처 메시(바닐라 활이 쓰는 돌출 2D 텍스처)는 2D 아이템이 커스텀 핫바 아이콘을 유지하면서 다르게 들리게 하거나 렌더 컨트롤러로 아이콘과 3D를 함께 보이게 한다. 투명해질 수 있고 폐기 예정이라는 의견도 있다. 메시가 아니라 뼈를 회전한다(메시는 법선이 이상함).
+- 2D 아이템에서 들고 있는 아이템을 숨기려면 샘플 어태처블을 복사해 식별자를 바꾸고 빈 geometry나 투명 텍스처를 쓴다. 착용품과 함께 손 아이템을 숨기려면 `rightItem` 뼈를 0으로 스케일한다(1인칭에서는 보였다는 보고).
+- 어태처블의 애니메이션 텍스처는 렌더 컨트롤러에서 `array.frames[Math.mod(math.floor(query.anim_time * 5), 9)]`를 쓴다. 스프라이트 시트 토템 애니메이션은 텍스처가 많은 어태처블과 렌더 컨트롤러 `controller.render.item_animation_totem`을 쓴다.
+- 아이템별 동적 텍스처(물약 종류/레벨/지속, 아이템 이름)는 쿼리가 없다. BP에서 플레이어 속성으로 변수를 보낸다. 물약 텍스처는 UI 오버레이 없이는 레벨이나 지속 시간에 따라 바꿀 수 없다.
+
+## 11. 블록 아이템, 3D 아이콘, 애니메이션 아이템
+
+- 블록의 자동 아이템을 명시적 아이템으로 교체하려면 같은 식별자로 아이템을 만들고 `minecraft:block_placer {block, replace_block_item:true}`를 둔다. 식별자가 다르면 `replace_block_item`은 효과가 없다. `minecraft:max_stack_size:1`, `minecraft:wearable`, 반짝임 등을 제어할 수 있다. `minecraft:icon`을 빼면 블록 모델이 렌더링된다. `minecraft:foil`은 `minecraft:glint`가 됐다(인벤토리 UI에서만 보이고 손 반짝임에는 어태처블이 필요). replace를 써도 블록과 아이템은 별도 숫자 ID를 갖는다. 블록 아이템 오버라이드는 블록에서 태그를 물려받지만 자동 생성 블록 아이템은 물려받지 않는다. 블록 아이템 replace에는 1.26 이상이 필요하다(위키 기준).
+- `item_display_transforms`는 geometry 파일에 있고 블록의 `minecraft:item_visual`이 아이템 모습을 제어한다. 블록 아이콘을 옮기거나 키우려면 `item_display_transforms` + `fit_to_frame: false`(gui에서는 기본 true)를 쓴다. 교차 모델 블록은 인벤토리에서 찌그러져 보이니 아이콘을 텍스처로 둔다.
+- 3D로 떨어지는 아이템/3D 인벤토리 아이콘: 어태처블은 장착됐을 때만 렌더링된다. 원하는 geometry의 블록을 만들고 같은 식별자의 아이템에 `minecraft:block_placer`와 `"replace_block_item": true`를 준 뒤 `use_on`을 쓸 수 없는 블록으로 제한해 설치되지 않게 한다. 또는 `placement_filter`(공기 조건이나 존재하지 않는 태그)로 설치할 수 없는 블록 자체를 아이템으로 쓰고 item display transform으로 스케일한다. 대안은 `EntityItemDropAfterEvent`/`EntityItemPickupBeforeEvent`로 떨어진 아이템을 더미 엔티티로 바꾸는 것이다.
+- 애니메이션 아이템 트릭: 플립북 텍스처를 가진 블록에 `item_display_transforms` 회전을 모두 0으로 주면 인벤토리 아이콘이 평평해진다. `placement_filter` 블록 조건 air로 설치를 막는다(block_placer 아이템 불필요). format은 블록 1.20.80 이상, 아이템 1.21.60 이상이다. 블록 JSON에는 텍스처 경로가 아니라 terrain_texture 타일 ID를 쓴다. 16/32/64px 텍스처에 큐브 모델 변형을 쓰면 프레임이 늦으니 텍스처마다 돌출 모델을 권한다. 아이템은 `flipbook_textures`로 애니메이션할 수 없다. 선택지는 (1) 텍스처가 다른 뼈 그룹을 바꾸는 어태처블 애니메이션(초보자에게 권장), (2) 렌더 컨트롤러가 텍스처를 바꾸는 어태처블, (3) 설치할 수 없는 애니메이션 블록이다. 인벤토리 아이콘은 고정 또는 플립북뿐이고 쿨다운 중 아이콘을 바꾸려면 다른 아이템으로 교체해야 한다.
+- 빛나는 아이템: 블록 아이템은 `light_emission`으로 빛날 수 있다. 진짜 아이템이나 어태처블을 추가하면 빛이 사라진다. 커스텀 블록 모델은 인챈트 반짝임을 보일 수 없다(NBT 인챈트만). Vibrant Visuals에서는 다른 광원 아래에 서면 빛이 덮인다. 반짝임 색은 바꿀 수 없지만(하드코딩) 반짝임 텍스처는 바꿀 수 있다. 연료 컴포넌트는 블록에 없다.
+- 블록 아이템 버그: `minecraft:liquid_clipped`는 수면 높이에 설치하고 `use_liquid_clipping`은 고장 났다(MCPE-236319). 문서는 액체 안에서 상호작용한다고 하지만 block_placer는 실제로 위에 설치한다.
+- 바닐라 블록의 인벤토리 아이콘과 설치 텍스처를 다르게(묘목) 하려면 `blocks.json`의 `carried_textures` + `terrain_texture.json` 항목을 쓴다. 옛 geometry와 새 아이템 geometry가 같을 때(2D↔2D)만 된다. `blocks.json` 키는 블록 ID(`oak_sapling`), `terrain_texture.json` 짧은 이름은 `sapling_oak`이며 블록과 carried 텍스처를 둘 다 거기에 정의한다.
+
+### 아이템 크기와 텍스처
+
+- 16x16보다 큰 텍스처(버전별): 1.26.0(26.0) 이전에는 손에서 거대하게 렌더링됐다(축소된다는 보고도 있음). 그때는 위키의 high-resolution-items 방식(어태처블)을 썼다. 26.0에서 고쳐졌고 번들이 데이터 기반이라 커스텀 아이템에도 적용된다. 슬롯보다 큰 아이템 텍스처(롱소드 등)는 폐기/미지원이고 아이템 아이콘은 인벤토리 슬롯을 넘을 수 없다.
+- `minecraft:hand_equipped: true`는 도구처럼 렌더링된다(3인칭에서 3배로 큼). 일반 크기를 원하면 뺀다. 검처럼 손에 들게 하려면 필요하다. `handheld`/`hand_equipped`는 텍스처를 뒤집을 수 있다.
+- 한 아이템은 텍스처를 데이터에 따라 바꿀 수 없으니 여러 아이템을 만들어 스크립트나 UI로 바꾼다(도구 "스킨"). RP만으로 이름표에 따라 아이템 텍스처를 바꾸는 것은 안 된다(엔티티/블록은 됨). 커스텀 아이템의 휘두르기 애니메이션은 같은 텍스처의 바닐라 아이템과 다르다(MCPE-178674). `item_texture.json`의 `quad`/`tint_color`는 GUI에서는 되지만 월드에서는 적용되지 않는다. 인벤토리와 손의 바닐라 아이템 텍스처를 다르게 하려면 인벤토리용 item_texture를 바꾸고 어태처블 `default` 텍스처는 유지한다.
+
+## 12. 음반, 번들, 기타
+
+### 음반 (`minecraft:record`)
+
+- 역사적으로 바닐라 소리만 받았다. 커스텀 소리를 쓰면 설명 툴팁과 "Now playing" 핫바 텍스트가 없고 재생 시간과 주크박스에서 꺼내기를 무시했다(2026-08-11쯤 고쳐졌고 설명/메시지는 여전히 깨짐). 26.30.28부터 Beta APIs 실험에서 커스텀 소리가 동작한다. 이때는 `format_version: "beta"`(1.26.30 아님)와 sound_definitions의 네임스페이스 소리 ID(예: `tbgs:record.animus_gardinus`)가 필요하다. 바닐라 소리 ID는 lang 키 `item.record_<id>.desc`로 설명을 보여 준다.
+- 소리를 요구하는 아이템 컴포넌트(`minecraft:durability_sensor`, `record`, `swing_sounds`, `use_modifiers`)는 바닐라 소리 ID만 받는다. `durability_sensor`의 `particle_type`은 몇 가지 값만 지원한다. `swing_sounds`는 바닐라 LevelSoundEvent만 쓰고 커스텀 소리는 스크립트로 낸다.
+- 대안은 바닐라 음반을 RP로 교체(모노 .ogg를 `sounds/music/game/records`에 넣고 lang 항목 추가)하거나 커뮤니티 스크립트 샘플을 쓰는 것이다. 커스텀 음반 스크립트(API 1.19.0..2.1.0)는 `record` 아이템 컴포넌트를 빼면 생존 모드에서 동작한다(그 컴포넌트가 주크박스에 자동으로 넣음). 생존에서 `itemStack`이 실패하면 `beforeItemStack`을 쓴다. 소리 카테고리 `ui`면 거리와 상관없이 볼륨이 일정하다.
+
+### 번들
+
+- 커스텀 번들은 `minecraft:bundle_interaction`(`num_viewable_slots`), `minecraft:storage_item`(`max_slots`, `allow_nested_storage_items`, `allowed_items`), `minecraft:storage_weight_limit`(`max_weight_limit`)을 쓴다. format 1.21.60 번들이 항상 가득 찬 것으로 보인 보고가 있다(`allowed_items`를 빼고 시험하라는 제안, 해결 안 됨). `storage_weight_limit`이 의도대로 동작하지 않는다는 보고도 있다. 우클릭으로 첫 칸을 쏟는 동작은 onUse를 끄지 않으면 막을 수 없다. `minecraft:storage_weight_modifier`는 번들 안 크기를 정한다. `minecraft:allow_off_hand`는 아이템 컴포넌트다. 스크립트에서 `minecraft:storage_item` setItem undefined가 ContainerRules 위반을 낸 사례가 있다.
+
+### 기타
+
+- `minecraft:fire_resistant`: `{"value": true}`이며 최신 format이 필요하다(1.21.50과 1.21.70에서 실패, 1.21.120 이상이라는 말이 있음).
+- `minecraft:damage`가 틀린 값을 보여 주는 문제(예: 325가 69로, MCPE-180073)는 26.0에서 고쳐졌지만 새 format이 필요하다.
+- 아이템으로 몹 변형을 바꾸려면 RP `query.is_item_name_any('slot.weapon.mainhand',0,'ns:item')`, 스크립트 `playerInteractWithEntity`, 또는 커스텀 엔티티의 `on_interact` 필터 `has_equipment`(domain main_hand)로 enum 속성(`client_sync: true`)을 설정하는 이벤트를 발동한다.
+- 커스텀 물고기 양동이는 아이템 + 엔티티 + 스크립트 우회가 필요하다. 풀어놓을 때는 `minecraft:entity_placer`(`entity`)를 쓴다. 양동이는 하드코딩이다.
+- 불가능한 것: 커스텀 화로, 찌가 있는 커스텀 낚싯대, 스파이글래스처럼 쓰는 동안 시야 감도 낮추기. 독성 감자 같은 바닐라 전리품은 수정할 수 없으니 블록 파괴 때 스크립트로 바꾼다.
+
+## 13. 바닐라 아이템 오버라이드와 aux ID
+
+- 바닐라 아이템은 대부분 수정할 수 없다. 전체 바닐라 행동 팩에는 데이터 기반 아이템 약 77개만 있고 나머지는 JSON이 없다. 데이터 기반인 것(창 쿨다운)은 되고 아닌 것(네더라이트 넉백)은 안 된다.
+- 오래된 format으로 덮어쓰기: format `1.10` 파일은 거의 모든 바닐라 아이템의 옛 형식 컴포넌트(예: `minecraft:max_durability`, 엔더 진주에 내구도를 준 사례)를 덮어쓸 수 있다. format `>1.16.100`은 몇 가지만 덮어쓴다. 1.10에 없던 컴포넌트는 덮어쓰지 못하고 1.10에서는 커스텀 컴포넌트를 쓸 수 없다. 한 시험에서는 1.10 내구도 변경이 시각적으로 초기화됐다. `minecraft:explodable`은 제거됐다. 바닐라 아이템 아이콘 덮어쓰기 예:
+
+```json
+{
+  "format_version": "1.10.0",
+  "minecraft:item": {
+    "description": { "identifier": "minecraft:waxed_copper_door" },
+    "components": { "minecraft:icon": "waxed_copper_door" }
+  }
+}
+```
+
+  `item_texture.json`에 대응 항목이 필요하다.
+- aux ID 계산(v26.0): 커스텀 블록 aux ID는 -9745(= -10000+255)에서 시작해 블록마다 줄어든다. 커스텀 아이템 aux ID는 257에서 시작해(256은 예약/아이템 없음) 늘어나며 중간에 끼어들어 바닐라 아이템 ID를 밀어낸다. 순서는 식별자가 아니라 파일 이름 순이고 하위 폴더가 알파벳순으로 먼저 오고 그다음 루트 파일이며 블록은 역순이다. PC에서는 일관되지만 Android에서는 깨질 수 있고 iOS에서는 깨진다. 위키는 커스텀 블록이 -1039에서 시작하고 aux ID로 렌더링되지 않는다고 한다. (conflicting)
+- bedrock-auxgen은 Go CLI(`go install github.com/DreamlandMC/bedrock-auxgen/cmd/bedrock-auxgen@latest`, 저장소는 wan-adrian/bedrock-auxgen으로 이전)로 bedrock-samples에서 `"minecraft:acacia_boat": 26935296` 같은 JSON을 만든다. `--rp <path>`는 커스텀 아이템용 `textures/item_texture.json`을 읽고 `--custom-start`(기본 257)를 쓴다. v1.0.4는 주석과 끝 쉼표 처리를 위해 bedrock-jsonfix를 통합했다. 오래된 BDS는 틀린 ID를 준다.
+
+## 14. 알려진 제한과 우회법
+
+| 제한 | 우회법 |
+|---|---|
+| 아이템 이벤트 제거 | 스크립트 커스텀 컴포넌트 |
+| `can_always_eat: false` 무시(MCPE-178647) | format 1.20.40 음식(커스텀 컴포넌트 포기) |
+| digger 채굴로 내구도 감소 없음 | 스크립트/DurabilityManager.js (정확한 복제는 불가) |
+| 커스텀 방어구 강인함/넉백 저항 없음 | 스크립트 `applyKnockback` |
+| 아이템 텍스처를 데이터로 바꿀 수 없음 | 아이템 여러 개를 스크립트로 교체 |
+| 아이템을 flipbook으로 애니메이션할 수 없음 | 어태처블 프레임 그룹/렌더 컨트롤러, 설치 불가 애니메이션 블록 |
+| 어태처블에 `item_display_transforms`, 로케이터, `uv_anim`, `ignore_lighting` 무효 | 애니메이션으로 위치/스케일, 프레임별 그룹, 머티리얼 교체, 스크립트 파티클 |
+| `/playanimation`이 어태처블에 안 됨 | player 속성 + `c.owning_entity -> q.property(...)`, 변수를 설정하는 더미 애니메이션 |
+| 착용 방어구 1인칭에서 안 보임 | 플레이어 렌더 컨트롤러 수정(호환성 저하) |
+| 쇠뇌 1인칭 당기기가 식별자 `crossbow`에 하드코딩 | 쇠뇌별 네임스페이스, 스크립트 애니메이션 |
+| 1.26.40 스미딩 base 제한(MCPE-242206) | 내구도 0 `durability` + `wearable slot.armor.body` |
+| 크리에이티브 숨기기(보고 엇갈림) | `menu_category` category `none` 시험 |
+| 아이템 NBT(셜커 내용 등) 스크립트 미노출 | 블록으로 설치해 인벤토리 읽기 |
+
+## 15. 버전별 변화
+
+- 1.20.0: 아이템 `minecraft:knockback_resistance` 제거. 1.20.30: digger `use_efficiency`. 1.20.40: `can_always_eat` 우회용 음식 format. 1.20.50: 아이템 태그 최소 format(`1.20.5`는 유효하지 않음).
+- 1.21.90: 아이템 커스텀 컴포넌트 V2(`"ns:comp": {}`), `minecraft:custom_components` 폐기, `description.category` 제거(→ `menu_category`).
+- 1.21.110: DurabilityManager 템플릿이 요구하는 format. 1.21.120: `fire_resistant`, `enchantable`(`/enchant`), 커스텀 컴포넌트 권장 format. 1.21.12x: `minecraft:copper_horse_armor`.
+- 1.21.130(2025-12, 창/Mounts of Mayhem): `player.entity.json`에 창 변수와 컨트롤러가 추가돼 옛 사본이 깨졌고 bedrock-samples가 한동안 뒤처졌다.
+- 26.0 / 1.26.0(2026-02 무렵): 16x16보다 큰 아이템 텍스처 문제 해결, `minecraft:damage` 표시 버그 해결(새 format 필요), `menu_category` `none` 숨기기가 동작했다는 보고, aux ID 계산 규칙.
+- 1.26.10: 커스텀 방패 템플릿이 @minecraft/server 2.6.0으로 정식, HCF 음식 `on_consume` 무효 확인, 아이템 카탈로그 format 1.26.10. 1.26.13: `saturation_modifier` 문자열이 `invalid numeric value`.
+- 2026-04-24: shooter 버그 MCPE-228333/228332 수정. 2026-05-02: `wearable`의 `slot.armor.body` 동작 중단(MCPE-238263). 2026-05-07: 착용 아이템 스택 크기 버그(MCPE-236344) 수정.
+- 1.26.30: 26.30.28부터 `record` 커스텀 소리(Beta APIs, `format_version: "beta"`), `interact_button` onUse 버그 지속. 1.26.40: `recipe_smithing_transform` base가 장비여야 하고 `durability`가 필요(MCPE-242206). 1.26.50: 스미딩 `addition`의 `{"tag": ...}`가 여전히 동작하지 않음.

@@ -1,0 +1,166 @@
+---
+title: "JSON UI 편집기와 생성기"
+description: "JsonForge, bedrock-json-ui-editor, EasyUIBuilder, JsonEncryptor의 사용법과 한계"
+sidebar_position: 3
+sources:
+  - private-research
+  - repo-tool-analyses
+  - jsonforge
+  - bedrock-json-ui-editor
+  - easyuibuilder
+  - jsonencryptor
+---
+
+JSON UI를 손으로 쓰지 않고 시각 편집기나 코드 생성기로 만드는 도구들이다. 도구마다 하는 일, 설치와 사용, 한계, 라이선스를 적는다. 공통 결론은 하나다. **미리보기와 생성 결과는 게임이 아니므로 반드시 게임(또는 [JSON UI 테스터](./jsonui-tester.mdx))에서 확인한다.** 조사한 네 도구 모두 바닐라 1.26.50.4 구조와 어긋나는 곳이 있었다(출처: tool-repo-analyses).
+
+| 도구 | 종류 | 언어 | 라이선스 | 조사 커밋 |
+|---|---|---|---|---|
+| JsonForge | 시각 편집기 | TypeScript, React, Electron | MIT | `2874876` |
+| bedrock-json-ui-editor | 위치 미세 조정 웹 도구 | HTML, JS | README에만 MIT, LICENSE 파일 없음 | `9cb4896` 분석, 클론 `1f18f0d` |
+| EasyUIBuilder | 코드 생성기 | PHP 8 | MIT | `90b889d` |
+| JsonEncryptor | 난독화기 | 웹 JS | MIT | `48e7837` |
+
+## JsonForge
+
+**하는 일.** 캔버스에 요소를 끌어다 놓고 속성을 고쳐 JSON UI를 만드는 도킹형 편집기다. 요소 10종(`panel`, `stack_panel`, `collection_panel`, `scrolling_panel`, `image`, `label`, `button`, `input_panel`, `toggle`, `custom`), 툴박스·계층·캔버스·속성·텍스처·바인딩·JSON 미리보기 패널, 9-slice 캔버스, 바인딩 편집기(`global`, `view`, `collection`, `collection_details`, `none`), 되돌리기, `.jfproject` 묶음 형식을 가진다. "애드온 내보내기"는 서버 폼(행동 팩 스크립트 포함), HUD 오버레이, 스코어보드 사이드바 세 가지를 `.mcaddon`/`.mcpack`으로 만든다(출처: tool-jsonforge, `README.md`).
+
+**설치와 사용.** 브라우저(Vite)와 데스크톱(Electron) 모두 한 코드베이스다. 소스에서는 다음과 같다.
+
+```bash
+git clone https://github.com/xRookieFight/jsonforge
+cd jsonforge && npm install
+npm run dev            # 웹 (vite)
+npm run dev:electron   # 데스크톱 (electron)
+npm run build:electron # 설치 파일(NSIS, portable, DMG, AppImage, deb)
+```
+
+사용 흐름은 시작 화면에서 템플릿(Blank, Dialog Form, Form Buttons List, Scoreboard Sidebar, HUD Overlay)을 고르고, 툴박스에서 요소를 추가해 캔버스·속성(Transform, Layout, Layer)으로 다듬고, 텍스처 패널에서 끌어다 놓은 뒤 File > Export Addon으로 내보내는 것이다. 새 프로젝트는 384x216 UI 단위 화면이다. 리소스팩은 게임이 이미 그리는 것만 다시 꾸밀 수 있고, 살아 있는 글자는 스크립트가 여는 폼이나 스코어보드에서 와야 한다(출처: tool-jsonforge, `docs/usage.md`).
+
+**한계(분석 결과).**
+1. 캔버스가 `anchor_from`과 `anchor_to`를 거꾸로 계산한다(부모 기준점을 `anchor_to`로). 두 값이 같으면 티가 안 나는데 바닐라도 96%는 같게 쓴다.
+2. 캔버스는 스택 패널을 쌓지 않고 `%`, `%c`, `fill`, `default` 크기를 모른다. `alpha`는 CSS `opacity`라 자식까지 흐려진다(엔진은 기본 비전파, LAY-33).
+3. "JSON 내보내기"는 자식 정의를 최상위에 따로 쓰고 부모 `controls`에는 `{ "자식": { "type": "..." } }`만 넣는다. `@` 참조가 없어 이름만 같은 새 인라인 컨트롤이 되므로 크기·텍스처·바인딩이 모두 빠진다.
+4. 애드온 내보내기는 낫지만, HUD 오버레이가 상속만 받은 `controls`에 `modifications`로 넣어 바닐라 HUD가 통째로 사라질 위험이 있고(MOD-04), 닫기 버튼 offset 부호가 바닐라와 반대이며, 서버 폼 라우터는 제목이 어느 화면과도 맞지 않으면 빈 화면을 띄워 다른 애드온의 폼을 망가뜨린다.
+5. 쓸 만한 기법: 폼 버튼을 `form_buttons` 컬렉션 위 그리드 하나로 내보내 서버가 보낸 개수만큼만 칸을 만든다. 묶인 Minecraft 글꼴과 프리셋 텍스처의 권리는 확인하지 못했다.
+
+**라이선스.** MIT(Copyright 2026 JsonForge).
+
+## bedrock-json-ui-editor
+
+**하는 일.** JSON UI 파일 하나를 붙여 넣으면 컨트롤 트리와 미리보기를 보여 주고, 미리보기에서 상자를 끌거나 화살표 키(Shift는 10배)로 밀면 `offset`을 다시 써 주는 정적 웹 앱이다. 새 화면 설계가 아니라 기존 HUD·스코어보드 요소의 위치 미세 조정이 목적이다. 편집할 수 있는 속성은 `offset`, `size`, `anchor_from`, `anchor_to`, `alpha`, `layer`, `visible`/`enabled`, 애니메이션 `from`/`to`/`duration`/`easing`이다(출처: tool-bedrock-json-ui-editor, `README.md`).
+
+**사용.** 편집기 페이지를 열어 `scoreboard.json`, `hud_screen.json` 같은 파일을 붙여 넣고 Parse & Edit을 누른 뒤, 트리나 미리보기에서 요소를 골라 끌고, 화면 크기를 고르고 예시 문자열을 넣어 실제 글자 위치를 확인하고, Export JSON으로 복사하거나 내려받는다. 설치가 필요 없고(빌드 없음, `index.html`, `style.css`, `app.js`) 서버 없이 브라우저에서 돌며 초안은 브라우저 저장소에 자동 저장된다.
+
+**기능.** 미리보기는 CSS 픽셀이 아니라 UI 픽셀 화면(데스크톱 427x240, 폰 520x240, 태블릿 320x240)이고, 실제 게임 스크린샷을 반투명하게 깔 수 있으며 화면 밖은 빗금으로 표시한다. 핫바(182x22), 체력·허기(81x9), 채팅(200x60), 사이드바(96x90), 로고(27x27) 위치를 안내선으로 그린다. 글자 폭은 공백 4, 일반 글자 6, 사설 영역 글리프 9, BMP 밖 글자 10 UI 픽셀, 줄 높이 10으로 추정한다.
+
+**한계.** 레이아웃 해석이 엔진 규칙과 여러 곳에서 다르다. `%c`를 "가장 큰 자식 곱하기 계수"로 보고(엔진은 스택 진행 축에서 보이는 자식의 합), `default`를 모든 타입에서 내용 크기로 보고, 스택 자식의 `offset`과 앵커를 그대로 적용하고(엔진은 무시, LAY-38), 숨은 자식에게도 자리를 주고, `fill`을 20픽셀로 그린다. 바닐라에 한 번도 없는 `wrap_content`를 다룬다. 따라서 위치 보조용으로만 쓰고 엔진 규칙의 근거로 쓰지 않는다.
+
+**라이선스.** README 끝에 "MIT"라고만 적혀 있고 `LICENSE` 파일과 저작권자 표기가 없다. 불명확하므로 코드와 문장을 복사하지 않고 사실만 적었다.
+
+## EasyUIBuilder
+
+**하는 일.** PHP 빌더 API로 JSON UI 파일을 만들고 `ui/custom_ui/<ns>.json`, `ui/_ui_defs.json`, `ui/server_form.json`을 자동 생성하는 Composer 라이브러리다(PHP 8.0 이상). 요소는 Label, Panel, Button, Image, Grid, StackPanel, Toggle, Slider, EditBox, ScrollView, Dropdown, InputPanel, Screen, CustomRender이고, 바인딩·애니메이션(30개 넘는 easing)·변수·`modifications`·JSON 검증기를 갖는다(출처: tool-easyuibuilder, `README.MD`).
+
+**설치와 사용.**
+
+```bash
+composer require refaltor/easy-ui-builder
+```
+
+```php
+use refaltor\ui\builders\Root;
+use refaltor\ui\elements\Label;
+use refaltor\ui\colors\BasicColor;
+
+$root = Root::create("my_namespace");
+$root->addElement(
+    Label::create("hello", "Hello Minecraft!")
+        ->setFontSize(Label::FONT_EXTRA_LARGE)
+        ->setShadow()
+        ->setColor(BasicColor::yellow())
+);
+$root->generateAndSaveJson("ui/my_screen.json");
+```
+
+화면마다 서버 폼 제목과 정확히 같은지(`titleCondition()`)로 화면을 고른다. 수동 설치는 `spl_autoload_register`로 `./src/`를 불러오는 오토로더를 둔다.
+
+**한계(분석 결과).** 자동 생성되는 `server_form.json`과 바닐라 수정 기능이 바닐라 구조와 어긋난다.
+1. `server_form.json`에 `namespace`가 없고, 정의 키가 자기 자신을 상속하는 `long_form@long_form`이며, `controls`가 배열이 아니라 객체다(PHP 연관 배열을 그대로 씀).
+2. 기본 폼을 숨기는 식이 화면마다 `not(...)`를 `and` 없이 이어 붙여 `(not(#title_text = '')not(#title_text = 'A'))` 꼴이 되고, 오타 키 `con`을 쓴다.
+3. `modifyVanillaElement`가 자기 namespace 파일에 `modifications`를 써서 바닐라에 적용되지 않는다(MOD-02).
+4. 바닐라에 없는 속성 이름을 낸다(`scroll_bar_track`, `scroll_size`, `toggle_tab_index`, `text_box_visible` 등).
+5. 검증기의 "유효 타입 14개"는 바닐라가 쓰는 24개를 빠뜨리고, 없는 렌더러 이름을 포함한다. 일치 비교라 제목에 메타데이터를 붙일 수 없다.
+
+**라이선스.** MIT(Copyright 2026 Refaltor77).
+
+## JsonEncryptor
+
+**하는 일.** `ui/` 파일을 받아 사용자 정의 이름을 MD5나 솔트 카이사르 암호로 바꾸고, 공백을 지우고 아무 데나 `/* */` 주석을 끼우고(내용 어지럽히기), 선택하면 문자열을 `\uXXXX`로 이스케이프하고, zip이면 파일 이름을 해시로 바꾸고 최상위 정의마다 파일을 나누는 브라우저 도구다. 입력은 `.json`/`.jsonc` 또는 팩 `.zip`이다(출처: tool-jsonencryptor, `README.md`).
+
+**사용.** 배포 페이지(GitHub Pages)에 파일을 올리고 설정(키, 어지럽히기, 이스케이프, 예외 목록, 자동 예외 추가)을 고른다. zip 모드는 `ui` 폴더만 처리하고 결과를 `ui` 안으로 옮기며 `_ui_defs.json`을 다시 쓴다. 처리 순서는 주석 제거 후 `JSON.parse`, 이름 암호화(문법 키, 엔진 팩토리 이름, 바닐라 namespace·정의 이름, 엔진 `$` 변수, 사용자 예외 제외), 출력, 선택적 어지럽히기와 `\u` 이스케이프다.
+
+**한계.**
+- 난독화가 기대는 문법(키와 값 사이·값 뒤·배열 원소 사이의 블록 주석, 공백 없는 한 줄 JSON, `\u` 이스케이프)은 모두 jsoncpp 규칙(FILE-03, FILE-30) 안에 있다. `\u` 이스케이프는 읽는 순간 풀리므로 보호 효과가 없다.
+- zip 모드 기본값(파일 이름 해시 켬, 정의별 파일 분리 켬, 대상 폴더 `obfuscated`)이 `ui/server_form.json`, `ui/hud_screen.json` 같은 바닐라 경로 파일도 `ui/obfuscated/<md5>.zip`으로 옮겨 바닐라 수정(FILE-22, MOD-02)을 깨뜨릴 수 있다.
+- 어지럽히기 정규식이 문자열 안의 쉼표에서 멈춰 `"Hello, world"`가 `"Hello/*...*/, world"`로, 바인딩 식 `'p,q'`도 깨진다.
+- 엔진 고정 이름 목록(팩토리 이름 22개, 엔진 `$` 변수 약 300개, 버튼 ID)이 데이터로 정리돼 있어 난독화나 이름 바꾸기 도구를 만들 때 체크리스트가 된다.
+
+**라이선스.** MIT(Copyright 2024 pipa_ngry).
+
+## 그 밖의 생성기
+
+조사에서 확인한 다른 생성기와 라이브러리는 라이선스가 갈린다: AsaJS(JSON UI를 TS로 짜는 프레임워크, 바인딩 식 컴파일러)와 StarLibV2(액션 폼용 템플릿)는 GPL-3.0, npm `mcbe-ts-ui`(TS 빌더, `_ui_defs.json` 자동 갱신)와 PMServerUI는 MIT다. 이들은 사례 섹션에서 따로 다룬다.
+
+## 커뮤니티 노트
+
+아래는 커뮤니티 조사로 모은 JSON UI, Ore UI, DDUI 도구 메모다.
+
+`(confirmed)`, `(single report)`, `(conflicting)` 같은 말은 보고의 신뢰도 표시다.
+
+### JSON UI / Ore UI / DDUI 도구
+
+- **JSON-UI-Maker** (`https://sebthesigma.github.io/JSON-UI-Maker/`): 데스크톱 전용이고 서버 폼만 다룬다. 단순한 stack_panel/grid만 되고 collection panel과 binding은 안 된다. 튜토리얼: `https://youtu.be/WAKUBKlSBx0` .
+- **JSON UI Web Editor** (`https://gamezasrc.github.io/JSON-UI-Web-Editor/` , 소스 `https://github.com/gamezaSRC/JSON-UI-Web-Editor`): inspector, binding, 변수, 폼 빌더를 갖춘 PC용 도구다. `visible`/`enabled`에 변수를 쓸 수 없고, % 값이 숫자로 바뀌고, `factory` 옵션이 없다.
+- **Cinnabar** (`https://bedrock-mc.github.io/cinnabar/`): 웹 JSON UI 편집기다. 뒤에서 AI가 짠 미완성 Rust Bedrock 재구현이 돈다.
+- **다른 편집기**: 중국판 JSON UI 편집기는 중국판 전용 JSON UI v2용이라 국제판에는 권하지 않는다. MCP를 지원하는 JSON UI 편집기와 폼 생성기(`https://rawcdn.githack.com/NathaLMV/CustomForms-IA/7d786478b42ddfd0ae93b3f4d485afdf6d782e75/tools/jsonui-form-generator.html`)도 언급됐다.
+- **JSON-UI Previewer (frederox)**: 1.16 중국판 UI 코드를 TS로 재현한 것이다. 원본 코드에서 나왔기 때문에 공개할 수 없다.
+- **스키마와 LSP**
+  - 파일에 `"$schema": "https://kalmemarq.github.io/Bugrock-JSON-UI-Schemas/ui.schema.json"`을 넣는다.
+  - VS Code 확장: `Sugger.json-ui-autocomplete`(VS Code 1.130.0에서 "namespace" 오류. 창을 다시 열거나 `json.validate.enable`을 끈다), `Dingsel.bedrock-ui`.
+  - 대부분의 JSON UI LSP는 JSONC를 지원하지 않는다.
+- **UI 핫 리로드**
+  - `options.txt`의 UI hot-loader 옵션은 리테일 빌드에서 동작하지 않는다(파트너/마켓플레이스 빌드에만 있다).
+  - LeviLauncher Ctrl+R: 기본은 꺼져 있고, 이미 로드된 파일만 다시 읽는다. 프로젝트가 죽었다는 보고가 있다.
+  - LeviLamina DLL 주입 핫 리로드는 미완성이다.
+  - `/reload all`은 설정에서 단축키(alt+key)로 지정할 수 있고, 낡은 툴팁 텍스처도 고친다.
+- **비공식 JSON UI 속성 목록**: LLM으로 실행 파일을 분석해 만든 1.26.52.3용 목록이 있다. (unverified)
+- **vanilla UI 파일**: bedrock-samples(`https://github.com/Mojang/bedrock-samples/releases/tag/v1.26.30.5`), `https://github.com/ZtechNetwork/MCBVanillaResourcePack/blob/master/ui/server_form.json`
+- **예제와 라이브러리**
+  - Chest-UI(`https://github.com/Herobrine643928/Chest-UI`): 스크롤이 안 되고, 잘못 쓰면 다른 UI를 깨뜨린다. `typeIds.js`
+  - WAILA: `https://github.com/r4isen1920/WAILA`
+  - bedrock-auxgen: `https://github.com/wan-adrian/bedrock-auxgen`
+  - collect-everything-bedrock: `https://github.com/joeskeen/collect-everything-bedrock`
+  - json-ui-examples: `https://github.com/LeGend077/json-ui-examples`
+- **나인슬라이스와 이미지 도구**: nineslice 편집기 `https://minato.beyondbedrock.org/web-apps/9slice/` (소스 `https://github.com/Minato-mba/web-apps/blob/main/9slice`), 뷰어 ninesliceviewer.web.app, OreUI 이미지 생성기 leowascoding.github.io/studio/html/oreui-image-creator.html, 스니펫 사이트 bedrock-resources.vercel.app.
+- **Ore UI Customizer (8Crafter)**: 사이트 `https://www.8crafter.com/utilities/ore-ui-customizer` , 앱 저장소 8Crafter-Studios/Ore-UI-Customizer-App, changelog `https://www.8crafter.com/utilities/ore-ui-customizer-changelogs` . 게임의 Ore UI 파일을 수정한다.
+  - 단축키: `CTRL+F8` 리로드, `CTRL+ALT+M` 유틸리티, `CTRL+SHIFT+I` 디버그 오버레이, `F3+2/3/4` 그래프
+  - 플러그인: `.mcouicplugin`/`.ouicplugin`, npm `@ore-ui-customizer-api/plugin-env`
+  - v1.9.0: 리로드 뒤 UI가 반응하지 않던 문제를 우회했다.
+  - v1.10.0: 1.21.130+ 쿼리 캐시.
+  - v1.12.0: 콘솔(`$0`..`$4`, `$_`), Lite Play Screen에서 MOTD를 HTML로 렌더하던 XSS류 문제를 고쳤다.
+  - v1.13.0: 수정 단계가 10~20배 빨라졌다.
+  - v1.13.2: `Export as RP`(RP에서 Ore UI를 불러오게 하는 게임 모드가 필요하다).
+  - v1.16.0: Android export world 버튼, Realms 개선.
+  - 앱: GDK 자동 업데이트로 깨진 설치 복구, `MicrosoftGame.Config` 읽기, MCPELauncher/LeviLauncher/Linux/macOS 지원.
+  - Ore UI 메뉴 텍스트는 팩의 `texts/en_US.lang`으로도 바꿀 수 있다.
+- **DDUI 도구**
+  - jaylydev 문서의 DDUI(`_minecraft_server-ui.CustomForm`, `ObservableUIRawMessage`)
+  - stirante preview typings
+  - Lamina DDUI 가이드: `https://lamina.levimc.org/developer_guides/how_to_guides/data_driven_ui_guide/`
+  - Keystone 라이브러리: `https://github.com/XxPMMPERxX/Keystone`
+  - gainser의 비주얼 DDUI 폼 빌더(WIP, 2026-10 미공개. 드래그 앤 드롭, TS/JS export와 import. 레이아웃 편집은 Mojang 레이아웃을 기다린다)
+  - Observable 래퍼 클래스
+- **diag2form.js**: NPC 대화 `.diag.json`을 server-ui 폼 JS로 바꾼다(`node diag2form.js in.diag.json out.js [-r|--raw]`, node 20+).
+
+---
+
