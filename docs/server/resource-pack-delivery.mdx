@@ -36,26 +36,20 @@ const (
 - `ResourcePackDeliveryConfig`의 `ChunkSize`(0이면 128KiB)와 `ChunkSendDelay`(0이면 200ms, 음수면 지연 없음)로 조절한다. 1.26.30 이후 클라이언트는 청크를 너무 공격적으로 보내면 다운로드에 실패할 수 있다.
 - 팩 객체는 `Name`, `UUID`, `Version`, `Modules`, `Dependencies`, `HasScripts`, `HasBehaviours`, `HasTextures`, `HasWorldTemplate`, `DownloadURL`, `Checksum`, `Encrypted` 같은 메서드를 가진다(`resource.Pack`). `Pack.WithContentKey`로 암호화 팩의 콘텐츠 키를 준다.
 
-## 서버 쪽 팩 처리 예 (한 Dragonfly 기반 서버)
+## 서버 쪽 팩 가공
 
-한 Dragonfly 기반 서버(MIT)는 리소스팩을 실행 파일에 넣고(`go:embed`) 서버를 켤 때 클라이언트에 보낼 모양으로 가공한다. 소스 파일은 그대로 두고 임시 복사본만 바꾼다. (출처: 비공개 조사)
+커스텀 서버는 리소스팩을 실행 파일에 넣고(Go라면 `go:embed`) 서버를 켤 때 클라이언트에 보낼 모양으로 가공할 수 있다. 소스 파일은 그대로 두고 임시 복사본만 바꾼다. (출처: 비공개 조사)
 
-1. **버전**: 팩 내용 해시로 `manifest.json` 버전을 자동으로 정한다(손대지 않는다). 비밀값도 해시에 들어간다. 같은 내용이면 같은 버전이라 클라이언트 캐시가 유지되고, 바뀌면 버전이 바뀌어 다시 받는다.
-2. **JSON minify**(`[ResourcePack] Minify`, 기본 켬): `.json`의 `//`·`/* */` 주석과 공백을 지운다(키 순서·문자열은 그대로). `manifest.json`은 건드리지 않는다. 주석을 지운 뒤에도 올바른 JSON이 아니면 서버가 켜지지 않는다(그런 파일은 게임도 못 읽는다). JSON UI 파일에 주석이 많아 용량이 꽤 준다.
-3. **암호화**(`[ResourcePack] Encrypt`, 기본 끔): 바닐라 마켓 팩과 같은 방식이다. 게임은 게임 중 Ore UI 페이지를 암호화되었거나 `content.zipe`이 있는 팩에서만 가져간다. 그래서 암호화를 끄면 팩마다 빈 `content.zipe`을 넣어 보낸다(그래야 메뉴의 DDUI 화면이 그대로 그려진다) `{실측}`.
+1. **버전**: 팩 내용 해시로 `manifest.json` 버전을 자동으로 정한다. 같은 내용이면 같은 버전이라 클라이언트 캐시가 유지되고, 바뀌면 버전이 바뀌어 다시 받는다. 암호화한다면 비밀값도 해시에 넣는다.
+2. **JSON minify**: `.json`의 `//`·`/* */` 주석과 공백을 지운다(키 순서·문자열은 그대로). `manifest.json`은 건드리지 않는다. 주석을 지운 뒤에도 올바른 JSON이 아니면 서버를 켜지 않게 한다(그런 파일은 게임도 못 읽는다). JSON UI 파일에 주석이 많아 용량이 꽤 준다.
+3. **암호화**: 바닐라 마켓 팩과 같은 방식이다. 게임은 게임 중 Ore UI 페이지를 암호화되었거나 `content.zipe`이 있는 팩에서만 가져간다. 그래서 암호화하지 않는 팩에도 빈 `content.zipe`을 넣어 보내야 팩의 DDUI·Ore UI 화면이 그대로 그려진다 `{실측}`.
    - 파일마다 32글자 키로 AES-256-CFB8(IV는 키 앞 16바이트)로 암호화한다. `manifest.json`·`pack_icon.png`는 그대로 둔다.
    - `contents.json`에 경로와 키를 적고(앞 256바이트는 머리: 버전 0, 매직 `FC B9 CF 9B`, 팩 UUID), 목록은 팩의 **콘텐츠 키**로 같은 방식으로 암호화한다. 콘텐츠 키는 접속할 때 서버가 클라이언트에 준다(gophertunnel `Pack.WithContentKey`).
-   - 키는 비밀값에서 HMAC으로 만든다(같은 내용이면 같은 키와 버전). 비밀값은 `data/resourcepack.secret`에 있다(처음 켤 때 만들어짐, 권한 0600). **이 파일을 잃거나 바꾸면 모든 팩의 키와 버전이 바뀌어 클라이언트가 팩을 다시 받는다.** 저장소에 넣지 않는다.
-   - 형식은 커뮤니티 도구(`akmalfairuz/bedrockpack`, `EncryptMyPack`)와 같고, 테스트가 서버 쪽에서 다시 풀어 보는 것까지 확인한다.
+   - 키를 서버 비밀값에서 HMAC으로 만들면 같은 내용이면 같은 키와 버전이 나온다. **비밀값을 잃거나 바꾸면 모든 팩의 키와 버전이 바뀌어 클라이언트가 팩을 다시 받는다.** 비밀값은 저장소에 넣지 않는다.
+   - 형식은 커뮤니티 도구(`akmalfairuz/bedrockpack`, `EncryptMyPack`)와 같다.
 4. **한계**: 암호화는 파일을 줍는 것을 번거롭게 할 뿐이다. 키를 클라이언트에 주므로 접속하는 클라이언트는 풀 수 있고 도구(`bedrockpack steal`)로 한 번에 풀린다. 실질적 보호가 아니라 억제다. 보이면 안 되는 것은 팩에 두지 않는다.
 
-```toml
-[ResourcePack]
-Minify = true
-Encrypt = false
-```
-
-`Encrypt`가 꺼져 있으면(기본) 비밀값 파일도 읽지 않는다. 빌드한 팩은 `data/packcache`에 캐시하며(팩 하나 빌드가 9.9ms에서 캐시 적중 1.5ms), `Resources.Required = true`로 접속 시 팩 적용을 강제한다.
+Dragonfly에서는 서버 설정 `Resources.Required = true`로 접속 시 팩 적용을 강제한다.
 
 암호화 팩이 Ore UI 파일 조회에서 신뢰된다는 근거와 `content.zipe`의 정체는 [../basics/pack-delivery-and-encryption.mdx](../basics/pack-delivery-and-encryption.mdx)에 있다(출처: repo-ore-ui-loading).
 

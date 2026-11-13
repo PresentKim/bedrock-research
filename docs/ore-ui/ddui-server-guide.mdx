@@ -108,7 +108,7 @@ new CustomForm(player, "Entity Monitor")
 | 버튼 수백 개(200개 격자), 탭 전환, 부분 갱신 | **됨** | `{실측}` |
 | 엔진이 그리는 아이템·블록 아이콘 | **됨.** 커스텀 아이템·블록도 `geo-item://`의 `bag`으로 | `{실측, 코드}` |
 | 팩 텍스처(커스텀 아이템·블록 그림) | **됨.** `pack://경로.png` | `{실측}` |
-| 연구 서버 연구 화면 전체 | **됨.** 연구 99개, 실제 규칙 | `{실측}` |
+| 격자 + 상세 화면(항목 99개, 상태별 규칙) | **됨** | `{실측}` |
 | 진짜 상자·화로·인벤토리를 Ore UI로 열기 | **안 됨.** 클라이언트 개발자 옵션이 켜져야 한다 | `{실측, 코드}` |
 | 컨테이너를 흉내 낸 화면 | 그려지지만 시프트 클릭, 커서 아이템, 드래그가 없다. 접었다 | `{실측}` |
 | 바닐라 DDUI 레이아웃(`ddui/root`)을 팩으로 바꾸기 | 안 됨. 엔진이 내장 팩만 읽는다 | `{코드}` |
@@ -123,14 +123,14 @@ new CustomForm(player, "Entity Monitor")
  | ClientBoundDataStore (Change)        |
  |   minecraft / custom_form_data_1 --->| query vanilla.ddui.string -> 화면 구조(oui)를 그림
  |   minecraft / oui_vars_1_n       --->| query vanilla.ddui.string -> 값 패치를 적용
- | ClientBoundDataDrivenUIShowScreen -->| query vanilla.ddui.screenId -> "minecraft:custom_form"이면 우리 화면 표시
+ | ClientBoundDataDrivenUIShowScreen -->| query vanilla.ddui.screenId -> "minecraft:custom_form"이면 직접 만든 화면 표시
  |                                      |
  |<-- ServerBoundDataStore -------------| setDataStorePathString(oui_event) <- 버튼·입력
  |<-- ServerBoundDataDrivenScreenClosed | Esc, 닫기
  | ClientBoundDataDrivenUICloseScreen ->|
 ```
 
-바닐라 서버 폼 루트 `minecraft:custom_form`을 **빈 틀**로 연다. 바닐라 폼은 CSS로 숨기고(`body.oui-active #root {visibility: hidden}`), 우리 렌더러가 그 위에 화면을 그린다. 바닐라 루트는 `$.minecraft.custom_form_data_{instanceId}`를 읽으므로 폼 ID와 데이터 ID를 둘 다 1로 두면 맞았다. 연결마다 한 번에 폼 하나를 쓴다. 바닐라 필드(`title`, `closeButton`, `layout`)도 함께 채운다.
+바닐라 서버 폼 루트 `minecraft:custom_form`을 **빈 틀**로 연다. 바닐라 폼은 CSS로 숨기고(`body.oui-active #root {visibility: hidden}`), 직접 만든 렌더러가 그 위에 화면을 그린다. 바닐라 루트는 `$.minecraft.custom_form_data_{instanceId}`를 읽으므로 폼 ID와 데이터 ID를 둘 다 1로 두면 맞았다. 연결마다 한 번에 폼 하나를 쓴다. 바닐라 필드(`title`, `closeButton`, `layout`)도 함께 채운다.
 
 ## 4. 패킷 `{실측, 코드}`
 
@@ -289,7 +289,7 @@ f.Close()
 
 - 화면 구조는 한 번만 보낸다. 그 뒤로는 바뀐 값만 보낸다.
 - 대량 목록은 `region`으로 나눠 필요한 부분만 다시 그린다. 전부 다시 그리는 `SetLayout`은 탭 전환처럼 드물게 쓴다.
-- 연구 화면: 선택을 바꾸면 상세 영역과 선택 표시 값 두 개, 연구를 마치면 격자 영역과 탭 수만 보낸다.
+- 격자 + 상세 화면: 선택을 바꾸면 상세 영역과 선택 표시 값 두 개, 항목 상태가 바뀌면 격자 영역과 탭 수만 보낸다.
 
 ## 9. 시험 서버 명령
 
@@ -298,16 +298,16 @@ f.Close()
 | 명령 | 내용 |
 | --- | --- |
 | `/ddui` | 실시간 값, 버튼 200개, 입력 요소, 아이템 아이콘 후보, 미디어 탭 |
-| `/research` | 연구 서버 연구 화면 |
+| `/research` | 격자 + 상세 화면 예([아이콘과 컨테이너](./geo-item-and-containers.mdx) 3장) |
 | `/ddupdate a`~`e` | 경로 갱신 판 번호 실험(5장) |
 | `/ddscreen 루트` | 바닐라 DDUI 루트를 데이터 없이 연다 |
 | `/ddchest` | 바닐라 Ore UI 상자 루트에 서버 데이터를 채워 연다(그려지지 않음) |
 | `/die` | 사망 화면(Ore UI) |
 
-연구 화면 예: 커스텀 텍스처용 팩을 평문으로 같이 보낸다.
+격자 + 상세 화면 예: 커스텀 텍스처용 팩을 평문으로 같이 보낸다.
 
 ```bash
-go run . ../ddui-pack OreUiProbeContentKey0123456789AB <서버>/assets/resourcepack/연구 서버
+go run . ../ddui-pack OreUiProbeContentKey0123456789AB <커스텀 텍스처 팩 폴더>
 ```
 
 ## 10. 남은 것

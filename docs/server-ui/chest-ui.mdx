@@ -158,22 +158,22 @@ PocketMine의 CustomSizedInvMenu, Muqsit/InvMenu, bedrock-gophers/inv와 같은 
 6. 이미 열린 창에 `ContainerOpen`이 또 오면 클라이언트는 `PacketViolationWarning`(type -1)으로 답한다.
 7. 팩이 없으면 27칸 상자로만 보인다. 그래서 리소스팩은 필수(`ResourcesRequired`)로 보낸다.
 
-### 5.1 Dragonfly에서의 구현 (한 Dragonfly 기반 서버 `common/chestui`)
+### 5.1 Dragonfly에서의 구현
 
-Dragonfly를 패치하지 않고 패킷 훅(`hook.Wrap`)으로 세션에 닿는다. 훅은 서버 리스너를 감싸 연결마다 양방향 패킷이 훅을 먼저 지나게 하며(바꾸기·버리기 가능), 연결이 끊기면 닫힘 훅이 돈다. 세션의 비공개 메서드(`writePacket`, `sendInv`, `nextWindowID`, `closeCurrentContainer`)는 `go:linkname`, 비공개 필드(`openedWindow` 등)는 리플렉션으로 쓴다. 이름이 바뀌면 테스트가 깨지도록 해 둔다.
+Dragonfly를 패치하지 않고 패킷 훅으로 세션에 닿을 수 있다(bedrock-gophers/inv 방식). 훅은 서버 리스너를 감싸 연결마다 양방향 패킷이 훅을 먼저 지나게 하며(바꾸기·버리기 가능), 연결이 끊기면 닫힘 훅이 돈다. 세션의 비공개 메서드(`writePacket`, `sendInv`, `nextWindowID`, `closeCurrentContainer`)는 `go:linkname`, 비공개 필드(`openedWindow` 등)는 리플렉션으로 쓴다. 이름이 바뀌면 테스트가 깨지도록 해 둔다.
 
 - 세션의 열린 창(`openedWindow`)을 그 인벤토리로 두므로 아이템 이동은 Dragonfly의 `ContainerLevelEntity → openedWindow` 경로를 그대로 탄다.
 - 창이 닫히면 엔티티를 지우고 닫힘 콜백을 부른다. 서버가 닫으면 그 트랜잭션에서, Dragonfly가 닫으면(클라이언트 닫기 응답 `ContainerClose`를 훅이 봄) 플레이어 트랜잭션에서, 접속이 끊기면 닫힘 훅에서 플레이어 없이 부른다. 콜백의 플레이어와 트랜잭션은 접속이 끊겨 닫힌 경우 `nil`이다.
-- 단계별 설정(InvMenu의 `PlayerWindowDispatcher` 단계를 하나씩 켠다). 기본은 `Ride`만 켜져 있다. 셋을 모두 켜면 상자가 바로 닫히므로 문제를 좁힐 때 하나씩 켠다.
+- 열기 단계는 InvMenu의 `PlayerWindowDispatcher` 단계를 따라 하나씩 켤 수 있게 둔다. 탑승 링크만 기본으로 켠다. 아래 셋을 모두 켜면 상자가 바로 닫히므로 문제를 좁힐 때 하나씩 켠다.
 
-| 설정 | 동작 |
+| 단계 | 동작 |
 | --- | --- |
-| `Ride` | 엔티티를 플레이어에 탑승 링크로 붙인다. 기본 켜짐 |
-| `WaitLatency` | `AddActor` 뒤 `NetworkStackLatency` 응답을 받고 연다(최대 1초) |
-| `Retry` | 클라이언트가 초과 열기에 대한 `PacketViolationWarning`(type -1)으로 확인할 때까지 매 틱 닫기 + 열기 재전송(최대 20회). 그동안 그 창의 닫기는 무시 |
-| `Debug` | 열기·닫기·클라이언트 닫기·위반 경고를 INFO 로그로 남긴다 |
+| 탑승 링크 | 엔티티를 플레이어에 탑승 링크로 붙인다. 기본 켜짐 |
+| 지연 확인 | `AddActor` 뒤 `NetworkStackLatency` 응답을 받고 연다(최대 1초) |
+| 재전송 | 클라이언트가 초과 열기에 대한 `PacketViolationWarning`(type -1)으로 확인할 때까지 매 틱 닫기 + 열기 재전송(최대 20회). 그동안 그 창의 닫기는 무시 |
+| 로그 | 열기·닫기·클라이언트 닫기·위반 경고를 로그로 남긴다 |
 
-- 사용: 실제 아이템이 오가는 창고 타입(`chestui.Storage`)은 여러 명이 같이 봐도 변경이 모두에게 보인다. 이동 검증은 `Inventory().Handle`, 변경 반영은 `OnChange`로 한다. 버튼 동작은 플레이어의 현재 월드 트랜잭션에서 실행된다. 열린 창은 `chestui.Close(p)`로 닫고, 월드·인스턴스를 옮기기 전에 닫는다. 클라이언트가 보낸 것을 다 처리한 뒤에 할 일은 `NetworkStackLatency` 왕복(최대 1초)으로 기다린다.
+- 실제 아이템이 오가는 상자는 같은 인벤토리를 여러 명이 열면 변경이 모두에게 보인다. 이동 검증은 Dragonfly 인벤토리의 `Handle`로 한다. 버튼 동작은 플레이어의 현재 월드 트랜잭션에서 실행한다. 열린 창은 플레이어가 월드를 옮기기 전에 닫는다. 클라이언트가 보낸 것을 다 처리한 뒤에 할 일은 `NetworkStackLatency` 왕복(최대 1초)으로 기다린다.
 
 ### 5.2 크기를 고르는 리소스팩
 
@@ -181,7 +181,7 @@ tedo0627/InventoryUIResourcePack(MIT, 서버 문서가 이렇게 밝힘. 저장�
 
 ### 5.3 모두 꺼내기·모두 넣기 버튼 (Quick Container 기법)
 
-창고 창 옆에 버튼 하나를 두고 그 밑에 칸 수만큼 보이지 않는 버튼을 겹쳐 둔다. 각 버튼의 누름을 그 칸의 바닐라 빠른 이동(`button.container_auto_place`, `consume_event: false`)으로 바꾸면 클릭 한 번이 모든 칸의 쉬프트 클릭이 된다. 서버에는 칸마다 평범한 아이템 이동 요청이 오므로 서버 코드가 필요 없다. 꺼내기는 창고 칸(`$quick_container_size`), 넣기는 인벤토리 27칸(`$quick_put_hotbar`면 핫바까지)을 옮긴다. "있는 것만 넣기"는 창고 앞 54칸 중 어느 칸에 같은 아이템(`#item_id_aux`)이 있는 인벤토리 칸만 옮긴다. JSON UI에는 반복이 없어 창고 칸마다 이름 붙은 컨트롤(`sg_quick_c<n>`)과 인벤토리 칸마다 54개의 비교 바인딩을 생성기가 파일로 써 둔다. 숨은 버튼이 `source_control_name`으로 그 칸 컨트롤의 `#item_id_aux`를 읽어(화면 루트부터 첫 일치) 같은 것이 있을 때만 보인다. 툴팁은 버튼 hover 상태 안의 라벨이라 번역 키가 풀린다(`common.hover_text`의 `#hover_text`는 번역되지 않는다). 아이콘은 바닐라 `up_arrow`·`down_arrow`·`store_filter_icon`이다 (출처: 비공개 조사).
+상자 창 옆에 버튼 하나를 두고 그 밑에 칸 수만큼 보이지 않는 버튼을 겹쳐 둔다. 각 버튼의 누름을 그 칸의 바닐라 빠른 이동(`button.container_auto_place`, `consume_event: false`)으로 바꾸면 클릭 한 번이 모든 칸의 쉬프트 클릭이 된다. 서버에는 칸마다 평범한 아이템 이동 요청이 오므로 서버 코드가 필요 없다. 꺼내기는 상자 칸(`$quick_container_size`), 넣기는 인벤토리 27칸(`$quick_put_hotbar`면 핫바까지)을 옮긴다. "있는 것만 넣기"는 상자 앞 54칸 중 어느 칸에 같은 아이템(`#item_id_aux`)이 있는 인벤토리 칸만 옮긴다. JSON UI에는 반복이 없어 상자 칸마다 이름 붙은 컨트롤(`quick_c<n>`)과 인벤토리 칸마다 54개의 비교 바인딩을 생성기가 파일로 써 둔다. 숨은 버튼이 `source_control_name`으로 그 칸 컨트롤의 `#item_id_aux`를 읽어(화면 루트부터 첫 일치) 같은 것이 있을 때만 보인다. 툴팁은 버튼 hover 상태 안의 라벨이라 번역 키가 풀린다(`common.hover_text`의 `#hover_text`는 번역되지 않는다). 아이콘은 바닐라 `up_arrow`·`down_arrow`·`store_filter_icon`이다 (출처: 비공개 조사).
 
 ## 6. 규칙 요약
 
