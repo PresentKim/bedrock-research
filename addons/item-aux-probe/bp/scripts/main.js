@@ -1,7 +1,7 @@
 import { BlockTypes, ItemTypes, system, world } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 
-const PACK_VERSION = "v1.1.0";
+const PACK_VERSION = "v1.2.0";
 const TEST_ITEM = "bwiki:aux_probe_test";
 const CELLS = 64;
 const RANGES = [840, -1278, -9776];
@@ -21,7 +21,7 @@ function customTypes() {
 }
 
 function openScan(player, start) {
-  const form = new ActionFormData().title("auxp:scan").body(`Numeric IDs ${start} to ${start + CELLS - 1}`);
+  const form = new ActionFormData().title("§b§wap:scan").body(`Numeric IDs ${start} to ${start + CELLS - 1}`);
   for (let k = 0; k < CELLS; k++) {
     const id = start + k;
     form.button(`${id}`, `aux:${id * 65536}`);

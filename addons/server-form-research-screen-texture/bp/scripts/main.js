@@ -1,7 +1,7 @@
 import { system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 
-const PACK_VERSION = "v1.3.3";
+const PACK_VERSION = "v1.4.0";
 const TEST_ITEM = "bwiki:research_screen_texture_test";
 const ITEM_COUNT = 200;
 const PAGE_SIZE = 48;
@@ -78,7 +78,7 @@ function addDetailBlock(form, i) {
 function openResearch(player, state) {
   const tabs = tabItems(ITEM_COUNT);
   const pageItems = [0, 1].map((t) => tabs[t].slice(state.pages[t] * PAGE_SIZE, (state.pages[t] + 1) * PAGE_SIZE));
-  const form = new ActionFormData().title(`ffr:F${"ab"[state.tab]}`).body("Research");
+  const form = new ActionFormData().title(`§b§wrt:F${"ab"[state.tab]}`).body("Research");
 
   for (const list of pageItems) {
     for (let k = 0; k < PAGE_SIZE; k++) {
@@ -121,7 +121,7 @@ function openClientPages(player, tab) {
   const tabs = tabItems(ITEM_COUNT);
   const slotItems = [];
   for (let t = 0; t < 2; t++) for (let k = 0; k < CLIENT_PAGES_PER_TAB * PAGE_SIZE; k++) slotItems.push(tabs[t][k]);
-  const form = new ActionFormData().title(`ffr:G${"ab"[tab]}`).body("Research");
+  const form = new ActionFormData().title(`§b§wrt:G${"ab"[tab]}`).body("Research");
 
   for (const i of slotItems) {
     if (i === undefined) form.button("§r");

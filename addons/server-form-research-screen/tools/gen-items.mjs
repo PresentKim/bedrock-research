@@ -31,7 +31,7 @@ function row(name, indices) {
       orientation: "horizontal",
       size: ["100%", 18],
       collection_name: "form_buttons",
-      controls: indices.map((i, j) => ({ [`s${j}@ffr.list_slot`]: { collection_index: i } })),
+      controls: indices.map((i, j) => ({ [`s${j}@frs.list_slot`]: { collection_index: i } })),
     },
   };
 }
@@ -52,7 +52,7 @@ function detailBody(b) {
           orientation: "horizontal",
           size: ["100%", 28],
           controls: [
-            { icon_row: { type: "stack_panel", orientation: "horizontal", size: [28, 28], collection_name: "form_buttons", controls: [{ "icon@ffr.detail_icon": { collection_index: b.head } }] } },
+            { icon_row: { type: "stack_panel", orientation: "horizontal", size: [28, 28], collection_name: "form_buttons", controls: [{ "icon@frs.detail_icon": { collection_index: b.head } }] } },
             { gap: { type: "panel", size: [4, 28] } },
             {
               info: {
@@ -62,9 +62,9 @@ function detailBody(b) {
                 collection_name: "form_buttons",
                 controls: [
                   { pad: { type: "panel", size: ["100%", 3] } },
-                  { "name@ffr.text_item": { collection_index: b.head } },
+                  { "name@frs.text_item": { collection_index: b.head } },
                   { pad2: { type: "panel", size: ["100%", 2] } },
-                  { "status@ffr.text_item": { collection_index: b.status } },
+                  { "status@frs.text_item": { collection_index: b.status } },
                 ],
               },
             },
@@ -72,12 +72,12 @@ function detailBody(b) {
         },
       },
       gap("gap1", 3),
-      { desc: { type: "stack_panel", orientation: "vertical", size: ["100%", "100%c"], collection_name: "form_buttons", controls: [{ "d@ffr.desc_item": { collection_index: b.desc } }] } },
+      { desc: { type: "stack_panel", orientation: "vertical", size: ["100%", "100%c"], collection_name: "form_buttons", controls: [{ "d@frs.desc_item": { collection_index: b.desc } }] } },
       gap("gap2", 4),
-      { "mat_head@ffr.header_label": { text: "Materials" } },
+      { "mat_head@frs.header_label": { text: "Materials" } },
       row("mats", b.mats),
       gap("gap3", 4),
-      { "reward_head@ffr.header_label": { text: "Rewards" } },
+      { "reward_head@frs.header_label": { text: "Rewards" } },
       row("rewards", b.rewards),
     ],
   };
@@ -96,7 +96,7 @@ function detail(ns, k, b) {
           offset: [3, 3],
           anchor_from: "top_left",
           anchor_to: "top_left",
-          controls: [{ "scroll@ffr.detail_scroll": { $scrolling_content: `${ns}.detail_body_${k}` } }],
+          controls: [{ "scroll@frs.detail_scroll": { $scrolling_content: `${ns}.detail_body_${k}` } }],
         },
       },
       {
@@ -108,7 +108,7 @@ function detail(ns, k, b) {
           anchor_from: "bottom_middle",
           anchor_to: "bottom_middle",
           collection_name: "form_buttons",
-          controls: [{ "b@ffr.progress_button": { collection_index: b.progress } }],
+          controls: [{ "b@frs.progress_button": { collection_index: b.progress } }],
         },
       },
     ],
@@ -120,7 +120,7 @@ function addDetails(ui, ns, slots, detailBase, factoryPrefix) {
     const b = block(k, detailBase);
     ui[`detail_body_${k}`] = detailBody(b);
     ui[`detail_${k}`] = detail(ns, k, b);
-    ui[`lazy_${k}@ffr.lazy_detail`] = { factory: { name: `${factoryPrefix}_lazy_${k}`, control_name: `${ns}.detail_${k}` } };
+    ui[`lazy_${k}@frs.lazy_detail`] = { factory: { name: `${factoryPrefix}_lazy_${k}`, control_name: `${ns}.detail_${k}` } };
   }
 }
 
@@ -130,7 +130,7 @@ function itemRow(ns, firstSlot, firstK, r) {
     const pos = r * 8 + col;
     const k = firstSlot + pos;
     toggles.push({
-      [`i${k}@ffr.item_toggle`]: {
+      [`i${k}@frs.item_toggle`]: {
         collection_index: k,
         $k: firstK + pos,
         $detail_offset: [152 - col * 18, -4 - r * 18],
@@ -152,8 +152,8 @@ const visibleFrom = (control) => ({
 });
 
 function serverPagesUi() {
-  const ui = { namespace: "ffri" };
-  addDetails(ui, "ffri", SERVER_PAGES.slots, SERVER_PAGES.detailBase, "ffr");
+  const ui = { namespace: "frsi" };
+  addDetails(ui, "frsi", SERVER_PAGES.slots, SERVER_PAGES.detailBase, "frs");
   const tabGrid = (tab) => ({
     [`grid${tab}`]: {
       type: "stack_panel",
@@ -161,27 +161,27 @@ function serverPagesUi() {
       size: [144, 108],
       anchor_from: "top_left",
       anchor_to: "top_left",
-      bindings: [visibleFrom(`ffr_t${tab}`)],
-      controls: rows("ffri", tab * PER_PAGE, 0),
+      bindings: [visibleFrom(`frs_t${tab}`)],
+      controls: rows("frsi", tab * PER_PAGE, 0),
     },
   });
   ui.items_f = {
     type: "panel",
     size: [144, 128],
-    controls: [tabGrid(0), tabGrid(1), { "pagers@ffr.pagers_tabs": { anchor_from: "top_left", anchor_to: "top_left", offset: [0, 110] } }],
+    controls: [tabGrid(0), tabGrid(1), { "pagers@frs.pagers_tabs": { anchor_from: "top_left", anchor_to: "top_left", offset: [0, 110] } }],
   };
   return ui;
 }
 
 function clientPagesUi() {
   const { pagesPerTab, pageLabelBase, slots, detailBase } = CLIENT_PAGES;
-  const ui = { namespace: "ffrg" };
-  addDetails(ui, "ffrg", slots, detailBase, "ffrg");
+  const ui = { namespace: "frsg" };
+  addDetails(ui, "frsg", slots, detailBase, "frsg");
   const tabs = [];
   for (let t = 0; t < 2; t++) {
     const controls = [];
     for (let p = 0; p < pagesPerTab; p++) {
-      const toggle = `ffrg_p${t}_${p}`;
+      const toggle = `frsg_p${t}_${p}`;
       ui[`page_${t}_${p}`] = {
         type: "stack_panel",
         orientation: "vertical",
@@ -189,19 +189,19 @@ function clientPagesUi() {
         anchor_from: "top_left",
         anchor_to: "top_left",
         bindings: [visibleFrom(toggle)],
-        controls: rows("ffrg", (t * pagesPerTab + p) * PER_PAGE, p * PER_PAGE),
+        controls: rows("frsg", (t * pagesPerTab + p) * PER_PAGE, p * PER_PAGE),
       };
       ui[`lazy_page_${t}_${p}`] = {
         type: "stack_panel",
         size: [144, 108],
         anchor_from: "top_left",
         anchor_to: "top_left",
-        factory: { name: `ffrg_page_${t}_${p}`, control_name: `ffrg.page_${t}_${p}` },
+        factory: { name: `frsg_page_${t}_${p}`, control_name: `frsg.page_${t}_${p}` },
         bindings: [
           { binding_type: "view", binding_condition: "always", source_control_name: toggle, source_property_name: "(#toggle_state * 1)", target_property_name: "#collection_length" },
         ],
       };
-      controls.push(p === 0 ? { [`p${p}@ffrg.page_${t}_${p}`]: {} } : { [`p${p}@ffrg.lazy_page_${t}_${p}`]: {} });
+      controls.push(p === 0 ? { [`p${p}@frsg.page_${t}_${p}`]: {} } : { [`p${p}@frsg.lazy_page_${t}_${p}`]: {} });
     }
     ui[`page_row_${t}`] = {
       type: "stack_panel",
@@ -209,21 +209,21 @@ function clientPagesUi() {
       size: [144, 18],
       collection_name: "form_buttons",
       controls: Array.from({ length: pagesPerTab }, (_, p) => ({
-        [`s${p}@ffr.page_slot`]: {
+        [`s${p}@frs.page_slot`]: {
           collection_index: pageLabelBase + t * pagesPerTab + p,
-          controls: [{ [`ffrg_p${t}_${p}@ffr.page_toggle`]: { $page_index: p, $page_group: `ffrg_pages_${t}` } }],
+          controls: [{ [`frsg_p${t}_${p}@frs.page_toggle`]: { $page_index: p, $page_group: `frsg_pages_${t}` } }],
         },
       })),
     };
-    controls.push({ [`pages@ffrg.page_row_${t}`]: { anchor_from: "top_left", anchor_to: "top_left", offset: [0, 110] } });
-    tabs.push({ [`tab${t}`]: { type: "panel", size: [144, 128], anchor_from: "top_left", anchor_to: "top_left", bindings: [visibleFrom(`ffr_t${t}`)], controls } });
+    controls.push({ [`pages@frsg.page_row_${t}`]: { anchor_from: "top_left", anchor_to: "top_left", offset: [0, 110] } });
+    tabs.push({ [`tab${t}`]: { type: "panel", size: [144, 128], anchor_from: "top_left", anchor_to: "top_left", bindings: [visibleFrom(`frs_t${t}`)], controls } });
   }
   ui.items = { type: "panel", size: [144, 128], controls: tabs };
   return ui;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  for (const [file, ui] of [["ffr_items.json", serverPagesUi()], ["ffr_pages.json", clientPagesUi()]]) {
+  for (const [file, ui] of [["frs_items.json", serverPagesUi()], ["frs_pages.json", clientPagesUi()]]) {
     const out = join(uiDir, file);
     writeFileSync(out, JSON.stringify(ui) + "\n");
     console.log(`wrote ${out}`);

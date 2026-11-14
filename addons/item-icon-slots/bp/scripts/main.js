@@ -1,7 +1,7 @@
 import { EnchantmentTypes, ItemLockMode, ItemStack, system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 
-const PACK_VERSION = "v1.0.0";
+const PACK_VERSION = "v1.1.0";
 const TEST_ITEM = "bwiki:item_icon_slots_test";
 const MARK = "§r§a§b§c§r";
 const ENTITY_TAG = "bwiki_item_icon_slots";
@@ -163,7 +163,7 @@ function trialFormSlot(player) {
   inventory(player).setItem(ONE_SLOT, display("minecraft:diamond"));
   system.runTimeout(() => {
     new ActionFormData()
-      .title("ixf:slot")
+      .title("§b§wis:slot")
       .body("Slot 17 holds a diamond.")
       .button("Done")
       .show(player)
@@ -198,7 +198,7 @@ function trialFormEntities(player) {
   });
   const hold = system.runInterval(() => entities.forEach((e, i) => e.isValid && e.teleport(spots[i])), 1);
   system.runTimeout(() => {
-    const form = new ActionFormData().title("ixf:ent").body("Entities drawn by live_horse_renderer");
+    const form = new ActionFormData().title("§b§wis:ent").body("Entities drawn by live_horse_renderer");
     for (const e of entities) form.button(e.id);
     form.button(player.id);
     form.show(player).then(() => {

@@ -1,7 +1,7 @@
 import { system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 
-const PACK_VERSION = "v1.2.0";
+const PACK_VERSION = "v1.3.0";
 const TEST_ITEM = "bwiki:json_ui_performance_test";
 const COUNTS = [100, 500, 1000, 2000];
 
@@ -23,7 +23,7 @@ function pad(text, width) {
 }
 
 function openList(player, count) {
-  const form = new ActionFormData().title("ffr:J").body(`${count} buttons`);
+  const form = new ActionFormData().title("§b§wjp:J").body(`${count} buttons`);
   for (let i = 0; i < count; i++) {
     const text = pad(`Item ${i + 1}`, 12) + pad(`desc line ${i + 1}`, 20) + String((i * 7) % 101);
     form.button(text, ICONS[i % ICONS.length]);
