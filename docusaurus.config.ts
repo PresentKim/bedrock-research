@@ -2,11 +2,15 @@ import { themes as prismThemes } from 'prism-react-renderer';
 import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import remarkDoubleTildeOnly from './src/plugins/remark-double-tilde-only.mjs';
 import remarkRuleRefs from './src/plugins/remark-rule-refs.mjs';
 import { loadRules } from './scripts/rules.mjs';
 
 const isEn = process.env.DOCUSAURUS_CURRENT_LOCALE === 'en';
+
+const repoUrl = 'https://github.com/PresentKim/bedrock-research';
+const commit = process.env.GITHUB_SHA ?? execSync('git rev-parse HEAD', { cwd: __dirname, encoding: 'utf8' }).trim();
 
 const ruleLocales = [
   path.resolve(__dirname, 'docs'),
@@ -59,7 +63,17 @@ const config: Config = {
   themeConfig: {
     navbar: { title: 'Bedrock 개발 위키', items: [
         { type: 'localeDropdown', position: 'right', className: 'navbar-locale' },
-        { href: 'https://github.com/PresentKim/bedrock-research', position: 'right', className: 'navbar-github', 'aria-label': 'GitHub' },
+        {
+          type: 'dropdown',
+          label: 'GitHub',
+          position: 'right',
+          className: 'navbar-github',
+          'aria-label': 'GitHub',
+          items: [
+            { href: repoUrl, label: repoUrl.replace('https://', '') },
+            { href: `${repoUrl}/commit/${commit}`, label: `commit ${commit.slice(0, 7)}` },
+          ],
+        },
       ] },
     footer: { style: 'dark', copyright: '출처와 라이선스는 각 페이지 하단 표에 적는다.' },
     prism: {
