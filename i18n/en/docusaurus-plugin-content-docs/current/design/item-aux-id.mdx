@@ -157,6 +157,50 @@ Custom blocks in identifier order are gold, diamond, emerald, and in file name o
 
 On PC, ProxyPass can capture the item registry of the same world to check the numbers directly. The 1.26.63 vanilla table is also built from this capture.
 
+### 4.4 Third experiment: path sort rule and several packs
+
+The first and second experiments settled the layout inside one pack (section 5.4). The third experiment settles the two remaining questions.
+
+Probe v1.1.0 adds 4 item files. Their names make byte order, case-insensitive order and numeric order all give different results.
+
+| File | Identifier | Picture |
+| --- | --- | --- |
+| `items/B_upper.json` | `bwiki:aux_probe_e` | Orange wool |
+| `items/m-dash.json` | `bwiki:aux_probe_f` | Purple wool |
+| `items/n10.json` | `bwiki:aux_probe_g` | Magenta wool |
+| `items/n9.json` | `bwiki:aux_probe_h` | Cyan wool |
+
+The probe extra pack (Item Aux Probe Extra v1.0.0) is a second pack with no script or UI that registers only 2 items and 1 block.
+
+| File | Identifier | Picture |
+| --- | --- | --- |
+| `items/c_extra.json` | `bwiki:aux_probe_x` | Pink wool |
+| `items/y_extra.json` | `bwiki:aux_probe_y` | Light blue wool |
+| `blocks/c_block.json` | `bwiki:aux_probe_block_x` | Lapis block |
+
+Order of the 9 custom items from 853 inside the probe pack alone:
+
+| Sort hypothesis | Order |
+| --- | --- |
+| Byte order | Orange (`B_upper`), blue, spyglass, purple (`m-dash`), lime (`m_mid`), magenta (`n10`), cyan (`n9`), yellow, red |
+| Case-insensitive | Blue, spyglass, orange, lime, purple, magenta, cyan, yellow, red |
+| Numbers read as numbers | Blue, spyglass, orange, lime, purple, cyan, magenta, yellow, red |
+
+Where the extra pack's pink (`c_extra`) and light blue (`y_extra`) go with both packs on:
+
+| Between-pack hypothesis | Place |
+| --- | --- |
+| Packs appended one after another in stack order | Pink and light blue come before or after the 9 probe items. Swapping the stack order swaps the side |
+| All packs' paths sorted together | Pink right after the spyglass, light blue right after yellow. The stack order does not matter |
+
+The probe's gold, emerald and diamond blocks and the extra pack's lapis block go downward from -9745. If paths are sorted together, lapis goes between diamond (`a_last`) and emerald (`m_mid`).
+
+Test steps:
+
+1. Turn on only probe v1.1.0 in a new world and take pictures of the first menu body and 840 to 903 (sort rule).
+2. Stack the extra pack **above** the probe in the same world, enter again, and take pictures of the first menu body, 840 to 903 and -9776 to -9713.
+3. Move the extra pack **below** the probe and take the same three pictures.
+
 ## 5. Results
 
 ### 5.1 First experiment (mobile, 1.26.63, probe v1.0.0, 2026-11-14)
@@ -232,10 +276,13 @@ What remains:
 
 <AddonDownload id="item-aux-probe" />
 
+<AddonDownload id="item-aux-probe-extra" />
+
 1. Open the file to import it (on mobile, tap the file and open it with Minecraft). In a new world, turn on the behavior pack "Bedrock Wiki Item Aux Probe BP". The resource pack turns on with it as a dependency, and no experimental toggle is needed.
 2. Take "Item Aux Probe" (spyglass) from the end of the Items category of the creative inventory. `/give @s bwiki:aux_probe_test` works too.
 3. Use the item to open the menu. `/scriptevent bwiki:aux_probe` opens it too.
 
+- Turn on the extra pack (Item Aux Probe Extra) together with the probe only for the third experiment. On its own it has no screen to open.
 - This add-on also replaces `$screen_content` of `third_party_server_screen`, so do not turn it on together with other server form test add-ons.
 - The text on screen is English.
 
