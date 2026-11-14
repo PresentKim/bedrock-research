@@ -1,6 +1,6 @@
 ---
 title: 엔티티 인벤토리로 메뉴 화면 만들기
-description: 보이지 않는 컨테이너 엔티티의 상자 화면을 리소스 팩으로 다시 그려 서버 폼 대신 메뉴로 쓰는 기획. 아이콘은 엔진이 엔티티 칸을 그리므로 숫자 ID가 필요 없다. 화면 라우팅, 클라이언트 선택, 칸의 이름과 내구도로 그리는 라벨과 막대, 스크립트로 가는 버튼, 화면을 여는 방법과 실측 결과, 연구 화면 예제.
+description: 보이지 않는 컨테이너 엔티티의 상자 화면을 리소스 팩으로 다시 그려 서버 폼 대신 메뉴로 쓰는 기획. 아이콘은 엔진이 엔티티 칸을 그리므로 숫자 ID가 필요 없다. 화면 라우팅, 클라이언트 선택, 칸의 이름과 내구도로 그리는 라벨과 막대, 스크립트로 가는 버튼, 화면을 여는 방법과 실측 결과, 연구 화면 예제, 엔티티 이름으로 고르는 라우팅과 애니메이션 다시 재생, 깜빡임을 다룬 2048 시험.
 sidebar_position: 5
 sources:
   - repo-guide
@@ -13,7 +13,7 @@ sources:
 
 이 페이지는 컨테이너 엔티티의 상자 화면을 리소스 팩으로 다시 그려 연구 화면 같은 메뉴로 쓰는 구성을 다룬다.
 
-상태: 1.26.63 모바일에서 시험했다(2026-11-14). 시험한 것은 화면 라우팅, 아이콘 격자, 클라이언트 선택, 칸의 이름과 내구도로 그리는 요소, 스크립트로 가는 버튼, 여는 방법이다. 여러 플레이어와 다른 기기는 남았다(5절).
+상태: 1.26.63 모바일에서 시험했다(2026-11-14). 시험한 것은 화면 라우팅, 아이콘 격자, 클라이언트 선택, 칸의 이름과 내구도로 그리는 요소, 스크립트로 가는 버튼, 여는 방법이다. 2026-11-15에는 2048 시험으로 `modifications` 라우팅, 엔티티 이름 선택, 애니메이션 다시 재생, 깜빡임을 시험했다(2.2절, 8절). 여러 플레이어와 다른 기기는 남았다(5절).
 
 ## 1. 서버 폼과 비교
 
@@ -45,6 +45,65 @@ sources:
 - 리소스 팩 엔티티는 뼈가 없는 빈 지오메트리로 두어 보이지 않게 한다.
 
 ### 2.2 화면 라우팅
+
+상자 화면에 우리 창을 넣는 방법은 둘이다.
+
+| 방법 | 넣는 곳 | 고르는 값 | 쓰는 곳 |
+| --- | --- | --- | --- |
+| A. `modifications` | 바닐라 상자 패널 `chest.small_chest_panel`, `pocket_containers.panel` | 엔티티 이름(`$container_title`) | 2048 시험(8절) |
+| B. 화면 재선언 | `small_chest_screen`의 `$screen_content`(HOST-18) | 0번 칸 표식 | Entity Menu Lab, 연구 화면 예제 |
+
+다른 상자 화면 애드온과 함께 켜질 수 있으면 A를 쓴다. 같은 화면을 재선언하는 애드온 둘을 켜면 팩 순서로 한쪽만 쓰였다. 다른 시험 애드온의 `chest_screen.json`이 위에 있어 우리 재선언 대신 바닐라 화면이 나왔다(실측, HOST-49). A는 화면 정의를 다시 선언하지 않으므로, 화면을 재선언한 다른 애드온이 위에 있어도 그 애드온이 바닐라 쪽에 둔 상자 패널 안에서 우리 창이 그려진다. 이것은 [JSON UI 테스터](../tools/jsonui-tester.mdx)(jsonui-tester) 정적 시뮬레이션으로만 확인했다(*미검증*).
+
+#### 2.2.1 A: `modifications`와 엔티티 이름
+
+```json
+"small_chest_panel": {
+  "modifications": [
+    { "array_name": "controls", "operation": "insert_back", "value": [ { "g2048_overlay@g2048.overlay": {} } ] }
+  ]
+}
+```
+
+휴대폰은 `pocket_containers.json`의 `panel`에 같은 `modifications`를 둔다. 넣는 컨트롤은 엔티티 이름으로 자기를 고른다.
+
+```json
+"overlay": {
+  "type": "panel", "size": [ "100%", "100%" ], "layer": 50,
+  "$g2048_title": "$container_title",
+  "controls": [
+    { "host": {
+        "type": "panel", "size": [ "100%", "100%" ],
+        "ignored": "(not ($g2048_title = '§2§0§4§8'))",
+        "controls": [ { "cover@g2048.cover": {} } ]
+    } }
+  ]
+}
+```
+
+- 스크립트가 메뉴 엔티티의 `nameTag`를 서식 코드만으로 된 `§2§0§4§8`로 둔다. 엔티티 상자 화면의 `$container_title`은 이 nameTag다(HOST-19).
+- `$container_title`은 바인딩 식에는 쓸 수 없지만 `ignored`와 `visible` 속성 식에서는 비교된다. 복사 변수(`"$g2048_title": "$container_title"`)를 두고 그 복사본을 비교한다(실측, HOST-48).
+- `ignored`는 그 컨트롤 자신의 `$` 선언을 보지 않고 부모 스코프에서 평가된다(FILE-34). 그래서 복사 변수는 부모 `overlay`에 두고 자식 `host`가 비교한다. 게임에서는 부모에 둔 구성만 시험했다(실측).
+- `ignored`가 참이면 컨트롤이 만들어지지 않으므로 이름이 다른 상자에는 우리 컨트롤이 하나도 없다. jsonui-tester에서 휴대폰 보통 상자의 컨트롤 수가 `visible`로만 가렸을 때 3,569개에서 2,207개로 줄었다(*미검증*, 정적 시뮬레이션).
+- 메뉴 엔티티의 이름표는 1인칭에서 보이지 않았다(실측). 3인칭이나 다른 플레이어에게 보이는지는 시험하지 않았다(*미검증*, 8.4절).
+
+바닐라 상자 화면은 같은 비교로 숨긴다.
+
+```json
+"panel": {
+  "$g2048_title": "$container_title",
+  "modifications": [ "..." ]
+},
+"header_area": { "ignored": "($g2048_title = '§2§0§4§8')" },
+"background_panel": { "ignored": "($g2048_title = '§2§0§4§8')" },
+"half_screen": { "ignored": "($g2048_title = '§2§0§4§8')" }
+```
+
+- 휴대폰은 `pocket_containers.panel`에 복사 변수를 두고 `header_area`, `background_panel`, `half_screen`을 `ignored`로 뺀다. 휴대폰 화면의 회색 배경이 사라지고 창이 클래식 UI처럼 월드 위에 떠 보였다(실측).
+- 데스크톱은 경로 키 `small_chest_panel/root_panel`에 같은 복사 변수와 `"visible": "(not ($g2048_title = '§2§0§4§8'))"`를 둔다.
+- 이 정의들은 바닐라 정의의 속성을 덮어쓰므로, 같은 속성을 쓰는 다른 팩과는 덮어쓰기 경쟁을 한다(MOD-13). 창을 넣는 `modifications`는 경쟁하지 않는다.
+
+#### 2.2.2 B: 화면 재선언과 0번 칸 표식
 
 `chest_screen.json`에서 `small_chest_screen`을 다시 선언해 `$screen_content`를 바꾼다(HOST-18). 0번 칸에 표식 아이템(`max_durability` 4242인 숨긴 커스텀 아이템)을 넣고, 그 값이 맞을 때만 우리 창을 그린다. 다른 상자와 엔티티는 바닐라 화면 그대로다.
 
@@ -211,10 +270,11 @@ C3 엔티티는 `minecraft:rideable`에 `family_types: ["player"]`, 좌석 `posi
 
 - 여러 플레이어: 다른 플레이어가 남의 메뉴 엔티티를 누를 수 있는지, 엔티티를 플레이어마다 둘 때의 정리.
 - Windows, iOS, 컨트롤러 입력(`button.menu_ok` 매핑)에서의 동작.
+- 엔티티 이름으로 고를 때 이름표가 3인칭과 다른 플레이어에게 보이는지(8.4절).
 
 ## 6. 실험 애드온
 
-Entity Menu Lab은 2.2~2.5절의 구성을 한 화면에 모은 실험 애드온이다. 메뉴 엔티티는 C2로 연다.
+Entity Menu Lab은 2.2절 B와 2.3~2.5절의 구성을 한 화면에 모은 실험 애드온이다. 메뉴 엔티티는 C2로 연다.
 
 <AddonDownload id="entity-menu-lab" />
 
@@ -291,11 +351,102 @@ Entity Menu Lab은 2.2~2.5절의 구성을 한 화면에 모은 실험 애드온
 
 예제 애드온 실측 영상(모바일 1.26.63, 2026-11-15).
 
+## 8. 2048 시험: 애니메이션 다시 재생과 깜빡임
+
+엔티티 칸으로 2048을 그려, 열린 상자 화면에서 타일이 미끄러지는 애니메이션을 수마다 다시 재생할 수 있는지 시험했다(모바일 1.26.63, 2026-11-15). 화면은 C2로 열고 2.2절 A 방식으로 넣는다. 내려받을 예제 애드온은 없다.
+
+### 8.1 칸 배치
+
+엔티티는 `inventory_size: 243`이다.
+
+| 칸 | 내용 |
+| --- | --- |
+| 1~16 | 이동 층. 옛 위치에 옛 값. 이름 예 `L2at5`(왼쪽으로 2칸, 표식 a, 값 2의 5제곱) |
+| 17~32 | 결과 층. 새 위치에 새 값. 이름 예 `Mbt6`(합쳐짐), `Pat1`(새로 생김), `Nat3`(그대로) |
+| 33, 34 | 점수, 상태 글 |
+| 36~40 | 위, 아래, 왼쪽, 오른쪽, New 버튼(빠른 이동 버튼, 2.5절) |
+
+이동 코드는 `S0`(제자리)와 방향 `U`, `D`, `L`, `R` 뒤에 거리 1~3이다. 결과 코드는 `N`, `M`, `P`다. 빈 칸에는 아이템이 없다. 데이터 아이템은 종이에 이름만 붙이고 `(#hover_text - '§o' - '§f' - '§r')`로 이름만 읽는다(2.4절).
+
+### 8.2 애니메이션 다시 재생
+
+열린 화면에서 애니메이션을 처음부터 다시 재생하려면 팩토리가 컨트롤을 새로 만들게 한다(실측, ANI-37).
+
+```json
+"mover_cell": {
+  "type": "stack_panel", "size": [ 30, 30 ],
+  "factory": { "name": "g2048_mover", "control_ids": { "L2at5": "@g2048.ft_L2_5", "L2bt5": "@g2048.ft_L2_5" } },
+  "property_bag": { "#k": [], "#kL2at5": [ "L2at5" ], "#kL2bt5": [ "L2bt5" ] },
+  "bindings": [
+    { "binding_type": "collection", "binding_collection_name": "container_items", "binding_name": "#hover_text", "binding_condition": "always" },
+    { "binding_type": "view", "binding_condition": "always", "source_property_name": "('#k' + (#hover_text - '§o' - '§f' - '§r'))", "target_property_name": "#collection_length" }
+  ]
+}
+```
+
+- 칸마다 `stack_panel` 팩토리 하나가 `('#k' + 이름)`으로 `property_bag`을 조회해 `#collection_length`를 정하고(COL-22, COL-23), `control_ids`에서 그 키의 컨트롤 하나를 만든다. 빈 칸은 `#k`가 빈 배열이라 아무것도 만들지 않는다. 실제 팩은 생성기로 이동 코드 13개와 결과 코드 3개에 값 13개, 표식 2개를 곱한 키를 만든다.
+- 스크립트는 수마다 이름의 표식을 `a`와 `b`로 바꾼다. 같은 타일이 같은 자리에 남아도 키가 바뀌므로 팩토리가 컨트롤을 새로 만들고, 그 컨트롤의 `anims`가 처음부터 재생됐다(실측).
+- 표식마다 변형 패널을 한 벌씩 두고 `#visible`만 바꾸는 방식은 슬라이드가 보이지 않았다. 숨었다 보이는 것으로는 애니메이션이 다시 재생되지 않는다(실측).
+
+타일 애니메이션은 다음과 같다.
+
+- 이동 타일은 0.12초 동안 `offset`으로 목적지까지 가고, 0.17초에 `alpha` 0이 된다.
+- 결과 타일은 0.12초 동안 `alpha` 0이었다가 보인다. 합쳐진 칸은 `size` 28에서 34로 커졌다 돌아오고, 새 칸은 0에서 커진다.
+- 기다리는 단계는 `from`과 `to`가 같은 `alpha`, `size` 애니메이션을 `next`로 잇는다.
+- 결과 층은 이동 층보다 위 레이어다.
+
+### 8.3 깜빡임과 빈 격자
+
+칸 아이템이 바뀌는 순간 `container_items` 격자의 칸 그림이 한 프레임 동안 다른 컨트롤 위에 그려졌다. 회색 칸이 우리 창 위로 잠깐 올라와 판 전체가 깜빡이는 것처럼 보였다(실측, HOST-50).
+
+| 창 뒤의 구성 | 결과 |
+| --- | --- |
+| 바닐라 상자 화면을 숨기지 않음 | 깜빡임이 보이지 않았다. 바닐라 상자 화면이 창 옆에 보였다 |
+| 바닐라를 `visible: false`로 숨기고 격자 없음 | 판 전체가 회색으로 깜빡였다 |
+| 바닐라 숨김, `common.pocket_ui_container_item` 칸 27개 격자 | 판 전체가 깜빡였다 |
+| 바닐라 숨김, 바닐라 칸 1개 격자 | 그 칸 자리만 깜빡였다 |
+| 바닐라 숨김, 빈 패널 칸 27개 `container_items` 격자 | 깜빡이지 않았다 |
+| 바닐라를 숨기지 않고 화면 전체를 불투명 배경으로 덮음 | 깜빡이지 않았지만, 화면 전체가 덮여 폼처럼 보이지 않았다 |
+
+모두 실측이다. 수마다 폭이 바뀌는 라벨로 레이아웃을 다시 계산하게 해도 깜빡임은 그대로였다(실측). 그래서 창 뒤에 빈 패널 칸으로 된 격자를 하나 둔다.
+
+```json
+"cover": {
+  "type": "input_panel", "modal": true, "size": [ "100%", "100%" ], "layer": 100,
+  "controls": [
+    { "sync_grid": {
+        "type": "grid", "size": [ 162, 54 ], "layer": 1,
+        "grid_rescaling_type": "horizontal", "maximum_grid_items": 27,
+        "collection_name": "container_items", "grid_item_template": "g2048.empty_cell"
+    } },
+    { "window@g2048.factory_window": { "layer": 2 } }
+  ]
+},
+"empty_cell": { "type": "panel", "size": [ 18, 18 ] }
+```
+
+- 위 표의 시험은 바닐라를 `visible: false`로 숨긴 구성에서 했다. 휴대폰 바닐라를 `ignored`로 빼는 구성(2.2.1절)에서 깜빡임이 어떤지는 확인하지 않았다(*미검증*).
+- 격자 없이 깜빡인 회색이 숨긴 바닐라 칸인지, 빈 격자를 두면 왜 깜빡임이 사라지는지는 모른다.
+- 바닐라 칸이 보이는 구성에서 깜빡임이 보이지 않은 것은 바닐라 칸이나 배경에 가려 눈에 띄지 않았기 때문일 수 있다(*추론*).
+
+### 8.4 컨테이너 제목과 이름표
+
+- 엔티티 상자 화면의 제목은 nameTag다(실측, HOST-19). `minecraft:inventory`, Script API의 `Container`와 `EntityInventoryComponent`에는 제목을 nameTag와 따로 정하는 필드나 함수가 없다(Microsoft Learn 문서).
+- nameTag가 없을 때 언어 파일의 `entity.<id>.name`이 제목이 되는지는 커뮤니티 보고가 엇갈린다(**충돌**).
+- 커스텀 블록은 `minecraft:block_entity`의 `container.title`(언어 키 또는 글자)로 제목을 줄 수 있고, `show_ui_on_interaction`(기본 켬)으로 블록을 누르면 열린다. 26.50, 26.60에서 실험 기능이라는 사용자 보고가 있다(*단일 보고*).
+- `minecraft:nameable`에는 이름표를 숨기는 필드가 없다(`allow_name_tag_renaming`, `always_show`, `default_trigger`, `name_actions`). 클라이언트 엔티티 파일이 없는 행동 팩 전용 엔티티는 이름표가 그려지지 않는다는 보고가 있다(*단일 보고*).
+- 이름표를 숨길 후보로 `Entity.nameplateRenderDistance`(`@minecraft/server` 2.8.0부터 쓰기 가능)가 있다. 0이 숨김인지는 시험하지 않았다(*미검증*).
+
 ## 관련 규칙
 
 | ID | 페이지 | 내용 |
 | --- | --- | --- |
 | HOST-16 ~ HOST-20 | [화면 호스트와 데이터 채널](../json-ui/screen-hosts-and-data.mdx) | 엔티티 인벤토리 화면, 칸 식별, 화면 재선언, 스크립트 쪽 주의 |
+| HOST-48 ~ HOST-50 | [화면 호스트와 데이터 채널](../json-ui/screen-hosts-and-data.mdx) | 엔티티 이름으로 고르기, `modifications`로 창 넣기, 빈 격자로 깜빡임 막기 |
+| ANI-37 | [이미지와 애니메이션](../json-ui/images-and-animation.mdx) | 컨트롤을 새로 만들어 애니메이션 다시 재생 |
+| COL-22, COL-23 | [컬렉션과 팩토리](../json-ui/collections-and-factory.mdx) | `property_bag` 사전 조회로 팩토리 종류 고르기 |
+| FILE-34 | [파일과 정의](../json-ui/files-and-definitions.mdx) | `ignored`는 부모 스코프에서 평가된다 |
+| MOD-13 | [바닐라 화면 수정](../json-ui/modifying-vanilla.mdx) | 정의 없는 `modifications`만 쓰기 |
 | ANI-03 | [이미지와 애니메이션](../json-ui/images-and-animation.mdx) | `#clip_ratio`로 그리는 진행 막대 |
 | ANI-06 | [이미지와 애니메이션](../json-ui/images-and-animation.mdx) | 아이템 렌더러와 `#item_id_aux` |
 | EXP-27 | [식](../json-ui/expressions.mdx) | 점으로 시작하는 실수 리터럴 |

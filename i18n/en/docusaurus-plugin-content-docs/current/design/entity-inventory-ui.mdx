@@ -1,6 +1,6 @@
 ---
 title: Building menu screens from an entity inventory
-description: A plan to restyle the chest screen of an invisible container entity with a resource pack and use it as a menu instead of a server form. The engine draws the entity slots, so no numeric ID is needed. Screen routing, client-side selection, labels and bars drawn from slot names and durability, a button that reaches the script, ways to open the screen, test results, and a research screen example.
+description: A plan to restyle the chest screen of an invisible container entity with a resource pack and use it as a menu instead of a server form. The engine draws the entity slots, so no numeric ID is needed. Screen routing, client-side selection, labels and bars drawn from slot names and durability, a button that reaches the script, ways to open the screen, test results, a research screen example, and a 2048 test covering routing by entity name, animation replay and flicker.
 sidebar_position: 5
 sources:
   - repo-guide
@@ -13,7 +13,7 @@ Server form buttons draw item icons only from a texture path or a numeric ID, an
 
 This page covers restyling the chest screen of a container entity with a resource pack and using it as a menu like the research screen.
 
-Status: tested on 1.26.63 mobile (2026-11-14). The tests covered screen routing, the icon grid, client-side selection, elements drawn from slot names and durability, a button that reaches the script, and ways to open the screen. Several players and other devices remain (section 5).
+Status: tested on 1.26.63 mobile (2026-11-14). The tests covered screen routing, the icon grid, client-side selection, elements drawn from slot names and durability, a button that reaches the script, and ways to open the screen. On 2026-11-15 a 2048 test covered `modifications` routing, picking by entity name, animation replay and flicker (sections 2.2 and 8). Several players and other devices remain (section 5).
 
 ## 1. Compared with a server form
 
@@ -45,6 +45,65 @@ Status: tested on 1.26.63 mobile (2026-11-14). The tests covered screen routing,
 - The resource pack entity uses an empty geometry with no bones so it is invisible.
 
 ### 2.2 Screen routing
+
+There are two ways to put the menu window into the chest screen.
+
+| Method | Where it goes | Value that picks it | Used by |
+| --- | --- | --- | --- |
+| A. `modifications` | The vanilla chest panels `chest.small_chest_panel` and `pocket_containers.panel` | The entity name (`$container_title`) | The 2048 test (section 8) |
+| B. Screen redeclaration | `$screen_content` of `small_chest_screen` (HOST-18) | The slot 0 marker | Entity Menu Lab, the research screen example |
+
+Use A when other chest screen add-ons may be turned on together. With two add-ons that redeclare the same screen, only one was used, by pack order: another test add-on's `chest_screen.json` was above ours, and the vanilla screen came out instead of our redeclaration (measured, HOST-49). A does not redeclare the screen definition, so even when another add-on that redeclares the screen is above it, the menu window is drawn inside the chest panel that add-on keeps on its vanilla side. This was checked only in the [JSON UI tester](../tools/jsonui-tester.mdx) (jsonui-tester) static simulation (*unverified*).
+
+#### 2.2.1 A: `modifications` and the entity name
+
+```json
+"small_chest_panel": {
+  "modifications": [
+    { "array_name": "controls", "operation": "insert_back", "value": [ { "g2048_overlay@g2048.overlay": {} } ] }
+  ]
+}
+```
+
+On mobile the same `modifications` goes on `panel` in `pocket_containers.json`. The inserted control picks itself by the entity name.
+
+```json
+"overlay": {
+  "type": "panel", "size": [ "100%", "100%" ], "layer": 50,
+  "$g2048_title": "$container_title",
+  "controls": [
+    { "host": {
+        "type": "panel", "size": [ "100%", "100%" ],
+        "ignored": "(not ($g2048_title = '§2§0§4§8'))",
+        "controls": [ { "cover@g2048.cover": {} } ]
+    } }
+  ]
+}
+```
+
+- The script sets the menu entity's `nameTag` to `§2§0§4§8`, which is made only of format codes. `$container_title` of an entity chest screen is this nameTag (HOST-19).
+- `$container_title` cannot be used in binding expressions, but it can be compared in `ignored` and `visible` property expressions. Declare a copy variable (`"$g2048_title": "$container_title"`) and compare the copy (measured, HOST-48).
+- `ignored` does not see the control's own `$` declarations and is evaluated in the parent scope (FILE-34). So the copy variable goes on the parent `overlay` and the child `host` compares it. In game only the setup with the copy on the parent was tested (measured).
+- When `ignored` is true the control is not built, so a chest with another name has none of our controls. In jsonui-tester the control count of a mobile ordinary chest went from 3,569 when hidden only with `visible` to 2,207 (*unverified*, static simulation).
+- The menu entity's name tag was not visible in first person (measured). Whether it shows in third person or to other players was not tested (*unverified*, section 8.4).
+
+The vanilla chest screen is hidden with the same comparison.
+
+```json
+"panel": {
+  "$g2048_title": "$container_title",
+  "modifications": [ "..." ]
+},
+"header_area": { "ignored": "($g2048_title = '§2§0§4§8')" },
+"background_panel": { "ignored": "($g2048_title = '§2§0§4§8')" },
+"half_screen": { "ignored": "($g2048_title = '§2§0§4§8')" }
+```
+
+- On mobile the copy variable goes on `pocket_containers.panel`, and `header_area`, `background_panel` and `half_screen` are left out with `ignored`. The grey background of the mobile screen disappeared and the window floated over the world like the classic UI (measured).
+- On desktop the path key `small_chest_panel/root_panel` gets the same copy variable and `"visible": "(not ($g2048_title = '§2§0§4§8'))"`.
+- These definitions override properties of vanilla definitions, so they compete with other packs that write the same properties (MOD-13). The `modifications` that inserts the window does not compete.
+
+#### 2.2.2 B: screen redeclaration and the slot 0 marker
 
 Redeclare `small_chest_screen` in `chest_screen.json` to replace `$screen_content` (HOST-18). Put a marker item (a hidden custom item with `max_durability` 4242) in slot 0, and draw the menu window only when that value matches. Other chests and entities keep the vanilla screen.
 
@@ -211,10 +270,11 @@ Other workarounds mentioned on Discord were not tested.
 
 - Several players: whether one player can tap another player's menu entity, and cleanup when each player has an entity.
 - Behavior on Windows, iOS and controller input (the `button.menu_ok` mapping).
+- Whether the name tag shows in third person and to other players when picking by entity name (section 8.4).
 
 ## 6. Test add-on
 
-Entity Menu Lab puts the setup of sections 2.2 to 2.5 on one screen. The menu entity opens with C2.
+Entity Menu Lab puts the setup of section 2.2 B and sections 2.3 to 2.5 on one screen. The menu entity opens with C2.
 
 <AddonDownload id="entity-menu-lab" />
 
@@ -291,11 +351,102 @@ Picking goes through the server, but the delay before the details changed was ba
 
 Example add-on measurement video (mobile 1.26.63, 2026-11-15).
 
+## 8. 2048 test: animation replay and flicker
+
+This test draws 2048 with entity slots to check whether the tile slide animations can replay on every move in an open chest screen (mobile 1.26.63, 2026-11-15). The screen opens with C2 and is inserted with method A of section 2.2. There is no example add-on to download.
+
+### 8.1 Slot layout
+
+The entity has `inventory_size: 243`.
+
+| Slot | Content |
+| --- | --- |
+| 1 to 16 | Mover layer. Old value at the old position. Name example `L2at5` (left by 2 cells, marker a, value 2 to the 5th) |
+| 17 to 32 | Result layer. New value at the new position. Name examples `Mbt6` (merged), `Pat1` (spawned), `Nat3` (unchanged) |
+| 33, 34 | Score, status text |
+| 36 to 40 | Up, down, left, right and New buttons (quick move buttons, section 2.5) |
+
+Mover codes are `S0` (stays) or a direction `U`, `D`, `L`, `R` followed by a distance of 1 to 3. Result codes are `N`, `M` and `P`. Empty cells have no item. Data items are paper with only a name, read with `(#hover_text - '§o' - '§f' - '§r')` (section 2.4).
+
+### 8.2 Animation replay
+
+To replay an animation from the start in an open screen, make the factory build its control again (measured, ANI-37).
+
+```json
+"mover_cell": {
+  "type": "stack_panel", "size": [ 30, 30 ],
+  "factory": { "name": "g2048_mover", "control_ids": { "L2at5": "@g2048.ft_L2_5", "L2bt5": "@g2048.ft_L2_5" } },
+  "property_bag": { "#k": [], "#kL2at5": [ "L2at5" ], "#kL2bt5": [ "L2bt5" ] },
+  "bindings": [
+    { "binding_type": "collection", "binding_collection_name": "container_items", "binding_name": "#hover_text", "binding_condition": "always" },
+    { "binding_type": "view", "binding_condition": "always", "source_property_name": "('#k' + (#hover_text - '§o' - '§f' - '§r'))", "target_property_name": "#collection_length" }
+  ]
+}
+```
+
+- In each cell one `stack_panel` factory looks up `property_bag` with `('#k' + name)` to set `#collection_length` (COL-22, COL-23) and builds the one control of that key from `control_ids`. For an empty cell `#k` is an empty array, so nothing is built. The real pack has a generator make keys for 13 mover codes and 3 result codes times 13 values and 2 markers.
+- On every move the script flips the marker in the names between `a` and `b`. Even when the same tile stays in the same place the key changes, so the factory builds a new control and that control's `anims` played from the start (measured).
+- Keeping one variant panel per marker and switching only `#visible` showed no slide. Being hidden and shown again does not replay an animation (measured).
+
+The tile animations:
+
+- A mover tile goes to its destination with `offset` over 0.12 seconds and reaches `alpha` 0 at 0.17 seconds.
+- A result tile stays at `alpha` 0 for 0.12 seconds and then shows. A merged cell grows from `size` 28 to 34 and back, and a spawned cell grows from 0.
+- Waiting steps are `alpha` and `size` animations with equal `from` and `to`, chained with `next`.
+- The result layer is on a layer above the mover layer.
+
+### 8.3 Flicker and the empty grid
+
+At the moment a slot item changed, the cells of a `container_items` grid were drawn above other controls for one frame. Grey cells came up over our window for an instant, and the whole board seemed to flicker (measured, HOST-50).
+
+| Setup behind the window | Result |
+| --- | --- |
+| Vanilla chest screen not hidden | No flicker was seen. The vanilla chest screen showed next to the window |
+| Vanilla hidden with `visible: false`, no grid | The whole board flickered grey |
+| Vanilla hidden, grid of 27 `common.pocket_ui_container_item` cells | The whole board flickered |
+| Vanilla hidden, grid of 1 vanilla cell | Only that cell's area flickered |
+| Vanilla hidden, `container_items` grid of 27 empty panel cells | No flicker |
+| Vanilla not hidden, whole screen covered with an opaque backdrop | No flicker, but with the whole screen covered it no longer looked like a form |
+
+All of these are measured. Forcing a layout pass with a label whose width changed on every move did not remove the flicker (measured). So a grid of empty panel cells goes behind the window.
+
+```json
+"cover": {
+  "type": "input_panel", "modal": true, "size": [ "100%", "100%" ], "layer": 100,
+  "controls": [
+    { "sync_grid": {
+        "type": "grid", "size": [ 162, 54 ], "layer": 1,
+        "grid_rescaling_type": "horizontal", "maximum_grid_items": 27,
+        "collection_name": "container_items", "grid_item_template": "g2048.empty_cell"
+    } },
+    { "window@g2048.factory_window": { "layer": 2 } }
+  ]
+},
+"empty_cell": { "type": "panel", "size": [ 18, 18 ] }
+```
+
+- The tests in the table hid vanilla with `visible: false`. How the flicker behaves with the setup that leaves the mobile vanilla out with `ignored` (section 2.2.1) was not checked (*unverified*).
+- Whether the grey drawn without a grid is the hidden vanilla cells, and why an empty grid makes the flicker go away, is not known.
+- With vanilla cells visible, the flicker may have gone unnoticed because the vanilla cells or background covered it (*inferred*).
+
+### 8.4 Container title and name tag
+
+- The title of an entity chest screen is the nameTag (measured, HOST-19). `minecraft:inventory` and the Script API `Container` and `EntityInventoryComponent` have no field or function that sets the title apart from the nameTag (Microsoft Learn documentation).
+- Community reports disagree on whether the language file's `entity.<id>.name` becomes the title when there is no nameTag (**conflicting**).
+- A custom block can give a title with `container.title` (a language key or text) of `minecraft:block_entity`, and opens on tap with `show_ui_on_interaction` (on by default). A user reports it as an experimental feature in 26.50 and 26.60 (*single report*).
+- `minecraft:nameable` has no field that hides the name tag (`allow_name_tag_renaming`, `always_show`, `default_trigger`, `name_actions`). There is a report that a behavior-pack-only entity with no client entity file draws no name tag (*single report*).
+- A candidate for hiding the name tag is `Entity.nameplateRenderDistance` (writable from `@minecraft/server` 2.8.0). Whether 0 hides it was not tested (*unverified*).
+
 ## Related rules
 
 | ID | Page | Content |
 | --- | --- | --- |
 | HOST-16 to HOST-20 | [Screen hosts and data](../json-ui/screen-hosts-and-data.mdx) | Entity inventory screen, slot identity, screen redeclaration, script-side cautions |
+| HOST-48 to HOST-50 | [Screen hosts and data](../json-ui/screen-hosts-and-data.mdx) | Picking by entity name, inserting the window with `modifications`, an empty grid against flicker |
+| ANI-37 | [Images and animation](../json-ui/images-and-animation.mdx) | Replaying animations by building the control again |
+| COL-22, COL-23 | [Collections and factories](../json-ui/collections-and-factory.mdx) | Picking factory kinds with a `property_bag` dictionary lookup |
+| FILE-34 | [Files and definitions](../json-ui/files-and-definitions.mdx) | `ignored` is evaluated in the parent scope |
+| MOD-13 | [Modifying vanilla screens](../json-ui/modifying-vanilla.mdx) | Using only `modifications` that define nothing |
 | ANI-03 | [Images and animation](../json-ui/images-and-animation.mdx) | Progress bars drawn with `#clip_ratio` |
 | ANI-06 | [Images and animation](../json-ui/images-and-animation.mdx) | The item renderer and `#item_id_aux` |
 | EXP-27 | [Expressions](../json-ui/expressions.mdx) | Real literals that start with a dot |

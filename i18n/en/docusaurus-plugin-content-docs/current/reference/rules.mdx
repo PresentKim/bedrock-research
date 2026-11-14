@@ -1,12 +1,12 @@
 ---
 title: Full rule ID table
-description: A collection of the 389 JSON UI rules as per-chapter tables, with the evidence level and source abbreviations.
+description: A collection of the 393 JSON UI rules as per-chapter tables, with the evidence level and source abbreviations.
 sidebar_position: 1
 sources:
   - repo-guide
 ---
 
-The vanilla baseline is bedrock-samples v1.26.50.4 (46ba6ea). There are 389 rules in total.
+The vanilla baseline is bedrock-samples v1.26.50.4 (46ba6ea). There are 393 rules in total.
 
 ## Evidence levels
 
@@ -363,6 +363,7 @@ The vanilla baseline is bedrock-samples v1.26.50.4 (46ba6ea). There are 389 rule
 | ANI-34 | The client drew a grayscale PNG translucent (the window showed through the gray frame). Texture optimization tools convert gray pictures to grayscale, so keep the pack's PNGs as RGB or RGBA. | measured | DF |
 | ANI-35 | The international `paper_doll_renderer` draws **only the player skin** that the engine supplies through bindings (`#paper_doll_skin`, `#skin_index`, `#classic_skin_index`). The properties vanilla uses are `use_selected_skin` (12, all `false`), `rotation` (`gesture_x` 6, `auto` 1), `camera_tilt_degrees` (8, all `-10`), `starting_rotation` (8, all `30`), `enable_scissor_test` (4, all `true`), and `#skin_rotation` in `property_bag` (2). To rotate it by dragging, put `"gesture_tracking_button": "button.turn_doll"` and its button mapping on an `input_panel`, and the paper doll receives that panel's `#gesture_delta_source` and `#gesture_mouse_delta_x` with view bindings. | vanilla | VN pause_screen.json:320, VN pause_screen.json:348, VN day_one_experience_screen.json:201, NB-12 |
 | ANI-36 | The NetEase documentation's UI 3D model features, namely `modelname`, `modelsize`, `animation`, and `animation_looped` of `paper_doll` and `netease_paper_doll_renderer` (`skeleton_model_name`, `entity_identifier`, `screen_scale`, `init_rot_x/y/z`, `freedom_gesture`, the Python `RenderEntity` and `RenderSkeletonModel`), are **China edition only**. The international binary has 0 `netease` strings and none of the long names of these properties, and vanilla never uses them. An international pack cannot draw custom models or entities in UI, so use world entities or particles (ALT-01). Short names cannot be judged by binary strings (`paper_doll_renderer` also has 0), so the conclusion leans on the long names. | code, vanilla, inferred | NB-12, VN 0 times, NE-30 paper_doll, NE-bone |
+| ANI-37 | To replay an animation from the start in an open screen, make that control get built again. In a `control_ids` factory whose `#collection_length` comes from a `property_bag` dictionary lookup (COL-22, COL-23), every change of the marker in the key value (the slot item name) built the control again and its `anims` played from the start. Turning `#visible` off and on did not replay it. | measured | E2048 |
 
 ## Chapter 10. Screen hosts and data channels
 
@@ -406,6 +407,9 @@ The vanilla baseline is bedrock-samples v1.26.50.4 (46ba6ea). There are 389 rule
 | HOST-45 | The sidebar scoreboard is a HUD channel that does not overlap with titles: attach a mark to the objective name and partial marks to each line, replace `scoreboard.scoreboard_sidebar` with a whole-screen panel, and draw each part in a different place with a `scoreboard_players` collection stack (`#scoreboard_sidebar_size` to `#collection_length`). The client merges lines with the same text, so attach `§r` after to tell them apart, up to 15 lines. | measured | DF |
 | HOST-46 | Putting `{"type":"multiselect","text":...,"options":[strings...],"default":[numbers...]}` in a modal form `content` makes the 1.26.52 client draw it with the vanilla UI (`text` is the head button text, and pressing it gives a checkbox list). In that place of the response array comes an array of the chosen numbers (`[0,2]`), and `null` comes if none is chosen. The default checks are given as an array of numbers in the singular `default`, and `defaults` written in the binary schema is ignored. All 25 options were also drawn, and even with several, or mixed with other rows, the response position follows the `content` order. It cannot be sent through the Script API, so only a server that sends a raw `ModalFormRequest` can use it (Dragonfly cannot put it in `form.Custom`, so it uses a raw packet). | measured, code | MS, NB-16 |
 | HOST-47 | The 1.26.60 Preview vanilla wraps `custom_multiselect` in `option_generic` to add the upper label (`#custom_text`) and tooltip and changes the head button text to `#multiselect_option_text`. The 1.26.50 version has no place for the upper label and tooltip. A pack that redraws this row or changes the `custom_form` factory puts `multiselect` in `control_ids` and rechecks per version. | vanilla | MS, VN server_form.json:294 and 503 |
+| HOST-48 | `$container_title` (the entity nameTag) cannot be used in binding expressions (HOST-19), but it can be compared in `ignored` and `visible` property expressions. Declare a copy variable such as `"$copy": "$container_title"` in the definition and compare the copy. `ignored` is evaluated in the parent scope (FILE-34), so the copy variable goes on the parent control. When picked with `ignored`, the control is not built for chests with another name. | measured | E2048 |
+| HOST-49 | To put a window into the chest screen, do not redeclare `small_chest_screen`; insert it into the `controls` of the vanilla chest panels (`chest.small_chest_panel`, `pocket_containers.panel`) with `modifications`. With two add-ons that redeclared the same screen, only one was used, by pack order (MOD-12, MOD-13). | measured | E2048 |
+| HOST-50 | When the vanilla chest cells are hidden with `visible: false` and a window is drawn in their place, at the moment a slot item changes the cells of a `container_items` grid were drawn grey above other controls for one frame. It flickered with no grid and with a grid of `common.pocket_ui_container_item` cells. With a `container_items` `grid` of 27 empty panel cells behind the window there was no flicker. The cause is not known. | measured | E2048 |
 
 ## Chapter 11. Pattern recipes
 
