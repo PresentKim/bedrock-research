@@ -1,0 +1,182 @@
+---
+title: Inferring numeric item IDs (aux) from the Script API
+description: A plan to research how a behavior pack script can compute the numeric item ID that the JSON UI item renderer takes, for vanilla items, custom items and custom blocks. Known facts and conflicts, a draft inference method, and a probe add-on that reads the numbers in the game to settle the hypotheses.
+sidebar_position: 4
+sources:
+  - repo-guide
+  - repo-chest-ui
+  - chest-ui
+  - bedrock-wiki
+  - repo-ore-ui-loading
+  - private-research
+---
+
+# Inferring numeric item IDs (aux) from the Script API
+
+The JSON UI `inventory_item_renderer` draws an item from `#item_id_aux` = `numeric item ID * 65536 + data value` (ANI-06). Enchant glint adds 32768. Unlike drawing from a texture path, blocks show in 3D and glint shows ([research screen section 8.1](./server-form-research-screen.mdx#81-item-icons-v140)).
+
+The problem is that a script has no way to know this number. This page researches how a behavior pack script can compute the numeric ID from an item name (`minecraft:diamond`, `bwiki:ruby`). It covers vanilla items and blocks, custom items and custom blocks.
+
+Status: plan and first experiment ready. Results go into section 5.
+
+## 1. The Script API has no numeric ID
+
+The typings of `@minecraft/server` 2.11.0 (stable), 2.12.0-beta.1.26.63-stable and 2.13.0-beta.1.26.70-preview.24 were checked.
+
+| API | What it gives |
+| --- | --- |
+| `ItemType` | `id` (string), `localizationKey` |
+| `ItemTypes` | `get(id)`, `getAll()` |
+| `BlockType` | `id`, `localizationKey` |
+| `BlockTypes` | `get(id)`, `getAll()` |
+| `ItemStack` | The constructor is `(itemType, amount)`. There is no data value member |
+| `BlockPermutation.getItemStack()`, `Block.getItemStack(amount, withData)` | Return an `ItemStack`. `withData` is block entity data |
+
+- No member returns a numeric ID, runtime ID, legacy ID or aux. The docs of `getAll()` say nothing about the order of the results.
+- `ActionFormData.button(text, iconPath)` in `@minecraft/server-ui` takes only a texture path. There is no overload that draws an icon from an item type.
+- The only inputs a script has are the custom item and custom block lists from `ItemTypes.getAll()` and `BlockTypes.getAll()`, and their order. Vanilla numbers must be put into the script as a table per version.
+
+## 2. Known facts and conflicts
+
+### 2.1 The drawn number is the item registry runtime ID
+
+The number JSON UI draws is the network runtime ID that the server sends in the item registry.
+
+- In the item list of a 1.26.0 world captured with ProxyPass on 2026-02-24 (1905 items), diamond is 335, apple 285, wind charge 284, emerald 552 and chest 54. The Chest-UI 26.20 table (2026-05-18) has the same values, and 1813 of 1824 shared names are equal.
+- The Dragonfly server appends custom items right after the vanilla numbers. The client never makes this layout on its own, yet on 1.26.52 Windows custom items and custom blocks were drawn from these runtime IDs * 65536 (Ore UI loading research).
+
+So the numeric IDs come from the registry built by whoever opened the world (a dedicated server, or the client hosting the world). Inference from a script means reproducing the layout rules of that registry.
+
+### 2.2 Vanilla layout
+
+- Bedrock Wiki 26.50 table: vanilla spans -1246 to 883. Blocks are negative, items 0 and up.
+- From 26.40, 32 data-driven items (spears, bundles, breeze rod, trial keys, wind charge, apple, glow berries and so on) moved to the end of the table. In 26.50 they are 852 to 883.
+- Vanilla numbers change with each version. Diamond is 335 in 26.30 and 306 in 26.40 (C-33).
+- On 1.26.63, sending apple as 883 (882 + 1 custom item) from the 26.50 table drew a wind charge. The layout of this range changed after 26.50. The 15 items below 852 were still right.
+
+### 2.3 Where custom items go and in what order
+
+| Topic | Record | Source |
+| --- | --- | --- |
+| Insertion point | Up to 26.30, from 257. In a 1.26.0 capture, 38 custom items are at 257 to 294 and every vanilla number after them moved by +38 | ProxyPass captures (1.21.73, 1.26.0), Chest-UI `ID < 256` |
+| Insertion point | From 850 in 26.40 and 852 in 26.50. Vanilla numbers before that do not move | Bedrock Wiki, Chest-UI `ID < 850` |
+| Order among custom items | String order of the identifier (`color_1`, `color_10`, `color_11`, `color_2`) | Two ProxyPass captures |
+| Order among custom items | Resource pack stack order | Bedrock Wiki 26.50 |
+| Order among custom items | File name order, files in subfolders first | Discord 2026-02-14, 2026-02-15 |
+| Counting | Counting the non-`minecraft:` items of `ItemTypes.getAll()` was right in a world with 1 custom item. In a world with every free Marketplace add-on the count was 1518, but the real shift was 1560 | Discord 2026-07-09 |
+| Saturation | Past 1569 custom items, nothing shifts further | Bedrock Wiki 26.50 |
+
+The three order claims disagree. The two captures only show the order inside one pack, so with several packs the stack order may come first.
+
+### 2.4 Custom blocks
+
+| Record | Source |
+| --- | --- |
+| Negative numbers going down from just below the lowest vanilla number (from -1039 in 1.21.100). They do not shift vanilla. They do not draw from their ID | Bedrock Wiki revisions 1.20.20 to 1.21.100. The sentence is gone from the 26.44 revision on |
+| Blocks do not shift vanilla numbers | Chest-UI `constants.js` |
+| The first custom block is -9745 (= -10000 + 255), going down by one in reverse file name order. Right on PC, sometimes wrong on Android, wrong on iOS | Discord 2026-02-14, 2026-03-14 |
+| Custom blocks do not draw from their aux ID. Their numbers are around -1091 | Discord 2026-05-12 |
+| Custom blocks registered by Dragonfly drew as 3D pictures from their runtime ID * 65536 | Ore UI loading research (1.26.52) |
+
+No registry capture with custom blocks exists yet.
+
+### 2.5 The real number can be read when the item is in a slot
+
+The client fills `#item_id_aux` of player hotbar and chest slots itself. No script computation is needed, but the item must really be in that slot, and a server form screen cannot read the inventory collection. It is used only as a reference to check inference.
+
+## 3. Draft inference method
+
+These are the steps for a script to get the numeric ID of a name `n`. Bold values are set by experiment.
+
+1. If `n` is a vanilla item whose table number is below **P**, use the table number.
+2. If `n` is a vanilla item whose table number is P or more, add the custom item count `C`. `C` does not exceed 1569.
+3. If `n` is a custom item, line up the custom items in **order O** and use `P + k`, where `k` is its place (from 0).
+4. If `n` is a vanilla block, use the table number.
+5. If `n` is a custom block, line up the custom blocks in **order O'** and use **B** `- k`.
+
+Values to settle:
+
+| Value | Candidates |
+| --- | --- |
+| P (custom item start) | 852 in 26.50. Different on 1.26.63, judging from the apple result |
+| Order O | Identifier order, file name order (subfolders first), path order, `ItemTypes.getAll()` order |
+| Whether C includes block items of custom blocks | Chest-UI leaves them out |
+| B (custom block start) | Just below the lowest vanilla number (-1247), -9745 |
+| Order O' | Identifier order, file name order, its reverse, `BlockTypes.getAll()` order |
+| Vanilla table | No 1.26.63 table exists. Build it from a registry capture |
+
+A script cannot read the game version, so the vanilla table matches the one version the add-on targets.
+
+## 4. First experiment: item aux probe
+
+The probe add-on registers 4 custom items and 3 custom blocks, and draws 64 numeric IDs with the item renderer, each labeled with its number. The pictures show directly what sits at each number.
+
+### 4.1 What it registers
+
+File names and identifiers are deliberately in different orders. The color order of the cells shows which order hypothesis holds.
+
+| File | Identifier | Picture |
+| --- | --- | --- |
+| `items/z_first.json` | `bwiki:aux_probe_a` | Red wool |
+| `items/a_last.json` | `bwiki:aux_probe_b` | Blue wool |
+| `items/m_mid.json` | `bwiki:aux_probe_c` | Lime wool |
+| `items/sub/k_sub.json` | `bwiki:aux_probe_d` | Yellow wool |
+| `items/aux_probe_test.json` | `bwiki:aux_probe_test` | Spyglass (launcher item) |
+| `blocks/z_first.json` | `bwiki:aux_probe_block_a` | Gold block |
+| `blocks/a_last.json` | `bwiki:aux_probe_block_b` | Diamond block |
+| `blocks/m_mid.json` | `bwiki:aux_probe_block_c` | Emerald block |
+
+Order of the 5 custom items under each hypothesis:
+
+| Order hypothesis | Order |
+| --- | --- |
+| Identifier | Red, blue, lime, yellow, spyglass |
+| File name, subfolders first | Yellow, blue, spyglass, lime, red |
+| Path string | Blue, spyglass, lime, yellow, red |
+
+Custom blocks in identifier order are gold, diamond, emerald, and in file name order diamond, emerald, gold.
+
+### 4.2 Screens
+
+- Body of the first menu: the custom items and blocks returned by `ItemTypes.getAll()` and `BlockTypes.getAll()`, in that order, and how many block items of custom blocks are in `ItemTypes.getAll()`.
+- 64-number screen: the button texture field carries `aux:` + `number * 65536`, and the number is written under each cell. Ranges to pick from the menu:
+
+| Range | What it shows |
+| --- | --- |
+| 840 to 903 | Where and in what order custom items went (P, O), and the shifted vanilla items (apple, wind charge and so on). 840 to 851 are vanilla items that do not shift, as a reference |
+| -1278 to -1215 | Whether custom blocks sit below the lowest vanilla number (-1278 to -1247). -1246 to -1215 are vanilla concrete slabs, as a reference |
+| -9776 to -9713 | The -9745 claim from Discord |
+| Typed start | 64 cells from a typed start number |
+
+### 4.3 Test steps
+
+1. Turn on only the probe add-on in a new world. Custom items of other test add-ons also enter the registry, so turn them off.
+2. Take a picture of the body of the first menu.
+3. Open the three ranges in turn and take pictures. In 840 to 903, look for the 4 wool colors and the spyglass. In -1278 to -1247 and -9776 to -9713, look for the gold, diamond and emerald blocks.
+4. If the custom blocks are in neither range, search other ranges with a typed start.
+
+On PC, ProxyPass can capture the item registry of the same world to check the numbers directly. The 1.26.63 vanilla table is also built from this capture.
+
+## 5. Results
+
+None yet.
+
+## 6. Example add-on
+
+<AddonDownload id="item-aux-probe" />
+
+1. Open the file to import it (on mobile, tap the file and open it with Minecraft). In a new world, turn on the behavior pack "Bedrock Wiki Item Aux Probe BP". The resource pack turns on with it as a dependency, and no experimental toggle is needed.
+2. Take "Item Aux Probe" (spyglass) from the end of the Items category of the creative inventory. `/give @s bwiki:aux_probe_test` works too.
+3. Use the item to open the menu. `/scriptevent bwiki:aux_probe` opens it too.
+
+- This add-on also replaces `$screen_content` of `third_party_server_screen`, so do not turn it on together with other server form test add-ons.
+- The text on screen is English.
+
+## Related rules
+
+| ID | Page | Content |
+| --- | --- | --- |
+| ANI-06 | [Images and animation](../json-ui/images-and-animation.mdx) | The item renderer and `#item_id_aux` |
+| EXP-16 | [Expressions](../json-ui/expressions.mdx) | `(#v - 0)` to turn a string into a number |
+| HOST-17 | [Screen hosts and data](../json-ui/screen-hosts-and-data.mdx) | Chest slot numbers and the shifting range |
+| C-33, C-54 | [Conflict table](../json-ui/conflicts.mdx) | Stable numeric ID range, numbering scheme |
