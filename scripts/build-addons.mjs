@@ -7,6 +7,7 @@ import { zipSync } from 'fflate';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PACKS = ['bp', 'rp'];
 const ZIP_MTIME = new Date('2026-01-01T00:00:00Z');
+const LAUNCHER_TAG = 'bwiki:test_launcher';
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
@@ -25,14 +26,16 @@ export function readAddon(dir) {
   const packs = Object.fromEntries(PACKS.map((p) => [p, readJson(path.join(dir, p, 'manifest.json'))]));
   const script = path.join(dir, 'bp', 'scripts', 'main.js');
   const itemsDir = path.join(dir, 'bp', 'items');
+  const items = fs.existsSync(itemsDir) ? listFiles(itemsDir).map((f) => readJson(path.join(itemsDir, f))['minecraft:item']) : [];
   return {
     id,
     dir,
     packs,
     scriptVersion: fs.existsSync(script) ? fs.readFileSync(script, 'utf8').match(/PACK_VERSION = "([^"]+)"/)?.[1] : undefined,
-    items: fs.existsSync(itemsDir)
-      ? fs.readdirSync(itemsDir).map((f) => readJson(path.join(itemsDir, f))['minecraft:item'].description.identifier)
-      : [],
+    items: items.map((it) => it.description.identifier),
+    launchers: items
+      .filter((it) => it.components?.['minecraft:tags']?.tags?.includes(LAUNCHER_TAG))
+      .map((it) => it.description.identifier),
   };
 }
 
@@ -89,7 +92,7 @@ export function build(addonsDir, outDir, dataFile) {
     const file = `${a.id}-v${version}.mcaddon`;
     const bytes = pack(a);
     fs.writeFileSync(path.join(outDir, file), bytes);
-    data[a.id] = { version, file, size: bytes.length, name: a.packs.bp.header.name.replace(/ BP v[\d.]+$/, ''), items: a.items };
+    data[a.id] = { version, file, size: bytes.length, name: a.packs.bp.header.name.replace(/ BP v[\d.]+$/, ''), items: a.launchers };
   }
   fs.mkdirSync(path.dirname(dataFile), { recursive: true });
   fs.writeFileSync(dataFile, JSON.stringify(data, null, 1));

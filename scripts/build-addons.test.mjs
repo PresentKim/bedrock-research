@@ -24,7 +24,8 @@ function addon(root, id, { v = [1, 2, 3], rpv = v, dep = v, script = `v${v.join(
   w('rp/manifest.json', manifest('rp', rpv, `${id}-rp`));
   w('bp/manifest.json', manifest('bp', v, `${id}-bp`, { dependencies: [{ uuid: `${id}-rp`, version: dep }] }));
   w('bp/scripts/main.js', `const PACK_VERSION = "${script}";`);
-  w('bp/items/a.json', { 'minecraft:item': { description: { identifier: item } } });
+  w('bp/items/a.json', { 'minecraft:item': { description: { identifier: item }, components: { 'minecraft:tags': { tags: ['bwiki:test_launcher'] } } } });
+  w('bp/items/sub/b.json', { 'minecraft:item': { description: { identifier: `${item}_extra` } } });
   w('rp/texts/en_US.lang', 'x=y\n');
   w('tools/gen.mjs', '');
   return dir;
@@ -49,6 +50,12 @@ test('reports items shared between add-ons', () => {
   assert.ok(errs.some((e) => /item t:x also defined by a/.test(e)));
 });
 
+test('reports items in item subfolders shared between add-ons', () => {
+  const root = tmp();
+  const errs = validate([readAddon(addon(root, 'c', { item: 't:z' })), readAddon(addon(root, 'd', { item: 't:z' }))]);
+  assert.ok(errs.some((e) => /item t:z_extra also defined by c/.test(e)));
+});
+
 test('packs bp and rp under the add-on id with the version in the file name', () => {
   const root = tmp();
   addon(path.join(root, 'addons'), 'demo');
@@ -56,5 +63,5 @@ test('packs bp and rp under the add-on id with the version in the file name', ()
   assert.equal(data.demo.file, 'demo-v1.2.3.mcaddon');
   assert.deepEqual(data.demo.items, ['t:demo']);
   const files = Object.keys(unzipSync(fs.readFileSync(path.join(root, 'out', 'demo-v1.2.3.mcaddon')))).sort();
-  assert.deepEqual(files, ['demo_bp/items/a.json', 'demo_bp/manifest.json', 'demo_bp/scripts/main.js', 'demo_rp/manifest.json', 'demo_rp/texts/en_US.lang']);
+  assert.deepEqual(files, ['demo_bp/items/a.json', 'demo_bp/items/sub/b.json', 'demo_bp/manifest.json', 'demo_bp/scripts/main.js', 'demo_rp/manifest.json', 'demo_rp/texts/en_US.lang']);
 });
