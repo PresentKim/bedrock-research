@@ -2,17 +2,18 @@ import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ITEMS = 96;
-const PER_TAB = 48;
-const DETAIL_BASE = 102;
+const PER_PAGE = 48;
 const BLOCK = 20;
 const MAX_MATS = 8;
 const MAX_REWARDS = 8;
 
-const out = join(dirname(fileURLToPath(import.meta.url)), "..", "rp", "ui", "ffr_items.json");
+export const SERVER_PAGES = { slots: 96, detailBase: 102 };
+export const CLIENT_PAGES = { pagesPerTab: 3, slots: 2 * 3 * PER_PAGE, tabBase: 288, pageLabelBase: 290, detailBase: 296 };
 
-function block(k) {
-  const base = DETAIL_BASE + k * BLOCK;
+const uiDir = join(dirname(fileURLToPath(import.meta.url)), "..", "rp", "ui");
+
+function block(k, detailBase) {
+  const base = detailBase + k * BLOCK;
   return {
     head: base,
     status: base + 1,
@@ -82,7 +83,7 @@ function detailBody(b) {
   };
 }
 
-function detail(k, b) {
+function detail(ns, k, b) {
   return {
     type: "image",
     texture: "textures/ui/ffr/panel",
@@ -95,7 +96,7 @@ function detail(k, b) {
           offset: [3, 3],
           anchor_from: "top_left",
           anchor_to: "top_left",
-          controls: [{ "scroll@ffr.detail_scroll": { $scrolling_content: `ffri.detail_body_${k}` } }],
+          controls: [{ "scroll@ffr.detail_scroll": { $scrolling_content: `${ns}.detail_body_${k}` } }],
         },
       },
       {
@@ -114,59 +115,114 @@ function detail(k, b) {
   };
 }
 
-function itemRow(tab, row, detailPrefix) {
+function addDetails(ui, ns, slots, detailBase, factoryPrefix) {
+  for (let k = 0; k < slots; k++) {
+    const b = block(k, detailBase);
+    ui[`detail_body_${k}`] = detailBody(b);
+    ui[`detail_${k}`] = detail(ns, k, b);
+    ui[`lazy_${k}@ffr.lazy_detail`] = { factory: { name: `${factoryPrefix}_lazy_${k}`, control_name: `${ns}.detail_${k}` } };
+  }
+}
+
+function itemRow(ns, firstSlot, firstK, r) {
   const toggles = [];
   for (let col = 0; col < 8; col++) {
-    const pos = row * 8 + col;
-    const k = tab * PER_TAB + pos;
+    const pos = r * 8 + col;
+    const k = firstSlot + pos;
     toggles.push({
       [`i${k}@ffr.item_toggle`]: {
         collection_index: k,
-        $k: pos,
-        $detail_offset: [152 - col * 18, -4 - row * 18],
-        $detail_def: `ffri.${detailPrefix}_${k}`,
+        $k: firstK + pos,
+        $detail_offset: [152 - col * 18, -4 - r * 18],
+        $detail_def: `${ns}.lazy_${k}`,
       },
     });
   }
-  return { [`r${row}`]: { type: "stack_panel", orientation: "horizontal", size: [144, 18], collection_name: "form_buttons", controls: toggles } };
+  return { [`r${r}`]: { type: "stack_panel", orientation: "horizontal", size: [144, 18], collection_name: "form_buttons", controls: toggles } };
 }
 
-function tabGrid(tab, detailPrefix) {
-  return {
+const rows = (ns, firstSlot, firstK) => Array.from({ length: PER_PAGE / 8 }, (_, r) => itemRow(ns, firstSlot, firstK, r));
+
+const visibleFrom = (control) => ({
+  binding_type: "view",
+  binding_condition: "always",
+  source_control_name: control,
+  source_property_name: "#toggle_state",
+  target_property_name: "#visible",
+});
+
+function serverPagesUi() {
+  const ui = { namespace: "ffri" };
+  addDetails(ui, "ffri", SERVER_PAGES.slots, SERVER_PAGES.detailBase, "ffr");
+  const tabGrid = (tab) => ({
     [`grid${tab}`]: {
       type: "stack_panel",
       orientation: "vertical",
       size: [144, 108],
       anchor_from: "top_left",
       anchor_to: "top_left",
-      bindings: [
-        { binding_type: "view", binding_condition: "always", source_control_name: `ffr_t${tab}`, source_property_name: "#toggle_state", target_property_name: "#visible" },
-      ],
-      controls: Array.from({ length: PER_TAB / 8 }, (_, row) => itemRow(tab, row, detailPrefix)),
+      bindings: [visibleFrom(`ffr_t${tab}`)],
+      controls: rows("ffri", tab * PER_PAGE, 0),
     },
-  };
-}
-
-function items(detailPrefix) {
-  return {
+  });
+  ui.items_f = {
     type: "panel",
     size: [144, 128],
-    controls: [
-      tabGrid(0, detailPrefix),
-      tabGrid(1, detailPrefix),
-      { "pagers@ffr.pagers_tabs": { anchor_from: "top_left", anchor_to: "top_left", offset: [0, 110] } },
-    ],
+    controls: [tabGrid(0), tabGrid(1), { "pagers@ffr.pagers_tabs": { anchor_from: "top_left", anchor_to: "top_left", offset: [0, 110] } }],
   };
+  return ui;
 }
 
-const ui = { namespace: "ffri" };
-for (let k = 0; k < ITEMS; k++) {
-  const b = block(k);
-  ui[`detail_body_${k}`] = detailBody(b);
-  ui[`detail_${k}`] = detail(k, b);
-  ui[`lazy_${k}@ffr.lazy_detail`] = { factory: { name: `ffr_lazy_${k}`, control_name: `ffri.detail_${k}` } };
+function clientPagesUi() {
+  const { pagesPerTab, pageLabelBase, slots, detailBase } = CLIENT_PAGES;
+  const ui = { namespace: "ffrg" };
+  addDetails(ui, "ffrg", slots, detailBase, "ffrg");
+  const tabs = [];
+  for (let t = 0; t < 2; t++) {
+    const controls = [];
+    for (let p = 0; p < pagesPerTab; p++) {
+      const toggle = `ffrg_p${t}_${p}`;
+      ui[`page_${t}_${p}`] = {
+        type: "stack_panel",
+        orientation: "vertical",
+        size: [144, 108],
+        anchor_from: "top_left",
+        anchor_to: "top_left",
+        bindings: [visibleFrom(toggle)],
+        controls: rows("ffrg", (t * pagesPerTab + p) * PER_PAGE, p * PER_PAGE),
+      };
+      ui[`lazy_page_${t}_${p}`] = {
+        type: "stack_panel",
+        size: [144, 108],
+        anchor_from: "top_left",
+        anchor_to: "top_left",
+        factory: { name: `ffrg_page_${t}_${p}`, control_name: `ffrg.page_${t}_${p}` },
+        bindings: [
+          { binding_type: "view", binding_condition: "always", source_control_name: toggle, source_property_name: "(#toggle_state * 1)", target_property_name: "#collection_length" },
+        ],
+      };
+      controls.push(p === 0 ? { [`p${p}@ffrg.page_${t}_${p}`]: {} } : { [`p${p}@ffrg.lazy_page_${t}_${p}`]: {} });
+    }
+    ui[`page_row_${t}`] = {
+      type: "stack_panel",
+      orientation: "horizontal",
+      size: [144, 18],
+      collection_name: "form_buttons",
+      controls: Array.from({ length: pagesPerTab }, (_, p) => ({
+        [`ffrg_p${t}_${p}@ffr.page_toggle`]: { collection_index: pageLabelBase + t * pagesPerTab + p, $page_index: p, $page_group: `ffrg_pages_${t}` },
+      })),
+    };
+    controls.push({ [`pages@ffrg.page_row_${t}`]: { anchor_from: "top_left", anchor_to: "top_left", offset: [0, 110] } });
+    tabs.push({ [`tab${t}`]: { type: "panel", size: [144, 128], anchor_from: "top_left", anchor_to: "top_left", bindings: [visibleFrom(`ffr_t${t}`)], controls } });
+  }
+  ui.items = { type: "panel", size: [144, 128], controls: tabs };
+  return ui;
 }
-ui.items_f = items("lazy");
 
-writeFileSync(out, JSON.stringify(ui) + "\n");
-console.log(`wrote ${out}`);
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  for (const [file, ui] of [["ffr_items.json", serverPagesUi()], ["ffr_pages.json", clientPagesUi()]]) {
+    const out = join(uiDir, file);
+    writeFileSync(out, JSON.stringify(ui) + "\n");
+    console.log(`wrote ${out}`);
+  }
+}

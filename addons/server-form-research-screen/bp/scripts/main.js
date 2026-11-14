@@ -1,7 +1,7 @@
 import { system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 
-const PACK_VERSION = "v1.2.0";
+const PACK_VERSION = "v1.3.0";
 const TEST_ITEM = "bwiki:research_screen_test";
 const ITEM_COUNT = 200;
 const PAGE_SIZE = 48;
@@ -112,8 +112,54 @@ function openResearch(player, state) {
   });
 }
 
+const CLIENT_PAGES_PER_TAB = 3;
+const CLIENT_SLOTS = 2 * CLIENT_PAGES_PER_TAB * PAGE_SIZE;
+const CLIENT_PAGE_LABEL_BASE = CLIENT_SLOTS + 2;
+const CLIENT_DETAIL_BASE = CLIENT_PAGE_LABEL_BASE + 2 * CLIENT_PAGES_PER_TAB;
+
+function openClientPages(player, tab) {
+  const tabs = tabItems(ITEM_COUNT);
+  const slotItems = [];
+  for (let t = 0; t < 2; t++) for (let k = 0; k < CLIENT_PAGES_PER_TAB * PAGE_SIZE; k++) slotItems.push(tabs[t][k]);
+  const form = new ActionFormData().title(`ffr:G${"ab"[tab]}`).body("Research");
+
+  for (const i of slotItems) {
+    if (i === undefined) form.button("§r");
+    else form.button("§r", item(i).icon);
+  }
+  form.button(`To do ${tabs[0].length}`, "textures/items/book_normal");
+  form.button(`Done ${tabs[1].length}`, "textures/items/emerald");
+  for (let t = 0; t < 2; t++) {
+    const pages = Math.ceil(tabs[t].length / PAGE_SIZE);
+    for (let p = 0; p < CLIENT_PAGES_PER_TAB; p++) form.button(p < pages ? `${p + 1}` : EMPTY);
+  }
+  for (const i of slotItems) addDetailBlock(form, i);
+
+  form.show(player).then((res) => {
+    if (res.canceled || res.selection === undefined) return;
+    const s = res.selection;
+    let nextTab = tab;
+    if (s >= CLIENT_DETAIL_BASE && (s - CLIENT_DETAIL_BASE) % BLOCK === BLOCK - 1) {
+      const slot = Math.floor((s - CLIENT_DETAIL_BASE) / BLOCK);
+      const i = slotItems[slot];
+      nextTab = slot < CLIENT_SLOTS / 2 ? 0 : 1;
+      if (i !== undefined) player.sendMessage(`[${PACK_VERSION}] Research requested: ${item(i).name}`);
+    }
+    openClientPages(player, nextTab);
+  });
+}
+
 function open(player) {
-  openResearch(player, { tab: 0, pages: [0, 0] });
+  const form = new ActionFormData()
+    .title(`Research Screen ${PACK_VERSION}`)
+    .body("Pick how pages change.")
+    .button("Server pages (tested)")
+    .button("Client pages (not yet tested)");
+  form.show(player).then((res) => {
+    if (res.canceled || res.selection === undefined) return;
+    if (res.selection === 0) openResearch(player, { tab: 0, pages: [0, 0] });
+    else openClientPages(player, 0);
+  });
 }
 
 world.afterEvents.itemUse.subscribe((event) => {
