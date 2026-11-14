@@ -1,7 +1,7 @@
 import { ItemLockMode, ItemStack, system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 
-const PACK_VERSION = "v1.3.0";
+const PACK_VERSION = "v1.4.0";
 const LAUNCHER = "bwiki:entity_menu_lab";
 const BOX = "bwiki:entity_menu_lab_box";
 const MARKER = "bwiki:entity_menu_lab_marker";
@@ -62,6 +62,14 @@ function data(name, lore) {
   return named("minecraft:paper", name, lore, ItemLockMode.none);
 }
 
+function worn(step) {
+  const item = new ItemStack("minecraft:iron_sword");
+  const durability = item.getComponent("durability");
+  if (durability) durability.damage = Math.min(durability.maxDurability - 1, step * 25);
+  item.lockMode = ItemLockMode.none;
+  return item;
+}
+
 function buttonItem() {
   const item = new ItemStack("minecraft:lime_wool");
   item.nameTag = BUTTON_MARK;
@@ -76,6 +84,7 @@ function fillMenu(storage) {
   storage.setItem(14, data("STATE_ON"));
   storage.setItem(15, data(COLORS[0]));
   storage.setItem(16, data("0"));
+  storage.setItem(17, worn(0));
   storage.setItem(BUTTON_SLOT, buttonItem());
 }
 
@@ -157,6 +166,7 @@ function tickData(session) {
   storage.setItem(14, data(n % 2 === 0 ? "STATE_ON" : "STATE_OFF"));
   storage.setItem(15, data(COLORS[n % COLORS.length]));
   storage.setItem(16, data(String(n % 11)));
+  storage.setItem(17, worn(n % 11));
 }
 
 system.runInterval(() => {
