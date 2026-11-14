@@ -1,0 +1,105 @@
+---
+title: "JSON UI tester"
+description: "How to use the tester that runs JSON UI without the game, its capabilities and its limits"
+sidebar_position: 4
+sources:
+  - repo-jsonui-tester
+  - repo-guide
+---
+
+## What it is
+
+The JSON UI tester is an experimental tool that runs a resource pack's JSON UI without starting the game. It reimplements in JavaScript the engine evidence in this repository (the guide rules, the engine behavior analysis `NB`, the Cinnabar reconstruction `CN`), and it is used in two ways: a browser GUI and a command line (`cli.mjs`). The vanilla baseline is v1.26.50.4 (`bedrock-samples` `46ba6ea`). **The results are not game behavior.** It is a model that transcribes the engine rules from the documents, so it differs from the game wherever a rule is wrong or not yet known. Final verification happens in game (Source: tool-jsonui-tester, `README.md`). The license is this project's own material.
+
+## Verified capabilities
+
+| What was checked | Result |
+|---|---|
+| Expression evaluator | All 42 results of the Cinnabar evaluator match. Includes byte truncation, chained comparison, `* 1` becoming an empty string, `0.3` being the integer 0, and `%` and `>=` becoming null |
+| Size expressions | Matches the 16 Cinnabar size expression results (`"100c%"` is parent %, `"10"` is 0, `50%cm` is the largest child) |
+| Full vanilla load | Reads 207 files and 6,276 definitions under `ui/` in 0.3 seconds |
+| Vanilla screen resolution | Builds `server_form.third_party_server_screen` (107 controls), `hud.hud_screen` (748) and `chest.small_chest_screen` (223) with 0 resolution errors |
+| Server form simulation | Given a title, body and buttons, the elements are placed in the right spot following the vanilla layout (a 225x200 window at the center of the screen) |
+| Button press | Answers `selection = N` if the button itself has `collection_details`, and `canceled` (COL-04) if not |
+| Time flow | Simulates `once` and `visibility_changed` tick by tick so the preserved title latch works |
+
+## Installation and use
+
+Node 20 or later is required and there are no external packages (`package.json` has `"type": "module"` and tests run with `node --test`).
+
+### GUI
+
+```bash
+node jsonui-tester/serve.mjs            # In the browser at http://localhost:5178
+node jsonui-tester/serve.mjs 5179 --no-vanilla   # Mode that downloads vanilla from GitHub
+VANILLA=<resource_pack path> node jsonui-tester/serve.mjs   # Specify the vanilla folder
+```
+
+The server automatically finds `bedrock-samples/resource_pack` next to the repository. On static hosting it downloads vanilla directly from GitHub (`Mojang/bedrock-samples`): the 207 UI files up front and textures when they are used. The screen is laid out as follows.
+
+| Area | What it does |
+|---|---|
+| Top bar | Engine model (measurement first / CN as is), platform (desktop / phone), screen size, scale, outline and hidden control view, "treat unknown global `#visible` as false" |
+| Left "Packs" | Add vanilla, your own resource pack folder and the sample pack, and reorder them (the top one merges first) |
+| Left "Files" | Edit the loaded UI files and apply them immediately (Ctrl+Enter) |
+| Center | The screen. Clicking a control selects it, and clicking a button or toggle simulates the engine response. Hover works too |
+| "Restart" / "Next tick" | Rebuild the tree / resend the host data while keeping the state |
+| Right "Host" | Server form (title, body, buttons), HUD (title, subtitle, action bar), chest (name, slots), raw JSON |
+| Right "Inspect" | Control tree, definition chain, rectangle, layer, property bag, bindings, `$` variables, resolved properties, diagnostics |
+| Right "Diagnostics" | Engine error messages and warnings tagged with guide rule IDs. Clicking one goes to that control |
+| Right "Expression lab" | Enter an expression and a property bag to see the value and the pitfalls right away |
+
+### Command line
+
+```bash
+node jsonui-tester/cli.mjs --vanilla ../bedrock-samples/resource_pack --pack ./my_rp \
+  --root server_form.third_party_server_screen --title "myui:v1 Shop" --buttons "Apple;Bread"
+```
+
+It prints diagnostics and the visible labels (text, position) and exits with code 1 if there is an `error` diagnostic. `--json` gives JSON output, `--cn` the CN model, and `--host hud --hud-title T --actionbar A` HUD mode. CI or an AI agent can use it as a static simulation after editing a pack.
+
+### Tests
+
+```bash
+cd jsonui-tester && npm test    # 80 tests: expressions 50, size and JSON 21, definition resolution 8, latch 1
+```
+
+For deployment, `.github/workflows/jsonui-tester.yml` runs the tests every time something lands on `main`, and uploads the GUI files to GitHub Pages only when the repository is public. The free plan cannot use Pages on a private repository.
+
+## What the prototype found
+
+| Finding | Details |
+|---|---|
+| The label of recipe 1 can go behind the background | The inner `bg_image` of `bg@common.common_panel` has `layer: 1`, so a sibling label with no layer set (layer 0) is drawn beneath it (LAY-18). The sample pack fixed it by giving the title `layer: 2` |
+| `$variable` substitution inside an expression | The evidence disagrees (BND-33 measurement shows no substitution, while the community preserved title pattern works). The tester runs both models and warns in measurement-first mode |
+| The MOD-04 warning has to look through to the base | The `bindings` of `long_form` is safe because the base has no `bindings`. The warning checks the base chain after reading all files |
+| Most vanilla hiding is an engine global value | If the simulated data does not know a HUD `#visible` flag, everything shows, so there is an option "treat unknown global `#visible` as false" (on by default) |
+
+## Limits
+
+- It is not the game. Rules whose evidence is code (NB, CN) are kept as they are, and where they differ from measurement, "measurement first" mode follows the measurement (BND-05 discarding the whole array, MOD-02 ignoring a different path, EXP-10 no literal truncation, BND-33). Both can be wrong.
+- The engine data is simulated. The bindings a screen controller supplies are only the part found in `src/engine/host.js`. The item renderer, paper doll, scrolling, animation, input focus and sound are not drawn or are only placeholders.
+- Text width is an approximation (6px for ASCII, 9px for wide characters, 10px per line). A layout fitted to the text with `%c` can differ by a few pixels, and localization is not done.
+- Only PNG and JPG textures are drawn (no TGA). 9-slice uses CSS `border-image` and tint uses multiply blending, so colors differ slightly.
+- Expressions that kill the game (a non-numeric value in a size binding, string division, and so on) are only reported as diagnostics, and the crash is not simulated.
+- It is based on the vanilla 1.26.50.4 structure. If you load vanilla from another version, it runs with that structure.
+
+## Structure
+
+| File | What it does | Rules it rests on |
+|---|---|---|
+| `src/engine/expr.js` | Tokens, precedence, per-type operations, result reinterpretation, pitfall checks | EXP-*, CN-26~30 |
+| `src/engine/jsonc.js` | jsoncpp rules (comments allowed, trailing commas and unquoted keys are errors) | FILE-30, CN-01~02 |
+| `src/engine/size.js` | Size expressions | LAY-03, LAY-34~37, CN-47 |
+| `src/engine/catalog.js` | Sorted `_ui_defs` loading, same-path merging, the 11 `modifications` operations | FILE-20~22, MOD-*, CN-03~13 |
+| `src/engine/resolve.js` | `@` inheritance, `$` scope, `variables`, `ignored` | FILE-*, CN-14~25, NB-10 |
+| `src/engine/bind.js` | Property bag, factory, grid and collection, bindings, button and toggle state | BND-*, COL-*, INP-* |
+| `src/engine/layout.js` | Size, anchor, stack, grid, layer, clipping, occlusion check | LAY-*, CN-48~50 |
+| `src/engine/host.js` | Simulated data for the server form, HUD and chest screens | CN-59~60 |
+| `src/render.js`, `src/app.js`, `index.html` | Browser GUI | |
+| `samples/sample-pack.js` | Sample pack (guide recipes 1 and 2, preserved title, playground) | PAT-01~02, BND-18 |
+
+## What to do next
+
+Measure the verified-in-game items in the real game and reflect them in the mode rules, collect the global bindings the engine controllers supply per screen, switch the font metrics to the vanilla glyph widths, and play back `anims` along the time axis.
+

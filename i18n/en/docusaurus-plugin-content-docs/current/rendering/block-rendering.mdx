@@ -1,0 +1,70 @@
+---
+title: Block rendering
+description: material_instances and render method for custom blocks, emission, lighting and AO bugs, transparent pixels, overlays and tint, break cracks, block model rules
+sidebar_position: 2
+sources: [private-research, bedrock-wiki, ms-learn]
+---
+
+# Block rendering
+
+## Concept
+
+The look of a custom block is decided by `minecraft:geometry` (the model) and `minecraft:material_instances` (per-face textures and render method) in the behavior pack block definition. Unlike entities, blocks have no render controller. Texture names are registered in the resource pack's `textures/terrain_texture.json` and go into the atlas ([Textures and atlases](./textures-and-atlases.mdx)). The resource pack's `blocks.json` sets only sounds and, for blocks without geometry, the legacy `textures` and `isotropic` (Source: private research).
+
+```json
+"minecraft:geometry": "geometry.my_block",
+"minecraft:material_instances": {
+  "*": { "texture": "my_block_tex", "render_method": "alpha_test_single_sided", "face_dimming": false, "ambient_occlusion": 0 },
+  "sushi_side": { "texture": "my_block_side", "render_method": "opaque" }
+}
+```
+
+`*` is the default for all faces (bones), and you can give a per-bone material using the bone name of the geometry as the key. The key name `render_method` in the example above is the correct name (not `material`). There is only one `render_method` per instance. `face_dimming` and `ambient_occlusion` are material instance properties, not `blocks.json` ones. The meaning of the values above is in the next section. Reference documents are the Microsoft Learn `minecraft:material_instances` block component reference (render method choices) and the Bedrock Wiki's vanilla block models list.
+
+## Choosing a render method
+
+- `opaque`: Opaque. If you need transparent pixels, replace them with opaque colors.
+- `blend`: Used when translucency and transparent pixels are mixed. It has bugs on complex geometry so it is a last resort, faces disappear at some angles, and it is single-sided (no back face; work around it by duplicating the geometry).
+- Leaves: `alpha_test_to_opaque`, `alpha_test_single_sided_to_opaque`. The maximum leaf-like opacity when surrounded is `alpha_test_to_opaque`.
+- z-fighting on cross and plant geometry: `alpha_test_single_sided` (like kelp, `alpha_test_single_sided_to_opaque` from a distance).
+- Translucency in the inventory: Blocks using legacy rendering (`textures` in the resource pack `blocks.json`) break translucency in the inventory UI. Remove that and use `minecraft:geometry` and material_instances (Bedrock Wiki `blocks/custom-glass-blocks`).
+- Other choices: `alpha_test_to_opaque` draws low-opacity backgrounds opaque. Use `alpha_test_one_sided` for glass, and make glass visible from one side only with block culling and blend. In a case where using `alpha_test_single_sided_to_opaque` on custom leaves produced black artifacts, alpha_test was suggested (`unverified`). Blend glass on a complex model has a draw order problem, and Blockbench has no blend render mode.
+- If transparent pixels come out black, the transparent pixels of the texture must carry real color information (otherwise it is an editor or converter problem) and it must be a PNG.
+
+## Emission
+
+- Per-pixel emission on a custom block works only under VV. Use `"emissive": true` in material_instances (format 1.21.120+, Upcoming Creator Features). Without VV, only entities and particles can glow. Real PBR needs a texture_set and MER, and you do not write `.png` in the `terrain_texture` path. Block glow without VV/RTX is impossible (even on Fancy, without entities or particles) and is imitated with flipbook brightness frames. The whole block can be made to glow with light emission. The flipbook shine of an ore texture works on blocks (square textures). `confirmed`
+
+## AO and lighting bugs
+
+- On custom blocks, faces touching walls and solid blocks become dark (the AO bug). Adjust the geometry, or after 1.26.10 set `ambient_occlusion` to the number 0 and `face_dimming` to false. For partial darkening such as on sand, `ambient_occlusion: 0.55` was tried, and per face `ambient_occlusion: 1.5` too.
+- Strange shading on custom stairs, slabs and walls: set `ambient_occlusion` to 0 or false and `face_dimming` to false in the material instance. There is an opinion that it is a game bug since 1.21.60 (not fixable), and `blocks.json` blocks have correct lighting but material instance blocks do not. There is also a workaround of making a custom version of a vanilla block to get the lighting right.
+- The block shapes of dried kelp and the cartography table cast excessive AO on custom blocks (shape related). Slabs cast AO only on custom blocks, not vanilla ones. Light does not match at low skylight (MCPE-237493).
+- Plants with `random_offset` or sunken models get dark shadows that do not go away even with `ambient_occlusion: false` and `face_dimming: false`.
+- The shadow artifact on the bottom face of a custom block when there is a block below is fixed by adding a plane that covers the down UV (lighting ignores empty UVs).
+- X-ray packs: the vanilla block shape `structure_void` removes AO (the fluoroscopy pack).
+- Chest-like shapes: The vanilla chest is rendered as a block entity. A custom block can imitate it by turning off AO and face_dimming, but it looks odd in Fancy and Simple. Reproducing the vanilla chest, PBR and the old water shader with a simple pack is impossible.
+- z-fighting: Coordinates are kept to one decimal place, so use a small `inflate`. Turning on VV brings back the z-fighting of 2D planes (no solution).
+
+## Overlays, tint, break cracks
+
+- Overlay textures: Give a second, slightly offset plane its own material instance (the break animation doubles). Ways to tint only part of a texture are the texture tinting of Bedrock Wiki `blocks/block-tinting` or two bones. Tinting the side of grass is `alpha_masked_tint` true in the material instance and alpha 0 on the dirt part. The vanilla `grass_side` atlas texture already contains tint (vanilla grass tint is hard-coded), so a custom block registers its own texture in `terrain_texture.json`. The side tint bug of `minecraft:grass_appearance` was solved by adding an `overlay_color` entry to `textures/blocks/grass_side`.
+- Break cracks cover the whole texture, so use per-face 16x16 textures (Blockbench per-face "blank" textures and material instances). Use the `minecraft:destruction_particles` component, and atlas textures larger than 16x16 break the particles. Enlarging 8x8 to 16x16 makes the cracks smaller (mob heads). Blockbench entity-style models stretch the crack pattern. The break overlay textures are `textures/environment/destroy_stage_0.png` through `_9.png`, and the overlay material is hard-coded and cannot be fixed with a resource pack.
+- Emitting particles from a block: Call the script `dimension.spawnParticle(particle, block.center())` from a block event, or emit from the tick of a custom block component with script. The Script API cannot emit client-side particles from a block.
+
+## Models
+
+- The size of an individual cube cannot be changed dynamically, so express growing parts with states and `bone_visibility` (nesting and group assignment are not possible). `uv_lock` behaves oddly (stair geometry).
+- Make a transparent block from a single-cube geometry with no UV faces. Do not shrink the UV to 0; delete the face completely (otherwise a strange texture appears in the middle).
+- Vanilla block models cannot be changed by a resource pack (hard-coded, only block shapes) and custom models can be used only on custom blocks. Blocks have no render controller and a pack cannot modify vanilla block JSON. A texture set only chooses per-block and per-state textures and PBR maps and cannot be changed by script, and custom (BP) blocks can use per-state textures. The ore replacement showcase used a script that swaps custom blocks with nearby vanilla ores. Lush leaves are possible by modeling but have a poor reputation.
+- With "Blockshapes", some vanilla blocks use the geometry of other vanilla blocks (the firefly bush uses fire geometry, and so do vines and leaves). This is used for lush plants and hay bales.
+- The fence waterlogging render glitch was fixed with collision 15.999. Vanilla fence UVs change with connections, so custom fences also match the vanilla UVs. Block texture variation (dirt, grass) is based on world coordinates.
+- Use `minecraft:geometry.cross` for cross-shaped plants. The fire block_shape removes shadows and makes the block opaque. A wrong geometry in a single block can stop the rendering of a whole subchunk, and if a flat plate shows instead of the model, it signals the pack was not applied. A very small cube inside a 1x1 block gets a skewed offset (about 300 is dangerous). Block culling is per face, and custom block geometry supports UV rotation.
+
+## Blocks under VV
+
+- VV can make custom block models look wrong, so test with VV off too. For VV brightness differences, check the MER file path and SSS. A custom block that is darker than vanilla with the same MER may be a game bug. For block faces without face dimming and AO, add `face_dimming` and `ao` as false.
+- The cause of custom glass having no sunlight reflection was a wrong texture_set and MER. A block that did not show emission, metal or roughness under VV was marked "[FIXED]" but the cause was not found.
+- The unique TNT flashing cannot be turned off by a resource pack (lit TNT is hard-coded and the client entity `minecraft:tnt` is ignored), and VV always-on emission was a workaround. Custom TNT can flash with a keyframe scale animation instead of `variable.swell`.
+- A grass checkerboard is impossible with a resource pack alone; on the server side, custom grass with two states must be put in through world generation.
+- PBR/MER is not applied to block geometry held in the hand ([VV and RTX](./vibrant-visuals-and-rtx.mdx)).

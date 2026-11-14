@@ -1,0 +1,105 @@
+---
+title: "AsaJS (JSON UI generation library and binding expression compiler)"
+description: "AsaJS builds UI packs in TypeScript. Remainder, bit, and unique-prefix check techniques from a compiler that lowers binding expressions to auxiliary view bindings, and its defects"
+sidebar_position: 2
+sources:
+  - asajs
+  - repo-guide
+  - repo-survey
+---
+
+## What it is
+
+AsaJS is a framework that builds resource pack UI as code with Node/TypeScript (npm `asajs` 4.2.0, formerly jsonui-scripting, author Asaki Yuki). Running code such as `Label({...})`, `Panel(...)`, and `Modify("start", "start_screen_content").insertChild(...)` writes `build/ui/*.json`, `_ui_defs.json`, and `manifest.json` and links them into the game's `development_resource_packs`. The analysis baseline is the `main` commit `9f884dc` (2026-03-02). The license, confirmed by opening the clone's `LICENSE`, is **GPL-3.0** (Source: cs-asajs). The license is shown in the header of each excerpt. It has no feature that intercepts server forms, so it has nothing to do with screen host techniques, and the meaningful part is the **binding expression compiler**.
+
+## How it works
+
+| Step | Content |
+| --- | --- |
+| Element creation | `Panel/Label/Image` becomes one definition. Without a name it gets a random 16 characters, and the namespace is random (one file is one namespace) |
+| Property conversion | Keys starting with `#` go into `property_bag`, one `anchor` is duplicated into `anchor_from` and `anchor_to`, and `$x\|d` becomes `$x\|default` |
+| Vanilla modification | `Modify(ns, name)` writes `modifications` into a file at **the same path as vanilla** using a built-in path table (`"start": "ui/start_screen.json"` and so on) |
+| Binding defaults | With only `binding_collection_name` it is `collection_details`, with other keys as well it is `collection`, and with `source_property_name` it is `view` |
+| Obfuscation (optional) | Replaces element, binding, and variable names with random strings |
+| Installation | Links `build/` to `development_resource_packs/asajs-build-<random>` and adds the pack to `global_resource_packs.json` |
+
+The generated manifest has `min_engine_version` `[1, 21, 80]`, and the build script fetches the vanilla definition list, the 1,476 binding names, the 946 button IDs, and the item aux ID table from an external API.
+
+## The binding expression compiler
+
+A `source_property_name` wrapped in `[` and `]` is a compile target. It turns its own syntax (`==`, `!=`, `>=`, `<=`, `&&`, `||`, `!`, `%`, `?:`, `f'...#{expression}...'`, function calls) into an expression that uses only operators the vanilla engine knows, plus **several auxiliary view bindings**. The auxiliary bindings come before the main binding, so the evaluation order is kept within the same control.
+
+| AsaJS syntax | Emitted expression | Verdict |
+| --- | --- | --- |
+| `a == b`, `a != b` | `(a = b)`, `(not (a = b))` | Matches EXP-03 |
+| `a >= b`, `a <= b` | `((a > b) or (a = b))`, `((a < b) or (a = b))` | Same as the workaround in EXP-03 |
+| `a && b`, `a \|\| b` | `(a and b)`, `(a or b)` | Avoids the precedence problem (EXP-29) with parentheses every time |
+| `-a` | `(0 - a)` | The string unary `-` problem (EXP-37) remains |
+| `a % b` | auxiliary `#r = (a - (a / b * b))` | Assumes integer division. Conflicts with EXP-20 (C-52) |
+| `f'Hello #{#name}!'` | `('Hello ' + #name + '!')` | String `+` |
+| `1e-2` | `0.01` | Integer 0 in the engine (EXP-27), a defect |
+| `0.5`, `.5` | Lexer error | Real number literals cannot be used |
+| `a < b < c` | `((a < b) < c)` | Does not prevent chained comparison (EXP-28) |
+
+For a binding with `source_control_name`, each `#property` in the expression gets its own auxiliary view binding that reads one property from that control, and the expression is computed in its own control. This is a way to build expressions that mix several values from other controls safely.
+
+### Functions
+
+`abs(x)` is `((-1 + (x > 0) * 2) * x)` (boolean arithmetic, EXP-19), `cache_value(c, o, r)` is `((r * c) + ((not r) * o))`, `contains(s, t)` is `not ((s - t) = s)` (EXP-07), `translatable(#k)` is `'%' + #k` (using the property that a localized label translates `%token`, TXT-17), and `bind(v, #bait)` is `((#bait - #bait) + v)` (a dependency device that forces re-evaluation when the bait changes). `strlen`, `sqrt`, and `vector_length` iterate with a self-referencing view binding. The parser also contains `intToBin`, which unpacks an integer into 30 bit bindings.
+
+## Key techniques
+
+### 1. Checking the start of a string of unknown length with a unique prefix
+
+`'%.Ns'` (EXP-08) needs `N` to be known at compile time. If both strings get a prefix `P` that cannot appear in the body, subtracting `(P + #p)` from `(P + #s)` changes the result only when `#s` starts with `#p` (subtraction removes every occurrence, but `P` is unique, so the only occurrence is at the very start). This is the matching branch of `starts_with` in the repository.
+
+<Excerpt src="asajs" title="AsaJS, starts_with" path="src/compilers/bindings/Function.ts">
+
+```ts
+const source_str_bind = RandomBindingString()
+const start_str_bind = RandomBindingString()
+
+return {
+	genBindings: [
+		{ source: `${prefix} + ${source_str}`, target: source_str_bind },
+		{ source: `${prefix} + ${start_str}`, target: start_str_bind },
+	],
+	value: `not ((${source_str_bind} - ${start_str_bind}) = ${source_str_bind})`,
+}
+```
+
+</Excerpt>
+
+`prefix` is `'asajs:<5 random characters>:'`. By the same principle, cutting the head off a prefixed string does not erase the cut head even if it also appears later, which solves the EXP-12 problem (`-` erases every occurrence).
+
+### 2. Remainder and bits through integer division
+
+The remainder is `(a - (a / b * b))` and bit i is `((x / 2^i) - ((x / 2^(i+1)) * 2))`. This works if EXP-18, which says division of integers is an integer, is right. In that case the EXP-20 statement "there are no floor or remainder operations, so several fields cannot be packed into one number and divided back" must be narrowed to mean there is **no `%` operator**. The only thing the author S14 tested was the `%` operator (`Invalid expression`), and there is no in-game record for division-based expressions (conflict C-52, partly resolved when this project confirmed that the Cinnabar evaluator's `divide` is `i32::wrapping_div`). Pitfall: collection and title strings are strings inside an expression, so string `/` number is 1 (EXP-32). For string channels, first make a number with `- 0`, as in `((#v - 0) - (((#v - 0) / 10) * 10))` (EXP-16).
+
+### 3. Runtime format strings and self-referencing iteration
+
+Format strings are built by concatenation, like `('%.' + (len(P) + #i) + 's')`. StarLibV2 uses the same form. `strlen` attaches two bindings to the same target, "counter = 0 (when the source changes)" and "counter = counter + 1 (if counting is not finished)", and relies on the behavior that a view binding rewrites only when the source changes and the chain runs until it converges (Cinnabar reconstruction CN-36). The iteration limit and the per-frame throughput are not confirmed.
+
+## Defects confirmed in the generated output
+
+- The ternary `c ? x : y` produces unbalanced parentheses in the final expression (confirmed in the survey by rebuilding the same string in Python and counting).
+- `insert_back` and others in `modifications` emit `value` as an object instead of an array (only `insert_front` uses an array). Whether the object is accepted is not confirmed.
+- `replaceChild` discards the child it is given and uses only the property object as `value`.
+- `new('lit')`, `int(3)`, and `str_slice('lit', ...)` create view bindings without `#`, which triggers BND-05 (the whole `bindings` of that control is dropped).
+- Using `%` as is in a string binding gives a wrong value because of EXP-32. Of the 328 properties in the type definitions, 46 have names that do not exist in vanilla (they are not emitted if unused).
+- `fixInventoryItemRenderer` wraps the `#item_id_aux` of `property_bag` in a `"(N / 1)"` string. Whether `property_bag` values are evaluated as expressions is unverified.
+
+## Relation to our rules
+
+| Rule ID | Relation |
+| --- | --- |
+| EXP-18, EXP-20, C-52 | The conflicting evidence that decides whether a remainder is possible (proposed EXP-38) |
+| EXP-07, EXP-08, EXP-12 | The basis for `contains`, `starts_with`, and prefix cutting |
+| EXP-03, EXP-19, EXP-27, EXP-28, EXP-32 | Rules the generator keeps or breaks |
+| BND-05, BND-30 (proposed) | Auxiliary binding defects, self-referencing iteration |
+| MOD-02 | It writes modifications into a copy at the vanilla path, so it complies |
+| TXT-17 | The `'%' + #key` translation label |
+
+## Proposals (not applied)
+
+These are the final numbers from the merge record. EXP-38 remainder (`{code, inferred, conflict}`), EXP-39 unique-prefix start check, an EXP-19 supplement (boolean selection and absolute value), BND-30 self-referencing iteration (`{code, unverified}`), and DBG-31 expression compiler output check. Items that need measurement: whether `(#v - ((#v / 5) * 5))` gives 2 for 17, how many frames the init plus self-increment binding takes to count a length, whether `modifications` accepts an object as `value`, and whether a concatenated format string works for cutting.

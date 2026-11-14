@@ -1,0 +1,108 @@
+---
+title: "bedrock-core (compiling JSX to JSON UI)"
+description: "A framework that compiles JSX screens into static JSON UI at build time. The server form host, the chest host, and the source of the engine rules (S1~S14) the author measured in game"
+sidebar_position: 3
+sources:
+  - bedrock-core
+  - repo-guide
+---
+
+## What it is
+
+bedrock-core (`@bedrock-core/ui`, author DrAv0011, beta) is a framework that turns screens written in React-style JSX into static JSON UI **at build time**. It does not draw layout at runtime, so all a script sends in game is the form title (which screen) and a few entry strings (the values that change). The analysis baseline is the repository `bedrock-core/ui` commit `aee2bbd` (2026-10-20), package `@bedrock-core/ui` 0.12.1, and `ui-compiler` 0.1.2. The license, confirmed by opening the `LICENSE` at the cloned HEAD (`51d5cf2`), is MIT (Copyright 2026 bedrock-core) (Source: cs-bedrock-core).
+
+This material is special for this project because the author left **in-game measurement records (S1~S14)** in `docs/spikes/`. Most of the `measured` level in our rules comes from these records. This project ran the repository's tests itself and confirmed that 531 of 532 pass (the one failure is unrelated to the analysis).
+
+## How it works
+
+```
+*.screen.tsx - render once on the build machine -> element tree
+   - flexbox (fixed 320x210 canvas) -> IR (rect, static props, required mechanisms)
+   -> face document (only the "look", no bindings) - host pass -> final JSON UI (bindings and collection_index inserted)
+In game: render(Screen, player) -> ActionFormData.title('<header><addon>_<screen>')
+         -> form.button('<value string>') per entry -> selection number = the collection_index baked in at compile time
+```
+
+The old approach (the *Render pack* page of the documentation site) was an interpreter that serialized a control's position and size into 83-byte fixed fields and sent them, and the resource pack decoded them with bindings. The author's measurement (S5) showed the server spent 14 ms for 50 cells and 53 ms for 200 cells each time it opened one screen, but the compiled approach spends 0, so all current code uses the compiled approach.
+
+To keep "the shape is fixed, only the values change", the source must declare what varies. Strings use `<Text maxLength>`, repeat counts use `<List max>`, and conditional rendering `{cond && <X/>}` is rewritten into a `visible` gate. For the look (color, texture, and so on), the build shakes the state, draws every appearance that can occur, and then shows only one through a `k<number>` entry. The package is split into the runtime (hooks), the compiler, the flexbox engine, theme components, navigation, and a Regolith filter.
+
+## Key techniques
+
+### 1. The server form hook: modifications only, hide the vanilla
+
+The vanilla `long_form` and `custom_form` are not deleted and are hidden with a binding when the title starts with the header. It writes only `modifications` into the same-path file, so several add-ons coexist in pack order. The header check is a 13-byte prefix test like `(not (('%.13s' * #title_text) = '<13-character header>'))`. Its own screen is built inside a bridge that borrows the vanilla `server_form_factory` and is `insert_back`ed into `main_screen_content`.
+
+### 2. The router: "create" only one screen by title
+
+If every compiled screen is attached with a `visible` gate, every screen of every add-on is created and laid out each time a form opens (S8 measurement: all 5546 controls re-laid out, and a slider on another screen asserts at creation time). This is because `visible` only blocks drawing and does not block creation. The router therefore creates only the selected screen cell with a `collection_panel` factory.
+
+```jsonc
+"demo_title_selector": {
+  "type": "collection_panel",
+  "property_bag": { "#route_": [], "#route_<titleA>": ["home"], "#route_<titleB>": ["settings"] },
+  "factory": { "name": "demo_title_screen",
+               "control_ids": { "home": "demo.screen_home", "settings": "demo.screen_settings" } },
+  "bindings": [
+    { "binding_name": "#title_text", "binding_condition": "always" },
+    { "binding_type": "view", "source_property_name": "('#route_' + #title_text)",
+      "target_property_name": "#collection_length", "binding_condition": "always" } ] }
+```
+
+It looks up a `property_bag` key like a dictionary with `'#route_' + #title_text` and puts the result (an array of cell IDs) into `#collection_length`. When nothing matches it hits the empty array and creates nothing. The meaning of "looking up a property_bag key by string" is at the `code` level, confirmed through the compiler tests and use in the 0.12.1 release, and was not confirmed directly in game. S11 measured that a factory with a computed length creates 0 or 1 cells.
+
+### 3. Entry = cell: `collection_index` + `collection_details`
+
+The following is the key conclusion excerpted from the author's measurement record (S1, 2026-08-27).
+
+<Excerpt src="bedrock-core" title="bedrock-core docs/spikes/S1-form-entry.md" path="docs/spikes/S1-form-entry.md">
+
+> A control the pack places itself owns a `form_buttons` entry when **the control itself** carries a `collection_details` binding on that collection, under a host supplying the `collection_index`. Without that binding the press still routes — the form closes — but arrives as `canceled`, indistinguishable from Esc.
+
+</Excerpt>
+
+So the runtime sends every entry as a `button()`. Mixing in `label()` makes the collection index and the `response.selection` number drift apart. A cell that cannot be pressed is just a control with no mapping and no `collection_details`. The value goes into `#form_button_text`. Flags are written as the letters `t/f` rather than `0/1`, and comparison cuts to the flag length plus 1 (`'%.2s'`). This is because the engine decides the type of an expression result by its look, so a cut `'0'` becomes a number and is not equal to the string `'0'`. A RawMessage is interpreted by the client in the player's language and put into the binding (S7).
+
+### 4. The data source pattern and enabled handling
+
+For a value read in several places, put one size-0 "source" control at the screen root and let each gate read it with a `source_control_name` view binding. This is also a way to read only the data without putting a native input (radio and so on) inside a collection item. For a button's enabled/disabled, both the enabled and disabled copies of the same face are gated with `t/f`, and the visibility owned by the button state machine is left alone and gated outside the state boundary.
+
+### 5. Modal forms
+
+The engine draws native fields (toggle, slider, dropdown, edit_box), so the compiler only reserves the space and places a shared-vocabulary template. **S3 measurement: the rows of `custom_form` and `formValues` align 1:1**, and `label()` is also one row and is `null` in the response. The build function that assigns numbers and the runtime function are the same, so they do not drift.
+
+### 6. The chest host: identify by durability, letters by stack count
+
+It is the only host whose data can change while open, but a slot exposes only numbers. The `max_durability` (32749) of the sentinel custom item in slot 0 is the mark "this chest is a compiled screen", and the current durability is the layout key. The vanilla `#item_id_aux` is not used because registering custom items shifts values of 256 and above. Letters go one per slot, and the stack count n is turned into a `'core.ui.c.' + #channel_raw` lang key (a count of 1 leaves `#inventory_stack_count` empty, so it is wrapped in blank characters `§r §r`). All button input is mapped to `button.drop_one`, and pressing 18 times was measured to drop 18 times while the cursor does not change (S14). The vanilla chest hook redeclares `small_chest_screen` and replaces `$screen_content` with the router, and the vanilla `chest_label` and `small_chest_grid` are not deleted but hidden with bindings (using the property that a collection binding without an index host reads slot 0).
+
+### 7. Client-only tabs: radio toggles
+
+Tab switching and collapse/expand send nothing to the script. On toggles with `radio_toggle_group` and `toggle_group_forced_index`, put the **content (pane) inside the `checked` state control**. All 8 states must be defined (entering an undefined state makes the control disappear), and without `toggle_on_button`/`toggle_off_button` and a button mapping the click does nothing (S4).
+
+## Summary of the engine rules the author measured
+
+| Topic | Content | Matching rules |
+| --- | --- | --- |
+| Collections | `collection_name` goes on `stack_panel` and `grid`, and `collection_index` only at the instantiation point. The index is inherited by the subtree | COL-01, COL-02, COL-03 |
+| Binding ownership | A bound property belongs to that control. A label two levels down is blank (S7) | BND-04 |
+| Factory cells | Bindings inside a factory cell run early and look empty. Solved with `always` (S11) | BND-07, C-11 |
+| Expressions | No `%` or `>=`. `'%.Ns' * #str` is the first N bytes. Number conversion is `(#v - 0)` | EXP-02, EXP-03, EXP-09, EXP-16 |
+| Expression errors | An expression without `#` discards the whole `bindings` array. `#visible` defaults to true, so a failed expression is always visible | BND-05, BND-09 |
+| Variables | A normal property is substituted only when the whole value is a variable. `$variable` cannot be used in bindings of an inserted tree | FILE-10, BND-13 |
+| modifications | Per path. Inserting into an array that is only inherited hides the inheritance. A `remove` on an inherited child voids the whole file modification | MOD-02, MOD-04, MOD-05 |
+| Size bindings | Both axes are bound. The position of static controls is set by spacer size. A bound `alpha` is only 0 and 1 | LAY-05, LAY-10~LAY-13 |
+| Creation | `visible` only blocks drawing. Creation is blocked with a factory length of 0 (S8, S11) | COL-10 |
+| Text | Labels are localized by default. String plus float shows nothing. A lang key whose value is a single space is trimmed | TXT-01, TXT-06, C-63 |
+| Toggles | Define all 8 states, content inside `checked` (S4) | INP-10 |
+| Chest | Only `container_type: "container"` with `private: false` goes to `chest_screen`. Even a 54-slot setting draws only 27 slots | HOST chest section |
+
+## Limits
+
+- It is beta, and the protocol broke several times in 0.x, so the version must be pinned.
+- Where the documentation site and the code disagree (the 83-byte fixed fields, the explanation of the layout key), the code was followed.
+- Unresolved: whether the layout is redone when a size binding changes while open (S6 B) was deferred because the client crashed before it could be measured (LAY-15).
+- Every screen is a child of one `server_form`, so if another add-on redeclares the same definition they may break together.
+
+## Comparison
+
+[BedrockAdvancements](./bedrockadvancements.mdx) uses fixed-width records for special screens, and [AdvancementPack](./advancementpack.mdx) uses the NPC screen and the HUD instead of a server form. bedrock-core's strengths are generality and stability (creation cost controlled by the router).

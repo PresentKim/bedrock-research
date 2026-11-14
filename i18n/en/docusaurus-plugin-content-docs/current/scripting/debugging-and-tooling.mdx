@@ -1,0 +1,144 @@
+---
+title: "Debugging, performance, tools"
+description: "Content log, /reload, the VS Code debugger, profiler, performance and memory, list of tools and libraries"
+sidebar_position: 9
+sources:
+  - private-research
+  - ms-learn
+  - bedrock-wiki
+---
+
+## Debugging methods at a glance
+
+The approaches summarized in the official documentation are as follows (Source: ms-learn, `creator/Documents/scripting/debugging-scripts.md`).
+
+| Method | Suitable for | Difficulty |
+|---|---|---|
+| Console log | Quick checks, simple problems | Easy |
+| Content log | JSON errors, pack loading problems | Easy |
+| VS Code debugger | Complex logic, variable inspection | Medium |
+| User tools | Variable changes over time | Medium |
+| Visual debug tools | Spatial problems, entity tracking | Hard |
+| Script profiler | Performance problems | Hard |
+
+## Content log and console
+
+Turn on the content log under Content Log Settings in the Creator section of the settings. Content Log File writes to a file and Content Log GUI shows it on screen in real time, and the GUI Log Level is Verbose (everything), Info (console output and warnings and errors), or Warn (only warnings and errors). The log file is in `%APPDATA%\Minecraft Bedrock\logs\` for GDK builds (1.21.120 and above) and `%APPDATA%\Minecraft Bedrock Preview\logs\` for the Preview. `console.warn()` is always visible regardless of log level, and `console.log()` is visible only at Verbose or Info.
+
+```javascript
+import { world, system } from "@minecraft/server";
+
+system.runInterval(() => {
+  const players = world.getAllPlayers();
+  console.warn(`Player count: ${players.length}`);
+  for (const p of players) {
+    console.warn(`Player ${p.name} at ${p.location.x}, ${p.location.y}, ${p.location.z}`);
+  }
+}, 100);
+
+const DEBUG_MODE = true;
+function debugLog(category, msg) {
+  if (DEBUG_MODE) console.warn(`[${category.toUpperCase()}] ${msg}`);
+}
+```
+
+## VS Code debugger
+
+Install Mojang's extension "Minecraft Bedrock Edition Debugger" (`mojang-studios.minecraft-debugger`) and open VS Code at the `development_behavior_packs` folder. The project's `.vscode/launch.json` is as follows, and the default port is 19144. For TypeScript, use `sourceMapRoot` (the source map folder) and `generatedSourceRoot` (the generated js folder) instead of `localRoot` (Source: ms-learn, `creator/Documents/scripting/vscode-debugger.md`).
+
+```json
+{
+  "version": "0.3.0",
+  "configurations": [
+    {
+      "type": "minecraft-js",
+      "request": "attach",
+      "name": "Debug with Minecraft",
+      "mode": "connect",
+      "targetModuleUuid": "<script module UUID>",
+      "localRoot": "${workspaceFolder}/",
+      "port": 19144
+    }
+  ]
+}
+```
+
+Start debugging with F5 to leave VS Code waiting, and run `/script debugger connect` in the game to get "Debugger connected to host". The Windows client needs a loopback exemption (`CheckNetIsolation.exe LoopbackExempt -a -p=<package SID>`) set once with administrator rights. For BDS it is the reverse: the server waits for the debug connection, and you turn on the script debugging allowance in `server.properties`. You can use breakpoints, conditional breakpoints, watch expressions and the debug console, and to see client diagnostics, turn on Enable Client Diagnostics in the creator debug settings.
+
+## Profiler
+
+```text
+/script profiler start
+...  (play as usual for a few minutes)
+/script profiler stop
+```
+
+When stopped, a timestamped `.cpuprofile` is created in the log folder, and you open it with VS Code. The result shows function name, Self time (its own code), Total time (including what it called) and call count, and since 1.19.10 it also covers core API calls. Look for functions with a large total time, functions called more often than expected, and unexpected API calls (Source: ms-learn, `creator/Documents/scripting/script-performance.md`).
+
+## Performance principles
+
+- Native calls are expensive, so keep a value you got once (dimension, player list) in a variable and reuse it.
+- Do not process large data in one tick; split it with `runJob`.
+- Use events instead of polling every tick. For lookups, pass filter options (`type: "minecraft:zombie"` and so on) to the API.
+- Do not summon too many entities, and keep ticking areas only as large as needed.
+
+```javascript
+// slow: gets the dimension again every tick
+system.runInterval(() => {
+  world.getDimension("overworld").spawnEntity("minecraft:experience_orb", { x: 0, y: 10, z: 0 });
+}, 1);
+
+// better: get it once outside
+const overworld = world.getDimension("overworld");
+system.runInterval(() => {
+  overworld.spawnEntity("minecraft:experience_orb", { x: 0, y: 10, z: 0 });
+}, 1);
+```
+
+## Types and external diagnostics
+
+With the types installed by `npm i @minecraft/server`, VS Code shows autocomplete and inline documentation. `@minecraft/debug-utilities` provides debug shapes and runtime statistics, and `@minecraft/diagnostics` provides Sentry integration (`sentry.initialize`, `captureException`). The starter in the official sample repository `minecraft-scripting-samples` comes with this tooling preconfigured (Source: ms-learn, `developer-tools.md`).
+
+## Community notes
+
+Below are the log, `/reload` and debugger troubleshooting, performance tips, and the list of tools and libraries gathered from the community research.
+
+
+`*confirmed*`, `*single report*` and `**conflicting**` are reliability marks for reports. The basis of this page is community reports, and they may differ from the official Mojang documentation.
+
+#### Debugging and logs
+
+- **Content log**: Settings > Creator (creator settings) > Content Log GUI/file. The file is in `AppData/Roaming/Minecraft Bedrock/logs`. A case where a log piled up to 30 GB was the cause of 5~15 FPS. For the "discovered package with uuid" noise, set the GUI log level to Info/Warn.
+- **`console.log` vs `console.warn`**: The log level must include info for `console.log` to show. At warn, only `console.warn`/`error` show. `console.log` in a hot path causes CPU spikes, and logging 300 times in one tick ends the world through the watchdog.
+- The message **"At least one of your resource or behavior packs failed to load"** can be ignored if the pack works.
+- **`/reload` vs `/reload all`**: `/reload` is scripts only and `/reload all` is everything (a case where a manifest change needed a game restart). Stale context errors such as `Native class [ItemStack] not registered for JSClassID` after `/reload` are fixed with `/reload all` or rejoining. `/reload` hot-reloads packs in `development_behavior_packs` or the world folder, and packs added as .mcpack are copied into the world.
+- **Mojang VS Code debugger** (`https://github.com/Mojang/minecraft-debugger/` , extension `mojang-studios.minecraft-debugger`): `launch.json` type `minecraft-js`, request `attach`, mode `listen`, `targetModuleUuid`, `localRoot`, `port`. In 26.40~1.26.43 attach failed repeatedly/with `ECONNRESET` -> change the request to `"listen"` and run `/script connect localhost 19144` (or `script debugger listen 19144`) in the game, and Windows needs a `CheckNetIsolation` loopback exemption. For BDS, `allow-outbound-script-debugging`/`allow-inbound-script-debugging` in `server.properties`. Attaching at server start makes loading spikes look large.
+- **Profiler**: Create a file with `/script profiler start` / `stop` and open it in the VS Code debugger. Self time = its own code, Total = including calls. `.cpuprofile` shows idle as a large self-time, has no call counts and is aggregated, so it may be less reliable. Creator > Enable Client Diagnostics. Documentation: `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/developer-tools?view=minecraft-bedrock-stable`
+- **Tracing memory leaks**: Dump `@minecraft/debug-utilities` `runtimeStats` (QuickJS counters) over time.
+- **Diagnostic capture**: `script diagnostics stopcapture` writes a `.mcstats` file (presumed to be readable by the debugger extension, *unverified*). The debugger extension also shows server and client performance statistics.
+- **JaylyBot in #debug-playground**: A ```js code block message > Apps > "Debug Scripts" returns errors and debug.log (not a slash command, usable in DMs too, only valid JS/TS). It publishes `.d.ts` per module, and modules without a stable are "not found in stable". The `;compile` bot is for plain Node JS and is useless for the Script API. The bot's warning about string slot names (`'Mainhand'`) is a false positive but the names are case-sensitive (`'mainhand'` and `'slot.weapon.mainhand'` fail). `/docs info &lt;module>` gives the version list. (One reporter's *caveat: a bot channel note, partly inferred*)
+
+
+### Performance and memory
+
+- **Tick budget**: All work of the server (the engine and all add-ons) shares one 50 ms tick. The advice is to keep one add-on usually under about 10 ms and even momentary bursts within 15~30 ms. Common causes of lag are unnecessary command execution and scanning inventories every tick, and spikes are prevented by splitting work across ticks and caching results.
+- **Reduce native calls**: Native getters such as `player.name` are 20~30 times slower than a JS Map lookup. Property access such as `entity.location` and `system.currentTick` also crosses the API boundary, so cache once per tick, cache components in a WeakMap, avoid allocating objects and strings in hot loops (8000 times: 0.38 ms vs 1.65 ms), and keep regexes as constants. Reducing API call count matters more than splitting work, and unused functions cost nothing.
+- **`runCommand` is slower than native APIs** (runCommand -> parser -> engine). Prefer native methods (`player.addItem` vs `/give`, `setActionBar` vs `title`, `inputPermissions` vs `/inputpermission`). Do not call commands in bulk from scripts. Counter example: the `effect clear` command was faster than `clearEffect` per effect. Comparisons of the CPU cost of commands and scripts differ between reports (**conflicting**). There is also a counterargument that command block lag is due to what each command does and not their count (*single report*). Commands return no feedback text, only `successCount`. `runCommand` is a method of Entity/Player/Dimension and is not on `world`.
+- **Events > polling**: Events such as entitySpawn are better than tick function polling, proximity checks every 5~20 ticks, and equipment detection polling every 5~20 ticks. Instead of repeating `getEntities`, maintain a Set/Map with `entitySpawn`/`entityLoad`/`entityRemove` (also a trick of tracking with a harmless effect `effectAdd` or `dataDrivenEntityTrigger`) and process only N per tick (for example 8) from one `runInterval` - a case that kept 217 entities at 20 TPS. An inventory change filter will probably be faster than 200 `hasitem` tag commands per tick (benchmarking recommended).
+- **Entity cost guides**: `Dimension.getEntities` ~0~1 ms. On BDS (Ryzen 9 7950X), about 500 wandering zombies is the 20 TPS limit, tracking/pathfinding is more expensive, and on a cheap VPS TPS drops from 300~350. Script pathfinding lags -> JSON AI. cannon-es ragdoll physics works without experiments but lags with many mobs (crashcat `https://crashcat.dev` recommended, Rapier uses Sable).
+- **Interval hygiene**: Do not nest intervals inside other intervals; fewer is better, but in a merged interval one function's failure stops the rest, so use try/catch per job. One shared `runInterval` across add-ons is cheaper than several. Per-player intervals are fine if cheap. Avoid heavy intervals that scan all dimensions every few seconds, and a single `InvalidEntityError` can stop a tick script.
+- **QuickJS micro-optimizations**: switch is slower than an object map (no JIT, tag dispatch `FUNC_LISTS[tag]()`), a for loop is faster than forEach, `.find`/filter are better than `.map`, use Set/Map (O(1)) for big lookups, and generator helpers are lazy and single-pass but slightly slower than raw loops. There are measurements that `var` was 25~30% faster than `let` and `await` slower than `.then`, but the differences are small so let/const is recommended. For frequent key additions/deletions use a Map (an object had a leak in one case). Weighted random uses the alias method (`https://www.keithschwarz.com/darts-dice-coins/`) or cumulative weights. `import * as mc` can increase bundle size.
+- **FPS**: Scripts usually do not affect FPS (particles and entities are the cause). Spawning many entities in one tick lags -> spawn once and then teleport, spread across ticks, set a cap. Many Marketplace add-ons are a cause of low TPS, and the player's Memory Tier setting also affects add-on loading.
+- **Causes of memory leaks**: Listeners that are not released, global arrays/Maps that hold entities and items forever, intervals not cleaned up, per-player Maps not deleted. `/reload` kills intervals but old module data remains until GC (a leak where a ticking area is created and not released was reported as MCPE-236954). Using prototype getters as Player keys can leak -> WeakMap or clean up on leave. A large DP DB can cause a TPS drop that does not show in the profiler.
+- **Code protection**: There is no true JS obfuscation. Obfuscation is easily reversed, causes engine errors and performance loss, and breaks multi-file import/export (bundle first), and eval-based schemes are quickly decoded. esbuild minify + symbol renaming is about what is realistic, and a license (choosealicense.com) is the practical protection. DPs are accessible only from the same script environment, so there is no reason to protect them by obfuscation. JSON cannot be protected, and add-ons cannot be restricted by IP/port.
+
+
+### Tools and references
+
+- **API documentation**: Microsoft Learn `https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/?view=minecraft-bedrock-stable` (check names in the experimental `?view=minecraft-bedrock-experimental`; per event class page example `https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/minecraft/server/playerspawnafterevent` ; documentation examples are sometimes outdated; report errors to the bedrock-samples / MS Learn repository or the feedback channel), JaylyDev `https://jaylydev.github.io/scriptapi-docs/latest/` (rated better than the official by the community, platform differences #platform-differences, privilege explanation /features/script-privileges.html, for LLMs `https://jaylydev.github.io/scriptapi-docs/meta/llms.html` and llms.txt; up to 26.20 as of 2026-06), stirante `https://stirante.com/script/` (per version `https://stirante.com/script/server/<version>/classes/<Class>.html`, server-ui, server-admin, debug-utilities, server-graphics, version diff `https://stirante.com/script/diff.html` , example `https://stirante.com/script/diff.html#%40minecraft%2Fserver/2.1.0/2.7.0` ; moved to CloudFront/S3; documentation generation repository `https://github.com/stirante/bedrock-script-api-docs`). JaylyDev Preview documentation `https://jaylydev.github.io/scriptapi-docs/preview/` . MS `system.run` guide `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/system-run-guide?view=minecraft-bedrock-stable` , documentation error reports `https://github.com/MicrosoftDocs/minecraft-creator/issues` (there is feedback that the MS TypeScript introduction article is outdated).
+- **Wiki/guides**: `https://wiki.bedrock.dev/scripting/what-is-script` , /scripting/scripting-intro , /scripting/api-modules , /scripting/resources , /scripting/typescript , /scripting/privileges , /scripting/custom-commands , /scripting/script-server (running commands, list of unimplemented commands), wiki repository `https://github.com/Bedrock-OSS/bedrock-wiki/tree/wiki` ; MS documentation: scripting introduction `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/introduction?view=minecraft-bedrock-stable` , custom components `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/custom-components?view=minecraft-bedrock-stable` , item custom components `https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/minecraft/server/itemcustomcomponent?view=minecraft-bedrock-stable` , the v2 overview, TS next steps `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/next-steps?view=minecraft-bedrock-stable` , custom pack settings `https://learn.microsoft.com/en-us/minecraft/creator/documents/addons/custompacksettings?view=minecraft-bedrock-experimental` , block state list `https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/intrinsicblockstateslist?view=minecraft-bedrock-stable` , block fall on `https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/blockcomponents/minecraftblock_entity_fall_on?view=minecraft-bedrock-stable` . Custom crops `https://wiki.bedrock.dev/blocks/custom-crops` , block events `https://wiki.bedrock.dev/blocks/block-events` , team damage (JSON) `https://wiki.bedrock.dev/entities/disabling-team-damage.html` , invulnerable entities `https://wiki.bedrock.dev/entities/invulnerable-entities` , runtime identifier `https://wiki.bedrock.dev/entities/runtime-identifier` , custom emoji `https://wiki.bedrock.dev/text/custom-emojis` .
+- **Types/metadata**: npm `@minecraft/server`, `@minecraft/server-ui`, `@minecraft/server-net`, `@minecraft/server-admin`, `@minecraft/server-gametest`, `@minecraft/debug-utilities`, `@minecraft/math`, `@minecraft/vanilla-data`, `@bedrock-apis/env-types` (`https://github.com/bedrock-apis/env-types`), Ore UI types `ore-ui-types`, `@ore-ui-types/enums`. Vanilla metadata `https://github.com/bedrock-apis/bds-docs/tree/preview/metadata/vanilladata_modules` , Mojang bedrock-samples `https://github.com/Mojang/bedrock-samples` (recipes, particles, textures/fonts), vanilla RP `https://github.com/ZtechNetwork/MCBVanillaResourcePack` . Finding the minimum version (tsc type checking against all versions) `https://waveplayz.github.io/bedrock-api-version-finder/` . For AI, having it read the `.d.ts` is better than human documentation (`minecraft_server.d.ts` ~200K context).
+- **Development tools**: Mojang debugger `https://github.com/Mojang/minecraft-debugger/` (VS Code `mojang-studios.minecraft-debugger`), developer tools documentation, the `minecraft-scripting-samples` ts-starter (bundles all modules into one main.js), Regolith (esbuild local filter, Rolldown filter `https://github.com/azurite-bedrock/regolith-filters/tree/main/dinoscript` , comptime `https://github.com/azurite-bedrock/rolldown-plugins/tree/main/comptime` , `https://github.com/lukeed/comptime` , serde `https://github.com/arexon/serdeco` ; the oxc family rolldown/oxlint/oxfmt, tsgo; TypeScript 7.0 (Go port) released 2026-07-08), JaylyBot (#debug-playground), online editor `https://minato.beyondbedrock.org/web-apps/web-editor.html` , command builder `https://cmd-builder.beyondbedrock.org/` , mctools.dev, the `bds` package manager `https://github.com/PhantomXD-nepal/bds` (`bds init|list|add`), world editing `https://github.com/8Crafter-Studios/Bedrock-World-Editor` , `https://bedrocktoolchest.com/download` , `https://www.chunker.app/` .
+- **Libraries**: bedrock-boost (`https://github.com/Bedrock-OSS/bedrock-boost` ; vector/command utilities, `PlayerPulseScheduler`, `EntitySaver`, `testfor`-based `isItem`), adk-scripts `https://github.com/SmokeyStack/adk-scripts` , Script-API-Utilities `https://github.com/IMvampireXD/Script-API-Utilities` (runJob utilities, terrain generation), MCBE-IPC / DirectIPC / @mcbe-mods/ipc / AddonAPIKit / DataExchange / matp, command-wrapper (github.com/Aevarkan/command-wrapper), QIDB / QUICK-ITEM-DATABASE, ShulkerDB `https://github.com/Duskaraa/shulkerdb` , script-api-database, KinetixDB, bedrock-websocket-server, Looky Tool `https://github.com/abrightmoore/lookytool` , CALM `https://github.com/abrightmoore/calm-add-on` , Bedrock-Persona (github.com/Daniel-Ric/Bedrock-Persona), Be.D.D. `https://github.com/LiteLDev/BeDD` , the JaylyDev script interpreter article `https://jaylydev.github.io/posts/script-interpreter/` , Paradox AntiCheat (rewrite branch: data-hive.ts, player-cache.ts, event-coordinator.ts `https://github.com/Visual1mpact/Paradox_AntiCheat/blob/rewrite/penrose/classes/core/event-coordinator.ts` , criticals.ts, dome.js), UnloadedUtils, ChunkLoader, Jobs.js (priority jobs), Chest-UI (Herobrine643928), Chest-Form (Sprixvy), Detect-Click `https://github.com/mittens4all/Detect-Click` (scores `detect:right_click`, `detect:left_click`), Player-Outline (github.com/JuanLuci/Player-Outline), tree felling `https://github.com/whynotoss/chop-chop` (Apache 2.0), recursive-crafting (github.com/Efficient123/recursive-crafting), Sweep-N-Slash `https://github.com/azurite-bedrock/Sweep-N-Slash` (and CurseForge `https://www.curseforge.com/minecraft-bedrock/addons/sweep-n-slash`), WebhookAPI, OverTakesJS (conmaster2112, prototype patching), the QuantumBE/Daniye CPS counter, Better Knockback (Agg-dev; repository deleted), JaylyDev/interpreter `https://github.com/JaylyDev/interpreter` , Generic DDA and a block state codec (WavePlayz gist), Native Local & Relative Coordinates utilities.
+- **Physics/others**: cannon-es (MajestikButter/Physics-Test), crashcat `https://crashcat.dev` , Rapier; a case of running a RISC-V Linux emulator on the Script API (slow). The Chinese edition's ShaderSDK `https://mc.163.com/dev/mcmanual/mc-dev/mcdocs/4-ShaderSDK/0-%E6%A6%82%E8%BF%B0.html?catalog=1` . A spreadsheet summarizing direction conventions (to be reflected in the wiki).
+- **Node/external**: Endstone (`scripting-nodejs-release` V8 bindings, plugins), SerenityJS (a Node-based server), custom BDS software (QuickJS replaced with V8).

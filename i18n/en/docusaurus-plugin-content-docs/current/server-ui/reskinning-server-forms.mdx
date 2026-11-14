@@ -1,0 +1,220 @@
+---
+title: Reskinning server forms
+description: How to redraw one server-sent action form as many screens with a resource pack. Title markers, wrapping-style factory replacement, fixed-width records, and measurements and rules for layout, performance and factory gates
+sidebar_position: 4
+sources: [private-research, chest-ui, repo-chest-ui, bedrock-samples, bedrock-wiki]
+---
+
+The text and buttons of a server form are decided by the server, but the shape is decided by the client's `server_form.json`. If the server sends a resource pack along and edits this file, the same form data can draw completely different screens (chest, table, advancement tree, shop). This page organizes the method in the order of concept, structure example, rules and measurements. The vanilla form structure is in section 8 of [Server form API and form types](./modal-forms.mdx).
+
+## 1. Concept: form data is a channel
+
+JSON UI can read only fixed values from a server-sent form. In an action form they are the title (`#title_text`), the body (`#form_text`), and for each button the text (`#form_button_text`) and the icon path (`#form_button_texture`). These four are the data channel from the server to the pack.
+
+- **Choosing the screen**: Put a marker text in the title, and the pack checks whether `#title_text` contains the marker to show or hide a layout.
+- **Choosing the slot**: Put a marker (like `§0§X§r`) before the button text to choose the slot type.
+- **Loading values**: Make the button text and body a fixed-width record, and the pack cuts and reads it with `'%.Ns'` slices and subtraction (`-`).
+- **Loading pictures**: Put a `textures/...` path or a numeric string in the button icon path.
+
+With this approach, a single action form can draw menus, shops, tables, inventory-like slots, grid + detail screens, advancement trees, recipe viewers, split list screens and a main menu. The screen type is chosen by the marker before the title (`§d§f§c§r` and so on) and the slot type by the marker before the button text (Source: private research).
+
+## 2. Entry structure: wrapping the vanilla `long_form`
+
+If a pack places `server_form.json` at the same path, it is merged on top of the vanilla file. The vanilla entry is a structure where the `server_form_factory` factory in `main_screen_content` links `long_form` and `custom_form` through `control_ids`.
+
+### 2.1 What not to do: redefine `long_form` wholesale
+
+Chest-UI redeclares `long_form` at the same path without `@` and changes `type: panel` and `controls`. `controls` is an array, so it is replaced wholesale. Other server form packs (upgrader and others) do exactly the same, so if you turn on two packs together, only the `controls` of the later one in pack order remains and the other's UI disappears `{inferred}` (Source: repo-chest-ui). The repository layout of Chest-UI is `RP/ui/server_form.json` (redeclaration), `chest_server_form.json`, `chest_inventory_system.json`, `furnace_server_form.json`, `_global_variables.json` (Source: chest-ui-pack, CC BY 4.0).
+
+### 2.2 Wrapping + adding a factory
+
+The BedrockAdvancements add-on does not edit `long_form` but wraps it. Below is a summary of the original structure, with only the shape carried over (Source: private research).
+
+```jsonc
+{
+  "namespace": "server_form",
+  // 1. My screen: visible if the title contains 'CUSTOMUI:BA'
+  "ba_long_form": {
+    "type": "panel", "size": ["100%", "100%"],
+    "bindings": [
+      { "binding_name": "#title_text" },
+      { "binding_type": "view",
+        "source_property_name": "(not ((#title_text - 'CUSTOMUI:BA') = #title_text))",
+        "target_property_name": "#visible" }
+    ],
+    "controls": [{ "ba_screen@ba_adv.root": {} }]
+  },
+  // 2. Wrap the vanilla long_form (or one changed by another pack) and hide it only when it is my screen
+  "ba_hideable_long_form": {
+    "type": "panel", "size": ["100%", "100%"],
+    "bindings": [ /* the opposite condition of 1 */ ],
+    "controls": [{ "long_form@server_form.long_form": {} }]
+  },
+  // 3. Override only the control_ids of the existing factory with a path key
+  "main_screen_content/server_form_factory": {
+    "control_ids": {
+      "long_form": "@server_form.ba_hideable_long_form",
+      "custom_form": "@server_form.custom_form"
+    }
+  },
+  // 4. Add one more factory for my screen
+  "main_screen_content": {
+    "size": ["100%", "100%"],
+    "modifications": [{ "array_name": "controls", "operation": "insert_back",
+      "value": [{ "ba_server_form_factory": { "type": "panel", "size": ["100%", "100%"],
+        "factory": { "name": "server_form_factory",
+                     "control_ids": { "long_form": "@server_form.ba_long_form" } } } }] }]
+  }
+}
+```
+
+Why this structure is safe.
+
+- `long_form@server_form.long_form` references the **finally merged** `long_form`. Even if another UI pack replaces `long_form` wholesale, the visibility condition of the wrapping panel is kept. The 2.0.2 changelog of this add-on ("fixed text and buttons showing jumbled behind the screen when using UI packs, regardless of pack order") is this structure. Conversely, it is also a failure case where the earlier version was an edit approach and broke UI pack compatibility.
+- A `"parent/child": {...}` path key overrides only part of a vanilla control's properties (`control_ids`).
+- Two factories with the same name (`server_form_factory`) exist. One builds the wrapped vanilla, the other builds my screen, and visibility shows only one.
+- If you identify the title by a **containment check** (the negation of `(#s - 'X') = #s`) rather than a prefix check (`'%.Ns'`), you can attach metadata (counts and so on) after the title. Example: `CUSTOMUI:BAT0153L0000` (153 tree records, 0 list records).
+- `custom_form` is passed to vanilla as is (this add-on reskins only action forms).
+
+### 2.3 Another approach: prefix match and `modifications`
+
+Packs of the bedrock-core family replace `server_form_factory` and identify by matching the first 13 bytes of the title (`'%.13s' * #title_text = 'corev0009core'`), and attach binding `modifications` to the vanilla `long_form` and `custom_form`. The identification is a prefix, so data cannot be attached after the title, but the structure is simple. Both approaches are safer than wholesale replacement of `controls`, which is sensitive to pack order (MOD-09 wrapping, MOD-13 using only `modifications`).
+
+### 2.4 Make title markers long and unique
+
+Make markers long and unique so they do not collide with other packs and servers (`CUSTOMUI:BA`, `CUSTOMHUD:ba_toast:`). A marker with `§` attached to every letter (`§c§h§e§s§t§5§4§r`, Chest-UI `HOST-34`) has every letter consumed as a format code, so the marker is not visible in the title even for clients without the resource pack or in the vanilla shape. The UI side finds it with a `(#title_text - '§c§h§e§s§t')` containment check. The trailing `§r` restores the formatting of the title that follows (Source: repo-chest-ui, chest-ui-pack).
+
+## 3. One form, many screens: layout gates `{measured}`
+
+One server pack has 13 layouts under `long_form` in `server_form.json`, and only one shows by the title marker (Source: private research).
+
+- **Gate condition**: Each layout starts with `"visible": false` and puts a `#title_text` (global) containment check into `#visible` with `"binding_condition": "always"`. With `once`, a layout that briefly matched while the form changed to the next form stayed on top of the next form.
+- **Conditions for factory and grid length**: If the factory length inside a layout (`#form_button_contents` -> `#collection_length`) was given `"binding_condition": "visible"`, a hidden layout did not build button slots. Using `visible` on a layout that is visible from the start made hidden layouts also build slots on the first frame, causing lag. With `always_when_visible` or omitted (default), the bindings of slots built on the first frame were not updated, so markers and text were empty (it became normal after changing or pressing the window).
+- **Variables inside expressions**: Taking the marker as a `$variable` and inserting it into a `source_property_name` expression did not substitute (tab and back buttons did not show, and the checker could not catch it). Split markers into `vis_*` templates that write the marker as literal text in each expression.
+- **Text comparison**: Comparing directly in the expression like `(not ((A - B) = 'z'))` flipped true and false. Putting it into a `#variable` first and comparing with `(not (#variable = 'z'))` gave the right result.
+
+### 3.1 Dictionary lookup routing (factory gate)
+
+This is a method where a `stack_panel` holds layout candidate values in `property_bag`, and the `control_ids` of a `factory` choose the layout by that value.
+
+```json
+{
+  "type": "stack_panel",
+  "property_bag": { "#layout_1": [ "on" ], "#layout_0": [] },
+  "factory": { "name": "layout", "control_ids": { "on": "...@my_form.split_form" } },
+  "bindings": [
+    { "binding_type": "view",
+      "source_property_name": "(('#layout_' + (condition * 1)))",
+      "target_property_name": "#collection_length" }
+  ]
+}
+```
+
+- This method works. The layout was built only when the condition matched (no freeze or exit).
+- **Form data was empty inside the gate**: Inside a layout built by the factory, the slots of a grid (`grid` + `collection_name`) read the button text and icon. Fixed `collection_index` slots (tabs, details, action buttons) were empty. Factories of `#form_button_contents` inside a layout (list, launcher) built nothing. All combinations of `collection_panel` (with or without `collection_name`), `stack_panel`, `control_name` and `control_ids` were the same, and giving `always` to the bindings of fixed-index slots changed nothing. `panel` + `factory` built nothing (the form opened with no window visible).
+- So all 13 layouts are switched only by `visible`. To use a gate, the layout must read buttons only as a grid. The early 2026-10 record (inside a `collection_panel` gate, factories and grids could not read buttons and only fixed slots read) is the opposite of this result, and I could not isolate what was different.
+
+## 4. Button count and grid size `{measured}`
+
+- **`#form_button_length` lingers**: The client held this value at the button count of the largest form seen so far (93 via a debug label, still 93 after reconnecting). If you set `#maximum_grid_items` from this value, small forms get endless empty slots and an empty scroll appears under the grid. Even `always_when_visible` did not change it.
+- **Putting the count before the body**: The server writes the grid slot count into the first 12 bytes of the body and the pack reads it.
+  - At first: comparing a hexadecimal digit character (`'3'`) with `=` did not match (the character is `3` but the value was 0). Switching to a set of base-6 a~f letters (`§a§b§d§r`) matched.
+  - Now: the server sends `§r§r§r042` and the pack puts `((('%.12s' * #form_text) - '§r') - 0)` directly into `#maximum_grid_items`. Bindings per grid went from 6 to 1.
+  - Putting the digits first, like `042§r§r§r`, makes `('%.12s' * #form_text)` read as the number 42 (EXP-30), which breaks the body cut `(#form_text - ('%.12s' * #form_text))` and the body disappeared.
+- **Buttons in the grid that are not slots**: A wrapping grid lets hidden buttons take up slots too. Counting the tab, back and page buttons in the slot count created one more empty row and the screen scrolled a few pixels. It was solved by sending only the slot button count. Put marker buttons **after** the slots (if placed before, the slots start shifted to the right).
+- **Lengths computed by expression**: When factory and grid lengths were made with expressions of `#form_button_contents` and `#form_button_length` (`* 1`, `* (marker match)`), the factory did not build buttons and the grid became the expression itself.
+
+## 5. Fixed indexes and performance `{measured}`
+
+- **A factory per row is slow**: When a grid + detail screen (48-slot grid + ingredient and reward rows) was built with stacks that walk all the buttons for every row, opening took 4~5 seconds. Switching to a fixed layout where each slot reads only one button through `collection_index` brought it to about 1 second.
+- **Where `collection_index` goes**: It takes effect only on the direct children of a `stack_panel` that has `collection_name`. Putting the page arrow row in a `panel` printed `Unknown property [collection_index]` and `[collection_name]` in the content log and it was empty. The chest screen is the same, so give `"collection_name": "container_items"` to the `stack_panel` itself.
+- **Buttons that cannot be pressed**: Server form buttons cannot be turned off. If `$pressed_button_name` is set to a name the engine does not know (`button.noop`), pressing does not answer the form and the hover tooltip still showed. Put only one button per slot. Putting both a pressable and a non-pressable button doubled the controls, and opening the screen took a few seconds.
+- **The `%` operator**: The item icon expression `(#t - (#t % 65536))` was in for a long time, and the icon was drawn with no `Invalid expression` in the content log. A user reported that the form became noticeably faster after changing to `(#t - 0)` (not measured).
+- BedrockAdvancements creates hundreds of controls per node, and "sending the nodes of every tab took a few seconds to open". So it sends only the nodes of the selected tab, and when a tab is pressed it submits the form and then reopens on that tab (Source: private research).
+
+## 6. Layout `{measured}`
+
+- **Two columns**: Putting two vertical columns in a horizontal `stack_panel` gave height 0. Put two vertical stacks attached left and right inside a `panel` (height `100%cm`).
+- **Split screen**: With the left pane and right detail in a horizontal stack, `100%c` added up the heights and `100%cm` collapsed the right detail. Put them in a `panel` anchored top left (the right with an offset).
+- **Window size**: Fitting the window height to the content with `100%c` made the window and content reference each other and collapse (buttons outside the window), and a screen-ratio size left empty space for short lists. Set every window to fixed pixels (at most the vanilla inventory 326x166). Phones draw the UI large, so a window bigger than this does not fit on screen. BedrockAdvancements is responsive and uses `size: [314, "100% - 64px"]`, `max_size: [314, 236]`.
+- **List slot**: Setting the list to the content height (`100%c + 8px`) makes an empty list a thin bar and a long list goes outside the window. Fix the list slot to the window height and put a `common.scrolling_panel` inside.
+- **Action slot height**: When two lines of body came above an action slot with a fixed height (94), a scrollbar appeared on the right slot. Make the action slot a `stack_panel` `100%c` that takes only the button height, and put short information in the button text.
+- **Grid height**: If the grid height was set to `#form_button_contents` or `default`, no buttons appeared at all. Use `100%c` (LAY-30) `{record}`.
+- **`100%c` in a horizontal stack**: It added up all child heights and left a large gap under the tab row. Use `100%cm`, which follows the largest child `{record}`.
+- **Numeric variable inside a size array**: Putting a numeric variable inside an array such as `"size": [ "$w", "100%c" ]` gave a "Dangling number" error. Give the size as a variable for the whole array (`"size": "$window_size"`) `{record}`.
+
+## 7. Text, tooltips, pictures `{measured}`
+
+- **Engine tooltip**: A hover box drawn directly next to a slot was clipped by the scroll window. If you put the vanilla `common.hover_text` (`hover_text_renderer`) as a child of the hover state and put the button text into `#hover_text`, it appears next to the pointer without clipping. With `$hover_text_max_width` at 0, lines break only at `\n` in the text, and with 150, Korean text wrapped at about five characters. Chest-UI puts this renderer inside the hover control (`type: custom`, `renderer: hover_text_renderer`, `allow_clipping: false`, `layer: 30`, a `#hover_text` binding). It is created only in the hover state, so only one exists even with many slots (INP-25).
+- **Focus**: Vanilla `common.button` and `common.toggle` have `focus_enabled` on, so when a form was opened on a phone, the first button (the "?" in the title bar) was drawn in the hover state. Use `$focus_enabled: false` on all buttons of the form, and `$toggle_group_default_selected: -1` and `$toggle_focus_enabled: false` on radio toggles.
+- **Radio toggle groups**: Radio toggles form one group only among sibling controls. Grid slots each have a separate parent, so they were not exclusive (chests piled up as you pressed).
+- **Grayscale PNG**: The client drew grayscale PNGs translucent (the gray node frames and windows showed through). Optimization tools convert gray pictures to grayscale, so keep the pack's PNGs as RGB or RGBA (99 converted). After optimizing, check with `file` that there is no grayscale.
+- **Labels containing `%`**: When a scoreboard line label went through translation, the `%` disappeared. Use `localize: false`.
+- **Text that holds only a number** `{record}`: Values that read as numbers (`" 219"`, `"1,532/4,096"`) did not show in a label. Send them as text that starts with a color code, or make them a string with `'§r' + value` inside a variable expression (EXP-15). A one-digit numeric flag also becomes a number and breaks text comparison, so write flags as letters (`a` to `k`). Chest-UI uses the unknown format code `§z` as a prefix to keep the result a string: `(('§z') + (('%.8s' * T) - ('%.6s' * T)))` (TXT-18).
+- **Expressions in the variables block** `{record}`: A count expression only evaluated when placed in the label's own `variables` block. Expressions in the parent panel's `variables` or `('§r' + $variable)` inside `text` were not evaluated. Using an expression from a variables block inside another expression was also not evaluated.
+- **Input form text** `{record}`: The text of the vanilla input field is white, so it is invisible on a light card.
+
+## 8. Screen host `{measured}`
+
+- **Form screen animation**: Give `third_party_server_screen` `"$screen_animations": []` and `"$background_animations": []`. If the next form arrived while the window was moving, the two windows appeared overlapping, and a main menu form that closes and reopens flickered.
+- **Background behind a form**: Change `$screen_bg_content` of `third_party_server_screen` (outside the safe zone, not pushed during screen transitions) to draw the frame you want behind the form. If the `#title_text` binding there is set to `once`, it was evaluated before the form content arrived and nothing showed.
+- **The HUD is not drawn behind a form**: While a form is open, the HUD is not drawn. To show the same frame behind the form as well, draw it in the form background too. Vanilla dims the area behind a form with `screen_background` at opacity 0.4 `{record}`.
+
+## 9. Fixed-width record protocol (BedrockAdvancements)
+
+When you need to send many numbers and flags, use the button text as a fixed-width record. Below is the original structure rewritten (Source: private research).
+
+```text
+[KIND 4][TAB 2][FRAME 24][TOKENS 160][PROGRESS 16][PCT 4][TITLE 120][DESC ...]
+ 0       4      6          30          190          206    210         330
+```
+
+| Field | Purpose |
+| --- | --- |
+| KIND | Record kind (`BAN\|` node, `BAT\|` tab, `BAL\|` label, `BAM\|` meta). `('%.4s' * #form_button_text) = 'BAN\|'` |
+| TAB | Tab number. If only digits are present, JSON UI turns it into a number, so use a letter prefix (`Ta`, `Tb`) |
+| FRAME | Builds the texture path as `'textures/ba/frames/' + #ba_frame` |
+| TOKENS | Bit and flag tokens (below) |
+| PROGRESS | A `§f` prefix keeps `3/17` from being read as a number |
+| PCT | `P050`. A letter prefix, then `- 'P'` and `* 1` to make it numeric |
+| TITLE / DESC | lang key or plain text, padded with `$` |
+
+- The padding characters `$` (fields) and `.` (tokens) and the reserved characters `~`/`$` are removed from plain text. The subtraction operation removes every occurrence, so the padding character must not appear in the body.
+- `'%.Ns'` is in **UTF-8 bytes**. The encoder cuts and pads by bytes (Korean characters are 3 bytes).
+- The standard chain for taking L bytes from the Nth byte:
+
+```jsonc
+{ "source_property_name": "('%.210s' * #form_button_text)",   "target_property_name": "#_text_head" },
+{ "source_property_name": "(#form_button_text - #_text_head)", "target_property_name": "#_text_rest" },
+{ "source_property_name": "('%.120s' * #_text_rest)",          "target_property_name": "#_text_raw"  },
+{ "source_property_name": "(#_text_raw - '$')",                "target_property_name": "#text"       }
+```
+
+- **Booleans are position-independent tokens**: `~` + group uppercase + bit lowercase (`~Xa`, `~Fo`). Presence is checked with `(not ((#form_button_text - '~Fo') = #form_button_text))`, so no field boundary calculation is needed. The groups are `X` (x 9 bits), `Y` (y 11 bits), `U`/`V` (connector length), `H` (canvas height), `F` (flags: `~Fc` has children, `~Fh` has parent, `~Fl` tooltip left, `~Fs` selected, `~Fp` progress, `~Fx` challenge, `~Fo` completed, `~Fe` empty slot). The uppercase + lowercase combination means no token is a prefix of another. This is a tip for designing tokens checked as substrings.
+- **Numbers to pixels: a bit spacer stack**: JSON UI has no stable way to compute `offset` from a binding value. Put 11 `panel`s whose sizes are powers of two (1, 2, 4 ... 1024) in a vertical stack and turn each on with `#visible` only when its bit token is present. Invisible children in a stack take no space, so the sum of the sizes that are on is the coordinate (0~2047px). The scroll content height is made the same way.
+- **Fixed-position elements bind directly with `collection_index`**. The script sends empty records (`~Fe`) even when there is no tab to fix the indexes (28 tab slots).
+- **If drawing order matters, draw the same collection with several factories on different layers**: a triple factory in the order all connector outlines first, then cores, then nodes, and hover last. This is because if you only raise the layer within one item, the outline of the next item covers the previous item.
+- **Buttons that do not submit when pressed**: Do not attach `button_mappings` and use only hover and focus (`focus_enabled`, `focus_magnet_enabled`). Tab buttons that submit map `button.menu_select` and `button.menu_ok` to `button.form_button_click`.
+- **Hover tooltip**: Draw beyond the viewport with `allow_clipping: false` and darken the screen with a 4000x4000 black image (alpha 0.3). The tooltip title bar measures the text width with an `alpha: 0` label and fits the parent with `100%c`/`100%cm`.
+- **9-slice**: Attach a `.json` (`nineslice_size`, `base_size`) to every UI texture. Example: window `[4,4,4,4]` / `[16,16]`.
+- **Reopening returns the scroll to the top**: There is no way to specify the scroll position, so the list tab builds rows for only one open section and puts that section first (accordion).
+- For structures with a lot of repetition (a 712KB screen JSON), a wire format definition (a spec file) is shared by the script encoder and the UI generator, and the **screen is built by a generator**. If layout calculation is kept as a pure function separate from the game API, it can be shared with a web preview.
+
+## 10. Working pack case: how Chest-UI builds slots `{verified}`
+
+This rewrites the techniques of Chest-UI (`115d95c`, CC BY 4.0) (Source: chest-ui-pack, repo-chest-ui). The full chest behavior is in [Chest UI](./chest-ui.mdx).
+
+- **Turn off per-size layouts at build time**: Reference the same template for each size and give each `"ignored": "$disable_N_slots_layout"`. The values are in the global variable file. If you build even the templates that will not be visible, 54 slots x 3 states x several renderers multiply, so the build itself is blocked.
+- **An expression evaluated at creation time in `collection_index`**: `"$start_index": "(($size - '§c§h§e§s§t' - '§') * 1)"`, `"collection_index": "($start_index + 9)"` (COL-31). If `$size` is `'§c§h§e§s§t§5§4'`, the start index is 54.
+- **Taking values from the button text prefix**: Put the button text as `stack#64dur#10§r name §r\n description` (a fixed-width 14-byte prefix) and take out the quantity `(('%.8s' * T) - ('%.6s' * T))`, durability `((%.14s * T) - (%.12s * T))` and body `(T - ('%.14s' * T))`.
+- **Image/item branch**: One slot (`inventory_item@common.button`) takes `#form_button_texture`, and if the first 8 bytes are `textures` it draws an image, otherwise it puts `#item_id_aux` into the item renderer and draws it (PAT-11).
+
+## 11. Rule summary
+
+1. Reskin server forms by **wrapping + adding a factory**, not by editing (MOD-09).
+2. Make title markers long and unique, find them with a containment check, and hide them by attaching `§` to every letter (HOST-34).
+3. Gate layouts with `visible` and identify them with `binding_condition: always`. Put a `visible` condition on factory length.
+4. Write markers as literal text in expressions (variables are not substituted inside expressions).
+5. Keep numeric values as strings with a letter prefix, and convert with `(#v - 0)` when a number is needed.
+6. With many slots, use fixed `collection_index` and fixed pixel sizes. The control count is the opening time.
+7. Avoid structures that compete with other packs over `controls` (MOD-20).

@@ -1,0 +1,181 @@
+---
+title: "Server software and BDS operation"
+description: "Choosing between BDS and custom server software, server.properties, permission and configuration files, enabling Beta APIs, hosting, Realms"
+sidebar_position: 1
+sources:
+  - private-research
+  - ms-learn
+  - dragonfly
+  - gophertunnel
+---
+
+## Concept: two kinds of server
+
+There are two broad kinds of Bedrock server. **BDS (Bedrock Dedicated Server)** is the official server distributed by Mojang. It runs vanilla game logic as is, has no plugin system, and runs **only add-ons (BP and scripts)**. **Custom server software** (PocketMine-MP, Dragonfly, PowerNukkitX, Serenity, Endstone and others) implements the protocol directly or wraps BDS, and runs the game by its own rules. Either way, the client connects with the same Bedrock protocol, so resource packs (RP) and JSON UI behave the same on both. The difference is whether the server-side definitions are **BP JSON and the Script API** or **server-language code (Go, Java, Python and so on)**. (Source: private research)
+
+Selection guide: for minigames, PvP and large networks, custom software scales better, but it does not suit vanilla survival or technical redstone. BDS fits those uses and official compatibility. Large networks tend to use BDS + a proxy rather than a mod loader (Zeqa uses PMMP, The Hive uses custom software). A list is in the Bedrock Wiki's servers/server-software.
+
+## server.properties (MS Learn)
+
+`server.properties` is in INI format (key=value, `#` comments). These are the main keys and defaults from the MS Learn reference. (Source: ms-learn, Documents/BedrockServer/server-properties.md)
+
+```properties
+server-name=Dedicated Server
+gamemode=survival
+force-gamemode=false
+difficulty=easy
+allow-cheats=false
+max-players=10
+online-mode=true
+allow-list=false
+server-port=19132
+server-portv6=19133
+enable-lan-visibility=true
+view-distance=32
+tick-distance=4
+player-idle-timeout=30
+max-threads=8
+level-name=Bedrock level
+default-player-permission-level=member
+texturepack-required=false
+content-log-file-enabled=false
+compression-threshold=1
+compression-algorithm=zlib
+server-authoritative-block-breaking=false
+```
+
+| Key | Description |
+|---|---|
+| `gamemode` | Game mode of new players. `survival`, `creative`, `adventure`. If `force-gamemode=true`, it always sends this value instead of the value saved in the world |
+| `difficulty` | `peaceful`, `easy`, `normal`, `hard` |
+| `online-mode` | If true, Xbox Live authentication is required. Remote (non-LAN) servers need authentication regardless of this value. Keeping it on is recommended when exposed to the internet |
+| `allow-list` | If true, only players in `allowlist.json` can join |
+| `enable-lan-visibility` | Responds to LAN discovery. When on, it also binds to the default ports 19132/19133 even if `server-port` differs |
+| `view-distance` | Maximum allowed view distance (chunks). 5 or more. A large value affects performance |
+| `tick-distance` | How many chunks around a player to tick. 4~12 |
+| `max-threads` | Maximum threads to use. If 0 or absent, as many as possible |
+| `default-player-permission-level` | `visitor`, `member`, `operator` |
+| `texturepack-required` | Forces a specific texture pack of the world on the client |
+| `compression-threshold` | Minimum payload size to compress (0~65535) |
+| `compression-algorithm` | `zlib` or `snappy` |
+| `server-authoritative-movement-strict`, `server-authoritative-dismount-strict`, `server-authoritative-entity-interactions-strict` | The server accepts client input more strictly. With high latency, movement is affected |
+| `player-position-acceptance-threshold` | Tolerance for the difference between client and server player positions (default 0.5) |
+| `player-movement-action-direction-threshold` | Allowed difference between attack direction and look direction, 0.0~1.0 (default 0.85) |
+| `server-authoritative-block-breaking` | The server computes block breaking together with the client and verifies it. Creative is client-authoritative |
+| `server-authoritative-block-breaking-range-scalar` | Multiplier for the breaking range (default 1.5, squared and multiplied with the default range) |
+| `chat-restriction` | `None`, `Dropped` (chat is discarded), `Disabled` (no chat UI either unless operator) |
+| `disable-player-interaction` | Tells the client to ignore other players (not server-authoritative) |
+| `client-side-chunk-generation-enabled` | Tells the client it may generate visual chunks outside interaction range |
+| `block-network-ids-are-hashes` | If true, sends hashed block network IDs instead of sequence numbers (stable) |
+| `disable-custom-skins` | Turns off custom skins that are not store or game assets |
+
+## Configuration files and rules (community 2025-10 to 2026-11)
+
+### 14.1 Configuration files
+- **xKingDark gist**: `server.properties` https://gist.github.com/xKingDark/0e87c3fb30151e9f3315476d70a45ee2 , `test_config.json` https://gist.github.com/xKingDark/271dbd969345169c45915a19953ff578 , `cdn_config.json` https://gist.github.com/xKingDark/e80569d688e692ee11e161b427f6e49f . Official documentation: https://learn.microsoft.com/en-us/minecraft/creator/documents/bedrockserver/getting-started?view=minecraft-bedrock-stable (including the server-properties and scripting pages). Property list: https://www.minebbs.com/threads/bedrock-dedicated-server-server-properties.32021/ . There were many complaints that BDS has no dedicated documentation or channel, and a BDS channel appeared around 2026-03-06.
+- **`config/default/permissions.json` `allowed_modules`**: Modules outside the default list (even if stable) must be added. `@minecraft/server-net` is intentionally absent from the default list. `@minecraft/debug-utilities` was later added to the default list. For DDUI, add `@minecraft/server-ui`, match the BDS version to the beta modules, and turn on Beta APIs in the world.
+- **`config/commands.json` (undocumented, explained by darknavi)**: Changes command permission levels or disables commands.
+  ```json
+  { "permission_levels": { "?": "internal", "help": "internal", "list": "internal", "me": "internal", "say": "internal", "tell": "internal" } }
+  ```
+  - Levels: `admin`, `game_directors` (operator), `owner`, `internal` (disabled).
+  - `help`/`?` are hard-coded and hidden from the list but still usable. `w`/`msg` follow `tell`.
+  - Do not put it in the `default` folder. Setting `default_permission_level: admin` removes even the admin commands.
+  - It did not work on Endstone 0.10 (bug).
+  - Scripts cannot change the behavior of vanilla commands, only decide who may run them.
+  - `"internal"` blocks the command from the console, players and command blocks alike. `/script` cannot be hidden.
+  - Hiding `/list` also hides `/tag <selector> list` on the surface, but its registration is not removed.
+  - Script custom commands need a `prefix:`, both `/test` and `/prefix:test` show, and there is no option to hide one of them.
+- **`op-permission-level=4`**: `/reload`, `/stop` and `/listd` show up in game.
+- **allowlist**: Entries in `allowlist.json` have `name`, `xuid` and `ignoresPlayerLimit`. The allow-list ignore bug of 1.26.10 (MCPE-237527) was fixed in the 1.26.12 hotfix (around 2026-04-01).
+- **`packetratelimitconfig`**: Supports only one rate-limit type. Which packet IDs it applies to was found by reverse engineering. It mitigates command packet crashes, but a script cannot receive it as an event (the loader must read the process output and pass it on as a scriptevent).
+- **Other properties**
+  - `msa-gamertags-only=true`: `Player.name` becomes the Xbox gamertag.
+  - `script-watchdog-memory-limit=0`: Turns off the script memory watchdog (cannot be changed on Realms).
+  - `op-permission-level`
+  - `max-threads`
+  - `server-wakeup-frequency` (default presumed to be 200, unverified)
+  - Since 2026-06 the server starts with `allow-list=true` by default.
+- **Logs**: Script console.log/warn go to the server console (in a dev environment you may need to turn on `content-log`). Script output can be saved to a file with a server.properties setting. Join/leave spam is filtered with a Node child_process wrapper. `[Json] Damage Source not found: water` is a JSON/pack problem, not a script problem (it looks for a damage_sensor that references an unknown cause). The party id is printed to the console as `Player PartyIdUpdate: ... pfid ... partyid ...` (it is missing when joining via a party in the 2026-04 build).
+- **Dynamic property warning**: If a pack uses more than about 10MB per minute of dynamic properties, a warning appears every 30 seconds.
+
+### 14.2 Enabling Beta APIs and experimental features
+- **`test_config.json` trick**: Put a `test_config.json` containing `{}` in the server root and start, and the server shuts itself down. If you delete the file and start again, the world is saved with Beta APIs on (found by AdemDev). There is a report that turning on the EDU toggle this way in Preview 1.26.40.25 seemed to drop the Chemistry RP.
+- **Editing `level.dat` directly**: Put in `experiments: {gametest:1b, upcoming_creator_features:1b, experimental_creator_cameras:1b, voxel_shapes:1b, experiments_ever_used:1b, saved_with_toggled_experiments:1b}` (`gametest` is the old Beta APIs key). All flags must be present, and it still fails occasionally. Experiments are often dropped during world export/import.
+- **A world made without experiments**: BDS does not run experimental Script APIs unless the world was created with experimental features on (be careful with automatic world generation). There is a case where a world copied after turning on Beta in the client failed on Docker BDS, while a world made on BDS worked.
+- **Problems after an update**: `ReferenceError: Module [@minecraft/server] is unrecognized` (1.21.120/121 Linux, `"2.4.0-beta"`) was resolved by a clean reinstall of the server. If scripts do not run after an update, restart BDS and check the beta API and manifest dependency versions.
+
+## Hosting and deployment
+
+- **Host opinions**: OVH (cheapest), Hetzner (new CPUs), Bisect (about a 14 euro plan for 50 concurrent players, tight on RAM), Ionos, Bloom.host (expensive but good support), Google Cloud. Some say self-hosting is cheaper. A small Go bot is fine on a cheap VPS. Have the provider fix outages, and if they do not, get a refund and move. For cheap dedicated servers, check DDoS protection. Aternos does not support custom script add-ons (joining Aternos from Xbox fails to load the RP, though there is a case where LAN worked).
+- **Docker**: Recommended for Linux deployment (Docker on Windows is slow or unusable). Vanilla image: https://github.com/m0lc14kk/docker-vanilla . The combination of an Endstone venv and PM2 was hard to set up.
+- **Installation tools**: npm `@bedrock-apis/bds-utils`, BDSAddonManager (`https://github.com/DragonTech26/BDSAddonManager`, installs add-ons on BDS).
+- **ARM64**: There is no official ARM64 BDS build. Run the Endstone Docker under emulation (speed depends on the hardware).
+  ```
+  docker pull --platform linux/amd64 endstone/endstone
+  docker run --platform linux/amd64 -p 19132:19132 -it -v ${PWD}:/home/endstone/bedrock_server --name endstone-server endstone/endstone
+  ```
+  Documentation: https://endstone.dev/latest/getting-started/installation/#with-docker-latest--macos--with-emulation (PR #387).
+- **Linux distributions**: BDS Linux is tested on Ubuntu but runs on glibc distributions such as Debian. On Android/Termux (bionic) it does not run without a compatibility layer.
+- **Panels**: As alternatives to Pterodactyl there are Pelican (beta) and a multi-server management tool (https://github.com/Zentari-Network/Server-Handler/). You can send console commands through the Pterodactyl panel API.
+- **Uploading a world**: Upload as a zip (otherwise BDS creates a default vanilla world). BDS packs need the uuid/version in `world_behavior_packs.json`. If scripts do not run on the server, check that the pack is in the world's behavior_packs and the json, that each module has a real v4 UUID, and that you did not put it only in `development_behavior_packs`. Packs in the dev folder are not copied into the world, and if they are outside the dev folder, stale scripts remain.
+- **BDS download link format**: https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.26.52.3.zip . There was no answer to a request for tar distribution instead of zip.
+- **Private connection between VPSs**: WireGuard is recommended.
+
+## Realms and multiplayer
+
+- **Realms run on BDS**: New block features may not work until the Realm version matches. When the version matches, scripts run too. Realms are cumbersome to update, so check that the pack version was applied. When re-uploading, change the pack UUID. If the pack is not applied, copy it into the world folder and delete `world_behavior_packs.json`.
+- **Realms debugging**: There is no content log. `/reload` works on some Realms. Uploading a beta API world works.
+- **Permissions**: The Realm owner has top permission, and `op` cannot be used from script commands. Custom slash commands registered by script work on Realms, but `CommandPermissionLevel.Admin` or higher fails, so use `GameDirectors` (Operator) (the same may apply on servers). The default of `cheatsRequired` is true, so they do not show on Realms or worlds with cheats off. Selector arguments also needed cheats (an old bug).
+- **What you cannot do on Realms**: server-net and server-admin, packet rate limits, changing the script memory watchdog. `@minecraft/server-admin` was turned off on Realms on 2026-02-24, and leaving it as a dependency in the manifest breaks every script module of that pack. Before that, answers conflicted: one (2025-11) said external server transfer works and another (2025-12) said other IPs do not.
+- **Realms pack copies**: A Realm keeps old pack copies that cannot be deleted. If "missing dependencies" appears only on a Realm, create a new pack UUID and change the name. If scripts do not run, check the manifest UUID first. Updates to Marketplace Realms add-ons may not be applied.
+- **Player count and Realms Pro**: In 2026-10 there was an answer that 40 players on a Realm is not possible. Realms Pro, released 2026-11-10, gives up to 50 players, resources not shared with other servers, a Minecraft.net resource dashboard, and PC-integrated Editor tools (structure cloning, terrain painting, real-time co-editing). On 2026-11-11, Sound Effects Packs that can be shared to Realms by subscription were released.
+- **Realms mob cap measurement**: The host is excluded from the mob cap (11 slots). At sim distance 12 the maximum was 194 mobs, and at sim 4 the average was about 24. At sim 4 with 10 players the probability of hitting the cap is about 99.9%, so the practical maximum is 4~6 players. The measurement counted within 128 blocks for 20 seconds after a random teleport within +/-10,000.
+- **Other Realms notes (single report)**: VV mode is off. If chat is restricted by age verification, an add-on cannot lift it, and commands or `sendMessage` are the alternative. For a world that contains command blocks, fix the backup with Amulet or an NBT editor. There is a setup that links several Realms like dimensions with a transfer add-on.
+- **Problems on Realms**: With a modpack's `chatSend`, every command gave an error (cause unresolved). `/title` text with color codes is inconsistent. A failed form input comparison was a case or typo problem. If chat is not visible, check the Xbox account privacy/communication settings.
+- **Achievements**: They are lost if you turn on cheats, if it is a creative world, or if the BP has no achievement-compatible manifest setting. They can be restored by editing level.db. Deleting a pack without changing the pack uuid or removing it from the world gives a "pack missing/uuid changed" error. Putting the RP in the BP folder gives the same result.
+- **Realm PvP tips**: Put cooldowns on /home and /tpa, and implement all damage handling (mace, spear, projectiles).
+- **Multiplayer synchronization**: Using `tp` continuously on many entities shows as lag for non-host players. Reduce teleports or use animation-based movement. Selectors and fork grow with the player count, so command cost rises. Command blocks must keep chunks held with a ticking area (`/tickingarea add circle ~ ~ ~ 4 name`). BDS `/transfer` works from the server console, and in game it needs op (permission 4) and does not accept selectors.
+- **Consoles and iOS**: Consoles such as PS5 can use only Marketplace add-ons unless file-access hacks exist. Marketplace add-ons cannot be used on a server, and non-Marketplace add-ons can be worked around only on Xbox (not possible on PlayStation). To let console players use add-ons, put the add-ons on BDS and connect them through a friend-hub-style host. An "external server connect" pack (zip) was shared. On iOS a server form sometimes only hides the HUD and does not appear, and ESC recovers it.
+- **DDUI soft lock**: The problem where the client got stuck in a form when the connection dropped or the server hit a watchdog/infinite loop was fixed by Mojang on 2026-03-10.
+- **Update day**: Minecraft updates come out on Tuesday.
+
+
+## Server software list and characteristics
+
+- **Selection guide**: Custom software such as PocketMine-MP, Dragonfly (Go), PowerNukkitX (Java) and Serenity (Rust, open source) scales well for minigames and PvP. But it does not suit vanilla survival or technical redstone. BDS fits those uses and official uses. Large networks use BDS + a proxy rather than a mod loader (Zeqa uses PMMP, The Hive uses custom software). The combat feel of Zeqa or NetherGames is imitated by server software, not by packs. List: https://wiki.bedrock.dev/servers/server-software *(confirmed)*
+- **Endstone** (https://github.com/EndstoneMC/endstone , https://endstone.dev): A wrapper that puts Python/C++ plugins on top of BDS and provides a Script API compatible ScriptSDK.
+  - To use ScriptSDK, a `.whl` plugin must be in the `plugins` folder.
+  - Without plugins it provides XUID, OS, IP, boss bar, client-side name tags, ping and device model information.
+  - It has packet blocking, crasher patches and pack encryption (there are reports of "resource pack failed to load" with encrypted packs).
+  - You can build real command trees (subcommands) (caveats: one reporter's claim about subcommands is weak evidence, unverified).
+  - Some say it suits about 30~40 players or fewer. Capacity reports are in [Server performance](performance.mdx).
+  - As of 2026-10, 0.11.12 supports 26.51, and cross-version plugins cover 26.40~26.60. The goal is "Paper for Bedrock". Explosion events have a position property. You can tell it from vanilla BDS because the `status` command gives a permission error. Some say it has many API bugs.
+  - The shawtymarco fork (`https://github.com/shawtymarco/Endstone`) turns off AABB collision, random tick, fire tick and chunkLoad/Unload handling through BDS hooks in settings.
+  - Copy the BDS files into Endstone's `bedrock_server` folder.
+  - The Endweave plugin (https://github.com/EndstoneMC/endweave) translates packets so new clients can join old servers. It lags behind BDS updates, its camera command is incomplete, and there is a report that inventory items disappeared randomly when used with dev Endweave.
+  - URL image form plugin: https://github.com/zelisce/URL-Image-Fix
+  - friend-connect plugin: https://github.com/TheNINJALLO/endstone-broadcaster
+- **LeviLamina**: A BDS mod loader and API (clients later). It provides headers, and there is a plugin that changes the height limit on the server side. It lags behind BDS updates. It is also mentioned as a client modding framework like Fabric with an Android launcher, and recommended for engine-level mods. LeviLauncher is only a launcher and injector.
+  - Installation: `lip init`, `lip install github.com/LiteLDev/LeviLamina` (pin a version with `@x.y.z`), run with `.\bedrock_server_mod.exe` and stop with `stop`. Put mods in the server's `plugins/` and the client's `mods/`. Match versions, install in a new folder, add mods one at a time, take backups, and create a new environment when changing the BDS version. Documentation: lamina.levimc.org, lip.levimc.org (there is also a mod template repository). C++ mod development uses VS Code, Git, xmake, Visual Studio C++ tools and LLVM/Clang.
+  - It supports add-ons and runs JS/Node/Lua/Python plugins with LegacyScriptEngine (`https://lse.levimc.org/`). There is no native Linux build (Docker + Wine). endweave's "levistone" loads Endstone Python plugins. Glacie was discontinued in 2025-11.
+  - Cases: a report of porting the Java mod TACZ in two days and running it on BDS, BarelyEnoughItems (`https://github.com/LiteLDev/BarelyEnoughItems`), and server-side Voxy/DH-style LOD experiments.
+- **Others**
+  - SerenityJS: Node-based (not QuickJS) and was used for heavy computation.
+  - Rust: bedrock-crustaceans `chorus` (https://github.com/bedrock-crustaceans/chorus), `pyrite` beta 1.7.3 worldgen plugin (https://github.com/bedrock-crustaceans/pyrite). There is no lighting engine yet.
+  - PocketMine: Does not support add-ons and attachables, only RPs. JSON UI works through the RP, and forms need the FormAPI plugin (it restricts the display position through the title text binding). Custom items use the Customies plugin.
+  - Dragonfly: Custom sword attack damage display was fixed by an upstream PR. It runs several worlds in one process, and there are a report of hosting 70 players on a 5,000 KRW per month host and a case of implementing BDS-style knockback. It has no default commands or game modes, and is described as "it runs but is not accurate". A Cobblemon-style dragonfly server hosted 100 players (custom models and RP); clients that failed to get the pack were fixed by clearing the cache, and about 300 models were fixed by hand after converting Cobblemon assets with Python. Server core library BRB: `https://github.com/shawtymarco/BRB` (single report)
+  - Quark (`https://github.com/Bedrock-Phanatics/Quark`): A high-performance server advertising PMMP API5 compatibility.
+  - Featured server setups (*unverified*): Lifeboat is said to be a PocketMine fork and CubeCraft Java-based, and the claim that "everything else is BDS" and the claim that the new official server is BDS-based were not confirmed.
+- **BDS itself**: It has no plugin system and runs only add-ons. A BDS wrapper (Node or Python) can read the console output and inject scriptevents. To send commands from BDS to the outside, use server-net HTTP or a log tailing helper.
+- **Friend connect**: MCXboxBroadcast (https://github.com/MCXboxBroadcast/Broadcaster, standalone jar or Geyser extension) broadcasts to Xbox and transfers players to the real server. You can also build it yourself with `bedrock-portal` and the `bedrock-protocol` npm package. For console players, friend connect is the best method (2026-05).
+- **Geyser**: As of 2026-09-25, supports Bedrock 26.30~26.51 and Java 26.2. On Spigot, put it in `plugins/` and edit `plugins/Geyser-Spigot/config.yml`. Open UDP 19132. Standalone needs Java 21 or higher and you set `bedrock.port`, `java.address` and `java.port`. With Floodgate, players join without a Java account. If Geyser is outdated, "Outdated client" appears. Fix movement and block stuck problems with the GeyserMovementFix plugin. There are experiments to run Java mods on Bedrock with a Geyser and Hydraulic-style translation layer (2026-11).
+- **Voting**: Use the API of a server list site (for example https://github.com/ItzCandra23/BedrockVote).
+- **VoiceCraft proximity voice chat** (github.com/AvionBlock/VoiceCraft): v1.1.0 (2025-12-18), v1.3.0 (2026-01-04). It was fully rewritten and has an API system. It handles 30 or more people easily and claims 500 or more before TPS drops. Mobile hosting works too.
+- **Chat bridge**: BedrockBridge (MCPEDL). Some also connect BDS and external chat services with the same Node app.
+
+## Korean server community
+
+- **Server lists**: Byulnuri (byulnuri.com, a Korean Bedrock server hosting and connection platform, about 30 players per server), Minelist and Mineplatform are used. Korean servers gather players through invitations from large communities rather than list sites. Omelet Arcade, a Korean Bedrock hosting app, has closed. "Ilseop" (a general server, from the Korean term) means a server based on Xbox Live that you join through friends or Realms-style invitations, not an IP server.
+- **Trends (*unverified*)**: There is a saying that the concurrent players of the largest Korean survival server dropped from about 400 to under 100, with the one-person operation structure and the MS login barrier named as causes.
+- **Server design cases (single report)**: Assign plots at 25-block intervals using armor stands and scoreboards and lay down structure block templates. Adjust inflation by the average balance, prevent combat logging, and use a sidebar HUD. There is also a case of analyzing Hive-style knockback through a proxy.

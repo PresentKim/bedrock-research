@@ -1,0 +1,145 @@
+---
+title: "Pattern recipes, known limits, open questions"
+description: "Common implementation patterns, a table of workarounds by limit, questions that are still unresolved"
+sidebar_position: 10
+sources:
+  - private-research
+  - bedrock-wiki
+---
+
+## How to use this page
+
+Problems with the Script API are usually (1) world changes blocked by execution permissions, (2) a mismatch between version and beta settings, or (3) the API simply not existing. This page first shows the most common mistakes in code, then gathers recipes, a "limits and workarounds" table, and unresolved questions.
+
+## The 5 most common mistakes
+
+1. Changing the world in a before event -> defer with `system.run`.
+
+```javascript
+// error: Native function [Entity::setOnFire] cannot be used in restricted execution
+world.beforeEvents.playerInteractWithBlock.subscribe((e) => { e.player.setOnFire(5); });
+// fix
+world.beforeEvents.playerInteractWithBlock.subscribe((e) => {
+  const p = e.player;
+  system.run(() => { if (p.isValid) p.setOnFire(5); });
+});
+```
+
+2. Accessing the world at module top level -> move it inside `world.afterEvents.worldLoad`.
+3. Receiving `cancel` by destructuring -> write it as `event.cancel = true`.
+4. Not writing an item back after editing it -> `container.setItem(slot, item)`.
+5. Putting the manifest's `dependencies` inside `modules`, or a wrong version -> look at the version list in the content log.
+
+```javascript
+// the correct form for item 3
+world.beforeEvents.playerBreakBlock.subscribe((event) => {
+  if (event.block.typeId === "minecraft:bedrock") event.cancel = true;
+});
+```
+
+## Basic pattern: cooldown and tick time
+
+```javascript
+const lastUse = new Map();              // playerId -> tick
+world.afterEvents.itemUse.subscribe(({ source, itemStack }) => {
+  const now = system.currentTick;
+  if (now - (lastUse.get(source.id) ?? -999) < 40) return;   // 2 second cooldown
+  lastUse.set(source.id, now);
+  source.sendMessage(`${itemStack.typeId} used`);
+});
+world.afterEvents.playerLeave.subscribe(({ playerId }) => lastUse.delete(playerId));
+```
+
+If you need to respect pausing, use `system.currentTick`, and if you need real time, use `Date.now()`.
+
+## Community notes
+
+Below are pattern recipes, a table of known limits and workarounds, and unresolved questions gathered from the community research.
+
+
+`*confirmed*`, `*single report*` and `**conflicting**` are reliability marks for reports. The basis of this page is community reports, and they may differ from the official Mojang documentation.
+
+### Pattern recipe collection
+
+- **Repetition without a command block**: Run every 24000 ticks -> `system.runInterval` or a tick.json function + a score counter. An observation that at the slowest tick speed an every-tick interval ran about once per 3 seconds.
+- **Game mode flag -> material**: Poll `player.getGameMode()` (beware the enum case) + `addTag`/`removeTag`, or use `world.afterEvents.playerGameModeChange` (misses players who are already in that mode on join), and choose the material in the RP player.json with `query.all_tags('tag')`. Filters: `world.getPlayers({gameMode: "Survival"})`, `GameMode.Creative`.
+- **Effect while holding**: Check the main hand in `runInterval(..., 20)` and then `addEffect('speed', 30, {amplifier:1, showParticles:false})`. Event style: `playerHotbarSelectedSlotChange` + `playerInventoryItemChange` (dropping from an empty slot has no slot change event, so use both) to start/`clearRun` a per-player interval, with run ids in a WeakMap. Restricting items by tag: drop/eject after an inventory change (poll for armor).
+- **Kill counter/rewards**: `entityDie` -> `damageSource.damagingEntity` -> `objective.addScore(identity, 1)` -> `killer.triggerEvent("unlock_level_up")`. Level system: defaults in `playerSpawn`, a tag -> XP lookup table, multiple level-ups with `while`. Playtime: instead of raising a score every second, store `Date.now()` on join and add up the difference on leave.
+- **Claims/plots**: Store claim boxes + a per-chunk index (world DP), cancel before `playerBreakBlock`/interact, chunk-based claims are simplest, do not log every block and use volume-based protection. Plots are laid out on a grid, stored in DPs and boundary-checked on leaving, or saved as structures. To prevent hopper duplication opposite a chest, check the `facing_direction` pairs 2-3 and 4-5 (+ toggle_bit).
+- **Custom chat/ranks/anti-spam**: Cancel beta `chatSend` + resend with formatting, anti-spam with a `player.id` Map rather than the player object, cancel only commands (`!cmd`).
+- **Custom death/join messages**: Turn off `showDeathMessages` and use `world.sendMessage` in `entityDie`, join with `playerSpawn`, leave with `playerLeave`.
+- **Experience/keep inventory**: Per-player keep inventory turns on the game rule and directly empties or drops the inventory of players without the tag (tag = exempt).
+- **Redeem codes**: Verify codes deterministically from a secret seed (FNV-1a 32bit -> xorshift32 -> character set) without storing a list, store used codes in world DPs, and give items with `container.getItem(slot).clone()` from a pre-filled chest in a ticking area chunk.
+- **Firing projectiles**: `const head = player.getHeadLocation(), v = player.getViewDirection(); const e = player.dimension.spawnEntity('ns:proj', {x: head.x+v.x, y: head.y+v.y, z: head.z+v.z}); const p = e.getComponent('projectile'); p.owner = player; p.shoot({x: v.x*1.5, y: v.y*1.5, z: v.z*1.5}, {uncertainty: 0});` - an offset along the view direction, not a fixed offset, and set owner first (to prevent self-hits). Reading owner in a deferred callback can throw, and for `behavior.ranged_attack` projectiles owner is undefined (record the shooter with a tag/DP). A snowball `runtime_identifier` projectile has no owner, so aggro and damagingEntity become the projectile -> use the arrow runtime id. Custom projectile entities are buggy, so vanilla `runtime_identifier` is recommended (it falls on shoot even if you turn off gravity). Arrow damage cannot be set directly (change the speed/definition or add damage on hit). A transformed projectile loses momentum, so store the speed and then `shoot()`. A projectile stuck after being shot into the sky does not despawn -> a `minecraft:timer` despawn event. `"minecraft:projectile": {"lightning": true}` in JSON. The original ItemStack that created the projectile cannot be obtained, so record it with a DP in `itemStartUse`. Using a script spawn and the item's `shooter` together fires two shots. A `runtime_identifier: minecraft:arrow` projectile can use the arrow pickup pattern but gets in the way of block placement and the hit size is also arrow based.
+- **Auto-kicking advertising bots**: A pack that kicks players who do not spawn within 20 seconds of joining was shared (*single report*).
+- **Blocking portals/dimensions**: Portals cannot be disabled -> remove `minecraft:portal` blocks near the player (~0.3 blocks) + revert in `playerDimensionChange` (creative moves before the event), player.json `minecraft:dimension_bound` (conflicts with other add-ons, locks both dimensions). Custom portal links use world DPs (collision-free portal blocks + a 20-tick AABB check), and the portal frame uses BFS flood fill.
+- **Entity imitation/doubles**: A mob that mirrors the player's equipment (read equipment + entity equippable - a case that fails on mobs), showing an item on a block with a dummy entity holding the item in its main hand (`/replaceitem`, entity scale also enlarges the item), a corpse as a dummy entity with the player skin, adding particles/models without editing player.json by riding an invisible parrot-family entity on the shoulder (delayed on the server), imitating custom equipment slots with an entity that teleports every tick.
+- **Floating text**: TextPrimitive (recommended) or entities (do not spawn many in one tick, spawn once and then teleport, collision issues).
+- **Block breaking (non-player)**: Compute break time from block hardness and show the cracking with a "block break progress entity" (bugs that remain with delay/loaded chunk transitions, cleaned with `/reload`). Tree felling and ore vein mining use a queue + BFS with a visited Set (`x;y;z` string keys). Vanilla-like tree felling (including durability) chop-chop. A 3x3 tool template (before event, 2.6/2.7 stable).
+- **Fandom patterns**: Dice (entity property + `playAnimation(id, {nextState})`), dash attack (timer + speed/damage/block removal + one animation), weapon jamming (firing rows in the spear, probability after a threshold, per-item `jamUntil`), Java-style weapon cooldown (script tracking + JSON UI), custom machete (`playerSwingStart` + `applyImpulse` fall/wind burst), melee knockback (`entityHitEntity` + main hand typeId + `applyKnockback`), pulling mobs (mob -> player normalized vector * force), double jump (`playerButtonInput` + tick timing + `applyImpulse`), tilling without a hoe (`minecraft:is_hoe` tag -> farmland + sound), preventing farmland trampling (a 1-tick slow fall for players on farmland; cannot stop mobs), swapping villager trades (a component group and event per trade table, reroll with `become_*` after `become_unskilled`), removing wandering trader llamas (remove `minecraft:trader_llama` in `entitySpawn`), mob evolution chains (tag in `entitySpawn` -> per-dimension `getEntities({tags})`; the opinion that a JSON `timer` is better), detecting structure pattern summons (layers must match exactly).
+- **Capture with an interaction item**: In `world.beforeEvents.playerInteractWithEntity`, if it is an empty net + a cod, replace the slot with `new ItemStack("my:fish_net")` and `remove()` the target (writes in `system.run`). Tropical fish are `minecraft:tropicalfish`, with combinations of `color`/`color2`/`variant`/`mark_variant` (3072), read the values before `system.run`, and there is no bucket event.
+- **Custom music discs**: Custom music needs script (not needed for vanilla music). The food effects were dropped from `minecraft:food` in the new format, so give effects with `onConsume`/`itemCompleteUse`. Screen overlays (the powder snow freeze effect) are impossible with script, and there is no API for underwater movement speed (speed effect/depth strider).
+- **Item icon paths**: The spear icon is `textures/items/spear/iron_spear` (singular `spear`). Build the item typeId -> texture path object yourself.
+- **Math utilities**: Integer random `Math.floor(Math.random()*(max-min+1)+min)` (the `Math.round` version is uneven at both ends), a line from A to B stepped with a normalized vector, a 3D sphere (8-way symmetric) dome, cubic Bezier x -> y with Cardano (no loop) versus bisection/Newton, magnitude `Math.hypot`. If command coordinates have no decimal point, add +0.5 to x/z. Feedback on Vec3 libraries: `isSomething()` should not throw.
+- **Single-command drop detection**: A non-player dropped item has rotation exactly 0 degrees and a player drop inherits the player's rotation -> `execute if entity @e[name=...,type=item,ry=-0.01,rym=0.01] as @a at @s positioned ^^^1 rotated as @e[...,type=item,r=3] positioned ^^^-1 if entity @s[r=0.001] run ...`.
+
+
+### Known limits and workarounds
+
+| Limit | Workaround | Source |
+|---|---|---|
+| `chatSend` is beta only | Custom commands, beta + experiment toggle; beware of overlap with other packs' handlers | |
+| Selector parameter error for non-OPs (MCPE-230568) | Take the name as a String parameter and look it up | |
+| `CommandPermissionLevel.Admin` is not possible on Realms | `GameDirectors` + origin/tag checks | |
+| No subcommands or variable string arguments | Several optional Strings, `_` separation, `!prefix` chat, separate commands | |
+| No access to mob equipment (equippable) | `replaceitem`/`testfor hasitem` + `successCount`, inventory custom entity | |
+| Cannot set player rotation | `teleport(loc, {rotation \| facingLocation})`, camera lock + input permission | |
+| Max health, scale, mark_variant and target are read-only | player.json events, health_boost, property + component group, 1.19.0 helper pack | |
+| Cannot modify block drops | Cancel breaking + `generateLootFromBlock`, replace the item entity | |
+| No events for crafting, trading, fishing, jumping, sleeping or wearing armor | Inventory diff, polling, entity JSON -> scriptevent | |
+| No block DP (before 26.50), block DP ~1 KB | `dimension:x:y:z` key world DP | |
+| DP string 32,767 bytes | Split into several keys, compression, key per record | |
+| Cannot store an ItemStack in a DP (NBT loss) | Entity inventory + structure (QIDB and so on) | |
+| Cannot access the contents of a shulker box item | Place it as a block and read it, dispenser, hidden dimension | |
+| Cannot force-open a container UI | Inventory entity/chest minecart/Chest-UI form | |
+| Cannot access blocks in unloaded chunks | Temporary ticking area (~255 chunks per pack), UnloadedUtils | |
+| Cannot cancel fire-inflicted damage or mob aggro | `extinguishFire` + restore health, attack-disable event | |
+| No client load completion event | Delay + `isValid`, movement detection, `UserBusy` retry | |
+| No right click on air (empty hand) or custom key input | Swing + temporary item, `/scriptevent` key shortcut, HUD button | |
+| `faceLocation` is wrong on some faces | EPSILON correction code, `1 - face` correction | |
+| Cannot read client settings (FOV, language, camera perspective) | `locale` (fragile), Molang animation tags | |
+| server-net is BDS only, no HTTP on Realms | WebSocket `/connect`, debugger channel (Hive Mind API) | |
+| Cannot share scripts between add-ons | scriptevent IPC (MCBE-IPC) | |
+| Several `setTitle` in the same tick are lost | One per tick queue | |
+| Cannot add elements after DDUI is shown, opening forms in succession fails | Build in advance and toggle `visible`, a delay of at least 1 tick | |
+| QuickJS performance (no JIT) | Cache, `runJob`, event driven, minimize allocations | |
+| Biome climate (precipitation, temperature) is not public | `tintedColor` cache, temperature filter entities + tags, biome table | |
+| Cannot query an entity target without beta | `on_target_acquired` + `queue_command` scriptevent, scoreboard numeric ID | |
+
+
+### Open questions
+
+- When will the non-OP permission bug (MCPE-230568) of the custom command `PlayerSelector` be fixed? What is the schedule for subcommand and rest-of-string argument support? (Mojang: the parser is fragile, undecided)
+- When does `minecraft:equippable` return to mobs (Mojang "on radar")?
+- Why does `world.beforeEvents.chatSend` stay beta (multi-add-on interference presumed), and will a stable replacement come?
+- With the `entityHurt` before event, how will the non-firing or odd behavior of the event when damage is lowered during i-frames, and the knockback and fire-infliction behavior on cancel, finally be settled?
+- The exact processing order of after-event callbacks and `runInterval` callbacks, and whether `system.run` is at the end of the current tick or the next tick.
+- When several packs set `cancel` on the same before event, is it OR or the last assignment?
+- When will `DebugText.depthTest`, TextPrimitive `depthTest` (VV) and `DebugShape.rotation` work properly?
+- The cause of teleporting to a custom dimension becoming `invalid` only from custom commands.
+- Will there be a client "fully loaded" event (or an API corresponding to `SetLocalPlayerAsInitializedPacket`)?
+- The case where `getEntities`/`getPlayers` distance queries were limited to 16 blocks, and the cause of large builds stopping with `tickingAreaManager`.
+- Whether `Observable.unsubscribe` not working and the resulting leak.
+- Whether the problem of drop events missing equipment slots on death (considered a bug) is fixed.
+- The case where `playerInteractWithBlock/Entity` before, for protecting item frames and workpieces, does not fire on frames, reading a spawner's mob type and spawn rate, armor trim detection, dynamic block tint.
+- Why `isFirstEvent`, which was used from 2025-11, is recorded as "added" in 2.8.0-beta (whether it is a re-notation in the documentation).
+- `playerSwingStart` air swings not firing on Linux/mobile (1.26.3.1 mobile), cross-platform consistency.
+- Whether `Container.addItem` returns the remaining stack or void - whether it changed by version is unconfirmed.
+- The actual usage of the `server-net` WebSocket ('not a socket' on BDS).
+- DDUI server-ui version requirements, Arabic text rendering, forcing keyboard focus in custom forms.
+- Detecting an entity inventory being opened (the claim of a `has_container_open` filter is *unverified*, and the claim that only custom UI can do it is also *unverified*).
+- When does the shulker box item `ItemInventoryComponent` actually arrive (the 26.60 changelog line was a mistake)?
+- Whether MCPE-244151 (custom dimension `localizationKey`) is fixed, the cause of the custom dimension `fillBlocks` unload error, and the custom dimension stable version (1.26.20 or ~26.30).
+- Whether an air `permutationToPlace` in `beforeOnPlayerPlace` acting like a cancel is a bug.
+- Whether `world.afterEvents.entityMount` and `Player.swing()` actually exist.
+- When virtual containers arrive in stable ("Drop 4") and whether hoppers and comparators are supported.

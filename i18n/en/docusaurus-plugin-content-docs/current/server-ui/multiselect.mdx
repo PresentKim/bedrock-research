@@ -1,0 +1,152 @@
+---
+title: The modal form multiselect row
+description: Whether the multiselect checkbox list row of a modal form (custom_form) can be used from a server, its JSON shape, the response, the vanilla UI and binary schema, measured results and per-server cautions
+sidebar_position: 3
+sources: [repo-multiselect, ms-learn, bedrock-samples, bedrock-wiki]
+---
+
+`multiselect` is one of the row types in server form JSON (`custom_form`), a multiple-choice list that shows a checkbox for each option. A dropdown picks only one, while multiselect picks several. Verification notation is `{measured}` (verified in game), `{code}` (read from a binary or type definitions), `{vanilla}` (read from the vanilla pack), and `{inferred}` (Source: repo-multiselect).
+
+## One-line conclusion
+
+It can be used from a server. But not through the Script API; only servers that send form JSON directly (the Dragonfly, PocketMine and Nukkit families, and proxies) can do it. If you put `{"type":"multiselect","text":...,"options":[...],"default":[index...]}` in `content`, a 1.26.52 client draws it as a checkbox list and returns an array of the chosen indexes (`[0,2]`) at that position in the response array. If nothing is chosen, it is `null`, not `[]`.
+
+## 1. Conclusion table
+
+| Question | Answer | Basis |
+| --- | --- | --- |
+| Does the client draw it | Yes. `text` becomes the header button text, and pressing it expands the checkbox list | `{measured}` |
+| Response format | An array of the chosen option indexes (from 0). `null` if none is chosen. The measurements always picked from the top in order, so they could not tell whether the array is in index order or click order | `{measured}` |
+| Default selection | `"default": [0,2]` (a singular key like a dropdown, with an array of indexes as the value) pre-checks them. `"defaults"` is ignored | `{measured}` |
+| Option count | Even 25 are all drawn and scroll (`[[0,24]]`). The 20-item limit does not exist in this version | `{measured}` |
+| Several in one form | Works. The response is `[null,[2]]` in row order | `{measured}` |
+| Mixing with other rows | Works. The position follows the `content` order (`[true,null,1,null]`) | `{measured}` |
+| Script API | None. Neither `ModalFormData` nor the new `CustomForm` (DDUI) has multiselect | `{code}` |
+| Dragonfly `form.Custom` | Cannot be added. `form.Element` requires a private method. Send a raw packet and read the response yourself | `{code}` |
+| Resource pack | Vanilla 1.26.50 `server_form.json` puts `"multiselect": "@server_form.custom_multiselect"` in the `custom_form` factory | `{vanilla}` |
+
+## 2. Row JSON shape
+
+| Key | Value | Required | Measured |
+| --- | --- | --- | --- |
+| `type` | `"multiselect"` | Yes | Drawn |
+| `text` | String. In the 1.26.50 vanilla UI it is used for the header button | Yes | Drawn |
+| `options` | String array. One checkbox per entry | Yes | 3, 4 and 25 drawn |
+| `default` | Integer array (option indexes counted from 0). It opens with these indexes on. If omitted, all are off | No | Confirmed (MS2) |
+| `tooltip` | String | No | No error, screen not checked |
+| `defaults` | Name in the binary schema | - | Ignored (MS1). Do not use |
+
+This is an example settings form mixed with other rows. It is not exactly what was sent to the test server; the measured behaviors are gathered into one form.
+
+```json
+{
+  "type": "custom_form",
+  "title": "Notification settings",
+  "content": [
+    { "type": "toggle", "text": "Receive notifications", "default": true },
+    {
+      "type": "multiselect",
+      "text": "Notifications to receive",
+      "options": ["Chat", "Trade", "Friend request", "Event"],
+      "default": [0, 2]
+    },
+    { "type": "dropdown", "text": "Language", "options": ["Korean", "English"], "default": 0 },
+    { "type": "label", "text": "Choose, then press Submit" }
+  ]
+}
+```
+
+The received value is an array with one position per `content` row. The label position is `null`.
+
+| What the player did | `ResponseData` | Basis |
+| --- | --- | --- |
+| Submit without changing anything | `[true,[0,2],0,null]` | The default checks come back as they are |
+| Leave only "Trade" and submit | `[true,[1],0,null]` | Only the chosen indexes come back |
+| Turn off all notifications to receive and submit | `[true,null,0,null]` | An empty selection is `null`, not `[]` |
+
+If the window is closed, `CancelReason` arrives without `ResponseData` (the same packet rule as other modal forms; not checked separately with a multiselect form). The trailing newline of the response is stripped before parsing.
+
+## 3. Vanilla UI
+
+- The `generated_contents` factory (collection `custom_form`) in 1.26.50.4 `server_form.json` links `multiselect` to `custom_multiselect`.
+- `custom_multiselect` is a vertical stack. The header is a dropdown-shaped toggle button (`settings_common.options_dropdown_toggle_control`, state binding `#custom_multiselect`, text `#custom_text`). The body is a stack that takes `#custom_multiselect` as `#visible`, and inside it is a checkbox factory (collection `custom_multiselect`, length `#custom_multiselect_length`).
+- The checkbox (`custom_multiselect_checkbox`) uses state `#custom_multiselect_toggled`, text `#custom_multiselect_text` and `collection_details`, and it is not a radio because of `$radio_toggle_group: false`.
+- Unlike a dropdown, 1.26.50 has no label above. In the mixed form measurement, the dropdown showed `text` in the upper label and the chosen option on the button, while multiselect showed only `text` on the button.
+- **Changes in the 1.26.60.29 Preview**: `custom_multiselect` inherits `settings_common.option_generic`, so it gets an upper label (`#custom_text`) and a tooltip (`#custom_tooltip_text`), and the header button text becomes the new binding `#multiselect_option_text`. A client of this version was not measured.
+- The binding names are not in the binary as strings (they seem to be stored as hashes). The binding side was not found in the binary (Source: bedrock-samples 1.26.50.4 and Preview 1.26.60.29, facts only).
+
+## 4. Not in the Script API
+
+I downloaded the `@minecraft/server-ui` type definitions from npm and searched them. The string `multiselect` never appears.
+
+| Version | `ModalFormData` methods | `CustomForm` (DDUI) methods |
+| --- | --- | --- |
+| 2.4.0-beta.1.26.60-preview.30 | divider, dropdown, header, label, slider, submitButton, textField, title, toggle | button, closeButton, divider, dropdown, header, image, label, multiButtonRow, slider, spacer, textField, toggle |
+| 2.4.0-rc.1.26.70-preview.21, 2.5.0-beta.1.26.70-preview.21 | Same | Same |
+
+The MS Learn module documentation (`a9fd1c0`, up to 2.5.0-beta.1.26.70-preview.24) and its changelog also have no multiselect. The changelog added only things such as `multiButtonRow`, `image` and `button1~3WithOptions`. You cannot make a multiselect form from a BDS script pack. If a script pack needs multiple selection, substitute several `ModalFormData` toggles.
+
+```js
+// alternative: one toggle per option
+const opts = ["Chat", "Trade", "Friend request", "Event"];
+const f = new ModalFormData().title("Notification settings");
+opts.forEach((o, i) => f.toggle(o, { defaultValue: i === 0 || i === 2 }));
+f.show(player).then((r) => {
+  if (r.canceled) return;
+  const picked = opts.filter((_, i) => r.formValues[i]);
+});
+```
+
+## 5. Client binary (`NB-16`, Android 1.26.52.3)
+
+- The client has a schema for server form JSON (a cereal schema with description strings). In the row type schema, the values of `type` ("Type of control used") are nine: `label`, `toggle`, `slider`, `step_slider`, `dropdown`, `multiselect`, `input`, `header`, `divider`.
+- Six of the per-row-type schemas have `tooltip`. One of them has `options` (string array), `defaults` (integer array) and `tooltip`, and the dropdown schema has `default` (integer), `options` and `tooltip`. Only these two lack `control_locked`.
+- **The schema and the actual parsing differ**: The schema says `defaults`, but in the measurement `defaults` was ignored and the checks went in only when the number array was given under the singular `default`. The schema appears to be for documentation and validation, with the actual parsing done by another path `{inferred}`.
+- In the executable, the word `multiselect` appears in only one place, this schema (the rest is on the pack manifest setting `MultiSelectSetting` side). This is Mojang's private binary read for personal reference, so only the behavior is written.
+
+## 6. Measurements
+
+**Method.** The client was Windows 1.26.52 (`Microsoft.MinecraftUWP 1.26.5203.0`) with no server resource pack (vanilla UI). The server was a Dragonfly patched build with authentication off (port 19140), writing `ModalFormRequest` raw and intercepting `ModalFormResponse` before Dragonfly to record it as is. The `/ms <n>` command sent the variants below. The test code is Go and depends on a private module, so the module path must be changed elsewhere.
+
+| Form | Row sent | What was done | Response |
+| --- | --- | --- | --- |
+| MS1 | `options:["A","B","C"], defaults:[0,2]` | Expanded and everything was off, sent as is | `[null]` |
+| MS0 | `options:["A","B","C"]` | Checked A and C | `[[0,2]]` |
+| MS2 | `options:["A","B","C"], default:[0,2]` | A and C were already on, sent as is | `[[0,2]]` |
+| MS1 again | MS1 above | Everything off regardless of the previous form (the state did not persist) | `[null]` |
+| MS3 | toggle (default true), multiselect (`defaults:[1]`, `tooltip`), dropdown (default 1), label | Sent without touching | `[true,null,1,null]` |
+| MS4 | 25 `options` | Checked o1 and o25 (scrolled down with the scrollbar) | `[[0,24]]` |
+| MS6 | Two multiselects | Checked E (index 2) of the second | `[null,[2]]` |
+
+These are the lines exactly as exchanged (only line breaks removed).
+
+```text
+SEND     {"type":"custom_form","title":"MS0 options only","content":[{"type":"multiselect","text":"pick","options":["A","B","C"]}]}
+RESPONSE [[0,2]]            <- A and C checked
+
+SEND     {"type":"custom_form","title":"MS2 default [0,2]","content":[{"type":"multiselect","text":"pick","options":["A","B","C"],"default":[0,2]}]}
+RESPONSE [[0,2]]            <- A and C were on from the moment it opened and were sent as is
+
+SEND     {"type":"custom_form","title":"MS1 defaults [0,2]","content":[{"type":"multiselect","text":"pick","options":["A","B","C"],"defaults":[0,2]}]}
+RESPONSE [null]             <- opened with everything off (defaults ignored)
+
+SEND     {"type":"custom_form","title":"MS6 two","content":[{"type":"multiselect","text":"first","options":["A","B"],"defaults":[0]},{"type":"multiselect","text":"second","options":["C","D","E"],"defaults":[2]}]}
+RESPONSE [null,[2]]         <- only E of the second checked
+```
+
+- When MS3 was first sent, it was `[false,null,1,null]`. The toggle on screen was actually off at that time, and when sent again it came back as `true` with it on. I judged that automated input had touched the toggle and that it is unrelated to multiselect `{inferred}`.
+- Pressing the header button expands the list and pressing again collapses it. I did not check whether the checks remain after collapsing. I also did not check how `tooltip` looks on screen.
+
+## 7. Rules for using it on a server
+
+1. **JSON**: Write it in the shape of section 2. The default check is `default` (an array of indexes).
+2. **Response validation**: The value at that position is `null` or an integer array. Convert `null` into an empty selection, and have the server check that the indexes are within the option range and have no duplicates (do not trust the client response). Do not rely on order; sort before use.
+3. **Dragonfly**: It cannot go in `form.Custom`. Send a raw `packet.ModalFormRequest`, and since it is not a form Dragonfly sent, intercept `ModalFormResponse` before Dragonfly handles it and read it directly. The test code used `WritePacket` and `OnClientPacket` of the packet hook.
+4. **PocketMine and Nukkit families**: They serialize the form to JSON, so you only need to add one more element class. But if the form library validates response values per element type, it must be fixed to accept `null` and arrays (not checked per library).
+5. **Client version**: Checked only on 1.26.50 and above, where `multiselect` entered the vanilla UI. Older clients lack this type in the factory. From the engine error text `FactoryComponent::create - {} was not found in the control_id list!`, it seems only that row would be dropped, but this was not checked `{inferred}`. I also do not know how the value at that position arrives in the response array. A server that accepts mixed versions decides whether to send based on the connected client's version.
+6. **Server resource pack**: A pack that replaces the modal form `generated_contents` factory with its own must put `multiselect` in `control_ids` for it to be drawn. If you use the vanilla UI as is, there is nothing to worry about.
+7. **After 1.26.60**: Preview vanilla is changing multiselect into a label + summary button shape. A pack that redraws this row should be checked again when the version changes.
+
+## 8. Do not confuse it with the multiselect in pack settings
+
+The pack settings (`settings`) of `manifest.json` 3.0.0 also have a `multiselect` type (`MultiSelectSetting`, Molang `query.is_pack_setting_selected`). The community report saying "it behaves like a dropdown" is about this pack setting. It is a different feature from the server form's multiselect, and check text in the binary such as `multiselect {} default value {} is not in options` is also on the pack manifest check side. Pack settings are covered in [pack manifest](../basics/manifest.mdx).

@@ -1,0 +1,113 @@
+---
+title: When JSON UI does not fit
+description: Options outside JSON UI such as particle glyphs and Ore UI screens (ALT-01~16).
+sidebar_position: 12
+sources:
+  - repo-guide
+  - repo-bedrock-core
+  - private-research
+  - advancementpack
+  - repo-damage-indicator
+  - ore-ui-customizer-app
+  - repo-ore-ui-loading
+  - repo-survey
+
+---
+
+## Concept: the limits of JSON UI and alternatives
+
+JSON UI is a tool for 2D displays fixed to screen coordinates and for menus. It cannot draw displays that follow a position in the world (a number above a head), it cannot read script state directly (it has to be carried as a string), and it conflicts with other add-ons because they share vanilla files and the title channel. So for display only, a method that does not touch UI files, such as particles, is better. Meanwhile, Mojang is moving screens to Ore UI, which is based on web technology, so it matters to know which screens are still JSON UI and what the narrow routes are by which a pack reaches Ore UI.
+
+A minimal example of drawing numbers with particles (the DI method): one digit glyph atlas and a particle component that picks `uv` with a single variable.
+
+```jsonc
+"minecraft:particle_appearance_billboard": {
+  "size": [ 0.2, 0.2 ], "facing_camera_mode": "lookat_xyz",
+  "uv": { "texture_width": 1024, "texture_height": 64,
+          "uv": [ "variable.glyph * 64", 0 ], "uv_size": [ 64, 64 ] } }
+```
+
+The script puts `variable.glyph` and `variable.tint` into a `MolangVariableMap` for each character and spawns it with `spawnParticle`. This example is a reduction of the structure of ALT-03~ALT-07 and was not run again in game. (Source: repo-guide)
+
+
+
+JSON UI is for 2D displays and menus fixed to **screen coordinates**. For things that need only display with no interaction, or that must follow world space, other means are better. The evidence for this chapter is the Premium Damage Indicator (DI), which shows damage numbers without using JSON UI at all, and the 8Crafter Ore UI Customizer (OUC), which fixes Ore UI screens by patching game files.
+
+## 12.1 Decision criteria
+
+| What you need | JSON UI | Particles (the DI method) |
+| --- | --- | --- |
+| Follows an entity or block position | Cannot (screen coordinates only) | Can |
+| Click, focus, scroll | Can | Cannot |
+| Conflicts with other add-ons | Arise from sharing the title, forms and vanilla files | None (not a shared slot) |
+| Number shown at once | One per channel (several for chat) | No limit |
+| Passing numbers | Needs string encoding | Directly as numbers through `MolangVariableMap` |
+| For one player only | Forms and titles are per player by nature | `Player.spawnParticle` |
+| Occlusion | Always on top | Can be hidden behind blocks and entities [inferred] |
+
+- **[ALT-01]** Displays that must follow a 3D position (a number above a head, a hit indicator) cannot be built with JSON UI. Use particles or entities. `{code, inferred}` (Source: DI chapters 0, 5 and 6-1)
+- **[ALT-02]** For display only, a method that does not touch vanilla UI files wins on compatibility. Choose a JSON UI reskin when interaction is needed. `{inferred}` (Source: DI 6-8, BA 6, AP 5)
+
+## 12.2 Particle glyph technique
+
+- **[ALT-03]** Numbers are drawn with a **glyph atlas**: put square cells in one horizontal row (DI: 1024x64, 12 of 16 cells of 64px for `0-9 - .`) and draw the characters in **white**. Give the particle's `uv` as `["variable.glyph * 64", 0]` and `uv_size [64, 64]` and one variable picks the character. The color is applied by tint, so one texture produces several colors. `{code}` (Source: DI 4.1 and 4.2)
+- **[ALT-04]** The script's `MolangVariableMap.setColorRGBA("variable.tint", c)` expands into the four values `variable.tint.r/.g/.b/.a`. In a tint gradient, giving RGB as variables and only alpha as keyframes separates color and fade. `{code}` (Source: DI 4.2 and 4.3)
+- **[ALT-05]** For translucency use `material: particles_blend`, for cutout `particles_alpha`. `{code}` (Source: DI 4.3)
+- **[ALT-06]** If it should be seen by only one player, use `Player.spawnParticle` (to the attacker only), and for everyone nearby `Dimension.spawnParticle`. `{code, inferred}` (Source: DI 4.6)
+- **[ALT-07]** For multi-character strings, push by `(i - (n-1)/2) x spacing` along the camera-relative right vector `right = (-view.z, 0, view.x)` to center them, and set the particle to `facing_camera_mode: lookat_xyz`. To avoid overlap on rapid hits, pick the candidate position farthest from recent positions. `{code}` (Source: DI 4.5)
+- **[ALT-08]** One particle is created per character, so with many targets, such as an area attack, the count grows fast. `{inferred}` (Source: DI chapter 7)
+
+## 12.3 Ideas shared with JSON UI
+
+- **[ALT-09]** The same idea, "on a surface that cannot draw text directly, **pick glyphs with a numeric code**", exists in two places: particles (variable -> UV cell) and chest slots (stack count -> lang key -> character, TXT-12). Both use a fixed character table and discard characters outside it. `{code}` (Source: DI 5.1, BC 4.3-(3))
+- **[ALT-10]** "The shape is fixed and only values change": both the particle definition and compiled JSON UI are static and the runtime sends only values. If you keep layout calculation as a pure function separate from the game API, you can share the same code with a web preview or editor (`tabLayout.js` of BA). `{code}` (Source: DI 5.1, BC chapters 1 and 3.2, BA chapter 1)
+
+## 12.4 Ore UI screens
+
+Ore UI is the web-technology-based UI with which Mojang is replacing JSON UI. For a resource pack author, what matters is knowing "what a pack cannot do" and "where the narrow routes a pack reaches are". The evidence is the code of a tool (OUC) that patches the Ore UI bundle with regular expressions, and a survey (OL) that read the engine's Ore UI loading path from the binary and measured it with a server pack.
+
+| What you want to change | With a resource pack |
+| --- | --- |
+| The layout, behavior and CSS of Ore UI screens (plaintext pack) | Not possible (ALT-11) |
+| The HTML, JS and CSS of in-game Ore UI screens (a local pack with an empty `content.zipe` in its root, or a pack the server sends encrypted) | Possible, measured (ALT-11) |
+| The background texture, text color and border color of in-game Ore UI buttons | Possible, measured (ALT-15) |
+| Game textures that Ore UI uses through `pack://` | Possible, measured (ALT-12) |
+| The Ore UI bundle's own images and fonts | Not possible (ALT-12) |
+| DDUI screen layouts (`ddui/root`) | Not possible for now, only built-in packs are read (ALT-16) |
+| Screens where JSON UI and Ore UI coexist | Visible only when the JSON UI side is chosen (ALT-13) |
+
+- **[ALT-11]** Ore UI screens are bundles of minified JS, CSS and HTML with hashes in the install folder `data/gui/dist/hbui/`. When the engine looks for an Ore UI file (`ui://…`), it looks at the pack stack before the install folder, but only at trusted packs (`isTrusted`). Trust is decided by the access strategy that opens the pack, and neither the UUID nor a marketplace signature is looked at. With plaintext packs (Zip and Directory strategies) only built-in packs in the install folder are trusted, so ordinary resource packs and plaintext server packs cannot change layout, behavior or CSS. The three encrypted pack strategies are always trusted, so the `hbui/<file>` of a pack opened with that strategy changes the HTML, JS and CSS of the in-game Ore UI pages (`gameplay.html`: death, bed, inventory, DDUI, trade and block screens). There are two ways to open it that way. **(1) Without a server: if you put a 0-byte empty file `content.zipe` in the root of a local resource pack folder**, the engine opens that pack with `DirectoryPackWithEncryptionAccessStrategy`. The engine only checks whether this file exists, and reads the plaintext files of the pack folder as they are without a key. When importing as a `.mcpack`, `manifest.json` and `content.zipe` must be directly at the top of the zip (one level deeper and the import fails with no message). A pack that carries the same fake encryption header in `contents.json` does not change. **(2) A pack the server encrypts with any 32-byte content key and sends with the key** (measured that sending the same pack as plaintext does not change anything). The JS of this page can read and write the vanilla DDUI data store, build a screen drawn according to the layout the server sent, and get presses and input back (OL chapters 3 and 6~9). The changed `gameplay.html` contains the hashed file names of the vanilla bundle, so match them to the install at every game update. A tool that patches the client install folder directly (OUC) applies only to that client and must be reapplied at every update. `{code, measured}` (Source: OUC chapters 2 and 3, OL chapters 3, 6, 7, 8 and 9)
+- **[ALT-12]** When Ore UI uses game textures, it requests them with `pack://textures/…png` URLs, and this path resolves even for textures of an untrusted server pack (measured with button textures). So a resource pack that changes textures should also be reflected in Ore UI's item and block icons (the icons themselves were not checked separately). The bundle's own images (`/hbui/assets/`) and fonts (`gui/dist/hbui/fonts`) are read from the install folder and are not changed by packs. `{code, measured, inferred}` (Source: OUC chapters 3 and 4.6, OL chapters 4 and 6)
+- **[ALT-13]** There is a facet `vanilla.screenTechStack` (`getTechStackForScreen`, `getPreferredTechStackForScreen`, `selectTechStackForScreen`) that chooses per screen whether to use JSON UI or Ore UI. For a screen where both implementations coexist, JSON UI modifications are assumed to show only when the JSON UI side is chosen, and if a modification does not show, first check which side that screen opened with. `{code, inferred}` (Source: OUC chapter 0)
+- **[ALT-14]** The data channel of Ore UI is a facet, not a binding (`engine.trigger("facet:request", name)` -> `facet:updated:<name>`). The existence of `vanilla.gameplay.*` facets for in-game screens (furnace progress, container items and size, death info, respawn, bed, coordinate HUD, etc.) is a signal that those screens are moving to Ore UI or have moved. Reskinning such a screen with JSON UI should account for the risk of migration. `{code, inferred}` (Source: OUC chapter 3)
+- **[ALT-15]** The engine resolves two JSON UI definitions from the pack stack and passes them through the facet `vanilla.resourcePackOverrides` to the in-game Ore UI (the whole `gameplay.html`: death, bed, inventory, DDUI, trade and so on). From the child controls `default`, `hover`, `pressed` and `locked` of `common_buttons.light_text_button` it takes `$new_ui_button_texture` (background, including the nine-slice), `$text_color` (text color) and `$border_color` (border color), and from `common_buttons.focus_border` it takes `texture`, and applies them to the default, hover/focus, pressed/selected and disabled states of primary and secondary buttons. So a pack that changes `$light_button_*_text_color` in `_global_variables.json` or `textures/ui/button_borderless_light*.png` also changes the Ore UI death screen buttons (measured with a server pack). No other definitions or properties are passed, and the out-of-game menu bundle does not use this facet. `{code, measured}` (Source: OL chapters 4 and 6)
+- **[ALT-16]** DDUI layouts (`ddui/root/*.json` = `minecraft:ui-root`, `ddui/composition` = `minecraft:ui-composition`) are read from resource pack folders, but the engine reads only packs marked as game built-in (first-party) packs (the same flag as the POI's `minecraft:` namespace allowance check). Even if you put `ddui/root/custom_form.json` in a user or server pack, it will probably not be used. JS already handles layouts from a non-vanilla source pack (`isCreatorDataDriven`, only its own pack's images allowed), so it is a route that would open if the engine check were lifted. `{code, inferred}` (Source: OL chapter 5)
+
+The answer to the request "please change Ore UI screens with a resource pack too" is: "If you put an empty `content.zipe` in the pack root or the server sends an encrypted pack, you can change the layout and behavior of in-game Ore UI screens (ALT-11), and with a plaintext pack only the look of in-game Ore UI buttons and game textures change (ALT-12, ALT-15)". Opening real containers (chest, furnace, inventory) with Ore UI, the vanilla DDUI layouts (ALT-16) and the HUD are not reached even with an encrypted pack.
+
+### ALT-11 supplement: details of changing Ore UI files with an encrypted pack
+
+Below are the measured details of the Ore UI loading survey (OL) that ALT-11 relies on. The levels are `measured` and `code`.
+
+- When Ore UI looks for a file (`/hbui/…`), it looks at the pack stack before the install folder but only at trusted packs. The location inside the pack is `hbui/<file>`. There is no need to put copies in the pack root or in `gui/dist/hbui/` (placing it only in `hbui/` was enough for it to change, measured 2026-10-24).
+- When the server sends it, it encrypts the pack with any 32-byte key and sends it with that key (the content key in `ResourcePacksInfo`, gophertunnel `pack.WithContentKey`). The marketplace format is as follows. `contents.json` has version 0 at bytes 0~3, the magic number `0x9BCFB9FC` (little endian) at bytes 4~7, the pack UUID length and string at 0x10, and from 0x100 the file list JSON (`{"content":[{"path","key"}]}`) encrypted with the content key using AES-256-CFB8 (the IV is the first 16 bytes of the key). `manifest.json` and `pack_icon.png` stay as plaintext, and every other file is encrypted per file with a random 32-byte key in the same way.
+- When you edit pack files, raise the pack version. With the same UUID and version, the client uses what it already received.
+- The in-game Ore UI (death, bed, inventory, DDUI, trade, block screens) is the single `gameplay.html`. To change it, copy the vanilla HTML and add two tags. The vanilla React app renders into `#root` as it is and the pack's JS attaches separately to `body`. The hashes in the bundle file names change at every game update, so look at the install folder `data/gui/dist/hbui/gameplay.html` and match them. If they are wrong, the whole in-game Ore UI does not appear.
+
+```html
+<script defer="defer" src="/hbui/gameplay-100751586307248a0527.js"></script>
+<link href="/hbui/gameplay-26927106c1834224ebc7.css" rel="stylesheet">
+<link href="/hbui/menus-theme-b1a483c329eea7188853.css" rel="stylesheet">
+<link href="/hbui/gameplay-theme-cb1e5471975ef2c1abb9.css" rel="stylesheet">
+<link href="/hbui/oui-ddui.css" rel="stylesheet">
+<script defer="defer" src="/hbui/oui-ddui.js"></script>
+```
+
+- What works this way (measured): drawing screens from server data and real-time updates at 4Hz or more, getting buttons, toggles, sliders, text input and selections back at the server, a 200-item grid and tab switching, item and block icons drawn by the engine, and `pack://<path>.png` pack textures. What does not work: opening a real chest, furnace or inventory with Ore UI (the client developer option is needed), changing the vanilla DDUI layout (`ddui/root`) with a pack, and shift click, cursor item and drag on a screen imitating a container. The out-of-game menu was not tested.
+
+## Proposals (not applied)
+
+The following are rule proposals from the additional material survey. They are numbered in the merge report but have not yet been reflected in the rulebook in the body above. The numbers are the final IDs in the merge report, and the strength of evidence follows the verification level of the original proposal. Check before using them.
+
+- **[ALT-15 proposal (not applied)]** If you put `query.is_in_ui` in an entity render controller condition, extra geometry is drawn only inside UI player renderers (`live_player_renderer`, etc.). Using `query.camera_rotation` for bone rotation makes a 3D display (coordinate axes) on the HUD that turns following the camera. The number overlaps with ALT-15 in the body (`vanilla.resourcePackOverrides`), so it will be reassigned at merge. `{working pack, unverified}` (Source: small-packs)
+- **[ALT chapter premise reinforcement proposal (decision not to apply)]** The "ALT chapter premise" based on Feedback request posts was weakened as evidence that a feature does not exist, because user request posts are weak evidence, so the merge report decided not to reflect it. The existing ALT rules already reach the same conclusion.

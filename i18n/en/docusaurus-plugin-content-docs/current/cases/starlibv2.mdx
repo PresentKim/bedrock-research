@@ -1,0 +1,103 @@
+---
+title: "StarLibV2 (a server form JSON UI template library)"
+description: "An action form library that builds 2D layouts from button string keys. Key gate parts, runtime format strings, a client search filter, and duplicate sibling names"
+sidebar_position: 15
+sources:
+  - starlibv2
+  - repo-guide
+---
+
+## What it is
+
+StarLibV2 is a collection of server action form (`form_buttons`) templates made by pipa_ngry (`pipangry`). It does not override `server_form.json` itself; the user builds screens by referencing the `global.*`, `style.*`, and `starlib_pkg_*` definitions from their own `server_form.json`. `_ui_defs.json` registers 14 `.jsonc` files (about 2,700 lines) as `ui/starlib2/*.jsonc`. The last commit is `6bf7875` (2025-04-30, 1.0.3.3 sibling name conflict fix), and the previous release is v1.0.3.2 on 2024-11-27. It is a library with no manifest, so the target version is not stated. The license, confirmed by opening the clone's `LICENSE`, is **GPL-3.0** (Source: cs-starlibv2). The license is shown in the header of each excerpt. The same author's JsonEncryptor (an obfuscator) and GrimUI (a paid pack showcase) are related.
+
+## Basic parts: key gates
+
+The library runs on four kinds of "gate panels". All take a `$key` string and decide `#visible` and `#enabled` together with a contains check (EXP-07).
+
+| Part | Value read | Visible when |
+| --- | --- | --- |
+| `binding` | Collection `#form_button_text` | The key is present |
+| `reverse_binding` | Collection `#form_button_text` | The key is absent |
+| `title_binding` | Global `#title_text` | The title has the key |
+| `reverse_title_binding` | Global `#title_text` | The title does not have the key |
+
+<Excerpt src="starlibv2" title="StarLibV2, global.jsonc (binding)" path="starlib2/global.jsonc">
+
+```jsonc
+"binding": {
+    "type": "panel",
+    "$key|default": "",
+    "visible": false,
+    "enabled": false,
+    "bindings": [
+        { "binding_collection_name": "form_buttons", "binding_name": "#form_button_text", "binding_type": "collection" },
+        { "binding_type": "view",
+          "source_property_name": "(not((#form_button_text - $key) = #form_button_text))",
+          "target_property_name": "#visible" },
+        { "binding_type": "view",
+          "source_property_name": "(not((#form_button_text - $key) = #form_button_text))",
+          "target_property_name": "#enabled" }
+    ],
+    "$control|default": "global.empty_panel",
+    "controls": [ { "control@$control": {} } ]
+}
+```
+
+</Excerpt>
+
+`$key` is substituted as is inside the binding expression because this is a definition in its own namespace and so meets the BND-12 condition. The same approach is blocked in a subtree inserted into the vanilla tree with `modifications` (BND-13). Lowering `#enabled` as well seems intended to keep a hidden button from receiving focus and input.
+
+## Screen skeleton
+
+The screen template places the form inside a `100%cm` size panel and overlays a border image at `100%sm + 2px`. A slot that takes `controls` wholesale as a variable (`"controls": "$forms_holder_controls"`) puts several forms in one screen (FILE-14). The close button is `$pressed_button_name: "button.menu_exit"`, the tabs are radio toggles wrapping the vanilla `common_toggles.light_text_toggle`, and the tab content reads the `#toggle_state` of that toggle with `source_control_name` (INP-19, PAT-07).
+
+## Key techniques
+
+### 1. A 2D layout built from keys
+
+Even if the server sends only an ordinary list of buttons, the layout is built from the keys in the button string.
+
+- **Horizontal position**: one item is a horizontal stack `[left spacer][button (fill)][right spacer]`. The two spacers are `binding` gates, so they are visible only when the string has a key such as "left 1/3" or "right 1/2". Hidden children take no space in a stack (LAY-04), so without a key the button is full width, and with one it is pushed and uses only the remaining width. There are 33.3%, 50%, and a user size.
+- **Turning off height ("no height")**: the item's picture is inside a zero-height buffer panel (`size: ["100%", 0]`), and the sizer that actually makes the item's height is a `reverse_binding`, so it hides when the "no height" key is present. Then the next item is drawn overlapping on the same line.
+- Result: giving button A "right 1/2 spacer + no height" and button B "left 1/2 spacer" draws A in the left half and B in the right half on the same line, and the `selection` number is unchanged. The sizer's `controls` is also a variable slot, so the height is decided as the sum of spacers of fixed heights per size key turned on and off (a variation of PAT-06, GrimUI's `size3`, `size16`, `size24`, `size64`). Some parts such as dividers and tips cannot be used with "no height", and overlapping items need horizontal spacers so their pressed areas do not overlap (proposed PAT-13).
+
+### 2. Taking a range with a runtime format string
+
+`range_selection_binding` takes `$from` and `$to` (byte positions), subtracts the first `$from` bytes from the first `$to` bytes, and removes tab characters. The real expression in the clone is as follows.
+
+<Excerpt src="starlibv2" title="StarLibV2, common_button.jsonc" path="starlib2/package_button/common_button.jsonc">
+
+```jsonc
+"source_property_name": "(((('%.' + $to + 's') * #form_button_text) - (('%.' + $from + 's') * #form_button_text)) - '\t')"
+```
+
+</Excerpt>
+
+`$from` and `$to` are substituted with numbers at creation time and the format string is assembled inside the expression (AsaJS has the same form). Using a **tab as the padding character** is a choice to avoid EXP-12 (subtraction erases every occurrence) and is an alternative to `$` padding (HOST-08) (proposed EXP-40, HOST-08 supplement). The step 2 subtraction also erases the head string if it appears again in the body, but with fixed-width records this is rarely a real problem. GrimUI uses this method to carry five ranges in one button: "default text", "side text", "title", "background text", and "tip".
+
+### 3. A client search filter
+
+The search box inherits `common.text_edit_box` and gives `$text_box_name` and `$text_edit_text_control` the same name (default `search_field`). The vanilla input template puts `"#property_field": "#item_name"` (11 times in vanilla) in `property_bag` so the typed text is written to its own `#item_name`. The buttons read that value with `source_control_name` and show if `(#search = '')` or `#form_button_text` contains `#search`. It is a client filter with no server round trip, and the initial value is copied once from `#default_search` in `property_bag` with a `binding_condition: "once"` view. Hidden items give up space in a vertical stack so the list shrinks, and in a grid template empty cells remain (LAY-31). The behavior itself was not confirmed in game (proposed INP-25).
+
+### 4. No duplicate sibling names
+
+Commit `6bf7875` of 1.0.3.3 renamed the second `padding` and `header_contents` in the same `controls` array at seven places in two files to `padding_top`/`padding_bottom`, `auto_padding_*`, and `right_header_contents`, and the change note is "JSON UI error fix in the new version". The `controls` arrays of vanilla 1.26.50.4 have no duplicate sibling names at all (5,084 in the merge record's recount, 4,626 in the first count), so the same name is likely to cause an error (proposed FILE-39).
+
+### 5. `#form_button_length`
+
+The button factory uses `{ "binding_name": "#form_button_length", "binding_name_override": "#collection_length" }` and the grid puts the same value into `#maximum_grid_items`. Vanilla 1.26.50 does not use this name. The research server measurement showed that the client holds this value at the button count of the largest form seen so far (COL-34, supplementing the level of proposed COL-31 `{working pack, unverified}`).
+
+## Relation to our rules
+
+| Rule ID | Relation |
+| --- | --- |
+| EXP-07, EXP-12, HOST-08, HOST-09 | Contains-check gates, tab padding, extending position-independent keys to layout parameters |
+| BND-12, BND-13 | `$key` substitution works in a definition in its own namespace but not in an inserted tree |
+| LAY-04, LAY-31, PAT-06 | Hidden children take no space, empty grid cells, summing spacers |
+| FILE-02, FILE-14, FILE-26, FILE-39 (proposed) | `.jsonc` registration, control slot variables, the risk of a generic namespace, sibling names |
+| INP-19, INP-25 (proposed), COL-31 (proposed), PAT-13 (proposed) | Reading toggle state, search filter, button count, key-based 2D layout |
+
+## Items that need measurement
+
+What the Content Log records when same-name siblings are present and whether both are created, whether `#form_button_length` includes label, header, and divider rows, whether `#item_name` updates on every typed character and whether it is cleared when the form is reopened, and whether a button that overflows outside a zero-height panel can be pressed.

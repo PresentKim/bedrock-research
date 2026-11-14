@@ -1,0 +1,128 @@
+---
+title: "Module versions, beta, and changes by version"
+description: "@minecraft/server version rules, beta dependencies, experiment toggles, a table of changes by release"
+sidebar_position: 2
+sources:
+  - private-research
+  - ms-learn
+---
+
+## Version scheme
+
+All script modules use semantic versions (major.minor.patch with an optional suffix). This number is separate from the Minecraft product version (for example `1.19.60`) and goes up when the API surface changes. Modules come in three tracks (Source: ms-learn, `creator/Documents/scripting/versioning.md`).
+
+| Track | Example | Rule |
+|---|---|---|
+| stable | `1.1.0` | A finished API. Within the same major, minor and patch are backward compatible. A dependency of `1.3.0` must work even if `1.8.0` fills it in |
+| beta | `1.3.0-beta` | No compatibility guarantee. Properties and methods can disappear even on a minor bump, and the beta number goes up with each release. The "Beta APIs" experiment must be turned on in the world |
+| internal | `1.4.0-internal` | Does not work in custom packs and has no support |
+
+Use stable where possible, and a published pack lists the highest version supported at release time as its dependency. A major bump (v2) is a cleanup that breaks backward compatibility, and existing packs that specify `1.x.x` will keep being supported to work as they are for a long time (Source: ms-learn, `v2-overview.md`).
+
+## `@minecraft/server` versions and product versions
+
+This is the official correspondence table (Source: ms-learn, `versioning.md`). For later versions, follow the community reports summarized in "Changes by version" below.
+
+| Module version | Product version |
+|---|---|
+| 1.0.0 | 1.19.70 |
+| 1.1.0 | 1.19.80 |
+| 1.2.0 | 1.20.0 |
+| 1.3.0 | 1.20.10 |
+| 1.4.0 | 1.20.20 |
+| 1.5.0 | 1.20.30 |
+| 1.6.0 | 1.20.40 |
+| 1.7.0 | 1.20.50 |
+| 1.8.0 | 1.20.60 |
+| 1.9.0 | 1.20.70 |
+| 1.10.0 | 1.20.80 |
+| 1.11.0 | 1.21.0 |
+| 1.13.0 | 1.21.20 |
+| 1.14.0 | 1.21.30 |
+| 1.15.0 | 1.21.40 |
+| 1.16.0 | 1.21.50 |
+| 1.17.0 | 1.21.60 |
+
+## Specifying versions in the manifest
+
+```json
+"dependencies": [
+  { "module_name": "@minecraft/server",    "version": "2.4.0" },
+  { "module_name": "@minecraft/server-ui", "version": "2.0.0" }
+]
+```
+
+To follow the latest beta, use the string `"beta"` instead of a number.
+
+```json
+"dependencies": [
+  { "module_name": "@minecraft/server", "version": "beta" }
+]
+```
+
+With `"beta"` you do not need to fix the version on every update, but if the world's Beta APIs experiment is off, the whole script does not load. A pinned specific `x.y.z-beta.*` version breaks with every game update. If you use a wrong version, the content log prints the list of available versions, so pick from that list.
+
+## Installing type definitions
+
+The npm `@minecraft/server` provides types for stable and beta, and for release and Preview variants. It is types only, so it is not needed to run (Source: ms-learn, `creator/Documents/scripting/developer-tools.md`).
+
+```powershell
+npm i @minecraft/server
+npm i @minecraft/server-ui
+npm i @minecraft/server@beta @minecraft/server-ui@beta   # beta types
+```
+
+## APIs changed in v2
+
+If you open your code with the 2.0.0-beta types (`npm i @minecraft/server@2.0.0-beta`), you can see right away what changed. The changes in the official overview are as follows (Source: ms-learn, `v2-overview.md`).
+
+- `Entity.applyKnockback` takes the horizontal force as a `VectorXZ` and the vertical strength as a separate argument. To convert a V1 direction vector, normalize it and multiply by the old horizontal strength.
+- `Dimension.runCommandAsync` was removed (most were not actually asynchronous). If you need async, use `system.runJob`.
+- Entity `getComponents/getComponent/hasComponent` throw an exception if the entity is invalid. `EntityComponent.getEntity` and `EntityInventoryComponent.container` also throw an exception instead of returning `undefined`.
+- The `isValid()` method of several classes became a read-only property `isValid`.
+- `EffectType.getName` and `Effect.typeId` always include the `minecraft:` prefix.
+- The `minecraft:air` item was removed (it is still valid as a block).
+- `world.afterEvents.worldInitialize` was only renamed to `worldLoad`, and `world.beforeEvents.worldInitialize` was replaced by `system.beforeEvents.startup`.
+
+## Beta and version rules from community notes
+
+The two sections below are practical rules from the community research and a timeline of changes by release.
+
+
+`*confirmed*`, `*single report*` and `**conflicting**` are reliability marks for reports. The basis of this page is community reports, and they may differ from the official Mojang documentation.
+
+#### Module versions and beta
+
+- **`"version": "beta"`**: Using `"beta"` without a number for `@minecraft/server`, `@minecraft/server-ui` and so on always resolves to the latest beta. It was added in the Preview and reached the release around 2025-10-28 (1.21.120). Even if an API moves from beta to stable it keeps working, but it can break if the API you use changes. `"stable"` sometimes auto-upgrades but is not reliable. *confirmed*
+- **Beta APIs experiment toggle**: Beta modules/features require the "Beta APIs" experiment on in the world. If it is off, the manifest requires it so the whole script does not load, and the script itself cannot detect this (workaround: a tick.json function raises a score every tick and the script clears it; warn if the value grows). In some cases other experiments such as "Upcoming creator features" and "Experimental creator camera features" also had to be on for main.js to load. On Aternos, turn on Beta APIs under servers > world > options. Most script add-on bundles distributed for servers require Beta APIs, and there is a report that this setting is an obstacle for mobile users (*single report*).
+- **Compatibility expectations of stable** (**conflicting**): There are both opinions that stable scripts do not break on updates and that they can break on updates if a deprecated API is removed. Stable APIs need no experiment toggle.
+- **Marketplace packs cannot use experimental/beta APIs**; they use only stabilized APIs such as DDUI.
+- **Invalid versions** (`1.0.0-beta` and so on) print "requested invalid version" with a list of available versions to the log (for example server 0.1.0, 1.19.0, 2.6.0, 2.7.0-beta, 3.0.0-alpha). Modules you do not use (gametest and so on) also cause version conflicts, so remove them.
+- **Pairing server / server-ui**: A conflict such as `[@minecraft/server] 2.1.0 requested by pack vs 1.3.0 requested by server-ui-bindings` is an incompatible combination. Examples: server 2.1.0 + server-ui 2.0.0, server 2.6.0 + server-ui 1.3.0 (works), server 2.10.0 + server-ui 2.2.0 (26.50), server 2.11.0 + server-ui 2.3.0 (the latest stable of 2026-11). The beta pair is `2.12.0-beta.1.26.60-stable` + `2.4.0-beta.1.26.60-stable`. server 2.6.0 + server-ui 1.0.0 conflicts on `server-bindings`.
+- **The highest v1 version is 1.19.0**, and v2 breaks backward compatibility. Packs that stay on 1.x can use features blocked in 2.x such as writing `EntityScaleComponent.value` (see the [scale workaround for entity components](./entities-and-components.mdx)).
+- **`3.0.0-alpha`** mirrors the latest 2.x beta as is. Also, 2.x versions are always promoted to the latest internally, so type autocomplete and runtime behavior can differ (developer statement).
+- **Education Edition** lags a few versions (as of 1.21.130 only server 2.4.0 stable is supported, and beta modules break with every update).
+- Old pinned betas (`server 1.13.0-beta`, `server-ui 1.2.0-beta`) do not work on current versions.
+
+
+### Changes by version
+
+- **1.20.80**: Dynamic `import()` support.
+- **Before 1.21.60 / 2.0**: `applyKnockback(x, z, h, v)` -> `applyKnockback({x,z}, v)`.
+- **Preview 1.21.80.22 ~ 1.21.9x**: Custom command beta -> **1.21.100** stable (@minecraft/server 2.1.0).
+- **1.21.90 (2.0.0)**: `@minecraft/server` 2.0.0 (left beta with the 1.21.90 release or around 1.21.100; reports differ). Changes: `worldInitialize` removed (startup/worldLoad), `isValid()` -> property, `runCommandAsync` removed, component registry moved to startup, permissions (read-only) introduced, `Player.isOp` removed, `PlayerPermissionLevel` (1.21.90.21), item components directly in `components` (format 1.21.90), `faceLocation` reference changed, item custom component params. Guide: `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/v2-overview?view=minecraft-bedrock-stable`
+- **1.21.101**: The 2048-character limit on scriptevent messages was removed.
+- **1.21.110 preview**: Reading pack settings (manifest v3 settings) from script and Molang (a report that `getPackSettings()` gave `{}`).
+- **1.21.114**: server 2.2.0 stable (`setLore` RawMessage). **1.21.120**: 2.3.0 stable, manifest `"version": "beta"` supported in the release, `getAABB`, `getGeneratedStructures` (beta), light level, loot table manager, inventory/hotbar events and others added.
+- **1.21.124**: 2.3.0 latest stable. **1.21.130 (2025-12-09)**: server 2.4.0 stable (`getBiome` stable), `minecraft:cooldown` `"type": "attack"` + `swing_duration`, `minecraft:storage_item`. debug-utilities `1.0.0-beta.1.21.130-stable`.
+- **Preview 26.0 (2025-12)**: `beforeEvents.entityHurt`, `entityHeal` before/after, `entityItemPickup` before/after, drop events, world seed, block `onEntity`, item cooldown added, `WeakRef`/`FinalizationRegistry` (26.0.23), item components require format 1.26.0, `TickingAreaManager` beta, `DebugShape.visibleTo`.
+- **2026-02-11**: server 2.5.0 stable (1.26.0, beta 2.6.0-beta.1.26.0-stable). `entityHurt` before usable with Beta APIs.
+- **26.10 (mid 2026-03)**: server 2.6.0 stable (`entityHurt` before stable, `setPropertyOverrideForEntity` 2.6.0), entity drop events stabilized, DDUI (server-ui 2.1.0-beta) usable as beta, custom item cooldown bar fix (26.10.20).
+- **2026-04-08 preview**: Custom dimension API beta. **26.20**: server 2.7.0 stable (2026-05), server-net WebSocket (preview 26.20/21), `EntityEnderInventoryComponent` (26.20.20), `EntityHealCause.TotemOfUndying` (26.20.23-24), TextPrimitive changes (26.20.22/26), `playerHotbarSelectedSlotChange` (2.7.0), `isFirstEvent` appeared in the 2.8.0-beta (1.26.20 preview) documentation.
+- **26.30**: DDUI stable (server-ui 2.1.0), the `new CustomForm(...)` constructor, custom dimensions stable (conflicts with a report that they were already listed as stable in the 1.26.20 documentation, **conflicting**), server 2.8.0 stable, SoundInstance preview, `Player.partyInfo` removed, an `onUse` problem of `minecraft:interact_button` items after 26.20.
+- **26.40**: DDUI images (preview), vanilla pack texture references not possible (~26.40.30), type-only import error, MCPE-240513 (`playSound` -> read-only property), SoundInstance, per-pack block DP ~1 KB, `carry_over_block_entity_data`, server-graphics left beta (2026-08-11 preview), debugger attach problem (26.40~1.26.43), `persistentId` (~2026-08-04), server 2.9.0 stable (2026-08), closeButton duplicate fix (26.40.20).
+- **26.50**: Block DP (`minecraft:block_entity`, format 1.26.50), MCPE-240513 fixed, world clock `WorldClock`, structure format v2 (26.50.24), `DimensionTypes` returns custom dimensions (26.50.26), `Camera.addShake` to be stable, split-screen DDUI input fix (preview), server 2.10.0 / server-ui 2.2.0 stable (2026-10). A case after the 26.50 update where a script silently did not load because of a server-ui 2.3.0 dependency (fixed by going down to 2.2.0, together with server 2.10.0).
+- **26.60**: server 2.11.0 / server-ui 2.3.0 stable, a report that DDUI button images are stable, `multiButtonRow` (server-ui 2.4.0-beta preview), SimulatedPlayer `setSkin` (1.26.60-preview.21), `vibration_damper` `hasComponent`, a report of block updates reacting to neighbor changes (*single report*). The shulker box `ItemInventoryComponent` line in the changelog was a mistake (Mojang's answer; see the item page below). Community block templates were also updated to the 1.26.60 modules.
+- **26.70 preview**: server 2.12.0-rc / 2.13.0-beta.1.26.70-preview.21~23 (`RecipeCraftingContext.getInputItem`), server-ui 2.5.0-beta, virtual container API, `BlockContainerOpenedAfterEvent`/`BlockContainerClosedAfterEvent`, a report of an explosion position property (*single report*), an entity X rotation snap-back fix (26.70.23, *unverified*), a report that `findClosestBiome` was renamed `calculateClosestBiomeFromSeed` (*single report*). `CustomCommandResult.message` allows RawMessage.
+- **Module version snapshots** (JaylyBot npm tags): 2025-10~11 stable 2.2.0/2.3.0, beta 2.4.0-beta.1.21.120-stable, preview 2.5.0-beta.1.21.130-preview.2x / server-ui 2.0.0, 2.1.0-beta -> 2025-12 stable 2.4.0, beta 2.5.0-beta.1.21.130-stable, preview 2.5.0-rc.1.26.0-preview.25 / 2.6.0-beta.1.26.0-preview.25 -> 2026-02 stable 2.5.0, beta 2.6.0-beta.1.26.1-stable, preview 2.6.0-rc.1.26.10-preview.24, 2.7.0-beta.1.26.10-preview.24, server-admin 1.0.0-beta.1.26.0-stable -> 2026-04 stable 2.6.0, beta 2.7.0-beta.1.26.10-stable, preview 2.8.0-beta.1.26.20-preview.20 -> 2026-05 stable 2.7.0, beta 2.8.0-beta.1.26.20-stable, preview beta 2.9.0-beta.1.26.30-preview -> 2026-06/07 stable 2.8.0, beta 2.9.0-beta.1.26.3x-stable, preview beta 2.10.0/2.11.0-beta, server-ui 2.1.0 / 2.2.0-beta, server-gametest and server-net 1.0.0-beta.1.26.34-stable -> 2026-08/09 stable 2.9.0, beta 2.10.0-beta.1.26.44-stable, preview 2.10.0-rc.1.26.50-preview.27, 2.11.0-beta.1.26.50-preview.27 -> 2026-10 stable 2.10.0 / server-ui 2.2.0; 2026-11 stable 2.11.0, beta 2.12.0-beta.1.26.60-stable (including the 1.26.62-stable variant), preview 2.12.0-rc / 2.13.0-beta, server-ui 2.3.0 / 2.4.0-beta / 2.5.0-beta, server-gametest `1.0.0-beta.1.26.60-stable`, math 2.4.1. Recommended stable range (advice of 2026-06-25): server 2.4.0~2.8.0, server-ui 2.0.0/2.1.0.
+- **Recommended combinations by time**: 2025-12-09 server 2.3.0 + server-ui 2.0.0, 1.21.120 is 2.4.0-beta, after 26.10 2.6.0 / 2.7.0-beta, for 26.30 2.9.0-beta + server-ui 2.2.0-beta.

@@ -1,0 +1,233 @@
+---
+title: "Events and combat"
+description: "world/system event subscription rules, renamed events, join, interaction, item and combat events with entityHurt, knockback"
+sidebar_position: 3
+sources:
+  - private-research
+  - ms-learn
+  - bedrock-samples
+---
+
+## Four branches of events
+
+Events are used in the way that "a subscribed callback receives an event object". The official documentation divides events into four groups (Source: ms-learn, `creator/Documents/scripting/events.md`).
+
+| Group | Timing | Example |
+|---|---|---|
+| `world.beforeEvents` | Right before an action happens. Cancelable, no world changes | Block break, item use, player leave |
+| `world.afterEvents` | Right after an action happened | Container opened, button pushed, entity death |
+| `system.beforeEvents` | Before the game starts and ends | `startup`, `shutdown`, `watchdogTerminate` |
+| `system.afterEvents` | The `/scriptevent` command | `scriptEventReceive` |
+
+`before` callbacks are restricted execution, so calling an API that changes world state gives an error. If a change is needed, defer it with `system.run`.
+
+```javascript
+import { world, system, GameMode, ItemStack } from "@minecraft/server";
+
+// when the custom block `custom:slab` is broken in survival, drop an item
+world.beforeEvents.playerBreakBlock.subscribe((eventData) => {
+  const { block, player } = eventData;
+  const blockId = block.typeId;
+  const { x, y, z } = block.location;
+  if (block.hasTag("custom:slab") && player.getGameMode() === GameMode.Survival) {
+    system.run(() => {
+      player.dimension.spawnItem(new ItemStack(blockId, 1), { x, y, z });
+    });
+  }
+});
+```
+
+A callback receives one event object. Always write `cancel` as `event.cancel = true` and do not receive it by destructuring. The official example of canceling chat is as follows (a beta-only event), and it blocks if the message contains `cancel`.
+
+```javascript
+world.beforeEvents.chatSend.subscribe((eventData) => {
+  if (eventData.message.includes("cancel")) eventData.cancel = true;
+});
+```
+
+## Filters and unsubscribing
+
+You can give a server-side filter as the second argument, which is efficient.
+
+```javascript
+world.afterEvents.entityHurt.subscribe(
+  (e) => world.sendMessage(`${e.hurtEntity.typeId} damage ${e.damage}`),
+  { entityFilter: { type: "minecraft:wolf" }, allowedDamageCauses: ["entityAttack"] }  // filter option example
+);
+
+const handler = world.afterEvents.playerSpawn.subscribe((e) => { /* ... */ });
+world.afterEvents.playerSpawn.unsubscribe(handler);  // the same reference is needed
+```
+
+## Handling player join
+
+`playerJoin` has no Player object, only an id and a name. For first-join handling, use `playerSpawn` and `initialSpawn`.
+
+```javascript
+world.afterEvents.playerSpawn.subscribe(({ player, initialSpawn }) => {
+  if (!initialSpawn) return;                       // skip respawns
+  system.runTimeout(() => {
+    if (player.isValid) player.sendMessage("Welcome");   // delayed to avoid losing the message while loading
+  }, 40);
+});
+```
+
+## `/scriptevent` and script events
+
+`system.afterEvents.scriptEventReceive` reacts to the `/scriptevent <messageId> <message>` command and `system.sendScriptEvent(id, message)`. Players, other scripts, NPCs and command blocks can all send it, so it is used for messages between add-ons. The properties of the event object are `id`, `message`, `initiator` (the entity that opened the NPC dialogue), `sourceBlock` (command block), `sourceEntity` (NPC) and `sourceType` (`Block`, `Entity`, `NPCDialogue`, `Server`). `Server` is the case from the server console or the `runCommand` API (Source: ms-learn, `events.md`).
+
+```javascript
+system.afterEvents.scriptEventReceive.subscribe((ev) => {
+  if (ev.id !== "my:ping") return;
+  world.sendMessage(`ping: ${ev.message} (${ev.sourceType})`);
+});
+// /scriptevent my:ping hello
+```
+
+## Order of after-event handling
+
+After events that occur in the same tick are delivered in a fixed order decided by the engine. Mojang's order table (`engine-after-events-ordering.json` in bedrock-samples) is a list per module version. For example, in 1.3.0 the order is `ButtonPush`, `LeverAction`, `PlayerJoin`, `PlayerSpawn`, `PlayerLeave`, and in 1.4.0 `ScriptEventCommandMessage` comes first, followed by `EntityHitEntity`, `EntityHurt`, `EntityHealthChanged`, `EntityDie`, the item use family, `PlayerJoin/Spawn/Leave`, `PressurePlatePush/Pop`, `TargetBlockHit` and `TripWireTrip` (Source: bedrock-samples).
+
+## Community notes
+
+Below are details and pitfalls of event and combat behavior gathered from the community research.
+
+
+`*confirmed*`, `*single report*` and `**conflicting**` are reliability marks for reports. The basis of this page is community reports, and they may differ from the official Mojang documentation.
+
+### Events
+
+#### Subscription in general
+
+- **A callback receives one event object**: `world.afterEvents.x.subscribe((event) => {...})`, and destructuring `({ player })` is possible. Some events expose methods instead of properties (`ProjectileHitEntityAfterEvent.getEntityHit()`, `getImpactedBlocks()`). A signature that takes several arguments such as `(damage, hurtEntity) =>` is wrong. `world`/`system` are instances and there is no exported `player` variable.
+- **Do not destructure `cancel` in before**: `({cancel}) => { cancel = true }` changes only a copy. Always `event.cancel = true`.
+- **unsubscribe**: `subscribe()` returns the callback you passed, and `unsubscribe(sameReference)` needs the same reference. It is used for toggleable modules, listeners limited to an entity's lifetime, and one-shot handlers. Do not subscribe to other events inside an event callback (handlers accumulate and leak).
+- **Filter options are the second argument**: `entityHurt.subscribe(cb, { entityFilter: { type: "minecraft:wolf" } })`, `{ entityFilter: { tags: ["parrying"] } }`, `{ allowedDamageCauses: [...] }`, `{entityTypes:["minecraft:player"]}` for `entityHealthChanged`, `{buttons:[InputButton.Jump], state: ButtonState.Pressed}` for `playerButtonInput`. They are server-side filters so efficient.
+- **Multiple subscriptions to the same event**: All handlers run. There is no measurable performance problem, but dispatching with an object map keyed by typeId (`handlers[typeId]?.(event)`) or merging into one is the tidy way. There is also a case where subscribing to the same event several times in one file tangled the behavior.
+- **Only before can cancel**: After events cannot be canceled, and not every after has a before counterpart. List of before events: `https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/minecraft/server/worldbeforeevents` . You cannot make custom before/after events (the bridge between C++ and QuickJS).
+- **Several packs subscribing to the same before**: One pack's cancel does not stop the other packs' handlers from running (later handlers see that `cancel` is already set), and regardless of pack order the result is OR. Within a pack it is subscription order. There is also a report that if each handler sets `cancel`, the last assignment decides (**conflicting**: OR vs last assignment).
+- **After-event order table**: `https://github.com/Mojang/bedrock-samples/blob/main/metadata/engine_modules/engine-after-events-ordering.json` . Within the same tick the order StartBreak -> Break or Cancel is guaranteed. The order can get mixed such as a wind charge explosion vs an arrow hit.
+
+#### Renamed or removed events (migration table)
+
+| Old name | Current |
+|---|---|
+| `world.events.beforeChat` / `world.event.beforeChat` | `world.beforeEvents.chatSend` (beta) |
+| `world.beforeEvents.worldInitialize` / `afterEvents.worldInitialize` | Register in `system.beforeEvents.startup`, world code in `world.afterEvents.worldLoad` |
+| `blockBreak` / `blockPlace` | `playerBreakBlock` / `playerPlaceBlock` |
+| `itemUseOn` (world event) | `playerInteractWithBlock` (before/after), `itemStartUseOn` |
+| `world.beforeEvents.playerSendMessage` | (removed) `chatSend` |
+| `propertyRegistry.registerEntityTypeDynamicProperties`, `DynamicPropertiesDefinition` | `setDynamicProperty` without a declaration |
+| Block component `onPlayerDestroy` (v1) | `onPlayerBreak` (v2) |
+| `minecraft:custom_components` array (format before 1.21.90) | Component names directly in `components` |
+| Piston before event | Removed, only `afterEvents.pistonActivate` |
+
+`cannot read property 'subscribe' of undefined` is a removed/renamed event or a beta-only event used with the stable module. Check the "Script API technical" section of every release's changelog.
+
+#### Join, spawn, leave
+
+- **`playerJoin` has no Player object**: Only `playerId`/`playerName` (a case where even `playerId` did not match the entity `player.id`). For first-join handling, use `world.afterEvents.playerSpawn` + `event.initialSpawn === true` (false for respawns). `initialSpawn` is true on every join "per session" and is not the lifetime first join -> for a real first join use a tag/DP flag.
+- **No load-complete event**: `playerSpawn` fires before the client renders, so messages/forms can be lost. In some cases you cannot see messages for up to a minute after joining. Workarounds: a delay of ~20~100 ticks and then an `isValid` check, polling until `world.getAllPlayers().includes(player)` (+~25 ticks), movement detection (position change after a small impulse), disabling input permissions (Camera/Movement) for 50 ticks, `UserBusy` form retries, and for BDS server-net `SetLocalPlayerAsInitializedPacket`. `playerDimensionChange`, `isValid`, `isChunkLoaded` and input permissions are true even during the loading screen so they cannot tell. There is a report recommending a 100~160 tick delay after `initialSpawn` for a first-join form. `worldLoad` fires before players join, so a message sent there is seen by no one.
+- **Leave**: `world.beforeEvents.playerLeave` (PlayerLeaveBeforeEvent in 2.7.0-beta) allows only early-execution calls (DP writes OK, `system.run` is too late). On a crash/timeout the handle may already be destroyed, so reconcile the cache periodically. If the singleplayer host closes the world, leave does not fire. Delete per-player Maps on leave.
+- **Join/leave messages**: Cannot be removed by script (canceling `beforeEvents.playerJoin` does not hide them either). Empty `multiplayer.player.joined` and so on in the RP `.lang`, or hide them with JSON UI. Outside BDS (local/Realms) this is the only way. Custom messages: `pauseNotification.title.onePlayer=%s joined your game!` + `{translate, with:[name]}`.
+- **A dying player**: During the death screen `player.isValid` is false (~1 tick even with instant respawn), and opening the chat window can leave you in the dead state indefinitely. On death tags/scores cannot be changed and `@a` does not find them -> DPs (which work even during death) or handle it in `playerSpawn`.
+
+#### Block and entity interaction
+
+- **`playerInteractWithBlock`**: before fires on every right click (repeats while held, also when placing) -> filter with `event.isFirstEvent` (otherwise double item consumption and duplicate forms). after fires only on blocks with a real interaction. Canceling before also cancels block placement, sleeping, campfire cooking and so on, and `playerPlaceBlock` before/after do not fire either (the interaction is handled first; the client briefly shows the block and the arm swings). `itemStack` (not `item`) is on the event and is undefined for an empty hand, and read-only in before. "aligned/snappable placement" (moving while holding) can fire interact with the air/up face.
+- **Blocking interaction but allowing placement**: No clean way. A heuristic of not canceling if the held item is a block (`BlockTypes.get(itemStack.typeId)`) or when sneaking (it misjudges when pressing a button holding dirt). The block component `onPlayerInteract` prevents placing on that block without sneaking, so for cases where another block must be attached, such as stripping a log, `world.beforeEvents.playerInteractWithBlock` + `system.run` is better. A custom block becomes interactable and swings the arm.
+- **Entity interaction**: `afterEvents.playerInteractWithEntity` fires only when an interaction really happens (it has `minecraft:interact` or taming/feeding succeeded; iron golem, warden and so on only in before). To catch all, before + `system.run`. There is also a case where it did not fire without Beta APIs.
+- **Direction**: A report that `blockFace` North/South look swapped in `playerInteractWithBlock` (use them swapped). Bell ringing detection is a combination of after interact + (not sneaking or empty hand/axe/hoe), and comparing `toggle_bit` is a bug.
+- **Water/lava buckets**: Canceling `itemUse` does not stop them, while canceling `playerInteractWithBlock` before works (for blocks that can hold water, also check `isWaterlogged`). For a desync where flooding shows only on the client after canceling a liquid placement, toggle the block state to refresh. Compute the bucket placement position with `itemStartUseOn` + `blockFace` (`playerPlaceBlock` does not include buckets). A custom block `onPlayerInteract` does not fire when holding a bucket.
+- **Other**: Opening a chest is a block interaction event. `blockContainerOpened` after has `event.openSource.entity` (no event.player). Showing an ActionForm from this event displayed only about 25% of the time, and canceling `playerInteractWithBlock` before and then showing with `system.run` was stable. Canceling the armor stand interaction before blocks the interaction itself.
+
+#### Block breaking and placing
+
+- **In `playerBreakBlock` after the block is already air**: Use `event.brokenBlockPermutation.type.id` (or capture in before and then `system.run`). `block.typeId` is cheaper than `block.type.id` (just the string). To prevent drops, cancel `beforeEvents.playerBreakBlock`. The item property of before is `itemStack`.
+- **Cannot modify drops**: The after event has no drops. Workarounds: (1) after breaking, find the nearby item entities, remove them, and generate a custom loot (`getEntitiesAtBlockLocation` is ~50% unreliable), (2) cancel the break and use `world.getLootTableManager().generateLootFromBlock(block, tool)` (the block must remain for the result to come out; tool enchantments such as Fortune are reflected) and then remove it yourself - canceling can cause client visual bugs, (3) the structure trick (save the block -> place it in the void -> `setblock ... destroy` -> collect items), (4) look at `brokenBlockPermutation` in after `playerBreakBlock` and `spawnItem` by probability (creative, `doTileDrops`, and breaking by non-players handled separately), (5) cancel before and use `setType('minecraft:air')` + `spawnItem` (the `block_destruct` particles need a custom copy). Silk Touch drops bypass the loot table, and there is a report (2025-11) that even canceling before did not prevent the drop. Reimplement Fortune/ore drops yourself.
+- **There is no API to break a block "like a player"**: Using `/setblock`/`/fill ... destroy` gives particles and drops but does not fire the custom `onPlayerBreak`.
+- **Cannot detect breaking from every source** (pistons, water, explosions, setblock, wither): Possible with `onBreak` for custom blocks only. There is no event for the wither, and TNT/skeletons use explosion events. `/fill`, `/clone` and `/kill` cannot be intercepted.
+- **`playerPlaceBlock` before**: Beta only (2026-03 latest beta, 2026-08 `2.10.0-beta.1.26.44-stable`; stable 2.9.0 has only after). Custom blocks substitute the `beforeOnPlayerPlace` component. Blocks pushed by pistons bypass the placement check. `playerInteractWithBlock` fires before placing, so judge "was it placed with an item" by a same-tick comparison.
+- **Break progress**: `playerStartBreakingBlock` (no progress), and `breakProgress` (0~1) of the new event only for canceled breaks; combine start + cancel/break. `entityHitBlock` also detects the start of breaking. There is no API to set progress (workaround with entity overlays).
+
+#### Item use
+
+- **Distinguishing events**: `itemUse` (once at the start of a right click, including unusable items, and fires even during cooldown), `itemStartUse`/`itemStopUse` (press/release), `itemReleaseUse` (firing a charged item), `itemCompleteUse` (finishing eating/drinking), `itemStartUseOn`. The event object uses `event.source` (not `player`). Stop/release fire only for usable (chargeable/food/bow/throwable) items, so a custom clone item of a vanilla one is needed.
+- **Holding**: Start a `runInterval` in `itemStartUse` (keyed by `source.id` in a Map) and `clearRun` in `itemStopUse`. For performance the best is to store the start tick and compute the difference on stop. If it does not stop within ~2 ticks, judge it as a "hold". Tricks for continuously used items: `minecraft:use_modifiers` (a large `use_duration`, `movement_modifier` 1) + `minecraft:throwable` (a long draw duration) + `minecraft:projectile` (format 1.21.90), or `minecraft:food` + `use_modifiers` (format 1.26.30). Continuously changing the lore/DP of an item in use drops `itemStopUse`.
+- **Canceling charging**: `world.beforeEvents.itemUse` can cancel bow firing, `afterEvents.itemStartUse` cannot. A bug where merely registering an empty `world.beforeEvents.itemUse` listener breaks bundle drop/right click (MCPE-222669; reported again in 2026-08 and 2026-10). There is no API to cancel eating (slot switch/equipment removal tricks risk desync and deletion).
+- **Crossbow**: No dedicated event, and the loaded state (`minecraft:charged_item`) is not exposed. Record "loaded" on complete use and treat the next use as a shot (item DPs persist only if written back to the slot). The shooter/throwable components are not exposed to script.
+- **The custom item component `onUse` stops when aiming at an entity** (after 26.20, when `minecraft:interact_button` is present) -> remove that component.
+
+#### Input and click detection
+
+- **`world.afterEvents.playerButtonInput`**: `{player, button, newButtonState}`, `InputButton` has only Jump and Sneak (no WASD, attack or sprint), and auto jump does not fire. `InputButton.Sneak` on touch is a 1-tick pulse. It does not fire while the inventory screen is open, and a Jump input does not guarantee an actual jump.
+- **`player.inputInfo`**: `getButtonState(InputButton.Jump) === ButtonState.Pressed`, `getMovementVector()` (Vector2 x,y; it updates even when input permissions block movement, so it is useful for drone/mount control), `lastInputModeUsed`.
+- **State properties**: `isSneaking`, `isSprinting` (read-only, useless when movement is disabled), `isJumping` (true while climbing scaffolding), `isOnGround`, `isFalling`, `isClimbing` (ladders only), `isInWater`, `isGliding` (read-only), `isSleeping`. The only sneak event is `entityStartSneaking` (added ~2026-05, no stop), so polling every tick is also cheap enough. There is no sleep start event (poll `isSleeping`).
+- **Jump detection (including auto jump)**: In one `runInterval`, `isJumping`, `!isOnGround && !isInWater && !isClimbing`, a narrow range of vertical speed (scaffolding Y speed `0.15000152587890625`; no `===` on floats), and reset the cache when returning to the ground. Knockback (shield, fishing rod, rapids, slime) can cause false positives. For manual jumps only, `playerButtonInput`.
+- **Swing/left click**: `world.afterEvents.playerSwingStart` (`player`, `heldItemStack`, `swingSource`: Attack/Build/Drop and so on, `EntitySwingSource`) detects air punches. Beta only in 2025-12~2026-02 (undefined in stable 1.9.0), and used as a stable API around 2026-04 (the timing is *unverified*). It fires for every swing including interactions, is limited to about 6 cps (`entityHitEntity` is accurate for CPS counting), and on mobile there is no swing unless you hit a block/entity (the attack button of the new touch scheme works). It fires in step with the actual arm swing, so clicks during the swing interval are missed, and it can come 1 tick early. The enum value is `EntitySwingSource.Attack` (capitalized). A `minecraft:piercing_weapon` item also fires this event. There is no before event to cancel. A report that there is no API to force a swing animation and a single report that `Player.swing()` exists conflict (**conflicting**). It has no block information, so if a raycast misses on mobile, use `playerStartBreakingBlock`. The name `playerSwing` (2025-12) was also mentioned early on.
+- **Right click on air (empty hand)**: Not detectable (a block, entity or item target is needed). Workaround: give a temporary item on swing and use its `itemUse`. Left-click hold time: no API (only via player.json + animation controller). There is no middle click or custom key -> bind `/scriptevent shortcut:a` to a PC keyboard shortcut (PC only) or a custom command, and on mobile a HUD button (it cannot be pressed on PC, and there is an unstable report of breaking action forms).
+- **Hotbar as buttons**: In `playerHotbarSelectedSlotChange` (`newSlotSelected`, `itemStack`, 2.7.0), set `player.selectedSlotIndex = 0` back and run per-item features. Shrinking the hotbar works the same way. Changing the slot in the handler fires the event again, so prevent an infinite loop.
+
+#### Inventory, drop and pickup events
+
+- **`world.afterEvents.playerInventoryItemChange`** (stable): `beforeItemStack`/`itemStack`; when picking up into an empty slot before is undefined, and on drop itemStack is undefined -> `?.typeId`. It fires per stack. Equipment (armor) slots are not included -> there is no armor wear event (poll every 5~20 ticks). It fires for every item on world load/join, not on `/reload`. Player only (no entity/block inventory change events -> poll slots every 10~20 ticks). There is no before version. Beware of a recursive loop when setting lore.
+- **`world.afterEvents.entityItemDrop`**: `items` is an array of item *entities* -> `entity.getComponent('minecraft:item').itemStack`. An old bug where `for...of` throws -> `Array.from(items)`/`forEach`. It also fires for mob loot drops (only drops of the `inventory` component; equipment and dispensers excluded), and fires after `entitySpawn`. On player death the equipment slots (armor, and the main hand by the rotation 0 judgment) are left out -> it does not fire if there is only armor. Changing the `nameTag` of an ItemStack copy does not work, so set it on the item entity. Stabilized in 26.10.
+- **`world.beforeEvents.entityItemPickup`**: `cancel` possible (pickup delay), `event.item` is an item entity (`typeId` is always `minecraft:item`) -> `item.getComponent("minecraft:item").itemStack`. The `amount` of an item entity is a read-only copy, so cancel -> remove the entity -> give a new stack. It does not fire for hopper minecarts. An after version also exists (returns an ItemStack). An item from `dimension.spawnItem()` is picked up immediately even if you give it an impulse.
+- **Container UI**: `EntityContainerOpenedAfterEvent` / `EntityContainerClosedAfterEvent` (Preview beta 2026-04, only for container UIs including the inventory), `blockContainerOpened`, and `BlockContainerOpenedAfterEvent`/`BlockContainerClosedAfterEvent` in the Preview documentation. There is no "GUI is open" boolean. Whether another UI is open can be guessed by showing a form and seeing whether `UserBusy` comes back, but it disturbs play. Chest log: snapshot on open + inventory change diff.
+
+#### Combat, projectile and death events
+
+- **`afterEvents.entityHitEntity`**: `damagingEntity`, `hitEntity` (melee only, arrows excluded), no before/cancel. The attacker's game mode can be read.
+- **`afterEvents.entityHurt`**: `hurtEntity` (not `entity`), `damage`, `damageSource.cause`/`damagingEntity`/`damagingProjectile`. It also fires for damage 0, and there is a report that healing fired hurt.
+- **`projectileHitEntity`/`projectileHitBlock`**: `projectile`, `getEntityHit()?.entity` (EntityHitInformation), `getBlockHit()?.block`, `location`, `dimension`. `ev.source` may be undefined, and after the hit even the `projectile` component `owner` fails -> read the owner in `entitySpawn` and copy it to a DP, or cache even the speed in a per-tick Map. On a head-on collision `projectileHitBlock` fires twice -> deduplicate with a `projectile.id` Set, and `isValid` before `remove()`. To prevent sticking, `destroy_on_hit: false` and then `remove()` yourself. Script events are recommended over entity JSON `definition_event`.
+- **`afterEvents.entityDie`**: `deadEntity`, `damageSource.damagingEntity` (may be undefined, null check), `damagingProjectile`, `cause`. Resolving the attacker: `damagingEntity ?? damagingProjectile?.source`. `entity.remove()` is not a death. Snowballs/eggs (remove_on_hit) fire, arrows/wind charges do not. A removed projectile fails `getComponent`. `/kill` is cause None or SelfDestruct. Vanilla death messages cannot be read/edited (turn off the gamerule `showDeathMessages` and send your own). An unresolved report that handling was unstable on player melee kills.
+- **No "before death" event**: `beforeEvents.entityRemove` gives the position but reading the entity often fails, it cannot be canceled, and it also fires when leaving simulation distance (unload). To prevent death, use `entityHurt` before + a lethal check.
+
+#### Other events
+
+- **`system.afterEvents.scriptEventReceive`** (not world): `{id, message, sourceType, initiator, sourceEntity, sourceBlock}`, `ScriptEventSource.Block|Entity|NPCDialogue|Server`. `/scriptevent ns:id msg` or `system.sendScriptEvent(id, message)`. Signal the script with entity JSON `queue_command` (for example `scriptevent agg:dragon 2`). Also used from NPC dialogue buttons.
+- **`afterEvents.dataDrivenEntityTrigger`**: `{entity, eventId}`, fires for every entity JSON event (for example `minecraft:entity_spawned`) so filter it. Use `getModifiers()` (DefinitionModifier) to see added/removed component groups (membership in a component group itself cannot be queried).
+- **`entitySpawn`**: Also fires for script spawns (a nameTag set right after spawn may not be visible in the handler yet -> guard against an infinite spawn loop). `initializationCause === EntityInitializationCause.Transformed` obtains the result of curing a zombie villager (better than the `minecraft:entity_transformed` trigger). The `Loaded` cause does not work -> `entityLoad` (does not fire on spawn). Village villager/golem "Event", player-built snow golem/wither "Spawned". Used to block fishing by removing the fishing bobber in `entitySpawn` or to name spawner mobs. There is an unresolved report that `entitySpawn` did not fire for a TNT entity ignited by a fire arrow.
+- **`afterEvents.pistonActivate`**: `isExpanding` (false = retracting), `block` is the piston. Call `getAttachedBlocksLocations()` before `runTimeout`; a block in motion is a `moving_block`, so compute the real position after ~2 ticks with an offset in the facing direction (facing_direction index [down, up, south(+z), north(-z), east(+x), west(-x)]). `getAttachedBlocks()` returns `moving_block`/the piston arm. The before event was removed and claim protection is incomplete because of slime/sand and so on (some servers disabled pistons).
+- **Explosions**: The `explosion` before extends after (`getImpactedBlocks()`, `setImpactedBlocks` on before), has no position (use the source entity position or the block centroid), and the block list can be empty. Do not destructure methods. Wind charge explosions are also handled as explosion damage. `ExplosionBeforeEvent` fires before the impacted blocks are decided, and there is a report that an explosion position property appeared in the Preview (*single report*). The actual origin (a wind charge is 0.25 out along the hit face normal, TNT is 0.06125 above the feet) is *unverified*. The `event.block` of `blockExplode` after is already air, so read the original type from the event's permutation property.
+- **Buttons, riding**: `world.afterEvents.buttonPush` gives `source` and `block`. A single report that a mob mounting was blocked with `world.afterEvents.entityMount` conflicts with "no mount event" below (**conflicting**).
+- **Effects**: `effectAdd` (before/after) `{entity, effectType}` - the `effectType` in before is a localized display string ("Mining Fatigue") and not a typeId, it does not fire when re-adding an already applied effect, an `Effect` instance becomes invalid after `removeEffect`, and `EffectTypes.get()` inside before throws. Used for witch potion detection.
+- **Health/healing**: `world.afterEvents.entityHealthChanged` (oldValue/newValue; better than intervals for a low-health effect), `entityHeal` before/after (2025-12 Preview; canceling in before is beta only as of 2.8.0-beta; `EntityHealCause`/`HealReason` `SelfHeal`, `TotemOfUndying` in 26.20.23-24).
+- **Dimension/weather/others**: `playerDimensionChange` (after only, cannot block portals; to send back, the default spawn is better than `fromLocation`), `weatherChange` (the dimension string is inconsistent in case as `overworld`/`Overworld` -> `DimensionTypes.get(id)?.typeId` or normalize), `pressurePlatePush` (`source`, no before, does not fire for a second player on an already pressed plate), `afterPlayerUseNameTag` (Preview 2026-03), `EntityUpgradeAfterEvent` (entity versioning `https://learn.microsoft.com/en-us/minecraft/creator/documents/entity-versioning`), `packSettingChange` (custom pack settings, experimental), `system.beforeEvents.shutdown`.
+
+#### Events that do not exist (reports as of 2026-11)
+
+Movement (`playerMove`), jumping (`entityJump`), stopping sneaking, starting sleep, adding/removing tags, opening the inventory screen, crafting (crafting/smelting), trading (villagers), successful fishing, biome change, a player entering a chunk, mounting (**conflicting**, the `entityMount` report above), world save, intercepting `/fill`, cobblestone generators, mob eating mob, canceling crop trampling, critical hits, experience orb pickup, cursor item change, first chunk generation, entity inventory change, entering a structure, a zombie targeting a villager, `entityHitEntity`/`entityHitBlock` before, canceling a swing, piston before, dimension change before, pressure plate before. Most are worked around with polling (`runInterval`), inventory diffs, custom block/item components, or entity JSON events -> `scriptevent`.
+
+### Damage and combat
+
+#### `world.beforeEvents.entityHurt` (EntityHurtBeforeEvent)
+
+- **History**: Added in the 2025-12-03 Preview (1.21.13x / 26.0.23, server 2.6.0-beta) -> usable with Beta APIs in the 2026-02 release Minecraft -> stable in @minecraft/server 2.6.0 (about 1.26.10) (confirmed 2026-04-19). Before that, in stable 1.21.131 and so on it was `cannot read property 'subscribe' of undefined`, and the alternatives were `damage_sensor`/editing player.json. *confirmed*
+- **Fields**: `hurtEntity`, `damage` (writable, the final value after resistance and so on: 4 damage vs Resistance IV -> 0.8; the original damage is not available; there are both a report that it is rounded to an integer and a report that zombies get ~0.94 from natural armor), `damageSource` (`cause`, `damagingEntity`, `damagingProjectile`; for `/damage` or script damage with no cause, cause is undefined), `cancel`. Changing damage needs no `system.run`.
+- **Pitfall of health values**: `health.currentValue` inside the handler already has the damage applied -> the original value is `+ event.damage`. A report that you must cancel first and then read health. Lethal check: `health.currentValue - damage <= 0` (+ for `/kill`, `damage === effectiveMax`), and check for a held totem.
+- **What canceling stops and does not stop**: It stops damage, armor/inventory durability loss, and `/kill` (`selfDestruct`, possible for invulnerable entities). Knockback could not be stopped at first (2025-12~2026-02), and after the 2026-03-24 Preview fix it came to block sprint/enchant/mace/projectile knockback too, then there was a report that "knockback is completely broken", and in later tests (2026-04, 2026-07) knockback is also blocked on cancel. It cannot stop fire-infliction ignition (even with `extinguishFire` in `system.run`, half a cell is lost), mob aggro, on-hit effects, mace smash, invincibility frame judgment and the hit flash. It does not fire for non-living entities (minecart, armor stand) or for hitting a painting (MCPE-174388). To stop side effects, use things like `beforeEvents.playerItemAttackEntity`. (**conflicting**: knockback behavior by time)
+- **`damage = 0` vs `cancel`**: `damage = 0` keeps the hit flash, critical and knockback (if knockback looks exaggerated, `system.run(() => hurtEntity.clearVelocity())`) and keeps landing particles. Cancel gives late feedback and can conflict with other scripts.
+- **Invincibility frame bug**: The problem where lowering `damage` in before broke the invincibility timer so damage came in every tick was confirmed fixed in the 2026-06-06 Preview. There are reports that lowering below 1.0 creates no i-frame, and that if you do not change damage during i-frames the event itself does not fire (unresolved). In vanilla too, larger damage gets through during i-frames.
+- **Reapplication loop**: Canceling and then `applyDamage` in the same handler is an infinite loop -> use a guard variable or a DP (can be set in before).
+- **Recipes**: Custom totem (main hand/off hand totem + `damage >= currentValue` -> cancel, empty the slot and `setCurrentValue` in `system.run`), fall immunity (`damageSource.cause === "fall"` -> `damage = 0`/cancel), fire immunity (`fireTick`, `fire`, `lava` are separate causes), tag-based invulnerability, team damage (compare `team:` tags on both sides, no cache needed), melee damage multiplier (`ev.damage += 5`), disabling attacks (`damagingEntity instanceof Player` + a main hand check), slime -> magma cube conversion (cancel the lethal hit and replace on the next tick), custom death (cancel -> spectator mode -> inventory to a container entity -> grave position DP), cactus damage immunity (cancel if cause is `"contact"` and there is no `damagingEntity`; magma blocks and sweet berry bushes are blocked too), harmless phantoms, server-verified melee attacks (cancel, check range, and `applyDamage` in `system.run`). A report that raising damage pierces totems (*unverified*).
+- **Measuring effective health**: Attach a listener, `applyDamage(x, {cause})` -> record `event.damage` -> cancel -> detach. effectiveHP = health / (dealt/input).
+
+#### `applyDamage`, invincibility frames, defense
+
+- **`entity.applyDamage(amount, {cause, damagingEntity, damagingProjectile})`**: `cause` is an enum such as `EntityDamageCause.projectile`, not a string. If the cause is projectile, `damagingProjectile` is needed (an error otherwise; Mojang sees it as a bug/unimplemented and asked for an MCPE report). It triggers a damage event and a hard-coded 0.5 second i-frame, so extra damage right after a melee hit is swallowed unless larger than the original damage. Small values are rounded up to 1, armor is already handled, and setting health directly bypasses i-frames but loses kill attribution. The cause `override` ignores both i-frames and armor/resistance. For the Ender Dragon, `applyDamage` is blocked by the multi-part logic, so use the health component. For some entities and causes (including suffocation), `applyDamage` returns false and `/damage` also fails. A single report that `{ damagingEntity: player }` does not work but `{ damagingProjectile: player }` did.
+- **i-frame**: A 10-tick window. Track the last hit tick per mob in the script. There is no API that plays only the hurt animation.
+- **Defense formula** (reverse engineered): `dmg * (1 - min(20, max(def/5, def - 4*dmg/(toughness+8)))/25)`, and Resistance is 20% per level (level 5 is immunity). Defense values are `equippable.totalArmor`/`totalToughness` (players only). The defense value of an individual armor item cannot be read.
+- **Custom PvP (old method)**: Nullify vanilla damage with the Weakness effect and apply your own damage/knockback (also works in 1.18.0 stable), or weapon JSON damage 0 + a script heal and then `applyDamage`. player.json `damage_sensor` conflicts with other add-ons.
+- **Critical hit detection**: Not possible with the hurt event -> in `entityHitEntity`, `isFalling && !isOnGround && !isClimbing && !isInWater && !riding && !blindness && !isSprinting` (gliding is also `isFalling`). Example: `https://github.com/Visual1mpact/Paradox_AntiCheat/blob/rewrite/penrose/modules/criticals.ts`
+- **Shield/mace**: A mace smash ignores shields (hard-coded). Imitating a shield: `isSneaking && getItemCooldown("minecraft:shield")==0`, Molang `q.is_blocking` (the shield also goes up when riding). Reference code `https://github.com/azurite-bedrock/Sweep-N-Slash` .
+- **Totem detection**: `entityHealthChanged` with oldValue&lt;=0 && newValue>0 + a totem in the inventory (old versions), and in newer versions the dedicated totem cause of `entityHeal` then health 1. The old "negative damage hurt" trick disappeared around 2026-03. A totem does not pop on `/kill` and void damage. The totem pop effect alone cannot be triggered separately (give a totem and then big magic damage). stirante keeps the detection recipe in the first post of the thread.
+
+#### Knockback and speed
+
+- **`applyKnockback`**: From 2.0, `entity.applyKnockback({x, z}, verticalStrength)` (put in a VectorXZ multiplied by the horizontal strength). The old 4-argument `(dirX, dirZ, horizontal, vertical)` gives "Incorrect number of arguments ... Expected 2, received 4"/no effect (the form before 1.21.60). The official documentation examples were once outdated. There is a report of 4-argument use even in 2026-07 but it looks like the old API (**conflicting**, *single report*). It overwrites the current knockback (does not accumulate), and for knockback of an aerial hit it is better than `applyImpulse`. It is affected by knockback resistance, so for movement such as dashes `applyImpulse` is right. An entity that is pathfinding turns its direction back, so remove the path component group briefly.
+- **`applyImpulse(Vector3)`**: Adds to velocity (accumulates), and also works on players in stable. On the ground, a y component can make it bounce. For non-hosts in worlds/Realms it stutters because of server position correction (BDS relaxes the server-authoritative movement setting). `clearVelocity()` removes velocity, `getVelocity()` (replaces `player.velocity`). The velocity unit of `applyImpulse`/`shoot` is blocks/tick.
+- **Removing/replacing knockback**: Overwrite with 0 knockback, store velocity -> `clearVelocity` -> reapply, `clearVelocity` on the next tick, teleport in place after being hit (awkward), opposite knockback in entityHitEntity. A knockback multiplier was added to player.json.
+- **Movement speed**: `getComponent("minecraft:movement").setCurrentValue(v)` (default ~0.1, an absolute value, and sprint and effects reset it so reapply every tick), `resetToDefaultValue()`, attribute components such as `underwater_movement`. Speed/slowness effects change the FOV (no clean way to slow without camera zoom). Documentation: `https://stirante.com/script/server/2.10.0/classes/EntityMovementComponent.html`
+- **Fixing in the air/flying**: Teleport every tick (cheapest), opposite velocity impulse (stutters), riding an invisible weightless entity + disabling input permissions. Flight system: tag gate + `applyKnockback`/`applyImpulse` in the look direction + slow fall. Elytra-style flight is possible (affects anti-cheat in multiplayer). There is no `mayfly` API (the `ability` command is Education only). Gravity cannot be changed (`minecraft:gravitation_force` is an AI hallucination).
+- **Fall physics and others** (*single report*): next tick vertical speed = (speed - 0.08) * 0.98, terminal velocity about 3.92 blocks/tick. A way to stun mobs by teleporting in place, input permissions have no effect on mobs, and a bunny hop was implemented with `applyImpulse` and a per-player momentum Map.

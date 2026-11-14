@@ -1,0 +1,185 @@
+---
+title: "manifest.json"
+description: "All manifest fields, UUID rules, modules and dependencies, script module versions, min_engine_version, product_type"
+sidebar_position: 5
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+---
+
+## Concept
+
+`manifest.json` is the ID card that introduces a pack to the game. It is at the root of every BP, RP, skin pack and world template. The top-level keys are as follows. (Source: bedrock-wiki, concepts/manifest; ms-learn, ManifestReference)
+
+| Key | Required | Description |
+|---|---|---|
+| `format_version` | Yes | Manifest syntax version. New packs use `3` |
+| `header` | Yes | Name, description, UUID, version |
+| `modules` | Yes | The kind of content the pack holds. Decides BP/RP/skin pack/world template |
+| `dependencies` | No | Other packs or script modules |
+| `capabilities` | No | Optional engine features |
+| `metadata` | No | Authors, license, URL, generating tool, product_type |
+| `subpacks` | No | Selectable variants (mainly texture resolution) |
+| `settings` | No | Toggles, sliders and dropdowns the player adjusts |
+
+The MS Learn reference also lists `has_education_metadata` (boolean) at the top level, and `platform_locked` and `pack_optimization_version` (a major/minor/patch/preRelease/buildMeta structure or a string) in `header`.
+
+### format_version 1, 2, 3
+
+| Value | Status | Notes |
+|---|---|---|
+| `1` | Legacy | Seen only in skin packs |
+| `2` | Supported | Writes versions as an array `[1, 0, 0]`. No pack settings and no `memory_performance_tier` |
+| `3` | Recommended | Every `version`, `min_engine_version` and `base_game_version` must be a SemVer **string**. Adds pack settings and `memory_performance_tier` |
+
+In format 3, `metadata.authors` is effectively required (loading fails without it. Microsoft stated that this is unintended behavior and will change). Script module dependency versions are always strings regardless of the manifest format.
+
+```json
+"version": [1, 2, 3]   // array form: formats 1 and 2 only
+"version": "1.2.3"     // SemVer string: allowed in format 2, required in 3
+```
+
+## UUID
+
+A UUID is 36 characters in the format `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` and must be **v4 (random)**. uuidgenerator.net, the VS Code UUID Generator extension and editors such as bridge. generate them.
+
+- Do not reuse. If the same header UUID is in two packs, "Duplicate pack detected" appears or one is silently replaced.
+- The header UUID and all module UUIDs must differ from each other (the `header.uuid` of the BP and the RP must differ too).
+- Keep the UUID when updating. If you change it, the pack is treated as a new pack so worlds do not receive the update, and dynamic properties and script isolation are tied to the pack UUID so the values are lost. Raise `header.version` instead.
+- UUIDs are case-insensitive, but lowercase is the convention.
+
+## header
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | Yes | In-game name. Can be a localization key such as `pack.name` |
+| `description` | No | Description under the name. One or two lines. Can be a localization key |
+| `uuid` | Yes | Identity of the pack |
+| `version` | Yes | When a pack with the same UUID is imported again, **only a higher version** replaces the existing one |
+| `min_engine_version` | BP, RP | Minimum game version supported. Also decides which legacy behaviors are turned on for the pack |
+| `pack_scope` | RP, optional | `"world"` only inside a world, `"global"` only in the global list, `"any"` (default) both |
+| `base_game_version` | World template | Vanilla pack version the template is based on |
+| `lock_template_options` | World template | Locks changes to world options |
+| `allow_random_seed` | World template | New seed on every use |
+
+## modules
+
+The pack kind is decided by the module `type`, not by the folder.
+
+| type | Pack | Description |
+|---|---|---|
+| `data` | Behavior pack | Server definitions such as entities, items, blocks, loot tables and functions |
+| `script` | Behavior pack | Script API entry point. `language` and `entry` are required. Usually placed together with `data` |
+| `resources` | Resource pack | Textures, models, sounds, UI and more |
+| `skin_pack` | Skin pack | |
+| `world_template` | World template | |
+| `client_data` | Behavior pack | Remnant of old client scripting. Removed, remains only in the MS docs |
+
+`data` and `resources` cannot be placed together in one pack. The module fields are `type`, `uuid`, `version`, `description` (a memo), `language` (only `"javascript"`) and `entry`.
+
+```json
+{
+  "format_version": 3,
+  "header": {
+    "name": "pack.name",
+    "description": "pack.description",
+    "uuid": "ee649bcf-256c-4013-9068-6a802b89d756",
+    "version": "1.0.0",
+    "min_engine_version": "1.26.40"
+  },
+  "modules": [
+    { "type": "data", "uuid": "fa6e90c8-c925-460f-8155-c8a60b753caa", "version": "1.0.0" },
+    { "type": "script", "language": "javascript", "entry": "scripts/main.js",
+      "uuid": "c05a992e-482a-455f-898c-58bbb4975e47", "version": "1.0.0" }
+  ],
+  "dependencies": [
+    { "uuid": "66c6e9a8-3093-462a-9c36-dbb052165822", "version": "1.0.0" },
+    { "module_name": "@minecraft/server", "version": "2.7.0" },
+    { "module_name": "@minecraft/server-ui", "version": "2.0.0" }
+  ],
+  "metadata": { "authors": ["Your Name"], "license": "MIT", "product_type": "addon" }
+}
+```
+
+A resource pack example (world-only, Vibrant Visuals support) has `header.pack_scope: "world"`, `resources` in `modules` and `capabilities: ["pbr"]`. A skin pack does not use `min_engine_version`, `dependencies`, `capabilities` or `settings`. A world template puts `base_game_version`, `lock_template_options` and `allow_random_seed` in `header` and sets the module type to `world_template`.
+
+## dependencies
+
+An entry is either a pack dependency (`uuid` + `version`) or a script module dependency (`module_name` + `version`).
+
+- **Pack dependency**: if a BP depends on an RP, the RP is added automatically when the BP is added to a world, and a warning appears if it is missing. The `uuid` must be exactly the same as the `header.uuid` of the RP, and the `version` must match the `header.version` of the RP.
+- **Script dependency**: a BP with a `script` module must declare every API module it imports. The version decides the API surface. A `-beta` suffix can be added (`"2.4.0-beta"`).
+
+## metadata
+
+| Field | Description |
+|---|---|
+| `authors` | Array of authors. Required in format 3 |
+| `license` | Distribution license string |
+| `url` | Website |
+| `product_type` | The only supported value is `"addon"` |
+| `generated_with` | Array of a tool name (`[a-zA-Z0-9_-]`, 32 characters or fewer) and SemVer strings |
+
+## Rules and reports (community 2025-10 ~ 2026-11)
+
+- **The pack kind is decided by the type in `modules`, not by the folder**: `"type": "data"` = behavior pack, `"type": "resources"` = resource pack, `"type": "script"` = script module. A BP that uses scripts has both `data` and `script` modules.
+- **The `header.uuid` of the BP and the RP must differ**, and the UUID must be a valid v4.
+- **Script module example** *(confirmed)*:
+
+  ```json
+  {"type":"script","language":"javascript","uuid":"<uuid>","version":"1.0.0","entry":"scripts/main.js"}
+  ```
+  `"language"` must be lowercase `"javascript"`, and `"entry"` must be the real path of the main file. If the entry file is missing or empty, "could not load main" appears.
+- **Dependencies**: `{"module_name": "@minecraft/server", "version": "2.8.0"}`. To activate the RP automatically, put the RP's `header.uuid` in the BP dependencies. An add-on that uses a shared UI RP also needs the dependency.
+- **When you raise the RP version, raise the RP dependency version on the BP side too.** A mismatch gave an unrelated "stack overflow" load error.
+- **The "Pack Manifest version 0 is deprecated"** warning means `format_version: 2` is missing. With a manifest made by bridge. 2.7.54 the same warning appeared even though `format_version: 2` was present (unresolved).
+- **Common manifest errors**: "dependencies/1/version is not compatible with SemVer" is a problem with a dependency version string. One wrong character gives "unknown package", and a file name typo (`mainfest.json`) makes the pack not show up with no log. Copying the BP's `"data"` module into an RP makes import fail. A trailing comma gives `Missing '}' or object member name`.
+- **An RP cannot have a `scripts` folder.** An add-on made of only an RP cannot run logic.
+- **A `"pack_scope": "world"` pack** is active only inside a world, so it does not appear in the My Packs list in the main menu.
+- **Manifest editing tools**: https://jaylydev.github.io/manifest-generator/ , schema https://github.com/Blockception/Minecraft-bedrock-json-schemas
+- **Open questions**: the cause of "Provided uuid '/header/uuid' element already exists in pack manifest", and whether manifest `format_version` 1 is supported after 26.63.
+- **`client_data`** is a remnant of old client scripting and remains only in the MS docs.
+- **`capabilities: ["script_eval"]`** is required for `eval`/`new Function()`.
+- **Reference manifests**: https://github.com/Mojang/bedrock-samples/blob/main/behavior_pack/manifest.json , wiki explanation https://wiki.bedrock.dev/guide/project-setup#manifest-explained , MS reference https://learn.microsoft.com/en-us/minecraft/creator/reference/content/addonsreference/packmanifest?view=minecraft-bedrock-stable
+
+### Differences between format_version 2 and 3
+
+- **v3 makes every version a string**: `"version": "1.0.0"`, `"min_engine_version": "1.26.50"`, and module and dependency versions are strings too. `format_version` itself is the number 3. Using an array in v3 gives `[Packs][error] header -> version: expected an object / invalid string`. Format 2 + array still loads. If a BP depends on an RP, keep the two packs consistent. *(confirmed)*
+- **Pack settings (`settings`) need v3**. v3 became officially usable in 26.50 (2026-09-15), and before that it was experimental/Preview.
+- **With manifest v3 + subpacks**, the `Resolution: ` prefix of the subpack slider disappears. Schema: https://github.com/Mojang/bedrock-samples/blob/f5b651000f52b66334c968f3ccf1aca7950cd6ee/metadata/json_schemas/client_server/packaging/3.0.0/Manifest.json
+- **`execute as @e` in a function showed an error after an update**, which was fixed by raising manifest `format_version` from 1 to 2.
+- **A case where v3 + a cosmetic model was visible only on the server and not in the world/UI** (1.26.0.02). *(single report, unanswered)*
+- **In the custom music disc example, the manifest `version` had to be the array `[1,0,0]`** (format 2).
+
+### min_engine_version
+
+- **26.x notation**: game "26.30" is `[1, 26, 30]` (`"1.26.30"` in v3). Internally it is still the 1.XX.X scheme. `[1,26,0]` is valid, and values such as `[2,30,0]` fail to load.
+- **A version that has not been released yet** (for example `[1,26,50]` as of 2026-09-10) makes the pack fail to import. Use a released version (for example `[1,26,40]`). A value higher than the game version also fails to import.
+- **Too low a value** applies the old command parser: below 1.19.50 the new `execute` fails to parse with "Unexpected @a/@e", and at 1.19.0 even syntax such as `summon x ~~~ 0 0 ninja` fails (a BP generated by Blockception uses 1.19.0). The latest value is recommended (for example `[1,21,110]` or above).
+- **Old manifests (for example 1.21.30) keep loading after 26.0**, and only the newer features cannot be used.
+- **Raising to `[1,21,130]` fixed missing mob/spawn egg entries** in one case.
+- **The opposite case**: a report that a pack did not show in the list when `[1,26,0]` was used in a format 2 manifest, fixed by correcting min engine. *(single report)*
+- **The bridge. editor recognizes packs by `min_engine_version`**, and 1.26.0 was not recognized, so 1.26.10/1.26.20 was recommended. *(single report)*
+- **`min_engine_version` has no effect on block format gating.**
+- **Do not use hotfix numbers**: use the latest release number ending in 0 (`"1.26.10"`, `[1, 26, 10]` for format 1/2). A game notation such as `26.1` fails. A moderator answered that the `[1, 26, 0]` form stays as it is after 26.x.
+
+### Script module dependency versions
+
+- **`"version": "beta"`**: used for `@minecraft/server`, `-ui` and `-gametest`, it picks the latest beta automatically at runtime (introduced in the stable release around 1.21.120). It avoids the problem of a fixed beta (`2.6.0-beta`) breaking on every update, but it does not protect against breaking API changes. Beta modules need the Beta APIs experiment. There were inconsistent cases of errors after a full restart, and `"stable"` is not documented.
+- **`"version": "*"` is invalid in the stable release.** Write it explicitly, such as `"2.6.0"` or `"beta"`.
+- **The error message lists the available versions.** A method also used is to enter a deliberately wrong version and read the list in the Content Log (2026-07-05 example: server 0.1.0, 1.19.0, 2.8.0, 2.9.0-beta, 3.0.0-alpha / server-ui 0.1.0, 1.3.0, 2.1.0, 2.2.0-beta, 3.0.0-alpha).
+- **Version conflict**: `@minecraft/server` `2.7.0-beta` + `@minecraft/server-ui` `1.3.0` -> `version conflict for module [@minecraft/server-bindings]`. Matching server-ui to `2.1.0-beta` fixes it.
+- **Recommended stable combinations by period**: 2025-11 server 2.3.0 + common 1.2.0 / 2026-03 server 2.5.0 / 2026-04-17 server 2.6.0 + server-ui 1.3.0 / 2026-05 server 2.7.0 / 2026-07 server 2.8.0 + server-ui 2.1.0 / at 26.50 server 2.10.0 + server-ui 2.2.0 (2.3.0 failed to load scripts in one pack) / at 26.60 (2026-11-03) server 2.11.0 + server-ui 2.3.0, server-gametest `1.0.0-beta.1.26.60-stable`. BDS example: server-gametest/net use the `1.0.0-beta.1.26.34-stable` format.
+- **`server-net` and `server-admin` exist only as `1.0.0-beta`** (Beta APIs required). "requested invalid version [2.2.0] of server-net, available 1.0.0-beta". On BDS, `"allowed_modules": ["@minecraft/server-net"]` in `config/default/permissions.json` is also required. Removing `server-gametest` and `server-admin` is recommended when debugging.
+- **Custom components need `@minecraft/server` >= 2.0.0.**
+- **The module versions in the wiki custom crop example were outdated**, and updating the manifest fixed it.
+- **Dynamic properties and script isolation are tied to the pack UUID**, so changing the UUID makes dynamic properties disappear. Pin the header/module UUIDs.
+
+### product_type and achievements
+
+- **Before 1.26.50**: adding `"metadata": {"product_type": "addon"}` kept achievements working even with a BP/scripts (it did not restrict scripts or components). Wiki: wiki.bedrock.dev/guide/project-setup#bp-manifest. *(confirmed)*
+- **Format**: write `product_type` only as a string in the BP manifest `metadata`. The object `{"addon": {}}` is rejected with "Required '/metadata/product_type/product_type' element is the wrong type in pack manifest". It only matters for packs that need no cheats or experimental toggles.
+- **After 1.26.50** *(conflicting)*: there was an answer that external (non-Marketplace) add-ons can no longer be achievement-friendly and that this is an intended restriction (2026-09-19). The change was not in the changelog, and there are MCPE-242529 ("Considered an Exploit") and a feedback post (https://feedback.minecraft.net/hc/en-us/community/posts/48931692849677-Revert-the-change-of-disabling-achievements-for-third-party-add-ons). Later, a report says it was fixed in 26.52 so achievements are kept again (2026-10-11), and another says they can still be turned off in 26.60 but the UI message is broken so it is hard to tell (2026-10-27). The reports disagree. Check the actual state for each release.
+- **A pack that removes the Marketplace button** also turns off achievements.
+- Earlier answers also said "turning on a BP turns off achievements with no workaround", but that referred to the practice before `product_type`. *(superseded)*

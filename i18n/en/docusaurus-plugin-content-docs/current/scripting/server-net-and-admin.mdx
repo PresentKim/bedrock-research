@@ -1,0 +1,165 @@
+---
+title: "server-ui, server-net, server-admin, GameTest"
+description: "server-ui forms and DDUI, the BDS-only server-net and server-admin, IPC between add-ons, GameTest and Editor"
+sidebar_position: 8
+sources:
+  - private-research
+  - ms-learn
+  - bedrock-wiki
+---
+
+## server-ui form summary
+
+`@minecraft/server-ui` is the module that shows forms to players. It has `ActionFormData` (button list), `ModalFormData` (slider, toggle, dropdown, text input) and `MessageFormData` (two-button confirmation), all used as `new XxxFormData().title(...)...show(player)` with the result returned as a Promise. `ActionFormData` has `title`, `body`, `button(text, iconPath)`, `header`, `label` and `divider`, and `ModalFormData` has `textField`, `slider`, `dropdown`, `toggle`, `submitButton` and so on (Source: ms-learn, `creator/ScriptAPI/minecraft/server-ui/ActionFormData.md`, `ModalFormData.md`).
+
+```javascript
+import { ActionFormData } from "@minecraft/server-ui";
+
+const form = new ActionFormData()
+  .title("Menu")
+  .body("Choose one")
+  .button("Start", "textures/items/diamond");
+form.show(player).then((res) => {
+  if (res.canceled) return;           // canceled or UserBusy
+  player.sendMessage(`Selected: ${res.selection}`);
+});
+```
+
+A form `show` is a world-changing call, so it cannot be called directly from a `before` event, and right after join or when forms overlap it can be canceled with `UserBusy`, so add a delay and retries. The details of using forms (modal forms, multiple selection, server form reskinning) are on the [modal forms](../server-ui/modal-forms.mdx) page. The notes below contain a summary of community research on forms and DDUI (data-driven UI).
+
+## BDS-only modules and permissions
+
+`@minecraft/server-net` (HTTP, WebSocket) and `@minecraft/server-admin` (variables and secrets) can be used only on Bedrock Dedicated Server (BDS), not on Realms or local worlds. Both are experimental (Beta APIs) modules. The script module allow list is the server's `config/default/permissions.json` (Source: ms-learn, `creator/Documents/BedrockServer/scripting.md`).
+
+```json
+{
+  "allowed_modules": [
+    "@minecraft/server-gametest",
+    "@minecraft/server",
+    "@minecraft/server-ui",
+    "@minecraft/server-admin",
+    "@minecraft/server-editor"
+  ]
+}
+```
+
+The `config` folder is created the first time the server runs, and the `default` subfolder holds the default settings for all modules. To give different settings per script module, create a folder in `config` with the same name as that module's UUID and put a `permissions.json` there. The official guidance recommends keeping the file in `default` to a minimum.
+
+## server-admin: variables and secrets
+
+To let an administrator change values without editing JSON directly, put `variables.json` in `config/default` or the module UUID folder.
+
+```json
+{ "mobSpawnRate": 22 }
+```
+
+```javascript
+import { variables, secrets } from "@minecraft/server-admin";
+const spawnRate = variables.get("mobSpawnRate");
+```
+
+`secrets.json` holds sensitive values such as authentication tokens, and they cannot be read from the script's global scope and are resolved at execution time inside specific objects such as the `server-net` `HttpHeader` (use `secrets.get()` as a header value).
+
+## server-net: HTTP requests
+
+```javascript
+import { http, HttpRequest, HttpHeader, HttpRequestMethod } from "@minecraft/server-net";
+import { secrets } from "@minecraft/server-admin";
+
+const req = new HttpRequest("http://localhost:3000/updateScore");
+req.body = JSON.stringify({ score: 22 });
+req.method = HttpRequestMethod.Post;
+req.headers = [
+  new HttpHeader("Content-Type", "application/json"),
+  new HttpHeader("auth", secrets.get("authtoken")),
+];
+const res = await http.request(req);          // Promise<HttpResponse>
+```
+
+`HttpRequest` has the properties `body`, `headers`, `method` and `timeout` and the methods `setBody`, `setHeaders`, `setMethod`, `setTimeout` and `addHeader`, and error classes include `HttpRequestLimitExceededError`, `RequestBodyTooLargeError`, `TLSOnlyError` and `UriNotAllowedError` (Source: ms-learn, `creator/ScriptAPI/minecraft/server-net/HttpRequest.md`). `WebSocket`, `WebSocketClient` and the packet receive and send before events (`PacketReceiveBeforeEventSignal`) are also in this module.
+
+## Communication between add-ons and GameTest
+
+Add-ons cannot import each other's scripts, so they exchange messages with `system.sendScriptEvent(id, message)` and `scriptEventReceive` (see the earlier events page). `@minecraft/server-gametest` is the oldest module with no stable version and is for testing, not for content creators. `server-editor` is used only in editor project worlds (Source: bedrock-wiki, `scripting/api-modules.md`).
+
+## Community notes
+
+Below is information on DDUI, server-ui details, BDS operation, IPC, GameTest and Editor gathered from the community research.
+
+
+`*confirmed*`, `*single report*` and `**conflicting**` are reliability marks for reports. The basis of this page is community reports, and they may differ from the official Mojang documentation.
+
+### UI: server-ui forms, DDUI, JSON UI integration
+
+#### ActionFormData / ModalFormData / MessageFormData
+
+- **ActionFormData**: `.title().body().button(text, iconPath).show(player).then(r => r.canceled / r.selection)`. `body` allows rawtext. A button returns only an index and cannot stay open after a click (re-show recursively), and there is no tooltip/hover. Body + one button = a single-button message. Icons are only RP texture paths (a case where the extension was needed as `textures/ui/x.png`; URL images need the Endstone plugin URL-Image-Fix/endweave), and item texture paths cannot be obtained from script. Documentation: `https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/minecraft/server-ui/actionformdata?view=minecraft-bedrock-stable`
+- **ModalFormData**: `.textField(label, placeholder, { defaultValue, tooltip })` (in 2.x the third argument is an object; the value is a string so `split(" ").map(Number)`, defaultValue is string/RawMessage), `.dropdown(label, options, { defaultValueIndex })` (a null array is an error), `.toggle(label, { defaultValue })`, `.slider(label, min, max, { defaultValue, valueStep })` (passing a number gives "Native type conversion failed ... ModalFormDataSliderOptions"; integer steps only -> scaling; a bug where `valueStep` 0.1 is fixed at 0, 2026-08), `.header()/.label()/.divider()`. The response is `response.canceled` (not `isCanceled`/`cancelled`) and `response.formValues[i]` - label/header/divider also take up positions and undefined goes in (reverted for backward compatibility), so index by position or filter with `v != null` (loose comparison; `!== null` cannot filter undefined). AI-written code often misses the `{ defaultValue }` object requirement. Text field length limits and center alignment go through JSON UI.
+- **show timing**: Do not `show` directly from before events, command callbacks and chat contexts; use `system.run` (it is not shown if the chat window is open). If another UI is open, it is `response.canceled && response.cancelationReason === FormCancelationReason.UserBusy` (the string `"UserBusy"`, PascalCase; there is also `UserClosed`; import from `@minecraft/server-ui`) and `selection` is undefined -> check the reason before looking at `selection` and use a `forceShow` pattern that retries with `runTimeout` (~20 ticks). A join welcome form works the same way. Create forms inside handlers, not at module top level. Build static forms once at initialization (showing a translated form is a ~400 ms spike, especially in development_* folders).
+- **Confirmation dialog**: In an async function, `return (await form.show(player)).selection === 0` (a return inside `.then` does not return from the outer function).
+- **Force close**: `uiManager.closeAllForms(player)` (server-ui; beta in 2026-04, stable in 2026-07) - auto-closing timer "video"/image forms, clean up with `form.show(player).finally(...)`. Selective closing needs UserBusy handling.
+- **Community extensions**: Herobrine643928/Chest-UI (`ChestFormData('large'|'small').title().button(slot, name, lore[], texture, amount).pattern([...]).show(player)`, `./extensions/forms.js`, not part of server-ui; if textures break in the latest version, replace the `#item_id_aux` binding `(#form_button_texture * 1)` in chest-server_form.json with `((#form_button_texture - (#form_button_texture % 65536)) / 65536)`; typeIdToID must be added manually for each new vanilla item, and custom item textures may be missing; forks `https://github.com/Herobrine643928/Chest-UI/forks` ; typeIds list `https://github.com/Herobrine643928/Chest-UI/blob/main/BP/scripts/extensions/typeIds.js`), Sprixvy/Chest-Form (`inventory.json` makes half the inventory clickable; `type` is `container`/`inventory`, slots from 0). Aux id for icons: `(itemId << 16) | (enchanted ? 1<<15 : 0)` (an unresolved report that only blocks rendered). Servers put a special `§` prefix in the form title to choose the JSON UI layout (for example the `custom_nephelia:skills_ui` grid - empty cells are `form.button("")`). diag2form.js converts NPC dialogue.json to server-ui. In form text, lang keys use `{translate:"key"}` or a plain-text `%key` prefix.
+
+#### DDUI (Data-Driven UI: `CustomForm`, `MessageBox`, `Observable*`, `uiManager`)
+
+- **History and requirements**: Introduced in Preview 1.26.10.21/22 (server-ui `2.1.0-beta`, server `2.7.0-beta`) (older Previews give `Could not find export 'CustomForm'`). min_engine_version [1,21,110]+, beta dependency. Usable with Beta APIs in the 26.10/26.11 release -> stabilized as server-ui v2.1.0 in 1.26.30 (`https://learn.microsoft.com/en-us/minecraft/creator/documents/update1.26.30?view=minecraft-bedrock-stable#released-minecraftserver-ui-v210`), and as a stable API it can be used on the Marketplace. In 2026-08 the syntax changed to strict types, and DDUI layouts were not released as of 2026-08. Documentation: `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/intro-to-ddui?view=minecraft-bedrock-stable` . Ore UI source: `https://github.com/Mojang/ore-ui` . *confirmed*
+- **BDS**: `"@minecraft/server-ui"` in `allowed_modules` of `config/default/permissions.json`, and Beta APIs in the world (before stabilization). A case solved by using a world BDS made instead of copying a client world.
+- **Constructor changes**: Initially `CustomForm.create(player, title)` and `Observable.create(value, {clientWritable})` -> 26.30+ `new CustomForm(player, title)` (below 26.30 it is `.create`; using the wrong one gives "Invalid constructor called"/"not a function"). `Observable` was split into `ObservableNumber`/`ObservableBoolean`/`ObservableString` (`new ObservableString("", {clientWritable: true})`, and the `Observable` export is gone). `ObservableUIRawMessage` for translation/rawtext labels (labels only; a textField value is a string observable). Strict types: boolean expressions such as `0 === 1` were errors while a `false` literal was reported to work. A `clientWritable` observable cannot be changed after creation (create a new one).
+- **Basic usage**: `new CustomForm(player, "Title").label(...).button(text, cb, opts).closeButton().show()`. `show()` is a Promise (`.then` when closed, `.catch` for errors; `form.then` is an error). Elements: `label`, `header`, `divider`, `spacer` (no size argument, needed per line), `button(text, cb, {visible, disabled, tooltip, imageDetails})`, `textField(label, obs, {description, disabled})`, `slider(label, obs, min, max, {step, description, disabled, visible})` (floats allowed), `toggle`, `dropdown(label, obs<number>, [{label, value}])` (obs is a numeric index), `closeButton()`, `image(src, packUuid, {width: 0..1, visible})`, `multiButtonRow` (26.60 preview, server-ui 2.4.0-beta, not stable). Title, label and button text allow `{translate, with}` RawMessage, and there is nothing like `player.translate()`.
+- **Reactivity**: You must pass the observable itself for updates (`.label(obs)`; `obs.getData()+"..."` is evaluated once, and mixing with strings gives `[object Object]`). A label observable must be a string (a number gives `Unexpected data type ... Expected string and received number`) -> update a second string observable in `subscribe`. One observable per label (no concatenation). `visible: selected.getData() === x` is also evaluated once -> keep an `Observable<boolean>` per element and `setData` in subscribe. There is no `!obs` operator (`!obs.getData()`), and buttons that toggle each other synchronize two boolean observables with subscribe. Calling `setData` inside its own subscribe gives an overflow error -> wrap with `system.run` (a guard does not help). `Observable.unsubscribe(handle)` has not worked since the Preview (it keeps being called; whether it leaks is unknown).
+- **Per-player data**: Observables are not bound to a form, so sharing one across several players' forms synchronizes them -> `Map<playerId, Observable>`, make writable observables per player and update the shared observable. DDUI can be updated while open (ActionFormData cannot), but elements cannot be added after showing -> build hidden elements in advance and toggle `visible` + dynamic button text. Dropdown items cannot be added/removed dynamically either. Search box: subscribe to a `clientWritable` text field observable and set the `visible` of pre-made buttons with `text.includes(query)` (do not create buttons inside subscribe). For thousands of items, a pool of ~7 buttons + pagination (1400 buttons was slow but did not crash). A derived observable pagination example: `https://gist.github.com/IanSSenne/7c6b0293f7d78628b714a6b8e032fffd` , a visibility chain helper: `https://github.com/NaKeRNarolino/ReHeart-of-the-Universe/blob/main/packs%2FBP%2Fscripts%2Futils%2Futils.ts#L159-L214` . CustomForm cannot be restyled. A wrapper that hides observables (`form.textField`, `.visible`, `.label`) was also shared.
+- **Switching/closing forms**: `form.close()` on the stored instance (not callable as a class static; if you chain everything the const is undefined inside the callback), `uiManager.closeAllForms(player)`. Opening another CustomForm right after closing gives "cannot show form because another is open" -> `runTimeout` of at least 1 tick (6~15 ticks depending on the person), or put two pages in one form and switch with `visible`. One form per player at a time. A case of using `canShow` to judge "the player has fully loaded". The problem of DDUI forms soft-locking the client on server crash/watchdog was fixed around 2026-03-10. The first button receives keyboard focus and can be pressed with W/space/enter (accessibility, intended behavior).
+- **Text**: `§` color codes work only in label/header/title (not button/toggle/dropdown text), `§l`/`§o` are invalid, `§k` becomes dots, the party chat color `§w` is unsupported (2026-05), and glyphs/emoji show as boxes (CustomForm does not support glyphs). The line break `\n` works since 2026-04-08 (before that `<br>`, `\r` and `~LINEBREAK~` were all ignored - work around it by listing characters that allow a break). The default spacing is tight so use `.spacer()`, and alignment is fixed to the left. Label line breaks cause clipping/overlap, and Arabic renders wrongly. Pixel art: `§a█` (U+2588), 2x2 sub-pixels with Block Elements (Bad Apple 40x30), about 20 characters per line. Games/minimaps/raycasters rebuild large label strings every frame, and WASD is input through a text field (no API to force focus).
+- **Button events**: Only left click/release (no long press, hover, right click or mouse button argument), and no tooltip when `disabled:true`.
+- **Images** (26.40 preview, button images reported stable in 26.60): `form.image('textures/items/stick.png', packUuid, {width, visible})`, gif possible, button `imageDetails: { imageSrc, imagePackId }`. Ore UI uses direct file paths so the extension is included. Since ~26.40.30, vanilla pack textures (empty uuid or `66c6e9a8-3093-462a-9c36-dbb052165822`) cannot be referenced -> copy into your own RP and use the RP header uuid. It loads slowly at first and is then cached, size limits are unconfirmed, and item/block rendering is unsupported.
+- **Close button**: In some 26.30 builds both `closeButton()` and the corner X showed (fixed in 26.40.20), and initially `closeButton()` was needed. The close button position cannot be reused for a custom back button.
+- **Performance and limits**: `visible:false` also remains in the layout, 100 buttons are slower than vanilla ActionForm and 2500 take ~1 minute + scroll fps drops, the number of observables itself (7 vs 500) is not a big cost but many elements and subscribers lag, there is a delay in the open/close animation, and it is slower than JSON UI. UI cannot be added to existing screens (inventory, HUD), and container/inventory slots are unsupported (Mojang: a container component is planned). DDUI broke input in split screen (fixed in the 26.50 preview). QuickJS is far too slow for emulators.
+
+#### Passing data to and from JSON UI
+
+- **Script -> JSON UI channels**: There is no API to put data in directly. `player.onScreenDisplay.setTitle(text, {fadeInDuration:0, stayDuration:0, fadeOutDuration:0})` (with all 0 there is no background afterimage; command `/title @s times 0 0 0`), `setActionBar`, `/titleraw`, chat, form title/button text/texture strings, and the item name/lore/durability on a container screen. `setTitle('§z')` + `updateSubtitle(...)` drives a preserved HUD element. Several `setTitle` in the same tick are dropped by a preserved title panel, so queue one per tick (`runTimeout(..., index)` or a DP-based queue). Resend the title on join/leave, and slot data is in player DPs. JSON UI treats number-only button text as an expression -> the `§z` prefix. DPs cannot be read from JSON UI.
+- **No JSON UI -> script channel**: A script cannot read button clicks (except server forms). Client RP data cannot be sent to the BP (a websocket was mentioned). There are no plans for client-side scripting (no `@minecraft/client`). A custom block cannot open a custom screen (open a server form from an event or use an inventory entity). JaylyDev/interpreter (GPL-3.0) is a large multi-line text box using JSON UI. `entity.id` is the entity UUID to pass to UI renderers such as `live_horse_renderer`.
+
+
+### Networking, servers, communication between add-ons
+
+#### `@minecraft/server-net` (BDS only)
+
+- **Environment**: Exists only on BDS (not on local worlds, Realms or Education; no HTTP on Realms). If you do not add it to `allowed_modules` of the server `config/default/permissions.json`, you get "Module is unrecognized/not configured". Importing a nonexistent module disables the whole script before catch (optional dependencies are unsupported; manifest v3 optional modules are planned). For security (unauthorized network access by malicious add-ons) server-net is missing from BDS Preview downloads (debug-utilities is included). Mojang plans to make server-net stable but for dedicated servers only.
+- **Detecting the environment**: `await import("@minecraft/server-net").catch(() => null)` and then check that `beforeEvents.packetReceive` exists (a plain `try { import }` does not work because the manifest throws first; putting the dependency in the manifest makes the pack fail outside that environment, so duplicate packs were needed). If there is no Host-permission player, it is BDS/Realm.
+- **HTTP**: `HttpRequest`, `HttpRequestMethod.Post`, header `Content-Type: application/json`, similar to node:http. A request to add PATCH -> it was added. `setTimeout`/`timeout` could not abort slow requests. "InternalHttpRequestError ... 0x80072efd" is a connection failure, and the POST problem was caused by old types. Sending a community webhook (clean up `@everyone`/`@here`), and in the opposite direction polling the community REST API with a bot token. Libraries: `https://github.com/m0lc14kk/WebhookAPI` , github.com/oliverperzyk/WebhookAPI .
+- **WebSocket**: Added to server-net in the 26.20/21 preview (beta). On BDS, `InternalWebSocketError 'not a socket'` (2026-03), and a report in 1.26.23.1 that `websocket.connect(uri, headers)` rejects two arguments (module/version mismatch). Connecting to a local LLM is possible.
+- **Packets**: `beforeEvents.packetReceive.subscribe(e => { e.cancel = true; }, { monitoredPacketIds: [PacketId.CommandRequestPacket] })` blocks client slash commands (disables all command features, but does not unregister them), `PacketSendBeforeEvent`. `ServerboundLoadingScreenPacket` (fires twice, set and clear) cannot be canceled. Chat content cannot be read with packetReceive.
+- **External DB examples**: MongoDB HTTP bridge `https://github.com/NetherGate-LLC/NetherGate-Bridge` (IP allow list, do not distribute the connection string to clients), Firebase/Supabase `https://github.com/colemad/Web-database` .
+
+#### `@minecraft/server-admin`
+
+- **Features**: `transferPlayer(player, {hostname, port})` (move to another server/world; beta), `kickPlayer`, `beforeEvents.asyncPlayerJoin` (fires earlier than playerJoin, the handler returns a Promise `(arg)=>Promise<void>`, provides `xuid`/`persistentId`, no player object -> platform kicks use `playerSpawn` + `platformType` + `kickPlayer`), server variables/secrets (BDS only; process env cannot be read).
+- **Realms**: By the documentation BDS only, but there are several confirmations that `transferPlayer` works on Realms (a report that it is the only function working locally). Realms-related changes: `https://help.minecraft.net/hc/en-us/articles/43490711924109-Update-Changes-to-Server-Admin-Scripting-Module` . On Realms/worlds, use the `kick` command for kicks (`runCommand("kick @s reason")` works again). A report that transferring players between Realms is impossible. Conversely there is also a report that transferring from a Realm to another server does not work at all (**conflicting**). Around 2026-02-24, `@minecraft/server-admin` was disabled on Realms, and if this dependency remained in the manifest, all of that pack's scripts failed, which was fixed by removing the dependency.
+
+#### BDS and Realms operation notes
+
+- BDS has no plugins and runs add-ons (plugins are in custom software such as Endstone). Endstone supports things vanilla scripts cannot, such as NPC skins, URL images, container UI and XUID. Disabling commands is `config/commands.json` (server only; `/me`, `/kill`). A config folder named after the module UUID is needed.
+- Memory: BDS server memory growing 50~100 MB per hour from chunk allocation is normal, and script growth should be ~0. Case: per-player Maps not cleaned + sidebar updates every tick + awaiting `ping` promises every tick + wind/noise systems at 150~200 MB/h -> 50 MB/h.
+- Realm pack updates are unstable: raise the pack version -> remove the pack from the Realm -> save -> leave to world selection -> add it again, and remove it from `development_*` first. Check loading with `/packstack server verbose exclude-vanilla`, and `/reload all` for scripts. To confirm it applied, change the description/version string or have a version output command. Resource packs are cached on the client, so raise the version.
+- On BDS, suspected engine bug of blocks vanishing during fast block placement (bridging) in survival mode, Windows BDS `/listd` crash, and reports of custom entities vanishing in subchunks (unresolved). A report that BDS crashed with about 50% probability when a player left after `/reload` (cause unconfirmed). Corrupted player data (`world/db`) crashes the server when a particular player joins -> Bedrock-World-Editor, Bedrock Tool Chest, Chunker, Amulet.
+- `world.broadcastClientMessage`/`player.postClientMessage` send a ScriptMessagePacket to the client (vanilla ignores it; for custom clients/proxies). IP/VPN detection only through a proxy (gophertunnel, WaterdogPE).
+
+#### Communicating with the outside from Realms and local worlds
+
+- No WebSocket/HTTP from scripts. `/connect` or `/wsserver host:port` (turn off the encryption requirement in settings) is a command the client runs, cannot be run with a script's `runCommand`, and `successCount` is always 0. Request format: `{header:{requestId, messagePurpose:'commandRequest', version:1, messageType:'commandRequest'}, body:{commandLine}}` (`https://www.s-anand.net/blog/programming-minecraft-with-websockets/`). MCWSS characteristics: status codes are negative HRESULTs (`-2147352576` "Command cannot be executed on a source!"), no response when more than ~100 are queued (a unique GUID per request), sending commands before the world loads crashes, a limit of 5 commands per tick is stable, and instability was reported on 1.21.120+. Only some of the about 114 MCWSS events actually work, and material summarizing the `PlayerDied` cause enum and test tools such as bedrock-websocket-server and MCBE-WSSTests were shared.
+- **Hive Mind API** (`https://github.com/TrayePlays/Hive-Mind-Api-Public` , backend `https://github.com/TrayePlays/Hive-Mind-Debugger`): Uses the script debugger connection to give server-net-like HTTP/web DB features in a world without beta; packets cannot be canceled, and the debugger connection is not encrypted so encrypt secrets yourself. You can also run scripts directly through the debugger channel (`/script debugger connect`) without command latency (the debugger protocol is needed). Exfiltrating Realm data is only ideas such as an external bot (needs NetherNet support) or a simulated player's `/connect`.
+
+#### Communication between add-ons (IPC)
+
+- **Isolation**: Each BP has its own JS runtime (globals and functions cannot be shared, subpacks are isolated too), and DPs are per pack. The channel is `system.sendScriptEvent(id, message)` / `/scriptevent` + `system.afterEvents.scriptEventReceive` (1 tick delay, order guaranteed and no loss, bundle into one JSON message considering the volume per tick). Do not do it with scoreboards. The 2048-character message length limit was removed in 1.21.101 (before that, overlong messages were silently dropped) - there is a report that it was still 2048 in 2026-08 but that looks like old information (**conflicting**), and large strings lag. One large scriptevent was about 35% slower than sending in pieces (MCBE-IPC v3.1.3 note). Put namespaces on scriptevent ids so they do not collide between packs.
+- **MCBE-IPC** (`https://github.com/OmniacDev/MCBE-IPC` , a single file, included on both sides): `IPC.send`/`IPC.handle`/invoke, typed binary serialization `PROTO.*` (`PROTO.Object({...})`, `Float64`, `UVarInt32`, extending schemas with spread, `PROTO.Cached(serializer, depth)` serialization LRU cache 2026-03-18, `Serializer`/`Deserializer` split in v3.2.1, serialization type enforcement from v3.1.4). Channels are broadcast. Bytes are packed 2 per UTF-16 character, and only the header is MIPS hex. Serialization is a `system.runJob` generator (processing ~11 KB+ synchronously hits the watchdog). There are no async generators, so `IPC.handle` does not accept async functions (a workaround wraps the generator in a promise). v3.3.0 fixed a bug where concurrent invokes all resolved with the first response (a guid correlation flag), and v3.3.1 fixed skipped listeners. The documentation is the unofficial DeepWiki `https://deepwiki.com/OmniacDev/MCBE-IPC/` , DirectIPC `https://github.com/OmniacDev/DirectIPC` .
+- **Alternatives**: @mcbe-mods/ipc (`https://github.com/mcbe-mods/ipc`; JSON + LZ-string base64, namespaced channels, generic casts without runtime validation - a dispute over the fairness of the benchmark), Flatbuffers (works with a TextEncoder polyfill), AddonAPIKit (`https://github.com/ForestOfLight/AddonAPIKit` , MCBE-IPC wrappers `AddonAPIServer`/`AddonAPICaller`, usage example `https://github.com/ForestOfLight/Construct/tree/dev/packs/BP/scripts/API`), a compatibility idea of announcing `{name, uuid, semver, url, data}` by scriptevent on load and `https://github.com/Bedrock-OSS/add-on-registry` . If several packs share the same logic, have only one pack register through IPC. DataExchange and matp are also mentioned as IPC alternatives, and there is an opinion to set a shared interface standard.
+
+### GameTest, SimulatedPlayer, Editor
+
+- **SimulatedPlayer**: No constructor -> `import { spawnSimulatedPlayer } from "@minecraft/server-gametest"; spawnSimulatedPlayer(locationWithDimension, "Name", GameMode.Creative)` also works outside tests. It is a full player entity, used for multiplayer compatibility tests, PvP bots (1.0.0-beta) and NPCs. In other packs that did not import `@minecraft/server-gametest`, it shows as undefined in `getAllPlayers()`, so import in each pack and filter with `instanceof gametest.SimulatedPlayer`. It can run commands, has no join/leave events, and cannot chat. `lookAt` is unsupported (`lookAtBlock/lookAtEntity/lookAtLocation`; teleport resets pitch), main hand/off hand do not update until the world is reloaded, `attackEntity` silently stops damaging (fixed by recopying the pack), and it cannot hit real players (suspected bug). Skin: `PlayerSkinData`/`setSkin` (1.26.60-preview.21) accepts only default/character creator skins or online player and persona UUIDs (no custom images). If a real player rides a SimulatedPlayer, it becomes a script-controlled entity imitating the skin (moving backward slows like a horse, head rotation is limited, a horse health bar, one per player).
+- **SimulatedPlayer details (2026-11)**: Still beta only. The explanation is that it is a GameTest feature and GameTest is for testing the current version and promises no backward compatibility. It spawns even without a gametest structure. `setSkin()` takes a Persona payload (id, packId, productId, type per piece), needs a full-body default body, cannot have two pieces of the same type, and had to call `setSkin` again at about 20/100/200 ticks and restart the bot animation. Persona IDs are found in `%APPDATA%\Minecraft Bedrock\premium_cache\persona\personaCatalogItemCache.json` (see github.com/Daniel-Ric/Bedrock-Persona). The old bot pattern calls `test.spawnSimulatedPlayer` in `gameTest.registerAsync(...)` and leaves the test unending with `.maxTicks(1000000000).structureName("<empty structure>")` (needs Beta APIs, remove existing bots first with `disconnect()`, delay the spawn with `runTimeout(..., 2)`).
+- **GameTest**: `Test.walkTo(entity, loc, speed)` works only inside the structure box. `setBeforeBatchCallback`/`setAfterBatchCallback`, and tests registered inside `system.run` are silently unregistered. An unresolved report that using the GameTest module turns off mob spawning and keeps fire burning, and a question of whether some modes intentionally stop time and mob spawning. There are a case where the Regolith `gametests` filter created duplicate node_modules under `data/gametests` and tangled types, and a case where the same filter gave the error "Existing manifest module of type script found with different properties". server-gametest is `1.0.0-beta.1.26.60-stable` as of 2026-11 and also works on BDS. For end-to-end tests including the client there is the LeviLamina-based Be.D.D. (`https://github.com/LiteLDev/BeDD`).
+- **Test automation**: Mock `@minecraft/*` with vitest/jest (`Bedrock-OSS/minecraft-server-jest` includes init/early-execution/read-only modes), and for automation BDS is best. Monkey-patching `Block.prototype.getComponent` and adding to the Entity prototype are fine in add-ons. Exceptions have no types and "can throw", so `try/catch` + `instanceof`; a lint rule enforcing `isValid` checks is under development.
+- **`@minecraft/server-editor`**: Runs only in Editor worlds, and depending on it makes the whole add-on stop in ordinary worlds with "skipping dependency ... not an editor world" (try/catch and `system.isEditorWorld` + dynamic import both fail - manifest modules load before the script). Optional module dependencies (manifest v3) are planned. The guide flat API (UI not released), and the fillBiomes family are in other modules. Editor structure/ghost block previews cannot be used from a BP. `server-editor-bindings` and `server-editor-private-bindings` also exist in the game.

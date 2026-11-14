@@ -1,0 +1,76 @@
+---
+title: "Server performance: BDS scaling and Dragonfly threading"
+description: "BDS thread, compression and capacity reports, an optimization checklist, Dragonfly world threading, join time measurement, client rendering limits"
+sidebar_position: 9
+sources:
+  - private-research
+  - ms-learn
+  - private-research
+  - dragonfly
+---
+
+## Concept: ticks and budget
+
+A server world advances one tick 20 times per second (every 50ms). **The tick value is the time it took to process one tick**, and 50ms is the budget. If a tick exceeds 50ms, the next tick is delayed and TPS drops below 20. The load ratio is roughly tick / 50ms (6ms is about 12%). Below about 25ms (50%) there is headroom, 25~40ms spikes occasionally when other work (saving, chunk transfer) overlaps, and above 40ms a TPS drop starts to show. (Source: private research)
+
+In MS Learn's `server.properties`, the keys that directly affect performance are `max-players` (a high value has an effect), `view-distance` (default 32, a high value has an effect), `tick-distance` (default 4, range 4~12), `max-threads` (default 8, 0 means as many as possible), `compression-threshold` and `compression-algorithm` (Source: ms-learn).
+
+## BDS performance and scaling (community)
+
+- **CPU**: The world tick is effectively single-threaded, so single-core performance is what matters (a consumer CPU beats a server CPU such as EPYC). Network and chunk work run on other threads, so with many people 5 or more threads are recommended. Use `max-threads` to leave a share for other processes (for example 2 on a 4-thread VPS). The script processing loop is also single-threaded. *(confirmed)*
+- **Capacity reports**
+  - "If you care about performance", 40~50 people. 50~60 is the best case and 75 is the danger line.
+  - A claim of 80 people on an OVH VPS of about $7 (all gathered within about 20 chunks and including scripts), and a claim of about 120 people on a high-performance CPU including generation.
+  - On a shared host (Ryzen 9 9900X), lag above 35 people, with MSPT fine up to 44 people.
+  - 25 people, 7000 chunks, 19~20 TPS on an OVH VPS.
+  - 300 entities gathered in one place on Endstone, about 19 TPS on a $4.90 VPS.
+  - A report (2026-10) of 20 or more people at 20 TPS on Endstone, with memory at 800~1000MB idle and 4~5GB under load.
+  - Claims from one Korean community (*unverified*): about 70 people on Endstone, lag above 30 people on vanilla BDS, 16~30 people on 2GB for PMMP, a large Korean server with 50 or more people on Endstone, and a BDS-based server with mspt 20 on 3GB.
+  - There is a report that even if you show 40 with `setmaxplayers`, it is blocked at 30 people (the claim of 33 people is unconfirmed). The lag is due to the actual player count. (single report)
+  - Bottlenecks: a single core, overselling by the host, add-ons/scripts, chunk generation, entity count.
+- **Optimization checklist**
+  - Pre-generate chunks.
+  - Keep view distance at 16 or lower (default 32).
+  - Entity/item cap (about 400~500): a script that stacks nearby mobs and merges items, despawn after about 5 minutes.
+  - For SMP, tick distance about 4.
+  - Cache script results and find the heavy parts with the VS Code debugger.
+  - About 250MB of RAM per player.
+  - If many `system.run` loops run constantly, all cores spike. Improve the polling approach.
+- **simulation distance cap**: The player simulation distance is capped at 12 chunks (about 380 blocks wide), and entity rendering stops at 64 blocks. To run wider, use a ticking area.
+- **Loaded chunks**: These are decided by simulation distance, not render distance. In one member's measurement, sim distance 4 used more CPU than 6. *(single report)*
+- **Compression**
+  - The default `compression-threshold` is low. snappy + 512/1024/2048, or zlib + about 8192~10240 (one member uses zlib + 65535) is recommended. Keep the compression level at 1.
+  - Join packets and skins exceed 2KB, so they benefit.
+  - snappy can cause join failures on some devices or very old clients (rare now, and consoles are reported fine). In 2026-11 snappy + 512 was still recommended, with the explanation that first-generation PS4 and some old phones may be blocked but this is rare.
+  - The claim that snappy stops crash bots only filters out simple bots that did not implement snappy.
+- **Memory**: Usually 1/4~1/10 of a Java server, and under 1GB for a solo world. If memory grows over several hours, it is usually a BP/script leak. For a BDS using 4~5GB with no players, scripts, chunk loaders and a large `.ldb` were named as candidate causes (resolution unconfirmed). Work around it with regular restarts (.bat + Task Scheduler). Hoppers and pathfinding are CPU hotspots.
+- **A 30~60 second freeze caused by one add-on**: It is almost always the add-on's fault, so remove them one by one. A corrupted chunk can also keep eating CPU, so restore a backup and test locally. Splitting one large add-on into several creates a script context per pack and makes it heavier instead (subpacks are better).
+- **Long-term operation case**: A vanilla world running since 1.16 with 28.8GB, 16k+ .ldb files and 5.4 million chunks had no lag even on 1.26.21. For rubberbanding at high latency, the client-authoritative movement setting was used. Starlink CGNAT was solved with a playit.gg tunnel.
+- **Windows console Quick Edit**: Clicking the console window freezes the server, and the log also stops until you type. Turn Quick Edit off.
+- **Other observations**: A history of phantom spawn bugs (changing the default simulation distance to 10 gave about 200 per player). A report that `/listd` crashes the world on Windows when other players are present. An unexplained crash on 1.26.14.1 Linux.
+
+## Dragonfly (v0.11) threading
+
+(Source: private research)
+
+- **One world = one logical goroutine.** World state changes only while the single `handleTransactions` goroutine (world/world.go) runs transactions one at a time from a queue (`queue`, buffer 128). `w.Do`/`w.Exec`, packet handling and ticks all go into this queue.
+  - A tick is also a transaction: `tickLoop` calls `<-w.exec(t.tick)` on every 50ms ticker (world/tick.go). If a tick exceeds 50ms, the missed ticks are skipped (no catch-up) and TPS drops.
+  - One tick: entity ticks (chunks that have viewers), scheduled ticks, random ticks, **the block entity `Tick` of every chunk in tick range on every tick** (world/tick.go `tickBlocksRandomly`), neighbor updates, redstone.
+  - Tick range: a `tickRange` chunk radius per viewer (player or loader) (world/world.go, changed with `SetTickRange`). Even with no players, a loader such as `NopViewer` counts as a viewer, so the area around it keeps running.
+- **Chunk reading and generation** is done by chunk worker goroutines (default 1, `ChunkLoadWorkers`, world/chunk_request.go), and applying results and lighting is done by the world goroutine. **Saving is done synchronously on the world goroutine** (LevelDB writes, world/world.go `save`).
+- **Connections**: three goroutines per session (write, packet read, 20Hz background). Packet handling is ultimately done **inside the world transaction** of the world the player is in (session/session.go `handlePackets`). Outgoing packets are passed through a channel (256) and gophertunnel batches and sends them every 50ms.
+- **Worlds run in parallel**: each world has its own queue and goroutine, so the Go scheduler spreads them across cores. GOMAXPROCS is not set separately, so all cores are used. The block registry lock is taken only at registration.
+
+### Summary
+- **All work of one world runs on one CPU core at a time**. With several worlds, several cores are used.
+- The cost of one world is mostly **the number of block entities in tick range x 20 times/second** (blocks that have a `Tick`, such as hoppers and chests) plus the packets and chunk transfer of that world's players.
+
+## Measuring join time
+
+To see where joining is slow, record the time at four points: Login handling, resource pack completion, StartGame sent, and the client's SetLocalPlayerAsInitialised. The time from StartGame being sent until loading finishes (client loading) grows with the number of block states and permutations. In Dragonfly, pack download is handled inside gophertunnel and is not shown separately, so the span from login to pack completion is merged into one. To compare, join several times with the same client and device and use the second join's value, or clear the client's pack cache.
+
+Values measured when drawing the same shape as an entity versus a custom block: client loading was 4,005ms on the entity side and 9,019ms (+5.0 seconds) on the side that added 2 blocks (37,249 states per block, 74,498 in total). With 12,083 filled cells, FPS was 7~20 for entities and 184 for blocks (1% low 60). Custom blocks with many block states increase join loading, but when drawing many they are far lighter than entities. (Source: private research)
+
+## The client gets heavy first
+
+In a world ticking about 5,000 block entities, the server tick had headroom at under 20% of the 50ms budget, but a client drawing 1,000 display entities and several thousand custom block models caused lag. At this scale, client rendering reaches its limit before the server does (Source: private research).

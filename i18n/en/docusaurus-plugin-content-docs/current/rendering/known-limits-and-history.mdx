@@ -1,0 +1,218 @@
+---
+title: Limits, changes by version, tools, open questions
+description: A table of known limits and workarounds in the rendering area, changes by version, tools and reference material, open questions
+sidebar_position: 14
+sources: [private-research, ms-learn, bedrock-wiki, bedrock-samples, particle-jester]
+---
+
+# Limits, changes by version, tools, open questions
+
+This is a page for finding workarounds starting from a symptom. Evidence and details are on each topic page (Source: private research).
+
+## Known limits and workarounds
+
+| Limit | Workaround |
+| --- | --- |
+| Cannot make only part of a block glow without VV | Whole-block light emission, flipbook brightness frames, imitate with entities/particles |
+| `entity_emissive_alpha` glow does not work under VV | MER emissive channel + texture_set + pbr capability |
+| One add-on turns off world VV | Add `"capabilities": ["pbr"]` to that pack's manifest |
+| Auto exposure, shadow resolution and reflection quality cannot be changed by a pack | Edit local game files (your own PC only), compensate with color grading |
+| VV tone mapper has no AgX/Lottes | veka.'s reproduced color grading settings, custom material.bin |
+| VV settings are needed per biome | Override globally with `minecraft:default_*` identifiers, copy the client_biome for swamp/mesa |
+| Flipbook stops at a distance, distant stripes | `num_mip_levels` 0 or 3, square, power-of-two, multiple-of-16 textures |
+| Lines on water from the 26.30 padding removal | Define still-water flipbooks as 3 tiles, lower the mip level |
+| Under VV, composite (additive) textures show only the top layer | Blocks fixed in 2026-07, items not fixed. Bake into a separate texture |
+| No per-block-state local light | Make on/off separate block identifiers |
+| Entities cannot be point lights | Use a custom light block |
+| Translucent particles are very expensive under VV | Reduce the count, raise opacity, use small particles |
+| Ordinary hand items cannot have an outline | Attachable + stencil material + outline model |
+| Drawing an entity over a first-person attachable | The stencilRef 2 stencil recipe (the depth section of the materials and shaders page) |
+| `light_color_multiplier`/`overlay_color`/`held_item_ignores_lighting` do not work on attachables | Make the attachable itself an emissive material |
+| Attachables cannot add new locators, custom locator particles do not work | Reuse the player locator (`lead_hold`), offsets |
+| Crash with more than 3 render controller texture arrays | Split into several render controllers |
+| Render controller `math.random` flicker | Set once in `initialize`/`pre_animation`, or use a property |
+| Large entities vanish when the hitbox is off screen | Enlarge `visible_bounds`, `should_update_bones_and_effects_offscreen`, proxy entity |
+| Lag when player geo total exceeds 1.15 MB | Shrink models, minimize bones/groups, minify JSON |
+| Shading bug on custom stairs/slabs | `ambient_occlusion` 0, `face_dimming` false, a custom version of the vanilla block |
+| Cannot thin underwater fog under VV | Practically none (turn off fog in settings, volumetric block light) |
+| VV reflections look pixelated | `texel_size` ~1024 + soft shadows |
+| VV has no rough reflections | A high-resolution random-direction normal map (192x192) |
+| RTX has no entity PBR/overlay textures | Do overlays with another model/render controller, glow with `charged_creeper` + `light_color_multiplier` |
+| Model disappears or is see-through from dithering | Turn it off under Settings > Accessibility, raise the minimum alpha |
+| `emitter_rate_manual` memory leak | Always specify `max_particles` (up to 1000) |
+| Particles cannot read entity variables | client_sync entity property, MolangVariableMap, temp leaking (unstable) |
+| Cannot distribute shaders in a resource pack | Replace material.bin, BetterRenderDragon (local only) |
+| Cannot animate item textures | Bone visibility, render controller texture swap, an animated block that cannot be placed |
+| Persona skins turn off when the player client entity is modified | Add min engine version, use the latest file of the installed game |
+| No black and white filter (blending) | VV color grading saturation |
+| Hidden bones also have a large render cost (per-bone cost grew under VV) | Merge bones, deactivate with a render controller |
+| Attachable locators do not work | Offset computation, parametric/point emitters, a locator on the player model |
+| MER not applied to the player entity | Make the glowing parts an attachable |
+| No custom sound from particles (MCPE-101714) | Vanilla sound events, script |
+| Texture variants break terrain textures (MCPE-244074) | Remove variants |
+| Cannot hide vanilla water under VV | A transparent material drawn over the water (partial workaround) |
+
+## Changes by version
+
+- **1.16**: The mipmap settings file appeared. Around this time the vanilla material inheritance problem was recorded in the wiki.
+- **1.17**: A claim that long-distance rendering of the Ender Dragon runtime_identifier was patched (**conflicting**).
+- **1.18.30**: The resource pack camera file was removed (one member).
+- **1.20.80-1.21.80**: Block light affected volumetric fog. Later deliberately separated.
+- **1.21.60+**: An opinion that the custom stairs/slab material instance lighting bug started.
+- **1.21.80**: TAAU became blurry. Lighting settings format 1.21.80.
+- **1.21.90**: Vanilla VV PBR introduced, also applied to RTX (texture_set shared). Default VV settings in `resource_packs\1.21.90`. Sound attenuation by camera distance. Color grading/fog format 1.21.90.
+- **1.21.12x (GDK)**: Wave `sample width` removed, static light Preview.
+- **1.21.120**: VV stencil fixed "to some extent". `local_lighting.json` format 1.21.120. Custom block `"emissive": true` format 1.21.120+. render distance fog fixed. RT point lights broken.
+- **~2025-10-31 GDK release**: Close-range dithering introduced, screen animation UI lag, UI settings reset.
+- **2025-11-04 Preview**: Water change in the materials index (sea foam artifact removed).
+- **2025-11 (build)**: Player/attachable locators broken.
+- **1.21.130**: RT point lights half fixed. In the showcase, color change by texture swap.
+- **2025-12-15 release**: First-person attachable partial alpha cut off at ~50%.
+- **26.0.23 (Preview, late 2025-12)**: Atlas corruption where MER shows in new worlds.
+- **2026-01**: Dithering extended to hand items. ~2026-01-08 Preview keyframed sky intensity. Around 2026-01-13 Preview fixed the over-16x16 item texture bug. 2026-01-14 Editor per-biome VV settings. ~2026-01-24 full block point lights. 2026-01-27 raster overlay to sRGB. Late January the mesh model Fancy smoothing problem started.
+- **26.0 (2026-02-10/11)**: Entity tint/multi-texture, End sky, sun/moon, weather material gamma correction (fixed oversaturated sun/moon with non-ACES tone mappers; entity materials also changed but not in the changelog). Baby mob model change. BetterRTX/RTX PBR broken, BetterRTX restored 2026-02-14.
+- **1.26.10**: The AO bug can be avoided with `ambient_occlusion` number 0 and `face_dimming` false. A texture set format 1.26.10 case.
+- **26.10 stable (2026-03)**: Static light and colored block light affect volumetric fog. A report that local_lighting does not work in Preview 26.10.x either.
+- **26.1x Preview**: VV Nether severe lag.
+- **2026-03-11~18 Preview**: `orbital_offset_degrees` always 0 (broken).
+- **26.20.x**: BetterRTX preset crash from the material format change. Waxed copper lantern ignores `light_color`. 26.20.21 sync bug mitigated.
+- **~2026-04-21 Preview**: Heightmap seams and RTX atlas tracing from the atlas change. Unfixed through 2026-04-30, fixed in the 2026-05-01 Preview. Release unaffected.
+- **2026-04-23/24**: Vanilla horses, fish and tropical fish appear pink without add-ons. Texture bugs reported after updating from 1.26.10.26 to 1.26.30.20.
+- **2026-04-30 Preview**: fog/lighting keyframes (volumetric density/scattering/absorption). DLSS 310.5.3.
+- **Spring 2026 (mentioned 2026-05-01)**: Point lights removed on Android and PS4/Xbox One. Heightmaps broke after the atlas change and Mojang will fix them.
+- **2026-05-06 Preview**: RTX new heightmap storage. veka. BetterRTX UV update.
+- **2026-05-12 Preview**: TAA jitter fix. An empty `materials.index.json` in the `shaders` folder.
+- **2026-05-18 Preview**: Falling blocks shown in RTX.
+- **2026-06 update**: Reports of non-power-of-two atlas corruption. `padding` ineffective on the terrain atlas. Changes such as `num_mip_levels` also apply to vanilla.
+- **2026-06-10**: RTX code fix reapplied (shader templates need `Support for 26.30.32`).
+- **2026-06-18/19**: Outline Template V3 (3.2).
+- **2026-06-20**: Point lights and their shadows merged into a single "Point light quality".
+- **26.30**: Atlas tile padding removed (MCPE-240144). Grid artifacts on non-power-of-two textures such as 66x66 (not present around 1.26.13).
+- **2026-07**: Point light low tier removed, 16/32/64 tiers. Dynamic shadow atlas. Lava point light performance fixed in the 2026-07-10 code review. Block composite texture VV fix by 2026-07-15.
+- **26.50**: Lava point light performance improved (~80 fps).
+- **2026-08**: Current-gen console point lights 32. 2026-08-06 Preview `WaterSimulation` material.bin.
+- **1.26.40/.50**: `item_display_transforms` bug.
+- **2026-09-22 Preview**: `transitioning_ambient_scalar` added. Point lights 96 on Series S, 256 on Series X/PC.
+- **26.52**: Report that custom panoramas broke.
+- **26.60**: Small texture first-load blur, Preview 3D crosshair oddity. The community RenderDragon source reconstruction (RenderDragon2src) was published for 26.60.
+- **1.26.60.28**: Shader platform ESSL_320 (separable sampler) added. Possibility of point lights returning on OpenGL ES 3.2 Android.
+- **2026-10-20 Preview**: Point light shadows pixel aligned, real time returns (only the near group), self shadowing returns.
+- **Preview 1.26.70.21**: The "atomic client entities" gist mentions LOD queries.
+- **Late 2026-10 Preview**: Series X point light crash, point light shadows stopping and concentrating on the nearest light.
+- **2026-10-31**: Texture variant terrain breakage reported as MCPE-244074.
+- **2026-11-04**: Snowstorm 3.3 released.
+
+## Tools and references
+
+**Official documentation (Microsoft Learn)**
+- VV overview: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/?view=minecraft-bedrock-stable , introduction https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/introvibrantvisuals?view=minecraft-bedrock-stable
+- PBR overview (MER, normal maps): https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/pbroverview?view=minecraft-bedrock-stable (#normal-map section)
+- Making MER with Blockbench: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/useblockbenchtocreatemodelswithtextures?view=minecraft-bedrock-stable
+- SSS: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/subsurfacescatteringcustomization
+- Color grading/tone mapping: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/colorgradingtonemappingcustomization
+- Lighting (local lights): https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/lightingcustomization?view=minecraft-bedrock-stable#local-lights
+- Water: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/watercustomization
+- volumetric fog/light shaft: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/volumetricfoglightshaftscustomization?view=minecraft-bedrock-stable
+- Material files: https://learn.microsoft.com/en-us/minecraft/creator/documents/material-files#technical-details
+- Block render method: https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/blockcomponents/minecraftblock_material_instances?view=minecraft-bedrock-stable#render-method-choices
+- Render controllers: https://learn.microsoft.com/en-us/minecraft/creator/documents/animations/animationrendercontroller
+- Particle reference: https://learn.microsoft.com/en-us/minecraft/creator/reference/content/particlesreference/particlesintroduction?view=minecraft-bedrock-stable
+- Particle effects tutorial: https://learn.microsoft.com/en-gb/minecraft/creator/documents/particleeffects?view=minecraft-bedrock-stable ; Snowstorm overview: https://learn.microsoft.com/en-us/minecraft/creator/documents/snowstormoverview?view=minecraft-bedrock-stable
+- Getting started with RTX: https://learn.microsoft.com/en-us/minecraft/creator/documents/rtxgettingstarted?view=minecraft-bedrock-stable
+- Blockbench VV textures (experimental): https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/useblockbenchtocreatemodelswithtextures?view=minecraft-bedrock-experimental
+
+**Samples**
+- Mojang bedrock-samples (textures, particles, fog, horse_v3, armor_stand animation, `panoramahdr_0.hdr`): https://github.com/Mojang/bedrock-samples , https://github.com/Mojang/bedrock-samples/tree/main/resource_pack , .../resource_pack/particles , .../resource_pack/fogs
+- VV/deferred starter: https://github.com/microsoft/minecraft-samples/tree/main/deferred_lighting_starter (the blob path is the same)
+- Open-source VV fog example: github.com/stephenle19/LerianX-Visuals
+
+**wiki.bedrock.dev**
+- Materials: https://wiki.bedrock.dev/visuals/materials , https://wiki.bedrock.dev/documentation/material-config-description , wiki.bedrock.dev/documentation/materials (#emissive)
+- Glowing textures: https://wiki.bedrock.dev/visuals/glowing-texture ; animated entity textures: https://wiki.bedrock.dev/visuals/animated-entity-texture ; animation effects: https://wiki.bedrock.dev/visuals/animation-effects ; removing shadows: https://wiki.bedrock.dev/visuals/remove-shadows (#render-when-invisible)
+- Texture atlases: https://wiki.bedrock.dev/concepts/texture-atlases (#mipmapping, #additive, #padding)
+- Blocks: https://wiki.bedrock.dev/blocks/custom-glass-blocks , https://wiki.bedrock.dev/blocks/vanilla-block-models#list-of-vanilla-models , https://wiki.bedrock.dev/blocks/block-tinting#texture-tinting
+- Attachables: https://wiki.bedrock.dev/items/attachables ; animation controllers: https://wiki.bedrock.dev/animation-controllers/animation-controllers-intro ; format version: https://wiki.bedrock.dev/guide/format-version#format-version-is-not-game-version
+- Particle sphere emitter: https://bedrock.dev/docs/stable/Particles#Emitter%20Shape%20Sphere%20component ; particle list: https://minecraft.wiki/w/Particles_(Bedrock_Edition)
+- Translucent stacking materials: https://www.the-bedrock-notebook.dev/materials/topics/blending.html
+- Texture layers: wiki.bedrock.dev/entities/render-controllers#texture-layering ; tint color: https://wiki.bedrock.dev/concepts/texture-atlases#tint-color ; custom emoji: https://wiki.bedrock.dev/text/custom-emojis
+- RP manifest: https://wiki.bedrock.dev/guide/project-setup#rp-manifest ; subpacks: https://wiki.bedrock.dev/concepts/subpacks ; entity materials: wiki.bedrock.dev/entities/entity-intro-rp#materials ; entity scale: https://wiki.8crafter.com/main/add-ons/entity-scale
+
+**Editors and plugins**
+- Snowstorm (particle editor): https://snowstorm.app , 3.3 changelog https://github.com/JannisX11/snowstorm/releases/tag/v3.3.0
+- Oxygen (github.com/dev-hydrogen/oxygen), the ORE web node editor (blank2092.github.io/ORE), Mcblend (beware `custom_normals` when importing polymesh), for a detailed list see [Modeling and texture tools](../tools/modeling.mdx)
+- Blockbench web (https://web.blockbench.net/ ), the Bedrock animation guide https://www.blockbench.net/wiki/guides/bedrock-modeling#animations , the Outline Creator and lightflow plugins
+- Palettes: https://lospec.com/palette-list , https://www.blockpalettes.com/palette/57847 , https://blockcolors.app/ ; color picker https://rgbacolorpicker.com ; the mctools.dev problem checker
+- Blockbench: Meshy (meshes to geo.json), Item Wizard (attachable animations), title generator (3D titles), texture_set/PBR helper ("Add material")
+- BBModel Unpack (VS Code, extracts geometry/animations/controllers/textures from .bbmodel, folder-level possible): https://marketplace.visualstudio.com/items?itemName=Kaioga.bbmodel-unpack , https://github.com/Kaioga5/BBModel-Unpack
+- MC Texture Browser: https://marketplace.visualstudio.com/items?itemName=FineArts.mc-texture-browser , web https://mc-assets.fineartsmc.com/
+- Framebook Visual (frames to a flipbook sheet and flipbook_textures.json): https://piggamers4u.github.io/Framebook-Visual/
+- noisier (hue/saturation noise on PNG pixels): `npx noisier in.png out.png`
+- Glyph generators: mcbeeringi.github.io/apps/mc/glyph_v1.html , darkness9373.github.io/Glyph-Maker ; font example: github.com/ZtechNetwork/MCBVanillaResourcePack
+- BlockMotion Studio (MP4/GIF to a menu background .mcpack): blockmotion.vercel.app
+- Block/item color reference: https://jom-er.github.io/Voxitema/
+- TesserPack optimization tool (beware: it may erase the color of alpha 0 pixels and break SSS)
+- Blockbench MCP + AI modeling skill: https://github.com/iMasterProX/mcbemodelingmasterAI
+- GIMP/Photoshop (heightmaps, MER TGA, .hdr export)
+
+**Shader and RTX tools**
+- BetterRTX (preset builder bedrock.graphics/creator), EscheridiaRT: https://github.com/QuirkyPlague/EscheridiaRT
+- BetterRenderDragon (BRD), MaterialBinLoader, Lazurite (material compiler, Android editing), the newb shader repository, veka0/mcbe-shader-codebase (VV shader source)
+- DLSS: techpowerup DLL, DLSS Swapper
+- ReShade (FXAA, DOF alternative, Windows), RenderDoc and Nsight (Windows GDK edition)
+- veka0/lazurite, ddf8196/MaterialBinTool, PandaMine5/RenderDragon2src, LiteLDev/Arke, bambosan/mirai, ShaderGlass
+
+**References and examples**
+- poggy's deferred table: https://poggy.org/Main/Wiki/deferred_table.html
+- GDC "Modernizing the Rendering of Minecraft": https://gdcvault.com/play/1035685/Modernizing-the-Rendering-of-Minecraft
+- Khronos PBR Neutral: https://github.com/KhronosGroup/ToneMapping/blob/main/PBR_Neutral/pbrNeutral.glsl ; AceX: odinsmods.github.io/posts/acex-tonemapper/
+- quirkyplague's VV PBR video: (link omitted) ; the entities-instead-of-particles thread: (link omitted)
+- Path tracing/irradiance cache video youtu.be/mDlmQYHApBU, VV path tracing demo youtu.be/x4IqwdnBg7w
+- Server-graphics Atmospherics API: https://stirante.com/script/server-graphics/1.0.0-beta.1.26.0-preview.26/classes/Atmospherics.html#setskyhorizoncolor ; `setPropertyOverrideForEntity`: stirante.com/script/server/2.6.0/classes/Player.html#setpropertyoverrideforentity
+- X-ray pack: https://github.com/ryanlua/fluoroscopy ; hopper Java model: https://github.com/GiwbyAlbatross/vanilla/blob/main/assets/minecraft/models/block/hopper.json
+- Blog on placing blocks as entities: https://github.com/theaddonn/Blogs/blob/main/block_as_entities/README.md
+- Breath particle (Apache 2.0): https://github.com/whynotoss/cold-breath ; player outline: https://github.com/JuanLuci/Player-Outline
+- Auto exposure feedback post: https://feedback.minecraft.net/hc/en-us/community/posts/41526941899149-Give-a-toggle-to-turn-off-autoexposure
+- Backrooms RTX map: https://www.curseforge.com/minecraft-bedrock/maps/backrooms-rtx
+- Community templates and add-ons (community threads): arxance "Entity Outline" (Template V3), "Dynamic Atlas Compositing", "Colormap Known Things", "All Blend Modes", "Custom Crossbow Template", "Better Vibrant Visuals Color Grading", "Better Mipmapping" (catgamer693), veka's HDR cubemap script and tone mapper settings
+- Examples: calm-add-on variant array render controllers (github.com/abrightmoore/calm-add-on), the "atomic client entities" gist, the no-fog-ultra pack
+- MCPE bugs: MCPE-235907 (VV settings reset), MCPE-219473 (first-person camera rotation query 0), MCPE-101714 (particle custom sound), MCPE-244074 (texture variants), MCPE-237912, MCPE-223126, MCPE-237517, MCPE-237493, MCPE-236317, MCPE-235788, MCPE-240144 (mojira.dev/MCPE-240144), MCPE-240476, MCPE-240457, MCPE-241087, MCPE-230030, MCPE-184865, MCPE-177602, and the RTX bug list on the VV and RTX page
+
+## Open questions
+
+- Other causes when VV does not turn on even though the pack has the pbr capability, and how to turn on VV with an encrypted pack.
+- The cause of reports (2026-02/03) that `local_lighting.json` does not work in Preview 26.10.x.
+- Player entity PBR: the 2026-03 and 2026-10 reports both say "does not work" and an attachable workaround was offered. Only one working report from 2025-11 remains.
+- How to make vanilla armor trims glow with MERS under VV.
+- The phenomenon of an emissive material flashing like a "flashbang" from below in daytime, and the phenomenon where glint covers emissive armor trims in a custom entity.material.
+- A fix for low-poly mesh models shading smoothly on Fancy (only the face dimming hypothesis exists).
+- The depth-only pass problem where a translucent entity on the water surface erases entities behind it.
+- The problem of a global stencil outline being drawn over the model.
+- The problem of the dyed collar tint bleeding onto the base texture, and the black background of `custom_animated:entity` (USE_UV_ANIM+ALPHA_TEST).
+- The RAM impact of 1200 versus 40 render controllers, and why `query.property('x')==4` does not work in the second render controller.
+- The saddle layer (`Texture.saddle : Texture.empty`) render controller, the custom iron golem transparent texture/variants.
+- How to change an attachable's color with `color`/`overlay_color`.
+- The elytra and cape texture conflict.
+- Floating text/billboards that do not face the camera, the per-tick client-side particle spawn probability, particle lifetime set by a variable.
+- How to set per-particle offsets with `per_render_expression`/`creation_expression`, the spellcolor color conversion of `particle_appearance_tinting`.
+- The RAM leak of custom trail particles (emitters suspected of not being deleted).
+- Particle custom sound: confirmed unsupported (MCPE-101714). The remaining question is a workaround other than vanilla events.
+- The problem of edits to the maximum shadow distance in `shadow_configuration.pc.json` reverting to 128.
+- The problem of locator particle positions under VV differing from Fancy, and locator particles on the client player model looking like they float.
+- The problem of golden food attachables losing transparency under VV/Fancy, and the loss of the `rightItem` binding on an adult model scaled for a baby.
+- Flicker between blend (fog) and add (firefly) particles.
+- Why a `facing_camera_mode: direction_x` single beam is not visible.
+- How to make a large model ignore fog independently of render distance, and how to hide it by light level.
+- How to tint the sky with `/fog push` under VV, how to override vanilla fog with a rain fog file, `weather` fog in client_biomes.
+- How to change the sky color immediately without a fade after applying fog, and how to change the custom dimension/End sky from the server.
+- Resolving the "no valid version"/"Identifier already exists" errors in `atmospherics.json`.
+- Toggling cloud movement.
+- A static panorama or a main menu that pans upward.
+- z-fighting when adding VV PBR to custom blocks/items.
+- The problem of the MER/normal of a lush 16x1x16 leaf tile rendering wrongly only together with a specific add-on.
+- terrain_texture variant breakage: the cause was narrowed to texture variants and reported as MCPE-244074. The workaround is removing variants and Mojang has no fix.
+- Priority of a subpack's terrain texture versus the base pack (the answer is not verified), the problem of colormap grass.png not tinting the side overlay.
+- The `spawn_aoe_cloud` color range (0-255 or normalized).
+- A workaround for white lines in UVs (a texture transfer bug).
+- How to reproduce the vanilla chest, PBR and the old water shader with a simple pack.
+- Guidance on how to write a real .hlsl shader.
+- What `log_luminance_range` of auto exposure does.

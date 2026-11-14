@@ -1,0 +1,259 @@
+---
+title: Images and animation
+description: image properties, progress bars, custom renderers, anim_type and easing, Aseprite flipbooks, and the paper doll and NetEase differences (ANI-01~36).
+sidebar_position: 9
+sources:
+  - repo-guide
+  - bedrock-samples
+  - bedrock-wiki
+  - ms-learn
+  - private-research
+  - bedrock-core
+  - private-research
+  - advancementpack
+  - cinnabar
+  - private-research
+  - netease-mcdocs
+---
+
+Images are drawn by `image` controls. The basics are stretching one texture (`fill`), repeating it (`tiled`), stretching while preserving corners with 9-slice, and showing only part of it (`clip_ratio`). What the engine draws directly (item icons, player models, hearts) is the `custom` type + `renderer`, and what changes over time is animation (`anim_type`).
+
+## 9.0 The smallest examples
+
+**Example 1. Image.** `texture` is a path from the pack root without an extension. With `uv` and `uv_size` you can use only part of a big texture.
+
+```json
+"icon": { "type": "image", "texture": "textures/ui/my_icon",
+  "size": [ 16, 16 ], "uv": [ 0, 0 ], "uv_size": [ 16, 16 ], "bilinear": false }
+```
+
+**Example 2. 9-slice.** Put `textures/ui/my_panel.json` next to `textures/ui/my_panel.png`. The 4 corner cells stay as they are and only the center stretches.
+
+```json
+{ "nineslice_size": 4, "base_size": [ 16, 16 ] }
+```
+
+**Example 3. Progress bar.** Bind `#clip_ratio` (0.0~1.0) and decide which side it is cut from with `clip_direction`. Keep the binding condition at `always` or `always_when_visible` (6 uses each in vanilla). To make 0~1 from an integer value (0~100), use a dot-leading real literal like `.01` (EXP-27).
+
+```json
+"bar": { "type": "image", "texture": "textures/ui/bar_fill", "size": [ 100, 8 ],
+  "clip_direction": "left", "clip_pixelperfect": false,
+  "bindings": [
+    { "binding_type": "view", "source_property_name": "(#percent * .01)",
+      "target_property_name": "#clip_ratio", "binding_condition": "always" } ] }
+```
+
+**Example 4. A slide in -> wait -> slide out animation** (see the code of 9.3 below). An animation control has `anim_type` instead of `type`, and is attached with `anims` or referenced directly in a property value as `@namespace.name`.
+
+## 9.0.1 Image property table (Bedrock Wiki, MS Learn)
+
+This is organized from the Sprite table of the Bedrock Wiki JSON UI Documentation and the MS Learn `ui_element` table (both list `texture`, `uv`, `tiled`, `keep_ratio`, `bilinear`, `fill`, `grayscale`, `clip_pixelperfect` and `nine_slice_*`).
+
+| Property | Type | Meaning |
+| --- | --- | --- |
+| `texture` | string | Path from the pack root (for example `textures/ui/White`) |
+| `allow_debug_missing_texture` | boolean | Draws a missing-texture image when the texture is absent. Default `true` |
+| `uv`, `uv_size` | `[u, v]`, `[width, height]` | The start point and size of the region of the texture to use |
+| `texture_file_system` | string | Where to read the texture from. `InUserPackage` (default), `InAppPackage`, `RawPath`, `RawPersistent`, `InSettingsDir`, `InExternalDir`, etc. |
+| `nineslice_size` | integer or `[x0, y0, x1, y1]` | 9-slice. Corners fixed, the rest stretches |
+| `tiled` | `true`/`false`/`"x"`/`"y"` | Repeats if the control is bigger than the texture. `tiled_scale` is the scale of the repeat unit |
+| `clip_direction`, `clip_ratio` | `left`/`right`/`up`/`down`, 0.0~1.0 | The side clipping starts from and the ratio. The wiki says to bind a `#*_ratio` binding to `#clip_ratio` with the `always` condition, and that the furnace progress arrow and fuel image work this way |
+| `clip_pixelperfect` | boolean | Clips exactly pixel by pixel where possible |
+| `keep_ratio` | boolean | Keeps the ratio when resizing. Default `true` |
+| `bilinear` | boolean | Bilinear interpolation when resizing. Default `false` |
+| `fill` | boolean | Stretches to the control size. Default `false` |
+| `grayscale` | boolean | Draws in grayscale |
+| `force_texture_reload` | boolean | Reloads when the texture path changes |
+| `base_size` | `[width, height]` | Base size of 9-slice |
+
+The `nine_slice_left/right/top/bottom` of the MS Learn table (including the spelling `buttom`) are names that do not appear in this project's exhaustive vanilla search (they resemble names in the China edition documentation, and the international edition uses the `.json` file approach, DBG-27).
+
+## 9.0.2 Easing and animation types
+
+The values and arguments of `anim_type` (Bedrock Wiki Intro): `alpha` (real number, opacity), `offset` (`[x, y]`, position relative to the anchor), `size` (`[width, height]`), `flip_book` (integer, an image that changes frames one at a time), `uv` (array, UV position), `color` (RGB 0.0~1.0), `wait` (number, wait), `aseprite_flip_book` (sprite sheet) and `clip`.
+
+The full list of `easing` (wiki): `linear`, `spring`, `in_quad`, `out_quad`, `in_out_quad`, `in_cubic`, `out_cubic`, `in_out_cubic`, `in_quart`, `out_quart`, `in_out_quart`, `in_quint`, `out_quint`, `in_out_quint`, `in_sine`, `out_sine`, `in_out_sine`, `in_expo`, `out_expo`, `in_out_expo`, `in_circ`, `out_circ`, `in_out_circ`, `in_bounce`, `out_bounce`, `in_out_bounce`, `in_back`, `out_back`, `in_out_back`, `in_elastic`, `out_elastic`, `in_out_elastic`. Of these, vanilla uses only 14 (ANI-10).
+
+Animation properties (wiki table): `anim_type`, `duration` (seconds), `next` (the animation to follow after it ends), `destroy_at_end`, `play_event`, `end_event`, `start_event`, `reset_event`, `easing`, `from`, `to`, `initial_uv`, `fps`, `frame_count`, `frame_step`, `reversible` (run backwards after ending), `resettable`, `scale_from_starting_alpha`, `activated`.
+
+## 9.1 Images
+
+- **[ANI-01]** The main properties of `image` (vanilla use counts): `texture`, `uv`/`uv_size` (40), `tiled` (44), `keep_ratio` (45), `bilinear` (50), `fill` (48), `color`, `alpha`, `clip_direction` (`left` 21, `down` 3, `up` 1, `right` 1), `clip_ratio`, `clip_pixelperfect` (21), `grayscale` (1), `force_texture_reload` (6), `zip_folder` (3). There are also `allow_debug_missing_texture` (4) and the axis values of `tiled` (ANI-17). `&#123;vanilla&#125;` (Source: VN, BW-doc)
+- **[ANI-02]** A texture path can be assembled with a variable expression: `"texture": "('textures/my/bg/' + $tab_bg)"`. At runtime, put the path into a `#texture` binding with a view expression: `('textures/my/frames/' + #frame)`. `&#123;working pack, vanilla&#125;` (Source: AP 4.9, BA 3.1, VN server_form.json:173)
+- **[ANI-03]** A **progress bar** binds `#clip_ratio` (0~1) and decides the clipped side with `clip_direction`. `clip_ratio`, `clip_direction` and `clip_pixelperfect` are not in the official schema but are properties vanilla uses. To make a 0~1 decimal from an integer value, use a dot-leading real literal like `(#v * .01)`. `(#v / 100)` is integer division (EXP-18, EXP-27). Vanilla gives the `#clip_ratio` binding `binding_condition` of `always` (6) or `always_when_visible` (6). `&#123;vanilla, measured, code&#125;` (Source: VN 33 uses, BC-facts, BA 3.2, BW-doc, CN)
+- **[ANI-04]** For 9-slice, put a `.json` of the same name next to the texture file and write `nineslice_size` (`[left, top, right, bottom]` or one value) and `base_size`. Vanilla UI JSON does not use `nineslice_size` as a literal property and uses it once through a binding (`#banner_nineslice_size` -> `#nineslice_size`) (LAY-27). For a repeating background, give the image `"tiled": true` (LAY-28, 44 uses in vanilla). `&#123;working pack, vanilla&#125;` (Source: BA chapter 5, AP 4.9, VN)
+
+## 9.2 Renderers (`custom`)
+
+- **[ANI-05]** With `"type": "custom"` + `"renderer": "name"`, the engine draws. The renderers vanilla 1.26.50.4 uses are 43 kinds (Appendix B). When importing a renderer name list from an external source, check it against the vanilla list. One external list had 10 of 53 not in vanilla. Of the wiki's 41 renderers, 7 (`background_renderer`, etc.) are not in vanilla 1.26.50, and 9 of vanilla's (`locator_bar`, `qr_code_renderer`, etc.) are not in the wiki. `&#123;vanilla&#125;` (Source: VN, MJ 4.2, BW-doc)
+- **[ANI-06]** An item icon gives `#item_id_aux` to `inventory_item_renderer`. The value is `numeric item ID x 65536 (+ data value)`. If constant, put it in `property_bag`, and if a runtime value, bind it. Numeric IDs partly shift when custom items are registered and can differ per world. The boundary where they shift differs by source (the BC record says 256 and above, the wiki's 1.26.50 table says -1246~851 are stable and only 852~883 shift). Check that version's table or the game before use. Use a texture path when possible. `&#123;working pack, measured, conflict&#125;` (Source: AP 4.7, BC-facts, BW-ids, Appendix A C-33)
+- **[ANI-07]** In 1.26.50 the vanilla HUD cursor (`cursor_renderer`) lost its instance at the HUD root and is referenced from `hud_crosshair_overlay.json` (the definition remains at `hud_screen.json:608`). HUD modifications that used this as a reference point break. `&#123;vanilla&#125;` (Source: VN hud_crosshair_overlay.json:4, MJ 4.1)
+
+
+### 9.2.1 The 43 vanilla renderers and their use counts (Appendix B value dictionary)
+
+These are the 43 kinds vanilla 1.26.50.4 uses as `renderer` values. Item icons are `inventory_item_renderer` and the player model is `paper_doll_renderer`. MS Learn gives `hud_player_renderer` and `inventory_item_renderer` as examples.
+
+| Renderer | Vanilla count |
+| --- | ---: |
+| `inventory_item_renderer` | 19 |
+| `paper_doll_renderer` | 13 |
+| `profile_image_renderer` | 8 |
+| `progress_bar_renderer` | 6 |
+| `gradient_renderer` | 6 |
+| `name_tag_renderer` | 4 |
+| `animated_gif_renderer` | 3 |
+| `equipment_preview_renderer` | 2 |
+| `enchanting_book_renderer` | 2 |
+| `vignette_renderer` | 2 |
+| `banner_pattern_renderer` | 2 |
+| `live_horse_renderer` | 2 |
+| `trial_time_renderer` | 2 |
+| `armor_renderer` | 2 |
+| `live_player_renderer` | 2 |
+| `qr_code_renderer` | 2 |
+| `cursor_renderer` | 2 |
+| `debug_screen_renderer` | 1 |
+| `hover_text_renderer` | 1 |
+| `flying_item_renderer` | 1 |
+| `credits_renderer` | 1 |
+| `3d_structure_renderer` | 1 |
+| `bundle_tooltip_renderer` | 1 |
+| `actor_portrait_renderer` | 1 |
+| `hud_player_renderer` | 1 |
+| `hotbar_renderer` | 1 |
+| `hotbar_cooldown_renderer` | 1 |
+| `heart_renderer` | 1 |
+| `horse_heart_renderer` | 1 |
+| `horse_jump_renderer` | 1 |
+| `dash_renderer` | 1 |
+| `locator_bar` | 1 |
+| `hunger_renderer` | 1 |
+| `bubbles_renderer` | 1 |
+| `mob_effects_renderer` | 1 |
+| `editor_gizmo_renderer` | 1 |
+| `progress_indicator_renderer` | 1 |
+| `camera_renderer` | 1 |
+| `editor_volume_highlight_renderer` | 1 |
+| `editor_compass_renderer` | 1 |
+| `panorama_renderer` | 1 |
+| `web_view_renderer` | 1 |
+| `splash_text_renderer` | 1 |
+
+## 9.3 Animation
+
+```json
+"anim_slide_in":  { "anim_type": "offset", "easing": "out_back", "duration": 0.5,
+                    "from": [ "100%c + 40px", 20 ], "to": [ 0, 20 ], "next": "@my_toast.anim_wait" },
+"anim_wait":      { "anim_type": "wait", "duration": 4.5, "next": "@my_toast.anim_slide_out" },
+"anim_slide_out": { "anim_type": "offset", "easing": "in_back", "duration": 0.5,
+                    "from": [ 0, 20 ], "to": [ "100%c + 40px", 20 ], "destroy_at_end": "hud_title_text" }
+// Usage: "anims": [ "@my_toast.anim_slide_in" ]  or  "alpha": "@my_toast.anim_fade"
+```
+
+- **[ANI-08]** `anim_type` values (vanilla counts): `alpha` 54, `offset` 42, `flip_book` 34, `wait` 30, `size` 7, `color` 3, `aseprite_flip_book` 2, `uv` 1. The wiki and Cinnabar (the 1.26.50 engine enum) also list `clip`, making 9 kinds (ANI-20). Vanilla uses it 0 times and what it clips was not confirmed (Appendix A C-38). `&#123;vanilla, code&#125;` (Source: VN, CN)
+- **[ANI-09]** Animation fields: `from`, `to`, `duration`, `easing`, `next` (a reference to the next animation), `destroy_at_end`, `play_event`, `end_event`, `reset_event`, `reversible`, `resettable`, `looping`, and for flipbooks `initial_uv`, `frame_count`, `frame_step` and `fps`. `&#123;vanilla&#125;` (Source: VN per-field tally)
+- **[ANI-10]** For `easing`, prefer the values vanilla uses: `linear`, `out_cubic`, `in_expo`, `in_quart`, `in_quint`, `out_expo`, `in_sine`, `in_out_back`, `out_sine`, `out_bounce`, `out_back`, `in_out_expo`, `in_out_circ`, `in_bounce`. Of the 32 easings in the external list, 18 are not in vanilla. `in_back` is used by BA. These 32 are the same as the wiki list, and all 14 of vanilla's are among them. `&#123;vanilla, working pack&#125;` (Source: VN, MJ 4.2, BA chapter 6, BW-doc)
+- **[ANI-11]** Attach an animation with `"anims": [ "@ns.name" ]` or reference it directly in a property value (`"alpha": "@hud.anim_title_text_alpha_in"`). **You can also attach an animation of another namespace to a vanilla element.** `&#123;vanilla, working pack&#125;` (Source: VN hud_screen.json:2272, AP 4.5)
+- **[ANI-12]** Every time a factory newly creates a control, the animation plays **from the beginning again.** That is why a toast slides in each time a title is sent. `&#123;working pack&#125;` (Source: BA chapter 6, BW-intro)
+- **[ANI-13]** If you shrink the height of a vanished item to 0 with a `size` animation, the next items of a stack panel rise smoothly. `&#123;working pack&#125;` (Source: AP 4.5)
+- **[ANI-14]** The value of `destroy_at_end` in vanilla uses the name of the control the factory created (`hud_title_text`), the name of its base definition (chat: instance `chat_item`, value `chat_grid_item`) and a variable (`$toast_control`). Which name it must match to actually be destroyed was not confirmed. Also stop accumulation with the factory count limit (`max_children_size`). In the Cinnabar reconstruction, `destroy_at_end` erases the nearest among that control and its ancestors whose instance name matches, and the chat controller gives the lines it creates the instance name `chat_grid_item` (ANI-21). Then it matches the value in vanilla chat. `&#123;vanilla, code, inferred&#125;` (Source: VN hud_screen.json:949 and 2213, AP 4.5, Appendix A C-27, CN)
+- **[ANI-15]** A flipbook icon is made with `"uv": "@ns.anim"` (`anim_type: aseprite_flip_book`) + `"uv_size"` + the Aseprite JSON next to the texture (`frames[].frame`, `duration`). In Aseprite, export the JSON in the **Array** format (Hash is said not to work). The texture and JSON have the same name without an extension, and `aseprite_flip_book` is applied only to the `uv` of an image. `&#123;vanilla, working pack&#125;` (Source: VN 2 uses, AP 4.7, BW-ase)
+- **[ANI-16]** The vanilla title animation times come in as engine variables (`$title_fade_in_time`, `$title_fade_out_time`). It appears that the `/title times` values are reflected here. `&#123;vanilla, inferred&#125;` (Source: VN hud_screen.json:2170 and 2185)
+
+
+## 9.3.1 Aseprite sprite animation (the Bedrock Wiki original)
+
+`aseprite_flip_book` makes animation from a sprite sheet exported from Aseprite (or the free alternative LibreSprite). Below is the wiki original (CC BY 4.0). It has the same content as the rules of ANI-15 (Array format, same-named files).
+
+<Excerpt src="bedrock-wiki" title="Aseprite Animations" path="docs/json-ui/aseprite-animations.md">
+
+**Creating an Animation in Aseprite**
+
+Suppose you have a series of frame images named "frameimage" with sequential numbers from 1 to 5.
+Import the first image, and Aseprite will automatically recognize the other images with the same name but different numbers.
+It will then place them in the correct order and create an animation.
+
+Use the arrow keys to navigate through all frames and the "Enter" key to play or pause the animation.
+Press the "Tab" key to open the timeline and select individual frames.
+Right-click a frame in the timeline to access various settings.
+
+To export the animation, use the shortcut "Ctrl + E" or navigate to "File" -> "Export to Sprite Sheet".
+In the output settings, select the Output file and the JSON Data.
+You'll see a dropdown menu with Hash and Array options.
+Ensure the Array option is selected, or the export will not work properly.
+
+You should now have two files: the SpriteSheet image and a JSON file.
+Ensure both files have the same name but different extensions.
+
+**Using Aseprite Animations in JSON UI**
+
+The `aseprite_flip_book` animation type can only be used for the `uv` property in an element of the type `image`.
+
+```json
+{
+    "image_element": {
+        "type": "image",
+        "texture": "textures/wiki/ui/my_sprite_file",
+        "uv_size": [32, 32],
+        "uv": "@example_namespace.image_uv_animation"
+    },
+
+    "image_uv_animation": {
+        "anim_type": "aseprite_flip_book",
+        "initial_uv": [0, 0]
+    }
+}
+```
+
+Set the `texture` field to the path of the exported files without the extension.
+The `uv_size` field should be set to the width and height of a single frame.
+
+</Excerpt>
+
+## 9.4 Rules added from the Bedrock Wiki comparison
+
+These are rules added by comparing the wiki (BW) documents with vanilla 1.26.50.4. Those with only wiki sentences are marked `unverified`, and those with in-game screenshots in the wiki are marked `measured` (third-party record).
+
+- **[ANI-17]** `tiled` accepts not only `true` (23) but also `"x"` (8) and `"y"` (12), which repeat on one axis only. The repeat unit scale is `tiled_scale` (3). `&#123;vanilla&#125;` (Source: BW-doc Sprite table, VN)
+- **[ANI-18]** For a control inside a grid, an animation chained with `next` has a bug where after the first animation the duration is divided by the number of items and it speeds up (except `flip_book`). For grid items, use a repeating animation as one stage or use `looping`. `&#123;unverified&#125;` (Source: BW-dyn)
+- **[ANI-19]** Additional animation fields vanilla uses: `start_event` (1), `scale_from_starting_alpha` (4), `activated` (2). On the control side: `animation_reset_name` (26), `disable_anim_fast_forward` (21). `&#123;vanilla&#125;` (Source: BW-doc Animations table, VN)
+
+## 9.5 Rules added from the Cinnabar engine reconstruction
+
+Cinnabar (`CN`) is Rust code that reconstructs the JSON UI parser of the 26.30 native client. The level is `code`, and `CN-run` is the result of this project running that evaluator directly. If it differs from game measurement, follow measurement (Appendix A C-41~C-47).
+
+- **[ANI-20]** There are 9 animation types: `alpha`, `clip`, `color`, `flip_book`, `aseprite_flip_book`, `offset`, `size`, `uv` and `wait` (the 1.26.50 enum). `&#123;code&#125;` (Source: CN, C-38)
+- **[ANI-21]** `destroy_at_end` erases the nearest among the control that has that animation and its ancestors whose instance name matches. `&#123;code&#125;` (Source: CN, C-27)
+- **[ANI-22]** An image chooses how to draw in the order 9-slice, `clip_ratio`, `tiled`, `fill`, `keep_ratio`, stretching. `clip_pixelperfect` (default on) clips in original pixel units. `color` can be `#rrggbb` as well as `[r,g,b,a]`. `&#123;code&#125;` (Source: CN)
+
+## 9.6 Rules added from the research server measurement
+
+These were measured on Windows 1.26.52 while building the research server (`DF`). They came from a structure that draws several screens with one server form.
+
+- **[ANI-34]** The client drew a grayscale PNG translucently (the window showed through the gray frame). Texture optimization tools convert gray images to grayscale, so keep a pack's PNGs as RGB or RGBA. `&#123;measured&#125;` (Source: DF)
+
+## 9.7 The paper doll and the NetEase skeleton model
+
+This is a comparison of the exhaustive 13 sites of vanilla `paper_doll_renderer` (`VN`), the native binary string search (`NB-12`), and the NetEase (China edition) skeleton model and paper doll documentation (`NE`).
+
+- **[ANI-35]** The international `paper_doll_renderer` draws **only the player skin** that the engine gives through bindings (`#paper_doll_skin`, `#skin_index`, `#classic_skin_index`). The properties vanilla uses are `use_selected_skin` (12, all `false`), `rotation` (`gesture_x` 6, `auto` 1), `camera_tilt_degrees` (8, all `-10`), `starting_rotation` (8, all `30`), `enable_scissor_test` (4, all `true`) and `#skin_rotation` of `property_bag` (2). To rotate it by dragging, put `"gesture_tracking_button": "button.turn_doll"` and its button mapping on an `input_panel`, and the paper doll receives `#gesture_delta_source` and `#gesture_mouse_delta_x` of that panel with a view binding. `&#123;vanilla&#125;` (Source: VN pause_screen.json:320, VN pause_screen.json:348, VN day_one_experience_screen.json:201, NB-12)
+- **[ANI-36]** The UI 3D model feature of the NetEase documentation, that is, `modelname`, `modelsize`, `animation` and `animation_looped` of `paper_doll` and `netease_paper_doll_renderer` (`skeleton_model_name`, `entity_identifier`, `screen_scale`, `init_rot_x/y/z`, `freedom_gesture`, Python `RenderEntity` and `RenderSkeletonModel`), is **China edition only.** There are 0 `netease` strings in the international binary, the long names of these properties are absent too, and vanilla never uses them. An international pack cannot draw custom models or entities in UI, so use world entities or particles (ALT-01). Short names cannot be judged by binary strings (even `paper_doll_renderer` is 0), so the conclusion rests on the long names. `&#123;code, vanilla, inferred&#125;` (Source: NB-12, VN 0 uses, NE-30 paper_doll, NE-bone)
+## How evidence is marked and source abbreviations
+
+A rule carries an ID in the form `[chapter abbreviation-number]`, and the `{…}` at the end is the verification level. The priority of verdicts is `measured` > `vanilla` > `working pack` > `code` > `inferred`, and `unverified` and `conflict` must be checked before use. `C-nn` is a number in the [conflict table](./conflicts.mdx), and the value counts of `VN` are the tallies in the [value dictionary](./value-dictionary.mdx). Rule IDs of other chapters (`LAY-`, `BND-`, `HOST-`, etc.) are on the corresponding pages of the same JSON UI chapter.
+
+| Abbreviation | Material |
+| --- | --- |
+| `VN` | Exhaustive search of vanilla resource pack `resource_pack/ui` v1.26.50.4 (bedrock-samples `46ba6ea`). `VN file:line` is that location |
+| `BC`, `BC-S1`~`BC-S14`, `BC-facts`, `BC-rules` | bedrock-core (`@bedrock-core/ui` 0.12.1, MIT) and the author's in-game measurement records (`aee2bbd`) |
+| `BA`, `BA-original` | BedrockAdvancements 2.0.3 (All rights reserved, only techniques carried over) |
+| `AP` | AdvancementPack v4.2 (MIT) |
+| `MJ` | mcbejsonuimasterAI (no license, only facts rechecked against vanilla) |
+| `BW`, `BW-intro`, `BW-dyn`, `BW-doc`, `BW-form`, `BW-btn`, `BW-type`, `BW-best`, `BW-title`, `BW-ase`, `BW-ids` | Bedrock Wiki JSON UI documents (CC BY 4.0). Respectively Intro to JSON UI, Dynamic Content Generation, JSON UI Documentation, Modifying Server Forms, Buttons and Toggles, Type Conversion, Best Practices, Preserve Title Texts, Aseprite Animations, Numerical Item IDs |
+| `CN`, `CN-run` | Cinnabar (Rust code reconstructing the 26.30 native client) and the results of this project running its evaluator |
+| `NB` | Engine behavior analysis of the Android 1.26.52.3 native client library (level `code`) |
+| `DF` | Measurement on Windows 1.26.52 with the research server |
+| `ASJ`, `SLB` | AsaJS analysis, StarLibV2 analysis (both GPL-3.0, only techniques rewritten in English) |
+| `MS` | The modal form multiselect survey |
+| `NE` | NetEase (China edition) developer documentation |

@@ -1,0 +1,114 @@
+---
+title: Recipes, smithing, item tags
+description: Recipe file structure and types (shaped, shapeless, furnace, brewing, smithing), unlocking, item descriptors, overriding vanilla recipes and known limits, and a recipe lock server case study.
+sidebar_position: 4
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+  - private-research
+---
+
+# Recipes, smithing, item tags
+
+A recipe defines an item conversion that happens at a crafting table, furnace types, a brewing stand and so on. Using recipes needs no experimental feature toggle. Anvil interactions are handled by the [item definition](./items.mdx), not by recipe files, and loom conversion is not supported at present. The evidence is the MS Learn recipe docs (a9fd1c0), loot/recipes of the Bedrock Wiki (0930b39), the vanilla recipes of bedrock-samples (15701fa9), community research (2025-10~2026-11) and a technical document of a Dragonfly-based server.
+
+## 1. Structure and minimal example
+
+Recipes go in the `recipes/` folder at the BP root, and the name and substructure are free. The common elements are as follows (Source: bedrock-wiki, ms-learn).
+
+- `format_version`: the recipe schema version. Effectively any value works and it can even be omitted, but writing a real Minecraft version is recommended.
+- `description.identifier`: identifies the recipe uniquely across all packs. There is no namespace rule, but add a namespace to avoid clashes.
+- `tags`: the required array that connects the recipe to a crafting interface. For crafting they are `crafting_table`, `stonecutter` and `smithing_table`, for cooking `furnace`, `blast_furnace`, `smoker`, `campfire` and `soul_campfire`, for brewing `brewing_stand`, and for Education Edition `material_reducer`. A custom crafting table declares custom tags in the `minecraft:crafting_table` block component. Custom cooking/brewing blocks are not supported. To effectively turn a recipe off (useful when overriding an earlier recipe), set the tag array to `[""]`.
+- `unlock`: the condition for unlocking the recipe (below).
+- Result `result`: an item descriptor.
+
+A shaped recipe example. The pattern is at most 3x3 and anything past the third character is ignored. A key is one character other than a space.
+
+```json
+{
+  "format_version": "1.17.41",
+  "minecraft:recipe_shaped": {
+    "description": { "identifier": "wiki:cold_steel_sword" },
+    "tags": [ "crafting_table", "altar" ],
+    "pattern": [ "X", "X", "I" ],
+    "key": { "X": "wiki:cold_steel", "I": "minecraft:stick" },
+    "unlock": [
+      { "item": "wiki:cold_steel" },
+      { "item": "minecraft:wool", "data": 3 },
+      { "context": "PlayerInWater" }
+    ],
+    "result": "wiki:cold_steel_sword"
+  }
+}
+```
+
+The vanilla bread recipe (bedrock-samples, format 1.20.10) consists of `pattern: ["###"]`, `key: {"#": {"item": "minecraft:wheat"}}`, `unlock: [{"item": "minecraft:wheat"}]` and `result: {"item": "minecraft:bread"}` (Source: bedrock-samples).
+
+## 2. Recipe types
+
+| Type | Key | Parameters |
+|---|---|---|
+| shaped | `minecraft:recipe_shaped` | tags, pattern, key, priority, result, assume_symmetry |
+| shapeless | `minecraft:recipe_shapeless` | tags, ingredients (position independent), priority, result |
+| furnace | `minecraft:recipe_furnace` | tags, input, output |
+| brewing | `minecraft:recipe_brewing_container`, `minecraft:recipe_brewing_mix` | tags, input, reagent, output |
+| smithing transform | `minecraft:recipe_smithing_transform` | tags, template, base, addition, result |
+| smithing trim | `minecraft:recipe_smithing_trim` | base, addition, template |
+
+- For `priority`, a lower number is a higher priority. Setting `assume_symmetry` (default true) to false lets you define the mirrored recipe separately to give a different result.
+- The `output` of a furnace recipe is the string `"ns:item"`, not `{ "item": ... }`.
+- An item descriptor is a string (`"minecraft:planks"`, with a data suffix `"minecraft:planks:2"`) or an object (`{"item": "minecraft:planks", "data": 2, "count": 3}`). The `count` of an object works only in crafting and furnace results, and giving a value greater than 1 to a non-stackable item is an error. Functions cannot be used in a descriptor. The data of a spawn egg can also be Molang (`"data": "q.get_actor_info_id('minecraft:chicken')"`). Base potions use identifiers of the form `minecraft:potion_type:strength` in strings only (water, awkward, mundane, thick, healing, regeneration, swiftness, strength, harming, poison, slowness, weakness, water_breathing, fire_resistance, nightvision, invisibility, leaping, slow_falling). There are no splash/lingering potion variants.
+
+### Recipe unlocking
+
+Since 1.20.10 the player unlocks recipes. The manifest `min_engine_version` must be 1.20.11 or higher (1.20.30 recommended). If a recipe is not visible, add `"unlock": { "context": "AlwaysUnlocked" }`. Trying to hide a recipe from the recipe book by removing `unlock` makes the recipe crash. There is a report that unlocking by tag was dropped (2026-10). The `unlock` array uses `{ "item": ..., "data": ...}` (unlocks when the inventory has that item) and `{ "context": ... }` (`AlwaysUnlocked`, `PlayerInWater`: when first entering water, `PlayerHasManyItems`: more than 10 items in the inventory). A crafting table uses `"unlock": {"context": "AlwaysUnlocked"}`.
+
+## 3. Rules and limits (community reports)
+
+- Only shaped recipes can give back container items. A shapeless recipe cannot give several results. There is no ingredient `count`. A creative-only recipe is impossible. Several recipes can output the same item. Potions are specified by data value. For crafting by wood type, use the item tag (`minecraft:logs`) rather than scripts. There is a web recipe generator tool (set to Bedrock 1.21).
+- Vanilla item IDs that cause problems (matched down to variants when in the ingredient position): anvil, bucket (milk, lava, powder snow, fish, water buckets), coal (charcoal), cobblestone_wall (all walls), dirt (coarse dirt), prismarine, purpur_block, quartz_block, red_sandstone, sand (red sand), sandstone, sponge (wet sponge), stone (granite/diorite/andesite and polished ones), tnt (underwater TNT). Append `:0` as in `"minecraft:stone:0"`. A regex for checking is `"(?:minecraft:)?(?:anvil|bucket|coal|cobblestone_wall|dirt|prismarine|purpur_block|quartz_block|red_sandstone|sand|sandstone|sponge|stone|tnt)(?!:0)"`.
+- Overriding a vanilla recipe needs the same `description.identifier` (for example `minecraft:bread`) and valid content, and an empty file does nothing. There was a suggestion to set the result to `minecraft:air` with count 0. One user could override bread only in another add-on (cache suspected: raise the manifest version or use a new world). The root cause was not found.
+- No way was found to hide a recipe from the recipe book while keeping it craftable (ideas are an unlock item or a custom crafting table tag). Using several crafting tags on a custom crafting block can make recipes invisible (MCPE-240719).
+- For a custom crafting table, match the block's `"minecraft:crafting_table": {"crafting_tags": ["ns:tag"], "table_name": "..."}` with the recipe's `"tags": ["ns:tag"]`. A recipe that looks locked is fixed with the `AlwaysUnlocked` unlock context, and this component is a stable release feature as of 2026-08.
+- Vanilla recipes are overridden with the same file name (for example `torch.json`) and the same identifier. There is a report that when the same recipe is duplicated, vanilla registers first and wins.
+- A prefilled book cannot be a recipe result, so hand it out with a loot table. There is no generic tag that groups all slabs. The unlocking rules are in the [MS Learn recipe introduction](https://learn.microsoft.com/en-us/minecraft/creator/documents/recipeintroduction?view=minecraft-bedrock-stable#recipe-unlocking).
+- Recipe result name: `set_name` does not work and there is no crafting result script event.
+- A typo in the folder name (`recepies`) makes recipes silently ignored.
+- There is a report that putting two recipes with the same result in one file makes one override the other and the crafter and quick craft can behave strangely (compare with "Several recipes can output the same item" above). A recipe whose `tags` lack `crafting_table` is not craftable, and in one case a recipe was turned off by changing its tag to `"null"`. Recipes of other add-ons are overridden by pack order.
+- A tag ingredient is written as `"B": { "tag": "minecraft:egg" }`. An `"item": {"tag": ...}` object gives "Recipe ingredient is invalid: Must contain either a valid item name or item tag". A custom tag is written as `namespace:id`. A block tag cannot be used as a recipe ingredient, and each variant needs an entry. It is said that the custom block tag problem was fixed in 26.10.
+- A recipe that recolors with dye gives `"minecraft:tags": {"tags": ["ns:tag"]}` to every target item and uses `{"tag": "ns:tag"}` in shapeless ingredients and `unlock` (vanilla example bedrock-samples `behavior_pack/recipes/bowl.json`).
+- A brewing recipe is written with format 1.20.10 `minecraft:recipe_brewing_mix`, tags `["brewing_stand"]`, and input/reagent/output (for example `minecraft:potion_type:awkward` + `minecraft:speckled_melon`, result `minecraft:potion_type:healing`). Input and output must be non-overlapping items, the output is always one, and data values cannot be used.
+- There is no custom furnace component with its own recipes and fuel. Use a custom crafting table with its own recipe tag or scripts, and the "Better Smelters" add-on provides a template. A custom bucket left after smelting is handled with commands/scripts.
+
+## 4. Smithing
+
+- An upgrade recipe is `minecraft:recipe_smithing_transform` (`tags:["smithing_table"]`, template/base/addition/result). For the base item use the tag `minecraft:transformable_items` (diamond -> netherite) and for a custom template the tag `minecraft:transform_template`. `addition` must be `minecraft:netherite_ingot` (hardcoded) and the `{"tag": ...}` form does not work (tested in format 1.26.50). However, a 2026-08-27 report says that from 26.40 transforms using a custom template are supported and `addition` accepts the tag `minecraft:transform_materials`, so it is **conflicting**. On 2026-01-09 smithing with a custom base item did not work. Tags cannot be attached to vanilla items. A block with no item file has no item tag. An old custom smithing recipe needed `<ns>:netherite_ingot` in the second slot, and this has not worked since 1.18.30.
+- Base item limit in 1.26.40: if the base is not armor/equipment, `base item is not a piece of armor or equipment` appears, and an item without `minecraft:durability` fails (MCPE-242206, filed 2026-08-30). Workaround:
+
+```json
+"minecraft:durability": { "damage_chance": { "min": 0, "max": 0 }, "max_durability": 0 },
+"minecraft:wearable": { "slot": "slot.armor.body" }
+```
+
+  With wearable, durability does not drop when hitting mobs. (confirmed) There is also a report that the `minecraft:transformable_items` tag of the result item does not work unless the item has one of durability, enchantable or wearable.
+
+## 5. Item tags
+
+- The list of vanilla tags is on the item-tags page of the Bedrock Wiki (auto-generated with a script that loops over ItemTypes), and vanilla item groups moved to the vanilla-item-groups page. Mojang adds tags to vanilla only when needed. There are no dynamic tags, so use non-overlapping items + dynamic properties. Accessory compatibility with external mods is sometimes a single item tag.
+- Goat horn variants are decided by loot `set_data` (random `{min,max}` or a fixed `data`).
+- To put a custom book in a chiseled bookshelf, give it the matching item tag. Do not attach the `minecraft:is_meat` tag, which vanilla fish do not have, to custom fish.
+
+## 6. Case study: recipe locking and live opening (a Dragonfly-based server)
+
+The client knows only the recipes the server sent in the `CraftingData` packet. This packet can be sent again at any time with `ClearRecipes` to replace the whole list. A Dragonfly-based server uses this to lock every recipe except oak planks, crafting table and research table, and opens them one at a time through research (Source: private research).
+
+- The Dragonfly server sends the full list once on join, builds a `network ID -> recipe` table per session, and accepts crafting requests (`CraftRecipe`, `AutoCraftRecipe`, smithing, stonecutter) only through that table. An ID not in the table falls through to dynamic recipes (decorated pot), and if it is not there either, it is rejected.
+- The patch `Player.SetRecipeFilter(f)` sends only the recipes the filter selects and puts them in the table (network IDs keep the order of the full list). Calling it sends again immediately. When a filter is set, dynamic recipes are blocked. Locked recipes do not appear in the recipe book or crafting slots, and the server rejects even forged packets. The unit of opening is the result item name.
+- Things not in the recipe list must be blocked separately. Smelting in furnaces, smokers and blast furnaces uses the item's `Smeltable` rather than a recipe, so checks are placed when inserting and when smelting. Brewing is in the list and is locked along with it.
+- The client recipe book lists only recipes whose result is in the creative inventory list (`CreativeContent`) and only when the block state matches too. So when making a new item/block by recipe, it must also be registered in the creative inventory, and for vanilla block results many have a state different from the creative entry (about 30 kinds such as chests and composters), so a patch to match runtime IDs was needed.
+
+## 7. Custom crafting with commands
+
+Without a crafting table, a crafting system can be imitated with two droppers (recipe, result) and one crafting dropper using one line: `execute if blocks <recipe> <recipe> <crafter> masked run clone <recipe_output> <recipe_output> <crafter>` (Source: bedrock-wiki, custom-crafting). If the recipe dropper and the crafting dropper match, the result dropper is copied to the crafting dropper. This method is used to make items with enchantments or custom names.

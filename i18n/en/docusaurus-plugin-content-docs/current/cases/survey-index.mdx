@@ -1,0 +1,116 @@
+---
+title: "Additional material survey list (31 items)"
+description: "Reads the candidate list of the 2026-10-22 additional JSON UI material survey as a table. What each item is, its license, its value, and which page of this wiki covers it"
+sidebar_position: 18
+sources:
+  - repo-survey
+  - asajs
+  - starlibv2
+  - jsonencryptor
+  - easyuibuilder
+  - jsonui-lsp
+  - jsonforge
+  - bedrock-json-ui-editor
+  - blockception-schemas
+  - bugrock-schemas
+  - json-escape
+  - chest-ui
+  - json-ui-examples
+  - upgrader
+  - fumeko-packs
+  - sidebar-mcbe
+  - sidebar-hud
+  - crosshair-xyz
+  - hide-achievements
+  - netease-docs
+  - cermada
+  - minecraft-feedback-mojira
+  - ms-learn
+---
+
+## Scope and method of the survey
+
+The additional survey of 2026-10-22 skimmed JSON UI related libraries, tools, documents, and public packs, excluding the 8 already analyzed separately (bedrock-core, AdvancementPack, BedrockAdvancements, Premium Damage Indicator, mcbejsonuimasterAI, Bedrock Wiki, Ore UI Customizer, Cinnabar). The places searched were the GitHub topics `json-ui` and `jsonui`, English, Chinese, Japanese, and Korean web searches, the npm registry, the Microsoft Learn source repository, and the NetEase documentation mirror repository. The comparison baseline is the comprehensive guide (340 rules at the time of the survey, conflicts C-01~C-47) and vanilla `bedrock-samples` `46ba6ea` (1.26.50.4). **Of the 31 candidates checked, 15 got their own analysis document** and the rest are noted only briefly in this table. No in-game measurement was done, and claims were judged by a full vanilla search, schema validation scripts, and running the Cinnabar evaluator (Source: repo-survey). Value is high (changes a guide rule or has several new techniques), medium (some new techniques or useful as a tool), or low (reference or error sample).
+
+The eight findings that most affected the guide are as follows.
+
+1. **`grid_position` is `[column, row]`.** In all 20 vanilla grids, `grid_dimensions [column count, row count]` and the child's first value (column) agree. The `[row, column]` in LAY-29 was wrong.
+2. **Numeric item IDs were rearranged in 26.40.** Chest-UI's "26.40 Update" moved the boundary from 256 to 850 and changed the diamond from 335 to 306. C-33 is settled as "the table changes with each version".
+3. **The claim that a remainder can be built with integer division** (AsaJS) conflicts with EXP-20 (C-52).
+4. **Public schemas and editors are quite wrong against vanilla.** The Blockception schema gives 2,251 false errors in 193 of 205 vanilla files, and the KalmeMarq schema gives 2,224 in 186 files. Use the tools only for autocomplete and navigation and do not trust their error display.
+5. **NetEase (China edition) documentation** tells about screen properties, the HUD F1 hiding binding, the `$touch` branch of `scrolling_panel`, and the context-dependent interpretation of a `@name` without a namespace.
+6. **Microsoft Learn's JSON UI reference is AI-generated and has many errors**, but its change notes (1.26.0 `priority` binding and scale consolidation, 1.26.30 `§w`) and the cooperative add-on guideline (do not override `ui/`) are usable.
+7. **New techniques from server form layout libraries.** StarLibV2 builds 2D layouts from button string keys and applies a live search filter with a text box's `#item_name`.
+8. **Animated result effects.** upgrader binds the `aseprite_flip_book` texture of pre-drawn frames to choose an effect per result and lengthens the last frame to stop at the end.
+
+## Libraries and generators
+
+| Item | What it is | License | Value | Where covered |
+| --- | --- | --- | --- | --- |
+| AsakiYuki/AsaJS (npm `asajs` 4.2.0, formerly jsonui-scripting), `9f884dc` | A TypeScript framework that builds JSON UI packs as code. The core is a compiler that lowers binding expressions to auxiliary view bindings | GPL-3.0 | High | [AsaJS](./asajs.mdx) |
+| pipangry/StarLibV2, `6bf7875` | A template library for action forms. 2D layout by keys, search filter, duplicate sibling name fix | GPL-3.0 | High | [StarLibV2](./starlibv2.mdx) |
+| pipangry/JsonEncryptor, `48e7837` | A JSON UI obfuscation web tool. It replaces names with hashes, inserts comments, and uses `\u` escapes. It is evidence for the syntax the parser accepts, and `\u` escapes have no protective effect | MIT | Medium | Tools section (obfuscation and escape tools) |
+| Refaltor77/EasyUIBuilder, `90b889d` | A PHP JSON UI form builder for PocketMine (109 stars). The `server_form.json` it generates has no `namespace`, inherits itself like `long_form@long_form`, and has the defect that `controls` is an object | MIT | Medium (output error record) | Tools section (builders) |
+| npm `mcbe-ts-ui` 1.0.2 | A TypeScript builder API that updates `_ui_defs.json` automatically. No repository URL | MIT | Low | This table |
+| Azvyl/PMServerUI | Script API-style form sending on PocketMine. No JSON UI technique, only the form sending format is a reference | MIT | Low | This table |
+| markeev/bedrock-tile-menu | A server menu of picture tiles of different sizes + a Nukkit-MOT demo. Subtraction chain exclusion gates, `§r` title separator | MIT | Medium-low | This table |
+| pipangry/GrimUI | A paid pack showcase site. An example of a StarLib-style key system | None | Low | Reflected in the StarLibV2 page |
+| Bedrock Server Manager "Native JSON UI for Plugins" | Same name only and unrelated to Minecraft JSON UI (a web dashboard schema) | AGPL-3.0 | None | Not applicable |
+
+## Editors, language servers, and schemas
+
+| Item | What it is | License | Value | Where covered |
+| --- | --- | --- | --- | --- |
+| Blockception/Minecraft-bedrock-json-schemas + VS Code extension (v8.0.46) | The UI part of the whole-add-on JSON schema. It gives very many false errors on vanilla | BSD-3 | Medium-high | Tools section (schemas) |
+| KalmeMarq/Bugrock-JSON-UI-Schemas, `de118a3` | A JSON UI-only schema (international + NetEase) | None | Medium | Tools section (schemas) |
+| DJStompZone/MCBE-JSON-UI-Schemas | An old copy (fork) of the KalmeMarq one above | None | Low | Tools section (schemas) |
+| zelisce/JSON-UI-Schemas | A new JSON UI schema. Its `$ref`s are broken so it does not load | MIT | Low | Tools section (schemas) |
+| CoolLoong/jsonui-lsp, `768dda2` (release v0.3.1) | A VS Code extension + Rust language server. Autocomplete, go to definition, references, color display. It generates the vanilla `$variable` dictionary automatically but has no diagnostics. The marketplace version has the 1.21.120.4 dictionary | MIT | Medium | Tools section (editors and LSP) |
+| xRookieFight/jsonforge (new address jfbedrock/jsonforge), `2874876` | A React + Electron drag-and-drop editor (74 stars). The canvas uses `anchor_from`/`anchor_to` backwards and does not know stack panels, `%c`, or `fill`. Do not trust its preview | MIT | Medium | Tools section (editors) |
+| w1zardz/bedrock-json-ui-editor, `9cb4896` | A web tool for fine-tuning HUD element offsets. UI pixel screen sizes and text width estimates | MIT only in the README (unclear) | Low to medium | [w1zardz editor](./bedrock-json-ui-editor.mdx) |
+| EmirhanOlgn/bedrock-jsonui-live-preview | Called a live preview but has only a LICENSE file | MIT | None | Not applicable |
+| RedStoneCraftGG/JSON-Escape, `94f91c3` | A Unicode escape web tool. It has a bug writing characters outside the BMP with five digits and a bug cutting a `//` inside a string | MIT | Low | [Small packs](./small-packs.mdx) |
+| Nine Slice Visualiser | A 9-slice preview web tool | n/a | Low | [Web document survey](./web-tutorials.mdx) |
+
+## Public packs and examples
+
+| Item | What it is | License | Value | Where covered |
+| --- | --- | --- | --- | --- |
+| Herobrine643928/Chest-UI (+ fork Aex66/Chest-UI), `115d95c` "26.40 Update" | Reskins an action form as a chest GUI (BP+RP). The numeric item ID table and the history of the `item_id_aux` expression | CC BY 4.0 | High | [Chest-UI](./chest-ui.mdx) |
+| LeGend077/json-ui-examples, `d4ff500` | Snippets for progress bars, sliders, toggles, scrolling, and NPC screens. No manifest, so example and unverified | MIT | Medium | [json-ui-examples](./json-ui-examples.mdx) |
+| hash2444/upgrader, `0119a5a` | A probability-wheel upgrader server form screen. Flipbook result effects | None | Medium-high | [upgrader](./upgrader.mdx) |
+| fumeko-ts/example-texture-packs-mcbe, `7c4e1b5` | A pause screen rebuild (search filter, player count) and a pack icon animation example | Credit condition | Medium | [Small packs](./small-packs.mdx) |
+| DeathAruban/Sidebar-Mcbe (caution) | A scoreboard sidebar mod (1.19.60, README 1.20.71) | Recorded as CC BY-ND 4.0 | Low (old version) | [Small packs](./small-packs.mdx) |
+| TrippleAWap/Sidebar-HUD (caution) | A fixed sidebar with `/title` (1.19.50) | None | Low (old version) | [Small packs](./small-packs.mdx) |
+| RedStoneCraftGG/MCBE-Crosshair-XYZ (caution) | A 3D axis crosshair with a paper doll renderer (1.17.0, abandoned) | MIT | Low (old version) | [Small packs](./small-packs.mdx) |
+| mittens4all/Hide-Disabled-Achievements | Covering with an empty lang value, replacing a shared texture and reconnecting the original with path keys (1.21.100) | MIT | Low | [Small packs](./small-packs.mdx) |
+
+## Documents and tutorials
+
+| Item | What it is | License | Value | Where covered |
+| --- | --- | --- | --- | --- |
+| NetEase developer documentation, UI chapter (mirror `EaseCation/netease-modsdk-wiki` `6dd1233`) | China-edition JSON UI tutorial and property reference (assumes Python ModAPI and MC Studio) | None | Medium-high | [NetEase](./netease.mdx) |
+| Microsoft Learn (`MicrosoftDocs/minecraft-creator`) | 5 pages of AI-generated JSON UI reference (many errors) + change notes and cooperative add-on guideline | CC BY 4.0 / MIT | Medium | [Web document survey](./web-tutorials.mdx) |
+| Cermada/json-ui-docs, `629f287` | AI-generated introductory documentation. About 30 wrong claims | None | Low (error sample) | [Cermada](./cermada.mdx) |
+| feedback.minecraft.net "Better JSON UI" and others | Request posts saying that in 2026 there are still no arbitrary bindings, formulas, or HUD layers | n/a | Low | [Web document survey](./web-tutorials.mdx) |
+| Mojira MCPE-170343, MCPE-66773, and others | A bug of 4 values in the 9-slice `base_size`, UI not updating before reapplying a pack | n/a | Low | [Web document survey](./web-tutorials.mdx) |
+| YouTube tutorials (2021~2026, 5 videos + a short) | Videos. Content was not watched | n/a | Unchecked | [Web document survey](./web-tutorials.mdx) |
+
+The places searched that had nothing usable are mcpedl (only release posts), minecraft.how, mcwiki.easecation.net (a copy of the Bedrock Wiki), bedrock.dev/docs (no UI documentation), and stand-alone tutorials in Japanese, Korean, Russian, and Portuguese. The GitHub search API and some sites (readthedocs, mc.163.com, the new Mojira) were blocked by the proxy, so mirrors or source repositories were read instead.
+
+## License handling
+
+MIT, BSD, and CC BY allow short examples with attribution (Chest-UI requires attribution). For GPL-3.0 (AsaJS, StarLibV2), code is not moved into the guide or commercial packs and only the techniques were rewritten. For no-license items (the KalmeMarq and DJStompZone schemas, upgrader, Cermada, the NetEase documentation, GrimUI, Sidebar-HUD, and the unclear w1zardz), no sentences or code were copied and only the facts were rechecked against vanilla. CC BY-ND (Sidebar-Mcbe) forbids distributing modified works, so only a summary was made. For each case page of this wiki, the result of actually opening the `LICENSE` file in the clone is recorded in the registry, and excerpts (`Excerpt`) were made only from material that can be redistributed.
+
+## Scale of the guide proposals
+
+| Item | Before | After applying the proposals |
+| --- | --- | --- |
+| Rules | 340 | 406 (+66), 74 existing rules supplemented |
+| Conflicts | C-01~C-47 | C-01~C-63 (+16), existing C-04, C-06, C-33, and C-37 updated |
+| Needs-measurement list | 28 | 58 |
+| Source abbreviations | 13 | +18 |
+
+Summary of the new conflict judgments: C-48 `grid_position` is `[column, row]` (resolved), C-49 the offset sign of right and bottom anchors is not flipped (resolved), C-50 a pack file at a vanilla path is merged (resolved), C-51 content-based size and stack layout keep the guide (resolved), C-52 the remainder by integer division (partly resolved, measurement needed), C-53 JSON real number variables (unresolved), C-54 the `#item_id_aux` numbering system (unresolved), C-55 a `@name` without a namespace (unresolved, always `ns.name`), C-56 the search range without `resolve_sibling_scope` (resolved), C-57 registering a copy at a vanilla path in `_ui_defs` (unnecessary, resolved), C-58 the flipbook start frame key is `initial_uv` (resolved), C-59 the `binding_type` default is `global` (resolved), C-60 for the Microsoft Learn reference, adopt vanilla (resolved), C-61 `#anchored_offset_value` on a static control (unresolved), C-62 a grid that leaves `grid_dimension_binding` (unresolved, remove the property), C-63 a lang key whose value is a single space (unresolved). The newly created sections are the input box `#item_name` and search filter, 2D layout by keys, chest-style server form recipes, and the range within which to trust AI-generated documents, NetEase-only names, language servers, editor previews, generator output, expression compilers, and obfuscation tools.
+
+Candidates for next work: checking the roughly 300 engine `$` variables and 22 factory names collected by JsonEncryptor against the value dictionary, and the measurement list (especially the C-52 remainder expression, the C-53 real number variable, and item IDs 850 and 851 after 26.40).

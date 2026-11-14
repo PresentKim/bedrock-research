@@ -1,0 +1,149 @@
+---
+title: "JSON UI overview"
+description: "What JSON UI is, how to read rule IDs and verification levels, how source abbreviations map to registry ids, and the 20 most important rules"
+sidebar_position: 1
+sources:
+  - repo-guide
+  - repo-survey
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+  - bedrock-core
+  - private-research
+  - advancementpack
+  - mcbejsonuimasterai
+  - cinnabar
+  - netease-docs
+  - private-research
+---
+
+# JSON UI overview
+
+Baseline version: vanilla resource pack v1.26.50.4 (Mojang `bedrock-samples` commit `46ba6ea`, 2026-09-16). Most rules in this section were checked by an exhaustive search of the 207 vanilla `ui/` files of this version (Source: repo-guide, bedrock-samples).
+
+## What JSON UI is
+
+JSON UI is a data-driven UI that describes game screens (HUD, inventory, server forms, chests, NPC dialogue, and so on) with the JSON files in the `ui/` folder of a Minecraft Bedrock resource pack. If a pack adds a file at the same path as a vanilla file or registers a new file, it can change the look and some of the behavior of a screen (Source: bedrock-wiki, ms-learn).
+
+| Things to know | Contents |
+| --- | --- |
+| Structure | One file is one namespace and one key is one control definition. Definitions inherit with `@` and take variables with `$` |
+| Data | `#property` values the engine provides are connected to control properties with bindings and computed with expressions |
+| Limits | Displays that follow a 3D position, and screens that have moved to Ore UI, cannot be built or fixed with JSON UI (ALT-01, ALT-11) |
+| Versions | JSON UI has no versions. If Mojang changes vanilla, packs can break, so keep the modified parts minimal |
+| Outlook | The Bedrock Wiki warns that JSON UI is being replaced by Ore UI, so add-ons that use JSON UI may break in the future (Source: bedrock-wiki) |
+
+The shortest start: make a new file and register it in `ui/_ui_defs.json` (FILE-01), and splice into vanilla screens with `modifications` (MOD-01). Step-by-step examples are in [Files and definitions](./files-and-definitions.mdx) and [Modifying vanilla screens](./modifying-vanilla.mdx).
+
+## Page map
+
+| Page | What it covers | Rule ID |
+| --- | --- | --- |
+| [Files and definitions](./files-and-definitions.mdx) | File registration, namespaces, `@` inheritance, `$` variables, `variables`, `ignored`, path keys, `property_bag` | FILE |
+| [Modifying vanilla screens](./modifying-vanilla.mdx) | The 11 `modifications` operations, overriding properties, redeclaring, wrapping, coexisting with other packs | MOD |
+| [Controls and layout](./controls-and-layout.mdx) | Control types, size keywords, anchors, stacks, layers, clipping, grids, scrolling, 9-slice | LAY |
+| [Bindings](./bindings.mdx) | Binding kinds and conditions, view bindings, reading other controls, engine properties | BND |
+| [Expressions and operators](./expressions.mdx) | The operator table, string truncation, type conversion, dangerous expressions, evaluator run results | EXP |
+| [Collections and factories](./collections-and-factory.mdx) | Collection addressing, the two factory forms, form row numbers, grids (sections 6.0~6.8) | COL |
+| [Factory synthesis and StarLibV2 key layout](./factory-synthesis.mdx) | Factory information synthesis, key gates and 2D layout, how evidence is marked (sections 6.9~6.10) | COL |
+| [Input, buttons and toggles](./input-buttons-toggles.mdx) | `button_mappings`, button IDs, the 8 toggle states, radio tabs, focus, chest input | INP |
+| [Text and localization](./text-and-localization.mdx) | Label properties, lang files, assembling translation keys, color codes, fonts | TXT |
+| [Images and animation](./images-and-animation.mdx) | `image` properties, progress bars, `anim_type` and easing, flipbooks, the paper doll | ANI |
+| [Screen hosts and data channels](./screen-hosts-and-data.mdx) | Rules for how server forms, modal forms, chests, NPC dialogue and the HUD receive script data | HOST |
+| [Pattern recipes](./recipes.mdx) | Recipes 1~6: minimal server form setup, data sources, fixed-width records and more | PAT |
+| [Pattern recipes (2)](./recipes-toast-and-widgets.mdx) | Recipes 7~12 for tabs, toasts, progress bars, icons and hover, and proposals | PAT |
+| [JSON UI optimization (planning document)](../design/json-ui-performance.mdx) | Creation gates (`ignored`, computed length factory, dictionary lookup), binding cost, choosing between grid and factory, screen open speed, checking order | Synthesis |
+| [When JSON UI does not fit](./alternatives.mdx) | Options outside JSON UI such as particle glyphs and Ore UI | ALT |
+| [Debugging, verification and version management](./debugging-and-versions.mdx) | Reading logs, a symptom table, schema pitfalls, vanilla comparison, 1.26.50 changes | DBG |
+| [Value dictionary](./value-dictionary.mdx) | Usage counts of literal values per property in vanilla UI files and a comparison with official enums | Table |
+| [Conflict table](./conflicts.mdx) | Verdicts for places where sources disagree (C-01~C-66) | C |
+| [Community reports and cross-checks](./community-reports.mdx) | A cross-check table (D-01~D-28) matching the guide against community reports, and community UI notes | D |
+| [Community notes: data channels, HUD, expressions, layout](./community-reports-hud-and-expressions.mdx) | Community report details: workflow, bindings, expressions, HUD, layout | D |
+| [Community notes: by screen](./community-reports-screens.mdx) | Community report details: server forms, chests, vanilla screens, DDUI, Ore UI | D |
+| [Community notes: limits, version timeline, tools, open questions](./community-reports-versions-and-bugs.mdx) | Community report details: restrictions and workarounds, the timeline, open questions | D |
+
+When a rule on a page points to a rule on another page, only the ID is written.
+
+## Rule IDs and conflict and reproduction numbers
+
+- A rule ID is `English chapter abbreviation-number` (for example `FILE-06`). When quoting a rule, write the ID with it. For rules whose verification level is `conflict` or `unverified`, do not assert them as is in your work and mark them "needs verification".
+- A `C-number` is a conflict verdict for a place where sources disagreed. The verdicts are `resolved` (one side confirmed), `partly resolved` (the scope is split and both are right) and `open` (measurement needed), and the relevant verdicts are copied at the end of each page of this section.
+- A `D-number` is an item from matching the community's year of conversations against the guide. Community reports are not put directly into rules and are written separately in the "Community reports" section of each page.
+- The "Proposals (not applied)" section of a page holds rule proposals from the new material survey. It uses the final numbers set by the merge record but they have not yet been merged into the body rules.
+
+## Verification levels
+
+The `{…}` at the end of every rule is the verification level and `(Source: …)` is the evidence. Several levels can be attached together.
+
+| Marker | Meaning | Reliability |
+| --- | --- | --- |
+| `measured` | There is a record of measurement in game (mainly the spike records of the bedrock-core author). It was not measured again in this project | High |
+| `vanilla` | It is actually used in the 207 vanilla 1.26.50.4 resource pack `ui/` files. The counts are results of this exhaustive search | High (names and structure), meaning is separate |
+| `working pack` | Distributed, working packs (BedrockAdvancements 2.0.3, AdvancementPack v4.2, etc.) use it that way | Medium-high |
+| `code` | Confirmed by reading source, compiled output or scripts. It does not guarantee game behavior. `NB`, the analysis of the actual client, is the most direct code evidence, followed by Cinnabar (`CN`), the reconstruction of the native client. For expression and variable rules that `NB` could not read, `CN` is the most direct | Medium (expression and variable rules of `NB` and `CN` are medium-high) |
+| `inferred` | Judged from the evidence above | Low |
+| `unverified` | Some source claimed it but no evidence was confirmed | Measure before use |
+| `conflict` | Sources differ and it was not fully resolved. The basis of the verdict is in the conflict verdict table at the end of each page | Measure before use |
+
+The priority of verdicts is **measured > vanilla > working pack > code > inferred**. If the same level disagrees, follow the later measurement, and if still different, leave it as `conflict`. What `NB`, which read the engine binary directly, confirmed is written with the source `NB` only, and for expression and variable rules `NB` could not read, Cinnabar (`CN`) is the most direct code evidence. Measured, vanilla and working pack are different kinds of evidence and are left as they are.
+
+Note: the binding expressions of vanilla 1.26.50.4 use only `not`, `and`, `or`, `=` and `+`. String truncation, string subtraction, arithmetic and ordering comparisons never appear in vanilla, so **the expression rules cannot be judged by vanilla and rest on measurement and working packs**.
+
+## Source abbreviations and registry ids
+
+The abbreviations in `(Source: …)` at the end of a rule correspond to the ids in this wiki's source table as follows. Material with `redistribute: false` because of its license has its facts rewritten without copying sentences or code.
+
+| Abbreviation | Material | Registry id |
+| --- | --- | --- |
+| `BC`, `BC-S1`…`BC-S14`, `BC-facts`, `BC-rules` | bedrock-core (`@bedrock-core/ui` 0.12.1, compiles JSX into JSON UI). The author's in-game measurement records (S1~S14, facts, rendering rules) | `jua-bedrock-core` |
+| `BA`, `BA-original` | BedrockAdvancements 2.0.3 (server form reskin, fixed-width records). The original `ui/*.json` is All rights reserved | `jua-bedrockadvancements` |
+| `AP`, `AP-samples` | AdvancementPack v4.2 (NPC dialogue and HUD overlay) | `jua-advancementpack` |
+| `MJ` | mcbejsonuimasterAI (skills and tools for AI, no license) | `jua-mcbejsonuimasterai` |
+| `BW`, `BW-intro`, `BW-best`, `BW-doc`, `BW-dyn`, `BW-form`, `BW-btn`, `BW-title`, `BW-type`, `BW-hud`, `BW-ase`, `BW-ids`, `BW-font` | Bedrock Wiki JSON UI documents (Intro, Best Practices, JSON UI Documentation, Dynamic Content Generation, Modifying Server Forms, Buttons and Toggles, Preserve Title Texts, Type Conversion, Adding HUD Elements, Aseprite Animations, Numerical Item IDs, Fonts) | `bedrock-wiki` |
+| `TP` | This guide's in-game measurement (2026-10-20, Windows 1.26.52, test pack) | `repo-guide` |
+| `VN` | Exhaustive search of vanilla resource pack `resource_pack/ui` v1.26.50.4. `VN file:line` is that location | `bedrock-samples` |
+| `CN`, `CN-run` | Analysis of Cinnabar (`crates/json-ui`, a reconstruction of the 26.30 native client) and the results of running its evaluator directly | `jua-cinnabar` |
+| `NB` | Native client engine behavior analysis (the Android 1.26.52.3 native client library, analysis tools). `NB-01`… are finding numbers | `private-research` |
+| `NE` | Analysis of the UI chapter of the NetEase (China edition) developer documentation (no license, facts only) | `jua-netease-docs` |
+| `DF` | Research server (Dragonfly Go server) measurement (Windows 1.26.52, 2026-10-19~22) | `jua-연구 서버` |
+| `FFR` | Server form factory and lag test add-on measurement (Script API action form, mobile, 2026-11-14). The setup is in [Server form research screen](../design/server-form-research-screen.mdx) | `repo-guide` |
+| `ML` | Microsoft Learn (Minecraft Creator) documents, including the Update notes and cooperative guidelines on those pages | `ms-learn` |
+| `CU`, `UP`, `SP`, `SLB`, `ASJ`, `JEN`, `JF`, `UIS`, `LG`, `WZ` | Sources of the proposals from the new material survey: Chest-UI, upgrader, 6 small packs, StarLibV2, AsaJS, JsonEncryptor, JsonForge, the 4 JSON UI schemas, json-ui-examples, bedrock-json-ui-editor | `jua-chest-ui`, `jua-upgrader`, `jua-small-packs`, `jua-starlibv2`, `jua-asajs`, `jua-jsonencryptor`, `jua-jsonforge`, `jua-jsonui-schemas`, `jua-json-ui-examples`, `jua-bedrock-json-ui-editor` |
+| Community | A summary of a year of the community (2025-10~2026-11) | `private-research` |
+| `DI`, `OUC`, `OL`, `MS` | Particle pack, Ore UI Customizer, the Ore UI loading survey, the modal form multiselect survey. The four pages of this section do not cite them directly | The source table of the relevant section page |
+
+The guide and the wiki originals were rechecked against `bedrock-wiki` 0930b39 (as of this wiki). The wiki commit the original guide recorded is `1d12a90`. License summary: `BW` is CC BY 4.0, so facts are rewritten in English with attribution and some are moved as an `Excerpt`. `BA` forbids redistribution, so only techniques were carried over. `MJ` and `NE` have no license, so only facts were carried over. `CN` has a noncommercial license, so only behavior rules were rewritten (the Cinnabar editor and evaluator are used only for noncommercial purposes, DBG-21). `NB` is a reading of Mojang's private binary for personal reference, so the analyzed code is not carried over and only behavior is rewritten.
+
+## The 20 most important rules
+
+These are what you must know before making anything first. The parentheses are rule IDs, and the evidence is on the page where each rule is.
+
+1. When editing a vanilla file, use **only `modifications` in the same-path file**. A `modifications` written at a different path is ignored or replaces the definition. (MOD-02)
+2. Do not delete vanilla controls; **hide them with a binding.** If you `remove` an inherited child, all modifications of that file silently disappear. (MOD-05)
+3. If you `insert` into an array that is only inherited, the inherited content is hidden wholesale. Put it into a definition that declares the array directly. (MOD-04)
+4. Expressions **do not have** `%`, `>=` and `<=` (there is no basis for `!=` either, so use `(not (a = b))`). Use only `=`, `<`, `>`, `not`, `and`, `or`, `+`, `-`, `*` and `/`. A decimal literal must start with a dot like `.3` to be a real number (`0.3` is the integer 0). Write a range as `((a < #v) and (#v < b))`, not `(a < #v < b)`. (EXP-01) (EXP-27) (EXP-28)
+5. `'%.Ns' * #string` cuts the first **N bytes** (UTF-8). A Hangul character is 3 bytes. (EXP-09)
+6. If an expression has no `#property` at all, **all** bindings of that control are discarded. Write a constant like `((#v = #v) * 40)`. (BND-05)
+7. `#visible` defaults to `true`, so if an expression fails it becomes "always visible". (BND-09)
+8. `visible: false` only stops drawing. **It does not stop creation and layout.** To stop creation, use `ignored` (a variable at creation time) or a factory with length 0. `ignored` is evaluated in the parent scope, not in its own `$` declarations, so pass the gate variable to the parent and put `ignored` on the child. (COL-10) (FILE-34)
+9. `collection_name` goes only on `stack_panel`, `grid` and `collection_panel`, and `collection_index` only on a reference point inside the parent's `controls`. (COL-01) (COL-02)
+10. For a server form button to count as pressed, **the button itself** needs a `collection_details` binding. Otherwise the script receives `canceled`. (COL-04)
+11. Send every action form entry with `button()`. Mixing in `label()` shifts the collection index and the `selection` number. (COL-19)
+12. A bound value **belongs to the control that bound it.** For a child to use it, the child binds it itself or copies it with a view binding. (BND-04)
+13. Labels are localized by default. For a literal, use `"localize": false`. A numeric binding shows only when joined to a string, and string + decimal outputs nothing. (TXT-01) (TXT-06)
+14. A toggle defines **all 8 state controls.** If it enters a missing state, the control disappears. (INP-10)
+15. A stack panel gives no space to hidden children. Conditional rows and bit spacer coordinates use this property. [LAY-04]
+16. The position of a static control cannot be bound. Push it by binding **the size of a spacer placed before it.** [LAY-05]
+17. When using the title, titles and chat as data channels, add a long unique prefix, and with the same prefix hide the vanilla display and turn on the custom display. (HOST-15)
+18. The HUD title is a single channel, so it is overwritten by other add-ons' `setTitle`. For notifications that can overlap, use the chat factory. (HOST-14)
+19. Displays that must follow a 3D position (a number above a head, etc.) cannot be built with JSON UI. Use particles or entities. (ALT-01)
+20. In experiments, change one thing at a time, and first check in the log that the screen actually opened. Copy "what works" rather than "what seems like it will work". (DBG-02)
+
+## Scope and limits
+
+- Most rules in this section were not measured again in game this time. `measured` is the measurement record of the original source. Items at `conflict` and `unverified` are collected in "Items that need measurement" at the end of each page.
+- Bedrock Wiki (`BW`) documents were included after checking against vanilla. A rule that has only a wiki sentence is `unverified`.
+- The Cinnabar (`CN`) evidence is reconstructed code of the 26.30 client, not the game. Where it differs from measurement (C-43~C-47), measurement was followed.
+- A plaintext resource pack cannot fix Ore UI screens. A pack with an empty `content.zipe` in its root (local, without a server) or a pack the server sends encrypted can change the in-game Ore UI pages (ALT-11).
+- When the version changes, compare against vanilla again (the DBG rules). The baseline version for each rule is 1.26.50.4 at the top of this overview.

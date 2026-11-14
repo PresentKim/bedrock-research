@@ -1,0 +1,94 @@
+---
+title: Icons (geo-item) and container UI
+description: The resolution rules of the Ore UI item renderer geo-item://, drawing custom items, container DDUI screens and why a server cannot open them, and grid and detail screen examples.
+sidebar_position: 6
+sources:
+  - repo-ore-ui-loading
+  - private-research
+---
+
+# Icons (geo-item) and container UI
+
+(Source: repo-ore-ui-loading, private-research NB-21 and NB-22)
+
+## 1. The `geo-item://` item renderer
+
+### Concept
+
+The in-game bundle draws item icons with `<fast-img src="geo-item://id?width=px&height=px">` (container slots, the trade screen). The engine renders that item directly. The same form works in an `<img>` of injected JS. It is the same engine path as the JSON UI item renderer (`item_renderer`).
+
+### Example
+
+```html
+<img src="geo-item://diamond_sword?width=64&height=64">
+<img src="geo-item://stone?width=64&height=64&bag=%7B%22%23item_id_aux%22%3A786432%7D">
+```
+
+The second one puts the vanilla name `stone` in the host and passes `{"#item_id_aux":786432}` (runtime ID 12 x 65536 + meta 0) URL-encoded in `bag`. The item to draw is decided by `bag`.
+
+### Resolution rules `{code}`
+
+`geo-item://` is registered together with `paperdoll://` and `https://` (the scheme registration function VA `0xb811e34`, using the same handler factory with flag 0/1), and the handler `OreUI::GeometryAtlasResourceHandlerImpl` (vtable `@0x12ea8058`) passes the URL to `OreUI::ItemResourceResolver` (vtable `+0x18`, `@0x0b91af24`). As a result, `GeometryAtlas::ItemHandleFactoryImpl` (vtable `+0x10`, VA `0x9666138`) builds the item handle.
+
+1. The **host** of the URL is the item name. It is looked up with `ItemRegistryRef::lookupByName`, and if it is not found nothing is drawn.
+2. Query keys are sorted by FNV-1a 32-bit hash: `width` (`0x95876e1f`), `height` (`0xd5bdbb42`), `id` (`0x37386ae0`, integer), **`bag`** (`0x63b75f31`, JSON after URL decoding). The default size is 50.
+3. `bag` is the property bag of the JSON UI item renderer. If the property bag has no `#item_id_aux`, the factory fills in the id and aux value of the item found in step 1. **If it has one, that value is used as is.**
+
+So the host can be any vanilla name, and the item to draw can be given with `#item_id_aux` (runtime ID x 65536 + meta, the same value as the JSON UI AuxId). Registered custom items and custom blocks come out through the engine render just as in JSON UI. (The ADRP+ADD search in round 12 failed to find the usage because that code was not grouped as a function in the analysis tool, and it was found by re-scanning the bytes with a 64-instruction window.)
+
+### Measurements
+
+| Input | Result |
+| --- | --- |
+| `diamond_sword`, `diamond`, `apple`, `totem_of_undying`, `bow`, `elytra`, etc. | Works. Items are sprites |
+| `stone`, `grass_block`, `chest`, `furnace`, `glass`, `oak_log`, etc. | Works. Blocks are 3D isometric icons drawn by the engine |
+| `minecraft:diamond_sword`, `diamond_sword:0`, `264` (number), `item.diamond_sword` | Does not work (empty image) |
+| Registered custom items `custom:ingot_steel`, `ingot_steel`, `minecraft%3Adiamond_sword` | Does not work (empty image) |
+| AuxId or runtime ID directly as the host | Does not work |
+| `stone?bag=` + URL-encoded `{"#item_id_aux":<runtime ID x 65536>}` | **Works.** A custom steel ingot |
+| Vanilla diamond sword the same way | **Works** |
+| A registered custom block the same way (a block with its own geometry, a cube with a different texture per face) | **Works.** A 3D icon |
+| `bag` not encoded | Does not work |
+| Runtime ID in `#item_id_aux` (without x 65536) | Does not work |
+
+- A host containing `:` was not drawn. So a custom item cannot be given by name and is given through `bag`.
+
+### Icon values of the renderer
+
+| Value | How it is drawn | Result |
+| --- | --- | --- |
+| `geo:diamond_sword` | `geo-item://diamond_sword?width=&height=` | The engine draws it |
+| `aux:AuxId` | `geo-item://stone?width=&height=&bag=` (encoded `#item_id_aux`) | The engine draws it. Custom items and blocks work too |
+| `tex:textures/items/pebble_stone` | `pack://textures/items/pebble_stone.png?filtering=point` | Pack texture. Works with a plaintext pack too |
+
+- AuxId is the same value as in JSON UI: runtime ID x 65536 + meta. In Dragonfly it is `rid<<16 | meta` of `world.ItemRuntimeID(it)`.
+- All item icons are sent as `aux:`. `geo:` and `tex:` are substitutes for items the server does not have (an item the client does not know cannot be drawn with `aux:`). Only UI images (`textures/ui/...`) are `tex:`.
+- `pack://textures/...png?filtering=point` also reads textures from an untrusted server pack. Vanilla `close_button_default` was not read through `pack://`, and `_light` was.
+
+## 2. Container (furnace, chest) UI
+
+### The engine's Ore UI containers `{measured, code}`
+
+- The vanilla DDUI roots `minecraft:chest_screen`, `barrel_screen` and `shulker_box_screen`, and the 11 layouts inside the bundle such as `furnace` and `hopper`, read from the data store `minecraft` / `container` (`name`, `colorMode`, `slots.levelEntityContainer[i]` = `{id, amount, containerItemType, details, ...}`). The slot component (`Container.Slot`) draws the item with `geo-item://id`.
+- On this client (1.26.52 stable release), opening a real chest opened the **existing JSON UI chest**. The engine does not yet send containers to Ore UI.
+- When the server opened it with `ShowScreen("minecraft:chest_screen")`, the DDUI page switched to that screen, but the `container` data was empty and nothing was drawn. When the server filled the `container` property itself, the data reached the JS (891B) but the vanilla Ore UI chest still did not draw. The vanilla container component appears to run only with a real engine container session `{inferred}`.
+
+### What switches to Ore UI `{code}`
+
+- The bundle's route `/gameplay/block-actors/:id` mounts only when the feature flag `vanilla.oreUIGameplay` is on (`alwaysMountedWithFeatureFlag`).
+- The facet `vanilla.screenSpecificOptions` has a property `devOreUIGameplayUI` (`@0x09e6f6cc`). The getter (`@0x09e6f998`) checks whether the integer value of option 593 (`0x251`) is 1, and the setter (`@0x09e6f9fc`) writes 1 to turn it on and 2 to turn it off. Besides those two, two other functions read this option (`@0x0b5db54c`, `@0x0b5db59c`). The second also checks whether the screen number falls in the bit mask `0x380103ef`, so it appears to be a table that allows the Ore UI switch per screen kind `{inferred}`. It is a developer build option and does not appear in the settings screen of the stable release.
+- `enableSDLInventoryPage` (feature toggle `0x28`, remote flighting key `mc-enable-sdl-inventory`, off by default) appears from its name and the surrounding toggles to be an owned-content page on the store side `{inferred}`. It is different from the in-game inventory.
+- Both switches are client options or Microsoft flighting. No route for a server to turn them on with a packet was found.
+
+### Containers imitated by the server were dropped `{measured}`
+
+An `/invui` that draws a chest, furnace and inventory directly with the renderer was built and tested. The slot contents looked right, but it was not a real container, so vanilla interactions were missing (shift click, an item attached to the cursor, splitting by dragging, number keys). Rebuilding all of that in JS and on the server costs more than it gains, so it was removed. For containers, decorating the vanilla JSON UI screen with a resource pack is the right way. (If the server also implements the vanilla click rules itself, an inventory screen can be built. See [Server-driven Ore UI screen operations notes](./server-case.mdx).)
+
+## 3. Example: a DDUI screen with a grid and details `{measured}`
+
+The grid + detail screen that used to be built as a JSON UI server form (an icon grid on the left, the details and buttons of the selected item on the right) was rebuilt with the renderer.
+
+- **Icons**: `geo:name` for vanilla, the texture in `item_texture.json` for custom items, and the front and side textures in `terrain_texture.json` for custom blocks.
+- **Text**: strings containing the server's `§` color codes were drawn as they are.
+- **Performance**: the screen structure is sent only once. The parts that change are split into `region`s. Changing the selection resends only the detail region and the two selection indicator values, and a change in item state resends only the grid region and the tab counts.
+- **Measured (Windows 1.26.52)**: selection and tooltips, grid refresh after a state change, tab switching and the notification line all worked. Custom textures and 3D block icons were shown together.

@@ -1,0 +1,564 @@
+---
+title: Entity component reference (1/23)
+description: 6 MS Learn component pages (minecraft:addrider ~ minecraft:angry). Property tables and sample JSON as in the original.
+sidebar_position: 100
+sources:
+  - ms-learn
+---
+
+# Entity component reference (1/23)
+
+This page carries the component pages of MS Learn (MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0). IDs, property names, types, default values and JSON are as in the original. The full list is in the [index](./entity-index.mdx).
+
+## minecraft&#58;addrider
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_addrider.md`)
+
+Adds a rider to the entity.
+
+> [!Note]
+> From 1.21.130, this component accepts an array of riders via the `riders` field (each with mandatory `entity_type` and optional `spawn_event`). The legacy single `entity_type` / `spawn_event` form remains supported for backward compatibility.
+
+> [!Note]
+> This item requires a format version of at least 1.8.0.
+
+> [!Note]
+> Requires the following component in order to work properly:
+> 
+> * Rideable (minecraft:rideable)
+> 
+
+### Add Rider Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| entity_type | *not set* | String from a list of choices | Type of entity to acquire as a rider |  |
+| riders | [] | Array of Riders items | List of riders to be added to the entity. Can only spawn as many riders as "minecraft:rideable" has "seat_count". | Cave Spider: `[{"entity_type":"minecraft:bogged"}]`, `[{"entity_type":"minecraft:wither_skeleton"}]` |
+| spawn_event | *not set* | Minecraft Event Reference | Trigger event when a rider is acquired |  |
+
+#### Entity Rider Data
+List of riders to be added to the entity. Must have no more riders than "minecraft:rideable" has "seat_count".
+
+
+##### Entity Rider Data Properties
+
+**JSON path:** `riders`
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| entity_type | *not set* | String | The entity type that will be riding this entity. |
+| spawn_event |  | String | The spawn event that will be used when the riding entity is created. |
+
+### Samples
+
+##### [Cave Spider](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/cave_spider.json)
+
+At /minecraft:entity/component_groups/minecraft:spider_bogged_jockey/minecraft:addrider/: 
+
+```json
+"minecraft:addrider": {
+  "riders": [
+    {
+      "entity_type": "minecraft:bogged"
+    }
+  ]
+}
+```
+
+At /minecraft:entity/component_groups/minecraft:spider_wither_jockey/minecraft:addrider/: 
+
+```json
+"minecraft:addrider": {
+  "riders": [
+    {
+      "entity_type": "minecraft:wither_skeleton"
+    }
+  ]
+}
+```
+
+At /minecraft:entity/component_groups/minecraft:spider_jockey/minecraft:addrider/: 
+
+```json
+"minecraft:addrider": {
+  "riders": [
+    {
+      "entity_type": "minecraft:skeleton"
+    }
+  ]
+}
+```
+
+At /minecraft:entity/component_groups/minecraft:spider_parched_jockey/minecraft:addrider/: 
+
+```json
+"minecraft:addrider": {
+  "riders": [
+    {
+      "entity_type": "minecraft:parched"
+    }
+  ]
+}
+```
+
+At /minecraft:entity/component_groups/minecraft:spider_stray_jockey/minecraft:addrider/: 
+
+```json
+"minecraft:addrider": {
+  "riders": [
+    {
+      "entity_type": "minecraft:stray"
+    }
+  ]
+}
+```
+
+##### [Strider](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/strider.json)
+
+At /minecraft:entity/component_groups/minecraft:strider_piglin_jockey/minecraft:addrider/: 
+
+```json
+"minecraft:addrider": {
+  "riders": [
+    {
+      "entity_type": "minecraft:zombie_pigman",
+      "spawn_event": "minecraft:spawn_as_strider_jockey"
+    }
+  ]
+}
+```
+
+At /minecraft:entity/component_groups/minecraft:strider_parent_jockey/minecraft:addrider/: 
+
+```json
+"minecraft:addrider": {
+  "riders": [
+    {
+      "entity_type": "minecraft:strider",
+      "spawn_event": "minecraft:spawn_baby_strider_jockey"
+    }
+  ]
+}
+```
+
+## minecraft&#58;admire_item
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_admire_item.md`)
+
+Allows an entity to ignore attackable targets for a given duration.
+
+### Entity Admire Item Properties
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| cooldown_after_being_attacked | 10 | Integer number | Duration, in seconds, for which mob won't admire items if it was hurt |
+| duration | 10 | Integer number | Duration, in seconds, that the mob admires an item. |
+
+### Samples
+
+## minecraft&#58;ageable
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_ageable.md`)
+
+Adds a timer for the entity to grow up. It can be accelerated by giving the entity the items it likes as defined by feed_items.
+
+> [!Note]
+> In 1.21.130 the `transform_to_item` field on each entry of `feed_items` was renamed to `result_item`. The new field is defined per-item, so different feed items can transform into different result items on use.
+
+### Ageable Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| drop_items | *not set* | Array of strings | List of items that are dropped when an entity grows up |  |
+| duration | 1200 | Decimal number | Length of time before an entity grows up (-1 to always stay a baby) | Chicken: `1200` |
+| feed_items (Ageable Feed Item) | *not set* | Array of Feed Items items | List of items that can be fed to an entity to age them up. Can be a single item string, an array of strings, or an array of objects with item and growth properties. | Chicken: `["wheat_seeds","beetroot_seeds","melon_seeds","pumpkin_seeds","pitcher_pod","torchflower_seeds"]`, Cow: `"wheat"`, Dolphin: `["fish","salmon"]` |
+| feed_items (as Array of strings) | *not set* | Array of strings |  |  |
+| feed_items (as String) | *not set* | String |  |  |
+| grow_up | *not set* | Object | Event to fire when an entity grows up. Can be an object with event and target properties, or a simple event string. | Chicken: `{"event":"minecraft:ageable_grow_up","target":"self"}`, Dolphin: `{"event":"ageable_grow_up","target":"self"}` |
+| grow_up (as String) | *not set* | String |  |  |
+| interact_filters | *not set* | Minecraft filter | List of conditions to meet so that the entity can be fed. |  |
+| pause_growth | *not set* | Object | Event triggered when a baby entity's growth is paused (via a `pause_growth_items` feed). |  |
+| pause_growth (as String) | *not set* | String |  |  |
+| pause_growth_items | *not set* | Array of strings | List of items that can be fed to a baby entity to pause its growth. This item requires a format version of at least 1.26.10. | Chicken: `["golden_dandelion"]` |
+| reset_growth | *not set* | Object | Event triggered when a baby entity's growth is reset (via a `reset_growth_items` feed). |  |
+| reset_growth (as String) | *not set* | String |  |  |
+| reset_growth_items | *not set* | Array of strings | List of items that can be fed to a baby entity to reset its growth timer. This item requires a format version of at least 1.26.10. | Chicken: `["golden_dandelion"]` |
+
+#### pause_growth
+
+Event triggered when a baby entity's growth is paused (via a `pause_growth_items` feed). Can be an object with `event` and `target` properties, or a simple event string. This item requires a format version of at least 1.26.10.
+
+#### reset_growth
+
+Event triggered when a baby entity's growth is reset (via a `reset_growth_items` feed). Can be an object with `event` and `target` properties, or a simple event string. This item requires a format version of at least 1.26.10.
+
+
+#### Feed Items
+
+##### Ageable Feed Item Properties
+
+**JSON path:** `feed_items`
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| growth | *not set* | Decimal number | How much the entity ages when fed this item. |
+| item | *not set* | String | The item identifier. |
+
+### Samples
+
+##### [Chicken](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/chicken.json)
+
+
+```json
+"minecraft:ageable": {
+  "duration": 1200,
+  "feed_items": [
+    "wheat_seeds",
+    "beetroot_seeds",
+    "melon_seeds",
+    "pumpkin_seeds",
+    "pitcher_pod",
+    "torchflower_seeds"
+  ],
+  "pause_growth_items": [
+    "golden_dandelion"
+  ],
+  "reset_growth_items": [
+    "golden_dandelion"
+  ],
+  "grow_up": {
+    "event": "minecraft:ageable_grow_up",
+    "target": "self"
+  }
+}
+```
+
+##### [Cow](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/cow.json)
+
+
+```json
+"minecraft:ageable": {
+  "duration": 1200,
+  "feed_items": "wheat",
+  "pause_growth_items": [
+    "golden_dandelion"
+  ],
+  "reset_growth_items": [
+    "golden_dandelion"
+  ],
+  "grow_up": {
+    "event": "minecraft:ageable_grow_up",
+    "target": "self"
+  }
+}
+```
+
+##### [Dolphin](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/dolphin.json)
+
+
+```json
+"minecraft:ageable": {
+  "duration": 1200,
+  "feed_items": [
+    "fish",
+    "salmon"
+  ],
+  "pause_growth_items": [
+    "golden_dandelion"
+  ],
+  "reset_growth_items": [
+    "golden_dandelion"
+  ],
+  "grow_up": {
+    "event": "ageable_grow_up",
+    "target": "self"
+  }
+}
+```
+
+##### [Llama](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/llama.json)
+
+
+```json
+"minecraft:ageable": {
+  "duration": 1200,
+  "feed_items": [
+    {
+      "item": "wheat",
+      "growth": 0.1
+    },
+    {
+      "item": "hay_block",
+      "growth": 0.9
+    }
+  ],
+  "pause_growth_items": [
+    "golden_dandelion"
+  ],
+  "reset_growth_items": [
+    "golden_dandelion"
+  ],
+  "grow_up": {
+    "event": "minecraft:ageable_grow_up",
+    "target": "self"
+  }
+}
+```
+
+## minecraft&#58;ambient_sound_interval
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_ambient_sound_interval.md`)
+
+Delay for an entity playing its sound.
+
+### Ambient Sound Interval Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| event_name | ambient | String | Level sound event to be played as the ambient sound. | Allay: `"ambient"` |
+| event_names | *not set* | Array of Event Names items | List of dynamic level sound events, with conditions for choosing between them. Evaluated in order, first one wins. If none evaluate to true, 'event_name' will take precedence. | Allay: `[{"condition":"query.is_using_item","event_name":"ambient.tame"},{"condition":"!query.is_using_item","event_name":"ambient"}]`, Breeze: `[{"condition":"!query.is_on_ground","event_name":"ambient.in.air"}]` |
+| range | 16 | Decimal number | Maximum time in seconds to randomly add to the ambient sound delay time. |  |
+| value | 8 | Decimal number | Minimum time in seconds before the entity plays its ambient sound again. |  |
+
+#### Event Names
+List of dynamic level sound events, with conditions for choosing between them. Evaluated in order, first one wins. If none evaluate to true, 'event_name' will take precedence.
+
+
+##### Event Names Properties
+
+**JSON path:** `event_names`
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| condition | *not set* | String | The condition that must be satisfied to select the given ambient sound |
+| event_name | *not set* | String | Level sound event to be played as the ambient sound. |
+
+### Samples
+
+##### [Allay](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/allay.json)
+
+
+```json
+"minecraft:ambient_sound_interval": {
+  "event_name": "ambient",
+  "event_names": [
+    {
+      "condition": "query.is_using_item",
+      "event_name": "ambient.tame"
+    },
+    {
+      "condition": "!query.is_using_item",
+      "event_name": "ambient"
+    }
+  ],
+  "range": 5,
+  "value": 5
+}
+```
+
+##### [Breeze](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/breeze.json)
+
+
+```json
+"minecraft:ambient_sound_interval": {
+  "event_name": "ambient",
+  "event_names": [
+    {
+      "condition": "!query.is_on_ground",
+      "event_name": "ambient.in.air"
+    }
+  ],
+  "range": 16,
+  "value": 8
+}
+```
+
+##### [Chicken](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/chicken.json)
+
+
+```json
+"minecraft:ambient_sound_interval": {
+  "event_name": "ambient",
+  "event_names": [
+    {
+      "condition": "query.is_baby",
+      "event_name": "ambient.baby"
+    }
+  ],
+  "range": 16,
+  "value": 6
+}
+```
+
+##### [Dolphin](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/dolphin.json)
+
+
+```json
+"minecraft:ambient_sound_interval": {
+  "event_name": "ambient",
+  "event_names": [
+    {
+      "condition": "query.head_is_in_water",
+      "event_name": "ambient.in.water"
+    }
+  ],
+  "range": 16,
+  "value": 6
+}
+```
+
+##### [Drowned](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/drowned.json)
+
+
+```json
+"minecraft:ambient_sound_interval": {
+  "event_name": "ambient",
+  "event_names": [
+    {
+      "condition": "query.head_is_in_water",
+      "event_name": "ambient.in.water"
+    }
+  ],
+  "range": 16,
+  "value": 8
+}
+```
+
+## minecraft&#58;anger_level
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_anger_level.md`)
+
+Compels the entity to track anger towards a set of nuisances.
+
+### Entity Anger Level Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| anger_decrement_interval | 1 | Decimal number | Anger level will decay over time. Defines how often anger towards all nuisances will decrease by one. | Warden: `1` |
+| angry_boost | 20 | Integer number | Anger boost applied to angry threshold when mob gets angry. Value must be &gt;= 0. | Warden: `20` |
+| angry_threshold | 80 | Integer number | Threshold that define when the mob is considered angry at a nuisance. Value must be &gt;= 0. | Warden: `80` |
+| broadcast_anger | false | Boolean true/false | If set, other entities of the same entity definition within the broadcastRange will also become angry |  |
+| broadcast_anger_on_attack | false | Boolean true/false | If set, other entities of the same entity definition within the broadcastRange will also become angry whenever this mob attacks |  |
+| broadcast_filters | *not set* | Minecraft filter | Conditions that make this entry in the list valid |  |
+| broadcast_range | 20 | Integer number | Distance in blocks within which other entities of the same entity type will become angry |  |
+| broadcast_targets | *not set* | Array of strings | A list of entity families to broadcast anger to |  |
+| calm_event | *not set* | String from a list of choices | Event to fire when this entity is calmed down |  |
+| default_annoyingness | 0 | Integer number | The default amount of annoyingness for any given nuisance. Specifies how much to raise anger level on each provocation. | Warden: `35` |
+| default_projectile_annoyingness | 0 | Integer number | The default amount of annoyingness for any given nuisance that is a projectile. Specifies how much to raise anger level on each provocation. | Warden: `10` |
+| duration | *not set* | Integer number | The amount of time in seconds that the entity will be angry. |  |
+| duration_delta | *not set* | Integer number | Variance in seconds added to the duration [-delta, delta]. |  |
+| filters | *not set* | Minecraft filter | Filter out mob types that it should not attack while angry (other Piglins) |  |
+| max_anger | 100 | Integer number | The maximum anger level that can be reached. Applies to any nuisance. Value must be &gt;= 0. | Warden: `150` |
+| nuisance_filter (Nuisance Filter) | &#123;"AND":null,"NOT":null,"OR":null,"all":null,"all_of":null,"any":null,"any_of":null,"none_of":null&#125; | Nuisance Filter item | Filter that is applied to determine if a mob can be a nuisance. | Warden: `{"all_of":[{"operator":"not","test":"is_family","subject":"other","value":"warden"},{"operator":"not","test":"is_family","subject":"other","value":"inanimate"}]}` |
+| nuisance_filter (Alternate 1) | *not set* | Object |  |  |
+| on_increase_sounds | [] | Array of Increase Sounds items | Sounds to play when the entity is getting provoked. Evaluated in order. First matching condition wins | Warden: `[{"condition":"query.anger_level(this) >= 40","sound":"listening_angry"},{"condition":"query.anger_level(this) >= 0","sound":"listening"}]` |
+| remove_targets_below_angry_threshold | true | Boolean true/false | Defines if the mob should remove target if it falls below 'angry' threshold. | Warden: `true` |
+| sound_interval | *not set* | Range of integers | Anger boost applied to angry threshold when the entity gets angry. |  |
+
+#### Nuisance Filter
+
+##### Nuisance Filter Properties
+
+**JSON path:** `nuisance_filter`
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| domain | *not set* | Object | The domain the test should be performed in. |
+| operator | *not set* | Object | The comparison to apply with 'value'. |
+| subject | *not set* | Object | The subject of this filter test. |
+| test | *not set* | String | The name of the test to apply. |
+| value | *not set* | Object | The value being compared with the test. |
+
+#### Entity SoundDefinition
+
+##### Entity SoundDefinition Properties
+
+**JSON path:** `on_increase_sounds`
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| condition | *not set* | Keyed set of strings | A Molang expression describing under which conditions to play this sound, given that the entity was provoked. |
+| condition (as Named set of objects) | *not set* | Key/item pairs of Condition (Legacy Molang Expression) items |  |
+| condition (as Decimal number) | *not set* | Decimal number |  |
+| sound | *not set* | String | The sound to play. |
+
+##### Legacy Molang Expression
+
+###### Legacy Molang Expression Properties
+
+**JSON path:** `on_increase_sounds > condition`
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| expression | *not set* | String |  |
+| version | *not set* | Integer number |  |
+
+### Samples
+
+##### [Warden](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/warden.json)
+
+
+```json
+"minecraft:anger_level": {
+  "angry_threshold": 80,
+  "angry_boost": 20,
+  "anger_decrement_interval": 1,
+  "default_annoyingness": 35,
+  "default_projectile_annoyingness": 10,
+  "max_anger": 150,
+  "on_increase_sounds": [
+    {
+      "condition": "query.anger_level(this) >= 40",
+      "sound": "listening_angry"
+    },
+    {
+      "condition": "query.anger_level(this) >= 0",
+      "sound": "listening"
+    }
+  ],
+  "nuisance_filter": {
+    "all_of": [
+      {
+        "operator": "not",
+        "test": "is_family",
+        "subject": "other",
+        "value": "warden"
+      },
+      {
+        "operator": "not",
+        "test": "is_family",
+        "subject": "other",
+        "value": "inanimate"
+      }
+    ]
+  },
+  "remove_targets_below_angry_threshold": true
+}
+```
+
+## minecraft&#58;angry
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_angry.md`)
+
+Defines an entity's 'angry' state using a timer.
+
+### Angry Properties
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| angry_sound | *not set* | String | The sound event to play when the mob is angry |
+| broadcast_anger | false | Boolean true/false | If set, other entities of the same entity definition within the broadcastRange will also become angry |
+| broadcast_anger_on_attack | false | Boolean true/false | If set, other entities of the same entity definition within the broadcastRange will also become angry whenever this mob attacks |
+| broadcast_anger_on_being_attacked | false | Boolean true/false | If true, other entities of the same entity definition within the broadcastRange will also become angry whenever this mob is attacked |
+| broadcast_anger_when_dying | true | Boolean true/false | If false, when this mob is killed it does not spread its anger to other entities of the same entity definition within the broadcastRange |
+| broadcast_filters | *not set* | Minecraft filter | Conditions that make this entry in the list valid |
+| broadcast_range | 20 | Integer number | Distance in blocks within which other entities of the same entity type will become angry |
+| broadcast_targets | *not set* | Array of strings | A list of entity families to broadcast anger to |
+| calm_event | *not set* | Object | Event to fire when this entity is calmed down. Can be a simple event name string or an object with event and target properties. |
+| calm_event (as String) | *not set* | String |  |
+| duration | 25 | Integer number | The amount of time in seconds that the entity will be angry. |
+| duration_delta | 0 | Integer number | Variance in seconds added to the duration [-delta, delta]. |
+| filters | *not set* | Minecraft filter | Filter out mob types that it should not attack while angry (other Piglins) |
+| sound_interval | 0 | Range of integers | The range of time in seconds to randomly wait before playing the sound again. |
+
+### Samples

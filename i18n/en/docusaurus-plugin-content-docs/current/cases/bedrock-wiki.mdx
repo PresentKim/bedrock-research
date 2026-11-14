@@ -1,0 +1,124 @@
+---
+title: "Bedrock Wiki JSON UI documents"
+description: "The gist of the 10 documents in the Bedrock Wiki JSON UI section, what matches and differs from this project's rules, and cautions when using the wiki dictionary"
+sidebar_position: 5
+sources:
+  - bedrock-wiki
+  - bedrock-samples
+  - repo-guide
+---
+
+## What it is
+
+The Bedrock Wiki (wiki.bedrock.dev) is community documentation written by Bedrock OSS contributors. The JSON UI section has 10 documents (about 300 KB), and the 194 KB `json-ui-documentation.md` among them is the dictionary of properties, button IDs, collections, and binding names. The baseline of this page is the wiki repository `Bedrock-OSS/bedrock-wiki` commit `0930b39`, and the original analysis was done at `1d12a90` (2026-10-20). The wiki body and images are CC BY 4.0 and the code examples are MIT, so they can be moved in an `Excerpt` (Source: bedrock-wiki). The vanilla comparison was done with `bedrock-samples` `46ba6ea` (1.26.50.4).
+
+How verification levels are attached: a statement only in the wiki gets `unverified`, a result the wiki shows with a game screenshot gets `measured` (a third-party record that this project did not measure again), and when vanilla also uses the same name and value, `vanilla` is attached as well.
+
+## Gist by page
+
+| Wiki document | Abbreviation | Content |
+| --- | --- | --- |
+| Intro to JSON UI | `BW-intro` | File kinds, namespace and `@`, types, animation, the operator table, variables, bindings, conditional rendering (action bar factory, title), string format specifiers, button mappings, 11 `modifications` operations |
+| Best Practices | `BW-best` | JSON UI has no version. Write only the properties you change, `modifications`, avoid deep path keys, a single entry point, performance (`ignored: true` is the same as deletion and `visible: false` is not) |
+| JSON UI Documentation | `BW-doc` | Allowed-property tables per type, Control/Layout/Data Binding/Grid/Text/Sprite/Input/Focus/Button/Toggle/Slider/Scroll/Custom Render/Screen properties, anchor explanation, `variables`, `property_bag`, 55 global variables, hyperlink list, button IDs |
+| Dynamic Content Generation | `BW-dyn` | Factories (`control_name` is an integer length, `control_ids` is a string array length), grids, cautions |
+| Modifying Server Forms | `BW-form` | `insert_back` a second factory that uses `server_form_factory`, and a hiding binding on the vanilla form with a title-contains check |
+| Buttons and Toggles | `BW-btn` | Reusing vanilla button and toggle templates, hover text, playing an animation from a button |
+| Preserve Title Texts | `BW-title` | A latch that remembers only titles containing a keyword, using `property_bag` + `visibility_changed` |
+| Type Conversion | `BW-type` | Conversions from string to number, float to integer, and boolean to number |
+| Adding HUD Elements | `BW-hud` | Adding a HUD element to `root_panel` with `insert_front` |
+| Aseprite Animations | `BW-ase` | Array-format JSON export and `aseprite_flip_book` |
+
+## What the wiki adds most
+
+### 1. The `property_bag` dictionary lookup was confirmed with screenshots
+
+The wiki's `BW-dyn` explains that giving a factory with `control_ids` a string array as `#collection_length` creates controls in array order, and shows the resulting screen. An expression cannot build an array, so one of the arrays placed beforehand in `property_bag` is chosen by string concatenation.
+
+<Excerpt src="bedrock-wiki" title="Dynamic Content Generation" path="docs/json-ui/dynamic-content-generation.md">
+
+```json
+{
+  "apple_factory": {
+    "type": "stack_panel",
+    "size": [ "100%cm", "100%c" ],
+    "factory": {
+      "name": "hud_apple_factory",
+      "control_ids": { "apple": "hud.hud_apple", "label": "hud.hud_label" }
+    },
+    "property_bag": {
+      "#list1": [ "apple", "label" ],
+      "#list2": [ "label", "apple" ]
+    },
+    "bindings": [
+      { "binding_name": "#hud_title_text_string", "binding_name_override": "#choice" },
+      { "binding_type": "view",
+        "source_property_name": "('#list' + #choice)",
+        "target_property_name": "#collection_length" }
+    ]
+  }
+}
+```
+
+In the bindings, we fetch the title string and store it in `#choice`, which is an integer representing the list to be selected. Then using `('#list' + #choice)`, we construct the name of the list and that list is then overridden to `#collection_length`.
+
+</Excerpt>
+
+This is the same mechanism as the bedrock-core router (`('#route_' + #title_text)`) (COL-22, COL-23), so the meaning of the [bedrock-core](./bedrock-core.mdx) router, which had only been confirmed by code and tests, is backed up at the screenshot level.
+
+### 2. The `* 1` number conversion broke as versions changed
+
+The wiki added a note to `BW-type` on 2026-10-05.
+
+<Excerpt src="bedrock-wiki" title="Type Conversion" path="docs/json-ui/type-conversion.md">
+
+Starting from some version of minecraft the `#str * 1` and `#str * #float` conversions no longer work, however you can still use `0 + #str` method.
+
+</Excerpt>
+
+This matches bedrock-core S12 (2026-09-17, the day after 1.26.50 was released), which measured `(#v * 1)` as 0. So the conflicts C-04 and C-24, between the records that `* 1` worked (BA, AP, S9) and the record that it does not (S12), are explained by a **version change** and not a dispute between sources. The safe conversion is `(#v - 0)` (EXP-16). That the performance example in the wiki's `BW-best` uses `* 1` is an internal contradiction of the wiki (C-40).
+
+### 3. 11 `modifications` operations and the value-keeping latch
+
+The list of operations is moved into the [Modifying vanilla screens](../json-ui/modifying-vanilla.mdx) page as an `Excerpt`. The latch (BND-18) puts `"#saved": ""` in the `property_bag` of a size-0 panel and copies the source only at the moment visibility changes, so the last HUD title containing a keyword is kept even when other titles arrive. This pattern is confirmed as standard in the community.
+
+## What matches our rules
+
+| Guide rule | Wiki evidence |
+| --- | --- |
+| FILE-01, FILE-02, FILE-04 | Register only new files, extensions other than `.json` are possible, `_global_variables.json` |
+| FILE-13, FILE-14, FILE-15 | `variables` is a single object or an array, `requires` takes only `$`, `child@$variable` |
+| FILE-16, COL-10 | `ignored: true` is the same as deletion and `visible: false` is still evaluated |
+| FILE-20, FILE-21 | Path keys, per-property merging (`"progress_text_label": { "shadow": false }`) |
+| MOD-08, MOD-13 | `insert_back` when the original has no `#visible`, coexistence through `modifications` |
+| BND-02, BND-08, BND-16 | Omitting `binding_type` means global, `source_control_name`, `binding_name_override` |
+| EXP-03, EXP-07, EXP-09, EXP-19 | The `>=` alternative, the contains check, byte units (fixed 2025-09-18), boolean 1/0 |
+| COL-14, COL-17, HOST-05 | A second engine factory, an engine factory passing data through variables |
+| ANI-12, ANI-15 | Animation restarts when a factory recreates, Aseprite flipbook |
+
+## What differs from the wiki, and wiki errors
+
+The wiki's dictionary has wide coverage but mixes old entries and typos, so it is used by checking against vanilla in both directions (DBG-07).
+
+| Item | Wiki | Vanilla 1.26.50.4 | Judgment |
+| --- | --- | --- | --- |
+| `localize` default | `false` | `false` stated 31 times, `true` once | Wiki error (C-32) |
+| Type `scrollbar_track` | Present | 0 uses, `scroll_track` once | Wiki typo (C-34) |
+| Animation `clip` | Present | 0 uses | Unverified (C-38) |
+| Emoji bytes | 3 | UTF-8 is 4 | Wiki error (C-35) |
+| `grid_fill_direction` | `vertical`, `horizontal`, `none` | Only `vertical` twice | No evidence |
+| `grid_rescaling_type` | 3 values including `none` | `horizontal` 21, `vertical` 1 | No evidence for `none` |
+| `input_mode_condition` | `not_gaze` and others | `gamepad` 7, `gamepad_and_not_gaze` 4, `not_gamepad` 1 | `gamepad` missing, no evidence for `not_gaze` |
+| `clip_direction` | 5 values including `center` | `left`, `down`, `up`, `right` | No evidence for `center` |
+| Easing | 32 | 14 (all inside the wiki list) | 18 have no vanilla evidence |
+| Renderers | 41 | 43 | 7 only in the wiki, 9 only in vanilla |
+| Button IDs | 268 | 876 | 42 wiki IDs are not in vanilla (removed screens), 649 vanilla IDs are not in the wiki |
+| Global variables | 55 | Only 34 are referenced by UI files | 21 cannot be confirmed (FILE-29) |
+| `size: "default"` | Same as `"100%"` | Differs by type | Partly resolved (C-36) |
+| `#size_binding` needs `use_anchored_offset` | Needed | The only vanilla usage uses them together | Unresolved (C-37) |
+| Stable range of numeric item IDs | As of 1.26.50, -1246~851 is stable and 852~883 shifts | The guide records that 256 and above shift | Resolved as a version change (C-33) |
+| `modifications` example | `move_front` specifies the target with `value` | n/a | Other examples use `where`/`control_name`. This example is not trusted |
+
+## How to use the wiki dictionary
+
+The `BW-doc` tables are usable as material for widening the value dictionary, but they are moved only by filling in the vanilla usage count column. The following are useful: the property dictionaries (16 Focus, 10 Input, Text Edit, 16 Slider, 12 Scroll View, 19 Screen with `screen_draws_last` and `force_render_below`), the renderer-specific properties (`gradient_direction`, `color1`, `color2` of `gradient_renderer`; `primary_color`, `secondary_color` of `progress_bar_renderer`; `rotation`, `use_selected_skin` of `paper_doll_renderer`), and the settings screen toggle table (toggle name, state binding, enabled binding). For per-screen button IDs and collection names, first check whether that screen file still exists in vanilla. Things in game checks can clear from unverified are `insert_after` and `replace` in `modifications`, the `(0 + #v)` conversion, `#size_binding` with `use_anchored_offset`, the latch pattern, the hidden item space in grids, and playing animations from button IDs.

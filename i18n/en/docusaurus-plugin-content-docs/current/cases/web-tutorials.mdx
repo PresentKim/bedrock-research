@@ -1,0 +1,110 @@
+---
+title: "Web document and tutorial survey"
+description: "Survey results on official Microsoft Learn statements (cooperative guideline, no version concept, 1.26.0 scale and priority, 1.26.30 color code), feedback, Mojira, videos, and multilingual material"
+sidebar_position: 17
+sources:
+  - ms-learn
+  - minecraft-feedback-mojira
+  - bedrock-samples
+  - bedrock-wiki
+  - repo-guide
+---
+
+## Summary
+
+**There is effectively no "official documentation" for international JSON UI.** Microsoft Learn has 5 pages of JSON UI reference (1 list, 4 components), but they are AI-made tables (`ai-usage: ai-assisted`, 2025-02-11). The property types differ from vanilla, NetEase-only properties are mixed in, and the enum tables list only `undefined` instead of values. Mojang's `bedrock.dev/docs/stable` has no UI documentation (0 of 20 pages), and `Schemas.html` in `bedrock-samples` has no JSON UI content either. Even so, Microsoft Learn's other official documents have four usable statements. For Microsoft Learn, the Markdown of the source repository `MicrosoftDocs/minecraft-creator` (`4432fb6` at analysis time, `a9fd1c0` as this wiki's baseline) was read, and the body is CC BY 4.0 and the code examples are MIT, so they are excerpted (Source: ms-learn). Value: the official Microsoft Learn statements are medium, and the rest is low.
+
+## Microsoft Learn
+
+### 1. Cooperative add-ons do not override JSON UI (official policy)
+
+<Excerpt src="ms-learn" title="Guidelines for Building Cooperative Add-Ons, JSON UI and Custom Fonts overrides are disallowed" path="creator/Documents/Practices/GuidelinesForBuildingCooperativeAddons.md">
+
+Because JSON UI (i.e., files in `<resource pack name>/ui`) and fonts (i.e., files in `<resource pack name>/font`) are not overridable in a cooperative manner - such that multiple Add-Ons can customize the same asset - cooperative Add-Ons should not override any JSON UI or font glyph files.
+
+</Excerpt>
+
+This guideline targets cooperative add-ons on the Marketplace. If the existing MOD-13 ("for several add-ons to attach to the same screen, use only `modifications` with no definitions") is a technical workaround, the official policy is stricter and says **do not touch it at all**. If the distribution target is a Marketplace cooperative add-on, first choose a workaround outside JSON UI (the action bar and title channels, particles, server-ui forms) (proposed MOD-20 `{inferred}`). Whether a pack that uses only `modifications` is also rejected in real review needs a policy check.
+
+### 2. JSON UI has no version concept (official)
+
+<Excerpt src="ms-learn" title="Latest Platform Version, asset versions table" path="creator/Documents/Practices/LatestPlatformVersion.md">
+
+|JSON UI|ui folder|(no versioning concept)|
+
+</Excerpt>
+
+The official documentation confirms DBG-15, that adding `format_version` does not fix the behavior.
+
+### 3. The 1.26.0 update notes: the `#priority` binding and scale consolidation
+
+<Excerpt src="ms-learn" title="Update 1.26.0" path="creator/Documents/Update1.26.0.md">
+
+- Updated the priority of `stack_panel` children to be bindable
+
+### UI Scaling
+- Consolidated JSON UI and Ore UI under one scaling approach
+- Ore UI screens use full-integer scaling for sharper visuals
+- Revised scaling range: new defaults, new min/max
+- Default scale uses DPI-based detection on handheld devices
+- Minimum scale set to half the maximum scale value
+
+</Excerpt>
+
+Vanilla already binds `#priority` in 3 places (`store_common.json:732, 8239, 8503`, with the parent stack `use_priority: true`). So the `use_priority` and `priority` of LAY-40 can be used not only as literals but also as bindings (`binding_name_override: "#priority"`). Because of the scale change, if you decided the pixel scale from material from before 1.26.0 (NetEase's 320×210 / 376×250 calculation and so on), you must measure again (proposed LAY-47).
+
+### 4. The 1.26.30 update notes
+
+A new color code `§w` (party chat blue) was added. Vanilla `_global_variables.json` has only 16 variables from `$0_color_format` to `$f_color_format` and no `$w_color_format`, so there are still 16 global variables (TXT-08). Whether `§w` inside label text is colored in JSON UI is unknown until measured (proposed TXT-19 `{unverified, vanilla}`). Also fixed was the problem on iOS and Android where the on-screen keyboard did not close after submitting JSON UI text input. This behavior on mobile in earlier versions is not a pack problem.
+
+### 5. The JSON UI reference: it exists but must not be used
+
+All five pages are `ai-usage: ai-assisted`, `ms.date: 02/11/2025`, are tables pulled mechanically from the schema, and the descriptions are sentences guessed from the names. Compared with vanilla, the following are wrong.
+
+| Documentation claim | Vanilla | Judgment |
+| --- | --- | --- |
+| `font_scale_factor` is Boolean | A number (`beacon_screen_pocket.json:519` `0.8`) | Wrong |
+| `grid_item_template` is Integer | A control name string (`"common.pocket_ui_container_item"`) | Wrong |
+| `locked_control` is Boolean | A child name string (`"locked"`) | Wrong |
+| `default_focus_precedence` is Boolean | An integer (`world_section.json:211` `1`) | Wrong |
+| `factory` is String | An object (`realms_allowlist.json:72`) | Wrong |
+| `fill` is a choice string | Boolean | Wrong |
+| `nine_slice_buttom`, `place_holder_text`, `slider_range` | 0 uses in vanilla, same as NetEase China-edition-only names | Not international (C-60) |
+| The enum value table | All 41 lines are `undefined` | No content |
+
+Most of the listed properties do exist in vanilla (`always_handle_pointer` 5 times, `consume_event` 11 times, `tts_skip_message` 13 times). But the types and meanings cannot be trusted, so it is not used beyond a list of property names (DBG-05, proposed DBG-26).
+
+## Feedback site
+
+- **"Better JSON UI"** (post 45026995852557, 2026-04-12, 4 votes, 0 comments, no Mojang reply): requests arbitrary data binding, formulas and logic operations, and adding HUD layers. Read backwards, this is the users' confirmation that these still do not exist in 2026. It matches the premise of working around with titles, action bars, and form text.
+- **"Let us switch between Ore UI and the original UI"** (post 24846048765325, 2024-03-09, comments up to 2026-06): one user comment reports that the way of going back to the original UI was blocked in 1.21.100. It is a single report with no official confirmation, so reliability is low (only as background for DBG-16).
+
+## Mojira
+
+The new Mojira (`bugs.mojang.com`) renders on the client and could not be read, so `bugs-legacy.mojang.com` was read.
+
+- **MCPE-170343** (1.19.81, 1.20.0.23): a report that the 9-slice `.json` of the hotbar end texture is wrong because it lists 4 values in `base_size`. `base_size` must be 2 values, `[width, height]` (supplementary basis for LAY-27). The report does not say whether the engine ignores the 4 values or uses the first two.
+- **MCPE-66773** (several versions, unresolved): resource pack UI is not reflected until the pack is applied again. It is the basis for restarting the game when the UI does not change (DBG-18).
+- **MCPE-152801, MCPE-154347**: the scrollbar and top bar on some block screens of the pocket UI do not follow the resource pack textures. It may mean the screens use hardcoded textures.
+
+## Videos and web tools
+
+For the tutorial videos (AgentMindStorm 2021-06, Dingsel 2023-12 and 2025-01, The Octazen 2026-07, dakonblackrose 2026-09, and 1 short), only the titles and dates were recorded and the content was not watched. As a web tool there is the 9-slice preview `Nine Slice Visualiser` (`minato.beyondbedrock.org/web-apps/9slice/`). It can be used to tune `nineslice_size` values outside the game, but it was not checked whether the rendering matches the game.
+
+## Places searched that had nothing usable
+
+mcpedl has only UI resource pack release posts, minecraft.how is an EasyUIBuilder introduction, and `json-ui` on `mcwiki.easecation.net` is a copy of the Bedrock Wiki. No stand-alone tutorials in Japanese, Korean, Russian, or Portuguese turned up, and the only Chinese material is the NetEase documentation. Material inside community servers could not be read.
+
+## Relation to our rules
+
+| Rule ID | Relation |
+| --- | --- |
+| MOD-13, MOD-20 (proposed) | The official guideline forbids overriding itself |
+| DBG-05, DBG-15, DBG-16, DBG-18, DBG-26 (proposed) | Distrust of the official schema and reference, no version concept, Ore UI switching, the reapply bug, AI-generated documents |
+| LAY-27, LAY-40, LAY-47 (proposed) | 2 values for `base_size`, the `#priority` binding, 1.26.0 scale consolidation |
+| TXT-08, TXT-19 (proposed) | The 16 global color variables and `§w` |
+| C-60 | For the reference's types and lists, adopt vanilla |
+
+## Items that need measurement
+
+Whether `§w` is colored blue in JSON UI labels after 1.26.30, whether a user pack's `#priority` binding actually changes the `use_priority` order, whether the GUI scale is an integer after 1.26.0 and the default DPI on handheld devices, whether 4 values written in `base_size` are ignored, and whether the cooperative guideline also rejects a pack that uses only `modifications`.

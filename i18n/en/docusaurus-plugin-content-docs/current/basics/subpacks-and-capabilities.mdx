@@ -1,0 +1,158 @@
+---
+title: "Subpacks, pack settings, capabilities"
+description: "Subpacks and memory tiers, manifest v3 pack settings, capabilities, Vibrant Visuals compatible manifest"
+sidebar_position: 7
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+---
+
+## Subpacks
+
+### Concept
+
+A subpack is a variant inside one pack that the player can choose. It was originally meant to put several texture resolutions in one resource pack so that a device with little memory reads smaller textures. Files in the selected subpack folder **overwrite the file at the same path in the pack root**. Files that are not in the subpack load from the root as they are. (Source: bedrock-wiki, concepts/manifest; ms-learn, Documents/BuildingSubpacks.md)
+
+Example: if both `RP/textures/wiki/entities/ghost.png` and `RP/subpacks/pack_1/textures/wiki/entities/ghost.png` exist, the latter is used when `pack_1` is on.
+
+### How to build
+
+1. Create a `subpacks` folder at the pack root.
+2. Create one folder per subpack inside it. Keep names short (path length limit).
+3. Each folder has the same structure as a normal pack. A subpack does not need its own manifest.
+4. Register them in the `subpacks` array of the root manifest.
+
+| Field | Required | Description |
+|---|---|---|
+| `folder_name` | Yes | Folder name inside `subpacks/` |
+| `name` | Yes | Name shown on the slider. Cannot be localized |
+| `memory_tier` | Yes | Minimum device memory needed for selection. Unit 0.25 GB (250 MB). `4` is 1 GB. To be replaced by `memory_performance_tier` |
+| `memory_performance_tier` | No | Platform tier 1~5. Needs manifest format 3, still experimental |
+
+```json
+{
+  "format_version": 3,
+  "header": { "name": "Pack Name", "description": "Pack Description",
+              "uuid": "2fc2dd6f-86cb-4370-af70-21490a1ae471", "version": "1.0.0",
+              "min_engine_version": "1.26.40" },
+  "modules": [ { "type": "resources", "uuid": "f6821b4a-1854-44fc-a8a4-0c2847ffda46", "version": "1.0.0" } ],
+  "metadata": { "authors": ["Your Name"] },
+  "subpacks": [
+    { "folder_name": "subpack_1", "name": "Low Resolution",  "memory_tier": 0,  "memory_performance_tier": 1 },
+    { "folder_name": "subpack_2", "name": "High Resolution", "memory_tier": 12, "memory_performance_tier": 3 }
+  ]
+}
+```
+
+The MS Learn example puts several `label` entries in `settings` to show the pack and subpack descriptions paragraph by paragraph. For several paragraphs, use several `type`/`text` pairs (`name` and `text` cannot be translated).
+
+### Memory tier table
+
+| Performance tier | Representative platforms | `memory_tier` | Device memory |
+|---|---|---|---|
+| 1 | Nintendo Switch | 11 or lower | 2~4 GB |
+| 2 | PS4, PS4 Pro, Xbox One, Xbox One S, most mobile (MS docs: 60%) | 12~16 | 4~5 GB |
+| 3 | Xbox One X, Xbox Series S | 18~20 | 6~8 GB |
+| 4 | Xbox Series X, PS5 | 24~28 | 8~12 GB |
+| 5 | PS5 Pro, most PC (MS docs: 70%) | 32 or higher | Over 12 GB |
+
+### Selection rules
+
+- The default is the subpack of the **highest tier** the device satisfies. If several share the same tier, it is the **last** one in the array. It is best not to have subpacks with the same tier.
+- The player changes it with the slider in pack settings (gear icon). Only tiers up to what the device supports can be reached, and the player can pick up to one step below the default (PS5 Pro defaults to 5 and can be set to 4 manually).
+- Even with one subpack, the slider has two positions, "subpack" and "no subpack". "No subpack" loads only the root.
+- It can be chosen only in pack settings outside a world and cannot be changed inside a world. The subpack in use cannot be detected from a BP.
+
+### Community reports
+
+- **Structure**: manifest `"subpacks": [{"folder_name": "...", "name": "...", "memory_tier": 0}]`, folders in `subpacks/<name>/`, no manifest needed per subpack. Subpack files overwrite same-path files of the base pack. Selectable only in pack settings outside a world and cannot be changed inside a world. The key name varied by post between `memory_tier` and `memory_performance_tier`. Wiki: https://wiki.bedrock.dev/concepts/subpacks
+- **Default selection**: the highest memory tier the device supports, and the last one in the array on a tie. One `memory_tier` step is 0.25GB of RAM (one explanation counts it as 256MB), and `0` can be selected by every device.
+- **BP subpack pitfalls** *(conflicting)*: one case said that if the RP depends on the BP, BP subpack switching breaks, and removing the dependency fixed it. Another report from the 26.13 period said BP subpacks apply only when the BP depends on the RP, and that leaving the settings makes the slider turn the add-on off and always return to the last subpack.
+- **A subpack that holds block textures** breaks if each subpack lacks `blocks.json`/textures (unresolved). A problem of not reading files outside the subpack folder is suspected to be a new bug in the 2026-07-05 beta/hotfix. The root default cannot be given a name.
+- **A 2026-01 comment said BP subpacks are not supported and BP settings are planned**, but later there were the BP subpack use cases above, and in 2026-08 an answer said both BP and RP accept `settings` and BP subpacks work.
+- **Non-Marketplace packs such as CurseForge ones** can be edited by swapping subpack folders in and out.
+
+## Pack settings (manifest v3 settings)
+
+### Concept
+
+Pack settings attach an options screen to a pack. They can hold labels, toggles, sliders and dropdowns. Open them from the gear icon in the pack list or from Settings during play. **RP settings are stored per player** and read with Molang, and **BP settings are stored per world** and read with the Script API. A skin pack cannot have settings. Requirements: manifest format 3 (ignored in format 2), `min_engine_version` 1.21.130 or higher, and for scripts `world.getPackSettings()` of `@minecraft/server`. `settings` is an **ordered** array. (Source: bedrock-wiki, concepts/manifest)
+
+| Type | Fields |
+|---|---|
+| `label` | `type`, `text` (supports `§` formatting codes) |
+| `toggle` | `type`, `name` (a namespace is recommended, for example `wiki:show_text`), `text`, `default` (boolean) |
+| `slider` | `type`, `name`, `text`, `min`, `max`, `step`, `default` (number) |
+| `dropdown` | `type`, `name`, `text`, `options` (array of `name` and `text` objects), `default` (the `name` of an option) |
+
+```json
+"settings": [
+  { "type": "label", "text": "Text Settings" },
+  { "type": "toggle", "name": "wiki:show_text", "text": "Show Text", "default": true },
+  { "type": "slider", "name": "wiki:text_scale", "text": "Text Scale",
+    "min": 0.5, "max": 2.0, "step": 0.1, "default": 1.0 },
+  { "type": "dropdown", "name": "wiki:text", "text": "Text Options",
+    "options": [ { "name": "text_1", "text": "This is text 1" },
+                 { "name": "text_2", "text": "This is text 2" } ],
+    "default": "text_2" }
+]
+```
+
+An RP reads them with Molang queries. They work anywhere: render controllers, animations, animation controllers, particles and entity definitions.
+
+```molang
+query.is_pack_setting_enabled('wiki:show_text')
+query.get_pack_setting('wiki:text_scale')
+query.is_pack_setting_selected('wiki:text', 'text_2')
+```
+
+A BP reads them with a script. A toggle is a boolean, a slider is a number, and a dropdown is the option `name` string.
+
+```js
+import { world } from "@minecraft/server";
+const settings = world.getPackSettings();
+if (settings["wiki:show_text"] === true) {
+  world.sendMessage(`Scale ${settings["wiki:text_scale"]}, option ${settings["wiki:text"]}`);
+}
+```
+
+### Community reports
+
+- **Setting types**: label, toggle, slider (number), dropdown (string), and the Preview `multiselect` (appeared in 2026-08, described as grouping up to 20 toggles into one but actually behaving like a dropdown: a bug or unfinished). `multiselect` was listed in 26.60, but in 2026-10 there was a report that importing a pack with a multiselect setting fails. The limit on the number of settings is about 32 (MS docs). A text input is unlikely to come.
+- **How to read**: RP Molang `query.is_pack_setting_enabled('ns:id')` (not experimental as of 2025-10-29, recommended over `get_pack_setting`), BP script `World.getPackSettings` (beta). A toggle affects attachables, animations and Molang inside a world and can also change JS settings. The subpack in use cannot be detected from a BP.
+- **To reflect settings live in particles**, use `emitter_lifetime_expression` instead of `emitter_lifetime_once` (evaluated once at start).
+- **Per-player settings are not possible in multiplayer**, and global resource settings take priority. Whether it applies per client is unresolved.
+- Docs: https://learn.microsoft.com/en-us/minecraft/creator/reference/content/addonsreference/packmanifest?view=minecraft-bedrock-stable#settings---manifest-version-3-experimental , https://learn.microsoft.com/en-us/minecraft/creator/documents/addons/custompacksettings?view=minecraft-bedrock-stable . Mojang stated that the reference docs are not updated automatically.
+
+## capabilities
+
+`capabilities` is a string array of the optional engine features the pack turns on. (Source: bedrock-wiki, concepts/manifest)
+
+| capability | Pack | Description |
+|---|---|---|
+| `pbr` | RP | Holds physically based rendering assets. Vibrant Visuals can be turned on while it is active |
+| `raytraced` | RP | Ray tracing assets. Turned on for supported devices (the community also calls it `raytracing` for RTX) |
+| `script_eval` | BP | Allows `eval()` and `Function()` in scripts. Not recommended |
+| `chemistry` | BP, RP | Education Edition chemistry behavior |
+| `editorExtension` | BP, RP | Minecraft Editor extension pack |
+| `experimental_custom_ui` | RP | Remnant of the old HTML-based UI. No effect |
+
+```json
+"capabilities": ["pbr"]
+```
+
+## Vibrant Visuals compatible manifest
+
+> Details of materials, rendering and shaders belong to the rendering section. Only facts directly tied to the manifest are kept here.
+
+- **VV is kept only if the RP manifest has a top-level `"capabilities": ["pbr"]` (array)**. Without it the game switches to Fancy with the tooltip "Vibrant Visuals requires a supported device and is not compatible with Marketplace Texture Packs or Worlds". Only the manifest capability is needed, and MER/texture sets can be added gradually. "raytracing" is for RTX and `pbr` is for VV. Common to non-Marketplace add-ons. Docs: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/vvresourcepacks , https://wiki.bedrock.dev/guide/project-setup#rp-manifest *(confirmed)*
+- **Relation to min_engine_version** *(conflicting)*: packs with an old min_engine (for example 1.19.60, 1.21.40) are treated as legacy and VV works without the capability, and there are cases where VV disappeared at min_engine 1.21.120 even with `pbr` and was restored by going down to 1.19.60. On the other hand, a 2026-05 report said that turning on the VV button/PBR needs `pbr` + `min_engine_version` [1,21,120] or higher. Try both methods.
+- **A report (2025-10, about 7 users) that a pack declaring `pbr` did not load at all on devices that cannot render VV (unsupported GPU)**: distributing VV content as a separate RP is recommended. Recommended min engine 1.21.90 / 1.21.120.
+- **Adding `pbr` to a custom block pack gave `Missing referenced asset red_rod`** for the `minecraft:material_instances` texture, and the PBR texture still applied after removing it (the docs seem outdated).
+- **Marketplace maps/servers turn VV off by default** (the creator must add the capability explicitly). By mistake the whole PBR system is turned off, so RTX PBR does not work either. The Marketplace has no "recently updated" requirement, so many old packs cannot use VV.
+- **Texture sets**: leave out the `.png` suffix when referencing. VV requires only the `mer` layer (normal/heightmap are optional). A per-channel constant instead of a texture, for example: `{"format_version":"1.21.30","minecraft:texture_set":{"color":"leaves_spruce","metalness_emissive_roughness_subsurface":[0,0,0,128]}}`. Texture sets make particles/items/blocks glow in VV. PBR docs: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/pbroverview?view=minecraft-bedrock-stable
+- **Local lighting**: in `local_lighting/local_lighting.json` (format 1.21.120), `light_color` and `light_type` (`point_light`/`static_light`) per block, for example `"minecraft:copper_lantern": {"light_color": [45,175,102], "light_type": "point_light"}`. Needs the `pbr` capability and (at the time) the Render Dragon Features for Creators toggle. Static light was taken out of experimental in 26.10. The vanilla copy is in the `experimental` folder of the installed game RP.
+- **A VV pack is a resource pack, not a shader.** Start from the Mojang VV pack template on MS Learn.
+- **The problem of a pack that edits water files not loading with "No ZIP found"** was solved by extracting the mcpack manually into `development_resource_packs`. For packs disappearing on subpack change and atmospherics errors, check the Content Log.
+- **Material docs** (the non-.material.bin kind): https://learn.microsoft.com/en-us/minecraft/creator/documents/material-files?view=minecraft-bedrock-stable ("has a few errors"). Loading of `materials.index.json` in the RP was removed from the 26.0 Preview (around 2026-02-03).

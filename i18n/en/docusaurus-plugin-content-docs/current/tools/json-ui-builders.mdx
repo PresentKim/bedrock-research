@@ -1,0 +1,170 @@
+---
+title: "JSON UI editors and generators"
+description: "How to use JsonForge, bedrock-json-ui-editor, EasyUIBuilder and JsonEncryptor, and their limits"
+sidebar_position: 3
+sources:
+  - private-research
+  - repo-tool-analyses
+  - jsonforge
+  - bedrock-json-ui-editor
+  - easyuibuilder
+  - jsonencryptor
+---
+
+These are tools for making JSON UI with a visual editor or a code generator instead of writing it by hand. For each tool, this page records what it does, installation and use, limits and license. There is one common conclusion. **Previews and generated output are not the game, so always verify in the game (or in the [JSON UI tester](./jsonui-tester.mdx)).** All four tools examined had places that disagree with the vanilla 1.26.50.4 structure (Source: tool-repo-analyses).
+
+| Tool | Kind | Language | License | Examined commit |
+|---|---|---|---|---|
+| JsonForge | Visual editor | TypeScript, React, Electron | MIT | `2874876` |
+| bedrock-json-ui-editor | Web tool for fine position adjustment | HTML, JS | MIT only in the README, no LICENSE file | `9cb4896` analyzed, clone `1f18f0d` |
+| EasyUIBuilder | Code generator | PHP 8 | MIT | `90b889d` |
+| JsonEncryptor | Obfuscator | Web JS | MIT | `48e7837` |
+
+## JsonForge
+
+**What it does.** A docking editor where you drag elements onto a canvas and edit properties to build JSON UI. It has 10 element types (`panel`, `stack_panel`, `collection_panel`, `scrolling_panel`, `image`, `label`, `button`, `input_panel`, `toggle`, `custom`), panels for toolbox, hierarchy, canvas, properties, textures, bindings and JSON preview, a 9-slice canvas, a binding editor (`global`, `view`, `collection`, `collection_details`, `none`), undo, and the `.jfproject` bundle format. "Export add-on" produces three kinds as `.mcaddon`/`.mcpack`: a server form (including a behavior pack script), a HUD overlay and a scoreboard sidebar (Source: tool-jsonforge, `README.md`).
+
+**Installation and use.** The browser (Vite) and desktop (Electron) share one codebase. From source it goes as follows.
+
+```bash
+git clone https://github.com/xRookieFight/jsonforge
+cd jsonforge && npm install
+npm run dev            # web (vite)
+npm run dev:electron   # desktop (electron)
+npm run build:electron # installers (NSIS, portable, DMG, AppImage, deb)
+```
+
+The usage flow is: choose a template on the start screen (Blank, Dialog Form, Form Buttons List, Scoreboard Sidebar, HUD Overlay), add elements from the toolbox, refine them on the canvas and in properties (Transform, Layout, Layer), drag them out of the texture panel, and export with File > Export Addon. A new project is a 384x216 UI-unit screen. A resource pack can only restyle what the game already draws, and live text has to come from a form or scoreboard that a script opens (Source: tool-jsonforge, `docs/usage.md`).
+
+**Limits (analysis results).**
+1. The canvas computes `anchor_from` and `anchor_to` backwards (the parent's reference point as `anchor_to`). It is not noticeable when the two values are equal, and vanilla also writes 96% of them equal.
+2. The canvas does not stack stack panels and does not know the sizes `%`, `%c`, `fill` and `default`. `alpha` is CSS `opacity`, so it fades children too (the engine does not propagate by default, LAY-33).
+3. "Export JSON" writes child definitions separately at the top level and puts only `{ "child": { "type": "..." } }` in the parent's `controls`. There is no `@` reference, so it becomes a new inline control that merely shares the name, and size, texture and bindings are all lost.
+4. Add-on export is better, but the HUD overlay inserts into `controls` that are only inherited using `modifications`, so there is a risk that the vanilla HUD disappears entirely (MOD-04), the sign of the close button offset is opposite to vanilla, and the server form router shows a blank screen when the title matches no screen, breaking other add-ons' forms.
+5. A usable technique: export form buttons as one grid over the `form_buttons` collection so that cells are created only as many as the server sent. The rights to the bundled Minecraft font and preset textures could not be confirmed.
+
+**License.** MIT (Copyright 2026 JsonForge).
+
+## bedrock-json-ui-editor
+
+**What it does.** A static web app that shows the control tree and a preview when you paste in one JSON UI file, and rewrites `offset` when you drag a box in the preview or nudge it with arrow keys (Shift is 10x). Its purpose is fine position adjustment of existing HUD and scoreboard elements, not designing new screens. The editable properties are `offset`, `size`, `anchor_from`, `anchor_to`, `alpha`, `layer`, `visible`/`enabled`, and the animation `from`/`to`/`duration`/`easing` (Source: tool-bedrock-json-ui-editor, `README.md`).
+
+**Use.** Open the editor page, paste a file such as `scoreboard.json` or `hud_screen.json`, press Parse & Edit, pick an element from the tree or the preview and drag it, choose a screen size and enter example strings to check the actual text position, and copy or download with Export JSON. No installation is needed (no build, `index.html`, `style.css`, `app.js`), it runs in the browser without a server, and drafts are saved automatically to browser storage.
+
+**Features.** The preview is a UI-pixel screen, not CSS pixels (desktop 427x240, phone 520x240, tablet 320x240), a real game screenshot can be laid under it semi-transparently, and areas outside the screen are hatched. It draws guide lines for the hotbar (182x22), health and hunger (81x9), chat (200x60), sidebar (96x90) and logo (27x27) positions. Text width is estimated as 4 UI pixels for a space, 6 for ordinary characters, 9 for private-use-area glyphs and 10 for characters outside the BMP, with a line height of 10.
+
+**Limits.** Its layout interpretation differs from the engine rules in several places. It treats `%c` as "the largest child times a factor" (the engine uses the sum of visible children along the stack's main axis), treats `default` as content size for every type, applies the `offset` and anchor of stack children as they are (the engine ignores them, LAY-38), gives space to hidden children too, and draws `fill` as 20 pixels. It handles `wrap_content`, which vanilla never has. So use it only as a position aid and not as evidence for engine rules.
+
+**License.** The README only says "MIT" at the end, and there is no `LICENSE` file or copyright holder notice. It is unclear, so no code or sentences were copied and only facts were written.
+
+## EasyUIBuilder
+
+**What it does.** A Composer library (PHP 8.0 or later) that builds JSON UI files with a PHP builder API and automatically generates `ui/custom_ui/<ns>.json`, `ui/_ui_defs.json` and `ui/server_form.json`. The elements are Label, Panel, Button, Image, Grid, StackPanel, Toggle, Slider, EditBox, ScrollView, Dropdown, InputPanel, Screen and CustomRender, and it has bindings, animations (more than 30 easings), variables, `modifications` and a JSON validator (Source: tool-easyuibuilder, `README.MD`).
+
+**Installation and use.**
+
+```bash
+composer require refaltor/easy-ui-builder
+```
+
+```php
+use refaltor\ui\builders\Root;
+use refaltor\ui\elements\Label;
+use refaltor\ui\colors\BasicColor;
+
+$root = Root::create("my_namespace");
+$root->addElement(
+    Label::create("hello", "Hello Minecraft!")
+        ->setFontSize(Label::FONT_EXTRA_LARGE)
+        ->setShadow()
+        ->setColor(BasicColor::yellow())
+);
+$root->generateAndSaveJson("ui/my_screen.json");
+```
+
+A screen is chosen per screen by whether it exactly equals the server form title (`titleCondition()`). For manual installation, set up an autoloader that loads `./src/` with `spl_autoload_register`.
+
+**Limits (analysis results).** The automatically generated `server_form.json` and the vanilla modification feature disagree with the vanilla structure.
+1. `server_form.json` has no `namespace`, the definition key is `long_form@long_form`, which inherits from itself, and `controls` is an object, not an array (a PHP associative array is written as is).
+2. The expression that hides the default form chains `not(...)` per screen without `and`, becoming the form `(not(#title_text = '')not(#title_text = 'A'))`, and it uses a misspelled key `con`.
+3. `modifyVanillaElement` writes `modifications` into its own namespace file, so it does not apply to vanilla (MOD-02).
+4. It emits property names that vanilla does not have (`scroll_bar_track`, `scroll_size`, `toggle_tab_index`, `text_box_visible`, etc.).
+5. The validator's "14 valid types" omits 24 that vanilla uses and includes renderer names that do not exist. It is an exact-match comparison, so metadata cannot be attached to the title.
+
+**License.** MIT (Copyright 2026 Refaltor77).
+
+## JsonEncryptor
+
+**What it does.** A browser tool that takes `ui/` files, replaces user-defined names with MD5 or a salted Caesar cipher, removes whitespace and inserts `/* */` comments anywhere (scrambling the content), optionally escapes strings as `\uXXXX`, and for a zip replaces file names with hashes and splits a file per top-level definition. The input is `.json`/`.jsonc` or a pack `.zip` (Source: tool-jsonencryptor, `README.md`).
+
+**Use.** Upload files to the deployed page (GitHub Pages) and choose the settings (key, scrambling, escaping, exception list, automatic exception addition). Zip mode processes only the `ui` folder, moves the result into `ui` and rewrites `_ui_defs.json`. The processing order is comment removal then `JSON.parse`, name encryption (excluding syntax keys, engine factory names, vanilla namespaces and definition names, engine `$` variables and user exceptions), output, then optional scrambling and `\u` escaping.
+
+**Limits.**
+- The syntax the obfuscation relies on (block comments between a key and value, after a value and between array elements, whitespace-free single-line JSON, `\u` escapes) is all within the jsoncpp rules (FILE-03, FILE-30). A `\u` escape is decoded the moment it is read, so it gives no protection.
+- The zip mode defaults (file name hashing on, per-definition file splitting on, target folder `obfuscated`) can also move files on vanilla paths such as `ui/server_form.json` and `ui/hud_screen.json` into `ui/obfuscated/<md5>.zip`, which can break vanilla modifications (FILE-22, MOD-02).
+- The scrambling regular expression stops at a comma inside a string, so `"Hello, world"` becomes `"Hello/*...*/, world"`, and the binding expression `'p,q'` also breaks.
+- The engine fixed name lists (22 factory names, about 300 engine `$` variables, button IDs) are organized as data, so they serve as a checklist when building an obfuscation or renaming tool.
+
+**License.** MIT (Copyright 2024 pipa_ngry).
+
+## Other generators
+
+Other generators and libraries found in the survey have mixed licenses: AsaJS (a framework for writing JSON UI in TS, a binding expression compiler) and StarLibV2 (templates for action forms) are GPL-3.0, while npm `mcbe-ts-ui` (a TS builder that updates `_ui_defs.json` automatically) and PMServerUI are MIT. They are covered separately in the case study section.
+
+## Community notes
+
+The following are notes on JSON UI, Ore UI and DDUI tools gathered in the community survey.
+
+Terms such as `(confirmed)`, `(single report)` and `(conflicting)` are reliability markers of the reports.
+
+### JSON UI / Ore UI / DDUI tools
+
+- **JSON-UI-Maker** (`https://sebthesigma.github.io/JSON-UI-Maker/`): desktop only and handles server forms only. Only simple stack_panel/grid works, and collection panels and bindings do not. Tutorial: `https://youtu.be/WAKUBKlSBx0` .
+- **JSON UI Web Editor** (`https://gamezasrc.github.io/JSON-UI-Web-Editor/` , source `https://github.com/gamezaSRC/JSON-UI-Web-Editor`): a PC tool with an inspector, bindings, variables and a form builder. Variables cannot be used in `visible`/`enabled`, % values become numbers, and there is no `factory` option.
+- **Cinnabar** (`https://bedrock-mc.github.io/cinnabar/` , repository `https://github.com/bedrock-mc/cinnabar`): a web JSON UI editor. Behind it runs an unfinished Rust Bedrock reimplementation written by AI. The following description is *unverified*.
+  - It builds a world with a local dragonfly server and renders OBJ models, runs Java Fabric-style content in the manner of a mod server, and the JSON UI engine supports live editing.
+  - There is an attempt to run a Go port on iOS without a jailbreak (with constraints). Dragonfly itself does not run on iOS/Android.
+  - It needs a login and its legal status is unclear. Proxying is blocked, so you cannot connect to Realms or ordinary servers.
+- **Chest UI tools**: there is a Chest UI editor (`https://minato.beyondbedrock.org/web-apps/chest-ui-editor/`) and a member-made Chest UI generator that forces classic UI and gives slot and button offsets differently. Minimap example: `https://github.com/coptaine/Bedrock-Minimap`
+- **Other editors**: the China edition JSON UI editor is for the China-edition-only JSON UI v2, so it is not recommended for the international edition. A JSON UI editor with MCP support and a form generator (`https://rawcdn.githack.com/NathaLMV/CustomForms-IA/7d786478b42ddfd0ae93b3f4d485afdf6d782e75/tools/jsonui-form-generator.html`) were also mentioned.
+- **JSON-UI Previewer (frederox)**: a TS reproduction of the 1.16 China edition UI code. Because it came from the original code, it cannot be made public.
+- **Schemas and LSP**
+  - Put `"$schema": "https://kalmemarq.github.io/Bugrock-JSON-UI-Schemas/ui.schema.json"` in the file.
+  - VS Code extensions: `Sugger.json-ui-autocomplete` (a "namespace" error in VS Code 1.130.0. Reopen the window or turn off `json.validate.enable`), `Dingsel.bedrock-ui`.
+  - Most JSON UI LSPs do not support JSONC.
+- **UI hot reload**
+  - The UI hot-loader option in `options.txt` does not work in retail builds (it exists only in partner/marketplace builds).
+  - LeviLauncher Ctrl+R: off by default, and it rereads only files that are already loaded. There is a report that the project is dead.
+  - LeviLamina DLL injection hot reload is unfinished.
+  - `/reload all` can be bound to a shortcut (alt+key) in settings, and it also fixes stale tooltip textures.
+- **Unofficial JSON UI property list**: there is a list for 1.26.52.3 made by analyzing the executable with an LLM. (unverified)
+- **Vanilla UI files**: bedrock-samples (`https://github.com/Mojang/bedrock-samples/releases/tag/v1.26.30.5`), `https://github.com/ZtechNetwork/MCBVanillaResourcePack/blob/master/ui/server_form.json`
+- **Examples and libraries**
+  - Chest-UI (`https://github.com/Herobrine643928/Chest-UI`): no scrolling, and misuse breaks other UIs. `typeIds.js`
+  - WAILA: `https://github.com/r4isen1920/WAILA`
+  - bedrock-auxgen: `https://github.com/wan-adrian/bedrock-auxgen`
+  - collect-everything-bedrock: `https://github.com/joeskeen/collect-everything-bedrock`
+  - json-ui-examples: `https://github.com/LeGend077/json-ui-examples`
+- **Nine-slice and image tools**: the nineslice editor `https://minato.beyondbedrock.org/web-apps/9slice/` (source `https://github.com/Minato-mba/web-apps/blob/main/9slice`), the viewer ninesliceviewer.web.app, the OreUI image generator leowascoding.github.io/studio/html/oreui-image-creator.html, and the snippet site bedrock-resources.vercel.app.
+- **Ore UI Customizer (8Crafter)**: site `https://www.8crafter.com/utilities/ore-ui-customizer` , app repository 8Crafter-Studios/Ore-UI-Customizer-App, changelog `https://www.8crafter.com/utilities/ore-ui-customizer-changelogs` . It modifies the game's Ore UI files.
+  - Shortcuts: `CTRL+F8` reload, `CTRL+ALT+M` utilities, `CTRL+SHIFT+I` debug overlay, `F3+2/3/4` graphs
+  - Plugins: `.mcouicplugin`/`.ouicplugin`, npm `@ore-ui-customizer-api/plugin-env`
+  - v1.9.0: worked around the problem where the UI did not respond after a reload.
+  - v1.10.0: 1.21.130+ query cache.
+  - v1.12.0: console (`$0`..`$4`, `$_`), fixed an XSS-like issue where the Lite Play Screen rendered the MOTD as HTML.
+  - v1.13.0: the modification stage became 10 to 20 times faster.
+  - v1.13.2: `Export as RP` (needs a game mod that makes the game load Ore UI from the RP).
+  - v1.16.0: Android export world button, Realms improvements.
+  - App: repair of installs broken by GDK auto-updates, reading `MicrosoftGame.Config`, support for MCPELauncher/LeviLauncher/Linux/macOS.
+  - Ore UI menu text can also be changed with the pack's `texts/en_US.lang`.
+- **DDUI tools**
+  - DDUI in the jaylydev documentation (`_minecraft_server-ui.CustomForm`, `ObservableUIRawMessage`)
+  - stirante preview typings
+  - Lamina DDUI guide: `https://lamina.levimc.org/developer_guides/how_to_guides/data_driven_ui_guide/`
+  - Keystone library: `https://github.com/XxPMMPERxX/Keystone`
+  - gainser's visual DDUI form builder (WIP, unreleased as of 2026-10. Drag and drop, TS/JS export and import. Layout editing waits for Mojang layouts)
+  - Observable wrapper classes
+- **diag2form.js**: turns an NPC dialogue `.diag.json` into server-ui form JS (`node diag2form.js in.diag.json out.js [-r|--raw]`, node 20+).
+
+---
+

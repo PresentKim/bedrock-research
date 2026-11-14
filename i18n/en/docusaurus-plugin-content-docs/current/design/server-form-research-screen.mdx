@@ -1,0 +1,309 @@
+---
+title: Building a research screen with tabs and selection in one server form
+description: How to draw a research screen with tabs, an item list and details using one Script API action form, and handle tab switching and item selection on the client without a server round trip. The screen router, button order, radio toggle layout, pitfalls such as late-drawn text, and button count test results.
+sidebar_position: 3
+sources:
+  - repo-guide
+  - private-research
+  - bedrock-samples
+---
+
+# Building a research screen with tabs and selection in one server form
+
+The research screen is a window with a grid of item cells on the left, the tabs "Research needed / Research done" on top, and the details of the chosen item on the right (name, state, description, materials, rewards, a proceed button). If the server resends the form every time a tab or item is pressed, the form closes and reopens, flickers, and is delayed by the round trip time. This page lays out a setup that draws this screen with a single Script API `ActionFormData`, where **the client handles tab switching and item selection and only "Start research" goes to the server**.
+
+The content is the result (2026-11-14) of measuring the server form factory and lag test add-on (`FFR`) on mobile. Rule IDs point to the original text in the [JSON UI](../json-ui/index.mdx) chapter.
+
+<video controls preload="metadata" width="100%" src={require('@site/static/video/server-form-research-screen.mp4').default} />
+
+Research screen measurement video (mobile, 2026-11-14).
+
+![The screen with item 2 chosen on the Research needed tab](/img/design/research-screen-tab-needed.png)
+
+![The screen with item 112 chosen on the Research done tab](/img/design/research-screen-tab-done.png)
+
+These are two screens from the same form with the tab and item changed. Tab switching and cell selection did not go through the server, the chosen cell gets a yellow border, and the details on the right change to that item. The number of materials, the number of rewards and the description length differ per item. The only thing that goes to the server is the "Start research" button at the bottom.
+
+Conclusions:
+
+1. The screen is chosen by form title and created by one router placed in `$screen_content` of `third_party_server_screen` (HOST-06, COL-47). The vanilla form content stays on the same screen and is turned off only with `#visible`.
+2. Tabs and item cells are all radio toggles. If you put that item's details inside the `checked` state control of a cell toggle, the details change when the cell is pressed and the form does not close (INP-36).
+3. The server sends in advance, as form buttons, all the text and icons the details need. A cell reads one button at a time with a fixed `collection_index`. All bindings of these cells are `binding_condition: "always"`.
+4. Only the actions that must go to the server (the proceed button, page arrows) are form buttons (`button.form_button_click`). Pressing one closes the form and the server sends the next form.
+
+## 1. Screen structure
+
+There are three resource pack files.
+
+| File | Contents |
+| --- | --- |
+| `ui/server_form.json` | Changes `$screen_content` of `third_party_server_screen` to our root, and stops our form from creating the vanilla button list |
+| `ui/ffr.json` | Common definitions of the root, screen router, window, tabs, cells and details |
+| `ui/ffr_items.json` | The detail definitions of the 96 item cells. `collection_index` is a static value, so each cell needs a separate definition, and they are made with a script |
+
+```json title="ui/server_form.json"
+{
+  "namespace": "server_form",
+  "third_party_server_screen": { "$screen_content": "ffr.root" },
+  "long_form_dynamic_buttons_panel": {
+    "bindings": [
+      { "binding_name": "#form_button_contents", "binding_name_override": "#collection_length", "binding_condition": "visible" }
+    ]
+  }
+}
+```
+
+If you change the length binding of the vanilla button list to the `visible` condition, button cells are not created in our form where the list is hidden (BND-32). Vanilla `long_form_scrolling_content/wrapping_panel` is also hidden with `#visible` using the same condition expression.
+
+### 1.1 Root and screen router
+
+The root places the vanilla form content and the router side by side. The vanilla content shows only when the title does not start with our prefix (`ffr:`).
+
+```json title="ffr.root"
+{
+  "type": "panel",
+  "size": ["100%", "100%"],
+  "controls": [
+    { "vanilla": {
+        "type": "panel", "size": ["100%", "100%"],
+        "bindings": [
+          { "binding_name": "#title_text" },
+          { "binding_type": "view",
+            "source_property_name": "(not (('%.4s' * #title_text) = 'ffr:'))",
+            "target_property_name": "#visible" }
+        ],
+        "controls": [ { "content@server_form.main_screen_content": {} } ] } },
+    { "screen_router@ffr.screen_router": {} }
+  ]
+}
+```
+
+The router is a single `collection_panel`. It looks up the first 6 bytes of the title (a form like `ffr:Ea`) as a `property_bag` key and puts the array of kind names of the screen to create into `#collection_length` (HOST-06, COL-22, COL-27). If the key is absent, nothing is created.
+
+```json title="ffr.screen_router"
+{
+  "type": "collection_panel",
+  "size": ["100%", "100%"],
+  "factory": {
+    "name": "ffr_screen",
+    "control_ids": { "ea": "@ffr.research_ea", "eb": "@ffr.research_eb" }
+  },
+  "property_bag": { "#ffr:Ea": ["ea"], "#ffr:Eb": ["eb"] },
+  "bindings": [
+    { "binding_name": "#title_text" },
+    { "binding_type": "view",
+      "source_property_name": "('#' + ('%.6s' * #title_text))",
+      "target_property_name": "#collection_length" }
+  ]
+}
+```
+
+Unlike the approach of creating every `visible`-hidden screen in every form, this setup creates only the one chosen screen (section 2 of [JSON UI optimization](./json-ui-performance.mdx)).
+
+### 1.2 Window
+
+The window has a fixed pixel size equal to the vanilla inventory size (326x166). Phones draw the UI large, so a window bigger than this does not fit on screen (LAY-53). The tabs go outside the top edge of the window (`offset` [8, -22]), and the left panel (152x136) and right panel (158x136) go inside a `panel` with `offset` relative to the top left (LAY-52).
+
+## 2. Button order
+
+The server sends every value the screen needs as individual form buttons. The button count is fixed at 2022 no matter how many items there are.
+
+| Number | Contents |
+| --- | --- |
+| 0~47 | The 48 items of the first tab's current page (text `§r`, icon texture) |
+| 48~95 | The 48 items of the second tab's current page |
+| 96, 97 | The two tabs (count in the text, icon) |
+| 98, 99 | The previous and next page arrows of the first tab |
+| 100, 101 | The previous and next page arrows of the second tab |
+| 102 + 20k ~ 121 + 20k | The 20 detail cells of item cell k (0~95): name (icon), state, description, 8 materials, 8 rewards, proceed button |
+
+- The number of material kinds, description length and number of rewards differ per research, so the detail cells are fixed at the maximum. For unused material and reward cells, the invisible formatting code `§0§e§r` is sent as the text, and a cell hides itself if it contains that marker. The containment check compares the subtraction result with the original (EXP-07): `((#form_button_text - '§0§e§r') = #form_button_text)`.
+- Send material counts so that they start with a character, like `§f16`. A string containing only digits is converted to a number in expressions (EXP-15).
+- Do not put `*` or `@` in marker strings. Even a `*` inside quotes breaks the expression (EXP-36).
+- The server tells actions apart by the chosen button number. 98~101 are page moves, and `102 + 20k + 19` is the proceed action of item k.
+
+```js title="Server script (summary)"
+form.show(player).then((res) => {
+  if (res.canceled || res.selection === undefined) return;
+  const s = res.selection;
+  if (s >= 98 && s <= 101) movePage(s);
+  else if (s >= 102 && (s - 102) % 20 === 19) startResearch(itemAt(Math.floor((s - 102) / 20)));
+  reopen(player);
+});
+```
+
+The tabs are form buttons (96, 97) but are drawn as radio toggles, not pressable buttons, so they do not go to the server (section 3). The last character of the title (`a`, `b`) is the tab to open first. `toggle_group_default_selected` is a static value, so each tab gets its own layout and the router chooses by title.
+
+## 3. Comparing tab switching methods
+
+Tab switching was built four ways and compared. In all of them the cells, tabs and details were drawn correctly as soon as the form opened (with all collection bindings `always`).
+
+| Method | Setup | Does the form close |
+| --- | --- | --- |
+| A | Tabs are form buttons. When pressed, the server resends the form with another tab | Closes |
+| B | Tabs are radio toggles, and the tab content is inside the toggle's `checked` state control (INP-13) | Does not close |
+| C | Tabs are radio toggles, both tab contents are created, and the `#toggle_state` read with `source_control_name` is attached to `#visible` | Does not close |
+| D | Same as C, but only the first opened tab is created in advance and the other tab is created by a factory when that tab is first pressed | Does not close |
+
+- In D, if even the first opened tab was made with a factory whose length is decided by `#toggle_state`, that tab was empty on first open. Create the first tab in advance.
+- Open time and tab switching time were not measured. The only differences among the four methods are "does the form close" and "is the hidden tab created in advance".
+
+The tab toggles are defined as a raw `toggle` instead of the vanilla template. All 8 state controls are filled in (INP-10), and `toggle_on_button` and `button_mappings` are given (INP-11).
+
+```json title="ffr.tab_toggle (excerpt)"
+{
+  "type": "toggle",
+  "size": [96, 22],
+  "toggle_name": "ffr_tabs",
+  "radio_toggle_group": true,
+  "toggle_group_forced_index": "$tab_index",
+  "toggle_group_default_selected": "$tab",
+  "toggle_on_button": "toggle.toggle_on",
+  "toggle_off_button": "toggle.toggle_off",
+  "button_mappings": [
+    { "from_button_id": "button.menu_select", "to_button_id": "button.menu_select", "mapping_type": "pressed" },
+    { "from_button_id": "button.menu_ok", "to_button_id": "button.menu_ok", "mapping_type": "focused" }
+  ],
+  "checked_control": "on", "checked_hover_control": "on",
+  "checked_locked_control": "on", "checked_locked_hover_control": "on",
+  "unchecked_control": "off", "unchecked_hover_control": "off_hover",
+  "unchecked_locked_control": "off", "unchecked_locked_hover_control": "off",
+  "controls": [ { "on@ffr.tab_face_on": {} }, { "off@ffr.tab_face": {} }, { "off_hover@ffr.tab_face_hover": {} } ]
+}
+```
+
+The two tab toggles are placed as direct children of a horizontal `stack_panel` that has `collection_name: "form_buttons"` and are given `collection_index` 96 and 97. That is how the tab text and icon are read from the buttons (COL-38).
+
+## 4. Item selection on the client too
+
+The 96 item cells are also radio toggles (group `ffr_items`, `toggle_group_default_selected: -1` so that nothing is chosen at first). The `on` state control of a cell toggle holds both the selection border and that item's detail panel. The detail panel is moved from the cell position to the right panel position by computing `offset`, and is drawn above the other cells with a high `layer`. When nothing is chosen, the right panel has only the text "Choose a research."
+
+```json title="ffr.item_chosen (the on state of a cell toggle)"
+{
+  "type": "panel",
+  "size": ["100%", "100%"],
+  "controls": [
+    { "face@ffr.item_face": { "$slot_bg": "textures/ui/ffr/slot_chosen" } },
+    { "sel": { "type": "image", "layer": 4, "texture": "textures/ui/focus_border_white",
+               "size": ["100%", "100%"], "color": [1, 0.85, 0.1] } },
+    { "detail@$detail_def": { "layer": 20, "anchor_from": "top_left", "anchor_to": "top_left",
+                              "offset": "$detail_offset" } }
+  ]
+}
+```
+
+### 4.1 Cell layout: row stacks
+
+For a cell to read its own button, it must be a direct child of a `stack_panel` that has `collection_name` (COL-38). So each tab has 6 horizontal stack rows inside a vertical stack, and each row has 8 cell toggles (COL-50).
+
+```json title="Cell grid of tab 0 (first row only)"
+{
+  "grid0": {
+    "type": "stack_panel", "orientation": "vertical", "size": [144, 108],
+    "bindings": [
+      { "binding_type": "view", "binding_condition": "always",
+        "source_control_name": "ffr_t0", "source_property_name": "#toggle_state",
+        "target_property_name": "#visible" }
+    ],
+    "controls": [
+      { "r0": {
+          "type": "stack_panel", "orientation": "horizontal", "size": [144, 18],
+          "collection_name": "form_buttons",
+          "controls": [
+            { "i0@ffr.item_toggle": { "collection_index": 0, "$k": 0,
+                "$detail_offset": [152, -4], "$detail_def": "ffri.detail_0" } },
+            { "i1@ffr.item_toggle": { "collection_index": 1, "$k": 1,
+                "$detail_offset": [134, -4], "$detail_def": "ffri.detail_1" } }
+          ] } }
+    ]
+  }
+}
+```
+
+What got stuck before finding this layout:
+
+| Attempt | Result | Rule |
+| --- | --- | --- |
+| Make the cell parent a `panel` and place cells with `offset` | Even with a different index per cell, all showed the icon of button 0 | COL-38, COL-50 |
+| On top of that, a `collection_details` binding on the cells and `toggle_grid_collection_name` | Still button 0 | COL-50 |
+| Put 48 cells in one horizontal stack and fold per row with `offset` | The icons were right but they ran in one line out of the window | LAY-56 |
+| 6 horizontal stack rows inside a vertical stack | Works. Only one cell is selected even across different rows | INP-35 |
+
+### 4.2 Create the details in advance, or when chosen
+
+| Method | Setup | Result |
+| --- | --- | --- |
+| E | Create the details of all 96 cells at the start | Works |
+| F | Wrap the details in a factory and create them when that cell is first chosen | Works |
+
+The factory in F sets the length with `#form_button_length > 0` and the binding condition to `visible`. The `on` state control is visible only when the cell is selected, so the length becomes 1 for the first time then and the details are created (BND-32).
+
+```json title="ffr.lazy_detail"
+{
+  "type": "stack_panel",
+  "size": [158, 136],
+  "bindings": [
+    { "binding_name": "#form_button_length", "binding_condition": "visible" },
+    { "binding_type": "view", "binding_condition": "visible",
+      "source_property_name": "((#form_button_length > 0) * 1)",
+      "target_property_name": "#collection_length" }
+  ]
+}
+```
+
+It is used by attaching `factory: { "name": "ffr_lazy_<k>", "control_name": "ffri.detail_<k>" }` to each item. The difference in open time between the two methods was not measured.
+
+### 4.3 Detail panel
+
+The details read 20 fixed cells with `collection_index`. The description length differs, so it goes in a small scroll area inside the details, and the proceed button is fixed at the bottom of the panel. Text labels draw the button text as is without an expression (`text: "#form_button_text"`), and a label must be placed in a reference definition that receives `collection_index` (`name@ffr.text_item`). An index given directly to a label is ignored (COL-02).
+
+The proceed button is a button that has `$pressed_button_name: "button.form_button_click"` and a `collection_details` binding (`always`) like a vanilla button. When pressed, that cell's button number goes to the server.
+
+## 5. Pitfalls
+
+| Symptom | Cause | Fix | Rule |
+| --- | --- | --- | --- |
+| On first open, cell icons and text are empty and fill in after switching the tab once | The collection bindings of the cells in the window the router created have the default condition | Make the collection, `collection_details` and body bindings all `always` | COL-47 |
+| Text in a scroll list is empty until something touches it | The label is on the same layer as the background image | Icon `layer: 2`, label `layer: 3` | LAY-55 |
+| The buttons and the close button of menu forms cannot be pressed and only scroll | A whole-screen scroll area is always present in every form | Create the scroll area only in that form | LAY-57 |
+| The first opened tab was empty | That tab was made with a `#toggle_state` length factory | Create the first tab in advance | Section 3 D |
+| The research name and description were empty | A `'*'` inside an expression, a string converted to a number, a `collection_index` given directly to a label | A plain label, a character marker, an index in a reference definition | EXP-36, EXP-15, COL-02 |
+| All item cells show the same icon | The cell parent is a `panel` | Row stacks | COL-38, COL-50 |
+| The research screen layout was drawn in other forms too | The title gate used an `or` expression or `always` | The router uses a `property_bag` dictionary lookup, and the top gate of the screen uses the default condition | COL-39 |
+
+## 6. Button count test
+
+A mode that draws only a button list was placed in the same pack to see behavior by button count. One button consists of a background, icon, name, description and progress bar.
+
+| Mode | Setup |
+| --- | --- |
+| S | The vanilla button list |
+| J | The screen router creates the window, scroll area and a 2-column grid together |
+| K | The window is present from the start but hidden with `#visible`, and a router inside the scroll creates the grid |
+| L | The same window as J, and the list is a one-column vertical stack factory with the length of `#form_button_contents` |
+
+| Button count | J, K (2-column grid) | L (1-column stack) |
+| --- | --- | --- |
+| 100~2000 | Works | Draws but lags heavily |
+| 3000 or more | Only the scroll range is long and the cells overlap in the top 200px or so | Not tested (excluded because of lag) |
+
+- Whether the limit of the 2-column grid is the button count or the content height (about 45000px at 3000) was not settled (COL-49).
+- Lists of more than 3000 are rare so this was not pursued further. If needed, split into pages on the server.
+- The research screen has a fixed button count of 2022 and only creates 96 cells and the details on screen, so it does not depend on the item count (the same screen even in the 10,000-item test).
+
+## 7. What remains
+
+- A way to show the item list with scrolling instead of pages while keeping selection on the client was not built. Details placed inside a cell get clipped by the scroll area, a grid always draws from button 0 so two per-tab lists cannot be put in one form, and details with a fixed index per item cannot be placed.
+- The open time and tab switching time of methods A to F were not measured.
+- Whether the radio toggles inside cells made by a grid or a factory are exclusive was not examined in this test (C-66).
+
+## Related rules
+
+| ID | Page | Contents |
+| --- | --- | --- |
+| COL-02, COL-38, COL-47 ~ COL-50 | [Collections and factories](../json-ui/collections-and-factory.mdx) | Fixed index cells, data inside a router window, row stacks, grid limits |
+| LAY-52, LAY-53, LAY-55 ~ LAY-57 | [Controls and layout](../json-ui/controls-and-layout.mdx) | Window size, text layers, `offset` inside stacks, touch of scroll areas |
+| INP-10, INP-11, INP-13, INP-35, INP-36 | [Input, buttons and toggles](../json-ui/input-buttons-toggles.mdx) | Toggle states, radio groups, client tabs and selection |
+| BND-32 | [Bindings](../json-ui/bindings.mdx) | A factory that creates when visible |
+| EXP-07, EXP-15, EXP-36 | [Expressions and operators](../json-ui/expressions.mdx) | Containment check, number conversion, characters that break expressions |
+| HOST-06 | [Screen hosts and data channels](../json-ui/screen-hosts-and-data.mdx) | Dictionary lookup routing |

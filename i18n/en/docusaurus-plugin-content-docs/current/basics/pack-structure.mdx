@@ -1,0 +1,96 @@
+---
+title: "Pack structure and development environment"
+description: "BP/RP folder structure, com.mojang paths, development folders, import and packaging, pack priority and overrides"
+sidebar_position: 3
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+---
+
+## Concept: two kinds of packs
+
+An add-on is split into a **behavior pack (BP)** and a **resource pack (RP)**. A BP holds server-side definitions (entity, item and block behavior, loot tables, recipes, functions, scripts), and an RP holds client-side assets (textures, models, sounds, animations, UI, particles). The pack kind is decided by the `modules` type in `manifest.json`, not by the folder name (details in [manifest.mdx](manifest.mdx)). Packs are developed under `development_behavior_packs` and `development_resource_packs` in the `com.mojang` folder. (Source: bedrock-wiki, project-setup)
+
+## Folder structure (Bedrock Wiki Pack Folder Structure)
+
+Below is the full list of folders and files that a BP and an RP can contain. (Source: bedrock-wiki, documentation/pack-structure)
+
+```text
+BP/
+  manifest.json, pack_icon.png, contents.json
+  aim_assist/presets/  animation_controllers/  animations/  biomes/  blocks/
+  cameras/presets/  dialogue/  dimensions/  entities/  feature_rules/  features/
+  functions/ (example.mcfunction, tick.json)
+  item_catalog/crafting_item_catalog.json
+  items/  loot_tables/  recipes/  scripts/  shapes/
+  sounds/sound_definitions.json
+  spawn_rules/  structures/<namespace>/*.mcstructure
+  texts/ (languages.json, *.lang)
+  trading/ (economy_trades/)
+  worldgen/ (processors/, structure_sets/, structures/, template_pools/)
+RP/
+  manifest.json, pack_icon.png, contents.json, sounds.json, splashes.json, loading_messages.json
+  animation_controllers/  animations/  atmospherics/  attachables/  biomes/ (client_biome)
+  block_culling/  color_grading/  entity/  fogs/  font/ (emoticons.json, font_metadata.json, *.png, *.ttf)
+  lighting/  materials/  models/blocks/  models/entity/  particles/  pbr/global.json
+  render_controllers/  shadows/global.json
+  sounds/ (*.ogg *.wav *.mp3 *.fsb, music_definitions.json, sound_definitions.json)
+  texts/ (*.lang, language_names.json, languages.json, per-language font/)
+  textures/ (blocks/ entity/ items/ particle/ environment/overworld_cubemap/cubemap_0..5.png,
+             flipbook_textures.json, item_texture.json, terrain_texture.json, textures_list.json)
+  ui/ (_global_variables.json, _ui_defs.json, *.json)
+  water/
+  biomes_client.json (legacy), blocks.json (legacy)
+```
+
+`BP/sounds/sound_definitions.json` is also in the list, but in practice it is normally used on the RP side. The rules below were collected from community reports.
+
+### Folders and paths
+
+- **Windows GDK paths (since 1.21.120)**: packs (shared) are in `%AppData%\Minecraft Bedrock\Users\Shared\games\com.mojang`, worlds and settings in `%AppData%\Minecraft Bedrock\Users\<random number>\games\com.mojang`, and game internal files (vanilla data) in `C:\XboxGames\Minecraft for Windows\Content\data`. If you are not signed in to a Microsoft account, packs are stored in `C:\XboxGames\Minecraft for Windows\Content`. The official guide is the MS document "gdkpcprojectfolder".
+- **GDK migration pitfall**: in some cases packs were moved to the per-user (random ID) folder instead of Shared. Moving them to the Shared com.mojang fixes it. Cases where packs disappeared or were hidden for some users after an update past 1.21.120 were fixed the same way.
+- **Development folders**: always work in `development_behavior_packs` / `development_resource_packs`. Working in a world copy folder does not apply edits reliably, and a world's custom items/blocks can be deleted on update. The "cached data" folder is not needed. Experimental features also need the development folders.
+- **Server-downloaded RP cache**: since 1.26.0 it is in `%localappdata%\Temp\Minecraft Bedrock\minecraftpe\packcache`. Entries are compressed files and can be cleared in the game (Settings > Storage). In 2025-11 it was `...\Temp\minecraftpe\packcache\resource`.
+- **Other Windows paths**: the default aim assist files `C:\XboxGames\Minecraft for Windows\Content\data\behavior_packs\vanilla\aim_assist\`, vanilla UI `...\Content\data\resource_packs\vanilla\ui`, and imported skin packs `AppData\Roaming\Minecraft Bedrock\Users\<id>\games\com.mojang\skin_packs`. The UWP path before GDK and the Preview folder are in [versions.mdx](versions.mdx).
+- **iOS**: `development_resource_packs` shows in the list only when the pack is valid. Even one missing comma in the manifest hides it silently.
+- **Android 11~16**: access to `Android/data/com.mojang.minecraftpe` is blocked, which makes direct on-device editing hard. Shizuku, `adb shell` (wireless debugging), MT Manager and ZArchiver are mentioned. File managers that use the "use this folder" permission method work only when the Minecraft storage setting is "external", and changing the setting does not move existing worlds. CX File Explorer can compress a .mcaddon.
+- **Mobile update pitfall**: raising the pack version sometimes still shows the old version, so people deleted the pack and imported it again, and on iOS a reinstall was needed. Old worlds keep using a cached pack copy.
+- **Packaging on macOS**: if `._*`, `.DS_Store` and `__MACOSX` remain, item loading breaks. Remove them.
+- **Folder name pitfalls**: RP folders are `entity/` (not entities), `animations/`, `animation_controllers/`, `render_controllers/`, `models/entity/` and `attachables/`. Block geometry must be in `models/blocks`. In a single case a pack folder named "behind the scene BP" broke loading. *(single report)*
+- **Identifiers and file names are lowercase snake_case**. An identifier with uppercase letters such as `The_Between_Boss` blocked entity loading. The texture path in an entity JSON must match the `textures/` path exactly.
+- **A `+` character in `header.name`** breaks debugging. *(single report)* The `-` and `+` symbols are also not recommended in identifiers. For the prefix, use the `teamname_projectname:name` convention. The layout of subfolders inside a pack folder is free.
+- **Pack icon**: `pack_icon.png` at the pack root.
+- **Path length limit**: if an internal pack path exceeds about 80 characters, load warnings and missing files occur. Development folders have a long leading path, so there is even less room. The reference is "pathlength" in mctoolsvalreference on learn.microsoft.com.
+- **A zip file inside a pack folder** slows down the whole game UI. *(single report)*
+- **Git repositories and links**: for a repository that holds the BP and RP as sibling folders, connect them to the development folders with links. Make links with `mklink` in Command Prompt (the Windows shortcut wizard does not work).
+
+### Import and packaging
+
+- **Double-click import of .mcpack/.mcaddon**: since the 2025-11 update, fully close the game first and then open the file. A GDK import can fail silently, so you can also rename the file to .zip and extract it directly into the development folder.
+- **.mcpack and .mcaddon**: a .mcpack is one pack, and a .mcaddon is a zip that holds several packs. Bundling a BP and an RP together in one .mcpack fails with "no manifest". .rar is not accepted. The "Not a valid ZIP archive" error on files made with PowerShell compression is unresolved. Pressing N on the import failure notice shows the details.
+- **Zip structure**: the BP/RP folders must be at the zip root and must not be placed in `behavior_packs/` or `resource_packs/` wrapper folders. A valid .mcpack is a zip with the manifest at the root (watch for the `.mcpack.zip` naming problem on consoles/mobile).
+- **`.mcaddon` contents**: can hold mcpack, mcworld, mctemplate and mceditoraddon, compressed or unpacked. Several BPs are possible, but not on the Marketplace.
+- **Several manifests at the same folder level** give "Cannot determine which pack manifest to use". For mobile manifests there was advice to remove the `generated_with` metadata.
+- **A pack zip left in the development folder takes priority over the folder** (a 2-hour debugging case).
+- **Including packs in a .mcworld**: https://nchiari.github.io/Minecraft-Bedrock-Edu-World-Builder/
+- **How a world stores packs**: premium packs and development packs are stored in the world as references, and imported packs as copies. In one case the in-game world export exported only one RP/BP even with several add-ons, so the rest were copied by hand.
+- **Mobile structure/world export**: removed from the Android UI after 1.21.130 (up to 1.21.124 a workaround that opens the Export button with a pack worked). Downgrade below 1.21.130 or use Windows.
+
+
+### Pack priority and overrides
+
+- **Load order is decided only by the pack stack order.** The warning that appears with 3 or more packs is not a bug. A pack pulled in by a dependency loads even if it is not equipped separately.
+- **Marketplace add-on content** can be overridden only with exactly the same `namespace:name`.
+- **When two packs define the same entity file (player.json, horse.json), only the higher-priority pack applies.** In some cases one side always won even after changing the order. Merge them into one file.
+- **Overriding a vanilla entity**: copy the file to the same path from bedrock-samples (`behavior_pack/entities` on the preview branch) and put your pack at the top of the BP load order. Example: set the `tnt` explosion size to 1 to reduce lag.
+- **Overriding a vanilla mob animation**: edit the vanilla client entity with the same identifier (animations + scripts.animate).
+- **Compatibility between add-ons (Orevilles A&S guide)**: in entity files, dictionaries merge across packs but arrays do not. The method hooks into the player `particles` animation controller. https://guides.orevillestudios.com/Creators-23fd7015059881aa8dd8cecb7f948f58
+- **The Spring 2026 Tiny Takeover changes applied automatically** to add-ons that did not override vanilla files.
+- **A case where terrain turned transparent only when 3 BPs were enabled together** (any two combined were fine). Changing load order, UUIDs or versions did not fix it, and the resolution was not recorded. *(single report)*
+
+### Removal and maintenance
+
+- **When an add-on is removed, custom blocks become unknown blocks**. An uninstaller that restores them cannot be built.
+- **Add-ons that depend on experimental toggles can break with every update.** One opinion is that add-ons must be rewritten every 3 ~ 4 major updates. There is a case where a legacy pack from the 1.21 era gave a 1.6MB error.
+

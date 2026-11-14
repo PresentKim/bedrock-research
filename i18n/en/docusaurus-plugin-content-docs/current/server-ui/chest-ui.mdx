@@ -1,0 +1,192 @@
+---
+title: Chest UI (Chest-UI and the entity chest)
+description: The structure of the Chest-UI working pack that draws an action form as a Java-server-style chest screen, changes in the item icon expression and the numeric ID table, and the entity chest method where real items move
+sidebar_position: 5
+sources: [repo-chest-ui, chest-ui, private-research, bedrock-wiki]
+---
+
+"Chest UI" refers to two things. One is the **form method**, which reskins the script `ActionFormData` with a resource pack so it looks like a chest (no items move; they are only buttons). The other is the **entity chest method**, which makes the client open a real chest window (items are actually moved). This page explains the two in turn. The rule for choosing is one line: use a form for screens where nothing is put in or taken out, and use a chest only where real items move.
+
+## 1. Form method: Chest-UI
+
+Chest-UI is a behavior pack + resource pack that reskins the Script API `ActionFormData` with a resource pack so it looks like a Java-server chest GUI (1~54 slots, furnace, player inventory mirror). It started in 2023-07 and has updated the numeric item ID table for each Minecraft version, and the last update is 26.40 (2026-08-14, `115d95c`, 112 commits). The original author is LeGend077, maintained by Herobrine64 and LeGend077, and the `pattern()` function was written by Aex66. The license is CC BY 4.0 (checked in the repository `License` file) (Source: chest-ui-pack, repo-chest-ui).
+
+The fork Aex66/Chest-UI (`7dbfd13`, 2026-01-06) is a subset of the original with no commits of its own, and it is 8 commits behind the original. It lacks the ID updates for 26.20~26.40, the inventory fixes and the furnace layout cleanup. So after 1.21.131 the IDs do not match, and the inventory icons keep the `* 1` expression and probably do not show after 1.21.130 `{inferred}`. Only the original is used as evidence.
+
+### 1.1 Structure and behavior
+
+The manifests of both RP and BP have `min_engine_version [1, 21, 0]` and version 1.5.0, and the BP uses `@minecraft/server` 1.18.0 and `@minecraft/server-ui` 1.3.0. The actual target version is not `min_engine_version` but the version in the commit message (26.40), because the numeric ID table differs per version.
+
+Files: `RP/ui/server_form.json`, `chest_server_form.json`, `chest_inventory_system.json`, `furnace_server_form.json`, `_global_variables.json`, `BP/scripts/extensions/forms.js` (form builder), `typeIds.js` (item -> numeric ID table with 2,364 entries + data value table), `constants.js`.
+
+The order of operation is as follows `{verified}`.
+
+1. The script builds an `ActionFormData`. At the very front of the title rawtext it puts `§c§h§e§s§t§2§7§r` (the size flag), and for each button the text `stack#NNdur#NN§r name §r\n description...` and an icon string. The icon is a texture path (`textures/...`) or a numeric string `(ID + offset) * 65536 + (enchanted ? 32768 : 0)`. If the inventory is turned on, the player's 36 inventory slots are appended as buttons of the same format.
+2. `server_form.json` redeclares `long_form` without `@` at the same path as vanilla, changing `type: panel` and `controls`. Inside are the vanilla shape (visible only when the title has no flag), the chest panel and the furnace panel, each shown by a title containment check.
+3. `chest_panel` has templates for 1, 5, 9, 18, 27, 36, 45 and 54 slots, each shown by a `$condition` (for example `§c§h§e§s§t§5§4`) containment check. Unused sizes are `ignored` by `$disable_N_slots_layout: true` in `_global_variables.json` and are not built. By default only the 54-slot and furnace layouts are on.
+4. The chest slots are built by a `grid` (`grid_dimensions: "$grid_size"`, `collection_name: form_buttons`), and the inventory and hotbar are built from 36 children with fixed `collection_index` inside a stack panel with `collection_name: form_buttons` (COL-06).
+5. A slot takes `#form_button_texture`, and if the first 8 bytes are `textures` it draws an image, otherwise it puts `#item_id_aux` into the item renderer (`beacon.item_renderer`) and draws it (PAT-11). The hover state gets a `hover_text_renderer` tooltip, a highlight and a focus border.
+
+The recipe for chest-style forms (PAT-13) is summarized like this: choose the size by the title flag -> build only the templates in use per size with `ignored` -> `grid` + `collection_name: form_buttons` -> branch image and item renderer per slot with `'%.8s' = 'textures'` -> quantity and durability from a fixed-width prefix in the button text -> tooltip on hover. The numeric ID is put in with `(#v - 0)`. The JSON snippets for these techniques are in section 10 of [Reskinning server forms](./reskinning-server-forms.mdx).
+
+### 1.2 Script-side example
+
+`forms.js` builds the icon number like this (CC BY 4.0, attribution below).
+
+<Excerpt src="chest-ui" title="Chest-UI forms.js (26.40)" path="BP/scripts/extensions/forms.js">
+
+```js
+this.#buttonArray.splice(Math.max(0, Math.min(slot, this.slotCount - 1)), 1, [
+	buttonRawtext,
+	ID === undefined ? targetTexture : ((ID + (ID < 850 ? 0 : number_of_custom_items)) * 65536) + (enchanted ? 32768 : 0)
+]);
+```
+
+</Excerpt>
+
+`ID < 850` is explained in the ID table changes in section 3 below. The size flags are taken from `constants.js`.
+
+<Excerpt src="chest-ui" title="Chest-UI constants.js" path="BP/scripts/extensions/constants.js">
+
+```js
+['double', ['§c§h§e§s§t§5§4§r', 54]], ['large', ['§c§h§e§s§t§5§4§r', 54]],
+['9', ['§c§h§e§s§t§0§9§r', 9]],
+['27', ['§c§h§e§s§t§2§7§r', 27]],
+```
+
+</Excerpt>
+
+## 2. Item icon: `#item_id_aux` and the `%` expression
+
+### 2.1 The current expression
+
+Three files (`chest_server_form.json`, `chest_inventory_system.json`, `furnace_server_form.json`) decide item icons with this binding.
+
+<Excerpt src="chest-ui" title="Chest-UI chest_server_form.json" path="RP/ui/chest_server_form.json">
+
+```json
+{
+    "binding_type": "view",
+    "source_property_name": "((#form_button_texture - (#form_button_texture % 65536)) / 65536)",
+    "target_property_name": "#item_id_aux"
+}
+```
+
+</Excerpt>
+
+`#form_button_texture` is a numeric string the script puts in (diamond `'20054016'` = 306 x 65536, `'20086784'` if enchanted).
+
+### 2.2 What this expression actually does `{code}` `{inferred}`
+
+These are the results from running the Cinnabar evaluator (code evidence reconstructed from the 26.30 native client, not game measurement. It was run only for noncommercial research purposes under the PolyForm Noncommercial license).
+
+| Expression | Result | How to read it |
+| --- | --- | --- |
+| `((#t - (#t % 65536)) / 65536)` | `Int(20054016)` | The whole original value, not the ID (306). The outer `/ 65536` was not applied |
+| The same expression on the enchanted value | `Int(20086784)` | The enchant bit (32768) also stays as it is |
+| `(#t % 65536)` | `Json(Null)` | `%` is not an operator (EXP-02) |
+| `(#t - (#t % 65536))` | `Int(20054016)` | string - null -> the original value is reinterpreted as a number |
+| `((#t - (#t % 65536)) / 2)` | `Int(20054016)` | The outer operation disappears regardless of the divisor |
+| `(((#t - (#t % 65536)) / 65536) + 1)` | `Int(20054017)` | `+ 1` is applied, only `/ 65536` is missing |
+| `((#t - #missing) / 65536)` | `Int(306)` | Comparison: subtracting a missing property (null) leaves the division normal |
+| `((#t - 0) / 65536)` | `Int(306)` | Comparison |
+| `(#fbt_num * 1)` | `Text("")` | The expression Chest-UI used before 2026-01. string `*` number is an empty string (EXP-31) |
+| `(#fbt_num - 0)` | `Int(20054016)` | Recommended conversion |
+| `(#fbt_num / 65536)` | `Int(1)` | string `/` number is 1 (EXP-32) |
+
+Conclusion: when the `%` group becomes null, the operation right outside it is dropped too, so the whole expression becomes `ID x 65536 (+ 32768)` as it is. This matches the vanilla `#item_id_aux` convention (ID x 65536 + data), so the pack works. In other words, it is not evidence that "`%` works"; it is a numeric conversion that happens to equal `(T - 0)` (EXP-38). Because the reason is accidental and a development build may hit an `Invalid expression` assert, use the proper expression that gives the same result, `(#form_button_texture - 0)` (EXP-16).
+
+### 2.3 How `* 1` changed to the `%` expression `{verified}`
+
+| Time | Commit | `#item_id_aux` expression |
+| --- | --- | --- |
+| 2023-08-09 | `022ccf2` "Added Blocks and Item Renderer Support + Enchants" | `(#form_button_texture * 1)` |
+| 2024-12 ~ 2025-11 | `c80a963`, `010aac1`, `e095704`, `0dac8e2` | Still `* 1` |
+| 2026-01-06 | `7dbfd13` "1.21.131 Update - ... UI will now display items properly" | Chest slots replaced with the `%` expression |
+| 2026-02-01 | `deddb15` "fix inventory issues" | Inventory slots also replaced with the `%` expression |
+
+The operand of `* 1` is the original collection string that came from the button icon. This expression drew icons for over two years and broke around 1.21.130. So it is natural to think the meaning of string `* 1` changed around that time (before: numeric conversion, after: empty string) `{inferred}` (the basis for updating conflict C-04).
+
+### 2.4 Enchant bit and data value
+
+The lower 16 bits of `#item_id_aux` are the data value (0~32767), and adding 32768 to it turns on the enchant glint: `ID x 65536 + data + (enchanted ? 32768 : 0)` (ANI-23). The data value table puts the data value in the lower 16 bits as in `-272 + (1 / 65536)` (respawn anchor charge level, redstone signal strength, color bars and so on).
+
+### 2.5 Difference from vanilla constants (unresolved, C-49)
+
+The `property_bag` constants of vanilla `beacon_screen.json` are netherite ingot 48627712 (742 x 65536), emerald 25427968 (388), diamond 17301504 (264), gold 17432576 (266), iron 17367040 (265). They are old legacy ID numbers. In the Chest-UI 26.40 runtime table, 264 is cod, 388 is sugar cane and 742 is a purple harness. It is not confirmed whether the static values and the runtime values use the same scheme. It would be settled by opening the beacon screen and looking at the icons.
+
+## 3. Changes in the numeric item ID table `{verified}`
+
+These are the per-commit values of `typeIds.js` and `forms.js` (ANI-24, the data for judging conflict C-33).
+
+| Commit | Target | Shift boundary | Apple | Diamond | Max ID |
+| --- | --- | --- | --- | --- | --- |
+| `8683ef1` 2025-03-28 | 1.21.70 | `ID < 256` | 278 | 328 | 798 |
+| `e095704` 2025-10-01 | 1.21.111 | `ID < 256` | 278 | 328 | 828 |
+| `7dbfd13` 2026-01-06 | 1.21.131 | `ID < 256` | 285 | 335 | 840 |
+| `24f76f7` 2026-05-18 | 26.20 | `ID < 256` | 285 | 335 | 844 |
+| `b5397cd` 2026-06-20 | 26.30 | `ID < 256` | 285 | 335 | 845 |
+| `115d95c` 2026-08-14 | 26.40 | `ID < 850` | 880 | 306 | 881 |
+
+- Up to 26.30, the 17 bundles (257~273), the breeze rod (274), the apple and so on came right after 256, so everything from 256 up shifted by the number of custom items.
+- In 26.40 the group that shifts moved to the end of the table: 850 `red_shrub`, 851 `shelf_mushroom`, 852~858 seven spears, 859~875 17 bundles, 876 `breeze_rod`, 877 `ominous_trial_key`, 878 `trial_key`, 879 `wind_charge`, 880 `apple`, 881 `glow_berries` (32 entries). The rest (diamond 306 and so on) do not shift.
+- The Bedrock Wiki's 26.50 table shifts only 852~883 (32 entries) and -1246~851 is stable. I could not confirm whether 850 and 851 in 26.40 are really part of the shifting group, or whether Chest-UI set the boundary 2 wider.
+- Blocks (negative IDs) do not shift for custom blocks.
+- Verdict: conflict C-33 is not a dispute between sources but a version change. 256 for 26.30 and below, 850 for 26.40 (Chest-UI), 852 for 26.50 (wiki).
+- The number of custom items from other add-ons must be written by hand in `constants.js` for the offset to be right. So where possible it is better to use a texture path.
+
+## 4. Other techniques and problems
+
+- **Tooltip that follows the cursor**: Put `{"type": "custom", "renderer": "hover_text_renderer", "allow_clipping": false, "layer": 30}` inside the hover control and bind the tooltip text to `#hover_text`. It is created only in the hover state (INP-25).
+- **Unquoted strings**: `(not ((#title_text - §l§i§t) = #title_text))` and `(%.14s * #form_button_text)` in the furnace file gave the same result as with quotes (evaluator `{code}`, and working-pack evidence that the game accepted them). Text containing spaces or operator characters is cut off, so use quotes (EXP-36, EXP-39).
+- **The durability bar does not work in the evaluator model**: With `"$one": 1.0` and `(($clip_max - #ratio_1) / $clip_max)`, the text `1.0` gets inserted into the binding expression and becomes an integer, and integer division gives 0, so the bar is always full. A literal starting with a dot, as in `((99 - #ratio) * .0101)`, is safe (EXP-40, conflict C-48 unresolved).
+- **Cannot coexist with other server form packs**: It redeclares `long_form` at the same path, so if you turn it on together with a pack such as upgrader, only the later one remains (MOD-20).
+
+### Proposals (not applied)
+
+These are candidate new rules that the original analysis proposed to the guide and that have not yet been reflected in the guide: EXP-38 (the `%` expression is not a remainder), EXP-39 (unquoted strings), EXP-40 (real-number variables), COL-31 (an expression evaluated at creation time in `collection_index`), ANI-23 (enchant bit), ANI-24 (ID table version changes), TXT-18 (`§z` invisible prefix), INP-25 (cursor tooltip), HOST-34 (a marker with `§` attached to every letter), MOD-20 (`long_form` cannot coexist), PAT-13 (chest-style form recipe). What needs measuring: whether the icons match between the `%` expression and `(#v - 0)` and the content log, the ratio of real-number variables, the shifting of 850 and 851, the beacon icon, the block and item glint of +32768, and the per-font visibility of `§z`.
+
+## 5. Entity chest: a window where real items move
+
+This works the same way as PocketMine's CustomSizedInvMenu, Muqsit/InvMenu and bedrock-gophers/inv. The server creates a client-only entity and makes the client open a chest window with that entity's container. The client behavior that server implementations rely on is as follows `{record}` (Source: private research).
+
+1. Send an invisible client-only entity with `AddActor`. The metadata is transparent and NoAI, `ContainerType` = INVENTORY(-1), `ContainerSize` = slot count, and the name = window title. The identifier can be appended to the `AvailableActorIdentifiers` sent at join, and no entity definition file is needed.
+2. Then sending `ContainerOpen` (`ContainerTypeContainer` + `ContainerEntityUniqueID`) and the contents opens the chest window.
+3. While the entity chest is open, the client sends a window 255 close when a form closes or when it overlaps with a block click. The server must ignore it for the window to stay. Ignore reopening the same inventory (to guard against block spam clicks).
+4. The client ignores an open that arrives while the window is closing. When switching from one chest to another (within 1 second of closing), confirm with a `NetworkStackLatency` round trip that the client processed the close, then create the entity and open.
+5. If the player moves away from the entity, the client closes the window. Attaching the entity to the player with a ride link keeps it from closing when the player moves. If you do not want to use a ride link, move the entity to the player's position while it is open.
+6. If `ContainerOpen` arrives again for an already open window, the client answers with `PacketViolationWarning` (type -1).
+7. Without the pack it appears only as a 27-slot chest. So the resource pack is sent as required (`ResourcesRequired`).
+
+### 5.1 Implementation in Dragonfly
+
+You can reach the session with a packet hook without patching Dragonfly (the bedrock-gophers/inv approach). The hook wraps the server listener so that bidirectional packets of each connection pass through the hook first (they can be changed or dropped), and when the connection drops, the close hook runs. The session's private methods (`writePacket`, `sendInv`, `nextWindowID`, `closeCurrentContainer`) are used with `go:linkname`, and private fields (`openedWindow` and so on) with reflection. Make tests break when names change.
+
+- The session's opened window (`openedWindow`) is set to that inventory, so item movement takes Dragonfly's `ContainerLevelEntity -> openedWindow` path as is.
+- When the window closes, the entity is removed and the close callback is called. When the server closes it, the callback runs in that transaction; when Dragonfly closes it (the hook sees the client's close response `ContainerClose`), in the player's transaction; and when the connection drops, in the close hook without a player. The player and transaction of the callback are `nil` when closed by a disconnect.
+- The opening steps follow InvMenu's `PlayerWindowDispatcher` steps and can be turned on one at a time. Only the ride link is on by default. Turning all three below on closes the chest immediately, so turn them on one at a time when narrowing down a problem.
+
+| Step | Behavior |
+| --- | --- |
+| Ride link | Attaches the entity to the player with a ride link. On by default |
+| Latency check | Opens after receiving a `NetworkStackLatency` response following `AddActor` (up to 1 second) |
+| Resend | Close + open resend every tick (up to 20 times) until the client confirms with `PacketViolationWarning` (type -1) for the excess open. Closes of that window are ignored meanwhile |
+| Log | Logs open, close, client close and violation warnings |
+
+- With a chest where real items move, if several people open the same inventory, changes are visible to everyone. Move validation is done with the `Handle` of the Dragonfly inventory. Button actions run in the player's current world transaction. An open window is closed before the player changes worlds. For work to do after everything the client sent is processed, wait with a `NetworkStackLatency` round trip (up to 1 second).
+
+### 5.2 Resource pack that chooses the size
+
+tedo0627/InventoryUIResourcePack (MIT, as the server documentation states. I could not open the repository's LICENSE myself) reads `§{row count 1~6}§{scroll 0/1}` + nine `§r` at the start of the title to decide the window size. Beyond 54 slots it scrolls at a height of 6 rows. An ordinary chest without the prefix is the vanilla screen as is. The server opens the entity chest with this prefix attached to the title. Format codes get attached to the title, so if the marker ends with a color code, append `§r` after it so the window title is not tinted.
+
+### 5.3 Take-all and put-all buttons (Quick Container technique)
+
+Put one button next to the chest window and overlap as many invisible buttons as there are slots under it. If you change each button's press into that slot's vanilla quick move (`button.container_auto_place`, `consume_event: false`), one click becomes a shift-click on every slot. The server receives a plain item move request per slot, so no server code is needed. Take-out moves the chest slots (`$quick_container_size`), and put-in moves the 27 inventory slots (including the hotbar if `$quick_put_hotbar`). "Put only what exists" moves only inventory slots whose item (`#item_id_aux`) is also in one of the front 54 chest slots. JSON UI has no loops, so a generator writes a named control (`quick_c<n>`) per chest slot and 54 comparison bindings per inventory slot into the file. The hidden button reads that slot control's `#item_id_aux` with `source_control_name` (first match from the screen root) and is visible only when the same item exists. The tooltip is a label inside the button's hover state, so translation keys resolve (the `#hover_text` of `common.hover_text` is not translated). The icons are vanilla `up_arrow`, `down_arrow` and `store_filter_icon` (Source: private research).
+
+## 6. Rule summary
+
+1. Use a form where nothing is put in or taken out, and an entity chest where real items move.
+2. A form-method chest is a title flag + per-size templates + fixed-index slots, and unused sizes are blocked from being built with `ignored`.
+3. Receive the icon number with `(#form_button_texture - 0)` and build it as `ID x 65536 + data + 32768 (enchanted)`. Rebuild the ID table for every version.
+4. For the entity chest, the server ignores close 255, confirms chest switching with `NetworkStackLatency`, and attaches the entity with a ride link.
+5. It cannot coexist with a pack that redeclares the same `server_form.json`. Use wrapping.

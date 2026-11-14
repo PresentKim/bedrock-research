@@ -1,0 +1,74 @@
+---
+title: "Cermada json-ui-docs (a sample of errors in AI-generated documentation)"
+description: "About 30 wrong claims found by vanilla comparison in 26 files of AI-generated JSON UI introductory documentation. Test material for deciding how far to trust the documentation"
+sidebar_position: 7
+sources:
+  - cermada
+  - bedrock-samples
+  - repo-guide
+---
+
+## What it is
+
+Cermada's `json-ui-docs` is a docsify documentation repository about JSON UI (HEAD `629f287`, 2026-07-25, 16 commits, 26 Markdown files under `docs/`, about 4,200 lines). The repository README itself warns "this documentation is AI Generated, some information may not correct". The clone has no `LICENSE`, so nothing was copied; the claims were summarized and verified against vanilla `bedrock-samples` `46ba6ea` (1.26.50.4) (Source: cs-cermada). **There is no new technique to take from this material, and it is used only as a sample of errors.** Some parts are right (basic element types, the 9 anchor values, `layer`, `binding_name_override`, the `grayscale` property), but they contradict each other within the same documentation, so a reader cannot tell them apart.
+
+The lesson of this case is to check a dictionary in both directions (DBG-07). Asking "does the vanilla name appear in the documentation" mostly passes, but asking "does the documentation name appear in vanilla" catches errors immediately.
+
+## Five types of wrong claims
+
+### 1. Inventing binding names that do not exist
+
+12 names, including `#player_health`, `#player_hunger`, `#player_max_health`, `#player_level`, `#player_experience_progress`, `#selected_hotbar_slot`, `#hotbar_slot_count`, `#is_holding_item`, `#boss_bars_visible`, `#is_showing_hud_elements`, `#craftable`, and `#fill_amount`, have 0 uses in vanilla. The vanilla HUD health is drawn by a renderer and there is no path to receive the health number through a binding (work around it with a data channel). The explanation that a progress bar is built with `fill: true` + `#fill_amount` is also wrong, and a progress bar uses `#clip_ratio` + `clip_direction` (ANI-03). `#texture_file_system` is used 90 times but is a value that decides the storage location to read textures from. A grid's `#collection_name` is a property (231 uses), not a binding.
+
+### 2. Files that do not exist and wrong namespaces
+
+| Claim | Vanilla fact |
+| --- | --- |
+| Chests, furnaces, and crafting tables in `container_screens.json` (namespace `container`) | No such file. Chests are `chest_screen.json`, furnaces are `furnace_screen.json`, and so on, one file per screen |
+| `mob_effects.json`, `toast.json`, `hud_with_effects.json` | None of the three exist (toasts are `toast_screen.json`) |
+| `common/common.json`, namespace `common` | No subfolder. The namespace `common` is `ui_common.json` |
+| Namespace `inventory` in `inventory_screen.json` | `"namespace": "crafting"` |
+| `server_form.json` = NPC dialog | A server form (`ActionFormData` and others). The NPC dialog is `npc_interact_screen.json` |
+
+### 3. HUD control names that do not exist
+
+13 names, including `hunger_bar`, `armor_bar`, `experience_bar`, `crosshair_container`, `boss_bars`, `chat_text_display`, `actionbar_text`, `hotbar_and_slot_items`, `pause_menu_content`, `hud_root_element`, and `xp_bar_fill`, have 0 vanilla keys but are used as `modifications` targets. The `hud_content` and `root_panel` that the documentation uses alongside them do exist. Pointing at a target that does not exist means the modification is not applied, so names must be copied from the vanilla files.
+
+### 4. Syntax errors
+
+| Claim | Fact |
+| --- | --- |
+| An animation is a `"type": "animation"` element with `"anim_type": "flipbook"` ("not `flip_book`") | Vanilla animation definitions have no `type`, and the value is `flip_book` (34 uses) with 0 uses of `flipbook`. **Wrong in exactly the opposite way** (ANI-08, ANI-20) |
+| `insert_before`, `insert_after`, and `remove` select with `"target": "name@ns.definition"` | Selection is by `control_name` or `where` (MOD-01). In the Cinnabar model, `target` is read only as the second reference of the move family, and with no selector it picks the first element, so `remove` removes the wrong child |
+| `" anchor_to"` (a space before the key) | Read as a different key and ignored (typo) |
+| Input box `placeholder_text` | 0 uses. Vanilla uses the `$place_holder_text` variable and `place_holder_control` |
+| `scrollbar_track_button: "scrollbar_track"`, `scrollbar_thumb_button` | The value of `scrollbar_track_button` is the button ID `button.scrollbar_skip_track` (1 use), and `scrollbar_thumb_button` has 0 uses (LAY-42) |
+
+### 5. Semantic errors
+
+| Claim | Guide |
+| --- | --- |
+| `anchor_from` = a point of the element, `anchor_to` = a point of the parent | LAY-16 says the opposite. The reference part of the same documentation writes it correctly, so it contradicts itself |
+| A panel clips its children by default | `clips_children` defaults to off (LAY-22) |
+| Even with `visible: false` it takes space, and you must set `enabled: false` to remove it | `enabled` is whether input is active. Space is controlled by `visible`, `ignored`, and size (COL-10, FILE-17) |
+| `font_type: "MinecraftSeven"` = pixel font | Using the internal name draws nothing (TXT-03, measured) |
+| `nineslice_size: [top, right, bottom, left]` as an image property | In the sidecar JSON as `[left, top, right, bottom]` (LAY-27). 0 literals in vanilla UI JSON |
+| JSON does not support comments, so use a `_comment` key | UI files accept comments (FILE-03, FILE-30). `_comment` has 0 uses |
+| `textures/ui/white_square`, a `textures/ui/icons` sheet | 0 references in vanilla UI JSON. `textures/ui/White` (capitalized) and `textures/ui/Black` exist |
+| `min_engine_version [1, 20, 0]` | It works but is outdated against the 1.21 baseline |
+
+## Relation to our rules
+
+No new rules or conflicts come out of this material. Every error is already refuted by an existing rule.
+
+| Rule ID | Relation |
+| --- | --- |
+| DBG-07 | A practical case of two-way comparison. 12 bindings, 13 HUD names, and 5 files hit 0 uses on the documentation side |
+| MOD-01 | A caution that some documentation uses `target` as a selector (proposed supplement) |
+| ANI-03, ANI-08, ANI-20 | The refuting basis for the progress bar and animation type errors |
+| LAY-16, LAY-22, LAY-27, LAY-42 | The refuting basis for anchor, clipping, 9-slice, and scroll composition errors |
+| FILE-17, FILE-30, TXT-03, COL-10 | Comments, `ignored`, fonts, creation cost |
+
+## How to use it
+
+With AI-generated documentation or a dictionary, first check "is the documentation's name in vanilla". Count how many times the name appears in a vanilla copy, as in `grep -rho '"#player_health"' resource_pack/ui | wc -l`, and do not use it if the count is 0. Use a working example copied from a vanilla file as the standard, not an explanation.

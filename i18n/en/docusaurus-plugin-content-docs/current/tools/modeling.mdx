@@ -1,0 +1,199 @@
+---
+title: "Modeling and texture tools: Blockbench and others"
+description: "Blockbench, Mcblend, particle, texture and shader tools"
+sidebar_position: 6
+sources:
+  - private-research
+  - blockbench
+---
+
+This page covers tools for making models, animations, particles and textures. Bedrock models are `.geo.json`, animations are `.animation.json` and textures are PNG/TGA. This page centers on Blockbench and also covers the Blender add-on Mcblend, particle editors, and texture and shader tools.
+
+## Blockbench
+
+**What it does.** A free open-source model editor for low-poly models and pixel-art textures, with dedicated formats for Minecraft Java and Bedrock. Features are extended with plugins (JavaScript). Models, textures and animations that users make are owned by the user (Source: tool-blockbench, `README.md`).
+
+**Installation and use.** Ordinary users download the app from `blockbench.net` or use the web app. To run from source, install NodeJS and run the following.
+
+```bash
+npm install
+npm run dev     # Run with Electron (Ctrl+Shift+B in VS Code)
+npm run serve   # Web app: http://localhost:3000
+```
+
+If you choose the "Debug Renderer" configuration in VS Code Run & Debug, you can set breakpoints in the renderer. For writing plugins, follow the plugin documentation of the official Blockbench wiki.
+
+**Main features.** The 5.1 "Workflow Update" (2026-03-24) added mirror animating, JPEG/TGA/WebP support, a UV size editor, collision and hitbox elements for blocks and entities (Tools > Generate Bounding Boxes, Copy Collision/Selection Component, Copy Collision/Hitbox Component), and attachable preview. The boxes remain in `.bbmodel`, not `.geo.json`. Animation export is right click then save, item binding is in the group's bindings, and the in-hand look and GUI are viewed in the Display tab.
+
+**Limits.** There is no support for `embedded` in item display transforms and `fit_to_frame` is handled wrongly, a Java model must be rewritten as a Bedrock block model (large models are invalid), the result of the 3D text generator comes out black in the game, and texture linking fails for OBJ/MTL. Blockbench does not create client entity files (entity definition, render controller). The Wizard plugins (Entity, Block, Item) are convenient but outdated. Details are in the notes below.
+
+**License.** The source code is GPL-3.0 (`LICENSE.MD`, commit `ec0b282`) and code modifications follow the same terms. Plugins and themes can be released as open source, proprietary or paid.
+
+## Mcblend
+
+A Blender add-on by Nusiq that exports models and animations made in Blender to Bedrock formats. It is verified only on the latest Blender LTS (v12.0.1~12.0.2 on Blender 4.5, v13.0.0 on Blender 5.2 LTS). On Blender 5.0 there were export errors, physics animation failures and wrong models, and it had to be rolled back to 4.5. Detailed usage is in the notes below.
+
+## Particle and texture tools
+
+For particles, Snowstorm (the VS Code extension `JannisX11.snowstorm`, and a web version) is the main editor. For textures there are `texture_set.json` for PBR (MER maps), 9-slice, atlas and shader tools. The detailed list and limits are in the notes below.
+
+## Community notes
+
+The following is information on model, animation and particle tools and on texture, graphics and shader tools gathered in the community survey.
+
+Terms such as `(confirmed)`, `(single report)` and `(conflicting)` are reliability markers of the reports.
+
+### Model, animation and particle tools
+
+#### Blockbench
+- **Blockbench 5.1 "Workflow Update" (2026-03-24)**
+  - Mirror animating, native JPEG/TGA/WebP support, a UV size editor
+  - **Bounding Box elements**: Tools > Generate Bounding Boxes, Copy Collision/Selection Component (blocks), Copy Collision/Hitbox Component (entities). Loads from BP block files or pasted JSON, and imports, edits and saves Bedrock voxel shape files. The boxes remain in .bbmodel, not .geo.json.
+  - **Attachable preview and animation**: handles first person and third person on the player model. Release notes: `https://github.com/JannisX11/blockbench/releases/tag/v5.1.0-beta.2`
+- **Item display transform problems**: `embedded` is unsupported, `fit_to_frame` is dropped if there is no other gui transform, and the defaults when loading are wrong (`https://github.com/JannisX11/blockbench/issues/3361`). The third-person-left x translation of a block is -2.
+- **Wizard plugins**
+  - Entity Wizard: good for beginners but outdated. It omits render/animation controllers and uses the old spawn egg and baby models for horses, donkeys and mules.
+  - Bedrock Block Wizard: creates block JSON and the RP texture set. Name mapping has been broken before.
+  - Item Wizard: armor and attachables.
+  - Blockbench does not create client entity files (the Wizards may be an exception).
+- **Feature notes**
+  - The "Display" tab: in-hand look and GUI preview
+  - Custom face names for material instances. Automatic UV assignment may need manual fixing.
+  - A Java model must be rebuilt as a Bedrock block model, and large models become invalid.
+  - Using the per-face UV mode (File > Project > Default UV mode) avoids loss of detail when adjusting scale.
+  - The result of the 3D text generator comes out black in the game.
+  - Animation export is right click > save.
+  - Item binding through group > bindings
+  - Texture linking fails in OBJ/MTL import.
+  - The asset browser plugin has vanilla files (entity animations are sometimes missing, so get them from bedrock-samples).
+  - PBR (MER) preview and texture_set organization, the Bedrock Entity format for attachables
+  - A tool to visualize seat positions
+  - Reference images, Toggle Graph Editor (Bezier), dragging in an image to make a flat model, Convert Project, an animation controller editor, GIF export
+  - Structure `.glb` files are loaded with the glTF plugin.
+  - First-person animations are matched with the fixed FOV 70 preset of the camera preset plugin (2026-11).
+  - Wizards are installed from File > Plugins and also work on mobile. There is no template for falling blocks like sand.
+  - In 2025-11 the play button spot was changed to a lock toggle.
+  - There are reports of losing work on mobile through erase-model or an accidentally pressed discard, so save often.
+- **Modeling tips**
+  - When changing size, use per-face UV or change the project texture resolution. Avoid fractional sizes.
+  - Use the UV chain toggle, group selection and mirror painting. There is a report that the result of the Mirror X/Y tool was not reflected in the game.
+  - The Bedrock entity format allows one texture per model, so split parts and combine them with render controllers.
+  - It can be converted to a Generic model, but a Generic model has no Bedrock .json export.
+  - Snapping: Shift moves in 0.25 steps and Shift+Ctrl in 0.025 steps, and there is vertex snap too.
+  - .obj import and glTF (.glb) export are supported.
+  - Artifacts visible in the viewport or GIF export are not in the game.
+  - On a phone, open the web app `https://web.blockbench.net/` in desktop mode.
+  - For big models, turn off automatic backups and work with a proxy texture.
+- **Animation tips**
+  - Remove the yellow warning on unsupported keyframes by converting to smooth.
+  - Set poses with step keyframes and then refine with linear/smooth. Use the graph editor's splines and onion skinning.
+  - IK was unstable and there was an IK update in 2026-09.
+  - Long Molang keyframes and flipbook animation slow down the editor.
+  - Passing to Blender through FBX/glTF breaks keyframes.
+  - Blockbench links animations by bone name, so bones with the same name in different folders collide.
+  - New Blockbench automatically loads particles linked to animations. In some versions Snowstorm particles broke and locator directions were flipped. Blockbench only previews particles and is not a particle editor.
+- **Plugins**: "meshy" (exports meshes directly to geo.json/poly_mesh), clipping mask, Medibang blend mode, UV face painter (shared as .js), a block creation plugin, Outline Creator, lightflow, Title Generator, animated_platforms, custom pixel brushes.
+- **Guides**: `https://www.blockbench.net/wiki/guides/bedrock-modeling#animations` . There is also a Korean-language Blockbench tutorial playlist (`https://youtube.com/playlist?list=PLvULVkjBtg2SezfUA8kHcPUGpxIS26uJR`). Advanced Korean-language tutorials are rare.
+- **Anim2Cam** (`https://rey-debida.github.io/mcanim-to-cam/`): converts Blockbench camera animations (bone name `camera`) into `/camera` commands. It is deprecated.
+- **Video and rendering**: trailers are made with Blender, Mine-imator (desktop only) and Cinema4D. For lit renders, use Blender or Nomad Sculpt.
+- **Kaioga's collision box tool and block templates**: `https://github.com/Kaioga5/Kaioga-s-Block-Templates` (slab, bed, concrete powder falling-block entity, glass connections).
+- **Notes from a Java tool author**: the `visible_bounds_*` fields are render culling hints and can be ignored.
+- **Bendables** (`https://www.diamondproduction.net/bendables`): player/entity models with bending joints.
+- **Other model tools**: Modelbench (for Mine-imator), FMBE (Fancy Model Block Entities), a modern version of MBE that uses bones and animations.
+
+#### Mcblend (Nusiq, Blender add-on)
+- **Blender compatibility**: tested only on the latest Blender LTS.
+  - v12.0.1, v12.0.2: Blender 4.5
+  - v13.0.0 (2026-08-30): Blender 5.2 LTS
+  - On Blender 5.0 there were export errors, physics animation failures and wrong models. Going back to 4.5 fixes it.
+  - 4.2 is unverified.
+  - Blender pins the built-in Python version (Blender 4.5 has Python 3.11).
+  - If `ImportError: cannot import name 'get_mcblend_events'` appears on 4.5.2, restart.
+  - Development of new features has nearly stopped (2026-02). Baking Blender particles into Bedrock particles was judged impossible.
+- **"number of edges is incorrect"**: it means the mesh is not a proper cuboid (6 faces, 12 edges, 8 vertices). Convert triangles to quads, do merge by distance, and find and delete stray vertices (show vertex indices, invert the selection with Ctrl+I).
+- **Models imported from other formats (PSK, etc.)**
+  - Split cubes with Mesh > Separate by selection and fill empty faces with F.
+  - Fix UVs with "Fix invalid UV maps". This operator can crash on objects that do not satisfy the cube rules.
+  - Use "Separate and Align Cubes".
+  - Get export working from a single cube and then widen from there.
+- **Parenting**: use Parent -> Bone (Ctrl+P). "With Automatic Weights" is not supported (Minecraft has no mesh deformation). An Armature modifier or vertex group is a wrong setup. The symptom is that only empty bones show in Blockbench. Clear the parent with Alt+P.
+- **cube and polymesh**: each object is marked as a cube or a polymesh. Docs: `https://mcblend.readthedocs.io/en/stable/modeling/cubes_vs_polymeshes/` . A polymesh is visible in the game but may not be visible in Blockbench. The maintainer considers polymesh support limited. It exports every face as a quad (4 vertices), so it can break in materials that expect triangles. Fix back faces with Normals > Recalculate Outside. Importing polymesh JSON into Blender creates `custom_normals` (and `sharp_edge`) attributes that make shading look inverted, and Recalculate Outside has no effect then. Keep only `position`, `sharp_face` and `UVMap` in Attributes and delete `custom_normals` (observed on Blender 4.5).
+- **Merging**: Ctrl+J then merge by distance. The Merge Models operator has limits (`https://mcblend.readthedocs.io/en/stable/modeling/merging_models/#merging-models`).
+- **Importing**
+  - From an RP: `https://mcblend.readthedocs.io/en/stable/modeling/importing_models_from_rp/#importing-models-from-resource-packs`
+  - From files and textures (a fake render controller is needed): `https://mcblend.readthedocs.io/en/stable/modeling/importing_models_from_files/#importing-and-applying-the-texture-to-the-model`
+  - Vanilla model bones have no length, so rotations look odd.
+  - Structures cannot be imported directly. A script that converts OBJ into a poly_mesh model (`models/obj/entity`, `textures/obj/entity`, output `models/entity`) and a script in the reverse direction were shared.
+- **Model origin**: if set to "armature", the armature's transform is reflected in the export and the model comes out flipped or lying sideways. Change it to "world" and export the model and animations again. Bone names are case-sensitive, and pairs that differ only in case, like `TORSO`/`Torso`, can break without warning (12.0.0).
+- **Animation export**
+  - Keyframe the rest pose at frame 0. Mcblend exports the difference from frame 0 (`https://mcblend.readthedocs.io/en/latest/animations/essential_concepts/#frame-0`).
+  - It exports per bone relative to parent space and compares the whole pose at any time where any bone has a keyframe. Visual keying is not needed.
+  - Extra keyframe patterns `1:`, `1:4:` (`https://mcblend.readthedocs.io/en/stable/animations/extra_keyframes/`)
+  - Lossy optimization (`https://mcblend.readthedocs.io/en/stable/animations/optimizing_animations/`) works well with linear interpolation.
+  - "Skip rest poses"
+  - Bake physics simulations and then convert them to armature animation (`https://mcblend.readthedocs.io/en/stable/animations/physics_simulation/`).
+  - IK is handled with an auxiliary IK armature and Copy Transforms family constraints. Key the constraint activation at frame 0 (verified).
+  - Animation data does not copy easily between rigs.
+- **Child rotation bug under a scaled parent**: fixed in v12.0.2 (issue #130, cubes scaled to 0 are handled specially).
+- **Camera animation export (v12.1.0, 2026-06-12)**: produces data for use in scripts. Docs: `https://mcblend.readthedocs.io/en/v12.1.0/camera_animations/exporting_camera_animations/`
+- **Animation names**: if an exported animation does not run in the game, you may need to rename it (it was a name/identifier problem).
+
+#### Particles
+- **Snowstorm**: a web particle editor. Behavior in the game can differ. There is no plugin API.
+  - 3.3 (2026-11-04): fixed blend/additive draw order and update expression evaluation order, player model reference, Molang in gradient stops, negative size warning, VS Code "Switch to Snowstorm", multi-line vector export, collapsible events, curve duplication. Release: `https://github.com/JannisX11/snowstorm/releases/tag/v3.3.0`
+- **Oxygen particle IDE** (`https://oxygen.hydrogen.exposed` , `https://github.com/dev-hydrogen/oxygen`)
+  - A rebuild of Snowstorm with more accurate Molang emulation and Vibrant Visuals support.
+  - Provides a VS Code extension (`hydrogen.oxygen-particle-editor`), a desktop app and MCP.
+  - Game connection: turn on the websocket and `/connect localhost:19131`.
+  - 0.2.0 keybinds, 0.2.1 auto update and `t.x`/`c.x` context values, 0.2.2 bulk setting of query samples.
+  - temp variables set in the pre-effect script work.
+  - 0.3.0: gizmos, GIF/MP4 export, a custom com.mojang path. On Linux and macOS only the web app can be used.
+- **ORE**: a web node-based particle editor (`https://blank2092.github.io/ORE`, source `https://github.com/blank2092/ORE`). Exports JSON and mcpack.
+- **Unreleased particle path tool**: generates `minecraft:particle_motion_parametric`.
+
+---
+
+
+### Texture, graphics and shader tools
+
+- **Texture Set Manager** (Microsoft Store `https://apps.microsoft.com/detail/9p9hp6zl1981` , `https://github.com/Cubeir/Texture-Set-Manager`): creates `texture_set`s for RTX/VV in bulk. Making SSS on leaves makes them sparkle (unresolved).
+- **BetterRTX** (`https://bedrock.graphics/`)
+  - Preset Creator (.rtpack output, bedrock.graphics/creator. Broken in 2026-02, the experimental SSS is crude)
+  - A DLSS update option, AgX and Lottes presets. IObit Unlocker is used for installation.
+  - The community server has about 53 thousand members.
+  - Vanilla RTX App: `https://apps.microsoft.com/detail/9N6PCRZ5V9DJ`
+- **Lazurite (veka)**: a shaderc-based material.bin shader compiler and inspector. Choose materials with `-m`. Edit only the `project` folder (the `src` scripts overwrite it).
+  - RTX template: `https://github.com/veka0/mcrtx-shader-template` . RTXStub handles everything except tonemapping and bloom. The proprietary RTX code is not public.
+  - Shaders for 26.30.32 may need a commit reverted that was rolled back in the 26.40 preview. Custom shaders may work only in Preview.
+- **Shaders and loaders**
+  - BetterRenderDragon: `https://github.com/QYCottage/BetterRenderDragon` . Used to inject custom materials on Windows. On mobile, mb loader.
+  - Vanilla materials: `https://github.com/mcpebd/materials/releases`
+  - Newb X: `https://github.com/devendrn/newb-x-mcbe/tree/dev` (use the `dev` branch. `main` is outdated and nothing is visible)
+  - mirai: `https://github.com/bambosan/mirai`
+  - Others: Firmamentcraft, Strawberry Deferred, Irradia, Unbound Visuals, Vibrant Legacy, EscheridiaRT
+- **Helper tools**
+  - DLSS Swapper, DLSS Tweaks, ReShade (DoF screenshots), Optiscaler
+  - Shutter Encoder or DaVinci Resolve (re-encoding video to H.264)
+  - looptile (`https://github.com/3merillon/looptile`, tiling textures and caustics)
+  - GIMP (MER TGA), Krita, Ibispaint (mobile MER)
+  - Pixel art editors: Aseprite (free if you compile it yourself), LibreSprite, Pixel Studio, ibisPaint X (up to 256x256), Pixel Station, isopix, Resprite (the free version exports once a day), Piskel, PixiEditor, paint.net, Photopea, Windows 11 Paint.
+  - Audio: to convert wav to ogg, use Audacity or freeconvert.com. Refer to the Blockbench style guide too. Shading and palette advice is in [Textures and atlases](../rendering/textures-and-atlases.mdx).
+  - PC performance: turn on NVIDIA Threaded Optimization and Prefer Maximum Performance, and check that the dGPU is used.
+- **Learning material**: The Book of Shaders, learnopengl, the Bedrock Graphics server, the poggy deferred table (`https://poggy.org/Main/Wiki/deferred_table.html`), smokey-pbr (`https://smokeystack.dev/projects/smokey-pbr`).
+- **VV settings validation**: even if a general validator such as JSONLint passes, it can fail against the VV schema ("unknown child schema type"). Check the content log.
+- **Texture and image web tools**
+  - image-to-item (shprojects.vercel.app/otherTools/image-to-item.html), Texture-Table paint (shadowgamer12k.github.io/otherTools/Texture-Table.html)
+  - textures-to-glyph (`https://minato.beyondbedrock.org/web-apps/textures-to-glyph/`), glyph tools (mcbeeringi.github.io/apps/mc/glyph_v1.html, darkness9373.github.io/Glyph-Maker)
+  - Icona (24x24 icons, `https://github.com/daniswastaken/icona`), TesserPack (image optimization)
+  - MCBPB picture pack builder (`https://mcbpb.pages.dev/`), a music disc tool (`https://mc-tools.net/music-disc`), BlockMotion Studio (video as a menu background, blockmotion.vercel.app)
+  - Pack Cache Converter (`https://github.com/TrayePlays/Pack-Cache-Converter`, renames pack cache file names to manifest names)
+  - Recipe generator (`https://crafting.thedestruc7i0n.ca/`, BP export, tags, mobile support)
+  - Perlin Fiddle 2.0 (`https://thepixelmancer.github.io/perlin-fiddle/`)
+  - superflat generator (`https://superflat.crackedmagnet.com/`)
+  - Loot table generator (`https://bedrock-oss.github.io/bedrock-loot-gen/`), a skin pack generator (`https://unun.app/skin-pack`), a Windows 98 icon collection (`https://win98icons.alexmeub.com/`)
+  - abrightmoore's itch.io tools (`https://abrightmoore.itch.io/`): texture-pack blocks world, museum generator, skin statues, skin UV transformer
+  - gitresource.com (replace "hub" with "resource" in a GitHub URL to browse a repository's resources), sprite-tools (`https://github.com/PresentKim/sprite-tools`), an AI pixel art collection (`https://gitresource.com/PresentKim/ai-generated-pixelart/main`, Unlicense, about 25 thousand 16px items)
+- **Block icon renderer**: npm `block-model-renderer` (`prepareAssets`, `renderBlock`, Node 22). Item icon info: `https://github.com/Broccoli-Gang-Studios/Minecraft-Bedrock-Item-Info/` . Rendering Bedrock blocks is hard because the vanilla RP has no model for blocks like the lectern, so the shapes have to be hardcoded in the renderer.
+
+---
+

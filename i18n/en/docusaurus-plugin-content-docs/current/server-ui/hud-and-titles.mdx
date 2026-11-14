@@ -1,0 +1,230 @@
+---
+title: HUD and title channels
+description: How to draw custom elements on the HUD using titles, subtitles, the action bar and scoreboards as data channels. Script API (ScreenDisplay), adding HUD elements, keyword-preserving components, toasts, a looked-at block info panel, sidebar HUD, touch pocket layout
+sidebar_position: 7
+sources: [ms-learn, bedrock-wiki, private-research]
+---
+
+The HUD is the screen visible most of the time during play. Unlike server forms, the player does not respond, and the server only streams text to the screen. So to draw custom elements on the HUD (toasts, a looked-at block info panel, status lines), the server loads data into the existing text channels, **title, subtitle, action bar and scoreboard**, and the resource pack's `hud_screen.json` reads that text and turns it into pictures. This page covers the channels, how to add elements, the format for loading data, and real cases.
+
+## 1. Data channels
+
+| Channel | Script API | Binding the pack reads | Characteristics |
+| --- | --- | --- | --- |
+| Title | `player.onScreenDisplay.setTitle(title, options?)` | `#hud_title_text_string` | Large text in the center. One at a time, shared with other features |
+| Subtitle | `options.subtitle` of `setTitle`, then `updateSubtitle(text)` | The variable `$var_subtitle_text` that the title factory provides, binding `#hud_subtitle_text_string` | Text under the title |
+| Action bar | `setActionBar(text)` | Action bar text binding | Text under the title and above the hotbar |
+| Scoreboard sidebar | `/scoreboard objectives setdisplay sidebar` | `scoreboard_players` collection | Lines remain until changed |
+
+(Source: ms-learn ScreenDisplay, private-research.) Server software (Dragonfly and others) uses the same channels through the `SetTitle` and `SetSubTitle` packets or the `titleraw` command.
+
+### 1.1 Script API: `ScreenDisplay`
+
+`player.onScreenDisplay` is a `ScreenDisplay` (Source: ms-learn, documentation commit `a9fd1c0`).
+
+| Method | Meaning |
+| --- | --- |
+| `setTitle(title, options?)` | Shows a title. An empty string clears it. `title` is a string, a `RawMessage` or an array of them |
+| `updateSubtitle(subtitle)` | Changes only the subtitle previously shown with `setTitle` |
+| `setActionBar(text)` | Action bar text (under the title, above the hotbar) |
+| `setHudVisibility(visible, hudElements?)` | Hide or restore HUD elements. `HudVisibility.Hide = 0`, `Reset = 1` |
+| `hideAllExcept(hudElements?)` | Hides everything except the listed ones |
+| `resetHudElementsVisibility()` | Returns everything to default |
+| `getHiddenHudElements()` | List of hidden elements |
+| `isForcedHidden(hudElement)` | Whether the element is forcibly hidden |
+
+These are the properties of `TitleDisplayOptions`.
+
+| Property | Meaning |
+| --- | --- |
+| `fadeInDuration` | Time to appear (ticks, 20 ticks per second) |
+| `stayDuration` | Time to stay (ticks) |
+| `fadeOutDuration` | Time to disappear (ticks) |
+| `subtitle?` | Subtitle |
+
+`HudElement` is `PaperDoll` (0), `Armor` (1), `ToolTips` (2), `TouchControls` (3), `Crosshair` (4), `Hotbar` (5), `Health` (6), `ProgressBar` (7), `Hunger` (8), `AirBubbles` (9), `HorseHealth` (10), `StatusEffects` (11), `ItemText` (12). These methods cannot be called in restricted-execution mode, and `setTitle` can throw `ArgumentOutOfBoundsError`, `InvalidEntityError` and `RawMessageError`.
+
+```js
+const d = player.onScreenDisplay;
+d.setTitle("CUSTOMHUD:toast:ready", {
+  fadeInDuration: 0, stayDuration: 60, fadeOutDuration: 10,
+  subtitle: "Subtitle"
+});
+d.updateSubtitle("Updated subtitle");           // afterwards, only the subtitle is updated
+d.setHudVisibility(HudVisibility.Hide, [HudElement.PaperDoll, HudElement.Armor]);
+```
+
+Hiding HUD elements (`SetHud`) hides only the vanilla HUD. **Elements a resource pack added to the HUD remain** `{record}` (Source: private research).
+
+## 2. Adding elements to the HUD
+
+The basic way to put an element into the HUD screen (`hud_screen.json`) is to insert a control into `root_panel` with `modifications`. `root_panel` is a `panel` that holds almost everything visible on the HUD (Source: bedrock-wiki, the additional HUD elements document).
+
+```json
+"hud_square": {
+	"type": "image",
+	"texture": "textures/ui/Black",
+	"anchor_from": "top_middle",
+	"anchor_to": "top_middle",
+	"size": [ 64, 64 ],
+	"offset": [ 0, 4 ]
+},
+"hud_text": {
+	"type": "label",
+	"text": "hud text",
+	"anchor_from": "top_right",
+	"anchor_to": "top_right",
+	"offset": [ -4, 4 ]
+},
+"root_panel": {
+	"modifications": [
+		{
+			"array_name": "controls",
+			"operation": "insert_front",
+			"value": [
+				{ "hud_square@hud.hud_square": {} },
+				{ "hud_text@hud.hud_text": {} }
+			]
+		}
+	]
+}
+```
+
+- Match the namespace of the elements listed in `value` (`@hud.hud_square`) to the namespace of the file where the element is defined. If you defined the element in the `scoreboard` namespace of `scoreboards.json`, it is `@scoreboard.hud_square`.
+- If there are many elements, group them in a `panel` (`hud_elements_panel`) and put only that one panel into `root_panel`. If you give the grouping panel no `size`, it inherits the size of its parent (`root_panel`), so the children's anchors and percentage sizes work relative to the HUD screen.
+- `insert_front` puts it in front (lower layer) and `insert_back` puts it at the back (upper layer).
+
+## 3. Reading text and turning it into pictures
+
+### 3.1 Picking a picture by a single digit
+
+To show the matching picture when the title is `1` to `5`, merge five controls into one instead of evaluating them separately (Source: bedrock-wiki, best practices document).
+
+```json
+{
+  "binding_type": "view",
+  "source_property_name": "(((#hud_title_text_string * 1) > 0) and ((#hud_title_text_string * 1) < 6))",
+  "target_property_name": "#visible"
+},
+{
+  "binding_type": "view",
+  "source_property_name": "('textures/wiki/ui/example_' + #hud_title_text_string)",
+  "target_property_name": "#texture"
+}
+```
+
+### 3.2 Updating only when a keyword is present and preserving the value (Preserve Title Texts)
+
+The title changes every time a command arrives, so you need a component that makes an element react only to text containing a specific keyword and ignore the rest. The component below uses `property_bag` so each instance has its own "memory" (`#preserved_text`), so using it several times on the same screen does not conflict (Source: bedrock-wiki, CC BY 4.0).
+
+```json
+"preserved_title_display": {
+    "$update_string": "update",
+    "type": "label",
+    "text": "#text",
+    "controls": [
+        {
+            "data_control": {
+                "type": "panel",
+                "size": [0, 0],
+                "property_bag": { "#preserved_text": "" },
+                "bindings": [
+                    { "binding_name": "#hud_title_text_string" },
+                    {
+                        "binding_name": "#hud_title_text_string",
+                        "binding_name_override": "#preserved_text",
+                        "binding_condition": "visibility_changed"
+                    },
+                    {
+                        "binding_type": "view",
+                        "source_property_name": "(not (#hud_title_text_string = #preserved_text) and not ((#hud_title_text_string - $update_string) = #hud_title_text_string))",
+                        "target_property_name": "#visible"
+                    }
+                ]
+            }
+        }
+    ],
+    "bindings": [
+        {
+            "binding_type": "view",
+            "source_control_name": "data_control",
+            "source_property_name": "(#preserved_text - $update_string)",
+            "target_property_name": "#text"
+        }
+    ]
+}
+```
+
+It works like this.
+
+1. An invisible `data_control` panel makes the decision. `property_bag` creates a local variable, so there is none of the conflict of the old method that used `global`.
+2. If a new title (differs from the stored value and) contains the keyword, the panel becomes visible for one frame and then hides. The `visibility_changed` binding copies the current title into `#preserved_text` at that moment.
+3. The label receives the text of the child `data_control`'s `#preserved_text` with the keyword removed as `#text` and shows it.
+
+## 4. Toast: showing a notification with a title factory (BedrockAdvancements)
+
+(Source: private research) This is the structure of the advancement-achieved notification toast.
+
+```jsonc
+"root_panel": { "modifications": [{ "array_name": "controls", "operation": "insert_front",
+  "value": [{ "ba_toast_factory@ba_toast.toast_factory": {} }] }] },
+"hud_title_text/title_frame": { "modifications": [{ "array_name": "bindings", "operation": "insert_back",
+  "value": [
+    { "binding_name": "#hud_title_text_string" },
+    { "binding_type": "view",
+      "source_property_name": "(not (('%.19s' * #hud_title_text_string) = 'CUSTOMHUD:ba_toast:'))",
+      "target_property_name": "#visible" } ] }] }
+```
+
+- `toast_factory` creates one more `hud_title_text_factory` and generates a `toast_notification`. The control is created anew each time a title arrives, so **the animation plays from the beginning every time**.
+- The data is `"CUSTOMHUD:ba_toast:" + category(20) + title(200) + icon(200)` padded with `$`. The header translates `('ba.toast.' + #toast_category)` with a `localize: true` label (lang: `ba.toast.task=§eAdvancement Made!` and so on).
+- Animation chain: `toast_slide_in` (offset, out_back, 0.5 seconds) -> `toast_wait` (4.5 seconds) -> `toast_slide_out` (in_back, 0.5 seconds). It comes in from off screen with `from: ["100%c + 40px", 20]`.
+- Sibling scope binding: the child label receives `#toast_title_key` and the like computed by the parent with `source_control_name: "toast_notification"` + `resolve_sibling_scope: true`. Parsing is done once in the parent and the children only reference the result. The icon `#visible` is evaluated just once with `binding_condition: "once"`.
+- Script: a per-player queue, 110-tick intervals (5.5 seconds of animation), play a sound after `setTitle`, and send the next toast when it ends.
+- **Limits**: Because the vanilla hiding was applied only to `title_frame`, there was a problem where text flashed briefly in the center (fixed in 2.0.5), and since the title channel is only one, if another add-on calls `setTitle` the toast disappears. I could not confirm the fix because the 2.0.5 original is unavailable. The title channel is shared with other features, so design assuming it can be overwritten.
+
+## 5. Looked-at block info panel `{record}`
+
+This is a HUD panel that shows the name, icon and information of the block you look at on screen (the same as the Java mods WAILA and Jade). The resource pack draws it and the server sends the data as a title string. On servers without the Script API, the server does the line-of-sight tracing, building the title and sending it (Source: private research). A comparison of ways to draw icons and counts, the data format and pack examples are collected in the design document [Dynamically drawing item icons and counts on the HUD](../design/hud-item-icons.mdx).
+
+### 5.1 Loading into the title and subtitle
+
+- Put a long prefix on the title to hide the panel's title, and load the name and info lines after it. The pack's position cut (`'%.Ns' * $var_title_text`) matches the prefix length. `'%.Ns'` cuts by bytes, so keep the front slots that are cut by position in ASCII and put non-ASCII text such as Korean at the very end.
+- Load icons into the subtitle in fixed-width slots. Fill each slot with the item runtime ID x 65536 as text (fill empty positions with a letter such as `x`), and attach letters before and after to preserve the string form. If you send only digits, the block state check, in which the pack treats the subtitle as a string, breaks (gray slot, an "expected a string" warning).
+- The pack cuts slots from the **variable** `$var_subtitle_text` that the title factory provides, erases the filler letters, and puts the result in `#item_id_aux` of `property_bag`. The panel text is also all drawn with this variable.
+- Send the subtitle before the title. When sending a regular title (level up and so on), pause the panel until that title ends.
+- Line-of-sight tracing runs when moving or turning and at short intervals, with a ray check (excluding air and liquid) up to a few blocks from the eyes. Crops are judged as a box whose height grows with the stage, and blocks without a collision box are judged as the whole cell, which matches the client crosshair. Send only what changed and occasionally resend.
+
+### 5.2 What to avoid in JSON UI
+
+- If you take the slot out with a **binding** expression (`#hud_subtitle_text_string`), the icon is empty in every format (cutting, fixed width, adding and subtracting, filling and erasing with `x`). Use the variable `$var_subtitle_text`. If you send the subtitle as digits only, the block state slot check breaks and an "expected a string" warning appears.
+- Values turned into numbers do not show in text (`" 219"`, `"1,532/4,096"`). Send quantity and line text in byte slots that start with `§f`, and make them a string with `'§r' + value` inside a variable expression. Put the count expression in the label's own variables block (an expression in the parent panel or `('§r' + $variable)` inside `text` is not evaluated).
+- A one-digit numeric flag becomes a number in the pack and text comparison fails. Write flags as letters (`a` to `k`) and choose with fixed letters in the variables block, not expressions.
+- If a binding expression uses no `#binding` at all, a "Must define a source property name" error appears.
+
+## 6. Sidebar scoreboard as a HUD channel `{measured}`
+
+The title holds only one at a time, so if you load a feature that uses the title, such as the block info panel, together with text that must always be shown, they overwrite each other. If you split one sidebar scoreboard into HUD parts and draw them, they do not overlap (Source: private research).
+
+- **Server**: Put a marker (`§d§h§u§d`) on the objective name and a partial marker in front of each line. For example: `§d§1` top left, `§d§2` top right, `§d§3` quest title, `§d§4` quest lines. Line order within a part stays as is. Turn off Dragonfly's leading padding. **The client merges lines with the same text**, so append `§r` to tell them apart (up to 15 lines).
+- **Pack**: `scoreboards.json` turns the vanilla `scoreboard.scoreboard_sidebar` into a full-screen panel, and shows the HUD frame if the objective name has the marker and a plain box (for other boards) if it does not. For each part, place a `scoreboard_players` collection stack (`#scoreboard_sidebar_size` -> `#collection_length`), and the line label is visible only when `#player_name_sidebar` has that marker and uses the text with the marker removed. Labels use `localize: false` (going through translation makes the `%` disappear).
+- Hidden lines do not take up space in the stack.
+- The touch screen (`$touch`) draws chat at the top left and the jump and sneak buttons at the middle right, so draw the top-left lines at the top right (right aligned) and put the quest window under them. The experience bar is vanilla as is.
+- While a form is open, the HUD is not drawn, so to show the same frame behind the form, draw it in the form background too (section 8 of [Reskinning](./reskinning-server-forms.mdx)).
+
+## 7. Touch pocket layout `{record}`
+
+On a touch screen, when the UI profile is pocket, the vanilla HUD draws hearts at the top left and hunger at the top right with `not_centered_gui_elements`. If those places overlap the server's lines, redefine that version in `hud_screen.json` and place hearts, armor, hunger, air bubbles and mount hearts above the hotbar (the classic touch layout, the same place as vanilla `centered_gui_elements_at_bottom_middle_touch`). The hotbar is drawn separately by the pocket layout, so it is not put in, and only the paper doll is left at the top left (Source: private research).
+
+## 8. Drawing items with the HUD subtitle `{record}`
+
+When carrying item runtime ID x 65536 in the title's subtitle to draw an icon, taking the slot from the binding `#hud_subtitle_text_string` left the icon empty with any expression. It was drawn when cut with `'%.11s'` from the variable `$var_subtitle_text` that the title factory provides and put into `#item_id_aux` of `property_bag`. Sending the subtitle as digits only breaks the vanilla block state slot check and gives an "expected a string" warning (Source: private research).
+
+## 9. Rule summary
+
+1. Insert HUD elements into `root_panel` with `modifications`. Group several in a `panel`.
+2. The title channel is a shared resource. Attach a long unique marker (`CUSTOMHUD:...`), hide the vanilla title only when it is your own marker, and assume other features can overwrite it.
+3. Put text that must always be shown on the sidebar scoreboard or the action bar, not the title.
+4. Scoreboard lines with the same text are merged, so tell them apart with an invisible tail such as `§r`.
+5. When taking a value out of the subtitle, use the `$var_subtitle_text` variable, not a binding, and write one-digit numeric flags as letters.
+6. Even if you hide the vanilla HUD with `SetHud`, elements the pack added remain.

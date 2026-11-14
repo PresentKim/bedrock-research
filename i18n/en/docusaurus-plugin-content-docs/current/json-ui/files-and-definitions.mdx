@@ -1,0 +1,252 @@
+---
+title: "Files and definitions"
+description: "UI file registration, namespaces, inheritance and variables, ignored, path keys, property_bag rules (FILE-01~FILE-43) and proposals"
+sidebar_position: 2
+sources:
+  - repo-guide
+  - repo-survey
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+  - private-research
+  - cinnabar
+  - bedrock-core
+  - advancementpack
+  - private-research
+  - mcbejsonuimasterai
+  - private-research
+  - netease-docs
+  - starlibv2
+  - jsonencryptor
+  - repo-small-packs
+  - chest-ui
+  - upgrader
+---
+
+## Concept: how UI files become one screen
+
+JSON UI is a way to describe game screens as data. The `ui/` folder of the vanilla resource pack holds screens (`hud_screen.json`, `inventory_screen.json`, etc.), templates (`ui_common.json`, `ui_template_*.json`) and system files (`_ui_defs.json`, `_global_variables.json`), and if your resource pack adds a file with the same name and path or a new file, the game merges it with vanilla when reading (Source: bedrock-wiki, ms-learn).
+
+There are five components.
+
+| Component | What it does |
+| --- | --- |
+| File | Has one namespace. Its content is a collection of definitions |
+| Definition (control) | One key is one definition. It has properties such as `type`, `size` and `controls` |
+| Inheritance `@` | Uses another definition as the base and overrides properties |
+| Variable `$` | A channel for passing values to a definition. Fixed once at load and creation time |
+| `ignored`, `variables` | Decide at creation time which controls to create and which variable values to use |
+
+### The smallest working example
+
+This is the minimal setup to make one new screen element and attach it to the vanilla HUD. It takes three files.
+
+```jsonc
+// RP/ui/_ui_defs.json  : register only new files
+{ "ui_defs": [ "ui/my_addon/badge.json" ] }
+```
+
+```jsonc
+// RP/ui/my_addon/badge.json : one namespace, several definitions
+{
+  "namespace": "my_addon",
+
+  // A reusable template. $color has a default and can be overridden from above
+  "badge": {
+    "type": "image",
+    "texture": "textures/ui/white_icon",
+    "$color|default": [1, 1, 1],
+    "color": "$color",
+    "size": [16, 16]
+  },
+
+  // Inheritance: a variant that takes the definition above and changes only the color
+  "red_badge@my_addon.badge": { "$color": [1, 0, 0] }
+}
+```
+
+```jsonc
+// RP/ui/hud_screen.json : the same path as vanilla. Not registered.
+// Splice it in front of root_panel with modifications (detailed rules are on the modifying vanilla screens page)
+{
+  "root_panel": {
+    "modifications": [
+      { "array_name": "controls", "operation": "insert_front",
+        "value": [ { "my_badge@my_addon.red_badge": {} } ] }
+    ]
+  }
+}
+```
+
+These three files are the background for most of the rules below. The `@` in `red_badge@my_addon.badge` is inheritance (FILE-06), `my_badge@my_addon.red_badge` is the instantiation point (FILE-08), and `$color|default` is a variable with a default (FILE-09).
+
+### The basic explanation of the Bedrock Wiki
+
+<Excerpt src="bedrock-wiki" title="Intro to JSON UI" path="docs/json-ui/json-ui-intro.md">
+
+The `_ui_defs.json` file references all JSON UI files in an array. Make sure to append the full filepath of the UI you are referencing, including the file extension (e.g. `*.json`), from the resource pack root folder. Only reference new UI files you have added in your pack. You don't need to reference vanilla files nor other third-party JSON UI files, as it automatically gets merged with other packs. You may append custom file extensions other than `*.json`, so long as the file contents are valid and written in JSON.
+
+```json
+{
+    "ui_defs": ["ui/button.json", "my_ui/main_menu.json"]
+}
+```
+
+Variables stored in `_global_variables.json` are constant and one-sided. And therefore, you cannot modify the default variable in one namespace to be then used by the other.
+
+When referencing elements from different namespaces, it must have the following format:
+
+```json
+"[element_name]@[namespace_reference].[element_name_reference]"
+```
+
+</Excerpt>
+
+The wiki writes that paths outside `ui/` also work, but this was not confirmed in this project (FILE-25).
+
+### The file reference of Microsoft Learn
+
+The MS Learn JSON UI reference (`minecraft-creator` commit a9fd1c0, as of 2025-02-11, marked in the document as written with AI assistance) describes the set of system files as follows (Source: ms-learn).
+
+- `_ui_defs.json`: the list of UI screen files the game loads. It is needed for custom screens to be recognized. It has one property, `ui_defs` (a string array), the path is relative to the resource pack root and usually starts with `ui/`. Example: `["ui/my_screen.json","ui/my_common_elements.json"]`.
+- UI screen files: consist of one `namespace` and definitions. One JSON key (except `namespace`) is one UI element, it inherits with `@` as in `my_button@common.button` and can override `$` variables.
+- `_global_variables.json`: global variables used by all screens. Names start with `$` and colors are written as `[r, g, b]` or `[r, g, b, a]` (0.0~1.0). Example: `"$button_text_color": [1, 1, 1]`, `"$background_color": [0.2, 0.2, 0.2, 0.8]`.
+- Some of this reference's name and type lists (`nine_slice_buttom`, enum tables with empty values, etc.) differ from vanilla usage. The verdict is in conflict C-60 below.
+
+## Rules
+
+JSON UI consists of JSON files in the resource pack `ui/` folder. One file is one namespace, and each key in it is a **control definition**. A definition inherits other definitions (`@`) and is reused by receiving values through variables (`$`).
+
+### 1.1 File registration and loading
+
+- **[FILE-01]** A new UI file is loaded only when its path is registered in the `ui_defs` array of `ui/_ui_defs.json`. Files at the same path as vanilla (`ui/hud_screen.json`, etc.) are already registered by vanilla, so they are not registered again. `{vanilla, working pack}` (Source: VN _ui_defs.json, AP-samples _ui_defs.json, BA, BW-intro)
+- **[FILE-02]** A registered file is loaded even if its extension is not `.json` (for example `ui/adv/_screen.r4ui`). `{working pack}` (Source: AP 4.9, BW-intro)
+- **[FILE-03]** A UI file is JSON that allows `//` and `/* */` comments. `{vanilla, working pack}` (Source: VN header comments of all files, AP-samples)
+- **[FILE-04]** `ui/_global_variables.json` is loaded automatically without registration, and `$variables` defined there can be used in all files. Vanilla also does not register this file in `_ui_defs.json`. `{vanilla, working pack}` (Source: VN _ui_defs.json and _global_variables.json, AP, MJ expressions and operators chapter, BW-intro)
+- **[FILE-05]** A new file has one `"namespace": "name"`. A merging file at the same path as vanilla works with vanilla's namespace even if the namespace is omitted. A checking tool flagging this as an error is a false positive. `{working pack, inferred}` (Source: AP-samples hud_screen.json, MJ expressions and operators chapter)
+
+```jsonc
+// ui/_ui_defs.json
+{ "ui_defs": [ "ui/my_addon/screen.json", "ui/my_addon/toast.json" ] }
+```
+
+### 1.2 Definitions, references, inheritance
+
+- **[FILE-06]** `"name@namespace.base": { … }` inherits `base` to make a new definition and overrides properties. A definition in the same file can also be referenced as `@base` without a namespace. `{vanilla}` (Source: VN throughout)
+- **[FILE-07]** A definition in another file is referenced as `namespace.name`. The location of a definition is decided by the **file** that owns it, so writing the same name in another file is treated as a different definition even in the same namespace. `{measured}` (Source: BC-facts)
+- **[FILE-08]** An item `{ "childname@ns.definition": { …properties to override… } }` inside a control array is the **instantiation point.** There are properties received only at the instantiation point, like `collection_index` (collections and factories chapter). `{vanilla, measured}` (Source: VN, BC-facts)
+
+### 1.3 Variables
+
+- **[FILE-09]** `$name` is a variable. Put it inside a definition as `"$x": value` or pass it at the reference point. `"$x|default": value` is the default used only when it was not passed from above (the reference point). `{vanilla}` (Source: VN `|default` 3,419 uses)
+- **[FILE-10]** Variable substitution in an ordinary property works **only when the whole value is a variable.** `"text": "$title"` works, but in `"text": "Title: $title"` the `$` is printed as is. If you need a combination, use a variable expression (FILE-11). `{measured}` (Source: BC-facts)
+- **[FILE-11]** A variable value can be a parenthesized expression. Vanilla assembles binding names, texture paths and control names with it. Example: `"$toggle_state_binding_name": "('#' + $dropdown_name)"`. `{vanilla, working pack}` (Source: VN ui_common.json:1126, AP 4.3 and 4.9)
+- **[FILE-12]** There are variables the engine puts in beforehand. Examples: `$education_edition`, `$is_ps4`, `$pre_release` (platform and build), `$container_title` of the chest screen, and `$actionbar_text` and `$title_fade_in_time` of controls created by HUD factories. `{vanilla, measured}` (Source: VN top values used in ignored, VN hud_screen.json:2158 and 2170, BC-facts)
+- **[FILE-13]** Each item of the `variables` array applies that item's variables when `"requires": "<$variable expression>"` is true. You may also write a **single object** instead of an array. `{vanilla, working pack}` (Source: VN arrays 274 and objects 4 uses, for example realms_settings_screen.json:2557, AP 4.6, BW-doc)
+- **[FILE-14]** A control array can also be passed as a variable: `"controls": "$target_control"`. It is a way to make a "child slot" in a template. `{vanilla, working pack}` (Source: VN 14 uses, for example persona_cast_character_screen.json:14, AP 4.2, BW-intro)
+- **[FILE-15]** With `"child@$variable"` you can mount the definition the variable points to. Vanilla also uses it 413 times with a variable passed from the reference point (for example `content@$button_content`). But there is a measurement that nothing was drawn in one setup of the bedrock-core chest router (referencing a host that declares `$gate|default` twice with different `$gate`). If mounting fails, write the definition name directly. `{vanilla, working pack, conflict}` (Source: VN 413 uses, AP 4.8, BC-facts, conflict C-03, BW-intro)
+
+```jsonc
+"my_button@common_buttons.light_text_button": {
+  "$pressed_button_name": "button.form_button_click",   // Specify template variables at the reference point
+  "$button_text": "#form_button_text"
+}
+```
+
+### 1.4 Deciding whether to create: `ignored`
+
+- **[FILE-16]** If `"ignored": "<$variable expression>"` is true, that control is **not created at all** (there is no binding or layout cost either). Use only `$variables` in the expression, and `#binding`s cannot be used. `ignored` is evaluated in the outer (parent) scope, not in that control's own `$` declarations (FILE-34). `{vanilla, measured, code}` (Source: VN 958 uses, BC-S8, BW-best, NB-10)
+- **[FILE-17]** `ignored` is evaluated **once at the time the control is created.** So to split creation by runtime data, a route for the data to come in as a variable is needed. A control created by the HUD title factory receives the title string as `$title_text`, so it can be filtered with `ignored`. Inside an ordinary server form screen there is no such route, so a factory length is used to branch at creation (collections and factories chapter). Variables the factory gives enter the outer scope of the created control, so the top-level `ignored` of that control can read them (FILE-34). `{working pack, measured, code, inferred}` (Source: AP 4.1, BC-S8 and S11, conflict C-17, CN)
+- **[FILE-18]** `ignored` can also be attached to an **array element**, like one item of `button_mappings`. `{vanilla, working pack}` (Source: VN gameplay_common.json:272, AP 4.3)
+- **[FILE-19]** In the variable expressions of `ignored`/`requires`, `$v > 'a'` was used to tell whether it is a string and `$v > 0` whether it is a number. `ignored` cannot see its own `$` declarations and values received at the reference point (FILE-34), so attach it to a **child** of the control that receives the variable. The example below is the form of the AP original. `{working pack, code}` (Source: AP 4.7, CN, AP-samples _screen.r4ui:321)
+
+```jsonc
+// Reference point: { "icon@my_ns.icon_slot": { "$icon": "textures/items/stick" } }
+"icon_slot": { "type": "panel", "size": [ 16, 16 ],
+  "controls": [
+    { "custom_image": { "type": "image", "texture": "$icon", "ignored": "(not ($icon > 'a'))" } },
+    { "item_icon":    { "type": "custom", "renderer": "inventory_item_renderer",
+                        "property_bag": { "#item_id_aux": "$icon" }, "ignored": "(not ($icon > 0))" } } ] }
+```
+
+### 1.5 Path keys and merging same-path files
+
+- **[FILE-20]** If you use a **path key** like `"parent/child/grandchild": { … }` in a file at the same path as vanilla, it overrides only the properties of a deep vanilla control. Vanilla itself does not use this syntax (0 uses). `{working pack}` (Source: BA chapter 2 `main_screen_content/server_form_factory`, AP 4.9 `recipe_unlocked_popup/input_panel/label_panel/horizontal_padding_1`, BW-intro, BW-best)
+- **[FILE-21]** If you write a definition with the same name as vanilla in a same-path file, it is **merged per property** (only the properties written change). Example: specify only the two properties `force_render_below` and `screen_draws_last` on `in_bed_screen`. If several packs write the same property, the later one in pack order wins. `{working pack, inferred}` (Source: AP-samples in_bed_screen.json and toast_screen.json, BC 6.3-9, BW-best)
+- **[FILE-22]** If you redeclare a vanilla definition in a file with a different name, it is ignored. A redeclaration is valid only in a file at a path vanilla owns. `{measured}` (Source: BC-facts)
+
+### 1.6 `property_bag`
+
+- **[FILE-23]** `property_bag` holds initial values of `#property`. It is used for defaults before a binding has written a value, for renderer input (`#item_id_aux`), and for routing dictionaries (screen hosts and data channels chapter). `{vanilla, working pack}` (Source: VN 240 uses, AP 4.7, BC 4.1)
+- **[FILE-24]** The `size`, `offset` and `alpha` values put in `property_bag` are not applied. Only a binding can change these three. `{measured}` (Source: BC-S12)
+
+### 1.7 Rules added from the Bedrock Wiki comparison
+
+These are rules added by comparing the wiki (BW) documents with vanilla 1.26.50.4. Those with only wiki sentences are marked `unverified`, and those with in-game screenshots in the wiki are marked `measured` (third-party record).
+
+- **[FILE-25]** The path in `_ui_defs.json` is the full path from the resource pack root to the extension. The wiki says folders outside `ui/` (`my_ui/main_menu.json`) also work. Vanilla and this project's working packs all use only below `ui/`, so check before using anything outside `ui/`. `{unverified}` (Source: BW-intro)
+- **[FILE-26]** A namespace is said to allow a prefix (`"namespace": "wiki:main"` -> `"x@wiki:main.element"`). It is for reducing the chance of colliding with vanilla namespaces. There is no usage example in vanilla or this project's sources. `{unverified}` (Source: BW-best)
+- **[FILE-27]** If the child that a path key (`"parent/child"`) points to does not exist, a resource pack error is left in the Content Log but the rest of the UI works normally. Path keys are the contact point that breaks first when vanilla is reworked, so if you can override the definition itself, use that. `{unverified, inferred}` (Source: BW-best)
+- **[FILE-28]** When using engine-provided variables (`$actionbar_text`, etc.) in an expression, receive them once as your own variable (`"$atext": "$actionbar_text"`, `"visible": "(not ($atext = 'x'))"`). The wiki says engine variables cannot be compared directly, and AP's `"$title_text|default": ""` declaration appears to have the same effect. `{unverified, inferred}` (Source: BW-intro, AP 4.1)
+- **[FILE-29]** Of the global platform variables the engine sets, those the vanilla 1.26.50 UI actually references: `$pocket_edition`, `$win10_edition`, `$osx_edition`, `$console_edition`, `$education_edition`, `$is_console`, `$is_desktop`, `$is_ios`, `$is_ps4`, `$xbox_one`, `$touch`, `$pocket_screen`, `$desktop_screen`, `$is_pregame` (out-of-game screens), `$is_publish`, `$pre_release`, `$trial`, `$store_disabled`, `$is_holographic`, `$apple_os`, `$google_os`, `$microsoft_os`, `$nx_os` and others, 34 in all. The remaining 21 of the wiki list's 55 (`$game_pad`, `$mouse`, `$fire_tv`, `$gear_vr`, etc.) do not appear in vanilla UI files, so it is unknown whether they are still supplied. `{vanilla}` (Source: BW-doc Global Variables, VN exhaustive search)
+
+### 1.8 Rules added from the Cinnabar engine reconstruction
+
+Cinnabar (`CN`) is Rust code that reconstructs the JSON UI parser of the 26.30 native client. The level is `code`, and `CN-run` is the result of this project running that evaluator directly. If it differs from game measurement, follow measurement (conflicts C-41~C-47).
+
+- **[FILE-30]** UI files are read with jsoncpp rules. Comments and leading zeros are fine, but **trailing commas and unquoted keys are errors.** When an error occurs, only the definitions read up to that point are loaded and the rest silently drop out. If the first file at the same path fails, overrides from later packs are not accepted either. `{code}` (Source: CN)
+- **[FILE-31]** The paths in `_ui_defs.json` are read once each in sorted order. If several files redefine the same definition, the last by path name wins. `{code}` (Source: CN)
+- **[FILE-32]** If a key without `@` has a dot, what is before the dot is read as the namespace (`"spacer_9.5"` -> namespace `spacer_9`, name `5`). Do not use dots in control names. `"@.name"` is the same file's namespace. `{code}` (Source: CN, CN regression test Lifeboat)
+- **[FILE-33]** `$variable` lookup finds a fixed value first. If there is a `"$x": value` anywhere outside, it beats the inner `"$x|default"`, and only when there is no fixed value is the nearest `|default` used. null means unset. `{code}` (Source: CN, CN-run)
+- **[FILE-34]** **`ignored` does not see that control's own `$` declarations.** Neither the `$x|default` inside the definition nor the `"$x": true` passed at the reference point reaches its own `ignored`, and it reads only the value of the parent (outer) scope. Pass the gate variable to the parent and put `ignored` on that child (the `hover_slot` of vanilla `focus_border` and the child of AP `category_tab_icon` have this form). The engine evaluates `ignored` before that control's `variables` (FILE-43). `{code, vanilla}` (Source: NB-10, CN and CN-run (`$x|default` and reference-point values), 2 of 146 VN reference points pass variables, AP-samples)
+- **[FILE-35]** If the result of `ignored` is a boolean it is used as is, an integer is "not created if not 0", and a string is created. An unset `$variable` is null inside an expression, but when the whole value is like `"ignored": "$x"` it stays as the text `$x` and is created. `{code}` (Source: CN)
+- **[FILE-36]** A child key can also be a variable: in `{ "$slot": { …properties to override… } }`, if `$slot` is `"name@ns.definition"`, it is created with that name and definition. You can also give only the instance name as a variable, as in `"$name_var@ns.definition"`. `{vanilla, code}` (Source: VN 83 uses, for example `base_tab` in ui_template_tabs.json, CN)
+- **[FILE-37]** In inheritance, a property the derived definition writes replaces the base's **wholesale, even if it is an object.** In contrast, redeclaration in a same-path file (FILE-21) merges object values member by member. To change only part of `property_bag`, redeclare, and to change all, inherit. `{code}` (Source: CN)
+- **[FILE-38]** A `"property": null` in a top-level definition erases the base value, but a `null` in an inline reference inside a control array leaves the base value as it is. `{code}` (Source: CN)
+
+### 1.9 Rules added from the engine behavior analysis
+
+These were read by analyzing the native library of the Android 1.26.52.3 client (`NB`). The level is `code`.
+
+- **[FILE-43]** For each control the engine evaluates **`ignored` first**, and if true it does none of the remaining processing for that control, including applying `variables`. So values set by its own `variables` (including conditional variables) do not reach its own `ignored` (FILE-34). Putting a real number, array or object in `ignored` gives the error `An invalid value was provided for "ignored" field.`. `variables` accepts one object or an array of objects, and items in the array that are not objects are skipped. `{code}` (Source: NB-10)
+
+## Facts added by community reports (community)
+
+These are contents from community conversations in the survey period 2025-10~2026-10 that tie in with the rules above (Source: private research). All are at the report level and were not measured again in game.
+
+- If a red mark appears on a pack in Settings > Global Resources, it is a JSON error in a UI file. There is a report that when an error occurs the latter part of that file drops out (the community also says the whole file is ignored) and code evidence that it is read up to the front part (FILE-30). Either way, assume the latter part of that file does not exist and fix the error.
+- If you write `bindings` directly on a control that inherits a template, all of the base's bindings disappear (a case where `scroll_grid` lost its collection bindings). It is the same phenomenon as FILE-37. To add, use `modifications`.
+- The `requires` of `variables` is evaluated only once when the screen loads and can see only `$variables`. A `#binding` is read as text (the same conclusion as FILE-13 and FILE-16).
+- The report that `ignored` cannot see its own scope variables and sees only ancestor variables is the same as FILE-34.
+- The platform variables `$touch`, `$pocket_screen` and `$desktop_screen` are load-time values, so even if you unplug the mouse a restart is needed to change. `$pocket_screen` is the pocket UI profile, not "mobile" (FILE-29). There is one report that `$touch` cannot be used inside a server form (D-18, check when using in a server form).
+
+## Proposals (not applied)
+
+These are rule proposals from the new material survey. They have not yet been merged into the body chapter (above), and the numbers are the final numbers set by the merge record. Do not trust the level marks as they are, and measure `unverified` ones before use.
+
+- **[FILE-39]** (proposal) Name siblings in the same `controls` array differently (the name before `@`). There are reports that from a version around April 2025 duplicate names cause JSON UI errors (StarLibV2 1.0.3.3), and none of the 5,084 `controls` arrays of vanilla 1.26.50 (recounted) has a duplicate. Split a common name like `padding` into `padding_top` and `padding_bottom`. `{working pack, vanilla}` (Source: jua-starlibv2, bedrock-samples) Measurement task: what is left in the 1.26.50 Content Log when siblings with the same name are placed, and whether both are created.
+- **[FILE-40]** (proposal) A `\uXXXX` escape in keys and string values is decoded into the original character when read. A file converted with escapes only gets bigger and the meaning (the byte count of an expression, comparison, containment check) is the same, and anyone can revert it with a JSON parser, so it has no effect if the purpose is hiding. There is a small pack tool that reported a five-digit escape bug and a surrogate pair problem. `{code, unverified}` (Source: jua-jsonencryptor, jua-small-packs) Measurement task: whether a definition that writes the `"type"` key and the `"label"` value with `\u` escapes works, and whether a label that writes an emoji outside the BMP as a surrogate pair is drawn.
+- **[FILE-41]** (proposal) The vanilla 1.26.50 UI puts one namespace in only one file. An obfuscator claims that splitting the definitions of one namespace across several files still resolves references, but there is no record. If there is no reason to split, keep one file per namespace. `{vanilla, unverified}` (Source: bedrock-samples, jua-jsonencryptor) Measurement task: whether it resolves when the same namespace `x` is split across two files and `x.a` (file 1) references `x.b` (file 2).
+- **[FILE-42]** (proposal) An `@name` without a namespace is looked up in different namespaces depending on context. There are 43 cases in vanilla where, even if a top-level definition inherits another namespace, the short name inside it is looked up in the **file namespace** (`trade_screen_pocket.json:349`), and 3 cases where a short name under an **instance** that inherits another namespace inside a control array (`"x@common.close_button": { "controls": [...] }`) is looked up in the **base namespace** (`default@close_button_panel` at `command_block_screen.json:1010-1038` exists only in `common`). The priority when both namespaces have the same name cannot be known, so inside a control that inherits another namespace always write `ns.name`. A reinforcement adding this exception to FILE-06 was also proposed. `{vanilla, conflict}` (Source: jua-netease-docs, bedrock-samples) Connected to conflict C-55.
+- **Reinforcement proposals (not applied)**: add actual extension examples to FILE-02: `.jsonc` (StarLibV2), `.zip` (JsonEncryptor) and `.atemp` (small pack `ui/global.atemp`) (whether `.atemp` is read in 26.x is unconfirmed). Add to FILE-25 the pack root `config.json` (small pack, from the 1.20.71 era so whether it works after 1.21 is unconfirmed) as an actual registration outside `ui/` and raise the level from `unverified` to `working pack, unverified`. Add to FILE-20 7 actual cases of using path keys to relink textures (small packs), and to FILE-21 an actual case of competition between server form packs (Chest-UI, upgrader) that redeclare the `controls` of `server_form.long_form`, where only the later pack's remains. Add to FILE-30 an explanation matching the jsoncpp rules with the comment handling of JSON obfuscators, and to FILE-04 and 13 the China edition documentation's merge description (with wording that it is unconfirmed).
+
+## Conflict verdicts (related to this chapter's rules)
+
+These are verdicts for places where sources disagreed. In the verdict column, `resolved` means one side is confirmed, `partly resolved` means the scope is split and both are right, and `open` means measurement is needed.
+
+| ID | Topic | Claim and evidence | Verdict |
+| --- | --- | --- | --- |
+| C-03 | `child@$variable` mount | The bedrock-core measurement said that mounting with a `$gate` passed by the reference point draws nothing, and AP works with `content@$hover_content`. Vanilla uses it 413 times and mostly with a reference-point variable (`content@$button_content`). BC's failure came from one setup of the chest router (referencing a host that declares `$gate\|default` twice) and the cause was not isolated | Partly resolved: works in general. If it fails in that setup, write the definition name directly (FILE-15) |
+| C-17 | When `ignored` is evaluated | BC-S8 said it is at load time so only per-pack branching is possible, and AP branched on runtime data with the `$title_text` the factory gives. Both are explained as "evaluated as a `$variable` at creation time", and the difference is whether there is a route for runtime data to enter as a variable | Partly resolved: evaluated at creation time (FILE-17) |
+| C-46 | Scope of redeclaration and `modifications` | Measurement says redeclaration in a file at a different path is ignored and `modifications` is per path. Cinnabar merges any file if namespace and name are equal (a simplification) | Measurement first: FILE-22 kept |
+| C-50 | Is a pack file at the same path as vanilla a merge or a replacement | A same-named definition in a pack file is merged per property (FILE-21) | Resolved: merge |
+| C-55 | Resolution of `@name` without a namespace | Vanilla has both a case that looks up the base namespace under inline inheritance and one that looks up the file namespace under top-level inheritance. Cinnabar always looks up the file namespace | Open: always write `ns.name` (FILE-42) |
+| C-57 | Registering a copy of a vanilla path in `_ui_defs` | There is no need to register (FILE-01) | Resolved: not needed |
+| C-60 | The type and property lists of the MS Learn reference | It is a document written with AI assistance, so there are `nine_slice_buttom`, enum tables with empty values and so on | Resolved: adopt vanilla usage (LAY-01) |
+
+## Items that need measurement
+
+- Whether `"$hide": true` at the reference point turns on `"ignored": "$hide"` of the definition (FILE-34, by the code evidence it does not).
+- Splitting one namespace across two files (FILE-41), `\u` escapes (FILE-40), siblings with the same name (FILE-39), registration outside `ui/` and `.atemp` (FILE-25, the FILE-39 reinforcement).
+- Which side attaches in top-level inheritance and in inline inheritance when the same name exists in two namespaces (FILE-42, C-55).

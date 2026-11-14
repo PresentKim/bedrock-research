@@ -1,0 +1,225 @@
+---
+title: "Protocol basics: RakNet, NetherNet, connection flow"
+description: "Bedrock protocol layers, the join handshake, NetherNet signaling and ports, server-authoritative movement, SubChunk requests, libraries, WebSocket, security and proxies"
+sidebar_position: 2
+sources:
+  - private-research
+  - bedrock-protocol-docs
+  - gophertunnel
+  - ms-learn
+---
+
+## Concept: layers
+
+A Bedrock client and server exchange **game packets on top of a transport layer**. For a long time the transport was RakNet (reliable transport over UDP), and since 26.50 there is also **NetherNet**, based on WebRTC. On top of that, packets are bundled into batches, compressed (zlib or snappy, when above the threshold), and encrypted once authentication finishes. Each game packet has a number (ID), and the field schema changes slightly with each release. You cannot read it with a raw UDP socket (the Bedrock protocol sits on top of RakNet), so you need a library such as PrismarineJS bedrock-protocol or gophertunnel.
+
+Mojang publishes the schema of packets, types and enums in the `Mojang/bedrock-protocol-docs` repository (JSON) and in the site built from it (mojang.github.io/bedrock-protocol-docs, revamped 2026-08). That repository is all rights reserved, so this wiki restates only the facts. The site has an xref table, guides, per-version pages (for example `/1.26.50-preview.26/search/`) and advanced search, and has problems such as exact matches being pushed down and search sometimes being case sensitive. The community channel was closed on 2026-09-27, and feedback goes to GitHub. (Source: protocol-docs-repo, private-research)
+
+## Connection flow (RakNet, custom server implementation notes)
+
+This is the order from a case of implementing a server directly (Source: private research).
+
+1. Unconnected Ping / Pong
+2. Open Connection Request 1 / Reply 1
+3. Request 2 / Reply 2. From here on it is frame sets and ACKs are handled.
+4. Connection Request / Request Accepted
+5. New Incoming Connection
+6. The server's Connected Ping (answered with Connected Pong)
+7. The client's Network Settings Request (protocol version)
+8. The server's Network Settings (compression threshold). After this, game packets are wrapped in the game packet header inside a Frame Set.
+
+Then it continues with Login, resource pack negotiation ([resource-pack-delivery.mdx](resource-pack-delivery.mdx)), StartGame, and chunk transfer. Cases where it got stuck: a C++ server could not receive Login after sending NetworkSettings (0x8F), and later the connection dropped at "generating world" after StartGame/PlayStatus (client 1.26.51). Login is the first split packet, so RakNet split handling is needed, and if Login does not arrive, it is usually a parse failure of the preceding packet. For the drop after "generating world", there is only a statement that a required world packet was missing, and it is unresolved. If you resend all chunks when changing worlds, afterimages appear on the client. Custom items registered by a native mod are sent over the protocol, so a vanilla client also sees them without a pack.
+
+### gophertunnel server example (MIT)
+
+gophertunnel (Go) is a Bedrock protocol library. It supports only one game version at a time (usually the latest release), but the API can handle several protocols. This is a minimal example that opens a server. (Source: gophertunnel-repo, minecraft/example_listener_test.go)
+
+<Excerpt src="gophertunnel" title="ExampleListen" path="minecraft/example_listener_test.go">
+
+```go
+name := "MOTD of this server"
+cfg := minecraft.ListenConfig{
+	StatusProvider: minecraft.NewStatusProvider(name, "Gophertunnel"),
+}
+listener, err := cfg.Listen("raknet", ":19132")
+if err != nil {
+	panic(err)
+}
+for {
+	c, err := listener.Accept()
+	if err != nil {
+		return
+	}
+	conn := c.(*minecraft.Conn)
+	go func() {
+		defer conn.Close()
+		// Make the client spawn in the world using conn.StartGame.
+		worldData := minecraft.GameData{}
+		if err := conn.StartGame(worldData); err != nil {
+			return
+		}
+		for {
+			pk, err := conn.ReadPacket()
+			if err != nil {
+				break
+			}
+			switch p := pk.(type) {
+			case *packet.MovePlayer:
+				fmt.Printf("Player %v moved to %v\n", p.EntityRuntimeID, p.Position)
+			}
+			conn.WritePacket(&packet.ChunkRadiusUpdated{ChunkRadius: 32})
+		}
+	}()
+}
+```
+
+</Excerpt>
+
+## Protocol documentation and libraries
+
+- **RakNet documentation**: https://minecraft.wiki/w/RakNet , https://github.com/vp817/RakNetProtocolDoc , https://wiki.bedrock.dev/servers/raknet , https://wiki.bedrock.dev/servers/bedrock .
+- **Libraries**: PrismarineJS bedrock-protocol (Node.js 24+, NetherNet transport added in 3.60.0, 3.60.1 (2026-09-25) supports 1.26.51. It builds clients, bots, servers and a Relay (`version`, `host`, `port`, `destination`, `offline`, `relay.listen()`) and uses prismarine-auth for authentication. See HISTORY.md for supported versions; release and Preview support are separate), gophertunnel (Go), go-raknet, cloudburst, bedrock-portal (https://github.com/LucienHH/bedrock-portal, NetherNet example). A proxy that bridges NetherNet and RakNet: GameParrot/netherconnect (based on gophertunnel). There is no Rust NetherNet library.
+- **The burden of supporting the latest protocol**: Because of NetherNet changes and protocol upgrades, some servers deliberately target older versions. The protocol changes slightly with each release.
+- **Actual client version distribution**: On one Korean server (2026-09), clients of 1.20.80, 1.21.40, 1.21.50, 1.21.114, 1.21.132 and 1.26.3 connected. Foreign players use downgraded versions and Korean players keep the latest, so it supports multiple versions.
+- **Multi-version library**: go-multiversion (`https://github.com/shawtymarco/go-multiversion`) is a multi-protocol library for gophertunnel/Dragonfly (a record says it supports 1.16 and 1.18, *unverified*).
+- **NetworkSettings (0x8F) structure**: `compressionThreshold` uint16 LE, `compressionAlgorithm` uint16 LE (Zlib=0, Snappy=1, None=0xFFFF), `clientThrottleEnabled` u8, `clientThrottleThreshold` u8, `clientThrottleScalar` float32 LE. Batches after this are handled as compressed bytes. 0x00FF is not a valid algorithm value.
+- **Implementing movement on a custom server (Pumpkin, 1.21.130)**: Movement speed is given by SetActorMotion or attributes (`minecraft:movement` 0.1, `minecraft:underwater_movement` 0.02). Movement works only once chunks are loaded, and abilities, actor data and attributes must all be sent. If air bubbles show, the actor data flags are wrong. There is a guess that gravity is set by actor data (*unverified*). An AI suggestion that stopping repeated `NetworkChunkPublisherUpdate` sends fixes stutter was refuted.
+
+## NetherNet
+
+### Summary of the Mojang onboarding guide
+
+(Source: protocol-docs-repo, additional_docs/NetherNetOnboardingGuide.md. The original is all rights reserved, so only the facts are restated.)
+
+NetherNet is Minecraft's transport layer built on WebRTC. The client and server open a **data channel** through WebRTC offer/answer negotiation. What the server implements is **HTTP signaling**.
+
+- **Capability check**: The client first calls `GET {serverUrl}/v1/join`. If it returns 2xx, NetherNet is supported, and if not (for example 404), WebRTC is not attempted. The response JSON has `name`, `protocol` (protocol number), `version` (for example "1.26.50"), `level`, `players`, `maxPlayers` and `gameType` (0 survival, 1 creative, 2 adventure).
+
+```json
+{ "name": "Dedicated Server", "protocol": 2177, "version": "1.26.50",
+  "level": "Bedrock level", "players": 0, "maxPlayers": 10, "gameType": 0 }
+```
+
+- **SDP exchange**: `POST {serverUrl}/v1/join/{networkId}`, `Content-Type: application/sdp`, with a body that is an SDP offer containing all ICE candidates. The response is 2xx with an SDP answer as `application/sdp`. The client sends the request **only once** per attempt and does not retry. `networkId` is an opaque string that identifies the client.
+- **Full ICE**: Trickle ICE is off; all candidates are gathered and the SDP is sent at once. So STUN/TURN servers are not recommended (the SDP can be sent only after contacting every server, which increases latency).
+- **Client PeerConnection settings**: TCP candidate policy `disabled` (all UDP), bundle policy `max-bundle`, no STUN/TURN (host candidates only), two data channels.
+- **Data channels**: `ReliableDataChannel` (ordered, reliable, supports fragmentation) and `UnreliableDataChannel` (unordered, `maxRetransmits` 0, no fragmentation, for latency-sensitive data such as movement updates). The server receives them with `ondatachannel`.
+- **Framing**: Every message on both channels has a 1-byte header in front. `0` is a complete message or the last fragment, and `N` (positive) means N more fragments follow, with the first fragment having the largest value. Only the reliable channel splits messages that exceed the SCTP maximum message size. On the unreliable channel, a message that is too large is dropped.
+
+```text
+Fragment 1:  [0x02] [payload chunk 1]   <- 2 more follow
+Fragment 2:  [0x01] [payload chunk 2]   <- 1 more follows
+Fragment 3:  [0x00] [payload chunk 3]   <- last
+```
+
+- **Server behind NAT**: The answer must have at least one candidate the client can reach (such as a `srflx` candidate of the public address). With only private address candidates, the connection does not form.
+- **Identity proof**: The offer contains an `a=identity` attribute in which the client claims an authenticated player identity (the server verifies it and decides whether to admit), and the answer includes an `a=identity` in which the server claims the operator identity, so the client performs a TOFU (trust on first use, pinning the public key) check. Both are base64 JSON envelopes (`idp.domain`, `idp.protocol`, `assertion`), and `assertion` is a JWT and a detached JWS over the `a=fingerprint` line of the SDP.
+- **Flow**: create PeerConnection -> create two channels -> create offer and gather ICE -> HTTP POST -> server passes the offer to the host -> host creates the answer -> 200 response -> ICE connection check -> DTLS -> SCTP -> data channels open -> game traffic.
+
+### NetherNet in BDS (26.50 / 26.51)
+
+- **Introduction and RakNet blocking**: In 26.50 `transport=nethernet` was added to `server.properties`. Up to 26.50, if the `transport` entry was missing, the actual default was raknet even if the example file said nethernet. From 26.60, connecting to BDS with RakNet makes the client show a "terracotta" or "door" error, and in 1.26.61.1 `transport=raknet` itself becomes an error, so change it to `transport=nethernet`. The statement that RakNet is removed completely in 26.70 is *unverified*. There are reports that Geyser has finished the update and that IP servers and dragonfly are also working on NetherNet support (*unverified*). In 26.50, the NetherNet server list ping was broken (mcping.me got no response). Direct LAN connection worked. Official guide: https://mojang.github.io/bedrock-protocol-docs/guides/nether-net-onboarding-guide/ (https://github.com/Mojang/bedrock-protocol-docs/blob/main/NetherNetOnboardingGuide.md).
+- **Port layout**: Signaling is HTTP(S) on TCP `server-port` (19132), and game traffic is UDP (WebRTC/ICE), with each connected player using one port from the `server-udp-ports` range. Open TCP 19132 and a UDP range as large as the maximum player count in the firewall, Docker and Pterodactyl (extra allocations). The player-side error is "NetherNet / InitialConnection". A front proxy such as Cloudflare can break this. *(confirmed)*
+- **A working example (cloud VM, behind Caddy)**: `transport=nethernet`, `server-port=19132`, `server-udp-ports=<public-ip>:32000-32100:32000-32100`. Leaving it as just `32000-32100` gave a NetherNet error. Use the public IP, not a domain. Docker uses `ports: "32000-32100:32000-32100/udp"`, the firewall `32000-32100/udp` and `19132/tcp`, and Caddy `reverse_proxy bedrock-service:19132`. A simple form is `server-ip=<public ip>`, `server-udp-ports=19150-19169`.
+- **Working around the door error**: NetherNet is WebRTC over UDP, so open the UDP ports (the door error appeared when running the itzg Docker image on ports 19140 and above). If it still remains, set `server-udp-ports` equal to the server port (for example `server-udp-ports=29321`). On a playit.gg tunnel, the whole `ip:port:port` form had to be written (presumed to be a parser bug). The cause of a door error that remains after the nethernet setting has no answer yet.
+- **Port per player**: One port per player is a property of the BDS implementation (Geyser uses one shared UDP port). One operator runs vanilla BDS on a private interface and port range, with a minimal NetherNet proxy in front. The proxy handles HTTPS signaling, rewrites the response to the public IP/port, remembers ICE uFrag -> local port, and routes UDP by uFrag (a claim of operating with 1,600 players). Endstone is said to address this problem.
+- **The old direct connection methods broke**: Because of the private NetherNet layer, Omlet/0verlix-style direct connection broke. RakNet on IP servers was fine at that point. eggnet.space uses the Xbox Live connection flow (claims about 95% success). ZeroTier, Tailscale, n2n and FRPS are the comparison targets. Single-player invite link: https://github.com/kimaaaa1/bedrock-world-invite-link .
+
+### Library support
+
+gophertunnel chooses the transport by network name, as in `minecraft.ListenConfig.Listen("raknet", addr)`. The Dragonfly patch added the NetherNet listener settings `LocalIP` (the local address the connection is bound to and announced with) and `PublicIP` (the public address announced by a server behind 1:1 NAT or a tunnel) (Source: private research).
+
+## Diagnosing BDS connection problems
+
+### LAN broadcast and the 1.26.30 connection timeout
+
+- **Symptom (BDS 1.26.30.5, 2026-06-16)**: An upgraded existing world (especially one with creator experiments on) loads without errors, but players time out ("Unable to connect to world"). Nothing appears in the BDS log either (BDS-23063, MCPE-239705). Connecting through a gophertunnel proxy worked the whole time.
+- **Cause and fix**: If `LANBroadcast` in `level.dat` is 0, it overrides `enable-lan-visibility=true` in `server.properties` (it may be off in imported or Chunker worlds). Stop the server completely and take a backup, then change `LANBroadcast` to 1 in both `level.dat` and `level.dat_old` with an NBT editor (for example the VS Code NBT extension). Check that the editing tool actually saves. Upload while the server is stopped (otherwise the server overwrites it), and restart with `enable-lan-visibility=true` kept. The same problem was reported again in 26.40. *(confirmed)*
+- **Related bug**: When `enable-lan-visibility=false`, BDS returns a malformed unconnected-pong missing the Server ID/MOTD. go-raknet fix: https://github.com/Sandertv/go-raknet/commit/703ec90295816a7e1fbe59981ca79c4446859445
+- **Custom ports**: Put `LANBroadcast: 1b` and `LANBroadcastIntent: 0b` (or 1b) in `level.dat`. The transfer error code when the port is not the default is `silverfish`. In 26.40 there was a case where external connections failed until a router restart or a nethernet/raknet adjustment.
+- **Several instances on one host (1.26.32)**: LAN broadcast uses the fixed port range 19132~19139, and a second instance silently fails on a port conflict. Start the 19132 instance first and keep each instance's IPv4 port within 19132~19139. The second instance works even without LAN messages.
+
+### Other connection problems
+
+- **Diagnosis by error**
+  - "The server you are attempting to join may not exist or be locked": it may be an allowlist problem. The allowlist bypass bug (MCPE-237527) was fixed, so update BDS.
+  - When one particular client connects, all the others are kicked: suspect RakNet session confusion (shared IP/CGNAT) or corrupted player data. Unresolved.
+  - A local server appears to alternate between 127.0.0.1 and the LAN IPv4: there is a case solved with Tailscale. Check the external IP with `curl https://ipinfo.io/ip`.
+  - Connections were blocked when a custom block had `use_beta_features` or a connection trait (fixed in 26.0). If custom blocks do not show on Xbox, it may be an RP download failure or a model path longer than 80 characters.
+  - After turning on the script debugger, the world became unjoinable and was restored from a backup (reported repeatedly).
+  - There is a case where a local test server was fixed by connecting with `127.0.0.1` instead of `localhost`.
+  - A BDS opened at home needs UDP forwarding (a case failed by opening only TCP, as in the RakNet days). Connect a domain with a DNS record that points to the host IP.
+  - If you are kicked on a Realm with a NetherNet/Terracotta error (2025-12), the network or add-ons may be the cause, so test with another network and a copy with add-ons turned off.
+  - "blocks between client and server do not match": Many creators using BP blocks reported it on 1.21.130. There is an explanation that an old block `format_version` causes rejection on mobile, so raise the format version.
+  - During the Xbox Live outage of 2026-09-02, a "Drowned" login error appeared and Realms and friend servers were affected. There is an old bug where Xbox friend servers do not appear in the invite list (a reinstall sometimes fixes it).
+
+## LAN discovery and WebSocket
+
+- **Behavior**: The client does not listen on a fixed port. It picks a free port and sends a broadcast/unicast ping to UDP 19132 (RakNet). NetherNet discovery was reported on port 7551.
+
+- **Connecting**: Connect with `/connect localhost:19131` (or `/wsserver`). The WebSocket setting must be on, and host or admin permission and cheats are needed. You must run it again on every join. If it is not TLS, turn off "Require Encrypted WebSocket". There is no official documentation and it may change. On Realms, external WebSocket commands cannot be handled.
+- **Stability (2026-04, single report)**: Payloads over about 200 bytes can cause crashes, and only about 2 commands per tick were stable (it used to be 5).
+- **Command request**: `{header:{version:1,requestId:uuid,messagePurpose:"commandRequest",messageType:"commandRequest"},body:{commandLine}}`. You can subscribe to several events, but the only action available is running commands. Keep the command `version` at the latest value (if omitted or 0, the oldest command syntax applies, and `execute` too). There is a report of a syntax error from quote escaping in block state commands. `/me` and `/msg` sent over WebSocket show the sender as "External".
+- **Uses**: In single player, mix scriptEvent and chat to communicate in both directions with an add-on. Outside BDS, a live WebSocket is needed to push data into the game. Audio tunneling is also possible but limited (command queue of about 100, latency 100~150ms). There was also a proximity chat idea (BDS exports positions, an RP hides messages, and one Windows client reads them through mcws), but using only server-net is simpler.
+- **PlayerDied event (undocumented)**: The body has `cause` (int), `inRaid`, `killer{color,id,type,variant}` and `player`, and the header is `eventName: "PlayerDied"`, `messagePurpose: "event"`. The cause values (found by testing with `/damage`): -1 None, 0 Override, 1 Contact, 2 EntityAttack, 3 Projectile, 4 Suffocation, 5 Fall, 6 Fire, 7 FireTick, 8 Lava, 9 Drowning, 10 BlockExplosion, 11 EntityExplosion, 12 Void, 13 SelfDestruct, 14 Magic, 15 Wither, 16 Starve, 17 Anvil, 18 Thorns, 19 FallingBlock, 20 Piston, 21 FlyIntoWall, 22 Magma, 23 Fireworks, 24 Lightning, 25 Charging, 26 Temperature, 27 Freezing, 28 Stalactite, 29 Stalagmite, 30 RamAttack, 31 SonicBoom, 32 Campfire, 33 SoulCampfire, 34 MaceSmash. Notes gist: https://gist.github.com/pyroboots/62185c7addc62e018709a55b896bec68 . Server example: https://github.com/WavePlayz/bedrock-websocket-server . There is a claim that about 114 events worked before 1.16 and only about 30 remain now*(single report)*.
+
+## Server-authoritative movement and anti-cheat (summary of Mojang documents)
+
+(Source: protocol-docs-repo, additional_docs. Only facts are restated.)
+
+- **Movement protocol transition**: `ServerAuthMovementMode` in `StartGamePacket` (ID 11) sets the movement mode. A preview of moving to server-authoritative movement started in fall 2024, and one release after completion the client-authoritative path is removed. A server that does not specify `ServerAuthoritativeV3` will eventually become incompatible. The server does not have to implement all the physics, and what was done the old way is still possible in V3.
+- **Affected packets**: 11 StartGame (the movement protocol is specified here), 18 MoveActorAbsolute (vehicle movement update, deprecated), 19 MovePlayer (client movement update, deprecated), 20 PassengerJump (horse jump deprecated), 36 PlayerAction (some types deprecated), 44 AnimateActor (boat paddle input deprecated), 57 PlayerInput (vehicle input deprecated), 144 PlayerAuthInput (main input packet), 161 CorrectPlayerMovePrediction (new optional correction mechanism).
+- **Anti-cheat correction**: The client and server simulate input together, and when they diverge the server sends a correction. The client rewinds to the point the server indicates, applies the correction, and reapplies the input after that. It is activated on the client when the server tells it to turn it on with `StartGame`. It is off by default and is turned on with `server.properties`.
+
+```properties
+# minimum tick interval between corrections (correcting at tick 5 with latency 2, the next possible correction is tick 8)
+player-rewind-min-correction-delay-ticks=5
+# ticks of history held by the client rolling window. At 20TPS, 40 handles latency up to a 2 second round trip by rewinding
+player-rewind-history-size-ticks=40
+# tolerance for position mismatch. Above 1.0, cheats are more likely to pass
+player-position-acceptance-threshold=0.5
+server-authoritative-block-breaking=true
+server-authoritative-block-breaking-pick-range-scalar=1.5
+```
+
+- **Block breaking**: With server-authoritative breaking on, the server verifies breaking progress. It checks distance on start or continue, and the multiplier is applied to the player's maximum pick distance. With it off, position is client-authoritative and 0.5 is added. Creative stays client-authoritative.
+
+## SubChunk request system (1.18.10)
+
+(Source: protocol-docs-repo, SubChunk Request System v1.18.10)
+
+From 1.18 the world height is -64~319, so sending whole columns would nearly double the network traffic. So the server sends a **skeleton LevelChunk**. Setting the subchunk count of the LevelChunkPacket to `0xffffffff` (the uint32 maximum) turns on a mode where the client requests the subchunks of that chunk. In this mode, block entities are put inside subchunks, not in the LevelChunk.
+
+- The client progressively requests (1) the tick area (roughly everything within 4 chunks) and (2) visible subchunks with `SubChunkRequestPacket` (dimension ID and subchunk position; Y is the absolute subchunk number, -4~20 for -64~319). Requests are not binding, so the server may ignore them and send in its own order.
+- At positions without a response yet, an invisible blocking placeholder block is placed. The response is `SubChunkPacket`: dimension ID, position, serialized subchunk (including block entities; an empty string if there is no data), result (0 undefined, 1 success, 2 chunk not found, 3 different dimension, 4 player not found, 5 index out of range), heightmap, and blob cache flag and ID. A third-party server usually needs only success (1).
+- The client accepts responses only for subchunks marked `NeedsRequest`, and after processing a success it ignores packets for the same subchunk until the whole chunk is marked as request mode again. Later changes are sent as ordinary block updates.
+- The heightmap is announced bit by bit per subchunk with a status byte (if 1, a 16x16 array of height values follows) to keep lighting and rain and snow handling working. The blob cache ID is based on the combined unit of subchunk and block entities, so it differs from the ID of an ordinary LevelChunk.
+
+## Security, crashers, anti-cheat, proxies
+
+- **Packet crashers**: Horion/Borion pour in a `TextPacket` over 62,000 bytes and a 6013-byte `SubChunkRequestPacket` (Borion supports 1.26.1 as of 2026-03-30). Huge sign text from hacked clients also causes lag.
+  - The BDS built-in packet limiter and `packetratelimitconfig` have limited effect.
+  - A script (server-net) can block by size, but crashers change the packet type.
+  - Endstone carries internal patches (chunk leak, crashers). Packet-level blocking such as blocking `CommandRequestPacket` is possible only on BDS or Endstone.
+  - The surest defense is a verifying proxy: Player -> gophertunnel (Go) proxy -> validator/blocklist/packet logger -> BDS. Cut the connection on unknown, too large or malformed packets. Existing proxy: https://github.com/smell-of-curry/gobds . Verixen is paid (about $20). A proxy also hides the origin IP and does load balancing and transfers.
+- **Spam bots and proxy clients (Lumine and others)**: They join as op and run `/clear` or send external command packets. They are not visible through `chatSend`, so turn off the commands with `config/commands.json`. Some bots do not fire `playerSpawn`. Other than reporting, there is no fundamental countermeasure. Bedrock OSS has an anti-crash article. Proxy-based anti-cheats such as Lumine are BDS-only.
+  - When an "external access" bot account floods chat with commands, a selector cannot catch it, so kick it from the player list. Spam bots enter worlds that allow "friends of friends", so invite-only is recommended. Advertising bots that bans do not stop were also reported on Korean servers.
+- **Attack report (one Korean community, single report)**: A join-flood kept new players on the loading screen, and they survived with the packet limit and proxy blocking. `/me`-style chat sent by a proxy tool (starting with `*` and the name) caused lag and crashes, so it was blocked with an add-on that filters lines starting with `* `. There is a report that a determined packet flood could not be stopped by the BDS/Endstone limiter, and a saying that DDoS has become common.
+- **Anti-cheat and anti-dupe packs**: Existing packs (Safeguard and others) are recommended. Anti-dupe packs for Realms mentioned were mcpedl.com/anti-dupe-bp/ and mcpedl.com/dupeguard/ (*unverified*). Anti-cheats reproduced on the server side with the Script API also work on Realms.
+- **Players with an empty or invalid name (LAN file editing)**: `/kick` fails. Countermeasures:
+  - Reject command/text packets on BDS.
+  - Cancel `chatSend` if `sender.name.length < 3`.
+  - Put a tag on valid players and `/kick @a[tag=!valid]`
+  - Force MSA authentication.
+  - Close LAN.
+- **The reality of cheats**: Most cheats break under server-authoritative movement, and what remains breaks outside survival. There is an opinion that command block/NBT exploits were blocked in 2023. The remaining attacks are crashers and reach hacks. Server-authoritative movement is enforced even in single player and can slow falling (one report that it is a bug on Linux BDS).
+- **PvP stutter**: Vanilla BDS has more movement stutter than PMMP/PNX/Dragonfly in PvP that uses `applyKnockback` (presumed to come from server-authoritative movement or PlayerAuthInputPacket handling). Reducing knockback during the hit cooldown helps. There is a claim that it was later fixed with EndstoneMC. If FPS drops over time and recovers on reconnect, suspect an uncancelled repeating loop per player.
+- **IP and VPN detection**: Not possible with scripts. You need a proxy that reads the login packet (gophertunnel, bedrock-protocol JS, WaterdogPE) and an IP list or VPNapi.io. Because it is RakNet/UDP, a reverse proxy is hard (TPROXY). On NetherNet the player IP is not revealed to the server, so there is advice to use a gophertunnel-style proxy.
+- **Reading traffic**: A raw UDP socket is useless (the Bedrock protocol is on top of RakNet). Use PrismarineJS bedrock-protocol or gophertunnel, and a logging proxy is accepted only if it authenticates in online mode. Sniff Realms packets with a bot or relay (bedrock-protocol `examples/realmRelay.js`).
+- **Transferring servers behind a proxy**: Fast transfer without client reconnection is not solved yet. The workaround is to send the transfer packet back to the proxy, and the proxy remembers for some time (for example 5 minutes) which sub-server to send to. The prototype was built with PrismarineJS bedrock-protocol. There is no open-source BungeeCord-style proxy yet. WaterdogPE does not fully support BDS (chunks fail after `/transfer`).
+  - Alternative proxies: spectrum (`https://github.com/cooldogedev/spectrum`, said to be hard for BDS), vanilla-proxy (`https://github.com/HyPE-Network/vanilla-proxy`). A chunk release problem was reported when using Endstone and WDPE together.
+  - There is a multi-region proxy case that keeps the session on the proxy and connects to sub-servers over TCP/QUIC (Asian players to a European server, with no server transfer).
+- **"Atlas" proxy technique**: Reloads the RP without leaving the server. When the client is transferred to the proxy, the proxy presents a new pack stack again and replays the world state. If `JigsawStructureData` is not sent before `StartGame`, the connection drops with "missing structure data". A large `PlayerList` packet must be split.
+- **When debug output packets no longer exist**: Mojang does not provide debug symbols, so fixing a server-side crash means touching the binary directly. Partner servers use custom software.
+- **ESP/outline packs**: They show entities through walls and can be unfair. Servers and Realms can block such packs, and server packs that change the player material break outline packs.
+- **Community rules**: Discussion of leaks, reverse engineering and DRM circumvention is prohibited.

@@ -1,0 +1,151 @@
+---
+title: Loading paths and the trust decision
+description: The order in which Ore UI file requests are resolved, why encrypted packs are trusted, the button style bridge, the DDUI layout loader, and the measured results.
+sidebar_position: 2
+sources:
+  - repo-ore-ui-loading
+  - private-research
+---
+
+# Loading paths and the trust decision
+
+Addresses are the Android 1.26.52.3 arm64 analysis base address (ELF address + 0x100000). (Source: repo-ore-ui-loading)
+
+## 0. Concept: the pack stack and "trust"
+
+JSON UI works by a resource pack's `ui/*.json` overriding vanilla definitions. Ore UI is different. A screen is a bundle of `hbui/*.html`, `*.js` and `*.css` in the install folder, and that bundle requests files with addresses starting with `ui://`. When the engine receives a request, before going to the install folder it scans the pack stack (the stacked list of enabled resource packs) from the top, and if a **trusted pack** has a file at the same path, it serves that one. So "which packs are trusted" decides whether Ore UI can be changed. Trust is decided by how the pack is opened (the access strategy) and has nothing to do with the pack's contents.
+
+The smallest probe pack looks like this (if the server sends it encrypted, the Ore UI background turns magenta).
+
+```text
+probe-pack/
+  manifest.json                 One resources module
+  hbui/gameplay-theme-cb1e5471975ef2c1abb9.css   Vanilla CSS content + a body rule on the last line
+```
+
+```css
+/* One line appended to the very end of the vanilla gameplay-theme CSS */
+body { background-color: rgba(255, 0, 255, 0.6) !important; }
+```
+
+The hash in the file name (`cb1e5471975ef2c1abb9`) differs for each game version. Check the name in the install folder `data/gui/dist/hbui/`.
+
+## 1. How an Ore UI file request is resolved `{code}`
+
+1. **URL normalization** (`@0x09cf635c`): if the request path does not start with `ui://`, the leading `/` is removed and `ui://` is prepended. The strings present are `ui://`, `ui://hbui/fonts/` and `coui://uiresources/...` (the Gameface inspector).
+2. **File lookup** (`@0x09cf68d4`)
+   - A path containing `../` or `..\` is rejected.
+   - After normalizing the path, it **walks the pack stack (an array of 0x110-byte pack entries) from the front.** Only when the virtual function (+0x30) of a pack's access strategy is true does it check whether that pack has the file (`@0x112ac30c`, sub packs, pack order, virtual function +0x38 = `hasAsset(path, false, false)`). If it has it, it serves from that pack.
+   - If not, it opens `gui/dist/` + base folder + path from the **app package file system** (`Core::FileSystem`, `@0x09cf66f8`).
+3. **The filter is `isTrusted()`**: the next slot right after (+0x38) is `hasAsset`, which matches the virtual function order of Bedrock's `PackAccessStrategy` (`... isWritable`, `setIsTrusted`/`isTrusted`, `hasAsset` ...). The first guess that "only built-in packs and marketplace packs are trusted" was wrong. Encrypted packs sent by a server are trusted too.
+4. `routes.json` (`@0x09cd39dc`) and fonts (`gui/dist/hbui/fonts`, `@0x096de4bc`) are read only from the install folder.
+
+The note in 8Crafter Ore UI Customizer's "Export as RP" that "a mod that makes the game load Ore UI from the RP is required" is correct for plaintext packs. An encrypted pack works without a client mod.
+
+## 2. Encrypted packs are trusted
+
+### Decision per access strategy `{code}`
+
+The vtables of the pack access strategy classes were found by their RTTI names (`18PackAccessStrategy`, etc.) and slot +0x30 (`isTrusted`) was disassembled (analysis round 11, `DumpVtables.java`).
+
+| Access strategy | +0x30 `isTrusted` | +0x28 `isWritable` |
+| --- | --- | --- |
+| `ZipPackAccessStrategy` (`@0x1125865c`) | `location.fileSystem == 1` or the `+0x170` flag | the `+0x171` flag |
+| `DirectoryPackAccessStrategy` (`@0x112ee564`) | `location.fileSystem == 1` | always true |
+| `EncryptedFileAccessStrategy` (`@0x112f456c`) | **always true** | always false |
+| `ZippedEncryptedFilesAccessStrategy` (`@0x112f456c`, the same function) | **always true** | always false |
+| `DirectoryPackWithEncryptionAccessStrategy` (`@0x112f0a70`) | **always true** | always true |
+
+- `location` is the pack's `ResourceLocation` (a field returned by the +0x18 slot of the access strategy), and its first field is the file system kind. 1 is read as the app package (`AppPackage`), that is, the built-in pack in the game install folder `{inferred, from the Bedrock ResourceFileSystem enum order}`.
+- **The pack UUID and the manifest content are not used for the trust decision.** The idea "can't we just use the UUID of a marketplace add-on" does not work. Even if you imitate the UUID, a plaintext pack opens with a Zip/Directory strategy, and that decision looks only at the install location.
+- The string `Failed encrypted file signature check` in the binary was in the world storage (LevelDB) code. The code that checks the pack signature (`signatures.json`) was not followed. In the measurements, a pack that was only encrypted without a signature was trusted.
+- The content key is looked up by `ClientContentKeyProvider` only from keys sent by the server, entitlements and the built-in table. It does not look at key files next to the pack or the world db (Source: private research).
+
+### Server measurement (Windows 1.26.52, 2026-10-23) `{measured}`
+
+- If you give the test server a 32-byte key as the second argument, it converts the pack to the marketplace encryption format and sends it with the key (the format is in [Modifying Ore UI pages](./modifying-pages.mdx)).
+- The same probe pack was sent alternately as plaintext and encrypted. The pack version was raised every time so the client would not reuse what it had received.
+
+| Pack sent | Ore UI death screen background |
+| --- | --- |
+| Plaintext (1.0.2, 1.0.4) | vanilla as is |
+| Encrypted (1.0.3) | **magenta** (probe CSS `body{background-color:rgba(255,0,255,0.6)}`) |
+
+- When the user cross-checked separately, the magenta screen also appeared only with the encrypted pack.
+- After disconnecting from the server, magenta once remained on the menu screen too. The menu `index.html` also loads `gameplay-theme-*.css`, and the server pack appears to stay in the pack stack for a while after connecting `{measured, inferred}`.
+
+### Local pack (`content.zipe`) `{measured, 2026-10-27}`
+
+If you add `content.zipe` to a plaintext pack folder, it opens with `DirectoryPackWithEncryptionAccessStrategy` even without a key, is trusted and changes Ore UI files. The engine only checks whether this file exists. The detailed test results are in the local test section of [Modifying Ore UI pages](./modifying-pages.mdx).
+
+## 3. The button style bridge `vanilla.resourcePackOverrides` `{code}`
+
+### Engine side
+
+- The facet `vanilla.resourcePackOverrides` (`OreUI::ResourcePackOverridesFacet`) outputs two properties, `definitions` and `lastUpdated` (`@0x09ef8760`).
+- One definition is `identifier`, `control`, `propertyData[]` (`UI::Resources::ResolvedPropertyData`: `name`, `value` = a JSON string) and `textureData[]` (`ResolvedTextureData`: `identifier`, `path`, `sliceSize`, `uvSize`, `uvScale`).
+- **The definitions the engine resolves are two hardcoded ones** (`@0x09ef8a7c`).
+
+| Definition | Texture variable | Property variables |
+| --- | --- | --- |
+| `common_buttons.light_text_button` | `$new_ui_button_texture` | `$text_color`, `$border_color` |
+| `common_buttons.focus_border` | `texture` | none |
+
+- The values are obtained by resolving variables all the way through in the JSON UI definition after the pack stack is merged. So changing `$light_button_*_text_color` in `_global_variables.json` or the texture files takes effect.
+
+### In-game bundle side (`gameplay-*.js`)
+
+- It converts `control` (the child control name) to an Ore UI state: `default` = default, `hover` = `hovered` and `focused`, `pressed`/`press` = `pressed` and `selected`, `locked` = `disabled`.
+- The target components are `pressable` (background and border) and `button` (text), and the roles are `primary` and `secondary`.
+- Conversion
+  - A texture becomes CSS `borderImageSource: pack://path.png?filtering=point`. `border-image-slice` is `sliceSize` x `uvScale`, and `border-image-width` is `uvSize` x 0.2rem. The nine-slice (`.json`) follows along as is.
+  - `$text_color` ([r,g,b] 0~1) becomes `color: rgb(...)`.
+  - `$border_color` becomes `filter: coh-color-matrix(...)` (multiplies the color into the border texture).
+- This provider **wraps the whole `gameplay.html` app** (the router's `wrapperComponent`). The death, bed, inventory, DDUI (`/gameplay/data-driven`), trade and block screens all receive it.
+- The menu bundle (`index-*.js`) only declares the facet name and does not use it. The out-of-game menu has no such bridge.
+
+### Probe pack and results `{measured}`
+
+The server is Dragonfly (authentication off, port 19140, resource packs required) and uses `/die` to deal 1000 void damage and open the death screen. The probe pack is a server pack, so it is not trusted.
+
+| Pack file | Contents |
+| --- | --- |
+| `ui/_global_variables.json` | `$light_button_default/hover/pressed_text_color` = red/green/blue |
+| `textures/ui/button_borderless_light(hover/pressed).png` | 16x16 solid yellow/sky blue/magenta |
+| `gameplay-theme-cb1e5471975ef2c1abb9.css` in `hbui/`, `gui/dist/hbui/` and the pack root | Vanilla CSS + `body{background-color:rgba(255,0,255,0.6)!important}` |
+| `ui/death_screen.json` | `ignored: true` on the `buttons_panel` and `labels_panel` of the JSON UI death screen |
+| `ui/pause_screen.json` | Control group. The texture of `pause.take_screenshot_icon` changed to the magenta texture |
+
+| Observation | Result |
+| --- | --- |
+| Pause screen (JSON UI) | Buttons have a yellow background and red text, hover is sky blue and green. The camera icon is magenta. The pack and top-level element modifications are applied |
+| Death screen | The title and two buttons **are still visible**. Since all the JSON UI death screen panels were hidden, this screen is **Ore UI** |
+| Death screen buttons | **Yellow background and red text, hover is sky blue background and green text.** The pack's texture and text color went into the Ore UI buttons |
+| Death screen background | Not magenta. The plaintext pack's `hbui/...css` was not used |
+
+Summary: the bridge and `pack://` textures work even with an untrusted server pack. Ore UI file lookup does not work with a plaintext server pack. Sending the same pack encrypted makes it work.
+
+Probe tip: if you hide a JSON UI screen's panels with `ignored: true` and the screen is still visible, that screen is Ore UI. This method can tell which technology a screen opened with.
+
+## 4. DDUI layouts are read from packs but only built-in ones `{code}`
+
+- The loader (`@0x0b96ab2c`) walks the pack stack and opens each pack's `ddui/root` and `ddui/composition` folders. Files are interpreted as `minecraft:ui-root` (`@0x0b96b304`, error messages `DataDrivenUI Root .json file '{}'`, `Failed to load DataDrivenUI file`) and `minecraft:ui-composition` (`@0x0b96c468`). The pack UUID is recorded with them and becomes the `sourcePackId` that goes to JS (`vanilla.CoreDataDrivenUIDefinitionQuery`).
+- **Pack filtering**: only packs where at least one of two bools on the pack object (+0x88 `@0x112ac54c`, +0x89 `@0x112ac55c`) is true are read. The same two functions are used in the POI loader (`@0x10a29438`, `@0x10a2b6e8`) to raise "`Cannot use minecraft namespace found %s`" when a pack with both false uses a `minecraft:` identifier. So these two values are a "game built-in (first-party) pack" marker `{inferred}`. `ddui/root/*.json` of user and server packs is not read.
+- `/reload` has a DDUI branch (`commands.reload.ddui.success`, `@0x0ebd02fc`).
+- **The frontend is ready to accept creator packs** (`gameplay-*.js`)
+  - A layout given by the engine is drawn with `isCreatorDataDriven: true` and `pack: sourcePackId`.
+  - Image rule: if the layout's source pack is vanilla (`0575c61f-...`), images can point to another pack (`packId`). If it is not vanilla, it can use only its own pack's images (error messages `RequestedPack is not supported.`, `Cannot load vanilla images.`, `Image cannot look like a URL.`).
+  - This matches exactly what a Mojang developer said in the community: "until stage 2 (full layouts), custom RP panels are internal-pack only".
+
+## 5. The screen switch and containers `{code}`
+
+The switch that opens container screens with Ore UI, and the conclusion that a server cannot turn it on, are in [Icons and containers](./geo-item-and-containers.mdx).
+
+## 6. Rule summary
+
+1. Plaintext packs (Zip, Directory access strategies) are not trusted, so files in `hbui/` are ignored.
+2. The three encrypted access strategies are always trusted regardless of the pack UUID, signature and manifest.
+3. A plaintext pack still reaches the button style bridge and `pack://` textures.
+4. Fonts and `routes.json` are read only from the install folder, not from packs.
+5. DDUI layouts (`ddui/root`) are read only from built-in packs.
+6. Every time the version changes, recheck the +0x30 implementations in the access strategy table and the bundle file name hashes.

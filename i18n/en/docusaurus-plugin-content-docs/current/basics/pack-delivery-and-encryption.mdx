@@ -1,0 +1,232 @@
+---
+title: "Pack delivery, encryption, obfuscation"
+description: "Applying packs on BDS and Realms, system packs, CDN, Marketplace rules, pack encryption and obfuscation, brarchive, pack optimization, Ore UI trust decision and content.zipe, JsonEncryptor"
+sidebar_position: 8
+sources:
+  - private-research
+  - ms-learn
+  - repo-ore-ui-loading
+  - repo-jsonencryptor
+  - jsonencryptor
+  - repo-bedrock-core
+---
+
+## Concept
+
+There are three ways a pack reaches a player. (1) A local development folder or a `.mcpack`/`.mcaddon` import, (2) included in a world and uploaded to a server/Realm, (3) a resource pack the server sends down on join. On every path the client caches by **pack UUID + version**, so when the content changes you must raise `header.version` for it to be downloaded again. This page collects the server-side application methods, archives (brarchive), protection (encryption and obfuscation), and the measurement that an encrypted pack is treated as a "trusted pack" in Ore UI file lookup.
+
+## Packs on BDS, Realms and hosted servers
+
+### Applying world packs (classic method)
+
+Put the pack list in `world_behavior_packs.json` and `world_resource_packs.json` in the world folder.
+
+```json
+[
+  { "pack_id": "<manifest header uuid>", "version": [1, 0, 0] }
+]
+```
+
+Check the active packs with `/packstack`, and on the client side with `/packstack client`. `texturepack-required=true` in `server.properties` alone does not force a pack. "Pack Stack - None" in the log (including modded BDS) means the pack is not registered in world_behavior_packs.json/world_resource_packs.json.
+
+- **Marketplace packs and servers**: Marketplace packs cannot be moved to BDS, and Marketplace add-ons cannot be used on a server. On a Realm, add an add-on you installed yourself in the Realm settings. The workaround for using non-Marketplace add-ons on consoles exists only on Xbox and not on PlayStation.
+
+- **System packs (Preview 26.30.28 / Stable 26.30)**: if you create `system_behavior_packs` and `system_resource_packs` in the BDS folder yourself, the packs inside apply to every world automatically, and their IDs cannot be reused by other packs. If a pack is not per-world, world_*_packs.json is not needed. Load order follows `pack.name`, not the folder name (test: "Resource Pack 1" before "2"). Changelog wording: "Added new pack folder to dedicated server for system packs".
+- **Hosted servers**: packs in `development_behavior_packs` are not copied into the world. Upload a world that includes the packs or add them manually to world_behavior_packs.json.
+- **Windows file permission pitfall**: a world pack json copied from another PC kept its original ACL, and BDS (1.26.10.4/13.1/14.1) showed `Pack Stack - None`. The user running bedrock_server needs read/write permission on the packs and the json.
+- **A case where BDS did not recognize structures in the BP `structures/` folder** was avoided by creating the structures with the Script API. *(single report)*
+- **When a pack does not work on a Realm**: reapply, raise the manifest version, clear the cache, or copy the pack to `minecraftWorlds/<world>/behavior_packs/1`, delete `world_behavior_packs.json` and upload again. Check `hasLockedBehaviorPack` in level.dat.
+- **Realm pack updates** *(conflicting)*: the answers disagree. One says raise only the manifest `version` and keep the UUID. A report says changing only the version can make the pack disappear on upload and that development add-ons on a Realm are not updated unless you replace the world. A short answer says to change the UUID. The problem of beta API packs not loading on Realms/servers after 1.21.13x and the problem of the registration of a removed pack remaining in the world are unresolved. Realms reject packs with many log errors. A workaround for PS5 world download failures was shared. *(unverified)*
+- **Aternos does not accept custom script add-ons.**
+- **Player RP cache**: a development RP leaves a stale cache on joining players. Even with the forced download setting, raise the RP version, and on the client clear the cache in Settings > Storage. A stale cache makes items transparent, and an old RP can also be the cause when custom blocks are not visible on consoles.
+- **BDS transport**: after 26.60, connecting to BDS with RakNet gives a "terracotta"/"door" error, and in 1.26.61.1 `transport=raknet` is an error, so set `transport=nethernet`. The claim that RakNet is removed completely in 26.70 is *(unverified)*.
+- **Only featured servers can skip the resource pack accept screen** (not all featured servers use it).
+- **A report that on 26.30 BDS scripts did not load until BDS was restarted.**
+
+### CDN resource packs (`cdn_config.json`)
+
+- An unofficially documented file placed next to server.properties: `{"<pack UUID>_<pack version>": "https://cdn.example.com/my_pack.zip"}`. It must list every non-vanilla RP of the world with the exact version, and if even one is missing the whole file is ignored. The zip needs a direct link, `Content-Type: application/zip` and a correct `Content-Length`. The client caches by UUID+version, so raise the version (manifest, world json, cdn_config) on every change. Results varied by platform (a case where Windows players froze with R2, own HTTP succeeded, a rumor of mobile failure). Tool: https://github.com/wimziicals/bedrock-cdn (Bun + Cloudflare R2), format notes: https://gist.github.com/xKingDark/e80569d688e692ee11e161b427f6e49f
+
+### Command and config files
+
+- **`config/commands.json`**: `{"permission_levels": {"me": "internal"}}` hides or disables any command. The `game_directors` level allows op, command blocks, functions and NPC execution. A custom command that reuses a vanilla name (`gamemode`, `save`) still clashes ("Custom Command alias [gamemode] already in use. Required to use full name [custom:gamemode]"). `/script` stays visible. The console/host can run host-level custom commands. Docs: https://bedrock-wiki.netlify.app/bds/topics/command-config.html
+- **`/save` is the BDS built-in backup command** and can be used from the console.
+- **Removing chat noise**: `enable-player-connection-text=false`, `enable-player-sleeping-text=false`, `enable-player-changed-skin-text=false` (in-game chat only, not the log). `disable-persona` is "Internal use only" and does not work on some clients.
+- **When VV falls back to Fancy on BDS**: check the server.properties property that turns off client VV, and check that every applied RP declares the PBR capability in its manifest.
+- **pack optimization (BDS)**: from the 26.40.27 Preview there are JSON minify + brarchive CLI flags, and `"unpack": true` in the JSON settings can unpack as well. Docs: https://learn.microsoft.com/en-us/minecraft/creator/documents/bedrockserver/pack-optimization?view=minecraft-bedrock-stable (an experimental version also exists)
+
+### cdn_config.json example
+
+```json
+{
+  "<pack UUID>_<pack version>": "https://cdn.example.com/my_pack.zip"
+}
+```
+
+### pack optimization (MS Learn)
+
+Run BDS in pack optimization mode to bundle loose files into an archive and strip JSON whitespace. An optimized pack has a minimum client version of **1.26.40**, and earlier clients fail to load it. It is compatible with later versions. (Source: ms-learn, Documents/BedrockServer/pack-optimization.md)
+
+```powershell
+./bedrock_server.exe PackOptimizerConfigPath=D:/path/to/pack_optimizer_config.json
+```
+
+```json
+{
+  "input_directory": "D:/path/to/packs",
+  "output_directory": "D:/path/to/output",
+  "verbose_logging": false
+}
+```
+
+- Each subfolder of `input_directory` (required) is one pack. `output_directory` is created automatically and the output contains `__brarchive/`. `verbose_logging` defaults to `false`.
+- The server exits after processing and does not go on to normal runtime. On failure the exit code is `7` (ResourceProcessingError), and if the input folder does not exist it is an invalid-argument error early on. If the path contains spaces, quote the whole thing as `"PackOptimizerConfigPath=..."`.
+- For a Marketplace-structure pack, the input is the `Content\resource_packs` and `Content\behavior_packs` folders.
+
+## Marketplace rules, pack protection, brarchive
+
+- **Vanilla files must not be included**, textures go under `textures/<studio>/<project>/`, and custom materials need a namespace. Editing a vanilla entity file (for example the zombie) is probably not allowed, so confirm with the Marketplace contact.
+- **Bundle assets instead of depending on a separate RP.** Using `%` (modulo) in `#form_button_texture` in JSON UI fails certification.
+- **Experimental/beta APIs cannot be used** (including DDUI beta forms), and the Marketplace requires stable APIs.
+- **No multiple BPs in a .mcaddon.**
+- **Achievement-friendly `product_type: addon`**: an answer that it became Marketplace-pack-only from 1.26.50 and a report that it was relaxed again in 26.52 are *(conflicting)* ([manifest.mdx](manifest.mdx)).
+- **Non-Marketplace add-ons and VV**: see the `pbr` rules above.
+- **UI and player files**: an official Marketplace add-on cannot contain UI modifications (including JSON UI) or edits of `player.entity.json`. Resource packs, maps and dynamic world products are possible (answers from 2025-10 ~ 2026-10). There is a 2025-12 answer that Ore UI also will not allow Marketplace UI modifications outside world templates.
+- **Guns and military weapons**: guns and tanks were explicitly banned on the Marketplace (2020), and in 2026-01 there was an answer that it is still not possible under the TOS. In 2025-10 a moderator's explanation of the realistic firearms policy was shared. *(unverified)*
+- **Custom dimensions** are allowed in Marketplace add-ons (2026-10, confirmed by the Marketplace contact).
+- **Release path**: effectively closed to individuals, so go through a publisher/studio. Mentions of joining as an associate are not settled. Partner program: https://www.minecraft.net/en-us/partner . Before a game version becomes a stable release, you cannot release with that version's features (2026-04).
+- **Review cases**: a technical resource pack that does not look like a cheat may pass. A villager UI tweak that shows future trades was rejected for lack of content (2026-06). An expansion of another pack needs the original author's permission (2025-10).
+- **Leaks**: there is a case of being banned for leaking a Marketplace development build (2026-03). Content leaks are not allowed.
+- **2026 news**: the SFX pack content type (mentioned 2026-09, announced 2026-11-11), Creator Pages (2026-11-04), and the 2026-09-16 outage where PS5/PC Marketplace products were not shown.
+- **Commissioning practice**: the community gives no price advice (collusion concerns, 2023). Demanding prepayment without a contract is a scam pattern (2026). Under old contract practice, NDAs and revenue shares of 20 ~ 85% were reported (2019 ~ 2022).
+
+### Non-Marketplace distribution (2025-10 ~ 2026-07)
+
+- MCPEDL allows only MCPEDL x CurseForge Rewards and bans link monetization such as Linkvertise. mcpedl fetches files through the CurseForge connection.
+- Donations are allowed, and paywalls and ad gates are discouraged.
+- A pack under the MIT license can be redistributed if the source is credited, and a pack with no license cannot be reused. An app that reposted packs without permission was taken down through a Google Play report.
+
+### Pack protection and obfuscation
+
+- **Consensus that any obfuscation can be reversed**. Tools discussed: AutoAsteroid/pack-obfuscator (https://github.com/AutoAsteroid/pack-obfuscator: JSON unicode + junk comments, texture path changes, corrupted TGA headers, control-character folder names invisible in Windows Explorer). Client Molang (animation/render controllers) is often broken by obfuscators. Real Marketplace packs use encryption (EncryptMC https://github.com/Cra-ZGuy/EncryptMC, needs server integration or a matching Marketplace UUID/key, and warns before deleting when the input and output directories are the same). One opinion is that obfuscating RP/BP JSON is practically impossible.
+- **Server rule**: do not help deobfuscate other people's code without the author's permission.
+- **Copyright of publishing vanilla BP/RP archives**: the Mojang documentation contact cannot give legal advice, ask `ip_justice`, and the consensus is that they can be taken down.
+
+### brarchive
+
+- **What it is**: an archive container with no official documentation (not compression itself) that goes inside a deflate zip so that repeated files compress together. It bundles directories of UTF-8 text to improve load performance (files get smaller, extraction is slightly slower) and sets `header.pack_optimization_version` "0.1.0". It is easily unpacked, so it is not a protection measure. The community implementation is based on a gist by tryhaster, and the format is versioned.
+- **`pack_optimization_version` applies only when JSON is converted to .brarchive and manifest format is 3.**
+- **Folders that do not load**: font, loot_tables, materials, scripts, sounds, subpacks, texts, textures (only JSON-family folders work). Loot tables do not work from an archive, so they are banned in Regolith filter v1.0.2. In vanilla packs a `.brarchive` next to the original takes priority, but a 2025-12 opinion says use in add-ons is limited (worldgen/recipe types). A report that an add-on with only brarchive could not load textures on consoles.
+- **From 26.50 the vanilla RP is shipped as `.brarchive`**, and from 26.50.x data files encoded as MCB go inside brarchive, which affects patch workflows. JSONTE added support with the pseudo path `x.brarchive#/dir/file.txt`. The installed vanilla packs no longer have a fogs folder, so use bedrock-samples.
+- **Tools**: Regolith filter `github.com/SprightGamesMC/regolith-filters/brarchive` (setting `mode` replace/keep_both, `minify`, `"url": "github.com/SprightGamesMC/regolith-filters", "version": "1.0.1"` in config.json), CLI https://github.com/Torrekie/br-ar (compared with the theaddonn tool), compiler https://github.com/iamorimm/brarchive-compiler , BDS pack optimization (`"unpack": true`, a stable version of the MS docs exists). After 26.50 it became hard to extract vanilla textures.
+- **brpak and MCB**: game files are shipped only as .brarchive, MCB and brpak. brpak is a zip variant that is uncompressed and strictly validated, and MCB is a schema-dependent encoding. Third-party packs can use them too, but probably not on the Marketplace. brarchive also has a binary format for particles. 2025-12 spec gist: https://gist.github.com/tryashtar/4e62280c1611d744b6aa5d752ab69c15
+- **pack treatment tags (26.70.20 Preview)**: `mc-pack-optimization-enable-marketplace-download`, `mc-pack-optimization-purge-premium-on-startup`. They look like settings that make Marketplace content be read as an archive without unpacking.
+
+## Ore UI and the trust decision for encrypted packs (measured)
+
+(Source: repo-ore-ui-loading, analysis of the native client libraries of Windows 1.26.52 and Android 1.26.52.3, and measurements on the Dragonfly test server on 2026-10-23)
+
+**If the server sends a resource pack encrypted with a content key, that pack can change Ore UI HTML, JS and CSS** `{code, measured}`. Ore UI file lookup (`ui://...`) searches the pack stack first before going to the install folder, and it looks at **trusted packs only**. `hbui/*.css` put in a plaintext server pack did not apply, and it applied when the same pack was sent encrypted.
+
+### isTrusted by access strategy
+
+| Access strategy | `isTrusted` | `isWritable` |
+|---|---|---|
+| `ZipPackAccessStrategy` | `location.fileSystem == 1` or the `+0x170` flag | `+0x171` flag |
+| `DirectoryPackAccessStrategy` | `location.fileSystem == 1` | Always true |
+| `EncryptedFileAccessStrategy` | **Always true** | Always false |
+| `ZippedEncryptedFilesAccessStrategy` | **Always true** | Always false |
+| `DirectoryPackWithEncryptionAccessStrategy` | **Always true** | Always true |
+
+- `location` is the `ResourceLocation` of the pack, and its first field is the file system kind. 1 is read as the app package (the built-in packs in the game install folder) `{inferred}`.
+- **The pack UUID and manifest content are not used in the trust decision.** Even if you imitate a Marketplace add-on UUID, a plaintext pack is opened with the Zip/Directory strategy and the decision looks only at the install location.
+- `Failed encrypted file signature check` in the binary was code on the world storage (LevelDB) side. The pack signature (`signatures.json`) check was not followed, and a pack that was only encrypted without a signature was trusted in measurement.
+- The first guess that "only built-in packs and Marketplace packs are trusted" was wrong.
+- Mojang may change this decision in the future, so check for each release.
+
+### Marketplace encryption format (implemented by the test server)
+
+- `contents.json`: bytes 0~3 version 0, bytes 4~7 magic number `0x9BCFB9FC` (little endian), at 0x10 a length byte and string of the content ID (pack UUID), and from 0x100 `{"content":[{"path","key"}...]}` encrypted with the content key using AES-256-CFB8 (the IV is the first 16 bytes of the key).
+- `manifest.json` and `pack_icon.png` are plaintext, and every other file is encrypted the same way with a random 32-byte key per file.
+
+### Measurement results
+
+The same probe pack (CSS `body{background-color:rgba(255,0,255,0.6)}`) was sent alternately as plaintext and encrypted (the version was raised every time so that the already-received pack was not reused).
+
+| Pack sent | Ore UI death screen background |
+|---|---|
+| Plaintext (1.0.2, 1.0.4) | Vanilla as is |
+| Encrypted (1.0.3) | Magenta |
+
+After disconnecting, magenta sometimes remained on the menu screen too. It seems to be because the menu `index.html` also loads `gameplay-theme-*.css` and the server pack stays in the pack stack for a while after leaving.
+
+### content.zipe: as a local pack without a server [measured, 2026-10-27]
+
+If you put an empty file `content.zipe` (0 bytes) in a plaintext pack folder, it is opened with `DirectoryPackWithEncryptionAccessStrategy` even without a key, so it is trusted and changes Ore UI files. The engine looks **only at whether this file exists**. The result was the same with an encryption header attached, or with only a pack zip or `manifest.json` put inside. The file reads the plaintext in the pack folder. A pack with the same header placed in `contents.json` (the `EncryptedFileAccessStrategy` path) and a `contents.json` inside a `.mcpack` did not change. The note in 8Crafter Ore UI Customizer's "Export as RP" that "a mode that loads Ore UI from the RP is needed" is correct for plaintext packs. Ore UI itself is covered in a separate section.
+
+## JsonEncryptor: the parser syntax obfuscators rely on
+
+(Source: repo-jsonencryptor; code is MIT, jsonencryptor repository `48e7837`, last commit 2025-03-10)
+
+JsonEncryptor (made by pipa_ngry, used together with StarLibV2 and GrimUI) is a browser tool that, for resource pack `ui/` files, (1) replaces user-defined names with MD5 or a salted Caesar cipher, (2) strips whitespace and inserts `/* */` comments anywhere, (3) optionally turns strings into `\uXXXX`, and (4) for zips, replaces file names with hashes and splits files per top-level definition. Notation: [confirmed] code, [reproduced] regex rerun, [inferred] judgement, [unverified] needs a check in game.
+
+### Processing order [confirmed]
+
+1. Strip comments, then a strict `JSON.parse`. A trailing comma makes it fail.
+2. For vanilla-path files with no `namespace`, fill in `namespace` from the built-in table (about 220 pairs).
+3. Hash keys, references after `@`, `$variables` and values that contain a dot, except syntax keys, engine factory names, vanilla namespace and definition names, engine `$` variables and user exceptions. `#property` names and strings without a dot are left alone, and the `|default` suffix is kept.
+4. Output: indented JSON, (optional) content scrambling, (optional) `\u` escapes, the author message in front and a fixed block comment at the end.
+5. Zip mode: file name hashing, move to the target folder, split files per definition, rewrite `_ui_defs.json`.
+
+### Obfuscation forms the parser allows
+
+| Form | Example | Basis |
+|---|---|---|
+| Block comment after a key colon | `"type":/*...*/"label"` | jsoncpp allows comments |
+| Comment after a value, before a comma | `"label"/*...*/,` | Same |
+| Comment between array elements | `["100%"/*...*/,10]` | Same |
+| One-line JSON with no whitespace | | JSON spec |
+| `\uXXXX` in keys and values | | Decoded on read. No in-game check recorded [unverified] |
+| Comment at the end of the file | | jsoncpp comment collection |
+| UI file with extension `.zip` | `ui/obfuscated/<md5>.zip` | An extreme of the extension-independent rule (FILE-02) [unverified] |
+| Author message in front | | Written without a comment symbol it is a JSON error and the whole file is lost (FILE-30) |
+
+A `\u` escape becomes the original character the moment it is read, so the `'%.Ns'` byte count in expressions and comparison results are the same, and anyone can reverse it with one JSON parser. It has no protective effect and only increases size `{FILE-40 candidate, code, unverified}`.
+
+### Risks and defects
+
+- **Moving vanilla-path files** [confirmed, inferred] `{DBG-24 candidate}`: the zip mode defaults are "file name hashing on, per-definition split on, target folder `obfuscated`, extension `zip`". Vanilla-path files such as `ui/server_form.json` and `ui/hud_screen.json` are moved too, so the property of being at the same path as vanilla is lost. As a result, redeclaring vanilla definitions is ignored (FILE-22), and `modifications` in vanilla-path files do not apply (MOD-02). A pack that modifies vanilla should leave vanilla-path files out of zip mode, process them in single `.json` mode and keep them at the same path. Move and split only the files of your own namespace.
+- **Splitting one namespace across several files** [unverified] `{FILE-41 candidate}`: split mode writes the same `namespace` in every file. The author said all references work. Vanilla 1.26.50.4 has one file per namespace (0 overlaps). If there is no reason to split, keep one file per namespace.
+- **Content scrambling regex** [reproduced] `{DBG-25 candidate}`: the regex that inserts comments after values stops at `,` and `}` inside strings.
+
+```text
+input value:       "text": "Hello, world: 1"   ->  "Hello/*C12*/, world: 1"
+input expression:  "(not (#a = 'p,q'))"         ->  "(not (#a = 'p/*C16*/,q'))"
+```
+
+  The comment text shows up as it is in a label, and in an expression the compared string changes and it is silently wrong. If there is text or an expression that contains a comma, turn this option off. The whitespace-stripping regex judges what is outside a string by counting quotes, so it can strip whitespace in a string that contains `\"` [inferred].
+- **Limits of name hashing** [confirmed]: a string value that contains a dot is seen as a reference and hashed, which can break translation keys and so on, so the `text` key was excluded entirely. Values such as `pressed_button_name` are avoided with a hardcoded value table (about 980 entries). Controls that the engine looks up by child name, such as `default`/`hover`/`pressed` (scroll view role names, toggle state controls and so on), must be handled as direct exceptions [inferred].
+
+### Engine fixed-name data [confirmed]
+
+| File | Contents |
+|---|---|
+| `data/factories.js` | 22 engine factory names (`server_form_factory`, `hud_tip_text_factory`, `popup_dialog_factory` and so on) |
+| `data/global_variables.js` | About 300 `$` variables the engine provides (`$container_title`, `$max_page_length`, `$text_box_size`, `$chat_font_type` and so on) |
+| `data/hardcored_values.js` | About 980 values such as `button.*` IDs and `#textbox.buttonName` |
+| `data/common_exceptions.js` | Definition names per vanilla namespace |
+| `data/namespace_mapping.js` | About 220 pairs of vanilla file path and namespace |
+
+## Compiler output and pack paths (bedrock-core case)
+
+The `@bedrock-core/ui` compiler (MIT, author DrAv0011) turns JSX screens into static JSON UI at build time and ships them in each add-on pack. The output layout is as follows. The render pack (`core-ui-<ver>.mcpack`) now contains only textures. (Source: repo-bedrock-core)
+
+| File | Contents |
+|---|---|
+| `ui/<addon>_<screen>.json` family | Screen definitions and dedicated definitions |
+| `ui/core-ui/screens/<addon>_forms.json` | Form router |
+| `ui/core-ui/screens/<addon>_router.json` | Chest router |
+| `ui/core-ui/support/<addon>.json` | Shared vocabulary for toggles, sliders, input boxes and chest cells |
+| `ui/server_form.json`, `ui/chest_screen.json`, `ui/data_driven_container_screen.json` | `modifications` hooks attached to vanilla files |
+
+Modifying vanilla files uses only `modifications` in the same-path file, so the modifications of several add-ons stack in pack order and coexist. Writing a **definition** in a vanilla file overwrites those of other packs.

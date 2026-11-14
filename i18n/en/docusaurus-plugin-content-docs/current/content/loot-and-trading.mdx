@@ -1,0 +1,174 @@
+---
+title: Loot tables and trade tables
+description: Pools, entries, functions and conditions of loot tables, tier pools, tiers, groups, wants and gives of trade tables, how they are used on entities and blocks, and known limits.
+sidebar_position: 5
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+---
+
+# Loot tables and trade tables
+
+A loot table is JSON that picks some items from a declared collection of items, and a trade table is JSON that holds the trades of an entity. Neither is registered on its own. They are referenced by path from elsewhere (entities, blocks, `/loot`, structure chests). The evidence is the loot docs of the Bedrock Wiki (0930b39), MS Learn (a9fd1c0), `loot_tables/` and `trading/` of bedrock-samples (15701fa9), and community research.
+
+## 1. Loot tables
+
+### Structure
+
+A loot table is JSON that requires one `pools` array. The result of a call is the sum of the results of all pools. Pools are independent of each other and are not affected by the results of other pools. They can go anywhere in the BP, but placing them under the top-level `loot_tables/` like vanilla is recommended (Source: bedrock-wiki).
+
+They are used by the `/loot` command, container contents, block drops, fishing, mob drops, equipment of spawned mobs and other mob behavior.
+
+A weighted random pool example. `rolls` is a number or `{min,max}`, and `bonus_rolls`/`bonus_chance` can change the count with the player's luck. The larger an entry's `weight`, the more likely it is picked, and `quality` changes the weight with luck (currently only the Luck of the Sea fishing rod).
+
+```json
+{
+  "pools": [
+    {
+      "rolls": { "min": 2, "max": 4 },
+      "entries": [
+        { "type": "item", "name": "minecraft:golden_apple", "weight": 20 },
+        { "type": "item", "name": "minecraft:appleEnchanted", "weight": 1 },
+        { "type": "item", "name": "minecraft:name_tag", "weight": 30 }
+      ]
+    }
+  ]
+}
+```
+
+### Tier pools
+
+A pool with a `tiers` object picks exactly one entry (mostly for mob equipment). Entries are ordered and counted from 1. The starting index is a random integer between 1 and `initial_range` (default 1), and `bonus_rolls` attempts each raise the index by 1 with probability `bonus_chance`. The entry at the final index is the result. In a tier pool all entry conditions are ignored and only conditions on the pool itself are allowed.
+
+```json
+{
+  "tiers": { "initial_range": 2, "bonus_rolls": 3, "bonus_chance": 0.095 },
+  "entries": [
+    { "type": "loot_table", "name": "loot_tables/entities/armor_set_leather.json" },
+    { "type": "loot_table", "name": "loot_tables/entities/armor_set_gold.json" },
+    { "type": "loot_table", "name": "loot_tables/entities/armor_set_iron.json" }
+  ]
+}
+```
+
+### Entries, functions, conditions
+
+- Entry types are `item` (an item ID), `loot_table` (a reference to another loot table, for building hierarchies) and `empty` (gives nothing on that roll). `empty` can also be imitated by including 0 in the roll range or with a probability condition, but it reads better in weighted pools.
+- Functions attach to entries and change count, name, enchantments and so on.
+
+```json
+{ "type": "item", "name": "minecraft:dirt", "weight": 10,
+  "functions": [
+    { "function": "set_count", "count": { "min": 16, "max": 64 } },
+    { "function": "set_name", "name": "Pile of dirt" }
+  ] }
+```
+
+  Commonly used functions are `set_count`, `set_name`, `set_lore`, `set_data`, `enchant_with_levels`, `enchant_randomly`, `looting_enchant`, `furnace_smelt` and `exploration_map` (the `destination` of a map trade, for example `village_taiga`).
+- Conditions attach to pools or entries.
+
+```json
+{
+  "conditions": [
+    { "condition": "killed_by_player" },
+    { "condition": "random_chance_with_looting", "chance": 0.025, "looting_multiplier": 0.01 }
+  ],
+  "rolls": 1,
+  "entries": [ { "type": "item", "name": "minecraft:iron_ingot", "weight": 1 } ]
+}
+```
+
+  The `match_tool` condition gives item tags to `minecraft:match_tool_filter_all/any/none`. Without `"count": 1` an empty hand matches too.
+
+### Use on entities and blocks (community reports)
+
+- Entity loot needs `rolls` and `entries` in every pool. Minimal form: `{"pools":[{"rolls":1,"entries":[{"type":"item","name":"ns:item","weight":1,"functions":[{"function":"set_count","count":{"min":1,"max":1}}]}]}]}`. There is a report that there were still no drops (not resolved). For entities, specify it with `minecraft:loot`. For baby variants, if `minecraft:ageable` is present the baby loot table may not apply, so put the loot component inside the group.
+- A block specifies it with `"minecraft:loot": "loot_tables/..."`. With a custom table the block does not drop itself unless you list it explicitly. Silk Touch and Fortune are hardcoded, so handle them with scripts. Ore XP is produced by spawning `minecraft:xp_orb` from a script. Vanilla block drops cannot be changed except for the data-driven vanilla blocks of 26.50. The detailed rules are in the loot table section of [Blocks](./blocks.mdx).
+- Structure chest loot is put in with NBT editing, the jigsaw processor (`append_loot`) and random loot tools. A world-saved structure with the same name takes priority over the BP one, so run `/structure delete <name>` and load again.
+- The count of a dropped item cannot be changed, so despawn it and spawn it again with the new count. For an adventure mode pickaxe, give an ItemStack that has the Can Destroy property.
+- To equip gear, use `/loot replace entity @s slot.armor.chest 0 loot "equipment/trial_chamber_diamond"`.
+
+## 2. Trade tables
+
+A trade table is JSON with no version and no namespace, placed in `BP/trading/`. It is referenced from an entity component (`minecraft:trade_table`). To avoid clashes, use a namespace folder under `trading/`. Unlike loot tables it does not support Molang and uses range objects and functions. Even one missing comma breaks the whole file (`Failed to load trade table`).
+
+The structure is `tiers[]` -> (`groups[]` -> `trades[]`) or directly `trades[]`. A tier is unlocked by `total_exp_required`. A trade has `wants` (required items: `item`, `quantity`, `price_multiplier`, a `choice` list) and `gives` (offered items, `functions` allowed), `max_uses`, `reward_exp` and `trader_exp`. The `num_to_select` of a group is the number of trades to pick from the group (Source: bedrock-wiki, trade-tables).
+
+```json
+{
+  "tiers": [
+    {
+      "groups": [
+        {
+          "num_to_select": 1,
+          "trades": [
+            {
+              "wants": [
+                { "item": "wiki:blessing_glyph", "quantity": { "min": 2, "max": 4 }, "price_multiplier": 0.5 },
+                { "item": "minecraft:book" }
+              ],
+              "gives": [
+                { "item": "minecraft:enchanted_book",
+                  "functions": [ { "function": "enchant_book_for_trading",
+                    "base_cost": 4, "base_random_cost": 12, "per_level_cost": 4, "per_level_random_cost": 8 } ] }
+              ],
+              "max_uses": 7,
+              "trader_exp": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "total_exp_required": 28,
+      "trades": [
+        { "wants": [ { "choice": [
+            { "item": "wiki:sacred_stones", "quantity": { "min": 4, "max": 6 }, "price_multiplier": 0.5 },
+            { "item": "wiki:blessed_beads", "quantity": { "min": 16, "max": 24 }, "price_multiplier": 0.5 } ] } ],
+          "gives": [ { "item": "wiki:aeleon_jewels", "quantity": { "min": 4, "max": 6 } } ],
+          "max_uses": 2 }
+      ]
+    }
+  ]
+}
+```
+
+- There is no native way to make a custom villager profession block. Use `move_to_block` + an event that changes the profession group, and store block positions with scripts. To refresh the trade table you must despawn and respawn. `minecraft:dweller` makes villagers claim beds and workstations. Trades beyond vanilla enchantment levels are impossible, so fake enchantments are made with scripts. The detailed entity-side rules are in section 5 of [Entities](./entities.mdx).
+
+## 3. Additional rules (merged from community research packs-versions)
+
+### Loot table basics
+
+- To call another loot table, write the full path including `.json` in the `name` of an entry with `"type": "loot_table"` (`"loot_tables/chests/abandoned_mineshaft.json"`). Custom tables go in `BP/loot_tables/<folder>/<name>.json`, and entity loot goes in `loot_tables/entities/`.
+- Entry `weight` is relative. With 30, 20 and 1, the probability of the first entry is 30/51. An explanation is in the [MS Learn introduction to loot tables](https://learn.microsoft.com/en-us/minecraft/creator/documents/introductiontoloottables?view=minecraft-bedrock-stable).
+- A block dropping itself needs no loot table. Chest loot is seed-based. Banner pattern functions are in [Bedrock Wiki item-functions](https://wiki.bedrock.dev/loot/item-functions#banner-type).
+- `random_chance` is a ratio from 0 to 1 (`0.01` = 1%, `5.0` is always). Pools are rolled independently, so a guaranteed drop pool does not block a rare pool. To always drop, put that item alone in a separate pool. There is a single report that the `minecraft:random_chance` filter was always true in tests.
+- Fortune emulation (nested pools): there is no `apply_bonus`/`alternatives`. Any entry can have its own `pools` (with conditions) nested without limit, and they fire only when the parent entry dropped. Coal Fortune 3 (1 item 40%, 2~4 items 20% each) is built as 1 + 0.6 chance of (1 + 0.667 chance of (1 + 0.5 chance of 1)).
+- Functions: `set_enchants`/`specific_enchants`, `enchant_with_levels` (`treasure`), `set_data` (goat horn), setting book text, lang reference `%key`, `carry_over_block_entity_data` (26.40 experimental). The vanilla trial vault tables use functions such as `set_ominous_bottle`. The loot condition list was extracted from vanilla files and is not all in the MS docs.
+- Exploration maps: a `loot_table` entry points to `loot_tables/maps/<name>.json`. Jigsaw structures can be located (they also show in `/locate`), and structure_template_feature structures may not. `decoration` decides the map icon. `destination`, `decoration` and `search_radius` of `exploration_map` are supported, but `zoom` has no effect, so a trade cannot set the map zoom level.
+- Putting loot into a chest with `/loot` fills it consecutively. Vanilla-like scattering is done by NBT editing or a loot processor list.
+- Script custom drops are not visible to the `loot` command and `LootTableManager` (they see only `minecraft:loot`). Make custom drops from scripts with `dimension.runCommand('loot spawn ...')` or the loot API. A loot table cannot summon mobs (one case handled an item named `<typeId> <amount> <nameTag>` with a `minecraft:item` `entitySpawn` listener). For a husk to drop sand without a zombie, use a husk-only `minecraft:loot` table.
+
+### match_tool and tool conditions
+
+- Form: `{"condition":"match_tool","minecraft:match_tool_filter_all":["minecraft:is_pickaxe"],"minecraft:match_tool_filter_any":["minecraft:diamond_tier","minecraft:netherite_tier"]}`. Exclusion is `minecraft:match_tool_filter_none`, and adding `"count": 1` makes a bare hand fail. An `enchantment: silk_touch` form also exists. The pool entry `minecraft:air` trick does not work.
+- The `filter_all`/`_any` tag combination passing even for a bare hand was a confirmed bug and was fixed in Preview 26.30.27 (related to MCPE-188723). There is also a 2025-12 report that "match all" was broken. Item count 0 gives loot for every tool outside the list but does not consider a bare hand, so vanilla-like leaf loot (sapling/stick chance, Fortune) cannot be reproduced exactly. In 26.30 the ore match_tool drops changed. (confirmed)
+- `match_tool` checks the tool passed to the loot command, so running `loot spawn ... loot "table"` without a tool cannot satisfy it.
+- Custom item tags are defined in the item's `minecraft:tags` (for example `wypnt:enderium_tier`) and used in loot/recipes. The digger's destroy_speeds use block tags (`q.any_tag('minecraft:is_pickaxe_item_destructible')`). You cannot properly require a pickaxe tier for an ore (no drop on explosion). To remove a block drop, use an empty loot table such as `loot_tables/blocks/air.json`.
+
+### Overriding vanilla loot
+
+- Generally impossible (obsidian drops and so on). Use scripts. Exceptions where same-path overriding worked: desert temple suspicious sand (2026-05-31), suspicious sand/gravel loot, and wandering trader trades `trading/economy_trades/wandering_trader_trades.json` (2026-04-17). Vanilla blocks that became data-driven in 26.50 can have their loot overridden. To make iron ore drop another item instead of raw ore, use block loot replacement (low/negative priority) or script block breaking, and for command replacement use hasitem/clear/give (avoid selecting item entities by `name=` since it depends on the game language).
+- Suspicious sand/gravel placed by a player has no loot. Place them with the jigsaw `block_entity_modifier` processor.
+- There is a report that entity/chest loot does not work in 26.10 (no resolution, single report). Loot tables do not work inside brarchive (probably the same for vanilla).
+
+### Trade tables
+
+- When several villagers share the same trades use a table, and for a single villager use NBT. A trade table can be swapped with a component group (how stock resets is unclear, and per-tag prices are unclear too). One JSON error (a missing comma) fails the whole table.
+- It is reported that among script events the villager trade event is not provided by default and needs a separate implementation (scripting research: trade detection is not in the event list).
+
+## 4. Full reference
+
+The full list of functions and conditions and the full trade table documents are included as MS Learn original excerpts in the [loot table reference](./reference/loot-tables-1.mdx) and the [trade table reference](./reference/trade-tables.mdx).

@@ -1,0 +1,493 @@
+---
+title: Items
+description: A rulebook for custom item JSON, icons and item_texture, script custom components, food, cooldown, tools, armor and weapons, attachables, block items and vanilla overrides.
+sidebar_position: 2
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+---
+
+# Items
+
+This page covers custom item definitions and behavior. Recipes, smithing and item tags are in [Recipes](./recipes.mdx). The evidence is community research notes from 2025-10-22 to 2026-11-13 (Source: private research), the items docs of the Bedrock Wiki (commit 0930b39) and the vanilla item JSON of bedrock-samples (15701fa9). Verification levels are written as `(confirmed)`, `(conflicting)`, `(single report)` and `(unverified)`.
+
+Items are based on `format_version` 1.21.90 or higher and script custom components, and the 3D held look is made with attachables.
+
+## Key summary
+
+1. `events`, `minecraft:on_use`, `weapon.on_hit` and food `on_consume` (Holiday Creator Features) in item JSON are gone. In format 1.21.90 or higher, put `"ns:comp": {}` and register it with `itemComponentRegistry.registerCustomComponent` in `system.beforeEvents.startup`.
+2. `minecraft:icon` is a string inside `components` and must match a key of `textures/item_texture.json` exactly (lowercase). The menu classification is `menu_category`, not `description.category`.
+3. Mining with `minecraft:digger` does not reduce durability. Handle it with scripts, and block hardness cannot be read from scripts, so it cannot be reproduced exactly like vanilla.
+4. The 3D held model is an attachable in RP `attachables/`. Give the root bone `"binding": "q.item_slot_to_bone_name(c.item_slot)"` and fit the first-person/third-person positions separately with animations. `item_display_transforms` does not apply to attachables.
+5. Most vanilla items are hardcoded. Only about 77 data-driven ones have JSON, and only some components can be overridden, and only with the old format (1.10).
+
+## 1. Concept and minimal example
+
+An item definition consists of `description` and a `components` list, similar to an entity. The following is the minimal item that appears in the creative menu. `components` must exist even if empty. (Source: bedrock-wiki, items-intro)
+
+```json
+{
+  "format_version": "1.26.60",
+  "minecraft:item": {
+    "description": {
+      "identifier": "wiki:custom_item",
+      "menu_category": { "category": "items" }
+    },
+    "components": {}
+  }
+}
+```
+
+`identifier` has the form `namespace:identifier`, and `menu_category` has the optional entries `group` and `is_hidden_in_commands`. Features are given by components.
+
+```json
+"components": {
+  "minecraft:damage": 10,
+  "minecraft:durability": { "max_durability": 36 },
+  "minecraft:hand_equipped": true,
+  "minecraft:icon": "wiki:custom_item"
+}
+```
+
+For the texture, connect a short name to an image in `RP/textures/item_texture.json`. Write the name in `RP/texts/en_US.lang`.
+
+```json
+{ "texture_data": { "wiki:custom_item": { "textures": "textures/items/custom_item" } } }
+```
+
+```lang
+item.wiki:custom_item=Custom Item
+```
+
+A block_placer item shows the 3D icon of the block if `minecraft:icon` is omitted. The vanilla spear definition (`iron_spear.json` in bedrock-samples, format 1.21.100) shows a real component setup (Source: bedrock-samples).
+
+```json
+"minecraft:tags": { "tags": [ "minecraft:iron_tier", "minecraft:is_spear" ] },
+"minecraft:max_stack_size": 1,
+"minecraft:durability": { "max_durability": 250, "damage_chance": { "min": 0, "max": 100 } },
+"minecraft:repairable": { "repair_items": [
+  { "items": [ "minecraft:iron_spear" ], "repair_amount": "context.other->query.remaining_durability" },
+  { "items": [ "minecraft:iron_ingot" ], "repair_amount": "query.max_durability * 0.25" } ] },
+"minecraft:enchantable": { "slot": "melee_spear", "value": 14 },
+"minecraft:use_modifiers": { "use_duration": 72000, "emit_vibrations": false, "movement_modifier": 1.0 },
+"minecraft:cooldown": { "category": "spear", "duration": 0.95, "type": "attack" },
+"minecraft:swing_duration": { "value": 0.95 },
+"minecraft:piercing_weapon": { }
+```
+
+A comment notes that `cooldown.duration` and `swing_duration.value` should be set to the same value.
+
+## 2. format_version, identifiers, names
+
+### format_version
+
+- The recommended format is 1.21.90 or higher (the latest value such as 1.21.130). Below this, item missing, component not used and recipe not working mostly occur. `1.20.5` is not valid and `1.20.50` is right. The oldest format seen is 1.10. Raising the format can change component locations and cause `not parse`, so check the content log.
+- `Item is an invalid json object` is caused by an old format or a wrong file. There is a case fixed by remaking it in the latest format. If `'minecraft:item' should be a json object`, regenerate `contents.json`. Junk files made by macOS compression such as `._portal.json`, `.DS_Store` and `__MACOSX` also give this error, so remove them from every folder.
+- `description.category` is gone in 1.21.90 and above. Use `"menu_category": {"category": "nature", "group": "..."}`. An invalid category (for example "equipments", "commands") or a wrong format makes an item with no icon and stack size 64.
+- When using scripts, the manifest must have both `data` and `script` modules in `modules` (changing data to script makes items and textures all disappear). If the header uuid of the BP and RP manifests is the same, the BP does not load. A typo in a folder name (`recepies`) makes recipes silently ignored. Wrong script dependencies caused a problem of entity_placer items being consumed.
+- In an open world, custom items of development packs may not register even after reloading. Fully restart the game.
+- Item JSON goes in BP `items/`, and subfolders under it also work (the same for `recipes/`). A "minecraft:weapon ... 1.21.60" error can come from a different item file, not the one you are fixing now. If "elements not in the schema" appears on the stable release, suspect that you used a Preview-only key. Files made by MCTools may produce outdated keys.
+- Do not use the reserved `minecraft:` namespace in identifiers. Giving the same identifier to an entity, attachable and item causes a clash. `worldedit:brush` seemed to clash with the vanilla brush, and renaming it to `brush2` worked normally.
+
+### Names and lore
+
+- `minecraft:display_name` is an object `{"value": "..."}`, and the value can be a translation key. It supports `§` codes and `\n`. In lang it is `item.<ns:id>.name=...`. Imitating line-break lore is written like `item.zxx:light_soul_ring.name=§cLight Soul Ring§r\nHold on screen to activate§r`, and name concatenation is `"%item.bucketCustomFish.name%entity.blaze.name"`. Trailing spaces in a lang value are trimmed, so attach `§r`. `pack.name`/`pack.description` are also translated in the BP and RP lang.
+- Lore: there is no `minecraft:lore` component in item JSON. Use the script `ItemStack.setLore` automatically in `playerInventoryItemChange` or use the loot `set_lore`. The limit is about 100 lines x about 1000 characters. The vanilla tooltip order cannot be reproduced exactly. The name tooltip can be shrunk with an empty name or `§§`, but the background cannot be removed. Enchantment text in tooltips is removed only with JSON UI.
+- Recipe result name: `set_name` does not work in recipes and there is no crafting result script event.
+- Name lang key format (conflicting): there is a report that in the new format `item.<ns>:<id>=Name` without `.name` is enough. There is also a report that from 26.50 the lang key of custom item tooltips uses the `tile.` prefix instead of `item.`. If the case of the lang file name (`en_US.lang`) is wrong it fails silently. Italics are removed by putting a format reset code before the name. A name over the length limit cannot be changed in an anvil, and vanilla item names cannot be changed. Candidate lang keys for the attack damage line are `attribute.name.minecraft:attack_damage` and `attribute.name.generic.attackDamage` (which one is unclear), and the "+N" wording is hardcoded.
+- Lore details: lore added with `setLore` is not visible in the creative inventory. One mention put the lore limit at 128. Loot `set_lore` can use rawtext translation but `set_name` does not translate. As of 2026-10 there is still no lore component in item JSON.
+
+## 3. Icons and item_texture.json
+
+- `minecraft:icon` is a string inside `components`, not `description` (`"minecraft:icon": "electrite_spear"`). Do not use the `textures.default` object form. The value is a key of `textures/item_texture.json` and uses lowercase only (uppercase gives `Missing referenced asset`). Usually no namespace is put in the key. If you did use a namespace, opinions split between matching it in icon the same way, that it becomes `:`, and that you should use `.`. Format 1.10 has no BP icon and defines it in the RP item file (vanilla `appleEnchanted`). `requires either an icon atlas or icon texture` means there is no icon.
+- item_texture.json form:
+
+```json
+{
+  "resource_pack_name": "x",
+  "texture_name": "atlas.items",
+  "texture_data": { "key": { "textures": "textures/items/x" } }
+}
+```
+
+  There are examples that include `padding: 8` and `num_mip_levels: 4`. Causes in some cases were putting in `"resource_pack_name": "vanilla"` and breaking it, a missing comma, and a wrong atlas file location (all icons disappeared). An atlas object or the `texture` form gives a schema warning.
+- When an icon is not visible, check that the RP is applied to the world. Someone fixed it by putting an RP dependency in the BP manifest, but there is also a remark that packs need not depend on each other. `[item][error]-Missing icon for data-driven item` means the mapping is wrong.
+- Vanilla textures can use vanilla keys without an RP, as in `"minecraft:icon": "diamond"`. However, a texture array (pickaxes and so on) defaults to the first one and the index cannot be specified, so add an entry to your own RP item_texture.json. Find vanilla texture names in the bedrock-samples resource_pack (for example heart of the sea `textures/items/heartofthesea_closed`). Data-driven bundles have separate texture keys (`bundle_white`). The name tag texture is `textures/items/name_tag.png`.
+- A 16x32 spawn egg texture shows only half (the atlas uses the width as the frame height). An icon is not required for creative menu registration.
+- There is a report that the icon object form accepts only vanilla keys. Vanilla texture name examples: dye `dye_powder_*`, sugar cane `reeds`, wood `wood_*`. A planks icon is written like `minecraft:planks`. Array textures are still fixed to the first one in 2026-11, and `texture_index` can be used only for spawn eggs.
+- Draw a sprite that looks cropped so that it uses the whole 16x16 canvas. 24x24 textures can also be used.
+
+## 4. Creative menu and item catalog
+
+- Custom groups are made in `item_catalog/crafting_item_catalog.json`. The structure is `minecraft:crafting_items_catalog` -> `categories[].category_name` (construction/equipment/items/nature) -> `groups[].group_identifier {name, icon}` -> `items[]`. `icon` must be an item identifier and is not mixed with `menu_category`. Only one catalog file is allowed. The expandable group explanation is in the wiki item-catalog doc and `craftingitemcatalogdocumentation` on MS Learn.
+- `menu_category.group` needs a namespace. Vanilla is `minecraft:itemGroup.name.sword` and `minecraft:itemGroup.name.slab`. Without it, `string must be prefixed with a namespace` appears. The `minecraft:` group form is from 1.21.60. Using `menu_category` and `item_catalog` together gives a conflict warning. A vanilla item can be used as a catalog group icon.
+- Limits: there are no new tabs or custom categories. Vanilla items cannot be put in a custom group. There is a report that custom items are sorted after vanilla and the order follows the file name. A spawn egg cannot leave the spawn egg group, so use a custom `minecraft:entity_placer` item. If the log `created with category 'none', now set to items` appears, set category to items. Using an item from a subpack as a catalog group icon breaks the whole catalog (MCPE-235816), and a group name of 298 characters or more crashes the game (MCPE-240721). The vanilla item group docs lack most items added after 1.13.
+- Hiding in creative (conflicting): there is a report that `menu_category` category `none` worked in 1.26.0 (an entity-only equipment item), but in 2026-05~06 and on 2026-07-17 the answer was that there is no working method.
+
+## 5. Custom components and item scripts
+
+### Concept
+
+The old item events (JSON `events`, `minecraft:on_use`, `on_hit` of `minecraft:weapon`, `on_consume` + `event` of food) became invalid (`invalid component`) with the removal of Holiday Creator Features. What replaces them is custom components registered by scripts. Custom Components V2 needs item/block format 1.21.90 or higher and `@minecraft/server` 2.0.0 or higher in the manifest (1.21.120 recommended), and since it is an official API it can also be used in Marketplace add-ons. A feature that gives a buff when hitting with an axe also needs scripts (the entity hit event). (confirmed)
+
+On the item side, put `"ns:name": {}` (any JSON value that is not null, parameters possible) directly in `components`. The old `"minecraft:custom_components": ["ns:name"]` is dropped.
+
+```json
+"components": { "ns:heal_on_use": { "amount": 4 } }
+```
+
+Register it in a script. The old `world.beforeEvents.worldInitialize` pattern is outdated.
+
+```javascript
+import { system } from "@minecraft/server";
+
+system.beforeEvents.startup.subscribe(({ itemComponentRegistry }) => {
+  itemComponentRegistry.registerCustomComponent("ns:heal_on_use", {
+    onUse(event, { params }) {
+      event.source.addEffect("regeneration", 100, { amplifier: params.amount });
+    },
+  });
+});
+```
+
+The hooks that can be registered are `onUse`, `onUseOn`, `onHitEntity`, `onMineBlock`, `onConsume`, `onCompleteUse` and `onBeforeDurabilityDamage`. Both the method shorthand (`onUse(event){}`) and arrow functions are valid. One note wrote the durability hook name as `beforeOnDurabilityDamage`, but the registration list has `onBeforeDurabilityDamage`.
+
+### Rules
+
+- Reading warnings: `Item custom component 'x' is not being used by an item` means it is registered in the script but is on no item (you edited the wrong file or the format is below 1.21.90). `was not registered in script but used on an item` is the opposite. In some cases both were caused by a namespace typo (`ctf:` vs `cft:`).
+- Parameters: item tags can only be booleans (`ItemStack.hasTag`). Pass numeric values as custom component parameters (`customComponentParameters.params.value`). `hasTag` treats a missing namespace as `minecraft:`, so add a namespace to custom tags.
+- The `onHitEntity` event gives attackingEntity, hadEffect, hitEntity and itemStack. To detect a hit with a specific item, use the script `entityHitEntity` followed by `triggerEvent`, or use an entity `damage_sensor` + `has_equipment` filter.
+- Right click without a component is `world.afterEvents.itemUse`. To cancel vanilla behavior (for example an ActionForm instead of the vanilla book UI), cancel `world.beforeEvents.itemUse`. An item with `minecraft:interact_button` does not fire `onUse` when used on an entity (also in 26.30). Using a bucket on a custom block does not fire `onPlayerInteract`.
+- Script pitfalls: `source.dimension.runCommand('spreadplayers ~ ~ 10 50 @s')` fails because `@s` becomes the dimension, so use `source.runCommand` or wrap it in `system.run(...)`. Writing `runcommand` in lowercase is a `Not a function` TypeError. Raycasting is `player.getBlockFromViewDirection()`, and `getHeadLocation()`/`getViewDirection()`. On Realms, use `runCommand` instead of the removed `runCommandAsync`.
+- The swing animation cannot be triggered by scripts. Give the item `minecraft:throwable` (`do_swing_animation: true`) + `minecraft:projectile` and cancel the use in a script (a throwing sound may play). The first-person eating/using animation is hardcoded.
+- Things only possible with scripts: durability loss on right click, ongoing armor effects, custom compasses, Silk Touch style items, items that change when thrown, gliding gear, Elytra replacements, enchantment level limits/repair adjustments. An armor effect example is `player.getComponent("equippable").getEquipment("Chest")` followed by `addEffect('speed', ticks, {amplifier, showParticles:false})`. Commands/functions using `hasitem={item=...,location=slot.armor.head}` also work, but running them from scripts gives bad performance.
+- Item NBT is not exposed to scripts (shulker box contents, ominous bottle effect level, goat horn sound). For a shulker, place it as a block and read `minecraft:inventory`, or burn the item entity to drop its contents. Part of it can be checked with `data` of the `hasitem` selector.
+- Store per-item data such as magazines in item dynamic properties. There is a bug report that the dynamic properties of a crossbow ItemStack disappear.
+- There is a report that the "book" item component opens an editable book. (single report)
+- Item locking gives the `item_lock` mode `lock_in_slot` (or `lock_in_inventory`) with commands or scripts. Turn off lock text spam with `gamerule showtags false`. For an adventure mode pickaxe, give an ItemStack that has the Can Destroy property.
+- Tool mining speed cannot be changed dynamically with scripts, and there is no jump height component either. Aim assist JSON categories go in `BP/aim_assist/categories/*.json` together with camera presets, and scripts decide when to turn it on.
+
+## 6. Use time, food, cooldown
+
+### Use events
+
+- `itemStartUse`/`itemReleaseUse`/`itemStopUse` fire only on chargeable items (food, shooter, throwable). The generic chargeable component was removed. To avoid consumption, drop food and use shooter/throwable, or set `minecraft:use_modifiers.use_duration` very large (for example 99999999).
+- `minecraft:use_modifiers` is an independent component alongside `minecraft:shooter`. Nesting it inside or mistyping it as `minecraft_use_modifiers` gives a `non-zero use_duration` error.
+
+### Food
+
+Basic form:
+
+```json
+"minecraft:food": { "nutrition": 4, "saturation_modifier": 0.6 },
+"minecraft:use_animation": "eat",
+"minecraft:use_modifiers": { "use_duration": 1.6, "movement_modifier": 0.35 }
+```
+
+`saturation_modifier` must be a number (a string works only in old formats and gives `invalid numeric value` in 1.26.13). That number is the same as vanilla saturation. `cooldown_type`/`cooldown_time` are not members of food (the MS docs are wrong). The drinking sound comes from `use_animation: "drink"`.
+
+- Food effects: the old way is the `minecraft:food.effects` array of format 1.10 (name/chance/duration/amplifier), which still works without scripts (copying the vanilla golden apple). The modern way is format 1.21.90 or higher + a custom component that calls `player.addEffect(effect, durationTicks, {amplifier})` in `onConsume`. Convert seconds to ticks with `*20` and reuse one component for several items. Random effects loop over the effect array a random number of times. The new format has no food effects. To give an effect when eating vanilla food, use the `itemCompleteUse` event (the answer as of 2026-10).
+- `can_always_eat: false` is ignored. It is a game bug that lets you eat even when full (MCPE-178647, confirmed). A report that it was fixed on 2026-02-11 and a report that it still does not work on 2026-05-25 disagree (conflicting). The only workaround is to use `minecraft:food` (`can_always_eat:false`, `nutrition`, `saturation_modifier`) + `minecraft:use_duration` + `minecraft:use_animation: "eat"` on a format `1.20.40` item, but custom components and composting stop working (composting by script).
+- The trim sound cannot be turned off (the chewing/drinking sound is decided by `minecraft:use_animation`). Putting block_placer and `minecraft:food` in one item made the texture invisible (no answer).
+
+### Cooldown
+
+- `minecraft:cooldown` needs `category` (a namespaced string), `type` (for example `"use"`) and `duration` (seconds). Scripts read it with `player.getItemCooldown(category)` and start it with `player.startItemCooldown(category, ticks)` (category is any string and need not be defined beforehand). Use your own category, not `wind_charge`. Items of the same category share the cooldown, so using the item name as the category is recommended. A `type: "attack"` cooldown is accepted in format 1.21.120/1.21.130 and was rejected in 1.20.80.
+- The automatic cooldown applies only to items that have a usable component (shooter, throwable, food, bundle_interaction). There is no generic usable component. For other items, call `itemStack.getComponent("minecraft:cooldown").startCooldown(player)` in `onUse`. Some say `onUse` does not fire during a cooldown and others say itemUse does. (conflicting) To apply the cooldown only after use ends, set the JSON cooldown to 0 and call `source.startItemCooldown(category, ticks)` in `onCompleteUse`.
+- There is a report that the item is removed when the cooldown ends (may be a Mojang change, no answer).
+- A cooldown can be used as a signal sent to an attachable: `q.cooldown_time_remaining('myaddon:toggle1')` + `player.startItemCooldown('myaddon:toggle1', 200)`. The cooldown of other players reads as 0 on my client, so it does not suit multiplayer. The attack cooldown can be made 0 with `startItemCooldown` (spear/lunge items are data-driven).
+
+## 7. Tools, durability, mining, enchantments
+
+### digger and mining speed
+
+- `minecraft:digger` needs `use_efficiency` (since 1.20.30) and `destroy_speeds`. An empty digger does nothing.
+
+```json
+"minecraft:digger": {
+  "use_efficiency": true,
+  "destroy_speeds": [
+    { "block": { "tags": "q.any_tag('minecraft:is_pickaxe_item_destructible')" }, "speed": 7 }
+  ]
+}
+```
+
+  To match vanilla, match the speed (netherite 9). Also attach the `minecraft:is_pickaxe`, `minecraft:is_tool` and `minecraft:digger` tags to the item. `speed` is an integer, so there is no value between bare hand 1 and wood tier 2. Which takes priority when a tag entry and a block entry are both present is not known. The basic setup of a pickaxe is `digger`, `durability`, `enchantable`, `hand_equipped`, `icon`, `max_stack_size` and `repairable`, and the rest is done with scripts.
+- Tool tiers: for digger use the `minecraft:is_*_item_destructible` tags, not tier tags. Drops follow the item tags (`minecraft:is_pickaxe` + `minecraft:iron_tier`, `minecraft:<tier>_tier`, `minecraft:digger`). Custom block breaking is only half implemented, so a full copy of vanilla is impossible. Vanilla blocks do not check the tier of custom items, so obsidian drops in any case. A `minecraft:diamond_tier_destructible` block can also be mined with a wooden pickaxe (there is no tool requirement mechanism, documented as UNSUPPORTED). The per-tool hardness property names are flipped in vanilla, which is confusing.
+- The end portal frame is hardcoded and does not break (digger does not help either). In the entity block hit after event, check the held item and block, replace it with air and spawn the item.
+- A custom block break progress system cancels mining or uses an unbreakable block and uses a runTimeout computed from `playerStartBreakingBlock`/`playerCancelBreakingBlock`. Otherwise vanilla mining flicker occurs.
+
+### Durability
+
+- Mining with digger does not reduce durability (observed 2025-11-05, the sword decreases normally). Handle it with scripts, but block hardness cannot be read, so exact reproduction is impossible. Hitting an entity reduces it by default (2 per hit). `shooter` reduces durability when firing. It can be controlled with the custom component durability hook. The community library "Equipments Durability" (CurseForge, `DurabilityManager.js`) uses the official API and needs item format 1.21.110 or higher. To reduce on use, set a custom `onUse` + durability component and revert. (confirmed)
+- For a broken-item mechanic like the Elytra, a script swaps the tool before it breaks. There is a case using `query.item_remaining_durability` in an attachable, but there is also a report that the attachable durability query is broken.
+- Making it unbreakable (conflicting): there is a report that armor does not break without `minecraft:durability`, but there is also a report that removing durability from a tool made the tool disappear from the game. There is a remark that `minecraft:durability` has a beta `unbreakable` option. `damage_chance` is a percentage, and the vanilla-style value that follows the unbreaking enchantment is `{"min":0,"max":100}`. An infinite durability pickaxe needed scripts, and the Equipment Durability add-on still works in 2026-11. To avoid reducing durability in creative, check `player.getGameMode()`.
+- Unbreakable custom armor removes the durability component. To keep durability when crafting turns A into B, the only way is one recipe per durability value.
+
+### Repair and anvil
+
+- `minecraft:repairable.repair_items[]` can give different `repair_amount` values to several materials and Molang also works (for example `query.max_durability * 0.25`). The combined formula using `context.other->query.remaining_durability` is crafting-table style, so it does not work for diamond repair.
+- Anvil combining needs only durability, and enchantments merge only when `minecraft:enchantable` exists. Putting `minecraft:repairable` on an item without `minecraft:durability` breaks combining, so remove it. Do not put spears in `repairable` (the durability component handles anvil repair like vanilla, and a custom repairable breaks the vanilla calculation). Crafting table tool merging cannot be turned off.
+
+### Enchantments
+
+- In `"minecraft:enchantable": {"slot":"axe","value":10}`, slot decides the enchantment kind and value decides the enchantment value (gold 22, diamond 10). `/enchant` works only with this (format 1.21.120). There are no default enchantments, so use loot `enchant_with_levels`. There is a case where wrongly making an item unenchantable was the cause of custom armor behaving strangely.
+- Slot names: there is no mace-only slot (a custom mace uses `slot: "all"` and a script whitelist). The `spear` slot is the trident, and a custom spear (lunge) uses `melee_spear`. On 2026-01-11 there was also an answer that there is no slot value for the mace/spear kinds so use `sword` to avoid Efficiency being attached. (conflicting)
+- Vanilla enchantment caps, gold tier durability and vanilla loot cannot be changed, so use scripts. Villager trades cannot exceed vanilla enchantment levels, so fake enchantments are made with scripts.
+- The max level is hardcoded, and `/loot` does not apply incompatible combinations (several protections). Abnormal levels (Protection 70) require editing item NBT, and there is an NBTEnchant script that makes enchanted items by editing structure file NBT. Higher level display is imitated with translation key rawtext. A custom enchantment cannot be a real enchantment, so work around it with an item such as a book in the offhand and scripts, and to give only a glint without an enchantment use `"minecraft:glint": true`.
+
+## 8. Armor, trims, dyeing
+
+### Wearing
+
+- `minecraft:armor` is dropped. Use `minecraft:wearable {slot, protection}` (wiki custom-armor). A block item can also be used with `minecraft:wearable {slot:"slot.armor.head"}`.
+- Armor toughness and knockback resistance do not exist on custom items. The item `minecraft:knockback_resistance` was removed in 1.20.0. Use scripts (`applyKnockback`). `minecraft:damage_absorption` exists. Custom equip sounds cannot be set with data.
+- If armor is not visible, compare with the content log, attachables, `minecraft:enchantable` and bedrock-samples. Checklist: the bones are under standard armor bone names (`head`, `leftLeg`/`rightLeg`, separate left and right shoulder bones) and the pivots match the player model, the geometry file is in `models/entity/` with the right name, and the JSON has no `//` comments. If only boots are visible, the render controller shows only the top-level bone while the geometry is in a child bone. If it renders like pixels, it is an attachable or texture path mistake. Vanilla armor cubes are inflated, so use inflate and keep the file at 32x32.
+- Detect an empty chest slot in an animation controller with `q.armor_texture_slot(1) == -1`.
+- Other wearables: `minecraft:wearable` has `hides_player_location`. A custom block helmet is made with the block-as-item method (`block_placer` + wearable), and there is a report that wearables must have max stack 1. The pumpkin mask texture is `textures/misc/pumpkinblur.png`.
+- A custom Elytra is not supported by a component. A method was used that puts the wings as an attachable in the head slot and puts a transparent Elytra on the chest slot (animated with `q.is_gliding`, occupying 2 armor slots).
+- There are reports that custom horse armor needs vanilla horse files edited and reports that it is possible, and the question of giving horse armor through a loot table or `minecraft:equipment` still had no answer in 2026-10.
+- `slot.armor.body` in `minecraft:wearable` stopped working around 2026-05-02 (MCPE-238263). There is an old bug where a mob armor item with `slot.armor.body` can be worn by players (MCPE-183957 / MCPE-188501).
+- In creative a custom armor stays in the hand while also going into the slot (MCPE-240759). The problem of the client not moving illegal-size stacks of wearable items was fixed on 2026-05-07 as MCPE-236344.
+- To keep it from being worn by interaction, use `"minecraft:block_placer": {"block":"minecraft:air","use_on":["minecraft:air"]}`.
+
+### Trims
+
+- To make it trimmable, attach the tag `minecraft:trimmable_armors` (and `minecraft:is_armor`). Custom trim patterns/materials cannot be made. There are reports that the `minecraft:trim_templates` or `trim_materials` tags give a Trim Pattern Registry error and that the materials tag breaks trims. A custom chestplate example using vanilla trims is in the addcustomitems doc of MS Learn (Source: ms-learn).
+- Trims and dyeing can be used together, but in a dye + trim layer the trim is drawn under the dye. Each trim needs an entry in the armor attachable code (for example `"bolt_trim": "textures/trims/custom"`). Using trim palettes such as `wild_trim` and `diamond_palette` in custom geometry fails without the correct layers.
+
+### Dyeing
+
+- With `minecraft:dyeable`, the parts of the texture with alpha 1 are not dyed (alpha-based, see dog armor). Players cannot be stopped from dyeing it. Draw dyeable armor textures in grayscale. There is a report that a .tga with an alpha channel was needed and .png did not work. (single report)
+- For the dyeable of a block item weapon, only the held look is dyed and the inventory icon is not (a bug). Custom items cannot be dyed at a crafting table, so work around it with one recipe per color (about 32). There was no answer for cauldron-dyeing style custom armor.
+- There is no loot function that sets leather armor color, and `random_dye` is the best (`set_data` does not give black). Wolf armor does not accept `random_dye` (seen as a bug). A mob spawner cannot hold an equipment loot table in NBT, so a zombie in dyed armor is brought in with a structure. As of 2026-03 a dyed leather armor could not be made with ItemStack + ItemDyeableComponent.
+- Dyeable bugs in 2026: if `default_color` is set and the `default`/`dyed` textures differ, the held look differs from the icon (MCPE-237529). `ItemDyeableComponent#color` is `undefined` even with `default_color` until dyed in a cauldron (MCPE-237576). `#defaultColor` is always `undefined` (MCPE-237575). Vanilla dye items do not expose dyeable to scripts (MCPE-237577). A crash on accessing a cloned ItemStack (MCPE-237909) was said to be fixed on 2026-04-30, but errors still occurred on 2026-05-15. The dyeable of a block item override does not keep its color once placed.
+- `q.armor_color_slot` works only in armor slots. How to set `variable.is_dyed` on a non-armor attachable and the leather armor dye color of custom entities are unresolved.
+
+## 9. Weapons
+
+### Bows and shooter
+
+A custom bow is made with `minecraft:shooter` + `minecraft:projectile` + `use_modifiers` + `use_animation: "bow"`.
+
+```json
+"minecraft:shooter": {
+  "ammunition": [ { "item": "minecraft:arrow", "use_offhand": true, "search_inventory": true, "use_in_creative": true } ],
+  "max_draw_duration": 1.0,
+  "charge_on_draw": true,
+  "scale_power_by_draw_duration": true
+},
+"minecraft:projectile": { "projectile_entity": "ns:my_arrow" },
+"minecraft:use_modifiers": { "use_duration": 3600, "movement_modifier": 0.35 },
+"minecraft:use_animation": "bow"
+```
+
+- The ammunition item is exactly as listed (arrow). The draw frames need a render controller or an attachable + animation controller, and the drawing arm pose needs a client player animation controller (add a new animation instead of modifying vanilla). The first-person bow pose is changed with the bow attachable animation (bow.json).
+- shooter bugs: the Quick Charge enchantment repeats loading, and when there is no ammunition the use animation/movement slowdown does not stop. By 2026-04-24 Mojang fixed some (MCPE-228333, MCPE-228332). Remaining reports are MCPE-238363, MCPE-238365, MCPE-238331 and MCPE-228331. A custom bow whose `ammunition` is `minecraft:arrow` consumes tipped arrows but fires a normal arrow (the same ID). The vanilla bow sound is hardcoded, so play it with scripts/animations.
+- shooter limits: a vanilla item that is not a projectile (iron nugget) cannot be fired. The delay after firing is hardcoded, so automatic fire needs scripts. Infinite projectiles are impossible with components (script spawn + velocity). Firing a custom projectile entity with shooter + projectile is unresolved (throwable consumes the item).
+- There are templates that reproduce shooter with scripts (multishot, durability support). The 1.20.60 bow template no longer worked on 2025-11-07.
+- For a wand that fires without ammunition (no scripts), there is an example that worked with `minecraft:use_modifiers` (movement_modifier 0.5, a very large use_duration), `minecraft:throwable` (`do_swing_animation` false, very large min/max_draw_duration, `scale_power_by_draw_duration` false) and `minecraft:projectile` (`minimum_critical_power` 1.25, `projectile_entity`) instead of shooter. There is a report that using a fireball as ammunition crashed the game.
+- Bow extras (mostly single reports): in 1.21+ a shooter with `ammunition` gave "ammunition not found" (not resolved). The tipped arrow effect is stored in the item data value (poison = 26). A custom arrow could not be fired reliably with a vanilla bow. Changing the bow's point of view needs a custom attachable and geometry.
+- Loaded crossbow: the `q.item_is_charged` query exists but cannot be read from scripts. `ItemCompleteUseAfterEvent` fires only when charging finishes, so it cannot detect an already loaded crossbow.
+
+### Crossbows, spears, tridents, maces, shields
+
+- The weapons that work with JSON are swords, crossbows and spears, while tridents and maces are hardcoded and need scripts. A sword or tool cannot be placed in the offhand ("cannot be used in offhand"). Real damage is 1 + the `damage` value, so to match a diamond sword give `damage: 7`.
+- The first-person draw animation of a crossbow works only when the item identifier is exactly `crossbow`. In one template `ae_cb:crossbow` worked, but other names or adding a digit at the end broke it. Use a different namespace per crossbow or build a custom animation with scripts. Similar identifier hardcoding exists elsewhere (the old custom smithing recipe needed `<ns>:netherite_ingot`).
+- Spears use the vanilla spear item. The vanilla spear JSON is in bedrock-samples (`behavior_pack/items/*_spear.json`), but the vanilla spear attachable exists only in the real vanilla RP and not in the samples. The new spear also changed the first-person/fist animation of packs that override player animations. The components for custom attack reach are `minecraft:piercing_weapon` (reach/creative_reach/hitbox_margin), `minecraft:swing_sounds`, `minecraft:swing_duration`, `minecraft:use_animation: spear` and `use_modifiers`, and MS Learn also has `kinetic_weapon` and `durability_sensor`. To use vanilla-like spear animation you need the tag `minecraft:is_spear` and the player's spear animation set. A custom trident template worked until Script API 1.19, and Riptide outside water was not confirmed.
+- When copying `iron_spear.json`, what is needed is `minecraft:cooldown` (category "spear", type "attack"), `minecraft:piercing_weapon`, `minecraft:swing_duration`, `minecraft:swing_sounds`, the tag `minecraft:is_spear` and `minecraft:use_modifiers`. The cooldown applying even when hitting thin air is because of type attack and piercing_weapon. `kinetic_weapon` needs format 1.21.100. Overwrite the spear texture at `textures/entity/spear`. With the vanilla spear, holding interact after attacking during a cooldown gives a strange animation.
+- The thrown trident model is mostly hardcoded, so only the geometry ID and texture change (texture meshes are ignored and it is opaque). To change it, put your own geometry and texture in the vanilla trident attachable.
+- A mace-type item copies the mace JSON and renames every reference. A custom mace template (script 2.4.0, no experimental features) uses a `slot: "all"` enchantable and a manager.js whitelist to receive mace enchantments, cancels fall damage with a teleport after the hit, and checks `playerSwingStart`, range 6 and `!attacker.isOnGround` for the smash. Wind Burst `applyImpulse` is inconsistent. Lunge needs beta swing detection or a `player.json` animation controller based on `variable.attack_time`.
+- Shields are hardcoded. They are imitated with a `player.json` damage_sensor or scripts while sneaking. The custom shield template (Alien-Edds/Shield) is script-based and became official with @minecraft/server 2.6.0 in 1.26.10 (if blocking does not work, raise the script version in the manifest). To make more shields you need item, block, attachable and terrain texture definitions. Damage reduction is not parameterized. Stun from axes, wardens and ravagers works. The transparent slot problem is unresolved. `shield_patterns` custom textures work, but a bug was reported that the normal shield keeps showing in first person in 1.21.130. The loot function `set_banner_details` works on shields too, unlike the docs. The vanilla shield's arrow deflection cannot be reproduced.
+
+### Guns and throwing
+
+- A custom projectile gun fired from an item puts `use_modifiers` on the item and has a script spawn the entity and `applyImpulse` it (leave out `throwable`/`projectile`).
+- A throwable item needs both `minecraft:throwable` and `minecraft:projectile`. It uses a projectile entity, and avoid namespaces other than the identifier in both entity files. Emitting particles while charging uses a custom component or modifying the player RP animation (a compatibility risk).
+- When an axe-type custom tool converts a block and there is no hit animation, there was a suggestion to add `minecraft:use_animation`. An item with the `minecraft:is_hoe`/`is_axe` tag strips/tills but does not fire the custom component `onUseOn` (`is_shovel` does fire it). Sound and particles occur, but there is no durability loss or animation, so scripts are needed, and removing the tag brings `onUseOn` back.
+- A hoe-style use animation sets `minecraft:use_animation` and the tags `minecraft:is_hoe` and `minecraft:is_tool`, and the attachable `animations` must really have hold/swing keys (otherwise `can't find animation hold`). A custom hoe makes no tilling sound.
+- Hit sounds: hitting an immune entity plays `game.player.attack.nodamage`, and a strong hit plays `game.player.attack.strong`. They can be turned off with volume 0 in sound_definitions, but this is not allowed in Marketplace packs, and `/stopsound` can also be used.
+- Knockback and damage cancellation are done with `entityHitEntity` + `applyKnockback` and by canceling damage in the before-hurt event. Launching upward is `entity.applyImpulse({x:0,y:0.8,z:0})`.
+
+## 10. Attachables
+
+### Concept and basic structure
+
+An attachable is a "client entity for items". A custom 3D item consists of item JSON + `RP/attachables/<name>.json` (format_version 1.10.0). The identifier is the same as the item identifier, and it has materials, textures, geometry, animations, `scripts.animate` and `render_controllers`. The folder is `attachables` (not `attachments`) and exists only in the RP. Items and attachables have no BP animation controller. A bone it does not have cannot be moved. You can make it with the Blockbench "Minecraft Item Wizard" plugin and preview the hand and third person.
+
+```json
+{
+  "format_version": "1.10.0",
+  "minecraft:attachable": {
+    "description": {
+      "identifier": "wiki:custom_sword",
+      "min_engine_version": "1.13.0",
+      "materials": { "default": "entity_alphatest", "enchanted": "entity_alphatest_glint" },
+      "textures": { "default": "textures/attachables/custom_sword", "enchanted": "textures/misc/enchanted_item_glint" },
+      "geometry": { "default": "geometry.custom_sword" },
+      "animations": { "hold_first_person": "animation.custom_sword.hold_first_person", "hold_third_person": "animation.custom_sword.hold_third_person" },
+      "scripts": { "animate": [ { "hold_first_person": "c.is_first_person" }, { "hold_third_person": "!c.is_first_person" } ] },
+      "render_controllers": [ "controller.render.item_default" ]
+    }
+  }
+}
+```
+
+Put `"binding": "q.item_slot_to_bone_name(c.item_slot)"` on the geometry root bone. Put `min_engine_version` inside `description`, not at the top level.
+
+### Binding and position
+
+- If the item does not attach to the hand and appears at the feet or floats, the geometry bone has no binding. Give `"binding": "q.item_slot_to_bone_name(c.item_slot)"` (works for both main hand and offhand) or `"'rightitem'"` with the edit binding of Blockbench (Element > Binding) or on the root bone of the geo file (for example `root_item`). Binding needs geometry format_version 1.16 or higher. For back/body attachment bind to `body`. The player arm bone is `rightArm` (not "right arm"), and if the parent bone name is wrong it does not follow the arm animation. (confirmed)
+- Use only one of `binding` and setting the arm bone name as parent (a case fixed an attachable floating in the world with `binding`). A held 3D model must be in Bedrock Entity format in Blockbench. `binding` accepts Molang, so it can attach per view as in `c.is_first_person ? 'head' : 'rightitem'`, and there is also a case of binding an offhand item to the head.
+- If a 2D icon shows instead of 3D, check whether you used the plural key `"render_controllers": [...]` and whether the same ID is in the render controller file. The broken UV after "import as attachable" was because Blockbench exported the UV size as 32x32 instead of 64x64.
+- There is a report that giving an attachable `min_engine_version >= 1.17.0` turns the attachable off. (conflicting)
+- First person and third person have different coordinate systems. In the attachable `scripts.animate` you must use `c.is_first_person`/`context.is_first_person`, and `query.is_first_person` and `variable.is_first_person` do not work (negate with `!`). Giving the rotation/position of the bone `rightItem` as `c.is_first_person ? a : b` is also correct. The Blockbench first-person preview is only a starting point, so fit each axis in game by binary search and check with `/reload all`. Example values: root bone third person `rotation [90,0,0]`, `position [0.5,22.5,-0.5]`, first-person root rotation -180, third person 0.
+- `item_display_transforms` (the Blockbench Display panel) has no effect on attachables. Attachable bones are relative to the player bones, so only rotation shows, and position and scale are given by first-person/third-person animations. Block-style `display` transforms apply only to block items. To make the first-person and third-person models different you need an attachable.
+- To make it bigger, use an animation that scales the bone. If the attachable is transparent with no error, check the default material (`entity_alphatest`), and the `texture` field of the geo must point to a texture key defined in the attachable (for example `"default"`).
+
+### Animation
+
+- For an animation controller, define `"controller": "controller.animation.x"` in `animations` and put only `"controller"` in `scripts.animate`. Use short names inside the controller. Do not animate everything at once (sprint and third-person animations play over the first person).
+- `/playanimation` and `playAnimation` do not apply to attachables. An attachable is treated as a different entity from the player. Workarounds are to play a dummy animation that sets a variable for the controller to read, or to switch with a BP `player.json` entity property + the attachable `"scripts":{"pre_animation":["variable.animation_a = c.owning_entity -> q.property('property:name');"]}` + `v.animation_a` (enum `== 'value'`, bool, `>= 3`). The same method can also change per-item render controllers and models.
+- `v.attack_time` does not work if used directly in an attachable. Add `"pre_animation": ["variable.attack_time = c.owning_entity->v.attack_time;"]`, set `"variable.attack_time": "public"` in the player entity, and use a `v.attack_time>0` transition. The value is 0~1, and a swing that started before switching to the item plays the attack animation again. (conditional) In the Preview samples (2025-12), `v.attack_time` and `v.item_use_normalized` became public variables that attachables can use. A private variable reads as 0 with no error. The problem of `c.owning_entity -> v.short_arm_offset_left` being 0 was fixed by making that variable public in `player.entity.json` (the player must enter first person once, confirmed).
+- The pose of the player holding an item (two-hand pose, custom swing, arms) cannot be changed with attachables. Add/modify player animations in the client `player.entity.json` (and the render controller so that arms are visible). The swing can be customized with an attachable animation conditioned on `q.is_using_item`. You can stop the arm raise by changing the vanilla `animation.player.holding` in the RP: `"rightarm": {"rotation": ["query.is_item_name_any('slot.weapon.mainhand','custom:item') ? 0.0 : (variable.is_holding_right ? (-this * 0.5 - 18.0) : 0.0)", 0, 0]}`. Using `pre_animation` in the player entity scripts is better practice than replacing vanilla animations. A first-person custom item animation pattern is to add a sub-controller (`player.custom_item_1st_person`) to `controller.animation.player.root` and switch with `query.get_equipped_item_name` and `variable.item_use_normalized`.
+- An attachable bone with the same name as a player bone receives player animations, so rename it to avoid that. Conversely, the same name can be used so that `/playanimation` also moves armor and attachables.
+- Holding a vanilla sword does not play the rightarm/rightitem first-person parry animation (hardcoded). For a custom sword to get the default swing and Actions & Stuff compatibility, it needs the tag `minecraft:is_sword`, and item tags need at least format 1.20.50.
+- Gun add-ons animate the player arms in the Blockbench first-person view, apply it to the player and then turn on arm rendering. To show arms in first person, either (A) modify the player first-person render controller so that arms are visible and animate them, or (B) put fake arms (Steve arms) in the gun attachable. Marketplace-style packs avoid fake arms for stability. Gun add-ons mostly use `player.json` for first-person hand and arm poses, and attachables are judged unstable. Syncing player and attachable animations is unstable, and first-person animations are flipped left-right compared to third person. First-person item position/rotation cannot be animated without an attachable (`rightItem`/`leftItem` are player bones). The dual-model trick is to put the third-person model in a bone under rightArm and the first-person model under waist behind the player. In first person only the right hand and head are rendered.
+- Equip sound: drive the animation sound effect with `v.hold_time = q.is_item_name_any('slot.weapon.mainhand','custom:item') ? q.life_time; v.play_sound = (q.life_time - (v.hold_time??0)) > (q.delta_time+0.01)`. An attachable animation controller keeps its state when re-equipped, so work around it with a state that stores a timestamp on entry and returns to default when the time difference exceeds 1. The breathing sway of a held attachable comes from the sway animation of `rightitem`, and the vanilla value is `variable.bob_animation * math.sin(q.life_time * 45.0) * 0.5`. If you scale the item up about 30 times and place it again, the screen sway is hardly felt. There is a report that `"variable.bob_animation = 0;"` in `scripts.pre_animation` did not work.
+- If you put the equip sound at 0 seconds of the first-person animation `sound_effects`, it plays only once even when re-equipped, so use a controller that changes state with a variable and plays again. An attachable animation to play every time an item is selected restarts only when another attachable item was held in between. Attachable `sound_effects` are said to be unstable.
+- A custom sword animation technique without player.json: make the use time very large (for example 72000) to block the vanilla use animation, animate a model bound to `Waist` with `c.is_first_person` in first person, and in third person use a copy of the model placed on `rightItem` and the script `player.playAnimation()`.
+- If gun attachments are passed to the render controller through entity properties, `client_sync` delay makes them briefly out of step when switching weapons. Methods were reported such as attaching an ID that increases on every switch and applying only the latest, or putting attachment data in the item identifier (unverified). There are cases of a render controller hitting the variation count limit, and a report that armor attachables reading the wearer's `query.property` were unstable.
+- On 2026-04-14 too, `q.head_x_rotation`/`q.camera_rotation` could not be read in a first-person attachable, so it was worked around with an entity property.
+
+### Offhand and position problems
+
+- An offhand attachable showing in the main hand is because the animation is relative to the main hand. Split with `c.item_slot == 'main_hand'` / `'off_hand'`. The first-person hold animation is not mirrored for the offhand and may be off screen, so move the root bone up about 12px in a separate offhand animation. To hide the first-person offhand model, scale it to 0 when `c.item_slot=='off_hand' && c.is_first_person`. The totem `animation.leftblock.first_person_wield` forces offhand placement.
+- There is a report that custom offhand attachables are not rendered in first person (seems to be special engine handling, not resolved).
+- Causes of an attachable being off from the hand: skin/player geometry differences (character creator skins and normal skins), and the VR part contained in first-person player animations copied from vanilla (deleting the `vr` part fixed it). Position differences between the Windows and Android builds and differences by FOV were also reported.
+- The attachable model disappearing on right click comes from `q.is_using_item` animations getting tangled in first person (no answer). `context.owning_entity->query.camera_rotation(n)` works only in third person.
+
+### Conflicts with entities, vanilla overrides
+
+- If an attachable and a client entity share an ID, the attachable takes priority and overrides an entity with the same ID (cod, salmon, rabbit). There is also a report that for vanilla items that are also entities (ender pearl, arrow, snowball, egg) the client entity with the same identifier overrides the attachable. Make the animations and models of the two files the same and split parts with `q.is_attached` / `!q.is_attached` (for example `{"controller.render.item_default": "query.is_attached"}`, `{"controller.render.thrown_item": "!query.is_attached"}`). On 2026-07-30 a report that the ender pearl can no longer use an attachable came with no answer. An attachable with the same identifier as a mob ID (chicken, cod, salmon, rabbit, pufferfish) cannot do the eating animation. (conflicting)
+- `c.is_first_person` cannot be used in the entity context. If it is in an animation shared with or overriding an entity, `unhandled request for unknown variable 'context.is_first_person'` appears.
+- To replace a vanilla item attachable, make an attachable with the vanilla identifier and override it (for example `minecraft:totem_of_undying`). If another pack (Actions & Stuff) already animates it, reuse its names and variables and put your pack on top. To avoid being overridden by the A&S player.json, use a unique item identifier that does not appear in player entity animation conditions. An RP alone cannot override a Marketplace pack. There is a report that replacing the held-look attachable of vanilla armor (iron boots) is not yet possible. For potions, the item ID of each potion is `minecraft:potion_type:<data>`, so make attachable files separately. The enchanted golden apple is not actually enchanted, so `variable.is_enchanted` is false and it has no glint, and overriding `minecraft:appleEnchanted` did not work.
+- Translucent (blend) items need an attachable. From around 2026-01 the parts of an attachable that have translucent pixels became invisible, and a workaround of making those parts fully transparent was reported. In classic skins wearing a cape there is an old bug where attachables (shield, bow, trident, crossbow) are lifted up.
+- If glint lag occurs, delete the `materials.enchanted` and `textures.enchanted` entries from the attachable. The glint of a custom attachable is the material `entity_alphatest_glint` + the texture `textures/misc/enchanted_item_glint`. The texture index of vanilla multi-texture items (buckets) cannot be specified except for `spawn_egg`.
+
+### Armor attachables
+
+- The vanilla way is two files (the held display and the worn layer, for example `netherite_helmet.json`, `netherite_helmet.player.json`). The worn layer uses `parent_setup` (for example `v.chest_layer_visible = 0.0;`), geometry `geometry.player.armor.chestplate`, materials `armor`/`armor_enchanted`, textures `textures/models/armor/...` and the render controller `controller.render.armor`. When using a whole set with one model, hide unrelated bones with part visibility. There is only one attachable per identifier, so if you want a large armor icon, combine the item attachable and the armor attachable and pick the geometry/texture with a render controller.
+- To attach to the head and so on, armor-style attachables attach by bone folder path, so nest the bone in the same real path as the player head geometry (for example `body/head/head/pumpkin_cubes`). An attachable attached to the `head` bone on a scaled mob scales together with the head.
+- A worn armor attachable is not visible in first person. The only workaround is to modify the client player entity render controller (reduces compatibility).
+- For vanilla armor on custom geometry entities, put `"enable_attachables": true` in the RP client entity `description`. For non-humanoid models, make per-part attachables and geometry in RP `attachables/`. To apply to only one entity, use a unique attachable identifier (for example `minecraft:diamond_helmet.jenny`) and the `item` map Molang condition `"item": {"minecraft:diamond_helmet": "query.owner_identifier == 'ns:jenny'"}` (reusing the vanilla identifier changes every mob wearing that armor). The item ID must be exact (`minecraft:diamond_chestplate`). If wrong, it does not even show in the content log. Animate the vanilla `animation.armor.chestplate.offset`/`animation.armor.helmet.offset` and use `armor`/`armor_enchanted` for body armor and `entity_alphatest`/`entity_alphatest_glint` for helmets. Detecting a non-player wearer is `q.owner_identifier != 'minecraft:player'`, and to hide an armor part by property use `"part_visibility":[{"head":"q.has_property('test:your_property') ? q.property('test:your_property') != 1 : true"}]`.
+- A 2025-10 report says it is impossible to make the held model and the worn model different and that two items must be swapped with scripts, which disagrees with the render controller merging above (conflicting). Armor and hand items are all attachables, and a hand item is effectively hand-slot armor. If the UV matches, one armor model can be reused for several textures. Vests, masks and bags are made by making a slot item with the Blockbench item wizard and swapping the model.
+- Dyed armor on custom entities needs a custom render controller that handles normal/dyed x enchanted/unenchanted and a dedicated material. Remaining unresolved items are leather armor dye color, netherite trim, and the turtle helmet effect on custom entities.
+- Horse armor is partly hardcoded. A custom horse showed the saddle but not the armor in slot 1. The method that worked is to use a `skin_id` per armor tier in the equip event. Vanilla horse armor/saddle rendering uses `Array.armor[variable.armor_texture_slot]` and the `query.is_saddled` part_visibility.
+
+### Attachable rendering limits
+
+- Locators do not work in attachables (the same answer on 2026-11-11, and the player has only one locator for the held item). Particles of an animation locator appear once in front of the player, not at the locator (a script particle works around it). Attachables cannot use every render controller feature. The `uv_anim` material property does not work, so hide and show groups per frame or change the texture frame with a render controller. `ignore_lighting` does not work in attachable render controllers, so change the material. Mesh (flat texture) models do not receive the enchantment glint. Dynamic color works only with the color overlay of a render controller.
+- To keep two textures always on or overlaid, use two render controllers (one with `Texture.default` and another with a different texture key). For per-context geometry/texture use a ternary like `"geometry": ["(c.item_slot == 'main_hand' && c.is_first_person) ? Geometry.icon : Geometry.sword"]`.
+- A texture mesh (the extruded 2D texture the vanilla bow uses) lets a 2D item keep a custom hotbar icon while being held differently, or shows icon and 3D together with a render controller. It can become transparent (there is a report of it looking transparent even when following the vanilla bow) and rotates bones, not the mesh (meshes have strange normals). On 2026-10-26 it was said that item mesh support is gone and item textures larger than expected now need a model and an attachable. An item with a 16x16 texture that rendered at double size looked like a bug. (single report)
+- Hand and slot textures can be split. The item shows a 16x16 icon and the attachable uses a 32x32 texture. To use a block as an attachable, make a `block_placer` item and give that item the attachable.
+- To hide the held item for a 2D item, copy a sample attachable, change the identifier and use an empty geometry or a transparent texture. To hide the hand item together with a wearable, scale the `rightItem` bone to 0 (there is a report that it was still visible in first person).
+- For an animated texture in an attachable, use `array.frames[Math.mod(math.floor(query.anim_time * 5), 9)]` in the render controller. A sprite sheet totem animation uses an attachable with many textures and the render controller `controller.render.item_animation_totem`.
+- There is no query for per-item dynamic textures (potion kind/level/duration, item name). Send a variable from the BP through a player property. Potion textures cannot change by level or duration without a UI overlay.
+
+## 11. Block items, 3D icons, animated items
+
+- To replace the automatic item of a block with an explicit item, make an item with the same identifier and put `minecraft:block_placer {block, replace_block_item:true}`. If the identifier differs, `replace_block_item` has no effect. You can control `minecraft:max_stack_size:1`, `minecraft:wearable`, glint and so on. If you remove `minecraft:icon`, the block model is rendered. `minecraft:foil` became `minecraft:glint` (visible only in the inventory UI, and the held glint needs an attachable). Even with replace, the block and item have separate numeric IDs. A block item override inherits tags from the block, but an automatically generated block item does not. Block item replace needs 1.26 or higher (per the wiki).
+- `item_display_transforms` is in the geometry file and the block's `minecraft:item_visual` controls the item look. To move or enlarge a block icon, use `item_display_transforms` + `fit_to_frame: false` (default true in gui). A cross model block looks squashed in the inventory, so use a texture for the icon.
+- 3D dropped items/3D inventory icons: an attachable renders only when equipped. Make a block with the geometry you want, give an item with the same identifier `minecraft:block_placer` and `"replace_block_item": true`, and restrict `use_on` to blocks that cannot be used so that it is not placed. Or use a block that cannot be placed because of `placement_filter` (an air condition or a nonexistent tag) as the item and scale it with item display transform. The alternative is to turn dropped items into dummy entities with `EntityItemDropAfterEvent`/`EntityItemPickupBeforeEvent`.
+- Animated item trick: give a block with a flipbook texture all `item_display_transforms` rotations of 0 so the inventory icon becomes flat. Block placement with `placement_filter` block condition air (no block_placer item needed). The format is block 1.20.80 or higher and item 1.21.60 or higher. In block JSON use the terrain_texture tile ID, not the texture path. Using a cube model variant with 16/32/64px textures makes frames late, so an extruded model per texture is recommended. Items cannot be animated with `flipbook_textures`. The options are (1) an attachable animation that switches bone groups with different textures (recommended for beginners), (2) an attachable whose render controller swaps textures, (3) an animated block that cannot be placed. Inventory icons are only fixed or flipbook, and to change the icon during a cooldown you must swap it for another item.
+- Glowing items: a block item can glow with `light_emission`. Adding a real item or attachable removes the glow. A custom block model cannot show the enchantment glint (only NBT enchantments). In Vibrant Visuals the light is covered when standing under another light source. The glint color cannot be changed (hardcoded) but the glint texture can. Blocks have no fuel component, but `minecraft:fuel` is an item component, so there is an answer that it can be put in `BP/items/<id>.json` together with `minecraft:block_placer` (`block`, `aligned_placement`, `replace_block_item`) (2026-05). `tag:minecraft:wool` in block `components` is a block tag, and item tags go in the item's `minecraft:tags`.
+- A block put in the offhand with `replaceitem` is rendered very small by default. A block item rendered as a block makes it easy to control the hand position. A 3D model icon is made by setting Angle to true isometric in Blockbench and taking a screenshot.
+- Block item bugs: `minecraft:liquid_clipped` places at water surface height and `use_liquid_clipping` is broken (MCPE-236319). The docs say it interacts inside liquid, but block_placer actually places on top.
+- To make the inventory icon and placed texture of a vanilla block different (saplings), use `carried_textures` in `blocks.json` + a `terrain_texture.json` entry. It works only when the old geometry and the new item geometry are the same (2D to 2D). The `blocks.json` key is the block ID (`oak_sapling`), the `terrain_texture.json` short name is `sapling_oak`, and both the block and carried textures are defined there.
+
+### Item size and textures
+
+- Textures larger than 16x16 (by version): before 1.26.0 (26.0) they rendered gigantic in hand (there are also reports that they shrink). At that time the wiki high-resolution-items method (an attachable) was used. It was fixed in 26.0, and since bundles are data-driven it also applies to custom items. There is a report on 2026-06-09 that 64x64 items and 32/64 helmet textures looked fine without an attachable, but on 2026-10-26 it was said that large textures need a model and an attachable, so they disagree (conflicting). The high-resolution items wiki page was deleted and remains in the Bedrock-OSS/bedrock-wiki repository history (`docs/items/high-resolution-items.md`). Item textures larger than the slot (longswords and so on) are deprecated/unsupported, and an item icon cannot exceed the inventory slot. A 32x32 or 38x38 weapon held at the shoulder or the middle is an attachable or model anchor problem.
+- `minecraft:hand_equipped: true` renders like a tool (3 times bigger in third person). Remove it if you want normal size. It is needed to hold it like a sword. `handheld`/`hand_equipped` can flip the texture.
+- One item cannot change its texture by data, so make several items and switch them with scripts or UI (tool "skins"). Changing an item texture by name tag with only an RP does not work (it does for entities/blocks). The swing animation of a custom item differs from a vanilla item with the same texture (MCPE-178674). `quad`/`tint_color` in `item_texture.json` work in the GUI but do not apply in the world. To make the vanilla item texture different in the inventory and hand, change the item_texture for the inventory and keep the attachable `default` texture.
+
+## 12. Music discs, bundles, other
+
+### Music discs (`minecraft:record`)
+
+- Historically it accepted only vanilla sounds. Using a custom sound had no description tooltip and no "Now playing" hotbar text, and ignored playback time and ejecting from a jukebox (fixed around 2026-08-11, while the description/message are still broken). Since 26.30.28 custom sounds work in the Beta APIs experiment. This needs `format_version: "beta"` (not 1.26.30) and a namespaced sound ID in sound_definitions (for example `tbgs:record.animus_gardinus`). Vanilla sound IDs show the description with the lang key `item.record_<id>.desc`.
+- Item components that require a sound (`minecraft:durability_sensor`, `record`, `swing_sounds`, `use_modifiers`) accept only vanilla sound IDs. The `particle_type` of `durability_sensor` supports only a few values. `swing_sounds` uses only vanilla LevelSoundEvents and custom sounds are played with scripts.
+- Alternatives are to replace the vanilla disc with an RP (put a mono .ogg in `sounds/music/game/records` and add a lang entry) or to use community script samples. The custom disc script (API 1.19.0..2.1.0) works in survival if you drop the `record` item component (that component automatically puts it into the jukebox). If `itemStack` fails in survival, use `beforeItemStack`. With the sound category `ui`, the volume is constant regardless of distance.
+
+### Bundles
+
+- A custom bundle uses `minecraft:bundle_interaction` (`num_viewable_slots`), `minecraft:storage_item` (`max_slots`, `allow_nested_storage_items`, `allowed_items`) and `minecraft:storage_weight_limit` (`max_weight_limit`). There is a report that a format 1.21.60 bundle looked always full (a suggestion to test without `allowed_items`, not resolved). There is also a report that `storage_weight_limit` does not work as intended. The right-click action that spills the first slot cannot be blocked unless onUse is turned off. `minecraft:storage_weight_modifier` decides the size inside the bundle. `minecraft:allow_off_hand` is an item component. There is a case where `minecraft:storage_item` setItem undefined in scripts gave a ContainerRules violation.
+- State in 2026-10~11: even with `storage_weight_modifier`/`weight_in_storage_item` at 0 (or 64) and max_stack_size 64, the item went into the bundle (tested in formats 1.26.40 and 1.21.60). Items whose stack size is not 64 seem to get a larger hardcoded weight and the modifier is ignored. It looks like a bug and there is no fix. For bundles larger than 64, scripts can put containers in, but nested containers read the whole NBT and lag badly. There is also a report that the bundle contents UI covers the attack damage tooltip of the same item.
+
+### Other
+
+- `minecraft:fire_resistant`: an object `{"value": true}` that needs the latest format. It failed in 1.21.50 and 1.21.70, and there are reports that it needs 1.21.110 or higher and that it worked in 1.21.120 but not in 1.20.80. The game does not always give an error for a wrong component. The bug of items disappearing in lava was fixed in 1.21.120. There is no explosion immunity component, and even an item made not to burn or despawn is destroyed by cacti and explosions.
+- The problem of `minecraft:damage` showing a wrong value (for example 325 as 69, MCPE-180073) was fixed in 26.0 but needs the new format.
+- To change a mob variant with an item, fire an event that sets an enum property (`client_sync: true`) with RP `query.is_item_name_any('slot.weapon.mainhand',0,'ns:item')`, the script `playerInteractWithEntity`, or the `on_interact` filter `has_equipment` (domain main_hand) of a custom entity.
+- A custom fish bucket needs an item + entity + script workaround. When releasing, use `minecraft:entity_placer` (`entity`). The bucket is hardcoded. To pick up a mob with behavior only, put `transform_to_item` in the mob's `minecraft:interact`, fire an event that despawns the mob, and spawn it again with an `entity_placer` item (the milk bucket tutorial of behaviorpackfromscratch on MS Learn). A custom fish given a runtime ID works with a fish bucket, but the vanilla name showed on the bucket item.
+- New potion effects and effect menu entries cannot be added, so swap existing effects or imitate them (dynamic properties/scoreboards, particles, JSON UI timers). There was no answer on how to make a dropped item unpickable. A boss summon item runs `/summon` or uses a spawn egg.
+- Impossible: custom furnaces, a custom fishing rod with a bobber, and lowering view sensitivity while in use like a spyglass. Vanilla loot such as the poisonous potato cannot be modified, so change it with scripts when the block is broken.
+
+## 13. Vanilla item overrides and aux IDs
+
+- Most vanilla items cannot be modified. The full vanilla behavior pack has only about 77 data-driven items and the rest have no JSON. What is data-driven (spear cooldown) works and what is not (netherite knockback) does not. Redefining a non-data-driven vanilla identifier (for example the mace) gives a game error. There was no answer on how to change only the name/texture of a vanilla item without replacing it.
+- The aux value is the same as the `data` value of the give command. Item aux values still work, but block aux values were replaced by block states.
+- Overriding with an old format: a format `1.10` file can override old-format components of almost every vanilla item (for example `minecraft:max_durability`, a case that gave durability to an ender pearl). Format `>1.16.100` overrides only a few. Components that did not exist in 1.10 cannot be overridden, and custom components cannot be used in 1.10. In one test the 1.10 durability change was visually reset. `minecraft:explodable` was removed. Vanilla item icon override example:
+
+```json
+{
+  "format_version": "1.10.0",
+  "minecraft:item": {
+    "description": { "identifier": "minecraft:waxed_copper_door" },
+    "components": { "minecraft:icon": "waxed_copper_door" }
+  }
+}
+```
+
+  A matching entry is needed in `item_texture.json`.
+- aux ID calculation (v26.0): custom block aux IDs start at -9745 (= -10000+255) and decrease per block. Custom item aux IDs start at 257 (256 is reserved/no item) and increase, wedging in the middle and pushing vanilla item IDs. The order is by file name, not identifier, with subfolders first in alphabetical order and then root files, and blocks are in reverse. It is consistent on PC but can break on Android and breaks on iOS. The wiki says custom blocks start at -1039 and are not rendered by aux ID. (conflicting)
+- bedrock-auxgen is a Go CLI (`go install github.com/DreamlandMC/bedrock-auxgen/cmd/bedrock-auxgen@latest`, the repository moved to wan-adrian/bedrock-auxgen) that makes JSON such as `"minecraft:acacia_boat": 26935296` from bedrock-samples. `--rp <path>` reads `textures/item_texture.json` for custom items and uses `--custom-start` (default 257). v1.0.4 integrated bedrock-jsonfix to handle comments and trailing commas. Old BDS gives wrong IDs.
+
+## 14. Known limits and workarounds
+
+| Limit | Workaround |
+|---|---|
+| Item events removed | Script custom components |
+| `can_always_eat: false` ignored (MCPE-178647) | Format 1.20.40 food (give up custom components) |
+| No durability loss when mining with digger | Scripts/DurabilityManager.js (exact copy impossible) |
+| No custom armor toughness/knockback resistance | Script `applyKnockback` |
+| Item textures cannot change by data | Swap several items with scripts |
+| Items cannot be animated with flipbook | Attachable frame groups/render controller, an animated block that cannot be placed |
+| `item_display_transforms`, locators, `uv_anim` and `ignore_lighting` have no effect on attachables | Position/scale by animation, per-frame groups, material swap, script particles |
+| `/playanimation` does not work on attachables | player property + `c.owning_entity -> q.property(...)`, a dummy animation that sets a variable |
+| Worn armor not visible in first person | Modify the player render controller (reduces compatibility) |
+| Crossbow first-person draw is hardcoded to the identifier `crossbow` | Per-crossbow namespace, script animation |
+| 1.26.40 smithing base limit (MCPE-242206) | `durability` 0 + `wearable slot.armor.body` |
+| Hiding in creative (reports disagree) | Try `menu_category` category `none` |
+| Item NBT (shulker contents and so on) not exposed to scripts | Place as a block and read the inventory |
+| Custom items cannot be dyed at a crafting table | One recipe per color |
+| Bundle `storage_weight_modifier` ignored | Script container (nesting lags) |
+| No custom enchantments | An item such as an offhand book + scripts, `minecraft:glint` |
+
+## 15. Changes by version
+
+- 1.20.0: item `minecraft:knockback_resistance` removed. 1.20.30: digger `use_efficiency`. 1.20.40: food format for the `can_always_eat` workaround. 1.20.50: minimum format for item tags (`1.20.5` is not valid).
+- 1.21.90: item custom components V2 (`"ns:comp": {}`), `minecraft:custom_components` dropped, `description.category` removed (use `menu_category` instead).
+- 1.21.60: the `minecraft:` group form of `menu_category`. 1.21.100: the format needed for `kinetic_weapon`.
+- 1.21.110: the format the DurabilityManager template requires, and a report that `fire_resistant` works. 1.21.120: `fire_resistant`, `enchantable` (`/enchant`), the recommended format for custom components, the lava item loss fix, `type` attack cooldown allowed. 1.21.12x: `minecraft:copper_horse_armor`.
+- 1.21.130: spear cooldown/reach, the `shield_patterns` first-person bug.
+- 1.21.130 (2025-12, spears/Mounts of Mayhem): spear variables and controllers were added to `player.entity.json` so old copies broke, and bedrock-samples lagged behind for a while.
+- 26.0 / 1.26.0 (around 2026-02): the problem of item textures larger than 16x16 was solved, the `minecraft:damage` display bug was solved (needs the new format), a report that hiding with `menu_category` `none` worked, and the aux ID calculation rules.
+- 1.26.10: the custom shield template became official with @minecraft/server 2.6.0, confirmation that HCF food `on_consume` is invalid, item catalog format 1.26.10. 1.26.13: a `saturation_modifier` string gives `invalid numeric value`.
+- 2026-04-24: shooter bugs MCPE-228333/228332 fixed. 2026-05-02: `slot.armor.body` of `wearable` stopped working (MCPE-238263). 2026-05-07: the wearable stack size bug (MCPE-236344) fixed.
+- 1.26.30: from 26.30.28 `record` custom sounds (Beta APIs, `format_version: "beta"`), the `interact_button` onUse bug persists. 1.26.40: the `recipe_smithing_transform` base must be equipment and needs `durability` (MCPE-242206). 1.26.50: `{"tag": ...}` for smithing `addition` still does not work (disagrees with the report that tag addition works from 26.40).
+- 2026-01: translucent attachable pixel bug. 2026-02-11: `can_always_eat` fix report (conflicting). 26.50: the tooltip lang key `tile.` prefix.
+- 2026-10~11: a remark that item mesh support ended, attachable locators still impossible, the bundle weight bug persists.

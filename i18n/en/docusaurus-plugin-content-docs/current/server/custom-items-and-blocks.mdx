@@ -1,0 +1,121 @@
+---
+title: "Custom items, blocks, entities and names (Dragonfly server)"
+description: "Custom blocks, items and entities defined in server code without a BP, adding client components, names and translation keys, division of roles with the resource pack"
+sidebar_position: 4
+sources:
+  - private-research
+  - dragonfly
+  - bedrock-samples
+---
+
+## Concept: how it differs from BDS
+
+In BDS, custom blocks, items and entities are defined with **BP JSON and the Script API**. A Dragonfly (Go) server has no BP or Script API runner. Instead, **game logic is written in server-language code**, and what is visible (textures, models, animations, sounds, language, particles, JSON UI) goes in a **resource pack**. The server sends the definitions to the client as components at join. In short, "an add-on = game logic written in Go + a resource pack". (Source: private research)
+
+| Category | BDS | Dragonfly server |
+|---|---|---|
+| Resource pack (textures, models, animations, sounds, language, particles, JSON UI) | Sent to the client | Usable as is. Sent to the client and applied |
+| BP JSON (block/item/entity definitions, loot tables, recipes, spawn rules) | Executed by the server | Not executed. The same content is defined in Go code |
+| Script API | Executed by the server | Not executed. Implemented in Go code |
+| Custom block/item definitions | BP JSON | Defined by Go types, and the server sends the components to the client |
+
+| What you did in an add-on | Where to do it in Dragonfly |
+|---|---|
+| `blocks/*.json` | Go block type |
+| `items/*.json` | Go item type |
+| `entities/*.json` (BP) | Go `EntityType` and behavior code |
+| `entity/*.entity.json` (RP), models, animations | Resource pack |
+| `loot_tables`, `recipes` | Go data. Vanilla recipes are built into Dragonfly |
+| Script API events | Dragonfly player/world handlers |
+| `ui/*.json`, `sounds`, `particles`, `texts` | Resource pack |
+
+## Custom blocks
+
+If you implement `world.CustomBlock` in Go, Dragonfly sends the block definition to the client.
+
+| Feature | Supported | How |
+|---|---|---|
+| Textures (including per face), render method | Yes | `Properties().Textures` (`customblock.Material`) |
+| Custom model (geometry) | Yes | The identifier in `Properties().Geometry`, with the `.geo.json` in the resource pack's `models/blocks/` |
+| Collision/selection box, rotation, scale, translation | Yes | `Properties()` |
+| Appearance per state (permutation) | Yes | Implement `States()` / `Permutations()` |
+| Light emission/blocking, mining time, friction, flammability | Yes | Implement interfaces such as `LightEmitter` and `BreakInfo` |
+| Block entity data, per-tick logic, interaction | Yes | `NBTer`, `TickerBlock`, `Activatable` and so on |
+| BP block components not in the list above | Limited | Dragonfly's internal packages build the components, so extending needs a fork |
+| Client-side block animation | Limited | Only texture flipbooks. Replace motion of the shape with an entity |
+
+A block model file is the resource pack's `models/blocks/<name>.geo.json`. For each face, it uses from (0,0) of the 16x16 texture as far as the face size. One file can hold several geometries per fill stage (`geometry.custom_<kind>_<0..8>`), and a full block uses the vanilla `minecraft:geometry.full_block`, so it has no model file. A block texture is `textures/blocks/<name>.png` plus a `terrain_texture.json` key (`custom_<name>`), and changing only the file changes the texture. A test catches missing files and keys.
+
+### Block texture animation (flipbook)
+
+One entry in `textures/flipbook_textures.json` animates one tile of `terrain_texture.json`. The image is a vertical strip (width 16, height 16 x frame count) and takes `ticks_per_frame`, `frames` (an ordered array) and `blend_frames` (on by default). A custom block animates with no other component if the texture in `material_instances` is that tile. The two files are merged across packs. All blocks animate at the same tempo, and switching it on and off is done by changing the texture through block state permutations. In item icons it does not animate depending on the version (Source: private-research; Bedrock Wiki blocks/flipbook-textures).
+
+## Custom items
+
+- Implement `world.CustomItem` (name, creative category) and call `world.RegisterItem`. The icon is found by the item identifier key in the resource pack's `textures/item_texture.json`.
+- For durability, food, armor, cooldown, projectiles and so on, components are attached automatically when the item implements the matching interface.
+- Textures are PNGs in the resource pack: `textures/items/<name>.png` (the `item_texture.json` key is the item identifier; a block item appears in the shape of the block, so it has no icon), `textures/blocks/<name>.png`.
+
+## Custom entities
+
+- Go: create a `world.EntityType` (identifier `custom:xxx`, hitbox, NBT) and register it in the server entity registry. Registered identifiers are sent to the client at join (`AvailableActorIdentifiers`).
+- RP: with the same identifier, create the client entity definition (`entity/*.entity.json`), geometry, textures, animations and render controllers.
+- AI, movement and interaction are all implemented in Go.
+- If the entity implements `item.Carrier`, the held item is sent to the client and drawn on the `rightItem` bone of the geometry.
+- Caution: even if you change the geometry, the client uses its cache when the pack version is the same. Solve this by computing the pack version automatically from a content hash ([resource-pack-delivery.mdx](resource-pack-delivery.mdx)).
+
+## Adding client components (editing entries at join)
+
+Custom item and block entries that Dragonfly builds contain only the components Dragonfly knows. To add other BP components, edit the entries sent to the client at join (the item list and block entries) in a packet hook. If you build it so that an item or block that implements an interface has its value read and a component added, game code does not need to know Dragonfly's internals. (Source: private research)
+
+Things worth adding this way:
+
+- Items: `minecraft:digger` (mining speed per block and tool tag), `minecraft:use_modifiers`, `minecraft:fuel`.
+- Blocks: the tool tag (`tag:...`) and pickaxe tier of `BreakInfo`, an interaction marker that sends the click to the server, per-permutation collision boxes and geometry bone visibility, and the render method name of the material (for example `alpha_test_single_sided` instead of `alpha_test`).
+- Block properties are sorted by name, to match the order in which the client numbers states.
+
+## Names and translation
+
+- **Send names as translation keys.** The client converts block and item names into its own language. Vanilla uses keys such as `tile.stone.name` and `item.stick.name`, and custom blocks and items use `item.<id>.name` and `tile.<id>.name` in the resource pack's `texts/<language>.lang`.
+- **Dragonfly puts the `Name()` text as is into `minecraft:display_name` of a custom item.** Then every client sees that one language. To make it appear per language, replace that value with the translation key `item.<id>.name` in the item list sent at join.
+- Put custom block and item names in **both** the lang file of the language you use and `en_US.lang`. On the client, `en_US.lang` is the fallback for every other language. When you add a language, create `texts/<code>.lang` and list it in `languages.json`.
+- **The server must convert names in the text it sends (messages, forms, sidebars) into the player's language.** For custom ones, the server reads the pack's `texts/*.lang` at startup; for vanilla ones, it uses a table built from `bedrock-samples`' `resource_pack/texts/*.lang` (see "Legacy translation keys" below). When you upgrade the game version, rebuild the table from the latest `bedrock-samples`.
+
+## Resource pack operating rules
+
+Dragonfly acts only as the BP. Turn off automatic pack generation (generated at server start from the textures/models/names of custom blocks and items) with `DisableResourceBuilding` and use a hand-written resource pack. It is easy to fix and test the pack separately, and you can open models directly in Blockbench. The resource pack holds block and item textures and atlases, block models, names (`texts/ko_KR.lang`, `en_US.lang`: `item.<id>.name`, `tile.<id>.name`), entity models, animations, sounds, JSON UI and particles.
+
+- Use a single identifier namespace (`custom:`).
+- Tests check that what server code refers to by name (model identifiers, material texture keys, item icons, name lines) exists in the pack. For item names, the Go `Name()` and the lang line must match.
+- Vanilla blocks Dragonfly lacks: piston, observer, dispenser, dropper, repeater, comparator. Some it has are hopper, chest, furnace, redstone dust, torch and lever. If you need a missing device, build it as a custom block.
+
+## UI methods
+
+| Method | Use |
+|---|---|
+| Ore UI DDUI screen | Menus, settings. The pack's `hbui/` replaces Ore UI pages during play |
+| Decorating forms with JSON UI | Edit the RP's `ui/server_form.json` and so on to make menus look like game UI. A common approach is to put a marker in the form title to choose the layout per screen |
+| Chest-style inventory UI | Inventory viewing, block workstation windows. Open an invisible entity as a chest ([fake-blocks-and-chunks.mdx](fake-blocks-and-chunks.mdx)) |
+| Sidebar, boss bar, title, action bar | Quest windows and HUD. Supported by the Dragonfly API |
+
+## What was confirmed about client display (server development notes)
+
+
+
+- **Translation key in an item name** [measured]: When a translation key was put in an item's custom name and description (lore), the client tooltip showed it literally. This was the same for `item.diamond.name`, `%item.diamond.name` and `%item.diamond.name%`, whether the key was the whole line or in the middle of text (1.26.50).
+- **Legacy translation keys** [record]: Many blocks do not find their name through `tile.<modern ID>.name`. The names are under legacy keys (`oak_planks` is `tile.planks.oak.name`, `oak_sapling` is `tile.sapling.oak.name`). If sent as is, the key text or the identifier shows. You can build a table by converting the ID to title form ("Oak Planks") and pairing it with the English value in `bedrock-samples`' `en_US.lang`, and about 190 (Education Edition, test blocks, `element_*` and so on) have no match.
+- **Language fallback** [record]: On the client, `en_US.lang` is the fallback for every other language. Put the pack's block and item names in `en_US.lang` too.
+- **Held pose** [record]: Sticks and bones are drawn in a tool-like grip in the third-person hand, but vanilla data has no `minecraft:hand_equipped` (`component_based` 0). It is hard-coded in client code. In the data (`vanilla_items.nbt`, `bedrock-samples` `behavior_pack/items`), only `breeze_rod` and spears (`*_spear`) have this component set to true.
+- **Showing an item in front of a block** [record]: Item entities always spin and bob on the client, merge with nearby identical items, and get sucked into a hopper below. Use a custom entity that holds the item in its hand (`MobEquipment`, `enable_attachables`) instead.
+  - The bone structure is `root > body > rightarm > rightitem_pose > rightitem_handheld > rightitem` and `body > leftarm > leftitem`. The values that cancel the third-person hand pose are `rightitem_pose` pivot [-1, -6, -6], rotation [-75, -12, -16], and `leftitem` pivot [5.5, 1, -3], rotation [-20, 45, 0] (see the Storage Drawers Bedrock add-on).
+  - An entity can look at the main hand item with `query.is_item_name_any('slot.weapon.mainhand', 0, ...)` and rotate only the held-pose items separately to correct them. The third-person item transform values are not in public material, and scale 0.65 fit for sticks.
+  - A client entity texture cannot be chosen per item (the render controller array and variant values would be needed for as many items as there are).
+  - Full cube blocks are drawn in 3D in the hand, so the angle differs. Cube blocks were fitted in the off hand and everything else in the main hand.
+- **Break cracks and particles** [record]: The client draws break cracks and particles on the block geometry cube. If the cube is small or transparent they are not visible, and the particles take their color from texture pixels.
+- **Block item picture** [record]: A block item is drawn in the shape of the block in inventories and forms, and scaled up to fill the slot. To make it appear at 9/16 size, put it inside a transparent 16-pixel frame cube. In inventories the south face is visible, so put the front on the south. The item icon texture is not required.
+- **Block state order** [record]: The client matches block runtime IDs in block state order. If you merge the state into one number, the order cannot drift from the server.
+- **Entity model orientation** [record]: Entity models are drawn half a turn from the world (the model's front faces north). When converting world coordinates to model coordinates, flip only the sign of z and leave x as it is.
+- **Block texture animation** [docs, record]: One entry in `textures/flipbook_textures.json` animates one tile of `terrain_texture.json`. The image is a vertical strip (width 16, height 16 x frame count) and takes `ticks_per_frame`, `frames` (an ordered array) and `blend_frames` (on by default). A custom block animates with no other component if the texture in `material_instances` is that tile. The two files are merged across packs. All blocks animate at the same tempo, and switching it on and off is done by changing the texture through block state permutations. In item icons it does not animate depending on the version (Bedrock Wiki).
+- **Interactive blocks** [record]: On top of a block the server sent as an interactive block (Dragonfly `Activatable`), the client does not predict placing the block it holds.
+- **Debug shape text direction** [record]: `Rotation` of a debug shape is [pitch, yaw, roll] in degrees, and yaw 0 reads from north. The reference differs from entity yaw (south 0, north 180), so using it as is flips north and south. A value in radians is effectively 0 degrees.
+

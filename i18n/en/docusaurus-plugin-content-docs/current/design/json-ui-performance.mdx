@@ -1,0 +1,115 @@
+---
+title: JSON UI optimization
+description: What slows a screen down (creation, bindings, drawing) and how to reduce it. Creation gates, binding conditions, choosing between grid and factory, screen open speed, and a checking order.
+sidebar_position: 1
+sources:
+  - repo-guide
+  - private-research
+  - bedrock-samples
+---
+
+# JSON UI optimization
+
+Everything that makes JSON UI slow is on the client. Even if a server form is heavy, server TPS stays the same and only the screen of the player who opened the form freezes (community reports). This page gathers the performance rules and community reports scattered across other chapters, by the stage where the cost arises. Rule IDs point to the original text in each chapter.
+
+## 1. Cost comes from three stages
+
+| Stage | What is expensive | How to prevent it |
+| --- | --- | --- |
+| Creation and layout | Creating controls and computing size and position. It is paid when the screen opens and when a factory recreates cells | `ignored`, factory length 0 (section 2) |
+| Binding evaluation | Bindings and expressions are re-evaluated according to their conditions | `binding_condition`, gathering calculations in one place (section 3) |
+| Drawing | Visible controls are drawn every frame | `visible: false`, reducing element count (section 6) |
+
+The most common misunderstanding is that `visible: false` removes the cost. **`visible` only stops drawing and does not stop creation and layout** (COL-10). A screen hidden with `visible` under the server form was fully created and laid out every time any form was opened (measured with 5,546 controls repositioned), and several reports say hidden elements also cost parsing. In the community, many hold that the main cause of lag is bindings rather than layout.
+
+## 2. Not creating: creation gates
+
+When there are several screens or tabs, switching from "create everything and hide" to "create only what is needed" has the biggest effect. There are three methods (COL-12).
+
+| Method | When evaluated | Condition material | Cost |
+| --- | --- | --- | --- |
+| `ignored` | Once at control creation | `$variable` only | Not created |
+| Factory `#collection_length` | Runtime, binding | `#binding` expression | Not created if 0 |
+| `visible` | Every frame | `#binding` expression | Creation and layout cost stay |
+
+### `ignored`
+
+- If `"ignored": true` or a `$variable` expression is true, the control is **not created at all**. There is no binding or layout cost either (FILE-16). The result is the same as `remove` in `modifications`.
+- `ignored` is evaluated only once at creation time and cannot use `#binding`s (FILE-17). So it is used to turn off a whole vanilla element, or to turn off a feature with a pack setting variable.
+- `ignored` does not see that control's own `$` declarations and reads only the parent scope. Pass the gate variable to the parent and put `ignored` on the child (FILE-34).
+- As an exception, a control created by the HUD title factory receives the title string as the variable `$title_text`, so it can be filtered with `ignored` (FILE-17, COL-17).
+
+### Computed length factory (a runtime gate)
+
+- If a factory's `#collection_length` is 0, nothing is created. Putting in a condition converted to 0/1 like `((#title_text = 'my_screen') * 1)` makes a gate that "creates that screen only when the condition holds" (COL-11). A full example is in recipe 4 (PAT-04) of [Pattern recipes](../json-ui/recipes.mdx).
+- When there are many screens, pick from one gate with a `property_bag` dictionary lookup. Put `"#route_<title>": ["screen id"]` in `property_bag` and feed the result of `('#route_' + #title_text)` into `#collection_length`, and only that one screen is created from `control_ids` (HOST-06, COL-22, COL-23). It worked in game measurement without freezing (COL-39).
+- If you put `binding_condition: "visible"` on the factory length binding inside a hidden layout, the invisible layout did not create button cells (BND-32). But a layout that is visible from the start created the cells on the first frame.
+
+### Pitfalls of gates
+
+- **Inside** a layout created by a gate factory, action form button data reached only the cells of `grid` + `collection_name`. Fixed `collection_index` cells and inner factories were empty (COL-40). Build the button list inside a gate with a grid. But in a window created by a router placed in `$screen_content` of `third_party_server_screen`, when all the cell bindings were set to `binding_condition: "always"`, fixed cells, toggle cells and inner factories were filled as soon as it opened (COL-47, C-65). With the default condition they were empty at first and filled only after switching a tab once.
+- A factory inside a cell created by a factory was not created at first if `#title_text` and the length binding had the default condition. Give both bindings `always` (COL-48).
+- If you always keep a scroll area covering the whole screen outside the router, it took over touches of other forms' buttons and the close button even when empty (LAY-57). Put the scroll area inside the window the router creates.
+- The expressions of every control that can be created must be safe even for wrong input (an empty string, another form's body). A setup in which an expression that puts a string into a numeric property is created in every form froze or killed the client (DBG-19). Make an expression that goes into a numeric property get created only inside a gate that checks the input format.
+- Putting `once` on the `#visible` of a layout chosen by title left the previous layout on while the form changed. Keep this binding `always` (BND-31).
+
+## 3. Reducing binding cost
+
+- **Use `once` for values needed once**: a value that only needs to be decided once, like whether a toast icon shows, gets `"binding_condition": "once"`. It is re-evaluated when a factory recreates the control (BND-06). There is also a report that putting `once` on the factory and grid length bindings of a big form reduced lag and ghost buttons (community report).
+- **Do heavy calculations once in one place**: do calculations such as string parsing in one place, the parent or a data source control, and have the children take only the result with `source_control_name` (BND-10). If several places use the same value, put a size-0 data source control at the screen root and have each gate read that value (BND-11).
+- **No several bindings on the same target**: if you attach several bindings to the same target, they are not merged and the last one wins. Merge them into one expression. A binding that reads and writes the same name (reading `#len` and writing to `#len`) becomes a loop, the string keeps growing and memory increases (community report).
+- **Keep repetition tricks short**: there is a report that the trick of repeating a string with a binding loop stops after about 20 repetitions, and a case-insensitive search that runs a `property_bag` mapping per character lagged when typing a long input or erasing it (community report).
+- **The HUD data channel**: even when the HUD is hidden by the inventory, chat, a form or F1, title and actionbar are still processed. With a heavy binding, processing backed up and froze for several seconds up to about a minute. Increase the update interval to 2~4 ticks or put the data control in `hud_content`. A 10,000-character title also had no problem once user bindings were reduced (community report).
+
+## 4. Lists: grid and factory
+
+| Situation | What to choose | Evidence |
+| --- | --- | --- |
+| Many buttons of the same shape | `grid` (`collection_name` + `#maximum_grid_items`) | A report that a grid loaded even 10,000 buttons at once. A button factory of more than 3000 (the `stack_panel` of vanilla `long_form`) froze for about 60 seconds even when hidden (community report). A test drawing the same buttons as a one-column vertical stack factory also lagged heavily (COL-49) |
+| One fixed button per cell | A fixed `collection_index` cell | A stack that walks whole buttons per row (a 48-cell grid + a material row) took 4~5 seconds to open, while a fixed layout that reads just one button per cell took about 1 second (COL-37, COL-06) |
+| A form with mixed row kinds | A row type factory | It creates a cell for every matching row, so count the cells. Push cells that are not their own row off screen (COL-13) |
+
+- A 2-column grid (30px cells) was fine up to 2000 buttons (about 30000px), and from 3000 (about 45000px) only the scroll range was long and the cells were drawn overlapping at the top. Whether the cause is the count or the height was not settled (COL-49). Beyond that, split into pages on the server.
+- To fix cells in two dimensions, put horizontal stack rows that have `collection_name` inside a vertical stack. If the cell parent was a `panel`, every cell drew button 0, and the `offset` of stack children did not move the cells (COL-50, LAY-56).
+- Factory cost is **cell size x count**. A screen with hundreds of controls in one node took several seconds to open if all tabs were sent, and it was solved by sending only the selected tab's node (COL-18).
+- Keep only one button per cell. Having both a pressable one and a non-pressable one doubles the controls (COL-37).
+- When there are many buttons, split into pages. But there is a case where a form took about 30 seconds to open even with many pages, so reduce the number of controls built at once before the number of pages (community report).
+- `max_children_size` is the maximum number a factory creates. A second factory sharing the same data uses up the limit even on invisible items (COL-16).
+
+## 5. Opening screens fast
+
+- **Light first tab, defer the rest**: merging 3 elements per store card into 1, deferring expensive content of tabs not opened first (button text, 3D block rendering), and opening with the lightest tab took 1.6 seconds down to 0.8 seconds (community report). For tabs, create only the selected one with the gate of section 2.
+- **Tabs and selection on the client**: if you make tabs and list cells radio toggles and put the details inside the `checked` state of a cell toggle, it changes without a server round trip and without closing the form. Send the server only actions it must know about, like a proceed button (INP-36). The details can be created by a `visible` condition factory the first time a cell is chosen (BND-32). The setup is in [Server form research screen](./server-form-research-screen.mdx).
+- **Hidden forms also stay in memory**: there is a report of merging into one toggle rather than hiding several forms with different styles (community report).
+- **Turn off open animations**: giving `third_party_server_screen` `"$screen_animations": []` and `"$background_animations": []` makes the form appear immediately without animation. On a screen where the menu is visited often, the next form does not overlap or flicker (HOST-43).
+- The rule of thumb that about 75 elements is fine was shared (community report).
+
+## 6. Drawing cost
+
+- For elements you never use, turn them off with `ignored: true` rather than `visible: false`. `visible: false` keeps processing so an FPS cost remains (FILE-16, community report).
+- Border markers such as `"debug": "red"` for checking layout are costly. Remove them when done checking (community report).
+- To hide only itself while keeping the children, use `alpha: 0` + `propagate_alpha: false`. A child's alpha is multiplied by the parent's alpha (community report).
+- If the text of a list in a scroll area looks empty until something touches it, it is a layer problem, not lag. It happens when a label is on the same layer as the background image. Put the icon on `layer: 2` and the label on `layer: 3`, above the background (LAY-55). Changing binding conditions or expressions did not fix it.
+
+## 7. Checking order
+
+1. Count how many controls are created for one screen. In-game debug overlays (Conduit Client, etc.) show element and binding counts, the factory tree and FPS (community report).
+2. Replace big chunks hidden only with `visible` (other screens, other tabs) with the gates of section 2.
+3. Turn button lists into a grid or fixed cells and reduce the number of controls per cell (section 4).
+4. Gather bindings that do the same calculation in several places into one data source, and put `once` on values that do not change (section 3).
+5. Defer expensive content that is not visible on the first screen (section 5).
+
+## Related rules
+
+| ID | Page | Contents |
+| --- | --- | --- |
+| FILE-16, FILE-17, FILE-34 | [Files and definitions](../json-ui/files-and-definitions.mdx) | The meaning, evaluation time and scope of `ignored` |
+| BND-06, BND-10, BND-11, BND-31, BND-32 | [Bindings](../json-ui/bindings.mdx) | `once`, gathering calculations, data sources, gate binding conditions |
+| COL-10 ~ COL-13, COL-16, COL-18, COL-22, COL-23, COL-37, COL-39, COL-40, COL-47 ~ COL-50 | [Collections and factories](../json-ui/collections-and-factory.mdx) | Creation gates, factory and grid cost, dictionary lookup, data inside a router window, grid limits |
+| LAY-55 ~ LAY-57 | [Controls and layout](../json-ui/controls-and-layout.mdx) | Text layers, `offset` inside stacks, touch of scroll areas |
+| INP-36 | [Input, buttons and toggles](../json-ui/input-buttons-toggles.mdx) | Client tabs and selection |
+| HOST-06, HOST-43 | [Screen hosts and data channels](../json-ui/screen-hosts-and-data.mdx) | Screen routing, open animation |
+| DBG-19 | [Debugging, verification and version management](../json-ui/debugging-and-versions.mdx) | Safety of expressions created in every form |
+| PAT-04 | [Pattern recipes](../json-ui/recipes.mdx) | A computed length factory example |
+
+The evidence for items marked "community report" is private research (community conversations) and is at the level of a report by one or more people. Figures differ by device and version, so measure again on your own screen.

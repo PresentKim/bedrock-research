@@ -1,0 +1,268 @@
+---
+title: "Editors, language servers and debuggers"
+description: "VS Code extensions, Blockception, jsonui-lsp, the Mojang debugger, bridge., mobile development environments"
+sidebar_position: 1
+sources:
+  - private-research
+  - ms-learn
+  - blockception-schemas
+  - jsonui-lsp
+  - minecraft-debugger
+  - bridge-editor
+  - repo-tool-analyses
+---
+
+This page covers editors, language servers and debuggers for writing add-on JSON and scripts. For each tool it records what it does, installation and use, limits and license. To state the conclusion first, for ordinary add-ons the combination of VS Code, the Blockception extension and npm type packages is the safest (Source: private research), and for JSON UI jsonui-lsp provides input assistance while the Mojang debugger handles script debugging.
+
+| Tool | What it does | License |
+|---|---|---|
+| Blockception extension | JSON schema validation of whole add-ons, a language server, lint | Schemas BSD-3-Clause |
+| jsonui-lsp | JSON UI autocomplete, go to definition, find references, color display | MIT |
+| Minecraft Bedrock Debugger | Script breakpoints, profiler, diagnostics | MIT |
+| bridge. | An add-on-specific editor (web, desktop) | GPL-3.0 |
+| Lantern, Command Checker, etc. | File grouping, mcfunction checking | Varies by extension |
+
+## The Blockception VS Code extension and schemas
+
+**What it does.** Blockception Ltd's "Minecraft Bedrock Development" extension validates and autocompletes manifests, entities, blocks, items, animation controllers, particles, mcfunction and more with schemas. The schema repository is `Blockception/Minecraft-bedrock-json-schemas` (BSD-3-Clause, Copyright 2020 Blockception Ltd, examined commit `e04436c`) and is split into the folders `behavior`, `resource`, `general`, `language` and `skinpacks`. The schema originals are written by hand in `source/` and an action minifies and exports them into per-folder schemas (Source: tool-blockception-schemas, `README.md`).
+
+**Installation.** Install the extension id `blockceptionltd.blockceptionvscodeminecraftbedrockdevelopmentextension` from the VS Code Marketplace. It is not on Open VSX, so VSCodium installs the `.vsix` from the release directly.
+
+**Using only the schemas.** If you copy `vscode-settings.example.json` of the schema repository to your project's `.vscode/settings.json`, VS Code validates with `json.schemas`. Writing one entry by hand looks like this.
+
+```json
+{
+  "json.schemas": [
+    {
+      "fileMatch": ["manifest.json"],
+      "url": "https://raw.githubusercontent.com/Blockception/Minecraft-bedrock-json-schemas/main/general/manifest.json"
+    }
+  ]
+}
+```
+
+How to set up Neovim (jsonls), JetBrains and Sublime Text is in the repository's `docs/guide/ide_setup.md`, and for Neovim you put the same entry (`description`, `fileMatch`, `url`) in `settings.json.schemas` of `lspconfig.jsonls.setup` (Source: tool-blockception-schemas, `docs/guide/ide_setup.md`).
+
+**Limits.** As summarized in the community notes below, it sometimes flags syntax that is valid in the game as an error, so make the final judgment with the game content log. Setting the editor language mode to `jsonc` removes comment warnings.
+
+## jsonui-lsp: JSON UI input assistance
+
+**What it does.** CoolLoong's VS Code extension `CoolLoong.jsonui-support` (display name jsonui-lsp). It consists of a VS Code client and a Rust language server (tower-lsp, tree-sitter JSON parser), and its features are autocomplete of control types, properties and binding values, go to definition and find references for `name@namespace.base`, and color swatches for `color` arrays. It has no diagnostics (error underlines), hover descriptions, previews or expression checks, so it is an "input assistance tool", not a "validation tool" (Source: tool-repo-analyses, jsonui-lsp analysis).
+
+**Installation.** Install `CoolLoong.jsonui-support` from the VS Code Marketplace. The extension activates when a `json` language file is opened (`onLanguage:json`), and the engine requirement is VS Code 1.66 or later. There are two settings, `jsonui-support.log.level` and `jsonui-support.options.auto_append_suffix` (automatically adds a comma after values). To build from source you need rust, nodejs and bun: run `bun i -D webpack-cli` and `bun i`, then debug with F5 (Source: tool-jsonui-lsp, `README.md`, `package.json`).
+
+**How it works.** It indexes every `.json` file in the workspace (up to 8 in parallel). It embeds a dictionary `vanillapack_define_<version>.json` (about 2 MB) extracted from all of vanilla `ui/` as "namespace -> top-level controls -> type and `$variable` lists (including the inheritance chain)", and a workflow checks Mojang `bedrock-samples` for new tags every 6 hours and updates it.
+
+**Limits.**
+- The Marketplace version (v0.3.1) bundles the vanilla 1.21.120.4 dictionary, and the main source has the 1.26.50.4 dictionary. To use the latest dictionary, build main yourself.
+- The property name and value dictionary is hand-written, so it does not suggest 124 of the 277 vanilla properties (`button_mappings`, `factory`, `grid_position`, `anims`, `collection_index`, `focus_*`, etc.).
+- It maps one file to one namespace, so if two files use the same namespace, only the later one is found.
+
+**License.** MIT. `LICENSE` names the original template author `IWANABETHATGUY` (2022).
+
+## Mojang Minecraft Bedrock Debugger
+
+**What it does.** An extension (`mojang-studios.minecraft-debugger`) for debugging JavaScript running in Minecraft from VS Code. It supports breakpoints, step execution, the Locals window, Watch, performance diagnostics and running slash commands, and does not support changing variable values or immediate mode (Source: tool-minecraft-debugger, `README.md`, MIT, Copyright Microsoft Corporation, commit `ac0b589`).
+
+**Setup.** On Windows, for the client to attach to VS Code on the same PC, add a loopback exemption once with administrator rights.
+
+```powershell
+CheckNetIsolation.exe LoopbackExempt -a -p=S-1-15-2-1958404141-86561845-1752920682-3514627264-368642714-62675701-733520436
+```
+
+Preview has a different SID (`S-1-15-2-424268864-5579737-879501358-346833251-474568803-887069379-4040235476`). In `.vscode/launch.json` at the pack root, write this.
+
+```json
+{
+  "version": "0.3.0",
+  "configurations": [
+    {
+      "type": "minecraft-js",
+      "request": "attach",
+      "name": "Debug with Minecraft",
+      "mode": "connect",
+      "targetModuleUuid": "<script module UUID>",
+      "localRoot": "${workspaceFolder}/",
+      "port": 19144
+    }
+  ]
+}
+```
+
+Start with F5 in VS Code and then run `/script debugger connect` in the game. If you use a bundler, use `sourceMapRoot` and `generatedSourceRoot` instead of `localRoot`. The detailed flow and the profiler are on the [Debugging and tooling](../scripting/debugging-and-tooling.mdx) page.
+
+**Limits.** After reconnecting, breakpoints have to be turned on again, and the notes below include a report that around 26.40 attach failed repeatedly and `listen` mode was needed.
+
+## bridge.
+
+**What it does.** An add-on-specific editor with a project folder structure (RP, BP, models and textures in one folder), per-file-type autocomplete, compile plugins and mcfunction generation. Both the web app (`editor.bridge-core.app`) and the Tauri desktop app come from the same source (`bridge-core/editor`). The license is GPL-3.0 (Source: tool-bridge-editor, `LICENSE`, commit `8eaccaf`).
+
+**Limits.** Updates are slow (no animation preview, a report that format_version 1.26.20 and later is unsupported), it cannot read `.mcstructure` (NBT), and script support is only partial. Details are in the notes below.
+
+## Community notes
+
+The following are details and reported bugs about editors, extensions, mobile development and TypeScript tools gathered in the community survey.
+
+Terms such as `(confirmed)`, `(single report)` and `(conflicting)` are reliability markers of the reports.
+
+### Development environment and editors
+
+#### Choosing an editor
+- **Desktop standard**: experienced people use raw VS Code and link the com.mojang folder with a directory junction. bridge. v2 is fine for beginners. MCreator has no Bedrock option.
+- **Recommended combination**: the combination of VS Code + the Blockception extension + npm type packages is better than bridge. for scripting (the extension handles JSON and npm modules handle JS). For beginners, Blockbench + VS Code or bridge. v2 is recommended.
+- **VS Code JSON validation errors can be wrong**: trust the in-game content log. Blockception also sometimes flags syntax as an error that is not in the docs but is valid in the game. In that case just test it (tryitands.ee).
+- **Bedrock JSON allows comments**: changing the editor language mode to `jsonc` removes the warning underlines.
+- **No VS Code extension gives bridge.-style item/block JSON autocomplete as is** (as of 2026-05-22).
+- **The Zed editor**: it has helix mode and multibuffer and is mentioned as a VS Code replacement. Its extensions are still thin. To use the Bedrock JSON schemas, copy the schema list from the Blockception VS Code plugin's `package.json` into `lsp.json-language-server.settings.json.schemas` and point at, for example, `https://raw.githubusercontent.com/Blockception/Minecraft-bedrock-json-schemas/refs/heads/main//behavior/animation_controllers/animation_controller.json`. It was also mentioned as a JSON UI editing environment. (single report)
+- **VS Code workspace setup**: a setup that puts the RP and BP in one multi-root workspace and uses the Minecraft Bedrock Debugger, Blockception and Snowstorm extensions together is recommended. Tidy pasted code with Prettier and catch syntax errors across several JSON files with a JSON validator.
+- **Other editor opinions**: IntelliJ/WebStorm and the Windsurf extension are also mentioned. The preference order of frequent helpers was VS Code, bridge. v2, text editors, then generator apps. (single report)
+- **VS Code tips**: the old default theme comes back if you choose Dark Modern in "Preferences: Color Theme". Turn off terminal sticky scroll in Terminal > Integrated > Sticky Scroll Enabled.
+
+#### The Blockception VS Code extension (Minecraft Bedrock Development)
+- **Identifiers and repositories**: extension id `blockceptionltd.blockceptionvscodeminecraftbedrockdevelopmentextension`, language server `https://github.com/Blockception/minecraft-bedrock-language-server` , JSON schemas `https://github.com/Blockception/Minecraft-bedrock-json-schemas` (written by hand, not generated). It passed 100 thousand installs on 2025-12-10.
+- **Source of the schemas**: built from `metadata/schemas` and `documentation` of bedrock-samples.
+- **Not on Open VSX**: because an agreement with the Blockception company is needed. The workarounds are to install the `.vsix` of the releases directly, or to set `"vsix.extensions": ["github:Blockception/minecraft-bedrock-language-server@0.0.41"]` in the VSIX Manager extension (`https://github.com/zokugun/vscode-vsix-manager`). The engine requirement rose to `^1.120.0`, so older versions such as VSCodium 1.105 cannot install the latest release.
+- **Turning off diagnostics**: ignore with a comment on a line or at the file root (`mc-disable`, 9.0.13, 2026-01-05~06). Docs: `https://github.com/Blockception/minecraft-bedrock-language-server/blob/main/documentation/mc-disable.md`
+- **`.mclint` linting (9.1.6, alpha)**: a `.mclint` at the workspace root enforces namespaces, identifier format and allowed namespaces. Docs: `https://github.com/Blockception/minecraft-bedrock-language-server/blob/main/documentation/project/MCLint.md`
+- **Release pipeline**: the global Azure DevOps PAT used for publishing expires on 2026-12-01, so it is being moved to `@vscode/vsce` trusted publishing (OIDC). The npm package is published with GitHub OIDC trusted publishing. 9.0.4 shipped by mistake without the JSON schemas and was fixed soon after. In 2026-01, `npm i bc-minecraft-bedrock-vanilla-data` once failed with a `@blockception/packages-shared` 404.
+- **Known bugs**
+  - If JSON warnings flicker briefly, downgrade "Microsoft Edge Tools for VS Code" to `v2.1.7`.
+  - When "Processing diagnostic queue failed. Error: Invalid arguments" appears, diagnostics of the whole file disappear. Suspected cause (AI analysis, unverified): the position of an empty node `{}` is undefined so it becomes `character: NaN`. Reproduction: `"minecraft:emitter_shape_point": {}` in a particle. It also appeared when saving an RP animation controller in 9.1.4.
+  - 9.0.21 showed "command 'bc.minecraft.export.pack' already exists". Fixed on 2026-03-17.
+  - It rejects file names containing spaces (issue #165). A feature rule without conditions raises "Cannot read properties of undefined (reading 'placement_pass')" (9.1.17).
+  - It wrongly flags `minecraft:geometry.full_block` as an error.
+  - With format_version `1.26.0`, the custom component check gave false positives (fixed in schema PR #551). No suggestions show in the entity `all_of`/`none_of`/`any_of` arrays (issue #599).
+  - It sometimes needs a restart and sometimes highlights the wrong line.
+  - It shows a wrong error on the BP identifier of format_version 1.26.60 items (2026-11-01, unresolved). There are also reports that Molang coloring and intellisense disappeared (2026-03), and that autocomplete stopped when turned on together with the Bedrock Definitions extension (2025-11). It can show many errors on projects that had none in bridge. v2. (single report)
+  - If a Hytale manifest is in the same workspace, it is recognized as a Minecraft manifest. Turn the extension off per workspace or use a VS Code profile.
+- **Schema accuracy notes**
+  - `load_on_low_memory` was removed from sound_definitions in 1.16.
+  - In an animation controller it says it does not know `context.owning_entity`, because Molang contexts differ per resource kind.
+  - The manifest module's `entry` is not in the MS manifest reference (it appears only in the scripting introduction).
+  - Items added in 1.26.10 (for example `minecraft:pushable_by_block`) were reflected only on 2026-03-29.
+  - Changing the format version shows outdated components.
+  - Some block components lack version gating.
+- **`minecraft:weight` of spawn rules**: the schema says 0..100 and the docs say "priority", but vanilla husk uses 240 and a 10x test shows it works as a relative weight. The docs are quite possibly wrong. The maintainer supports only behavior that has a vanilla example.
+- **Molang support**: it gives Molang help, but the Molang query mapping Mojang published (`bds-docs/.../mojang-molang-queries.json`) has not been brought in yet. The problem of ternary expressions displayed with added parentheses was only a display problem and was fixed on 2026-04-16.
+- **Error code docs**: `https://github.com/Blockception/Minecraft-Error-Codes` is not up to date.
+
+#### bridge.
+- **Site and web app**: `https://bridge-core.app/` , web editor `https://editor.bridge-core.app/` . It works on mobile (as a home screen PWA on iPhone) and has script definition autocomplete and mcfunction generation. It cannot connect to com.mojang on mobile.
+- **Releases**: v2.8 nightly (`https://nightly.bridge-core.app/` , 2025-11-29), the v3.0.0 pre-release (2026-05-11, `https://github.com/bridge-core/editor/releases/tag/v3.0.0` , about 3 years of work, 980+ commits). The v3 rewrite PR changed about 962 files and deleted 35 thousand lines (including the schema folder). The original author Solvedev has been unreachable since late 2025, and outercloud maintains it.
+- **Updates are slow**: in 2025-12 there was a report that it was "broken". There is no animation preview, no new script types or item-catalog template, and it does not support format_version 1.26.20+ (2026-08). The schema rejects `block_face`, the `ambient_occlusion` number and an integer `count`. The texture_set `color` autocomplete is wrong. It compiles float `0.0` to `0` in entity property ranges.
+- **`generated_with` in the manifest**: it puts `generated_with` metadata (for example `bridge 2.7.52, dash 0.11.7`) in the manifest. Module versions use `"beta"`.
+- **Script entry**: the user has to create an entry file such as `scripts/main.js` by hand to match the manifest `entry`. If it is missing or empty, "could not load main" appears. TypeScript support is only partial.
+- **File icons and extensions**: icon color distinguishes BP (red) from RP (blue) animation controllers. If one is in the wrong folder it shows red, and you fix it by setting the directory to `RP/animation_controllers` directly. In the mobile editor, create an RP animation controller as `name.ac`. Tutorial: `https://youtu.be/5wq_mw5AzIM`
+- **It cannot read `.mcstructure` files (NBT)**: opening one shows garbled content, so do not edit them.
+- **Mobile performance**: heavy and slow on Android 11+ (the import/export stage).
+- **"error parsing entity" after an update**: if it appears after a game update, re-import the pack to fix it.
+- **Encrypted packs**: the claim that bridge. automatically decrypts encrypted packs was refuted (**conflicting**).
+- **Limits of the plugin ecosystem**: a plugin that bundles an external library (for example Vue Flow) is hard to distribute, because the plugins repository and docs assume publishing in `.vue` source form. The iframe API (`https://bridge-core.app/extensions/iframe-api/index.html`) is the closest alternative.
+- **bridge-core Molang library**: `dieRoll`/`dieRollInt` in `lib/env/math.ts` are unfinished as of 2026-09-09.
+- **Storage and backups**: v2 stores projects in the browser's IndexedDB (PWA), so files moved by hand do not show up in bridge. and are hard to recover. Files deleted in bridge. are permanently deleted with no recycle bin. There are reports of losing projects after an update or losing unsaved files on the web version, and cases where automatic backups saved a pack. Export is "export as .mcaddon" in the three-dot menu.
+- **GDK sync**: after 1.21.120, relink the project's com.mojang path to the Shared development folder and restart. In 2.7.52 there were cases where sync stopped or new files were not reflected. On the web version, clearing the site's cookies and data after exporting sometimes fixes it. Entities created outside the project do not show in the file tree.
+- **Other constraints**
+  - DataCloneError on iOS 26.1. v2.8 is said to have many bugs.
+  - Change the default namespace in the project settings.
+  - Item events cannot be set in the editor, and `player.entity.json` and new biome files have no autocomplete. `enchantable` was added late.
+  - The automatic fix that put "/" in `queue_command` values was patched.
+  - A tree editor template exists but saving is unstable (2026-11).
+  - The problem of repeated folder permission requests and project creation failing on mobile (2026-11) was directed to be reported as a GitHub issue.
+- **Where to ask about import problems**: to the bridge. server.
+
+#### Other VS Code extensions
+- **Mojang Minecraft Debugger** (`mojang-studios.minecraft-debugger`): gives breakpoints, script profiling, the `diagnosis` command (live performance diagnostics), and packet/transition information. After reconnecting, breakpoints must be turned on again. Otherwise the world freezes or crashes when you alt-tab. There is a report that the game froze at a breakpoint right after 1.21.120 (single report). Setting example: `type: minecraft-js`, `request: attach`, `mode: listen|connect`, `targetModuleUuid`, `localRoot`, `port`. To use npm you may need to change the PowerShell execution policy. Docs: `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/developer-tools?view=minecraft-bedrock-stable`
+- **A debugger fork for Neovim**: `https://github.com/Paperweightt/minecraft-debugger` (arbitrary code breakpoints, no performance diagnostics).
+- **Lantern** (`Hatchibombotar.bedrock-file-grouper`, `https://github.com/Hatchibombotar/lantern` , MIT): groups files by entity/item/block in the sidebar without moving files on disk. Folders under `BP/entities` become groups.
+  - v0.3.0: importing vanilla entities
+  - v0.4.0: script links (`@lantern-links-entities`/`@lantern-links-items` codelens). There are also the `// @lantern ["custom:goblin"]` and `// @lantern:region` syntaxes from keyyard's PR. It does not recognize ids made as a const.
+  - v0.5.0: blocks and assets folders
+  - v0.6.0: importing snippets from external repositories
+- **Command and structure extensions**: MCBE Command Checker (`Tomocraft.mcbe-command-checker`, mcfunction validation), MCStructure Preview (`Tomocraft.mcstructure-preview`, no support for block state rotation and custom blocks).
+- **Animation controller graph preview**: `pixelmancer.controller-view`.
+- **Extension list recommended in 2026-07**: Minecraft Bedrock Glyph Viewer (`Nicita3.minecraft-bedrock-glyph-viewer`), `Nobuwu.mc-color`, `JannisX11.snowstorm`, `mojang-studios.minecraft-debugger`, `pixelmancer.controller-view`, Blockception. Use LibreSprite for pixel art.
+- **Bedrock Emoji Viewer** (`BeyondBedrock.bedrock-emoji-viewer`): shows custom glyphs inline and opens a picker with ctrl+shift+u. It is not compatible with bridge..
+- **Bedrock Dialogue Node Editor** (`aevarkan.bedrock-dialogue-node-editor`): edits NPC dialogue as a node graph. A scene dock was added in v0.3.0. As of 2025-12 it does not parse `rawtext` properly.
+- **ModularMC syntax extension**: `pixelmancer.modular-mc-syntax`.
+- **JSONTE extension**: `MCDevKit.jsonte-vscode`.
+- **featurelab extension**: `stirante.featurelab`. See section 13 for details.
+- **Minecraft Bedrock NPM Updater**: stopped updating after module versions changed from 1.x to 2.x. A patched `dist/extension.js` was shared.
+- **npm package version extension**: `https://marketplace.visualstudio.com/items?itemName=idered.npm`
+- **NBT extension**: the VS Code "NBT viewer" (`Misodee.vscode-nbt`, Deepslate-based) supports 3D preview only for Java `.nbt`. For `.mcstructure` it shows only the NBT tree. It is used for editing structures and `level.dat`.
+
+#### Mobile (Android) development
+- **File access restrictions**
+  - Android 11+: the SAF picker cannot grant `Android/data` access.
+  - Android 13: access is blocked without Shizuku.
+  - Android 15/16: editing the game data folder is blocked. The ZArchiver+Shizuku workaround is unstable. New folders cannot be created inside `com.mojang`, and even MT Manager or Shizuku-based file managers can only modify and copy existing files. The safe routes are .mcpack/.mcaddon import or connecting to a PC over USB.
+  - iOS accesses `com.mojang` directly with the Files app.
+- **LeviLauncher** (`https://github.com/LiteLDev/LeviLaunchroid`): uses a separate com.mojang so you can edit `development_*_packs` directly. With the ordinary data folder, imported packs go to the non-development folder and are not updated.
+  - From 1.5.x the storage location is `/storage/emulated/0/Android/media/org.levimc.launcher/minecraft/com.mojang.minecraftpe/internal/games/com.mojang` (there is also `_shared/external|internal/...`).
+  - If version isolation is on, files may not be visible.
+  - Open it with Acode's "Add Path".
+  - It also supports structure export and native Ctrl+R reload.
+- **Acode** (`https://github.com/Acode-Foundation/Acode`): uses a built-in LSP.
+  - Install `npm i @minecraft/server` in the pack folder and place a `jsconfig.json` (`moduleResolution:node, target:ES2022, checkJs:true, include:["scripts/**/*"]`).
+  - For the LSP, use vtsls or a STDIO LSP and turn off the Web Worker LSP.
+  - In some versions the LSP breaks in external folders (1.12.6/1.12.9 and nightly work). The 2026-06 update brought native TS autocomplete and broke most plugins.
+  - JSON autocomplete: install `npm i @minecraft/bedrock-schemas` and specify `"$schema": "../node_modules/@minecraft/bedrock-schemas/schemas/bp/entities/index.schema.json"`.
+  - There is also a Minecraft Autocomplete plugin.
+- **Termux**: use `pkg i neovim nodejs`, typescript-language-server and LazyVim. While Shizuku is running, access Android/data with `rish -c "<cmd>"`.
+- **Other editors**: Acode, QuickEdit (can open Android/data file by file), SPCK, Rhmsoft Code Editor (Android), Kodex (iOS), Pocket Editor, GitHub Codespaces, and MiXplorer and ZArchiver (file management) are used. There is a report that Acode shows many duplicate JSON errors. Setup guide: `https://wiki.bedrock.dev/guide/project-setup-android`
+- **Side effects of third-party editors**: some editors empty manifest.json. Packs must be in `development_behavior_packs` to reload automatically.
+- **Mobile add-on maker apps**: Minecraft Addon Maker (MAM), Crafty Craft and the like have many ads and odd results such as wrong UVs for textures that are not 16. They also cause errors by putting `generated_with` in the manifest (you can just delete it). In general they are not recommended (there is also an opinion that recommends them to beginners).
+  - MAM pitfalls: saving many edits in one add-on breaks file generation, so start over with a new add-on. Keep `min_engine_version` at the latest. Failures saving entity JSON or `on_use` items, giant lang files and delayed support for new features (about a month for spear) were reported.
+  - If the Blockbench preview and the game result differ, check geometry and animations one by one (for an entity derived from enderman, remove the head position animation). The 3D hand model needs "High Resolution" and attachable settings.
+  - As a next step bridge. is recommended, and the M.A.P app is not recommended either.
+- **Packs generated by Bedrock Tweaks**: they were not visible on Android until reinstalling. The metadata had `product_type`.
+- **Iterative development**: com.mojang is read-only, so the .mcpack has to be re-imported every time you change something. USB tethering or a desktop environment is recommended. People also automate it with a Node compiler that sends `reload`/`reload all` over websocket `/connect`, or a Python script that bumps the manifest version + `tsc` + zip. [ui/one reporter]
+- **Mobile-friendly web tools**: Bridge, Blockbench, Snowstorm. But Blockbench web crashed on mobile Chrome when opening the paint menu and worked in another browser. Blockbench for Termux needs an Electron build, and the web version does not support plugins.
+
+---
+
+
+### TypeScript and Script API development tools
+
+- **TS must be compiled to JS**: the game runs only JS. Compile on every save with `tsc --watch` or `npx tsc --watch` and `/reload` in the game. Build check is `npx tsc --noEmit`. TS examples can be converted to JS with transform.tools/typescript-to-javascript. Docs: `https://wiki.bedrock.dev/scripting/typescript`
+- **Autocomplete in a pure JS pack**: run `npm install @minecraft/server` in the folder that has the pack.
+- **Checking API versions**
+  - API versions available per game version: `https://www.npmjs.com/package/@minecraft/server?activeTab=versions`
+  - As of 2026-04-19 the latest stable is `@minecraft/server` 2.6.0, used together with `@minecraft/server-ui` 1.3.0. Types 2.7.0 in 2026-05 and 2.8.0 in 2026-07 were mentioned.
+  - A 1.10.0 -> 2.2.0 changelog PDF was shared (by one reporter, some versions guessed).
+  - JaylyBot posts the `npm i @minecraft/server@<ver>` (stable/beta/preview) command, and also has `/docs info <module>` and a code debug feature.
+- **Custom block state types**: `BlockStateSuperset` of `@minecraft/vanilla-data` is a type alias, so use declaration merging.
+  ```ts
+  type CustomStateSuperset = BlockStateSuperset & {"ns:state": string};
+  declare module "@minecraft/server" { interface BlockPermutation { getState<T extends keyof CustomStateSuperset>(...) } }
+  ```
+  A simple way is casting with `permutation.withState("ns:state" as keyof BlockStateSuperset, ...)`.
+- **TS pitfall**: property types of object literals widen to `string`. Use `readonly`, `as const` and `satisfies`.
+- **Choosing a bundler**: the Microsoft starter template (ESLint+prettier, almost no content), rolldown, esbuild, Bun. Bun installs much faster than npm/pnpm. `@minecraft/math` (Vector3 operations) must be bundled. Custom npm libraries are used the same way (MS docs "Core build tasks").
+- **Direction in `@minecraft/math`**: it treats north as Z+, but in Bedrock -Z is north.
+- **Hiding code**: minifying is practically the only way. Obfuscation tools include shitfuscator.xyz (a private VM approach) and pack-obfuscator.
+- **Type sources**: bedrock-apis/bds-docs (preview branch) has BDS-generated types and JSON schemas (including ddui) and `@bedrock-apis/env-types`. XeroAlpha/caidlist collects ids from the gametest source. `update_vanilla_data.mjs` in mrpatches123/patchy-testing-stable converts the vanilla-data enums.
+- **Testing**: Bedrock-OSS/minecraft-server-jest (jest mock). Benchmark libraries such as IPC with vitest or big data, not in the game (in the game, tick delay dominates the result).
+- **Testing when using AI coding agents**: E2E tests (Playwright, seeded test users) and hand-written tests are recommended. Unit tests alone pass too easily.
+- **Attempts in other languages**
+  - Gleam -> JS: given up because there are no classes or associated functions.
+  - The Result/Option pattern: awkward in TS since JS built-ins use undefined/null and exceptions.
+  - arexon's `bedoxi_server` Rust crate: runs Rust (wasm-like) with Script API bindings.
+  - JS pitfall: `const y = layer--` returns the previous value and changes the variable.
+- **WebSocket (`/connect`)**: you can subscribe to events such as PlayerMessage. gist: `https://gist.github.com/jocopa3/5f718f4198f1ea91a37e3a9da468675c` . See section 19.4 for details.
+- **npm trusted publishing**: pushing a tag makes GitHub Actions publish without a token (a one-time setup on the npm side is needed). Example workflow: `https://github.com/Aevarkan/command-wrapper/blob/2dcd9101ddc35f7ee181d521844fbd545545e380/.github/workflows/publish.yml`
+  - In the 2026-05 npm supply chain attack (the TanStack postmortem `https://tanstack.com/blog/npm-supply-chain-compromise-postmortem`), a `pull_request_target` workflow ran even for an immediately closed PR and poisoned the Actions cache. A similar case: `https://github.com/nrwl/nx/security/advisories/GHSA-cxm3-wv7p-598c`
+  - In publishing pipelines, avoid `pull_request_target` that uses a cache. nx made publishing through Trusted Providers mandatory (`https://docs.npmjs.com/trusted-publishers#supported-cicd-providers`).
+- **Testing GitHub Actions locally**: `nektos/act` (`https://github.com/nektos/act`).
+
+### Documentation and references
+
+- **Frequently cited MS Learn pages**: latestplatformversion, guidelinesforbuildingcooperativeaddons, the Blockbench docs, the camera system, and componentlist and filterlist of entityreference. It was pointed out that MS docs mix preview and stable content.
+- **Community material**
+  - bedrock-tools.dev: Search Samples, a geometry viewer (cannot open encrypted models)
+  - The Bedrock Technical Resource Pack wiki: `https://github.com/RavinMaddHatter/Bedrock-Technical-Resource-Pack/wiki`
+  - SmokeyStack parity: `https://github.com/SmokeyStack/parity`
+  - The useful-links and software-preparation pages of the Bedrock Wiki, the Bedrock-OSS add-on-registry
+  - Bedrock Wiki contribution guide: `https://wiki.bedrock.dev/contribute`
+
+---
+

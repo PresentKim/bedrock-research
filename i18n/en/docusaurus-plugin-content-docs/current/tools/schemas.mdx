@@ -1,0 +1,157 @@
+---
+title: "JSON schemas"
+description: "Installation, defects and vanilla validation results of the four JSON UI schemas and the Blockception schemas"
+sidebar_position: 2
+sources:
+  - private-research
+  - repo-survey
+  - blockception-schemas
+  - bugrock-schemas
+  - repo-tool-analyses
+  - ms-learn
+---
+
+A JSON schema is the most common "validation tool", giving autocomplete and error underlines in editors such as VS Code. This page sorts out how to install the four public JSON UI schemas and the Blockception schemas that cover whole add-ons, and how far they can be trusted. The survey method was to validate the 205 UI files of vanilla 1.26.50.4 (excluding `_ui_defs.json` and `_global_variables.json`) as they are with the four schemas. Vanilla is what the game really reads, so most errors on vanilla are false positives of the schema (Source: tool-repo-analyses, jsonui-schemas analysis).
+
+| Schema | Repository | License | Files with errors out of 205 vanilla | Error count |
+|---|---|---|---|---|
+| KalmeMarq Bugrock-JSON-UI-Schemas | `KalmeMarq/Bugrock-JSON-UI-Schemas` `de118a3` | No license file | 186 | 2,224 |
+| DJStompZone MCBE-JSON-UI-Schemas | KalmeMarq's 2025-02 fork `398d49b` | No license file | 186 | 2,241 |
+| Blockception latest source | `Blockception/Minecraft-bedrock-json-schemas` | BSD-3-Clause | 43 | 116 |
+| Blockception version bundled in the extension (v8.0.46) | The same company's VS Code extension | BSD-3-Clause | 193 | 2,251 |
+| zelisce JSON-UI-Schemas | `zelisce/JSON-UI-Schemas` `1f7bbec` | MIT | Not measurable | `$ref` points to a string so the schema itself does not load |
+
+## Installing the KalmeMarq schemas
+
+There is no license file, so the schema body is not copied and only the usage is written. The published configuration example (README) hooks the four schemas into `json.schemas` with file patterns.
+
+```json
+"json.schemas": [
+  {
+    "url": "https://kalmemarq.github.io/Bugrock-JSON-UI-Schemas/ui.schema.json",
+    "fileMatch": ["*.ui.json", "*.uidx", "ui/**/*.json",
+                  "!_global_variables.json", "!_ui_defs.json", "!/textures/**/*.json"]
+  },
+  {
+    "url": "https://kalmemarq.github.io/Bugrock-JSON-UI-Schemas/ui_defs.schema.json",
+    "fileMatch": ["ui/_ui_defs.json"]
+  },
+  {
+    "url": "https://kalmemarq.github.io/Bugrock-JSON-UI-Schemas/global_variables.schema.json",
+    "fileMatch": ["ui/_global_variables.json"]
+  }
+]
+```
+
+Hook `ui.sprite.schema.json` to `textures/**/*.json` (9-slice sprite definitions), and exclude `flipbook_textures.json`, `item_texture.json`, `terrain_texture.json`, `texture_list.json` and so on. The repository has `ui.schema.json`, `old_ui.schema.json`, `ui.sprite.schema.json`, `ui_defs.schema.json` and `global_variables.schema.json`, and the README has a per-screen table of the version each was introduced in.
+
+## Installing the Blockception schemas
+
+It is BSD-3-Clause, so copying the settings fragment is fine. Copy the repository's `vscode-settings.example.json` to `.vscode/settings.json`, or put a `json.schemas` array inside the `settings` of a `.code-workspace`. The source of the UI schema is `source/resource/ui/` (one file per property) and the build result is `resource/ui/ui.json` (Source: tool-blockception-schemas, `README.md`).
+
+## Defect summary
+
+- KalmeMarq and DJ: the size expression regular expression allows only one term, so it rejects `"100% - 4px"`, and the texture regular expression rejects `/`. 4 property names that vanilla has (18 for DJ) are missing from the schema.
+- Blockception latest: `additionalProperties: false` makes every unknown property an error, enums are neutralized by an alternative that allows "any identifier", and 50 vanilla property names are missing. The version bundled in the extension rejects `100%c`, negative numbers and expressions in sizes.
+- zelisce: the size regular expression rejects decimals and negative numbers and allows `*` and `/`.
+
+## Engine facts the schemas revealed
+
+1. `grid_position` is `[column, row]` (x, y). In 20 vanilla grids, `grid_dimensions` is `[column count, row count]` and the first value of a child is the column (for example `[3, 0]` in the `[4, 1]` grid of `trade_screen.json`). The first edition of the guide's `[row, column]` (LAY-29) was wrong.
+2. Only `+` and `-` are used in size and position expressions. Of the 551 kinds of vanilla size strings (12,806 uses), 0 contain `*` or `/`, while decimal coefficients (`56.25%x`) and negative numbers (`-50% + 10px`) are used (LAY-44).
+3. Passing a schema does not mean the game allows it, and a schema error does not mean a game error. All four schemas either produce false positives on vanilla or let through values that vanilla does not have (`clip_direction: "dwn"`, `anchor_from: "left"`, NetEase-only properties) (DBG-23~25).
+4. Vanilla also has broken values: `"size": [ "fill%", "100%" ]` (sidebar_navigation.json), a one-element `"size": [ "100%, 100%" ]`, an `"ignored"` expression with unclosed parentheses, and an empty `"max_size": []`. So "it appears once in vanilla" is not evidence that the value is valid.
+
+## How to use them
+
+Use schemas for catching typos and autocomplete, and make the final judgment with the game's content log or the [JSON UI tester](./jsonui-tester.mdx). If size expression errors pour out all at once, it is a problem with that schema's size regular expression, so turn off only that rule or point directly at the Blockception latest source.
+
+## Errors in official and community documentation
+
+The notes below collect gaps and errors in documentation based on Microsoft Learn, the Bedrock Wiki and NetEase documents, and how to contribute to the docs.
+
+## Community notes
+
+Terms such as `(confirmed)`, `(single report)` and `(conflicting)` are reliability markers of the reports.
+
+### Documentation and references
+
+#### Official material
+- **Microsoft Learn** (`https://learn.microsoft.com/en-us/minecraft/creator/`): many say the search is poor. Search Google with `site:learn.microsoft.com` or search the docs GitHub repository. Report errors at `https://github.com/MicrosoftDocs/minecraft-creator/issues` (for example 962 leash, 976 spawn rule rarity). A release summary example: `https://learn.microsoft.com/en-us/minecraft/creator/documents/update1.26.40?view=minecraft-bedrock-stable`
+- **Docs team plans (2026-10)**: the team was newly formed. It is building a system to update the docs on every release, and plans to have an experimental branch updated with each preview and a stable branch updated with each release. The 26.50 update summary page did not exist as of 2026-10-13.
+- **Mojang/bedrock-samples** (`https://github.com/Mojang/bedrock-samples`): vanilla BP/RP is used the most, JSON schemas next. The `documentation/` folder is the main source of bedrock.dev.
+  - Metadata: `metadata/json_schemas` (the engine's own "Cereal" schemas, internal truth), `metadata/command_modules` (current command syntax), `metadata/schemas`, `metadata/vanilladata_modules/mojang-blocks.json`/`mojang-items.json` (`command_name`, `name`, `raw_id`, `serialization_id`, `serialization_name`), `mojang-biomes.json`. The metadata has `CEREAL_EDITOR_SCHEMA_TAG`.
+  - `serialization_id` does not correspond to `en_US.lang` keys.
+  - The metadata is used with every update for things such as aux ID generation.
+- **Gaps in bedrock-samples (reported 2026-08~09)**
+  - Missing: `BP/aim_assist`, `BP/cameras/presets`, `BP/feature_rules`, `BP/features`, `BP/item_catalog`, `BP/worldgen/{structures,structure_sets,processors,template_pools}`, `RP/block_culling`, `RP/cameras`, `RP/ddui`, `RP/font`, `RP/items`, `RP/materials`, `RP/pbr`, `RP/point_lights`, `RP/shadows`, renderer textures, attachable and feature definitions, chemistry and experimental content. worldgen files are in the BDS experimental folder.
+  - As vanilla files move to `.brarchive`, the need for samples to be complete has grown.
+  - `behavior_pack/blocks` was added in commit 1.26.50.26 (preview branch). Add-ons cannot override it (the `minecraft` namespace, `internal_vanilla_data`) and use it as a reference. Mojang plans to publish new blocks this way by default.
+- **Errors in bedrock-samples**
+  - The client `player.json`/`player.entity` and `player.animation.controller` are broken. When modifying the player, use the files from the game install.
+  - The iron golem RP references a nonexistent `controller.render.iron_golem`.
+  - 1.10 format items (most foods) remain.
+  - The array format changes every release, causing diff noise.
+  - The player.json in stable can lag behind beta.
+- **Mojang/bedrock-schemas** (`https://github.com/Mojang/bedrock-schemas` , npm `@minecraft/bedrock-schemas`, announced by mammerla 2026-03-24): provides JSON schemas and .d.ts but is at an early stage.
+  - Identical interfaces and enums are duplicated (for example `MinecraftBehaviorDigOnStartFilters`), and there are unused enums (`MinecraftBehaviorDigControlFlags`). `VoxelShapeDocumentMinecraftVoxelShape` and `VoxelShapeFile` are duplicated.
+  - There is no `npc` component, and the `scenes` of NPC dialogue is wrongly typed as a string array.
+  - Reported 2026-09-20: in many schemas, `$id` sends `$ref` to the wrong place so they effectively do not work. There are no manifest v3 and `aggregate_feature` schemas. An example of a wrong description: `metadata/json_schemas/server/entity/1.26.50/CatchFireSubcomponentDefinition.json`.
+  - Schemas polished for the docs are edited at `https://github.com/MicrosoftDocs/minecraft-creator/tree/main/content/forms` . Many fields accept `true`, strings and objects alike, so the schema has to be kept loose.
+- **Molang query mapping**: `https://github.com/bedrock-apis/bds-docs/blob/preview/metadata/molang_modules/mojang-molang-queries.json` (for editor extensions).
+- **Vanilla tags**: Mojang does not publish them. There is a community action `https://github.com/bedrock-dot-dev/vanilla-tags` (for example `stable/items.json`, v1.26.3.1). Block tags and most item tags are not data-driven, so they have to be dumped with an in-game script. The values of the wiki tables (`https://wiki.bedrock.dev/assets/tables/blocks/vanilla-block-tags/tags.json`, `tags_per_block.json`, `items/vanilla-item-tags/tags.json`, `tags_per_item.json`) contain backtick markdown. `Bedrock-OSS/bedrock-wiki-content-generator` scrapes only the vanilla packs.
+- **Item ID lists**: `https://learn.microsoft.com/en-us/minecraft/creator/reference/content/vanillalistingsreference/items?view=minecraft-bedrock-stable` , `https://wiki.bedrock.dev/items/item-catalog`
+- **Default vanilla packs**: `https://bedrock.dev/packs` . There is also a mirror at `https://github.com/ZtechNetwork/MCBVanillaResourcePack` .
+- **Editor changelog**: `https://github.com/Mojang/minecraft-editor/discussions` (triaged daily).
+
+#### Errors and gaps in the docs themselves (the 2026-08 docs feedback thread)
+- **Worldgen and data docs**: the jigsaw template pool page lists `legacy`/`list` elements that do not exist, and the jigsaw structure folder name is outdated. The explanation of how to apply loot tables is thin, and the entity event list is missing many vanilla events. The animationsreference/volumereference pages are empty or 404. There are no attachable 1.8/1.10 docs. Docs conflict with each other on the validity of `early_out` in `aggregate_feature` and whether placement is sequential.
+- **Script API docs**: `Dimension.getBlocks` is missing even though it is stable. `applyImpulse`/`applyKnockback` have no units and `is_sleeping` is ambiguous. The stable/experimental tabs do not match the types, and for a few weeks before and after a release they disagree with stable. Examples go stale quickly.
+- **Particle sounds**: the docs say particle sound events play from `sound_definitions.json`, but in practice only the existing `individual_event_sounds` in vanilla `sounds.json` worked. (single report)
+- **Behavior missing from the docs**
+  - Renaming at an anvil can change the item texture (MCPE-188505).
+  - `query.lod_index` exists only on bedrock.dev.
+  - Custom component parameters nest only 2 levels of objects (`{"one": {"two2": {"three": "ERROR"}}}`). The error message does not mention this limit.
+
+#### Community documentation
+- **Bedrock Wiki** (`https://wiki.bedrock.dev/`): the standard beginner guide. More up to date than some docs on bedrock.dev.
+  - Main pages: blocks-intro, block-components, custom-crops, block-permutations, block-culling, entity-intro-bp/rp, entity-events, spawn-rules, visuals/animation-effects, meta/addon-performance, scripting/scripting-intro, json-ui-intro/documentation, the commands family (new-execute, execution-forking, scoreboard-operations, etc.).
+  - `llms.txt` (`https://wiki.bedrock.dev/llms.txt`): you can read the raw markdown by turning a page URL into `https://raw.githubusercontent.com/Bedrock-OSS/bedrock-wiki/refs/heads/wiki/docs/<path>.md`.
+- **bedrock.dev**
+  - On 2025-11-12 beta.bedrock.dev was rewritten in Astro, dropping Next.js. Next.js inlined the doc HTML twice (the rendered result and a preflight for hydration), which made it slow. The App Router migration did not fit a static site and locale handling and was reverted.
+  - Translations that had not been updated for over 4 years were removed.
+  - The dark mode CSS problem when switching versions was fixed on 2026-02-27.
+- **BDS-Versions** (github.com/Bedrock-OSS/BDS-Versions): managed by a bot. If you fix the README with a PR it is reverted, so fix the README template (it takes effect after about 15 minutes).
+  - It is updated only after a binary is actually released. A maintainer agreed to put `cdn_root` (`https://www.minecraft.net/bedrockdedicatedserver`) in versions.json.
+  - After the original maintainer (Mojang) left in 2026-07, there was no 1.26.40 tag, so bedrock.dev stayed at 1.26.30.5. On 2026-08-07 this was fixed to clone the repository directly instead of using releases or tags.
+  - The docs update ping bot in #bedrock-dev-docs-updates runs on pushes/releases of BDS-Versions.
+  - Even for the same release, build numbers can differ by platform (for example Linux BDS 1.26.40.8 versus 1.26.40.5 on the site).
+- **Script API docs mirrors**
+  - stirante: `https://stirante.com/script/` . Has typedoc per module/version and a diff tool (for example `/script/server/2.10.0/classes/BlockPermutation.html`, `/server/2.6.0-beta.1.26.0-preview.26/`, debug-utilities, server-ui preview). It downloads BDS, builds script module JSON, converts to .d.ts and feeds typedoc. Automated with a GitHub Action since 2026-02. Sometimes down.
+  - jaylydev: `https://jaylydev.github.io/scriptapi-docs/latest/` . Provides search, archived old versions, npm commands, editor-private-bindings, per-class TS source, an LLM prompt page (`https://jaylydev.github.io/scriptapi-docs/meta/llms.html`) and a manifest generator (`https://jaylydev.github.io/manifest-generator/`).
+- **Other docs**: the-bedrock-notebook.dev (material docs). Dingsel's JSON UI YouTube (`https://www.youtube.com/@Dingsel`). Video series `https://www.youtube.com/watch?v=QhJkCDIZ-NU` (code `https://skyls.de/`). Easing reference `https://easings.net/` .
+- **Bedrock Commands Community (BCC)**: `https://bedrockcommands.org/join` . The owner Zhea manages the bedrock.dev commands side, and there is a binary-in-commands doc. Other help communities are the "Break the Bedrock" server and MCPEDL.
+- **Changelog search**: SearchLog `https://searchlog.beyondbedrock.org` , the changelog reader `https://minecrews.com` , preview file change tracking `https://github.com/SmokeyStack/brarchaeology` .
+
+#### How to contribute to the Bedrock Wiki
+- **Images**: put them in `docs/public/assets/images/<page path>/`, and in `<WikiImage>` drop the `/public/...` prefix (the file name alone is enough).
+- **Redirects and sections**: when you rename a page, add an entry to `redirects.yaml` (moved out of `.vitepress`). Sections are defined by `section.yaml` (title, optional `categories`). The front matter has `category`, `mentions`, `nav_order`, `tags` and `description`. Specifying `category` in a section without categories causes a build error.
+- **Style**: write file paths as `<CodeHeader>path</CodeHeader>`, do not put `:` in titles, do not use manual `---` dividers, and use case consistently. Run it locally before a PR. Revert the list format change of Prettier v3.4.0 with `prettier-plugin-markdown-list-tabwidth`. Mermaid supports light and dark themes.
+- **Search**: uses Algolia. Crawling was fixed in 2025-11, and in 2026-04 pages with a slash in the name dropped out of the index.
+- **Repository size**: giant GIFs (up to 41.9MB) were shrunk. Use `git clone --filter=blob:none`. Do not push old `bedrock-examples` submodule commits.
+- **License**: MIT/CC-BY ("Bedrock OSS"). SPDX headers are added only to large code contributions, and other contributors are listed in `mentions`.
+- **Traffic**: 43 thousand clicks in 2025-12 and about 45 thousand/month in 2026-04, a declining trend, with more AI crawlers. A note on contribution direction: long `/execute` chain articles were judged of limited use on Bedrock, which has scripting.
+- **Listing criteria for the server software list (2026-10)**: at least 3 months old, has its own README or site, roughly 15 stars, supports one of the latest 3 protocol versions or has recent commits, and must be clearly different from the fork source. Geyser and others move to a "Crossplay Software" section. Discontinued software (PocketMine, Nukkit, BDSX) stays as a historical record.
+
+#### Bug reports
+- **Route**: report at `https://report.bugs.mojang.com/servicedesk/customer/portal/6/` and look up at mojira.dev (`https://mojira.dev/MCPE-xxxxx`). If you disagree with triage, comment on the report and tell the Mojira community. If a fix moved the problem elsewhere, create a new report and link the existing report and the fixed version. Use Kaleidoscope for image comparison.
+- **Mojang's position (darknavi)**: a crash caused by creator content is always a bug, so report it with reproduction steps. kaylasara (Mojang) said she would pass an organized mojira list to the team. Experiments exist so that UGC depending on broken behavior is not supported.
+- **Issues mentioned**: MCPE-232019, MCPE-236312 (`minecraft:support` fails to block placement), MCPE-237057, MCPE-19214, MCPE-38136 ("Unknown was slain"), MCPE-240457 (temp variable leak), MCPE-240513 (playSound/property), MCPE-23686 (unfused TNT, patched by Canopy ≥1.5.4), MCPE-164588, MCPE-237219 (Editor text field).
+
+#### Using AI
+- **Reliability**: AI answers are hard to trust for Bedrock commands and the Script API (invented fog transitions, claims such as "holiday creator features were removed", deprecated APIs like `runCommandAsync`). Prefer the official documentation.
+- **Real use cases**: there are cases of building a Regolith filter, a Molang engine and a memory checker with Claude. AI-written JSON UI was also seen in bedrock-samples commits. Mcblend does not need a dedicated MCP, and the Blender MCP (`https://www.blender.org/lab/mcp-server/`) plus a SKILL.md/AGENTS.md describing Mcblend constraints is enough. A particle AI skill (Particle Jester): `https://github.com/lia2rich/particle-jester` . The jaylydev docs, the wiki and ModularMC provide llms pages.
+- **Reports of use in modeling**: making about 5 cube models with Claude used about 15% of the usage window and the quality was low. There is also a case of making a weapon with a model and animations using GPT and MCP. AI is weak at tuning features and invents APIs that do not exist. (single report)
+
+---
+

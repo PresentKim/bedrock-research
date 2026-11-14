@@ -1,0 +1,53 @@
+---
+title: "Crafting data: CraftingData, recipe locking, creative list"
+description: "The CraftingData packet, recipe filters and live unlocking, server-side shape checks, how the creative inventory relates to the recipe book"
+sidebar_position: 5
+sources:
+  - private-research
+  - dragonfly
+  - gophertunnel
+  - private-research
+---
+
+## Concept
+
+The client knows only the recipes the server sent in the `CraftingData` packet (recipe book and crafting grid results). A server either reads the BP's `recipes/*.json` and sends it, as BDS does, or builds a packet from the recipe list in its code, as Dragonfly does. The `ClearRecipes` flag lets this packet be **resent at any time to replace the whole list**, so recipes can be locked and unlocked during play. The client recipe book lists only recipes whose result is in the **creative inventory list** (the `CreativeContent` packet), and only **when the block state also matches**. (Source: private research)
+
+```text
+server -> client:  CraftingData { Recipes: [...], ClearRecipes: true }   // replace the list
+server -> client:  CreativeContent { Items: [...] }                       // result list the recipe book looks at
+client -> server:  ItemStackRequest ... CraftRecipe(networkID) / AutoCraftRecipe  // picks a recipe by ID
+```
+
+## Per-player recipe locking and live unlocking (Dragonfly)
+
+If you lock recipes and then unlock them one at a time during play, an unlocked recipe can appear in the recipe book and crafting grid immediately.
+
+- Dragonfly sends the full list once at join, builds a `network ID -> recipe` table per session, and accepts crafting requests (`CraftRecipe`, `AutoCraftRecipe`, smithing, stonecutter) only through that table. An ID not in the table falls through to dynamic recipes (decorated pots), and is rejected if it is not there either.
+- Upstream has no per-player filter, so the fork adds one to the session: only the recipes the filter picks are sent in `CraftingData` and put in the table. Network IDs keep their position in the full list so they do not change. Changing the filter resends immediately. With a filter, dynamic recipes are blocked.
+  - So locked recipes do not appear in the recipe book or crafting grid, and the server rejects them even if a packet is forged.
+- Unlocking by result item name unlocks color and wood-type variants together.
+
+### What is not in the recipe list (must be blocked separately)
+
+- **Furnace, smoker and blast furnace smelting**: Dragonfly smelts through the item's `Smeltable`, not the recipe list. To lock it, add separate checks when inserting into the furnace and when smelting.
+- Processing in custom blocks is server code, so that code must check the lock state directly.
+- Brewing (potions) is in the list, so it is locked along with the rest.
+
+## Recipe book and creative inventory
+
+The client recipe book lists only recipes whose result is in the **creative inventory list** (`CreativeContent`), and only when the **block state** also matches.
+
+- Custom items and blocks: anything that is a recipe result must be registered in the creative list to show up in the recipe book. A test that checks every recipe result is in the creative list catches omissions.
+- Vanilla blocks: many block results in the vanilla recipe data (`crafting_data.nbt`) have a different state than the creative entry (about 30 kinds, such as chests and composters). Sending the recipe result's block runtime ID set to that of the item's creative entry (when there is only one entry) makes them appear.
+
+## What to fix in upstream crafting handling (Dragonfly)
+
+- **Shape check**: Upstream takes the ingredients of the recipe the client picked regardless of slot position. The server must check that the items in the crafting grid match the recipe shape (anywhere inside the grid, mirrored only when allowed) and reject otherwise. For recipes that forbid a mirrored layout, send `AssumeSymmetry=false` to the client.
+- **Recipe cache**: Build recipes and creative data once per block registry, share them, and fix the recipe network IDs (Source: private research).
+
+## Comparison with BDS
+
+BDS reads the BP `recipes/*.json` (for the `format_version` format, see [../basics/format-version.mdx](../basics/format-version.mdx)), sends it to the client, and handles recipe unlock conditions through the manifest and recipe JSON. In the Dragonfly family, which builds recipes from server code, per-player unlocking is implemented directly with the filter approach above.
+
+A BDS-side technique for making a recipe result a spawn egg: `"result":{"item":"minecraft:spawn_egg","data":"query.get_actor_info_id('type:id')"}` (Source: private research).

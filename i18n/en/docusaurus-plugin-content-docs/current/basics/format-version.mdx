@@ -1,0 +1,61 @@
+---
+title: "format_version: schema version per file type"
+description: "format_version is a schema version per file type, not the game version. Representative values, pitfalls when raising it, and the full wiki survey table"
+sidebar_position: 6
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+---
+
+## Concept
+
+Most JSON files have a line such as `"format_version": "1.21.0"` at the top. This number is the **syntax version of the subsystem for that file type**. It is not the game version. Minecraft uses this value to add new features without breaking old add-ons. For example, a `1.8.0` RP entity and a `1.10.0` RP entity have quite different syntax. Mixing different versions across files is normal. Avoid the temptation to "change format_version to the latest game version". (Source: bedrock-wiki, guide/format-version)
+
+```json
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": { "description": { "identifier": "wiki:ghost" } }
+}
+```
+
+**Automatic correction**: a wrongly written value "falls down" to a valid one. For example, a `1.11.0` RP entity is read as `1.10.0` and gives no error. This system is not well known and does not apply to every file, so do not rely on it.
+
+**How to choose**: download the vanilla packs (bedrock-samples) and follow the value used most often or most recently for the same file type. The tables below are the vanilla distribution counted by the wiki as of 1.21.50 (⭐ recommended).
+
+| RP file | Value (count) |
+|---|---|
+| Animation Controllers | 1.10.0 ⭐ (65) |
+| Animations | 1.10.0 ⭐ (6), 1.8.0 (130) |
+| Attachable | 1.10.0 ⭐ (30), 1.10 (1), 1.8.0 (25) |
+| Blocks Catalog | 1.21.40 ⭐ (1) |
+| Client Entity | 1.10.0 ⭐ (88), 1.8.0 (84) |
+| Fog Settings | 1.16.100 ⭐ (73) |
+| Geometry | 1.16.0 (6), 1.12.0 (30), 1.10.0 (5), 1.8.0 (91) |
+| Particle Effect | 1.10.0 ⭐ (176) |
+| Render Controllers | 1.10.0 ⭐ (24), 1.8.0 (98) |
+| Sound Definitions | 1.20.20 ⭐ (1) |
+
+| BP file | Value (count) |
+|---|---|
+| Entity | 1.21.50 ⭐ (9), 1.21.60 (17), 1.21.30 (1), 1.21.20 (2), 1.21.10 (9), 1.21.0 (28), 1.19.80, 1.19.60, 1.19.50, 1.19.30 (1 each), 1.18.20 (1), 1.18.10 (3), 1.17.10 (1), 1.16.210 (1), 1.16.0 (19), 1.14.0 (6), 1.13.0 (2), 1.12.0 (14), 1.10.0 (1), 1.8.0 (2) |
+| Item | 1.21.30 ⭐ (17), 1.20.50 (5), 1.16.0, 1.16, 1.14 (1 each), 1.10 (45) |
+| Recipe | 1.21.50 ⭐ (13), 1.21.60 (4), 1.21.30 (2), 1.20.60 (3), 1.20.30 (19), 1.20.10 (1315), 1.16 (139), 1.12 (67) |
+| Spawn Rules | 1.17.0 ⭐ (1), 1.11.0 (1), 1.8.0 (51) |
+| Trade Table | 1.18.10 (1) |
+
+These tables are outdated because they are based on 1.21.50 (the wiki page says "Last Updated for 1.21.50" and has no block format). For the latest values, the community reports below take priority. History per file: block-format-history and item-format-history on wiki.bedrock.dev.
+
+## Rules and reports
+
+- **format_version is not the game version**: it is the version of a subsystem/file type (for example game 1.21.131, block format 1.21.130). https://wiki.bedrock.dev/guide/format-version#format-version-is-not-game-version . History per file: https://wiki.bedrock.dev/blocks/block-format-history , https://wiki.bedrock.dev/items/item-format-history *(confirmed)*
+- **Representative values by the wiki (cited 2026-01-03)**: RP attachable, client entity, animations, animation controllers, render controllers, particles `1.10.0`; geometry `1.16.0`; sound definitions `1.20.20`; fog `1.16.100`; blocks catalog `1.20.40`; BP entity `1.21.60`, item `1.21.30`, recipe `1.21.60`, spawn rules `1.17.0`, trade table `1.18.10`. Other observations: BP entity `1.21.130`, render controller `1.8.0`, spawn_rules `1.8.0`, `sound_definitions` `1.14.0` (the more common value).
+- **Latest entity format**: `1.26.0` in 2026-03, `1.26.10` recommended in 2026-04, `1.26.40` on 2026-08-20 (game 26.44). The old 1.16 broke baby spawn eggs without `minecraft:offspring`. In one case a client entity that would not load was fixed with `1.10.0`.
+- **Entity format 1.26.50**: `interactions` of `minecraft:interact` must be an array (several triggers are allowed, around the sulfur cube update). `minecraft:leap_at_target` also needs the new format.
+- **Leaving the format as it is** reportedly protects against behavior changes from updates, except for experimental features. On the other hand there are also problem reports about very old formats *(single reports)*: formats below 1.21.70/1.21.80 caused packet problems on mobile and were fixed, Android could not join a Realm that had old-block-format add-ons after 1.21.120, and a report that values from 1.10 to 1.16.100 are no longer registered while 1.20.10 works (file type unknown).
+- **Raising the format** can make an entity silently disappear because component shapes change. Mixing item formats can make a recipe not show in the recipe book.
+- **Item/block custom components** need a higher format_version to use the new schema (in Preview 26.0.x, item custom components required `"1.26.0"`).
+- **Item tags need item format >= 1.20.50**, `minecraft:use_modifiers` needs 1.26.30, the spear sample needs 1.26.30, and `minecraft:fire_resistant` needs 1.21.120+ (it failed on 1.21.50/1.21.70). Geometry needs >= 1.16 for bindings.
+- **The `is_experimental`** item flag no longer has any effect (experimental gameplay was split into individual toggles). The item `category` description format changed around 1.20.80.
+- **bedrock-samples status**: release zips are at https://github.com/Mojang/bedrock-samples/releases . There are reports that the sample files are obfuscated (2026-10-01), that the full set is not on GitHub so it is extracted from the game folder (2026-11-02), and that the preview `terrain_texture.json` contains only new blocks (2026-11-05). Find biome/feature and sulfur cube JSON in BDS or the game install folder. Link collection: https://wiki.bedrock.dev/meta/useful-links#sample-behavior-resource-packs
+- **Unofficial recipe format**: as of 2026-01 the latest is 1.21.60 (one user), and the `"unlock": {"context": "None"}` example is 1.26.30.

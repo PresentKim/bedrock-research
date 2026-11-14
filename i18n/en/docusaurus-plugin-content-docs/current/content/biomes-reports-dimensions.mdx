@@ -1,0 +1,199 @@
+---
+title: "Biomes, dimensions, limits and versions: community reports"
+description: "Detailed community reports on biomes, custom dimensions, known limits and workarounds, changes per version, tools and resources, and open questions."
+sidebar_position: 23
+sources:
+  - private-research
+---
+
+# Biomes, dimensions, limits and versions: community reports
+
+These are individual reports from community research (2025-10-22 ~ 2026-11-13) that the preceding documents of this page did not summarize. The `[uNNN date]` at the end of each item is the research note number and the report date, and `(single report)` marks content reported by only one person.
+
+### Biomes
+
+- **Format versions**: behavior biome `1.21.110`, client/resource biome `1.21.120` (by the latest Mojang samples, and one member said only 1.21.120 worked). An old 1.13.0 client biome fails with "Cannot load client_biome with format_version 1.13.0", and 1.20.70 and others give `[BiomeRegistry] unsupported version: no parser available`. The error "format_version must be 1.21.110 or higher". A client biome must be in namespaced form. A 1.26.30 format was also seen. The old wiki biome info (1.16.210) is outdated and the MS docs are the latest. The "experimental" label on the wiki is also outdated.
+- **`minecraft:replace_biomes`**: this is needed for a custom biome to generate. A custom biome cannot generate on its own and appears only as a replacement (a biome that replaces nothing is not possible, and both a biome and a client biome file are needed). `targets` must be vanilla biome IDs with the `minecraft:` prefix (tags are not allowed). There is no filter based on neighboring biomes (such as only a beach next to a jungle). A replacement changes only the biome/block kinds and keeps the terrain shape. You cannot mix the vanilla biome layout on the same seed or block the default biomes by any method other than replacement (an attempt at "ocean only" produced only stone).
+  ```json
+  "minecraft:replace_biomes": {"replacements":[{"dimension":"minecraft:overworld","targets":["minecraft:plains"],"amount":1,"noise_frequency_scale":25}]}
+  ```
+- **Patch shapes**: square or sparse replacements are fixed by raising `noise_frequency_scale` (MS example 25), lowering `amount` and adding more targets. "Chunk border" squares come from old chunks stored on disk, so recreate the world. Replacing many vanilla biomes makes world loading slow. `/locate biome` is limited to a radius of about 500 blocks, so when testing raise `amount` or teleport far away, and check real load failures in the Content Log. `/locate biome` fails for a completely replaced vanilla biome, so look for the custom biome.
+- **Replacement behavior details**: if several biomes replace the same vanilla biome, you cannot control each probability (the default ocean probability remains). Defining a BP biome with a vanilla ID overrides it, but only block materials apply on the server side. To make the whole world one biome, use only one biome in the world template. If vanilla trees appear after replacement, it is a mistake in the biome file. A biome that appears at high elevation must replace a vanilla biome that appears high, and snow is decided by the biome.
+- **Dimensions (by period)**: in 2025-11 only the Overworld was supported (no Nether/End replacement). In 2026-01 custom Nether biomes were Preview only. Replacing in the Nether as documented (`"dimension": "minecraft:nether"`, targets `soul_valley`, `basalt_deltas` and so on) had a bug and was fixed in the 2026-05 Preview/hotfix (MCPE-236399, around 2026-05-21). Custom Nether biomes need no scripts or beta modules. A custom End biome is impossible. With non-VV lighting a custom End biome shows the Overworld sky (unresolved).
+- **Components (confirmed to work in 1.21.110)**: `minecraft:climate`, `minecraft:overworld_height {noise_type}`, `minecraft:surface_builder {builder:{type:"minecraft:overworld", sea_floor_depth, sea_floor_material, foundation_material, mid_material, top_material, sea_material}}` (replacing the old `minecraft:surface_parameters`). The Nether uses `type: "minecraft:capped"` with `floor_materials`, `ceiling_materials`, `beach_material` and `foundation_material`. `minecraft:surface_material_adjustments` is a biome component, not a feature (about 17 biomes such as `minecraft:hell` use it for surface decoration without features). Valid `noise_type` presets (1.21.110 samples): default, default_mutated, river, ocean, deep_ocean, lowlands, taiga, mountains, highlands, extreme, less_extreme, beach, stone_beach, mushroom, swamp (`forest` is invalid).
+- **No effect on terrain**: `overworld_generation_rules` is legacy/non-functional, `minecraft:overworld_height` has almost no effect (the height parameters from before Caves & Cliffs are gone), and `sea_floor_depth` seems to change only the surface layer thickness or have no effect at all (unresolved). Biome height is at most about 128 (noise parameters stagnant). Foundation material cannot overwrite the deepslate layer, so a "down to bedrock" block fails (below that the cave biomes take over, and only replacing stone with a feature works). `multinoise_generation_rules` can be overridden for vanilla biomes but cannot be used to place custom biomes. The vanilla biome distribution/noisemap is not exposed. For an ocean custom biome there was advice that `multinoise_generation_rules`, `overworld_height` `noise_type: ocean`, `generate_for_climates` and so on are needed, but it could not be found with /locate (unresolved).
+- **`minecraft:noise_gradient` surface builder (new in 1.26.30)**: uses `noise_descriptor` (`name`, `first_octave`, `amplitudes`) and `noise_block_specifiers` (`range` min/max). By the docs it is for the height range below the terrain. It replaced layers several blocks deep, and the diamond_block range -1..-0.9 did not appear. The meaning of octaves and ranges is unresolved.
+- **Tags and vanilla structures**: tags do nothing by themselves and are used in spawn rules, feature rules and jigsaw. Replacing a vanilla biome loses villages, temples, shipwrecks and trial chambers (because they look for vanilla IDs/tags). Adding the tags of the replaced biome brings back vanilla structures (for example the `plains` tag gives plains villages, and ice plains needs both `ice_plains` and `mutated`). Keeping the vanilla ID and tags makes structures appear but loses custom effects (rain and so on). There is a Python script that adds the tags of the replaced biome automatically (not Marketplace compatible). Village generation can be turned on and off with the biome JSON (including variant selection). The wiki tag page only lists them with no meaning, and it is generated from `tags.json` / `tags_per_biome.json`, so pale_garden was missing until regeneration.
+- **Cave biomes**: replace lush caves/dripstone/deep dark, or make a custom "X-cave" biome matched to the surface. A cave biome only tags the area, so decorate it directly with features (cave_carver, snap_to_surface, ore, growing_plant, vegetation_patch). Generating caves with custom features is heavy.
+- **Grass side color**: the top of grass in a custom biome uses the colormap, but the sides are fixed in terrain_textures so the color does not match (an old bug). A workaround of giving `overlay_color` to `grass_side` in `terrain_texture.json` (`{"textures":[{"overlay_color":"#2eabf9","path":"textures/blocks/grass_side"}]}`) worked for one person and not for another. There is also a workaround using a custom block. The cause is that the vanilla grass_side tint uses the latest side tint (dappled forest), and it is fixed with your own terrain_texture entry or by modifying the grass side overlay (the new color is added next to the existing color).
+- **Client biome colors**: grass/leaf/water/fog colors are set in the RP `biomes/<name>.client_biome.json` (`grass_color` and so on). Tints apply only to grass, default_foliage, dry_foliage and water, and birch/spruce leaves use a colormap. `minecraft:map_tints` is for maps.
+- **Precipitation, snow, fog**: `"minecraft:precipitation": {"white_ash": 2.0}` goes outside climate and needs biome format 1.21.110 or higher. There is a 2025-12 report that `snow_accumulation [0,0]` had no effect and its use in a 26.50 example. Water fog and VV color fog are decided by the client biome referencing a fog file (the VV fog color is the sky horizon color).
+- **Experiment removal and mobs**: Custom Biomes is not an experiment toggle as of 2026-08-30. The sulfur caves ID is `sulfur_caves`. To spawn mobs in a biome, every entity needs spawn_rules. The worldgen biome schema on the wiki is older than MS Learn.
+- **Weather and atmosphere**: weather is global, so an always-raining biome is impossible (fake rain with script checks or collision particles). Negative fog values tint the screen (a biome atmosphere trick). To remove the snow layer of a replaced ice plains, change temperature/downfall. A modified swamp biome did not work on Realms (unresolved).
+- **Resources**: biomes wiki rework https://github.com/Supernova3695/nova_bedrock_wiki (patch-9), biome docs https://bedrock.dev/docs/stable/Biomes. Use current techniques instead of old biome templates, and for extra biomes duplicate all files and rename them. The superflat + biomes thread still works in 2026 except for the tree problem.
+
+### Custom dimensions
+
+- **Registration and status**: register with `event.dimensionRegistry.registerCustomDimension(id)` in the script `system.beforeEvents.startup` (startup only, cannot be rerun with `/reload`). Tutorial: https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/custom-dimension-api-tutorial?view=minecraft-bedrock-stable. It left experimental in 26.30 and was in the stable release on 2026-06-23 (unstable and laggy at first).
+- **Generation**: only the `void` generator ("generator_type": "void") exists, and the default biome is `minecraft:ocean` (ocean mobs spawn). It does not inherit Overworld terrain/biomes and is just a void with Overworld mechanics. Structure sets and feature rules do not run naturally. The ocean biome tag rules were not placed either. Place things only with commands/scripts (jigsaw + script worldgen, features for small additions) and imitate terrain with scripts. This is slow: QuickJS noise and `Dimension.fillBlocks` on large volumes are the bottlenecks, so split volumes, schedule with `system.runJob` and batch native calls. The dimension biome cannot be changed at runtime (use an Editor mod, the offline Amulet API, or the Java to Bedrock Chunker). Trying to switch to a custom biome gave a game error.
+- **JSON dimension definition (26.50+)**: `BP/dimensions/<name>.json` was added in Preview 26.50.25. Both script and JSON registration work, and JSON overrides script registration. JSON is better for setting the height range and default biome. Script registration will be kept "for the time being". The bug that tied dimension bounds to the Overworld -64..320 (MCPE-241528) was fixed and -512..512 returned (2026-08-18 changelog). The components changed from min_y/max_y to `minecraft:dimension_height {min_y, height_range}` (matches Java, the community prefers min/max). `minecraft:default_biome {biome}` is an object for future extension. In 26.45 the height limit could not be set. `minecraft:default_biome` appeared in 26.50, is only for JSON dimensions and also works with custom biomes. In a void dimension too, the biome changes fog/mobs/color and syncs with the Overworld day/night. The format 1.26.50 example used dimension_height -32/224 and default_biome warm_ocean. A 1.26.60 working example (derived from the schema, and a schema validator may show the format_version wrongly):
+  ```json
+  {"format_version":"1.26.60","minecraft:dimension":{"description":{"identifier":"ns:dimension"},"components":{"minecraft:clouds":{"height":-64},"minecraft:dimension_height":{"min_y":-512,"height_range":1024},"minecraft:generation":{"generator_type":"void"},"minecraft:default_biome":{"biome":"minecraft:forest"}}}}
+  ```
+- **The earlier data-driven dimension file**: a format 1.18.0 file that used `minecraft:dimension_bounds` (min/max) and `minecraft:generation` (void) in `minecraft:dimension` was used for things like void generation of vanilla dimensions (https://learn.microsoft.com/en-us/minecraft/creator/documents/datadrivenoverworldheight?view=minecraft-bedrock-stable). In 1.26.20, having several crashed pack loading (MCPE-238456, worked in 1.26.13, fixed around 2026-05-14), and giving custom bounds to a vanilla dimension gave an error. Overlapping void generation with custom generation is impossible. Data-driven Overworld height is at most 512 blocks but works only in a void generator world, and changing the Overworld bounds turns vanilla generation off. Even with a void Nether, the portal builds a platform.
+- **Sky**: there is no supported way to hide the sun/moon or change the skybox of a custom dimension even in 2026-11. There is a report that only the fog of the default biome's client properties applied (another member says it works). A fake sky is made with a big client entity.
+- **ID**: the 26.10 world NBT has a dimension ID map. Custom dimension numeric IDs start at 1000 and go up to 57089 (some say they saw 58079/65376), and the total limit is stored on disk. Dimension 3 is unused. Most Unicode can be used in namespace IDs.
+- **World editing and transfer**: with Chunker (https://github.com/HiveGamesOSS/Chunker/releases/tag/1.17.0) you can put chunks into leveldb and put a prebuilt world into a custom dimension (Sky Dimensions by Starfish, several dimensions succeeded, a recommended method Mojang contributed to in 1.18 but undocumented). Amulet does not support custom dimensions. Bedrock World Editor (https://github.com/8Crafter-Studios/Bedrock-World-Editor) does (DimensionNameIdTable support is being added). Encrypted Marketplace worlds cannot be edited. Chunker also supports converting Java custom dimensions (installed version). Other conversion tools are je2be and WorldPainter (Java only), and after AmuletMC became paid, WorldEdit, the Amulet-Core and Amulet-Map-Editor 0.10 sources, and unmined.net were mentioned as free alternatives.
+- **Requests (unreleased)**: per-dimension time/world clock (world data has WorldClocks), gravity, game rules, weather, sky, portal API (workaround: a custom block without a hitbox + step/inside detection, player.json `inside_block_notifier`, a request for an `onInside`/selection box intersection custom component), dimension reset/temporary dimensions, dimension_types templates, Java-like worldgen JSON (noise settings, biome distribution), client-side dimension definition in the RP. There is an opinion that structure set parameters are unnecessary since villages can be turned on and off with biome JSON.
+- **Other notes**: Hytale worldgen v2 and cubic chunks were mentioned as models. Bedrock stores subchunks from the bottom and stops when only air remains. Feature pattern abstraction, spatial-aware features and wider noise options were requested. There is a case of building a locate feature by reimplementing biome/structure algorithms in scripts.
+
+### Known limits and workarounds
+
+- **onPlayerInteract blocks placement** -> `world.beforeEvents.playerInteractWithBlock` + `system.run`.
+- **Blocks placed by worldgen do not tick** -> x/z 0..15 (without negative extents), `final_pass`, search + feature, or check near players with scripts.
+- **Block size over 30px** -> multi-block, several blocks, entities.
+- **Only one selection box** -> multi-block + voxel shape (planned), entities.
+- **onStepOn not firing on thin blocks** -> a 4px floor cube, `onEntityFallOn`, player tick checks.
+- **Silk Touch/Fortune/vanilla loot hardcoded** -> cancel the destroy event + script drops.
+- **Custom tool durability and digger accuracy** -> reduce durability with scripts.
+- **`use_liquid_clipping` does not work, water showing through behind stairs** -> geometry ~0.001 inflate.
+- **No automatic merging of stacked slabs** -> an interaction script or item replacement method (the slab section above).
+- **No texture change API for blocks** -> material_instances per state + permutation (https://wiki.bedrock.dev/blocks/block-permutations).
+- **Looks dark because of AO** -> `ambient_occlusion` 0, `face_dimming` false, move the face 0.1 forward.
+- **Huge cracks/particles from large atlas textures** -> 16x16 textures per face.
+- **Plants do not stay on custom grass** -> copy the block list of the vanilla placement feature and add to it.
+- **Feature cut at 3x3 chunks** -> structure at the chunk center, 16x16 or smaller, negative extent, `rotate_around_center` + 8,8 offset, or else jigsaw.
+- **Entities in feature structures not generated** -> use jigsaw, or a ticking summon block.
+- **Cannot force jigsaw count/direction** -> make the required room the start piece.
+- **Structures overlap** -> put them in the same structure_set.
+- **Jigsaw road covers houses** -> save the road piece at Y 25.
+- **Features generate inside jigsaw** -> `block_allowlist` on the feature, a floor without grass/dirt tags, structure void.
+- **No seed-based noise** -> coordinate offset salt.
+- **Cannot modify terrain** -> place air/stone/water with features, Molang noise terrain.
+- **Feature rules do not work in custom dimensions** -> script placement (split with `runJob`), insert prebuilt chunks with Chunker.
+- **A custom biome loses vanilla structures** -> add the tags of the replaced biome to the custom biome.
+- **No custom End biome** -> share a low-frequency noise zone across all related rules.
+- **Keeping dynamic block data with scripts (before 26.50)** -> world dynamic properties (position key).
+- **Lines/missing faces between textures after 1.26**: change to a power-of-two size and match the UV.
+- **Vanilla village/structure frequency**: override the structure set and change spacing/separation, or replace the village.
+- **Snow layer on custom blocks**: place under a solid block or avoid cold biomes (final_pass has no effect).
+
+### Changes by version
+
+- **1.19.10 ~ 1.21.120**: features opened by block format_version (see the list in the "format_version" section above: 1.19.40 geometry/material_instances, 1.19.80 transformation, 1.20.10 Molang bone visibility, 1.21.30 hardness override, 1.21.70 isotropic, 1.21.90 UV lock, 1.21.110 atlas tile variation, 1.21.120 alpha tint).
+- **1.20.30**: block "properties" renamed to "states". digger `use_efficiency` started working.
+- **1.20.50**: the NBT editing workaround that exceeded the structure block limit of 64 was blocked.
+- **Before/after 1.21**: jigsaw `max_depth` from 7 to 20.
+- **1.21.30**: `item_specific_speeds` silently fails in formats lower than this.
+- **1.21.50.26 Preview (2024-10)**: data-driven jigsaw stable.
+- **1.21.80**: `minecraft:block_culling_rules` format.
+- **1.21.90**: custom components v2 required, the `minecraft:custom_components` array is invalid, `destruction_particles`, mob spawning on custom blocks fixed.
+- **1.21.100**: the last jigsaw format change.
+- **1.21.110**: behavior biome format, texture variation weights, geometry format for item_display_transforms.
+- **1.21.120**: client biome format, `alpha_masked_tint`, UCF `emissive`. Jigsaw examples updated (Jigsaw_dev_resource.mcaddon).
+- **1.21.124**: flower_pottable + embedded_visual.
+- **1.21.12x (2025-11~12)**: crash from combining two structure add-ons (MCPE-232661). Block protection processors (`protected_blocks`, `block_ignore`, `capped`) added.
+- **2025-11 late hotfix**: report that random tick blocks do not tick (single report).
+- **1.21.130 (2025-11/12)**: multiple collision boxes, `onBreak` and `connection_rule` appeared as experiments. Collision height extended. Editor tools disappeared with add-ons that have jigsaw worldgen folders. Packs with the connection trait blocked joining (error code Boat).
+- **1.21.131 / 1.21.132**: crashes near high scatter and jigsaw, Android structure export failure (from 1.21.132).
+- **26.0 (2026-02)**: `connection_rule`, multiple collisions, stair traits and redstone custom component events stabilized. New traits need format 1.26.0+. `use_liquid_clipping` appeared (not working). Multiplayer problems caused by traits fixed. Some blocks rendered black and were hotfixed. The permutation validation of Preview 26.0.27 (geometry + material_instances pair) was reverted and reappeared in 1.26.20 (MCPE-238086, fixed 2026-05-01).
+- **2026-02-11 Preview**: linear build mode fix. **2026-02-17**: voxel shape bounds check fix.
+- **2026-03-10/11 Preview**: many block bugs fixed (234635, 236314, 235787, 234585, 236308, 234647, 234708, 236362, 235802), setblock failure on non-default parts of multi-block fixed. `minecraft:feature_pool_element` added (around 2026-03-11). The 2026-03 block schema change gave the "Cannot downgrade from modern slice" error (MCPE-237057).
+- **26.10**: block item `liquid_clipped` meaning changed (place only on water). `ambient_occlusion` false turns it off completely. Stair corner bug fixed. `get_level_seed_based_fraction` fails in features (1.26.10). Side shadow of buried models fixed, colored lighting stable (single report), harmless "Unexpected version" log on 1.26.10 blocks.
+- **After 1.26**: textures that are not a power of two/multiple of 8 create lines between blocks and missing faces.
+- **1.26.20**: `minecraft:tags` array confirmed (the old `tag:` is a schema error), the 26.20 Preview strict parser also errors on old-format blocks, `chest_obstruction` breakage report.
+- **26.20.20~23 Preview**: multi-block + placement filter fix, omitting menu_category allowed again (26.20.23). Sulfur cube tags (26.20).
+- **2026-05**: Nether biome replacement fixed (MCPE-236399). height difference filter feature appeared. beforeOnPlayerPlace prediction fixed (MCPE-238017). snowlogging name fixed.
+- **26.30 (2026-06)**: custom dimensions left experimental. `minecraft:geometry` object format. Ore no longer drops with a bare hand/explosion (user report). `noise_gradient` surface builder, instrument sound, `rotate_around_center` fix. snowlogging is experimental until 1.26.30. Multi-block precipitation_interactions is root only (26.30.25). `minecraft:block_entity` in Preview 26.30.28.
+- **26.40**: `minecraft:multi_block_feature`, voxel shape moved to the default vanilla BP, `carry_over_block_entity_data`, block_entity experiment. The plan for stable vertical multi-block was dropped. Kaioga templates are the first target.
+- **26.50 (2026-08/09)**: multi-block (vertical, horizontal) stable. block_entity dynamic properties stable (containers are experimental). Some vanilla blocks became data-driven (loot can be changed). JSON dimension definition (Preview 26.50.25), `minecraft:dimension_height`, `minecraft:default_biome`, bounds -512..512 restored. A block that is invisible only in the inventory (MCPE-241108), multi-block non-root part container breakage, BDS feature files bundled into `.brarchive`.
+- **2026-08-30**: confirmed that Custom Biomes is not an experiment toggle.
+- **2026-09-15**: conditional list feature stable.
+- **26.60**: `minecraft:clouds` component. n_way_visual_rotation host -> client sync (26.60.28/29, Realms problem reports continue). Block containers are still experimental in both the stable release and the Preview.
+- **26.70 Preview / 2026-10**: .mcstructure v2 exported from the Preview (new compression, does not load in the stable release). In 26.70 there is no multi-block non-root container breakage.
+
+#### Documents
+
+- https://wiki.bedrock.dev/blocks/block-components : block components overall (#crafting-table, #liquid-detection, #item-visual).
+- https://wiki.bedrock.dev/blocks/block-format-history : features allowed per block format_version.
+- https://wiki.bedrock.dev/blocks/block-permutations : permutations and limits (#permutation-limits).
+- https://wiki.bedrock.dev/blocks/block-traits#placement-direction , https://wiki.bedrock.dev/blocks/block-orientation (#cardinal-orientation, #axis-alignment), https://wiki.bedrock.dev/blocks/rotatable-blocks , https://wiki.bedrock.dev/blocks/precise-rotation , https://wiki.bedrock.dev/blocks/n-way-rotation#sixteen-way-rotation , https://wiki.bedrock.dev/blocks/custom-heads : orientation and rotation.
+- https://wiki.bedrock.dev/blocks/multi-blocks , https://learn.microsoft.com/en-us/minecraft/creator/documents/multi-blocks?view=minecraft-bedrock-stable : multi-block.
+- https://wiki.bedrock.dev/blocks/tool-based-destruction , https://wiki.bedrock.dev/blocks/ore-loot-tables (#xp-reward-script) , https://wiki.bedrock.dev/meta/blocks-items-qna#disabling-silk-touch : mining and loot.
+- https://wiki.bedrock.dev/blocks/vanilla-block-models , https://wiki.bedrock.dev/blocks/block-models#removing-faces , https://wiki.bedrock.dev/blocks/blocks-as-items : geometry and items.
+- https://wiki.bedrock.dev/blocks/block-visuals-intro (#shading) , https://wiki.bedrock.dev/blocks/block-tinting#texture-tinting , https://wiki.bedrock.dev/blocks/flipbook-textures , https://wiki.bedrock.dev/blocks/block-culling , https://wiki.bedrock.dev/blocks/block-sounds , https://wiki.bedrock.dev/blocks/vanilla-block-tags , https://wiki.bedrock.dev/blocks/custom-glass-blocks , https://wiki.bedrock.dev/blocks/custom-crops , https://wiki.bedrock.dev/items/vanilla-item-tags : visuals, culling, sound, tags, examples.
+- https://learn.microsoft.com/en-us/minecraft/creator/documents/variationsblocktexture?view=minecraft-bedrock-stable , https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/itemdisplaytransforms?view=minecraft-bedrock-stable , https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/traits/connection?view=minecraft-bedrock-stable , https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockcullingreference/examples/blockcullingrules/block_culling : MS block reference.
+- https://wiki.bedrock.dev/world-generation/world-generation-intro , wiki.bedrock.dev/world-generation/generating-custom-ores , wiki.bedrock.dev/world-generation/feature-types.html#carver-features , https://bedrock.dev/docs/stable/Features (#minecraft:single_block_feature, #minecraft:snap_to_surface_feature) , bedrock.dev/docs/stable/Biomes : worldgen docs.
+- wiki.bedrock.dev/world-generation/jigsaw-structures (#processors, #protected-blocks-processor), MS jigsaw example https://learn.microsoft.com/ja-jp/minecraft/creator/reference/content/worldgenreference/examples/jigsawjigsawstructures?view=minecraft-bedrock-stable , wiki.bedrock.dev/loot/randomized-structure-loot (#jigsaw-processors, #example) , wiki.bedrock.dev/meta/world-gen-qna (worldgen Q&A with Mojang).
+- https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/custom-dimension-api-tutorial?view=minecraft-bedrock-stable , https://learn.microsoft.com/en-us/minecraft/creator/documents/datadrivenoverworldheight?view=minecraft-bedrock-stable : dimensions.
+- https://stirante.com/script/server/2.10.0/classes/LootItemCondition.html : script loot API docs.
+- Additional block docs: https://wiki.bedrock.dev/blocks/troubleshooting-blocks , https://wiki.bedrock.dev/blocks/block-visuals-intro#distance-based-render-methods , https://wiki.bedrock.dev/blocks/block-events#redstone-update , https://learn.microsoft.com/en-us/minecraft/creator/documents/voxelshapes?view=minecraft-bedrock-stable . Other page names that were referenced: blocks-intro (#per-face-textures), intercardinal-orientation, block-tags, custom-trapdoors, meta/blocks-items-qna#block-polymesh-model-support, nbt/mcstructure, MS intrinsicblockstateslist, MS vanillalistingsreference/blocks.
+- Additional worldgen docs: https://wiki.bedrock.dev/world-generation/feature-types#tree-features . Other page names that were referenced: MS featuresintroduction, wiki biome-tags, wiki heightmap-noise, wiki structure-features, MS custompartialbiomereplacement, MS introductiontojigsawstructures, MS datadrivenoverworldheight.
+
+#### Vanilla data and samples
+
+- https://github.com/Mojang/bedrock-samples : vanilla samples (some block JSON, `metadata/command_modules/mojang-commands.json`, `mojang-blocks.json`). Vanilla block JSON samples are blocked by `internal_vanilla_data` (for example `block_archetype`) (Mojang 2026-06-23, planning a tool to generate an editable "vanilla version").
+- https://github.com/microsoft/minecraft-samples/tree/main/custom_features/example_feature_set/behavior_packs/example_feature_set/features : MS feature examples.
+- https://github.com/llgava/mcbedrock-features : community copy of vanilla features (not the latest).
+- https://mcasset.cloud : asset resources.
+- https://github.com/Mojang/bedrock-samples/tree/main/behavior_pack/biomes : vanilla biomes (take them from the matching version tag). https://github.com/microsoft/minecraft-samples/tree/main/chill_oasis_blocks_and_features : custom biome example.
+
+#### Templates
+
+- https://github.com/Kaioga5/Kaioga-s-Block-Templates : 71-80 vanilla block templates (including fence 1.20.80, log `templates/1.20.80/logs`, ladder `templates/1.26.50/ladder`).
+- https://www.curseforge.com/minecraft-bedrock/addons/blocks-with-traits-stairs-slabs-fences-and-more : a pack of stairs/slabs/vertical slabs/pillars/glazed terracotta/fences using only traits.
+- https://www.curseforge.com/minecraft-bedrock/addons/connecting-textures : connecting textures.
+- https://scriptlabsmc.vercel.app/templates/stackable-block : stackable block.
+- https://github.com/Alien-Edds/Barrel : entity container barrel. https://github.com/MeerkatMC/mkt-pots : pot template (avoids a duplication bug with `display_item === undefined` instead of `!display_item`).
+- dmahonjr stairs, fence/fence gate and vertical slab templates, Jom's templates (doors), the kaioga vine template, the numeric state stacking template (thread 1434287459591782442).
+- Jigsaw: Jigsaw_dev_resource.mcaddon (1.21.120 outpost/underground, 1.21.132 dungeon/outpost/village/stronghold, supernova3695yt; the stronghold end portal generates only 1/3, roads overlap), vanilla plains village template (1.21.100), Example Jigsaw Dungeon, ancient city jigsaw example.
+- Worldgen example packs: Deeper_Ocean_BP.zip, End_Void_BP.zip, End_Void_v2_BP.zip, New_Project.mcaddon (protected_blocks), Fast Biome Generation Template (1.20.30), vanilla Overworld ore feature/rule zip, 822 vanilla structures of 1.21.131.
+
+#### Tools
+
+- Kaioga Collision Box Editor https://kaioga5.github.io/block-collision-viewer/ (source https://github.com/kaioga5/block-collision-viewer/), Blockbench plugin https://www.blockbench.net/plugins/block_multi_collisions : multiple collision boxes.
+- Blockbench "MC Block Wizard" plugin: mcaddon export (how to merge several blocks into an existing .mcaddon is unresolved).
+- Editors: bridge. (watch for schema errors), VS Code + Blockception extension (watch for false positives), Acode on mobile.
+- Texture Debugging Browser https://github.com/world-class-engineers/mcbe-texture-debug : checks runtime numeric ID mapping (hardcoded map `scripts/modals/item-numerical-ids.json`).
+- Perlin Fiddle 2.0 https://thepixelmancer.github.io/perlin-fiddle/ : Molang noise/terrain prototyping (seed input, infinite generation, preview up to 5000x5000).
+- Jigsaw Structure Builder https://jsonjigsawb.onrender.com/ : a JSON wizard for template pools, connectors and spawn settings (AI-made, needs full identifiers such as `name:name_pool`).
+- MCBE Essentials structure editor https://mcbe-essentials.github.io/structure-editor/ : structure NBT (spawners, vaults, loot).
+- Structure export and conversion: StructureLimitRemoverPC (github.com/JORICK404/StructureLimitRemoverPC), mcstructure-table-editor https://ludwigbooysen.github.io/mcstructure-table-editor/ , changelog search https://searchlog.beyondbedrock.org/?q=Mcstructure , Bloxelizer https://bloxelizer.com/converter , HoloPrint https://holoprint-mc.github.io/wiki/creating-packs , Levi Launcher. NBT editors: NBT Studio, 8crafter NBT editor, Universal Minecraft Editor, VS Code NBT viewer.
+- Worldgen tools: Misode https://misode.github.io/worldgen/structure-set/ , MCBE Essentials world generator https://mcbe-essentials.github.io/world-generator/ (does not reflect sulfur_caves), je2be, WorldPainter, unmined.net.
+- mcstructure preview/editing https://github.com/tomocraft/mcstructure-preview , format docs https://github.com/UohMyGod/mcstructureFileFormat , conversion https://github.com/JaylyDev/nbt-to-mcstructure .
+- Chunker https://github.com/HiveGamesOSS/Chunker/releases/tag/1.17.0 , Bedrock World Editor https://github.com/8Crafter-Studios/Bedrock-World-Editor , Amulet API (offline), Editor mod, LeviLamina (C++ mod loader, changes height limit).
+- The state collection script `everyperm.js` (script-api channel), Code Neon YouTube jigsaw tutorial, jigsaw docs rework PR (supernova3695yt).
+
+### Open questions
+
+- A fix for redstone torches placed beside a custom block turning the consumer on.
+- The official way to attach a custom UI to a block entity container.
+- How to make a 1x2 custom wall portal.
+- Regarding `beforeOnPlayerPlace`/item placement, the exact scope of conditions under which a block placed by an item does not call this hook.
+- Why the Wither breaks blocks even with `minecraft:destructible_by_explosion: false` (a fix other than canceling).
+- How to read `connection_rule` of a block from scripts, and how to recompute connection state after rotating a structure.
+- How to make a mob spawner with an entity in it using permutations, and the problem of trapdoor rotation settings when placing structures.
+- Changing vanilla block map colors, and whether the item frame border is hardcoded as birch_planks.
+- The cause of random tick vine blocks giving "unexpected version" in all formats from 1.20.60 to 1.21.130 on Preview 1.26.10.20.
+- Putting ticking blocks into features such as flowing lava.
+- A fix for custom geode crystal buds always facing down (or up) (a `block_face` direction block).
+- How to rotate a ceiling block with single_block_feature.
+- The meaning of octaves/ranges of the `noise_gradient` surface builder, and what `sea_floor_depth` really does.
+- Why an about 35x64x50 structure is not generated at all by structure_template_feature.
+- A custom snow biome using `inherits` (for example mushroom_fields) not showing in `/locate biome`, and a custom ocean biome not being found by /locate.
+- Why a modified vanilla biome (swamp) is not applied on Realms.
+- How to make jigsaw generate a specific room exactly once or twice (stronghold style).
+- The cause of feature-based random clustering (two appearing stuck together even at scatter_chance 1/1500).
+- Whether End islands can be blocked with structure void.
+- The performance overhead of `Dimension.placeFeatureRule()`, and whether features placed by scripts/commands also have the 3x3 chunk limit.
+- Whether custom dimensions work on BDS when a dimension change crashes BDS.
+- An updated custom tree generation example (the wiki page is outdated).
+- An official way to override vanilla villages while keeping their generation rules. Removal and replacement are partly solved by a case on 2026-11-01 that replaced the plains village by overriding the structure set.
+- The cause of getting blocked when a collision box crosses between two other custom blocks.
+- The problem of jigsaw placement rotating state-based rotated blocks again, and the problem of models rotated by permutations being flipped in the inventory.
+- How to turn off continuous particles emitted by a particle emitter when a block is destroyed/changes state.
+- Whether missing block recognition in processor lists is a bug.
+- The limit on the number of custom dimensions, and changing the sun/moon/sky of a custom dimension.
+- Adding a vault/trial spawner to a vanilla structure, and excluding specific mobs from a biome while keeping shared tags.
+- "Increment by 1" for an integer state with a non-contiguous list of values.
+- A workflow to merge several blocks made with MC Block Wizard into an existing .mcaddon.

@@ -1,0 +1,89 @@
+---
+title: "Dynamic properties and data storage"
+description: "Dynamic property limits, scoreboards, tags, ItemStack and large-storage patterns"
+sidebar_position: 7
+sources:
+  - private-research
+  - ms-learn
+---
+
+## Dynamic properties
+
+A dynamic property is a persistent key-value store attached to the world, entities, players and (non-stackable) ItemStacks. A value is one of `boolean`, `number`, `string` or `Vector3`, and you write it directly with `setDynamicProperty(id, value)` with no declaration. Giving the value `undefined` deletes it. The lookup and management methods are `getDynamicProperty`, `getDynamicPropertyIds`, `getDynamicPropertyTotalByteCount` (for checking total usage), `clearDynamicProperties` and `setDynamicProperties` (Source: ms-learn, `creator/ScriptAPI/minecraft/server/World.md`).
+
+```javascript
+import { world } from "@minecraft/server";
+
+// increment a number (simplified from the official example)
+let n = world.getDynamicProperty("samplelibrary:number") ?? 0;
+world.setDynamicProperty("samplelibrary:number", n + 1);
+
+// store objects as JSON strings
+const raw = world.getDynamicProperty("samplelibrary:longerjson");
+const paint = raw ? JSON.parse(raw) : { color: "purple", intensity: 0 };
+paint.intensity += 1;
+world.setDynamicProperty("samplelibrary:longerjson", JSON.stringify(paint));
+```
+
+The key limits are 32,767 bytes per string and a sandbox per pack UUID (if you change the UUID, the previous data is no longer visible). So when updating, keep the pack UUID and raise only `version`.
+
+## Storage on entities and players
+
+```javascript
+player.setDynamicProperty("my:score", 10);
+const score = player.getDynamicProperty("my:score") ?? 0;
+player.setDynamicProperty("my:score", undefined);   // delete
+```
+
+Player DPs can be written even during death, which is useful for death handling. You can also write them on an ItemStack, but an ItemStack is a copy, so put it back in the slot after writing.
+
+```javascript
+const item = container.getItem(0);
+item.setDynamicProperty("my:owner", player.id);
+container.setItem(0, item);
+```
+
+## Selection criteria
+
+For script data, it is better to use DPs than scoreboards. Scoreboards are easily cleared or edited by commands, and for large data they need many API calls and have size limits. Tags suit light flags, and large structures are split into several keys in DPs.
+
+## Community notes
+
+Below are block DPs, large-storage and hidden-data patterns gathered from the community research.
+
+
+`*confirmed*`, `*single report*` and `**conflicting**` are reliability marks for reports. The basis of this page is community reports, and they may differ from the official Mojang documentation.
+
+### Data storage
+
+#### Dynamic Properties
+
+- **Targets and types**: World, all Entities (including projectiles) and Players, and non-stackable (max stack 1) ItemStacks. Values are only string, number, boolean and Vector3 (ItemStack and component objects are impossible -> `JSON.stringify`). Write directly with `setDynamicProperty(key, value)` without a declaration, and an unset key is undefined (do not compare with `== false`; check with `typeof`). It cannot be set by commands. Resource packs and JSON UI cannot read DPs (for visuals, mirror it with a `client_sync` entity property or a title). *confirmed*
+- **Size limit**: 32,767 **bytes** per string ("Maximum string size exceeded (x/32767) bytes"; the key too), cannot be raised, and the number of keys is unlimited -> split large data into several keys (`id:i` pieces + delete the leftover tail). The ~65,535 characters in early reports was wrong. A report that item/block DPs are about 1 KB. Numbers above 9e15 cannot be stored as JSON numbers -> strings.
+- **Write volume warning**: "X MB of dynamic properties were saved during the last minute, exceeding the 10 MB threshold" (every 30 seconds on BDS) is only a warning but a sign of a leak. Cases: a claim add-on that recorded a DP on every block placement left 434,962 entries (removed by a cleanup script inside the original pack, and the warning persisted after the pack was removed), and a land claim script that cloned instead of overwriting on every save wrote 32 MB per minute. The byte counts (world, console, `getDynamicPropertyTotalByteCount`) differ from one another. The total cap is not documented.
+- **Storage method and performance**: DPs are saved to disk in LevelDB. World DPs are bundled in one NBT tag so writing one re-saves everything, and there is a case where autosaving 33~55 KB every 60 seconds caused multi-second lag. Countermeasures: save only dirty data and less often, cache parse results in memory, one key per record (no single giant array), batch save every 20~30 seconds + save on leave. World DPs of a few hundred are no problem. Calling `getDynamicProperty`/`getScore` every tick is wasteful -> mirror in a Map. (The report that world DPs "do not cause lag by themselves" and the lag case above differ in data volume)
+- **Deletion**: `setDynamicProperty(key)` / `(key, undefined)` (the documentation says null but the type is undefined; a report that both delete). `JSON.parse(undefined)` throws, so check existence before parsing. Batch: `world.setDynamicProperties({k: v})`, iteration: `getDynamicPropertyIds()`.
+- **Pack UUID sandbox**: A DP is bound to the BP (script module UUID) that made it. Other packs do not collide even if they use the same key, and cannot read it either. If you change the UUID, the data is not erased but only becomes invisible (restored if you go back to the original UUID). The same on Realms, and a Realm rollback rolls back DPs too. There is no way to transfer between worlds. Tags and scoreboards, on the other hand, are shared by the world.
+- **Entity DPs vanish with the entity** (despawn and death; can be read last in `entityRemove`). To preserve them, use `world.setDynamicProperty(entity.id, ...)` or save the entity to a structure. The DPs of an offline player cannot be read or cleared, so keep them in world DPs in the form `playerId:key`, clean old entries by last join time, and queue offline score changes and apply them on join. World storage is also better for the uninstall flow.
+- **ItemStack DP**: Only non-stackable items. An ItemStack taken out of a container is a copy, so after changing it you must write it back with `container.setItem(slot, item)`, and it must be set on the stack that is actually placed/created (after `spawnItem`, on the new stack, not the stack to be replaced). `ItemStack.clone()` keeps DPs. Writing a DP to an item in use can lock the "in use" state.
+- **Block DP**: Until 2026-06 blocks had no DP, so data was stored in world DPs with `dimension.id:x:y:z` (including the dimension) keys (cost of handling explosions and pistons; the DP of a block item is lost on placement, and lore can carry data). In 26.40 there is a per-pack ~1 KB block DP limit, and in 1.26.50+ the block JSON needs `"minecraft:block_entity": {"dynamic_properties": true}` and format_version 1.26.50, accessed with `block.getComponent("dynamic_properties")` (`.get`, `.totalByteCount()`) (about 1 KB/block, deleted on block type change or break -> read in before-break or `playerStartBreakingBlock`). To carry it over to a dropped item, use the root function `carry_over_block_entity_data` (`"dynamic_properties": true`, 26.40, Upcoming Creator Features), and on the item side `block_actor_dynamic_properties`/`ItemBlockDynamicPropertiesComponent` (2.10). Documentation: `https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/blockcomponents/minecraftblock_block_entity?view=minecraft-bedrock-stable`
+- **Compact storage techniques**: Booleans as bit flags (`1<<n`; bit operations are truncated to 32 bits, and above 31 bits use BigInt), positions as `"x:y:z/"` strings (about -50% in hexadecimal), parallel arrays instead of arrays of objects, compact encoding (`"zinc_ingot.12.13.13.9"`) + a lookup table on the script side. There are both the opinion that splitting long strings into several keys is faster than compressing, and the Paradox data-hive approach, which makes it crash safe with LZ/LZW compression (~50~75% savings) + chunks + header + staged writes in the `~tmp` namespace (a multi-key `setDynamicProperties` is not atomic). Compressed records are hard to query, so hide the serialization inside the DB. LEB128 binary serialization was also proposed. About 200 ops/sec (stress test).
+- **"First load" flag**: A world DP boolean guarantees `worldLoad` runs once. For one-time spawn flags too, use DPs rather than scoreboards.
+- **DB wrapper pattern**: Keep the target and key in private fields and do get/set + an `isValid` check on every access. DP as permanent storage and an in-memory Map as a cache.
+
+#### Scoreboards and tags
+
+- **Scoreboard API**: `world.scoreboard.getObjective(id) ?? world.scoreboard.addObjective(id, displayName)` (fails if called too early -> `system.run`/after world load; prevent re-adding), `objective.setScore/addScore` (addScore returns the new total), `getScore`, `hasParticipant`, `getParticipants()`, `setObjectiveAtDisplaySlot(DisplaySlotId.Sidebar, {objective, sortOrder: ObjectiveSortOrder.Descending})`.
+- **Pitfalls**: If there is no participant, `getScore`/`setScore` throw with "Failed to resolve identity" and the like -> check `hasParticipant` or try/catch. If the entity is invalid (unloaded/removed), `hasParticipant(entity)` is false even if the score entry remains -> comparing `entity.scoreboardIdentity` (readable even when invalid) with `getParticipants()` gives an entity presence tracker that distinguishes "unloaded" from "removed" (the ScoreboardIdentity id persists after reload, and `isValid` is false once removed). Objectives/participants can become invalid at runtime, so check `isValid` on cached objects. Scores are limited around 2^31 (split big numbers across several objectives). Fake players: `getScore` with a string participant constant (`".Fake.Player"`), and define objectives outside the interval.
+- **Selection criteria**: Prefer DPs for script data (scoreboards are easily cleared or edited by commands, big data needs many API calls and has size limits, and JSON-in-scoreboard cannot scale). Scoreboards suit light numbers, command and rawtext integration, and keeping offline identity (wrapper `https://github.com/AutoAsteroid/script-api-database/blob/main/scoreboard.js`). Hiding sidebar numbers: display name `§h§n`. Per-player scoreboard display is impossible (imitate with title/actionbar). A scoreboard stays in the world even if the pack is removed, but holds only integers.
+- **Tags**: 30-character limit per tag, there is a limit on count, and for boolean use. Reads are ~10% faster than DPs and writes ~2x slower (measured). `hasTag` takes exactly one tag (`tags.some(t => e.hasTag(t))`, and for several, call `getTags()` once). The opinion that tags are enough for per-entity booleans. Molang can see tags (`query.all_tags`) but not script DPs.
+
+#### ItemStack and large storage
+
+- **Lossless ItemStack preservation**: DP serialization loses NBT-only data (shulker contents, ominous bottle level, goat horn sound, banner patterns, trims). Recommended: copy into a custom entity inventory and save it with `world.structureManager.createFromWorld(id, dim, loc, loc, {includeBlocks:false, includeEntities:true, saveMode: StructureSaveMode.World})` and remove the entity (memory cache + restore from the structure on reload), or a chest structure. Libraries: QIDB (needs real ItemStack storage; Map-like storage, no orphan key GC; moved to TickingAreaManager + a `ready` Promise on 2026-09-22, fixed storage location (27000,318,27000), needs Beta APIs), Carchi777 QUICK-ITEM-DATABASE (`https://github.com/Carchi777/QUICK-ITEM-DATABASE` , fork `https://github.com/Aevarkan/item-database`). Entities themselves also cannot be stored in DPs -> structures (bedrock-boost `EntitySaver`: `https://github.com/Bedrock-OSS/bedrock-boost/blob/main/src/utils/EntitySaver.ts`).
+- **DB libraries**: `https://github.com/AutoAsteroid/script-api-database` (`world.db`, `player.db`, supports external JSON through server-net), KinetixDB (`https://github.com/DevelopmentKinetix/KinetixDB` , document-style insert/find/upsert), Paradox data-hive.ts. For numeric data of ~5000 players a DP DB is enough, an external DB costs latency and money, and one large JSON risks corruption. Use an external HTTP DB only as cold storage.
+- **ShulkerDB** (`https://github.com/Duskaraa/shulkerdb` , v1.1.0 2026-11-12): Map-like storage that bundles several JSON records into one DP (2,000 records in 12 keys) and batch-saves every second. ShulkerVault keeps real ItemStacks in storage entities (the performance claim against QIDB is disputed).
+- **Pitfalls of storage entity DBs** (gathered in the ShulkerDB review): when a vault entity is removed, it also deletes entries whose latest copy is elsewhere, a chunk unload is mistaken for entity removal and then it spawns into an unloaded chunk and crashes, leaving an emptied vault entity in the world causes duplication on restart and it picks up the wrong thing, and `BigInt` values break the `setDynamicProperties` batch save. Decide the spawn position with the stable `dimension.heightRange.max` and check `dimension.isChunkLoaded(location)` before spawning. The claim that entity-based DBs cannot be used on Realms is *unverified*.
+- **Very large data** (millions of blocks): Items/books are unrealistic. Console log dumps, structure linking, and for BDS a server-net external DB (a case where moving to an external sqlite fixed the TPS drop). There is no file write API. Export data by saving an entity holding DPs as a structure or copying the content log.
+- **Hidden data in stackable items**: Encode numbers in lore with format codes (`§0` sequences) or record an expiry tick (`system.currentTick + N`) (they do not stack if the values differ). There is also the opinion that lore is fragile for data storage.
+- **In-memory state**: Module-scope Maps/variables vanish on `/reload` and shutdown (kept until leaving or reloading the world). A global `let` is shared by all players (one BP per server). Do not store state on player objects; use a `player.id` keyed Map (a WeakMap is also possible).

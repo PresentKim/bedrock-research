@@ -1,0 +1,92 @@
+---
+title: "json-ui-examples (LeGend077)"
+description: "A collection of JSON UI examples the Chest-UI author has answered with in the community. Unverified examples such as the anchored offset of static controls, copying the hotbar grid, and a form that cannot be closed, with comparison results"
+sidebar_position: 11
+sources:
+  - json-ui-examples
+  - cinnabar
+  - bedrock-samples
+  - repo-guide
+---
+
+## What it is
+
+This is a repository that collects examples LeGend077 (the Chest-UI author) has answered with in the community (HEAD `d4ff500` 2026-02-28, 59 commits). It is a **collection of snippets with no manifest**, so it cannot be installed as a pack to check, and it does not say which version each worked on. It consists of 7 JSON files (`custom_progress_bar.json`, `custom_heart_or_hunger_like_progress_bar_icons.json`, `size_offset.json`, `custom_slider.json`, `custom_toggle.json`, `custom_npc_screen_layout_reference_file.json`, `scroll_panel_template.json`) and 28 README snippets (13 of them are only community links). The license, confirmed by opening the clone's `LICENSE`, is MIT (Copyright 2025 LeGend), so it can be excerpted (Source: cs-json-ui-examples). The evidence level is not "working pack" but **"example, unverified"**. The level is raised only for parts backed by vanilla and Cinnabar.
+
+## Techniques by file
+
+### A health bar from the HUD title (`custom_progress_bar.json`)
+
+It is the wiki's "Preserve Title Texts" pattern, which takes `#hud_title_text_string` as `#preserved_text` and updates the value only when the prefix is `hp:` (not a new technique). The value is `((#preserved_text - $update_string) * $one)`, and the bar uses `clip_direction: left` and `#clip_ratio` taken from `(($max_health - #health) / $max_health)` with `"$max_health": 20.0`. **In the Cinnabar interpretation `((20.0 - #health) / 20.0)` is integer division and becomes 0** (C-53). Multiplying by a literal that starts with a dot (`.05`) is safe (EXP-27, ANI-03).
+
+### 10 heart icons
+
+One icon cell receives `$condition` (2, 4, ..., 20) and shows a full heart if `((#health_value = $condition) or (#health_value > $condition))` and a half heart if `(#health_value = $condition_half)`. The value is read from a `data_control` that computes it once, with `source_control_name` + `resolve_sibling_scope: true`. Solving it with `or` instead of `>=` matches EXP-03.
+
+### Moving size and position with sliders (`size_offset.json`)
+
+It inserts 4 static sliders and one panel into the start screen with `modifications insert_back` and connects the slider values to the panel's `#size_binding_x/y` and `#anchored_offset_value_x/y`. The following are that binding and `property_bag`.
+
+<Excerpt src="json-ui-examples" title="json-ui-examples, size_offset.json" path="size_offset.json">
+
+```jsonc
+"property_bag": {
+  // max value is 1.0 - meaning 100% of size of element.
+  "#size_binding_x": 0.0,
+  "#size_binding_y": 0.0,
+  // these are offsets related to anchoring and parent's size. max value is 1.0
+  "#anchored_offset_value_x": 0.0,
+  "#anchored_offset_value_y": 0.0
+},
+"bindings": [
+  { "binding_type": "view", "source_control_name": "size_x",
+    "source_property_name": "( (#slider_value + 1) / 10 )",
+    "target_property_name": "#size_binding_x" },
+  { "binding_type": "view", "source_control_name": "offset_x",
+    "source_property_name": "( ( #slider_value ) / 10 )",
+    "target_property_name": "#anchored_offset_value_x" }
+]
+```
+
+</Excerpt>
+
+The comments describe the size binding value as "a ratio of the element size (max 1.0)" and the offset as "related to anchoring and the parent size", which is the same interpretation as LAY-10 (a multiple of the parent size). There are two differences from the guide.
+
+1. **The anchored offset of a static control.** The guide table says `#anchored_offset_value` does not work on static controls (BC-S12 measurement). Cinnabar pushes by value × parent size when `use_anchored_offset: true` and `anchor_from` is not `center`. This example uses a `top_left` anchor (conflict C-61, unresolved. Hypothesis: S12 used a center anchor).
+2. **Static sliders.** HOST-12 says a slider must not be placed statically, but its basis (BC-S8, S9) is an assert from **a slider created while hidden under a server form**. It is not a basis for forbidding this example, which puts them statically on the start screen, or the vanilla settings screen, so a supplement was proposed that states the scope of HOST-12 as screens under a server form. Pay attention to the slider value type too: in Cinnabar the value after the user moves it is a real number, but the `property_bag` initial value `5` is an integer, so on the first frame `((5 + 1) / 10)` = 0. The `#slider_value` of a stepped slider is a step number, not a 0~1 ratio.
+
+### Other files
+
+- `custom_slider.json`: `#slider_value`, then `(#val * 1)`, then `/ 10`, then `#alpha`. It is the same experiment subject as the measurement that a bound alpha applies only 0 and 1 (LAY-13, C-45).
+- `custom_toggle.json`: `"$toggle_view_binding_name@$template_toggle": {}` gives both the child name and the base definition as variables (FILE-15, FILE-36). The 8 state texture variables are the vanilla `common.toggle` as is.
+- `custom_npc_screen_layout_reference_file.json`: in `npc_screen_contents` it does `remove control_name: "student"` and then puts its own panel in with `insert_front`. In vanilla, `student` is a child that `npc_screen_contents` **declares directly**, so it does not hit MOD-05. If the title has `MENU` it shows its own layout, and otherwise the vanilla student panel (EXP-07, HOST-15).
+- `scroll_panel_template.json` (fumeko's contribution): it copies the vanilla `common.scrolling_panel` almost as is and exposes 11 size and offset variables. It specifies the role control names with the `scroll_view` properties and the tree position is free (a working example that matches LAY-42).
+
+## What to take from the README snippets
+
+| No. | Content | Comparison |
+| --- | --- | --- |
+| 1 | Text button and toggle | The toggle snippet is missing two commas, so using it as is gives a parse error (FILE-30) |
+| 3 | 3x3 hotbar grid | It copies the vanilla `hotbar_grid` and changes it to `bindings: [{}]` but leaves `grid_dimension_binding`, so Cinnabar adds a global binding automatically and it becomes 9×1 (C-62). The way safe in both models is to remove `grid_dimension_binding` entirely |
+| 13 | Input box `common.text_edit_box`, numbers only with `$text_edit_box_text_type: "NumberChars"` | The input text is `#item_name`. It is used for search filters |
+| 18 | "Grayscaled Image" with `color: [0.4666, ...]` | `color` is a multiplying tint, so it only darkens. Real grayscale is `grayscale`, used once in vanilla (proposed ANI-31) |
+| 20 | `"prevent_touch_input": true` | 3 uses in vanilla, skips hover in touch mode (proposed INP-30) |
+| 22 | A form that cannot be closed: `third_party_server_screen.button_mappings: []` + `$show_close_button: false` | It cuts the `menu_cancel` to `menu_exit` mapping. It redeclares the whole mapping array, so it competes with other packs and the server must leave a way to close with `closeAllForms` (proposed INP-29, unverified) |
+| 24 | Button state animation | Put `animation_reset_name: "$pressed_button_name"` on each state control. There are 76 `pressed` mappings without `from_button_id` in vanilla |
+| 27 | Choosing a color by score | A `property_bag` dictionary lookup with `('#color_' + (#score < 100) * 1)`. Not a new technique |
+
+The remaining 13 snippets are only community links, so their content could not be checked.
+
+## Relation to our rules
+
+| Rule ID | Relation |
+| --- | --- |
+| LAY-10, LAY-12, LAY-13, C-45, C-61 | Interpretation and conflicts of size, offset, and alpha bindings (proposed LAY-49) |
+| LAY-25, C-62 | Grid dimension bindings (proposed LAY-50) |
+| HOST-12 | The scope of the static slider prohibition (supplement proposal) |
+| MOD-05, EXP-07, HOST-15 | A directly declared child can be safely `remove`d, title contains check |
+| EXP-27, C-53, ANI-03 | A `20.0` variable risks integer division |
+
+## Measurement needed
+
+`#anchored_offset_value` on a `top_left` anchor static panel (compared with a center anchor), the 3x3 hotbar snippet against a version with `grid_dimension_binding` removed, the type and range of a stepped slider's `#slider_value`, whether a form that cannot be closed blocks Esc, B, and back, the difference between `grayscale: true` and a `color` tint, and whether `prevent_touch_input` blocks the touch display of HUD buttons.

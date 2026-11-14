@@ -1,0 +1,118 @@
+---
+title: Ore UI engine findings
+description: Pack lookup and the trust decision for Ore UI file requests, encrypted packs, the button bridge, the DDUI layout and data channel, and geo-item icons (NB-17~22).
+sidebar_position: 3
+sources:
+  - private-research
+  - repo-guide
+  - repo-ore-ui-loading
+  - private-research
+---
+
+
+Ore UI is a React-based web UI that runs on Coherent Gameface. Settings, the world list, loading, the death screen, some in-game screens and script forms (DDUI) are on this side. Unlike JSON UI, its layout cannot be changed with a resource pack's JSON, so "can it really not be changed with a resource pack" has been a long-standing question. This page is the result of reading the client binary to confirm **how a file request looks up packs**, **which packs are trusted**, **the bridge by which JSON UI button definitions pass to Ore UI**, **the DDUI data channel**, and **`geo-item://` icon resolution**.
+
+
+All verification levels are `code`. It was read from compiled output, so it does not guarantee game behavior, and if it differs from in-game measurement, follow the measurement. `@0x…` is an analysis address in the Android 1.26.52.3 arm64 build and changes when the version changes. The analyzed code is not included, and only the behavior is rewritten in English.
+
+Each finding is paired with a measurement (`OL`, the Ore UI loading survey) made by sending probe packs from a server (Dragonfly) and checking on Windows 1.26.52. The binary answers "why it happens" and the measurement answers "whether it really happens".
+
+## 0. At a glance
+
+- An Ore UI file request (`ui://…`) looks at the **pack stack first**, before the install folder, but only at trusted packs. `hbui/…` in ordinary and server resource packs is not used (NB-17).
+- Encrypted pack access strategies (`EncryptedFileAccessStrategy` and others) are **always trusted**. So a pack the server sends encrypted with any content key, or a local pack with only a 0-byte `content.zipe` in its root, replaces Ore UI files (NB-20).
+- The look of in-game Ore UI buttons comes from two JSON UI definitions (`common_buttons.light_text_button`, `common_buttons.focus_border`) through `vanilla.resourcePackOverrides` (NB-18).
+- DDUI layouts (`ddui/root`, `ddui/composition`) are read only from packs that carry the built-in pack marker (NB-19).
+- The item icon `geo-item://<name>?width=&height=&id=&bag=` accepts the `#item_id_aux` property bag that the JSON UI item renderer uses (NB-22).
+
+### Effect on the guide rules
+
+| Topic | Earlier claim | Binary result | Verdict |
+| --- | --- | --- | --- |
+| Modifying Ore UI with a resource pack (ALT-11) | "A pack cannot fix it" (OUC code, community) | Layout, behavior and CSS are looked up only from trusted packs. But the encrypted access strategy is always trusted | **Supplemented.** It is not that it cannot be changed at all |
+| Button look (ALT-15) | "A pack cannot fix it" | `resourcePackOverrides` passes two JSON UI button definitions to Ore UI buttons | Confirmed (including measurement) |
+| DDUI user pack layouts (ALT-16) | Mojang statement: internal packs only until stage 2 | Only packs with the built-in pack marker are read | Supported (inferred) |
+| Item icons (ALT, HOST-17) | Only the numeric ID method was known | `geo-item://` finds the item by name and takes `#item_id_aux` from the property bag | New fact |
+
+
+
+## 1. File requests and pack lookup
+
+### NB-17 An Ore UI file request looks at trusted packs first, and opens from the install folder if there is none
+
+The question was "can Ore UI really not be changed with a resource pack" (2026-10-23, analysis rounds 8~10). The whole survey, including measurements, is in (`OL`).
+
+- `@0x09cf635c` normalizes the request path to `ui://…`, and `@0x09cf68d4` finds the file. `../` and `..\` are rejected.
+- It walks the pack stack (0x110-byte pack entries) and checks `hasResource` (`@0x112ac30c`, virtual function +0x38 = `hasAsset(path,false,false)`) only in packs where the access strategy's virtual function +0x30 is true. +0x30 appears to be `isTrusted()` (inferred). If there is none, it opens under `gui/dist/` from the app package file system (`@0x09cf66f8`).
+- `hbui/routes.json` (`@0x09cd39dc`) and `gui/dist/hbui/fonts` (`@0x096de4bc`) are read only from the install folder.
+- A `hbui/…css` put in a server pack was not applied (`OL` measurement).
+
+
+## 2. Pack access strategies and trust
+
+"Whether a pack is trusted" is decided by the **access strategy class** that reads the pack. The pack UUID and manifest are not looked at.
+
+### NB-20 Encrypted pack access strategies are always trusted
+
+The trust check of NB-17 (+0x30) was disassembled for each class (round 11, `DumpVtables.java`. Analysis address = ELF address + 0x100000).
+
+- `ZipPackAccessStrategy` (`@0x1125865c`) is true when `location.fileSystem == 1` (app package) or the +0x170 flag is set, and `DirectoryPackAccessStrategy` (`@0x112ee564`) is true only when `location.fileSystem == 1`.
+- `EncryptedFileAccessStrategy` and `ZippedEncryptedFilesAccessStrategy` (`@0x112f456c`) and `DirectoryPackWithEncryptionAccessStrategy` (`@0x112f0a70`) return **always true**.
+- The pack UUID and manifest are not looked at. A pack the server sends encrypted with any content key is also trusted and replaces Ore UI files (`OL` chapter 7 measurement).
+- For a folder pack, the pack creation function (`FUN_1127c5e0` -> `FUN_1128022c` -> `FUN_11280ebc`) looks for `content.zipe` when a key provider exists, and if it is there opens it with `DirectoryPackWithEncryptionAccessStrategy` (rounds 24~27). A local pack with only a 0-byte `content.zipe` in its root was also trusted and replaced Ore UI files (`OL` chapter 7 measurement). This check appears to look only at whether the file exists. The pack file type decision (`FUN_129c3d34`) does not treat anything under 256 bytes as an encrypted file, but an empty file worked (inferred).
+- The +0x170 flag of a Zip pack is copied from +0x48 of the argument struct by the constructor `FUN_112569a0`. All four places that call the constructor put 0 into this value, so no pack is trusted through this flag (round 24).
+- The content key is looked up by `ClientContentKeyProvider` only from keys sent by the server, entitlements and the built-in table. It does not look at key files next to the pack or the world db (rounds 26~27).
+
+
+## 3. Button definitions passing from JSON UI to Ore UI
+
+### NB-18 `vanilla.resourcePackOverrides`: two JSON UI button definitions pass to Ore UI
+
+- The facet outputs `definitions` and `lastUpdated` (`@0x09ef8760`). A definition is `identifier`, `control`, `propertyData[]` (`name`, `value`) and `textureData[]` (`identifier`, `path`, `sliceSize`, `uvSize`, `uvScale`).
+- The definitions the engine resolves are two hardcoded ones (`@0x09ef8a7c`): `common_buttons.light_text_button` (texture `$new_ui_button_texture`, properties `$text_color` and `$border_color`) and `common_buttons.focus_border` (texture `texture`).
+- The in-game bundle turns this into per-state `border-image` (`pack://<path>.png?filtering=point`), `color` and `filter` of the primary and secondary buttons. It was confirmed that a server pack changes the Ore UI death screen buttons (`OL` measurement).
+
+
+## 4. DDUI
+
+DDUI (the `CustomForm` family of `@minecraft/server-ui`) is the way Ore UI draws forms made by scripts. The layout loader and the data channel are as follows.
+
+### NB-19 DDUI layouts are read only from built-in packs
+
+- `@0x0b96ab2c` reads `ddui/root` (`minecraft:ui-root`, `@0x0b96b304`) and `ddui/composition` (`minecraft:ui-composition`, `@0x0b96c468`) from the pack stack and keeps the pack UUID as `sourcePackId`.
+- Only packs where the bool +0x88 (`@0x112ac54c`) or +0x89 (`@0x112ac55c`) of the pack object is true are read. The same two functions decide whether the `minecraft:` namespace is allowed in the POI loader (`@0x10a29438`, `@0x10a2b6e8`) (if both are false, `Cannot use minecraft namespace found %s`). So these values are treated as the built-in pack marker (inferred). DDUI layouts of user packs are not read. It was not measured.
+
+### NB-21 The DDUI data channel and the in-game Ore UI switch
+
+- The in-game bundle reads DDUI data with the engine queries `vanilla.ddui.string/number/bool/object/objectArray` (arguments: store, property, path). Writing is the command group `vanillaDduiDataStoreSetCommandGroup` (`setDataStorePathString/Number/Bool`, `dataStoreButtonPress`, `dataStoreCloseButtonPress`). Injected JS can use the same things with `engine.trigger("query:subscribe/<name>", id, …)` and `window.__commands__` (`OL` chapter 9 measurement).
+- Type names in the binary: `OreUI::DataStoreQueryString` and others, `OreUI::DataStoreSetCommandGroup`, `Bedrock::DDUI::DataStoreSyncClient`/`DataStoreSyncServer`. The packet `ClientboundDataStorePacket` is defined as a cereal schema (`ClientboundDataStorePacketPayload`, `variant<DataStoreUpdate, DataStoreChange, DataStoreRemoval>`).
+- The item icon is `geo-item://<name>?width=&height=` (`OL` chapter 10 measurement). Resolution is in NB-22.
+- The property `devOreUIGameplayUI` (`@0x09e6f6cc`) of `vanilla.screenSpecificOptions` is true when option 593 (`0x251`) is the integer 1. Getter `@0x09e6f998`, setter `@0x09e6f9fc` (1 on, 2 off, round 14). The two other functions that read option 593 (`@0x0b5db54c`, `@0x0b5db59c`, round 15) first look at `@0x0b5db380` (checks the global settings object) and then check whether option 593 is 1. The second also checks whether the number passed as an argument falls in the bit mask `0x380103ef` (it appears to be a per-screen-kind allowance table, inferred). The registration site (`@0x078a325c`) could not be read because the analysis tool wrongly grouped it into another function.
+- The feature toggle table (`@0x0b16a4c4`, round 13) registers (number, flighting key, name, default). `0x28` is `mc-enable-sdl-inventory`/`enableSDLInventoryPage` (off by default).
+
+
+## 5. The item icon `geo-item://`
+
+### NB-22 `geo-item://` accepts the property bag of the JSON UI item renderer
+
+- The reason the ADRP+ADD search in round 12 failed to find the usage of `geo-item://` is that the code was not grouped as a function in the analysis tool. When the window was widened to 64 instructions and the bytes were re-scanned, the scheme registration function (`@0x0b911e34`) appeared. It is registered together with `https://` and `paperdoll://`, and `geo-item://` and `paperdoll://` use the same handler factory (+0x200) with flag 0/1.
+- The handler is `OreUI::GeometryAtlasResourceHandlerImpl` (vtable `@0x12ea8058`). The request (slot 2, `@0x0b91aa50`) passes the URL string to the resolve function of `OreUI::ItemResourceResolver` (vtable +0x18, `@0x0b91af24`) (rounds 18~22).
+- The resolve function takes the URL host as the item name. Query keys are compared by FNV-1a 32-bit hash: `width` (`0x95876e1f`), `height` (`0xd5bdbb42`), `id` (`0x37386ae0`, integer), `bag` (`0x63b75f31`, a `Json::Value` after URL decoding). The names were found by matching the hashes against a dictionary and an exhaustive search. The default size is 50.
+- The creation function of `GeometryAtlas::ItemHandleFactoryImpl` (vtable +0x10, `@0x09766138`) finds the name with `ItemRegistryRef::lookupByName` (`@0x0fcc10e8`) and returns an empty handle if there is none. If there is one, it creates an item instance and puts its id and aux value into `#item_id_aux` of the property bag. But **if the property bag already has `#item_id_aux`, it does not put it in**. So the `#item_id_aux` given through `bag` becomes the item to be drawn. Custom items and blocks are drawn too (`OL` chapter 10 measurement).
+
+
+## 6. Comparison with other sources
+
+### 6.1 Things learned only through reverse engineering
+
+| # | Contents | What other sources had | NB | Guide |
+| --- | --- | --- | --- | --- |
+| R-16 | **Pack lookup of Ore UI file requests.** A `ui://` request looks at the pack stack before the install folder (`gui/dist/`) but only at trusted packs (appears to be `isTrusted`). So `hbui/…` in ordinary and server resource packs is not used (measured) | Community and OUC: "Ore UI cannot be changed with a pack", "a mod that makes the game load Ore UI from the RP is required" | NB-17 | ALT-11 |
+| R-17 | **Resource pack -> Ore UI button bridge.** `vanilla.resourcePackOverrides` passes `common_buttons.light_text_button` (`$new_ui_button_texture`, `$text_color`, `$border_color`) and `common_buttons.focus_border` (`texture`) to in-game Ore UI buttons. A server pack changed the Ore UI death screen buttons (measured) | None. All said only that "Ore UI cannot be changed with a pack" | NB-18 | ALT-15 |
+| R-18 | **The DDUI layout path and the pack restriction.** `ddui/root` and `ddui/composition` are read from pack folders but only packs with the built-in pack marker pass. JS already handles layouts from a non-vanilla source pack | Community: "custom RP panels are internal-pack only until stage 2" (Mojang statement) | NB-19 | ALT-16 |
+
+### 6.2 Things that supplement other sources' claims
+
+| # | Claim | Who | Reverse engineering result | Result | NB | Guide |
+| --- | --- | --- | --- | --- | --- | --- |
+| C-12 | Ore UI cannot be changed with a resource pack | Guide (ALT-11, OUC code), community | Layout, behavior and CSS are right (only trusted packs are looked up). But the in-game button look passes through the bridge and `pack://` textures resolve even from a server pack (R-16, R-17). A local pack with an empty `content.zipe` in its root opens with the encrypted access strategy and is trusted, so it can change Ore UI files too (NB-20, OL chapter 7 measurement) | **Supplemented.** It is not that it "cannot be changed at all" | NB-17, NB-18 | ALT-11, ALT-12, ALT-15 |

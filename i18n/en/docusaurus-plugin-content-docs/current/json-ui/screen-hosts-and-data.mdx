@@ -1,0 +1,299 @@
+---
+title: Screen hosts and data channels
+description: Rules for using server forms, modal forms, chests, NPC dialogue and the HUD as hosts to receive script data (HOST-01~47).
+sidebar_position: 10
+sources:
+  - repo-guide
+  - repo-bedrock-core
+  - private-research
+  - advancementpack
+  - repo-damage-indicator
+  - mcbejsonuimasterai
+  - repo-testpack
+  - bedrock-samples
+  - private-research
+  - repo-multiselect
+  - netease-mcdocs
+  - bedrock-wiki
+  - repo-survey
+
+---
+
+## Concept: hosts and channels
+
+A resource pack's JSON UI cannot create a new screen. It attaches to a vanilla screen the engine already knows how to open and only changes the look. This screen is called a **host**, and the values the script sends to the host (a form's title, body and button text, title, actionbar and chat strings, numbers in chest slots) are called **data channels**. Design starts with "which host gives me the interaction and update method I need".
+
+The most common setup is the server form host. The script opens a form with `ActionFormData` and puts a prefix in the title.
+
+```js
+import { ActionFormData } from "@minecraft/server-ui";
+new ActionFormData().title("wiki_form:main").body("Body").button("OK").show(player);
+```
+
+On the pack side (`RP/ui/server_form.json`, the same structure as the Bedrock Wiki's server form modification tutorial), add to `main_screen_content` a second factory that borrows vanilla `server_form_factory` by name, show my panel only when the title has the prefix, and put the negation of the same condition on vanilla `long_form` to prevent overlap.
+
+```jsonc
+{
+  "main_screen_content": { "modifications": [ { "array_name": "controls", "operation": "insert_back", "value": [
+    { "my_factory": { "type": "panel",           // The name must differ from server_form_factory
+        "factory": { "name": "server_form_factory",   // Required: the form data is tied to this name
+                     "control_ids": { "long_form": "@server_form.my_panel",
+                                      "custom_form": "@server_form.my_custom_panel" } } } } ] } ] },
+  "long_form": { "modifications": [ { "array_name": "bindings", "operation": "insert_back", "value": [
+    { "binding_name": "#title_text" },
+    { "binding_type": "view", "source_property_name": "((#title_text - 'wiki_form:') = #title_text)",
+      "target_property_name": "#visible" } ] } ] }
+}
+```
+
+A modal form is called `custom_form` inside `server_form.json`, and `long_form` and `custom_form` are both put in the factory's `control_ids`. The wiki recommends putting all your screens inside one `my_panel` rather than placing the same factory several times. The rules of this chapter widen the host on this skeleton to title detection (HOST-03), hiding (HOST-04), creating only the chosen screen (HOST-06), using entries as a data channel (HOST-07), and then modal forms, chests, NPC dialogue and the HUD. (Source: bedrock-wiki)
+
+
+
+A resource pack cannot create a new screen. It attaches to a vanilla screen that already exists (the **host**), and decides what to draw by the data (the **channel**) the script sends to that screen. Which host you choose is the first decision of the design.
+
+## 10.1 Choosing a host
+
+| Host | How to open (script) | Data channel | Changing values after opening | Input | Cases |
+| --- | --- | --- | --- | --- | --- |
+| Action form `long_form` | `ActionFormData` | Title `#title_text`, body `#form_text`, entry strings and textures (`form_buttons`) | Not possible (must reopen) | Entry press -> `selection` | BC, BA |
+| Modal form `custom_form` | `ModalFormData` | Title, row labels and defaults (`custom_form`) | Not possible | Native fields, `formValues` on submit | BC |
+| Chest screen | Custom entity/block inventory | The **numbers** of slots (item ID, count, durability, color), the title is the nameTag | **Possible** (immediately when slots change) | Slot actions, `button.drop_one` | BC |
+| NPC dialogue | `dialogue open` command | Dialogue text `#dialogtext`, button names (`student_buttons_collection`) | Not possible | Dialogue button -> command | AP |
+| HUD title | `setTitle` | `#hud_title_text_string`, `$title_text` of the created control | Possible (recreated when sent again) | Mouse hover and scroll with `always_accepts_input` | BA, AP |
+| HUD actionbar | `setActionBar` | `$actionbar_text` | Possible | None | VN |
+| HUD chat | `sendMessage` | `#chat_text` (`chat_text_grid`) | Possible, a control is created per message | None | AP |
+
+- **[HOST-01]** Choose the host by the interaction and data update method you need. Menus and lists are an action form, input forms a modal form, a chest screen if values must change while it stays open, and notifications the HUD (title = one, chat = several). If it must follow a 3D position, it is not JSON UI (chapter 12). `{working pack, measured, inferred}` (Source: BC chapter 4, BA, AP chapter 6, DI chapter 5)
+
+## 10.2 Action form (`server_form.json`)
+
+The vanilla structure (1.26.50.4):
+
+```
+third_party_server_screen@common.base_screen   ($screen_content = server_form.main_screen_content)
+└ main_screen_content (panel, size [0,0])
+  └ server_form_factory  (type: factory, control_ids: long_form / custom_form)
+     ├ long_form@common_dialogs.main_panel_no_buttons   ($text_name = #title_text)
+     │  └ … long_form_dynamic_buttons_panel (factory "buttons", collection form_buttons,
+     │                                       #form_button_contents -> #collection_length)
+     └ custom_form …                         (factory "buttons", collection custom_form)
+```
+
+- **[HOST-02]** Every server form opens as the single screen `server_form.third_party_server_screen`. A pack cannot route to another screen file, so it **branches by title** inside this screen. `{vanilla, measured}` (Source: VN server_form.json:9-33, BC-S8)
+- **[HOST-03]** There are two ways to detect the title. **Prefix**: `(('%.13s' * #title_text) = 'corev0009core')`. **Containment**: `(not ((#title_text - 'CUSTOMUI:BA') = #title_text))`. A containment check allows metadata (a count, etc.) to be attached after the title. Either way, make the flag long and unique. `{code, working pack}` (Source: BC 4.1-(1), BA chapters 2 and 3.4, BW-form, BW-title)
+- **[HOST-04]** There are two ways to hide the vanilla form. Each has pros and cons, so choose to fit the situation. `{code, working pack, inferred}` (Source: BC 4.1-(1), BA chapters 2 and 10)
+
+| | (a) Appending bindings (BC) | (b) Wrapping + replacing `control_ids` (BA) |
+| --- | --- | --- |
+| Method | `insert_back` a view binding "visible if it is not my title" into the `bindings` of `long_form` and `custom_form` | Wrap `long_form` in a hiding wrapper and change `control_ids.long_form` of `main_screen_content/server_form_factory` to the wrapper |
+| Another UI pack replaces `long_form` wholesale | Whether the binding attaches to that pack's definition depends on pack order | The wrapper wraps the final merge result, so it is safe |
+| With other add-ons using the same method | It is `modifications`, so it accumulates | `control_ids` is a property override so **only the later pack remains** [inferred] |
+
+- **[HOST-05]** Make my screen by `insert_back`-ing into `main_screen_content` a **second factory** that borrows vanilla's `server_form_factory` as is. Both react to the same form data, and by visibility (or length) only one shows. `{code, working pack}` (Source: BC 4.1-(1), BA chapter 2, BW-form, BW-intro)
+- **[HOST-06]** If you have several screens, do not attach them all with `visible`; **create only the chosen screen** (COL-10). bedrock-core puts `"#route_<title>": ["screen id"]` in the `property_bag` of a `collection_panel` and puts the result of a dictionary-like lookup with `('#route_' + #title_text)` into `#collection_length` to create only that cell. This dictionary lookup was confirmed in bedrock-core only by code and tests, and a Bedrock Wiki tutorial shows the result of the same mechanism (`('#list' + #choice)`) with game screenshots (COL-23, third-party record). Creating 0 or 1 cells with a computed length itself was measured. `{code, measured}` (Source: BC 4.1-(2), BC-S11, BW-dyn screenshot)
+- **[HOST-07]** **Entry = data channel.** Carry values in the action form entry string (`#form_button_text`). Give a pressable cell `collection_details` + the `form_button_click` mapping (COL-04, INP-04), and a cell that only reads values a `collection` binding without a mapping (even with `collection_details`, without a mapping it is not pressed). If the pressable cells go first (in document order) and the value channel after, the button numbers do not change even when the text count changes. `{measured, code}` (Source: BC 4.1-(3) and (4), BC-S1)
+- **[HOST-08]** **Fixed-width records.** If you carry several fields in one entry, fix the byte widths like `[kind 4][tab 2][frame 24]…`, and have the encoder (script) and the UI generator read one spec file together. Remove the padding character (`$`) and reserved characters from the body, and give number fields a letter prefix (EXP-15). `{working pack}` (Source: BA chapter 3)
+- **[HOST-09]** **Position-independent tokens.** Several booleans are put anywhere in the string as `~` + an uppercase group + a lowercase bit (`~Fo`, `~Xa`) and read with a containment check (EXP-07). `{working pack}` (Source: BA 3.3)
+- **[HOST-10]** If you reopen a form, the scroll returns to the top and there is no way to set the position. Make tab switching and accordions as "submit the form -> reopen in that state", and put the open section at the front of the list to avoid the scroll problem. If it is canceled with `UserBusy` because of another screen (chat, etc.), retry at intervals of a few ticks. `{working pack}` (Source: BA chapters 4 and 7)
+
+## 10.3 Modal forms
+
+- **[HOST-11]** The native fields of a modal form (toggle, slider, dropdown, input) are drawn by the engine. The pack takes the place and puts in it a template that has the same bindings as vanilla (`#custom_toggle_state`, etc., `collection_details`). The pack draws the submit button and maps it to `button.submit_custom_form`. `{code, vanilla}` (Source: BC 4.2, VN server_form.json:283-321)
+- **[HOST-12]** **A slider must not be placed statically.** It validates state at creation, so even if a slider of another screen is created hidden, it raises the `_setCurrentStep`/`_setPercentage` assert. For sliders, have the factory that routes `custom_form` by row type create one only when a slider row exists. `{measured}` (Source: BC-S8, BC-S9)
+- **[HOST-13]** A pattern of switching pages by the selected value of a hidden dropdown (field 0) inside one modal form, `('%.4s' * #dropdown_option_text)`, has been introduced. The point is that `#custom_dropdown` is the open state, not the current selection. There is no record of confirmation in game. `{unverified}` (Source: MJ chapter 8-5)
+
+## 10.4 Data prefix convention
+
+- **[HOST-14]** **Number of channels.** The HUD title channel is one, so when another add-on calls `setTitle` my overlay and toast are overwritten. Chat creates a control per message so several notifications stack. Chat is right for notifications that can overlap, and the title for a status display where only the latest value is needed. `{working pack}` (Source: BA chapter 6, AP 4.5 and chapter 6)
+- **[HOST-15]** When using the title, titles, chat and dialogue text as data channels, attach a **unique prefix** (`_r4ui:`, `CUSTOMHUD:ba_toast:`, `corev0009core`) and with that one prefix decide at once "hide the vanilla display, turn on the custom display". All three packs use this convention. If another add-on sends with the same prefix it gets hidden, so make the prefix long enough. `{working pack}` (Source: AP chapters 3 and 6, BA chapter 6, BC 4.1)
+
+## 10.5 Chest screen (`chest_screen.json`)
+
+- **[HOST-16]** Of entity inventories, only `container_type: "container"` goes to `chest_screen.json`, and it opens only if `private: false`. `inventory_size: 54` also goes to `small_chest_screen`, not a large chest, and draws only 27 cells, but cells that are not drawn are still read by bindings and updated in real time. Even 200 cells worked. `{measured}` (Source: BC-facts)
+- **[HOST-17]** Slots expose **only numbers** (`#hover_text` is the value of the whole screen, and the group name is empty). The screen is identified by the custom item's `max_durability` (signed 16 bits, 1..32767). Vanilla `#item_id_aux` has a range that shifts with the number of custom items (the BC record says 256 and above, the wiki 1.26.50 table 852~883), and an empty slot or an item with no durability fails every durability gate. `{measured, conflict}` (Source: BC-facts, BC-S14, BC 4.3-(1), BW-ids, Appendix A C-33)
+- **[HOST-18]** The chest screen content redeclares `small_chest_screen` in `chest_screen.json` to change `$screen_content` (MOD-11), and the vanilla label and grid are hidden with a slot 0 identifier binding (COL-05). For `small_chest_panel_top_half`, where controls are declared directly, `insert_back` is safe. Touch screens also go to `pocket_containers.small_chest_panel` in the same file. `{measured, code}` (Source: BC 4.3-(2), BC-facts)
+- **[HOST-19]** `$container_title` is the entity nameTag and can be used in text but not in binding expressions. Do routing with slot values. `{measured}` (Source: BC-facts)
+- **[HOST-20]** A script-side caution: there is no lock mode that makes slots read-only (poll and restore is the only way). If you refill a slot while the player holds the original, it is duplicated. The cursor can be read and cleared with `PlayerCursorInventoryComponent` but is not filled on touch. `setDynamicProperty` throws on stackable items, so mark them with lore. `{measured}` (Source: BC-facts)
+
+## 10.6 NPC dialogue screen (`npc_interact_screen.json`)
+
+- **[HOST-21]** **The dialogue text is the screen ID.** Compare `#dialogtext` (a global binding) to switch between my screen and vanilla `npc_screen_contents` by visibility. If you wrap the vanilla content, ordinary NPC dialogue keeps working. The `scene_tag` of the dialogue file (the name the command opens) and `text` (the value the UI sees) may differ. `{working pack}` (Source: AP 4.2)
+- **[HOST-22]** Use dialogue buttons (`student_buttons_collection`) as tabs and menus. If you choose the look by **button name** (`#student_button_text`) and not by index, the UI does not break even if you reorder the buttons in the dialogue file. When pressed, `button.student_button` -> the dialogue's command (`/scriptevent`, etc.) runs. `{working pack, vanilla}` (Source: AP 4.3, VN npc_interact_screen.json:1180-1261)
+- **[HOST-23]** Tell "closed by tab switching" from "closed by the user" with the dialogue's `on_close_commands` and tags (a tab button attaches a tag, and the close command cleans up only when there is no tag). `{working pack}` (Source: AP 4.3)
+- **[HOST-24]** The NPC that opens the dialogue is an invisible entity (scale 0, invulnerable) placed near the player and opened with `dialogue open @e[...] @s <scene>`. The claim that scene buttons in a dialogue file are limited to 6, and the claim that NPC structure NBT extends it to 9, were not confirmed. `{working pack, unverified}` (Source: AP 4.2, MJ chapter 7)
+
+## 10.7 HUD (`hud_screen.json`)
+
+- **[HOST-25]** To draw the HUD over another screen, give the screen below `force_render_below: true` and `screen_draws_last: false`, and the HUD `screen_draws_last: true` (other screens such as the bed screen are sent below the same way). `{working pack}` (Source: AP 3.1, AP-samples in_bed_screen.json, BW-doc)
+- **[HOST-26]** Put a custom HUD layer not inside vanilla `root_panel` but in the **background mount slot `$screen_bg_content`** that `common.base_screen` provides. Then even if the whole vanilla HUD (`root_panel`) is hidden, my layer remains. `{working pack, vanilla}` (Source: AP 4.4, VN ui_common.json:6349 and 6507)
+- **[HOST-27]** HUD title channel: place one more `hud_title_text_factory` in my layer and hide the vanilla title (`hud_title_text`) when it has my prefix. Put the hiding binding on the whole `hud_title_text`. If put only on `title_frame`, the sibling subtitle (`subtitle_frame`) does not hide and text can flash briefly (a known problem of BA 2.0.3, the 2.0.5 fix is unconfirmed). `{working pack, inferred}` (Source: BA chapter 6, AP-samples hud_screen.json)
+- **[HOST-28]** If a control created by the title factory receives `$title_text` (and `$subtitle_text`, `$actionbar_text`) with `|default` and decides with `ignored` and `variables.requires`, tabs and items that will not show are not created at all, so it is light. When the title is resent, the control is recreated. `{working pack}` (Source: AP 4.1)
+- **[HOST-29]** Chat channel: if you place one more `chat_item_factory` with the same name as the vanilla HUD chat in my layer, a second list is created from the same chat data. Hide my messages in **two places**: `messages_text` of the chat screen `chat_screen.json`, and the HUD's `chat_grid_item` (the chat lines over the screen). `{working pack}` (Source: AP 4.5)
+- **[HOST-30]** The HUD actionbar control is created by `hud_actionbar_text_factory` and receives its text through the variable `$actionbar_text`. If you put in `root_panel` a second factory named `hud_actionbar_text_factory` (`"control_ids": { "hud_actionbar_text": "hud_actionbar_text@myns.definition" }`), when an actionbar is sent my control is created along with the vanilla actionbar, and the label inside receives `$actionbar_text` as is. `{vanilla, measured}` (Source: VN hud_screen.json:2143-2160 and 3406, TP)
+- **[HOST-31]** In 1.26.50 the HUD subtitle changed to `subtitle_container_factory`. Recheck HUD modifications that depended on the subtitle position. `{vanilla}` (Source: VN hud_screen.json:3340, MJ 4.1)
+
+## 10.8 Rules added from the Bedrock Wiki comparison
+
+These are rules added by comparing the wiki (BW) documents with vanilla 1.26.50.4. Those with only wiki sentences are marked `unverified`, and those with in-game screenshots in the wiki are marked `measured` (third-party record).
+
+- **[HOST-32]** The wiki's standard HUD approach is to `insert_front` one wrapper panel into `root_panel` of `hud_screen.json`. If you give the wrapper no `size`, it receives the parent (screen) size so children's anchors and percentages work relative to the screen. For a layer that must remain even when the vanilla HUD is hidden (F1, hiding `root_panel`), put it in `$screen_bg_content` of HOST-26. `{unverified, working pack}` (Source: BW-hud, BW-best, AP)
+- **[HOST-33]** To exclude several custom form titles at once, chain subtractions: if `((#title_text - 'formA:' - 'formB:') = #title_text)` is true, the vanilla form shows. `{unverified}` (Source: BW-form)
+
+## 10.9 Rules added from the research server measurement
+
+These were measured on Windows 1.26.52 while building the research server (`DF`, a Go server made with Dragonfly). They came from a structure that draws several screens with one server form.
+
+- **[HOST-43]** If you give `third_party_server_screen` `"$screen_animations": []` and `"$background_animations": []`, the form appears immediately without animation. If the next form arrived while the window was moving, the two windows looked overlapped, and a menu that closes and reopens flickered. `{measured}` (Source: DF)
+- **[HOST-44]** To draw a screen frame behind a server form, change `$screen_bg_content` of `third_party_server_screen` (outside the safe zone, not pushed during screen transitions). The HUD is not drawn while a form is open, so to make the HUD's frame visible over a form, draw it here too. A `#title_text` binding in this place set to `once` was evaluated before the form content arrived and did not show. `{measured}` (Source: DF)
+- **[HOST-45]** The sidebar scoreboard is a HUD channel that does not overlap with the title: attach a marker to the objective name and partial markers to each line, change `scoreboard.scoreboard_sidebar` to a whole-screen panel, and draw each part in a different place with a `scoreboard_players` collection stack (`#scoreboard_sidebar_size` -> `#collection_length`). The client merges lines with the same text, so distinguish them by appending `§r`, up to 15 lines. `{measured}` (Source: DF)
+
+## 10.10 Rules added from the modal form `multiselect` measurement
+
+- **[HOST-46]** If you put `{"type":"multiselect","text":…,"options":[strings…],"default":[numbers…]}` in the modal form `content`, the 1.26.52 client draws it with vanilla UI (`text` is the head button text, and pressing it shows a checkbox list). At that position in the response array comes an array of chosen numbers (`[0,2]`), and `null` if none is chosen. The default checks are given as an array of numbers in the singular `default`, and `defaults` written in the binary schema is ignored. Even 25 options were all drawn, and even if you put several or mix with other rows, the response positions follow the `content` order. It cannot be sent with the Script API, so only servers that send a raw `ModalFormRequest` (Dragonfly cannot put it in `form.Custom`, so as a raw packet) can use it. `{measured, code}` (Source: MS, NB-16)
+- **[HOST-47]** The 1.26.60 preview vanilla wraps `custom_multiselect` in `option_generic` to add an upper label (`#custom_text`) and tooltip, and changes the head button text to `#multiselect_option_text`. The 1.26.50 version has no place for the upper label and tooltip. A pack that redraws this row or changes the `custom_form` factory should put `multiselect` in `control_ids` and recheck per version. `{vanilla}` (Source: MS, VN server_form.json:294 and 503)
+
+## Complete examples
+
+:::caution[Examples not verified in game]
+Examples A to D below were not run and confirmed in game by this wiki. They were newly written by combining the basis of the rule sections (HOST-xx) and the vanilla file structure. Recheck binding names, control names and collection names in your own version's vanilla UI files, and open them once on a real client before use. The verification level is `{inferred}`.
+:::
+
+These are examples that bundle the rule sections one set per host. Names are examples. Recipes 1, 8 and 9 (the recipes pages) are the complete files for the action form, HUD title and chat, and here the modal form, chest screen, NPC dialogue and actionbar are added.
+
+### Example A. Laying my title line over a modal form (`custom_form`)
+
+```jsonc
+// RP/ui/server_form.json   (a vanilla path)
+{
+  "custom_form": { "modifications": [ { "array_name": "bindings", "operation": "insert_back", "value": [
+    { "binding_name": "#title_text" },
+    { "binding_type": "view", "source_property_name": "((#title_text - 'mymodal:') = #title_text)",
+      "target_property_name": "#visible" } ] } ] },
+  "main_screen_content": { "modifications": [ { "array_name": "controls", "operation": "insert_back", "value": [
+    { "my_modal_factory": { "type": "panel", "size": [ "100%", "100%" ],
+        "factory": { "name": "server_form_factory",
+                     "control_ids": { "custom_form": "@server_form.my_modal_panel" } } } } ] } ] },
+  "my_modal_panel": {
+    "type": "panel", "size": [ 240, 160 ],
+    "bindings": [ { "binding_name": "#title_text" },
+      { "binding_type": "view", "source_property_name": "(not ((#title_text - 'mymodal:') = #title_text))",
+        "target_property_name": "#visible" } ],
+    "controls": [ { "bg": { "type": "image", "texture": "textures/ui/dialog_background_opaque" } },
+                  { "caption": { "type": "label", "text": "My modal form", "localize": false, "offset": [ 0, 8 ],
+                                 "anchor_from": "top_middle", "anchor_to": "top_middle" } } ]
+  }
+}
+```
+
+```js
+import { ModalFormData } from "@minecraft/server-ui";
+new ModalFormData().title("mymodal:settings").toggle("Sound effects", { defaultValue: true }).show(player);
+```
+
+1. Add a "hide if my prefix is present" binding to vanilla `custom_form` to prevent overlap (HOST-04 a). The prefix check is a containment check, so metadata may be attached after it (HOST-03).
+2. A modal form is mounted with the `custom_form` key of `control_ids` (the same structure as the wiki's modal form modification).
+3. To draw native fields (toggle, slider, dropdown, input) in my panel, put in a template that has the same bindings as vanilla (`#custom_toggle_state`, etc.) and map the submit button to `button.submit_custom_form` (HOST-11). Do not place sliders statically; have them created only when a slider row exists (HOST-12).
+
+### Example B. Choosing my screen by chest slot 0
+
+```jsonc
+// BP/entities/menu_chest.json (gist): minecraft:inventory with container_type "container", private false, inventory_size 27
+// Script: put a custom item 'my:menu_marker' with max_durability 777 in slot 0, and items for the cells from slot 1.
+```
+
+```jsonc
+// RP/ui/chest_screen.json   (a vanilla path)
+{
+  "small_chest_panel_top_half": { "modifications": [ { "array_name": "controls", "operation": "insert_back", "value": [
+    { "my_menu": { "type": "panel", "size": [ "100%", "100%" ], "visible": false,
+        "property_bag": { "#visible": false },
+        "controls": [ { "hello": { "type": "label", "text": "My menu", "localize": false } } ],
+        "bindings": [
+          { "binding_type": "collection_details", "binding_collection_name": "container_items" },
+          { "binding_name": "#item_durability_max", "binding_type": "collection", "binding_collection_name": "container_items" },
+          { "binding_type": "view", "source_property_name": "((#item_durability_max - 0) = 777)", "target_property_name": "#visible" } ] } } ] } ] }
+}
+```
+
+1. The chest screen comes to `chest_screen.json` when the entity inventory is `container_type: "container"` and `private: false` (HOST-16).
+2. Slots expose only numbers, so use the custom item's `max_durability` (1~32767) as the screen identifier (HOST-17). The binding name above (`#item_durability_max`) and the collection name are examples taken from the BC measurement records, so check them in your own version's vanilla `chest_screen.json`.
+3. Hide the vanilla label and grid with a slot 0 identifier binding (HOST-18, COL-05). For `small_chest_panel_top_half`, where controls are declared directly, `insert_back` is safe.
+4. Slot values update immediately if they change while open. There is no lock mode that locks slots read-only (HOST-20).
+
+### Example C. Using NPC dialogue text as the screen ID
+
+```jsonc
+// BP/dialogue/menu.json : scene_tag "my_menu", text "my_menu:v1", button name "Shop" -> command /scriptevent my:shop
+// Script: place an invisible NPC entity near the player and open it with a command
+//   dialogue open @e[type=my:npc,c=1] @s my_menu
+```
+
+```jsonc
+// RP/ui/npc_interact_screen.json   (a vanilla path)
+{
+  "npc_screen_contents": { "modifications": [
+    { "control_name": "teacher", "array_name": "bindings", "operation": "insert_back", "value": [
+      { "binding_name": "#dialogtext", "binding_type": "global" },
+      { "binding_type": "view", "source_property_name": "((#dialogtext - 'my_menu:v1') = #dialogtext)",
+        "target_property_name": "#visible" } ] },
+    { "control_name": "student", "array_name": "bindings", "operation": "insert_back", "value": [
+      { "binding_name": "#dialogtext", "binding_type": "global" },
+      { "binding_type": "view", "source_property_name": "((#dialogtext - 'my_menu:v1') = #dialogtext)",
+        "target_property_name": "#visible" } ] },
+    { "array_name": "controls", "operation": "insert_back", "value": [
+      { "my_menu@npc_interact.my_menu_root": { } } ] } ] },
+  "my_menu_root": { "type": "panel", "size": [ 240, 140 ],
+    "controls": [ { "title": { "type": "label", "text": "My NPC screen", "localize": false } } ],
+    "bindings": [ { "binding_name": "#dialogtext", "binding_type": "global" },
+      { "binding_type": "view", "source_property_name": "(not ((#dialogtext - 'my_menu:v1') = #dialogtext))",
+        "target_property_name": "#visible" } ] }
+}
+```
+
+1. Put the marker `my_menu:v1` in the dialogue file's `text` (the value the UI sees). The `scene_tag` (the name the command opens) may differ (HOST-21).
+2. Vanilla `npc_screen_contents` is a `panel` that holds `teacher` (the edit screen), `student` (the dialogue screen) and the close guide. Add a "visible only when the marker is absent" condition to the `bindings` of `teacher` and `student`, and splice my panel in at the end of the `controls` of `npc_screen_contents` as `my_menu@npc_interact.my_menu_root`, shown by the opposite condition. If you hide the whole of `npc_screen_contents`, my panel spliced inside is hidden too, so hide only the two children. When the marker is absent, vanilla shows as is, so ordinary NPC dialogue keeps working.
+3. The look of dialogue buttons is chosen by button name (`#student_button_text`), not by index (HOST-22). The splicing step is the third operation in the example above. The names `teacher` and `student` are the names of `controls` items of vanilla `npc_screen_contents` (VN `npc_interact_screen.json` lines 1486~1531), so recheck when the version changes.
+4. A close by tab switching and a close by the user are told apart with the dialogue's `on_close_commands` and tags (HOST-23).
+
+### Example D. Receiving actionbar text with my control too
+
+```jsonc
+// RP/ui/hud_screen.json   (a vanilla path)
+{
+  "root_panel": { "modifications": [ { "array_name": "controls", "operation": "insert_back", "value": [
+    { "hud_actionbar_text_factory": { "type": "panel", "size": [ "100%", "100%" ],
+        "factory": { "name": "hud_actionbar_text_factory",
+                     "control_ids": { "hud_actionbar_text": "hud_actionbar_text@myhud.bar_label" } } } } ] } ] }
+}
+```
+
+```jsonc
+// RP/ui/myhud/bar_label.json   (registered in _ui_defs.json)
+{ "namespace": "myhud",
+  "bar_label": { "type": "panel", "size": [ "100%", 14 ], "anchor_from": "bottom_middle", "anchor_to": "bottom_middle",
+    "controls": [ { "t": { "type": "label", "text": "$actionbar_text", "color": [ 1, 0.8, 0.2 ] } } ] } }
+```
+
+```js
+player.onScreenDisplay.setActionBar("Score 120");
+```
+
+1. If you put in `root_panel` a second factory named `hud_actionbar_text_factory`, the same name as vanilla's, my control is created together with the vanilla control when an actionbar is sent (HOST-30).
+2. Inside the control the factory created, the variable `$actionbar_text` receives the sent text as is. This example also draws the vanilla actionbar, so to hide it add the prefix convention (HOST-15) and a binding.
+
+## Proposals (not applied)
+
+Below are rule proposals from the additional material survey. They are numbered in the merge report but have not yet been reflected in the rulebook in the body above. The numbers are the final IDs in the merge report, and the strength of evidence follows the verification level of the original proposal. Check before using them.
+
+- **[HOST-34 proposal (not applied)]** If you make the title flag by **attaching `§` to every character** (`§c§h§e§s§t§5§4§r`), every character is consumed as a formatting code, so the flag does not show in the title even when there is no resource pack or the vanilla look is shown. The containment check (EXP-07) still works. Attach `§r` at the end to undo formatting for the following title. `{working pack}` (Source: Chest-UI constants.js, upgrader protocol.js)
+- **[HOST-08 reinforcement proposal (not applied)]** If you use a **tab** (`\t`) as the padding character of fixed-width fields, it almost never overlaps with the body, and after taking it out you erase it with `(piece - '\t')`. It is an alternative to HOST-08, which uses a visible character such as `$`. `{working pack}` (Source: StarLibV2)
+- **[HOST-35 proposal (not applied)]** There is a rule (TLM proposal) that compares a title against an exactly matching value such as `§r`. When detecting by `(#title_text = 'exact value')` rather than a containment check, it also notes the pitfall that it does not match if formatting codes or metadata are attached before or after the title (a reinforcement of HOST-03). `{working pack}` (Source: merge report TLM, EasyUIBuilder)
+- **[HOST-36 proposal (not applied)]** Meaning of screen properties: `render_only_when_topmost` (if false, draws even when covered), `always_accepts_input` (if true, input even when not on top), `absorbs_input` (if false, input goes to the game), `is_showing_menu` (if false, a resident UI like the HUD), `should_steal_mouse` (if true, hides the cursor), `render_game_behind`, `low_frequency_rendering` (low-frequency rendering), `cache_screen` (faster to reopen), `close_on_player_hurt` (closes on damage), `load_screen_immediately`, `send_telemetry`. Vanilla mostly uses the opposite of the default for these (HUD: `is_showing_menu: false`, `should_steal_mouse: true`, `absorbs_input: false`, `low_frequency_rendering: true`). But `should_steal_mouse` (false 3 / true 1) and `low_frequency_rendering` (true 3 / false 1) show both values. `{vanilla, unverified}` (Source: NetEase documentation, VN hud_screen.json:3574, debug_screen.json:44, toast_screen.json:1775)
+- **[HOST-37 proposal (not applied)]** When putting my HUD layer outside vanilla `root_panel` (`$screen_bg_content`, etc.), if you attach to the layer root the same three global bindings as vanilla `root_panel` (`#hud_visible`->`#visible`, `#hud_alpha`->`#alpha`, `#hud_propagate_alpha`->`#propagateAlpha`), it follows the F1 hiding and the HUD opacity setting. `{vanilla}` (Source: VN hud_screen.json:3555, NetEase documentation)
+- **[HOST-38 proposal (not applied)]** The `$screen_content` of `common.base_screen` attaches inside the safezone matrix (`variables_button_mappings_and_controls/safezone_screen_matrix/inner_matrix/safezone_screen_panel/root_screen_panel`) to respect the screen safe zone, and `$screen_bg_content` attaches outside it. The open and close animations are changed with `$screen_animations`: the default is 8 of offset+fade, `[]` means none, and `"$background_animations"` is alpha only (the HUD has 4 fades). (The HOST-43 in the body measured the same variable.) `{vanilla}` (Source: VN ui_common.json:6350 and 6747, hud_screen.json:3580, debug_screen.json:54)
+- **[HOST-39 proposal (not applied)]** In case there is no resource pack, put a **fallback notice** in the server form `body` ("The resource pack is off, so the default screen is shown") and do not draw the body in the custom screen. Hide the title flag by attaching `§` to every character (HOST-34 proposal). Map data-only buttons to no action (`kind: none`) so that pressing them on the default screen is harmless. `{working pack}` (Source: upgrader protocol.js)
+- **[HOST-40 proposal (not applied)]** For a multi-stage screen (choose -> effect -> result), open a new form with a changed title suffix code per stage (`MARKER + '§1'/'§2'/'§3'`), and the UI picks the stage panel with an exact match `(#title_text = MARKER§N)`. The script closes with `uiManager.closeAllForms(player)` after the effect time and opens the next form. The game screen can show for one frame between forms, so make player-visible state changes (inventory, etc.) a few ticks after the next form opens. `{working pack, unverified}` (Source: upgrader session.js)
+- **[HOST-41 proposal (not applied)]** If you redeclare `hud_title_text` at the same path and override `alpha` with a constant, the fade and `destroy_at_end` chain disappear and the title stays until the next title (a fixed sidebar). It loses the vanilla title display, so for now prefer the HOST-27 method (one more factory). Based on a 2023 pack. `{working pack, unverified}` (Source: small-packs, VN hud_screen.json:2267-2273)
+- **[HOST-42 proposal (not applied)]** The display name of a scoreboard sidebar objective (`#objective_sidebar_name`) can be used as a server -> UI channel: if the name is a set value, the sidebar look changes. The global binding `#hud_title_text_string` can also be read inside the sidebar. It is a pack based on 1.20.71. `{working pack, unverified}` (Source: small-packs)
+- **[HOST-33 level raise proposal (not applied)]** There is a proposal (a TLM proposal, used in working packs) to raise HOST-33, which chains title exclusions with subtraction, from `unverified` to `working pack`.

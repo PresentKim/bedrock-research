@@ -1,0 +1,106 @@
+---
+title: "Camera, HUD, input locks"
+description: "The CameraInstruction, SetHud and UpdateClientInputLocks packets, screen control sent to a single player, notes on HUD and forms"
+sidebar_position: 6
+sources:
+  - private-research
+  - gophertunnel
+  - dragonfly
+---
+
+## Concept
+
+The camera, HUD elements and input are all controlled with **packets the server sends only to one player's client**. In BDS the `/camera` command and the Script API do the same job, and a custom server sends the packets directly. The world does not change, so other players are not affected. The packets below follow the gophertunnel (MIT) definitions. (Source: gophertunnel-repo, minecraft/protocol/packet)
+
+## CameraInstruction packet
+
+All fields of `CameraInstruction` are optional, so one packet can carry several commands.
+
+| Field | Description |
+|---|---|
+| `Set` | Set the camera to a given preset (position, rotation, transition time and so on) |
+| `Clear` | If true, clear all camera commands |
+| `Fade` | Fade the screen to a given color |
+| `Target` | Aim at a specific entity |
+| `RemoveTarget` | If true, clear the current target |
+| `FieldOfView` | Update the field of view |
+| `Spline` | Spline path for the camera to follow |
+| `AttachToEntity` | ID of the entity to attach the camera to |
+| `DetachFromEntity` | If true, detach from the current entity |
+
+Presets are announced in advance with the `CameraPresets` packet at join. A common approach is to send one free camera preset at start and then change position and rotation with `Set`.
+
+## SetHud and UpdateClientInputLocks
+
+```go
+// hide or restore HUD elements
+&packet.SetHud{Elements: []int32{packet.HudElementHotBar, packet.HudElementHealth}, Visibility: packet.HudVisibilityHide}
+// input lock: a combination of flags, 0 clears everything
+&packet.UpdateClientInputLocks{Locks: packet.ClientInputLockCamera | packet.ClientInputLockMovement}
+```
+
+| HUD element constant | Index |
+|---|---|
+| `HudElementPaperDoll` | 0 |
+| `HudElementArmour` | 1 |
+| `HudElementToolTips` | 2 |
+| `HudElementTouchControls` | 3 |
+| `HudElementCrosshair` | 4 |
+| `HudElementHotBar` | 5 |
+| `HudElementHealth` | 6 |
+| `HudElementProgressBar` | 7 |
+| `HudElementHunger` | 8 |
+| `HudElementAirBubbles` | 9 |
+| `HudElementHorseHealth` | 10 |
+| `HudElementStatusEffects` | 11 |
+| `HudElementItemText` | 12 |
+
+`Visibility` is `HudVisibilityHide` (0) or `HudVisibilityReset` (1). The input lock flags are `ClientInputLockCamera`, `Movement`, `LateralMovement`, `Sneak`, `Jump`, `Mount`, `Dismount`, `MoveForward`, `MoveBackward`, `MoveLeft`, `MoveRight` (bits starting from `1 << (iota+1)`, with one bit left empty). **Even if you hide with `SetHud`, elements a resource pack added to the HUD (such as the sidebar) remain.**
+
+## Screen control for one player in Dragonfly (packet hooks)
+
+Dragonfly has no such API, so you build hooks that send packets to the session. All of them are sent only to one player's client. (Source: private research)
+
+| What it does | How |
+|---|---|
+| Move the camera to a position and rotation | `CameraInstruction.Set` with the free camera preset sent at join (including easing time). Meanwhile the movement keys are relative to the camera |
+| Return the camera to normal | `CameraInstruction.Clear` |
+| Change and restore the field of view | `CameraInstruction.FieldOfView` |
+| Hide all vanilla HUD | `SetHud` with all elements. Resource pack HUD elements remain |
+| Input lock | `UpdateClientInputLocks`, 0 clears |
+| Play a resource pack animation once for only that player | `AnimateEntity` to that client only (similar to the script `playAnimation`) |
+| A player model that exists in no world | [fake-blocks-and-chunks.mdx](fake-blocks-and-chunks.mdx) |
+| Title and subtitle | Send the subtitle before the title, because the client shows the subtitle together with the next title. If sent as a raw JSON title, the client converts translation keys into its own language |
+
+## More observations on forms and HUD (server development measurements)
+
+### Screen host
+
+- **Form screen animation** [measured]: `"$screen_animations": []` and `"$background_animations": []` on `third_party_server_screen`. If the next form arrived while the window was moving, the two windows appeared overlapping, and a form that closes and reopens flickered.
+- **Background behind a form** [measured]: Change `$screen_bg_content` of `third_party_server_screen` (outside the safe zone, not pushed during screen transitions) to draw the frame you want behind the form. If the `#title_text` binding there is set to `once`, it was evaluated before the form content arrived and nothing showed.
+- **Sidebar scoreboard as a HUD channel** [measured]: Attach a marker (`§d§h§u§d`) to the objective name and partial markers (`§d§1` to `§d§4`) to each line. `scoreboards.json` turns `scoreboard_sidebar` into a full-screen panel and draws each part by splitting it with a `scoreboard_players` collection stack (`#scoreboard_sidebar_size` as `#collection_length`). The client merges lines with the same text, so append `§r` to tell them apart (up to 15 lines). It does not overwrite the title.
+- **Form while the HUD is hidden** [measured]: While a form is open, the HUD is not drawn. To show the same frame behind the form as well, draw it in the form background (`$screen_bg_content`) too.
+
+
+### Miscellaneous facts about forms and HUD
+
+
+- **Vanilla confirmation form** [record]: A modal form (`modal_form`) does not take the `server_form.json` theme and appeared as a light default window. Confirm and cancel were sent as the two buttons of an action form.
+- **Grid height** [record]: If the grid height was set to `#form_button_contents` or `default`, no buttons appeared at all. Use `100%c`.
+- **`100%c` in a horizontal stack** [record]: The height `100%c` of a horizontal stack adds up all child heights, leaving a large gap under the tab row. Use `100%cm`, which follows the largest child.
+- **Numeric variable inside a size array** [record]: Putting a numeric variable inside an array such as `"size": [ "$w", "100%c" ]` gave a "Dangling number" error. Give the size as a variable for the whole array (`"size": "$window_size"`).
+- **Input form text** [record]: The text of the vanilla input field is white, so it is invisible on a light card.
+- **Text that holds only a number** [record]: Values that read as numbers (`" 219"`, `"1,532/4,096"`) did not show in a label. Send them as text that starts with a color code, or make them a string with `'§r' + value` inside a variable expression. A one-digit numeric flag also becomes a number and breaks text comparison, so write flags as letters (`a` to `k`).
+- **Expressions in the variables block** [record]: A count expression only evaluated when placed in the label's own `variables` block. Expressions in the parent panel's `variables` or `('§r' + $variable)` inside `text` were not evaluated. Using an expression from a variables block inside another expression was also not evaluated.
+- **Drawing an item with the HUD subtitle** [record]: When carrying item runtime ID x 65536 in the title's subtitle to draw an icon, taking the slot from the binding `#hud_subtitle_text_string` left the icon empty with every approach (cutting, fixed width, adding and subtracting, erasing the padding characters). It was drawn when cut with `'%.11s'` from the variable `$var_subtitle_text` that the title factory provides and put into `#item_id_aux` of `property_bag`. Sending the subtitle as digits only broke the vanilla block-state slot check and gave an "expected a string" warning.
+- **Toast** [record]: The client shows toasts one at a time in turn. Toasts show even while a form is open and do not block the next form.
+- **Item use repetition** [record]: While the use button is held, the client repeatedly sends the item use packet. If you send a form on every use, the same form piles up and the next one appears each time you close one.
+- **HUD hidden with `SetHud`** [record]: Even if you hide the vanilla HUD with `SetHud`, elements a resource pack added to the HUD remain.
+- **Pocket layout** [record]: On a touch screen, when the UI profile is pocket, the vanilla HUD draws hearts at the top left and hunger at the top right through `not_centered_gui_elements`. You can redefine that version in `hud_screen.json` and move to the classic touch layout (the same place as `centered_gui_elements_at_bottom_middle_touch`).
+- **Dimming the screen** [record]: Vanilla dims the area behind a form with `screen_background` at opacity 0.4.
+- **Quick move button** [record]: If you stack one visible button next to the chest window and as many invisible buttons as there are slots under it, and change each button's press into that slot's vanilla quick move (`button.container_auto_place`, `consume_event: false`), one click becomes a shift-click on every slot (a technique from the Quick Container pack). The server receives a plain item move request per slot. There is also an example in ../bedrock-core/samples/pack.chest.json.
+- **Slot decoration (markers in item names)** [record]: JSON UI cannot read a slot's item data; it reads only the slot collection's `#hover_text` (name + description). If you put a marker with `§r` right after `§k`, such as `§k§r§a`, in an item name, nothing remains on screen, and you can add the binding `(not ((#hover_text - 'marker') = #hover_text)) * number` to make a number and pick a texture.
+  - The slot template needs changes in two places: `container_item` (`ui_common.json`, chests and so on) and `inventory_container_item` (`inventory_screen.json`, bag and crafting slots). The latter has its own `controls`, so a change to the former does not reach it. The layers are slot background 1 and item 7, so put the back decoration at 6 and the front decoration at 9.
+  - The PC hover box is drawn by the engine and its frame cannot be changed. On the touch UI's selected item bubble (`item_panel_image`), you can draw over it.
+  - The color code of a marker continues into the following text, so if you put a name containing a marker in the middle of a sentence, the color bleeds.
+

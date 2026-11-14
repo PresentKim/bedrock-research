@@ -1,0 +1,158 @@
+---
+title: Modifying Ore UI pages
+description: Building an encrypted pack, the content.zipe local pack, swapping gameplay.html, injection tests, and the results of the local probe packs.
+sidebar_position: 3
+sources:
+  - repo-ore-ui-loading
+---
+
+# Modifying Ore UI pages
+
+As seen in [Loading paths](./loading-paths.mdx), Ore UI files are changed only by a trusted pack. This page covers two ways to actually make a trusted pack (the server sends it encrypted, or a `content.zipe` is placed in a local folder) and how to swap `gameplay.html` on top of that. (Source: repo-ore-ui-loading)
+
+## 1. Method A: the server sends an encrypted pack `{measured, code}`
+
+### Concept
+
+The server sends the pack with a content key in the resource pack list (`ResourcePacksInfo`). Marketplace packs work this way. The client decrypts the pack with the key, opens it with the encrypted access strategy and trusts it. The key can be any 32 bytes. Signatures and UUIDs are not checked.
+
+### Format (marketplace format)
+
+- `contents.json`
+  - Bytes 0~3: version 0
+  - Bytes 4~7: magic number `0x9BCFB9FC` (little endian)
+  - 0x10: the length byte and string of the content ID (pack UUID)
+  - From 0x100: the file list JSON `{"content":[{"path","key"}]}` encrypted with the content key using AES-256-CFB8 (IV = the first 16 bytes of the key)
+- `manifest.json` and `pack_icon.png` stay as plaintext.
+- Every other file is encrypted per file with a random 32-byte key in the same way (AES-256-CFB8, IV = the first 16 bytes of that key), and that key is written in the list in `contents.json`.
+
+### Example: running the test server
+
+```bash
+# In samples/ouitest. The second argument is the 32-byte content key.
+go run . ../probe-pack OreUiProbeContentKey0123456789AB
+```
+
+After connecting, open the Ore UI death screen with `/die` and the pack's CSS is applied. In gophertunnel, specify the key with `pack.WithContentKey`.
+
+### Rules
+
+- If the same pack is sent as plaintext, it cannot change Ore UI files.
+- When you edit pack files, **raise the pack version.** With the same UUID and version, the client uses what it already received.
+- If `header.uuid` or a module `uuid` collides with another server's pack, the client cache gets mixed up. Create a new UUID when you reuse a renderer pack.
+- The location inside the pack is `hbui/<file>`. There is no need to put copies in the pack root or in `gui/dist/hbui/` (measured 2026-10-24: placing it only in `hbui/` was enough for it to change).
+- Encryption is only a condition for opening Ore UI, not protection. The key is given to the client, so a connecting client can decrypt the pack (tools such as `bedrockpack steal`).
+
+## 2. Method B: the `content.zipe` local pack `{measured, 2026-10-27}`
+
+### Concept
+
+No server is needed. If you put a file named `content.zipe` in a plaintext pack folder, the engine opens that folder with `DirectoryPackWithEncryptionAccessStrategy` (reading plaintext without a key), and this strategy is always trusted.
+
+### Example
+
+```text
+my-ore-ui-pack/
+  manifest.json
+  content.zipe          An empty 0-byte file is fine
+  hbui/gameplay-theme-....css
+```
+
+The tool that wraps another pack in this format is the `wrap` command of the test program.
+
+```bash
+go run . wrap ../deathdebug-pack out
+```
+
+This produces `out/<name>/` (a folder pack) and `out/<name>.mcpack` (a zip with the files directly at the top). The original files stay as plaintext and only a 0-byte `content.zipe` is added. After editing the pack JS, raise the manifest version.
+
+### Probe variants and results (Windows 1.26.52)
+
+Header: 0 at bytes 0~3, `0x9BCFB9FC` (LE) at 4~7, the length byte of the content ID and the pack UUID at 0x10, zeros up to 0x100 bytes. Each variant has a different UUID and background color. Every variant contains `hbui/`, `gui/dist/hbui/`, a one-line background color CSS in the pack root, `ui/_global_variables.json` that turns the bright button text red (a marker to see whether pack files are read), and `ui/death_screen.json` that hides the JSON UI death screen panels.
+
+| Variant | Form | Targeted path | Background | Result |
+| --- | --- | --- | --- | --- |
+| `localprobe-listing` | `contents.json` = header + plaintext list (no keys) | `EncryptedFileAccessStrategy` | magenta | not changed |
+| `localprobe-header` | `contents.json` = only the 256-byte header | `EncryptedFileAccessStrategy` | sky blue | not changed |
+| `localprobe-zipe` | `content.zipe` = header + plaintext zip | `DirectoryPackWithEncryptionAccessStrategy` | yellow | **changed** |
+| `localprobe-mcpack.mcpack` | a zip with the same content as listing | `ZippedEncryptedFilesAccessStrategy` | orange | not changed |
+| `localprobe-zipe-manifest` | same as zipe but the inner zip has only `manifest.json` | Directory encryption | green | **changed** |
+| `localprobe-zipe-empty` | `content.zipe` = only the 256-byte header | Directory encryption | blue | **changed** |
+| `localprobe-zipe-magic256` | 256 bytes, all zero except the magic number at 4~7 | same | red | not checked separately |
+| `localprobe-zipe-magic8` | 8 bytes `00000000 FCB9CF9B` | same | white | not checked separately |
+| `localprobe-zipe-blank` | `content.zipe` = 0 bytes | same | black | **changed** |
+
+Interpretation
+
+- The content of `content.zipe` does not matter. The engine only checks whether the file exists to choose the access strategy, and files are read as plaintext from the pack folder. The pack file type check reads the first 256 bytes, and if it is under 256 bytes or the content ID length does not fit, it is not seen as an encrypted file `{code}`. But an empty file worked, so the folder pack's `content.zipe` check does not go through this decision and looks only at existence `{measured, inferred}`.
+- A pack with the header in `contents.json`, and a `contents.json` inside a `.mcpack`, did not change anything.
+- When importing as a `.mcpack`, `manifest.json` and `content.zipe` must be directly at the top of the zip. A `.mcpack` made by zipping the whole folder, one level deeper, failed to import with no message.
+- The client has nowhere to get the key for a keyless encrypted pack (it looks only at server keys, entitlements and the built-in table). This test looked at what happens when the encrypted strategy is created without a key.
+- Test order (Windows): turn on only one variant at a time. Copy the folder variants to `%APPDATA%\Minecraft Bedrock\Users\Shared\games\com.mojang\resource_packs\` and turn them on under global resources in settings. Check whether the pack shows in the pack list, whether the pause screen button text is red, and what the background color of the death screen opened with `/kill` in a cheats world is.
+
+Reading table
+
+| Pack list | Button text red | Death screen background | Meaning |
+| --- | --- | --- | --- |
+| Shown | Yes | Variant color | It opened with a keyless encrypted strategy, read plaintext files and was trusted |
+| Shown | Yes | Vanilla | It opened with the plaintext strategy. The header was ignored |
+| Shown | No | Vanilla | It opened with the encrypted strategy but had no key so the asset list was empty |
+| Not shown or error | - | - | A keyless encrypted pack was rejected at the load stage |
+
+## 3. Swapping `gameplay.html` `{measured}`
+
+### Concept
+
+All in-game Ore UI (death, bed, inventory, DDUI, trade, block screens) is the single `gameplay.html`. A trusted pack's `hbui/gameplay.html` replaces the installed one, so if you copy the vanilla HTML and add only tags, the vanilla app keeps running and your own JS and CSS run in the same page.
+
+### Example
+
+```html
+<script defer="defer" src="/hbui/gameplay-100751586307248a0527.js"></script>
+<link href="/hbui/gameplay-26927106c1834224ebc7.css" rel="stylesheet">
+<link href="/hbui/menus-theme-b1a483c329eea7188853.css" rel="stylesheet">
+<link href="/hbui/gameplay-theme-cb1e5471975ef2c1abb9.css" rel="stylesheet">
+<link href="/hbui/oui-ddui.css" rel="stylesheet">
+<script defer="defer" src="/hbui/oui-ddui.js"></script>
+```
+
+The first four lines are vanilla and the last two are the additions.
+
+### Rules
+
+- The vanilla React app renders into `#root` as it is, and the injected JS attaches separately to `body`.
+- **The vanilla bundle file names contain hashes.** When the game updates, look at the install folder `data/gui/dist/hbui/gameplay.html` and match the names. If they are wrong, the whole in-game Ore UI does not appear. The approach of overriding only existing files such as `gameplay-theme-*.css` is just as tied to the names. A server cannot see the install, so match them by hand for each version.
+- If the pack CSS points to a game font (`ui://hbui/fonts/...`) with `@font-face`, match that name too.
+- All in-game Ore UI screens use `gameplay.html`, so the injected JS runs in all of those screens. The HUD is not Ore UI and is not reached.
+- The injected JS runs in the same page as the vanilla bundle, so it should also reach the engine facets (`engine.trigger("facet:request", ...)`) `{inferred, not tested}`.
+
+## 4. Injection test: showing your own HTML, JS and CSS `{measured}`
+
+The injection pack loads the vanilla JS and CSS as they are and then appends `/hbui/oui-inject.css` and `/hbui/oui-inject.js`.
+
+```bash
+go run . ../inject-pack OreUiProbeContentKey0123456789AB
+```
+
+| Panel element | What was confirmed |
+| --- | --- |
+| Yellow-bordered panel, title, text | HTML insertion and CSS (flex, `border-radius`, `rgba`) |
+| Second-resolution clock, progress bar | `setInterval` and DOM updates keep running |
+| Click button and click count | Mouse `click` events, `:hover` |
+| Rotating icon | Loading a pack texture as `pack://textures/ui/...png`, `@keyframes` animation |
+
+## 5. The debug death screen pack `{partly measured}`
+
+`deathdebug-pack` is a debug pack used wrapped in the `content.zipe` form. It swaps `gameplay.html` to float two panels over the vanilla screen, and pressing the bottom center strip hides or shows them again.
+
+- Left: `mousedown` buttons (counter, toggle, border color, add box, press duration, drag bar, `<input>`, exceptions and rejected Promises, `engine` and `__commands__` info), media (pack GIF, CSS rotation, a vanilla texture through `pack://`, `geo-item://`, `<audio>` playback).
+- Right: time, FPS, route, window size, rem, UA, mouse coordinates, pressed keys and gamepad, event counts by kind and the latest 16 lines (`mousedown`, `mouseup`, `click`, `dblclick`, `contextmenu`, `wheel`, `keydown`, `keyup`, `touch*`, `focus`, `blur`, `resize`, `hashchange`, `onerror`, `unhandledrejection`, `console.error`).
+- The router does not change the address, so `location` is `/hbui/gameplay.html#` even on the death screen `{measured}`. So the death screen is not told apart by route.
+- In a desktop browser, only the panel, buttons, keys and error log running without the vanilla bundle was confirmed. It has not yet been run in game.
+
+## 6. What a pack cannot change
+
+- The vanilla DDUI layouts (`ddui/root`)
+- Opening a real container (chest, furnace, inventory) with Ore UI
+- The HUD (it is not Ore UI)
+- Fonts and `routes.json`

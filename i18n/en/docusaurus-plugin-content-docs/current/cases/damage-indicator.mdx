@@ -1,0 +1,76 @@
+---
+title: "Premium Damage Indicator (showing damage with particles, no JSON UI)"
+description: "An add-on that floats damage numbers using world-space particles and a glyph atlas. An alternative case for when JSON UI does not fit"
+sidebar_position: 9
+sources:
+  - damage-indicator
+  - repo-guide
+---
+
+## What it is
+
+Premium Damage Indicator v1.1 is an add-on posted on MCPEDL by the author GAVTI (`Premium_Damage_Indicator_v1.1.mcaddon`, 54.54 KB, posted 2026-09-15, updated 2026-09-28, supported version listed as 26.30). A damage number floats up on every hit (white normally, red for critical hits and mace smashes). **This add-on does not use JSON UI at all.** There is no `ui/` folder either. It draws damage numbers not in the HUD but as **world-space particles**, cuts a digit glyph atlas (one PNG) with particle UVs, and the script shows one particle per character only to the attacking player. So this page is material for "what to use when JSON UI does not fit".
+
+The analysis opened all 7 attached files, and the MCPEDL page had only one introductory paragraph and no implementation description. The files carry no license notice, so no code was copied and only facts were rewritten (Source: cs-damage-indicator). No in-game measurement was done. The manifest's `min_engine_version` is `[1, 26, 40]` and MCPEDL says "26.30", so the labels disagree. Whether it really loads on a 26.30 client needs measurement.
+
+## Structure and flow
+
+| Path | Content |
+| --- | --- |
+| BP `manifest.json`, `scripts/main.js` (6.1 KB) | `@minecraft/server` 2.9.0, event subscriptions, critical hit detection, particle placement |
+| RP `particles/damage_glyph.json` | Particle `pdi:damage_glyph` (format_version `1.26.10`) |
+| RP `textures/particle/pdi_damage_glyphs.png` | A 1024×64 RGBA glyph atlas |
+
+The script records `playerSwingStart`, `entityHitEntity`, and `entityHurt`. When the `entityHurt` cause is a melee attack or a mace smash and the attacker is a player, on the next tick it matches against records within ±4 ticks and ORs in the critical hit, rounds `event.damage` to two decimal places (`-7`, `-12.5`), and calls `attacker.spawnParticle("pdi:damage_glyph", pos, vars)` for each character. The critical hit check is a server-state heuristic such as `isFalling` and not in water or climbing, so it can miss. Arrows, explosions, and similar are not shown.
+
+## Key techniques
+
+### 1. Picking a glyph from the atlas with a Molang variable
+
+The atlas is 1024 wide and 64 tall with 16 square cells of 64px, and only 12 cells are used: `0` to `9`, `-`, and `.`. The characters are drawn in white and the color is applied as a particle tint, so one texture produces several colors. One particle definition handles every character.
+
+```jsonc
+// An example newly written to explain the technique (not the original)
+"minecraft:particle_appearance_billboard": {
+  "facing_camera_mode": "lookat_xyz",
+  "uv": { "texture_width": 1024, "texture_height": 64,
+          "uv": ["variable.glyph * 64", 0], "uv_size": [64, 64] }
+}
+```
+
+The script puts `variable.glyph` (0~11), `variable.scale` (1.0 normally, 1.13 for critical hits), and `setColorRGBA("variable.tint", ...)` into a `MolangVariableMap`. `setColorRGBA` unpacks into the four variables `variable.tint.r/.g/.b/.a`. In the gradient, RGB uses these variables and **only the alpha** is given as a 0, then 1, then 1, then 0 keyframe (appearing in the first 8% of the lifetime and fading in the last 28%), separating color from fade. It needs translucency, so it uses `material: particles_blend` (`particles_alpha` is cutout). For size, it swells up to 10% and returns with `sin(0 to π)` over the lifetime, giving a pop effect. Motion is `initial_speed [0, 0.22, 0]`, `linear_acceleration [0, 0.08, 0]`, and `linear_drag_coefficient 0.9`, rising slowly and then decelerating.
+
+### 2. Placing the characters
+
+From `view`, the attacker's gaze normalized onto the XZ plane, it computes `right = (-view.z, 0, view.x)` and shifts each character along `right` by `(i - (len-1)/2) * 0.155` to center it. The starting point is pulled 0.28 toward the attacker from the victim's head and 0.08 below. On rapid hits it chooses, out of 9 candidate offsets, the one farthest from the most recent 5 positions.
+
+### 3. Visible only to the attacker
+
+It uses `attacker.spawnParticle` and not `world.spawnParticle`. A code comment says "Only the attacker sees the indicator". `Player.spawnParticle` is an API that sends only to that player's client, so in multiplayer other people's numbers are not visible (inferred).
+
+## Comparison with a JSON UI HUD reskin
+
+| Item | This add-on (world particles) | JSON UI HUD reskin |
+| --- | --- | --- |
+| Position | 3D space above the victim's head | Fixed screen coordinates. Cannot follow an entity |
+| Data path | Numbers passed directly with `MolangVariableMap` | `setTitle`/`setActionBar` string + flag prefix |
+| Conflicts with other add-ons | None | title/actionbar is a single slot and overwrites |
+| Simultaneous display | No limit | One per channel |
+| Number rendering | Texture glyph + UV | Label text (string + float concatenation shows nothing, TXT-06) |
+| Interaction | Not possible (display only) | Click, focus, and scroll possible |
+| Occlusion and distance | Hidden behind blocks and entities and may shrink with distance (estimated) | Always on top, independent of distance |
+| Required files | 1 particle JSON + 1 PNG | Edits to `ui/hud_screen.json` and so on |
+
+It touches no vanilla UI file, so pack compatibility problems are absent by nature. On the other hand, just as the chest screen of bedrock-core draws one character per slot through "stack count to translation key to glyph", this add-on draws one character per particle through "Molang variable to UV offset to glyph". Both choose characters by a numeric code on a surface that cannot draw text directly. The character table is also fixed (64 characters versus 12), and characters outside the table are dropped. The particle definition is static and the runtime changes only values, which is the same as the "shape is fixed, only values change" principle (see [bedrock-core](./bedrock-core.mdx)).
+
+## Relation to our rules
+
+| Rule ID | Relation |
+| --- | --- |
+| ALT-01 | A display that follows a 3D position cannot be made with JSON UI. Use particles or entities (supports) |
+| HOST-14 | Contrasting evidence that a single title channel is weak for overlapping notifications |
+| TXT-06 | The constraint that a float number cannot be drawn directly in a label is one reason for choosing particles |
+
+## Limits
+
+Particles are created per character, so hitting several mobs with an area attack raises the particle count quickly. Particles undergo the depth test and can be hidden. The occlusion and distance above, the critical hit accuracy, and whether the `@minecraft/server` 2.9.0 stable release has all the events need measurement.

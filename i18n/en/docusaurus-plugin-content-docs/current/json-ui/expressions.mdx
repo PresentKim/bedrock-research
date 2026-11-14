@@ -1,0 +1,637 @@
+---
+title: Expressions and operators
+description: Operators, string truncation, type conversion, dangerous expressions, Cinnabar evaluator run results, and AsaJS and StarLibV2 expression techniques (EXP-01~46).
+sidebar_position: 5
+sources:
+  - repo-guide
+  - bedrock-samples
+  - bedrock-wiki
+  - ms-learn
+  - private-research
+  - bedrock-core
+  - private-research
+  - advancementpack
+  - cinnabar
+  - private-research
+  - asajs
+  - starlibv2
+---
+
+
+Expressions are the **only means of computing values** in JSON UI. An expression is a string wrapped in parentheses and is used in two places. One is the creation-time expression that uses `$variables` as material (`ignored`, `requires`, variable values, size and position), and the other is the runtime expression that uses `#properties` as material (the `source_property_name` of a view binding). This chapter covers the operators you can use, how to cut and erase strings, how types change between number and string, expressions that kill the client, and the run results of Cinnabar, which reconstructs the engine evaluator without the game.
+
+## 5.0 The concept of expressions and basic examples
+
+One expression has the form `(left operator right)`. A string value is wrapped in quotes, binding names start with `#` and variable names with `$`. The result goes into the property that `target_property_name` points to. If that property is `#visible`, the control shows and hides.
+
+**Example 1. An image visible only when the value is 12.** `#value` is a binding that comes from somewhere. The result of the expression (true/false) goes into `#visible`.
+
+```json
+"badge": {
+  "type": "image", "texture": "textures/ui/star",
+  "bindings": [
+    { "binding_type": "view",
+      "source_property_name": "(#value = 12)",
+      "target_property_name": "#visible" }
+  ]
+}
+```
+
+**Example 2. Showing only when the title string contains `boss` (containment check, EXP-07).** String subtraction erases every occurrence, so if the erased result differs from the original, `boss` is contained.
+
+```json
+{ "binding_type": "global", "binding_name": "#title_text" },
+{ "binding_type": "view",
+  "source_property_name": "(not ((#title_text - 'boss') = #title_text))",
+  "target_property_name": "#visible" }
+```
+
+**Example 3. Prefix check (EXP-08).** `'%.Ns' * #s` is the first N bytes of `#s`. Below is an expression that is true when the title starts with `a1;` (`a1;` is 3 bytes).
+
+```json
+"(('%.3s' * #title_text) = 'a1;')"
+```
+
+**Example 4. Size expressions (creation time).** `size` and `offset` use a separate syntax with units such as `100% - 10px` and `100%c + 4px`. This differs from parenthesized expressions (`+ - * / = < >`). The result table is in 5.8.2.
+
+## 5.0.1 Operators as the standard documentation describes them
+
+The "Using Operators" table of the Bedrock Wiki (`bedrock-wiki` 0930b39 `json-ui-intro.md`) lists operators as follows. The meaning of this table and the verification results are judged by the rules in 5.1.
+
+| Operation | Wiki example | Verdict of this chapter |
+| --- | --- | --- |
+| Add `+` | `("100% + 420px")`, `($text + ' my')`, `($index + 2)`, `('#' + $bdg_nm + '_name')` | String concatenation is the default (EXP-01) |
+| Subtract `-` | `("100% - 69px")`, `($text - ' my')`, `($index - 13)` | For strings, removes every occurrence (EXP-12) |
+| Multiply `*`, divide `/` | `($var * 9)`, `(#value / 2)` | Integer division (EXP-18) |
+| `=`, `>`, `<` | `($var = 12)`, `(#value > 13)`, `($var < 4)` | Works |
+| Greater or equal, less or equal | `(#value > 2 or #value = 2)`, `(#value < 2 or #value = 2)` | There are no dedicated operators, so build with `or` (EXP-03) |
+| `and`, `or`, `not` | `($is_school and $is_open)`, `(not (#name = 'text'))` | Same precedence (EXP-29) |
+
+The JSON UI reference of MS Learn (`ms-learn` a9fd1c0) (`JsonUiReference`) lists only properties and types and does not explain the expression syntax. Its enum tables also have every value cell empty as `undefined` and have type typos such as listing `grid_item_template` as an integer and `font_scale_factor` as a boolean. For expressions and values, follow this wiki's rules (the exhaustive vanilla search).
+
+### String format specifiers (the `'%.Ns'` family) and byte width
+
+Multiplying a string by a format specifier gives part of the string. The wiki original is as follows.
+
+<Excerpt src="bedrock-wiki" title="Intro to JSON UI - Format Specifiers" path="docs/json-ui/json-ui-intro.md">
+
+**Format Specifiers**
+
+Assuming the variable **$var** is defined as:
+
+```json
+"$var": "abcdefghijklmn"
+```
+
+The following format specifiers can be used:
+
+-   `%.ns`  
+    Truncates the string to the first **n byte**.  
+    Example: `('%.7s' * $var)` returns `abcdefg`.
+
+-   `%0ns`  
+    Returns the full string if its length is **n or more byte**, otherwise returns `0`.  
+    Example:  
+    `('%04s' * $var)` returns `abcdefghijklmn`  
+    `('%015s' * $var)` returns `0`
+
+-   `%n.xs`  
+    Returns **x byte** from the start, padded with **leading spaces** to reach **n byte** in total.  
+    Example: `('%7.4s' * $var)` returns `   abcd`.
+
+-   `%-n.xs`  
+    Returns **x byte** from the start, padded with **trailing spaces** to reach **n byte** in total.  
+    Example: `('%-7.4s' * $var)` returns `abcd   `.
+
+-   `%ns`  
+    Adds **spaces to the start** to make the total length **n byte**, if needed.  
+    Example: `('%15s' * $var)` returns ` abcdefghijklmn`.
+
+-   `%-ns`  
+    Adds **spaces to the end** to make the total length **n byte**, if needed.  
+    Example: `('%-15s' * $var)` returns `abcdefghijklmn `.
+
+Remember that the usage of this format is limited.
+
+</Excerpt>
+
+The wiki's `%0ns` (returns `0` if the length is under n bytes) and the padding format examples above could not be confirmed by in-game measurement in this project (`unverified`). Only `'%.Ns'` was confirmed, and the evaluator reconstruction (Cinnabar) also recognizes only the `%.Ns` form (EXP-09, EXP-25, Appendix A C-05). On the wiki's byte width explanation ("above U+07FF is 3 bytes"), EXP-24 is more accurate, since U+10000 and above (most emoji) is 4 bytes.
+
+## 5.0.2 How to read this chapter
+
+5.1~5.7 below are rule lists. Read in the order operator table (5.1) -> handling strings (5.2) -> numbers and types (5.3) -> dangerous expressions (5.4), and 5.5~5.7 are rules added from the wiki, Cinnabar and a real server. For the caution about evidence, read the 5.1 header first.
+
+
+An expression is a string wrapped in parentheses. It is used in the `source_property_name` of a view binding (using `#property`) and in variable values, `ignored` and `requires` (using `$variable`).
+
+**A caution about evidence.** The 1,467 expressions of vanilla 1.26.50.4 use only `not` (993), `or` (230), `+` (200), `and` (130) and `=` (132). `-`, `*`, `/`, `<`, `>` and `'%.Ns'` **never appear** in vanilla. So the operator meanings in this chapter rest on bedrock-core's in-game measurements and the usage in distributed packs (BA, AP). Vanilla cannot judge "exists / does not exist". From 2026-10-21 the code of Cinnabar (`CN`), which reconstructs the native evaluator, and its run results (`CN-run`) are also used as evidence (5.6).
+
+## 5.1 Operator table
+
+| Operation | Meaning | Verification |
+| --- | --- | --- |
+| `a = b` | Equality (string, number, boolean) | vanilla |
+| `not a`, `a and b`, `a or b` | Logic | vanilla |
+| `a + b` | String concatenation. A bound string + a number was also concatenated (`'35' + 0` -> `'350'`). Do not trust it as numeric addition | vanilla, measured |
+| `a - b` (string) | **Removes every occurrence** of `b` from `a` | working pack |
+| `a - b` (number) | Subtraction. `('35' - 0)` is the number 35 | measured |
+| `a * b` | Multiplication. A boolean is 1/0. string `*` number is an empty string (EXP-31) | measured, working pack, code |
+| `'%.Ns' * #s` | The first **N bytes** of `#s` | working pack, code |
+| `a / b` | Division. Integer division for integers (EXP-18). string `/` string is the occurrence count (EXP-32) | measured, code |
+| `a > b`, `a < b` | Ordering comparison. Also used with strings like `$v > 'a'` | measured, working pack |
+| `>=`, `<=` | **Do not exist.** Parsing fails -> the property stays at its default | measured, code |
+| `%` (remainder) | **Does not exist.** `Invalid expression` assert | measured |
+| `!=` | Not in the sources. Write `(not (a = b))` | inferred |
+
+- **[EXP-01]** The operators you can use are `=`, `<`, `>`, `not`, `and`, `or`, `+`, `-`, `*`, `/` and the string truncation `'%.Ns' *`. The precedence is as in the table below (CN reconstruction). `&#123;measured, working pack, vanilla, code&#125;` (Source: BC-S14, BC-facts, BC 6.2-1, AP 4.7, VN, BW-intro, CN)
+
+| Rank | Operators | Associativity |
+| --- | --- | --- |
+| 1 (strongest) | Unary `+`, `-`, `not` | Attach only to the operand right after (EXP-37) |
+| 2 | `*`, `/` | From the left |
+| 3 | `+`, `-` | From the left |
+| 4 | `=`, `<`, `>` | From the left. No chained comparison (EXP-28) |
+| 5 | `and`, `or` | **Same rank**, from the left (EXP-29) |
+- **[EXP-02]** `%` is not an operator. `((#c % 10) = 3)` raises an `Invalid expression` assert every time the screen opens. Do not use expressions like `(x - x % 65536) / 65536` from community examples (Chest-UI, etc.). `&#123;measured&#125;` (Source: BC-S14, BC-facts, MJ 4.2-7, Appendix A C-06)
+- **[EXP-03]** There are no `>=` and `<=`. A failed expression leaves the property at its default, so written to `#visible` it looks always true. Write `(a > b) or (a = b)` (the wiki also writes this form as the standard but there is no measurement record). In the CN evaluator `<=` is read as two operators and the whole expression becomes null. `(not (#v < a))` is also an alternative. `&#123;measured, code, inferred&#125;` (Source: BC-facts, BW-intro, CN-run)
+- **[EXP-04]** `<` and `>` work. The evidence is the CN evaluator, AP's use of `>`, and that expressions containing `<` in S14 were evaluated without an error. But the result that `962 < #c < 964` and `0.9 < (#c / 1000) < 1` in S14 were true is a **chained comparison so it is not evidence of a range check** (EXP-28, Appendix A C-41). Write a range as `((962 < #c) and (#c < 964))`. The earlier record that `<` is `Invalid expression` (S9) is not followed. `&#123;measured, working pack, code, conflict&#125;` (Source: BC-S14, BC-facts, BC-S9, AP 4.7, Appendix A C-02, CN-run, Appendix A C-41)
+- **[EXP-05]** Even `'%.6s' * #text = 'x'` without parentheses worked because the product (truncation) is computed before the comparison. Still, write the parentheses explicitly. `&#123;working pack&#125;` (Source: AP 4.4)
+- **[EXP-06]** An expression that is too deep (`((#c + #t + (#c * #t)) = 964963)`) fails. Split it into step-by-step view bindings and put the intermediates in properties. But the CN evaluator computes up to 512 levels of nesting, so the cause of the failure may be types, not depth. If `#c` and `#t` are chest quantities they are strings (EXP-17), and string `+` is concatenation. `&#123;measured, inferred&#125;` (Source: BC-S14, CN-run)
+
+## 5.2 Handling strings
+
+- **[EXP-07]** **Containment check**: `(not ((#s - 'X') = #s))`. If `X` is contained, the erased result differs from the original. It is independent of position so there is no need to compute field boundaries. `&#123;working pack&#125;` (Source: BA chapters 2 and 3.3, AP 4.1, BW-form, BW-title)
+- **[EXP-08]** **Prefix check**: `(('%.Ns' * #s) = 'X')`, N is the byte length of X. Short flags (`t`/`f`) must be cut and compared at **length+1** so that a long value starting with `f` is not mistaken: `(('%.2s' * #v) = 'f')`. `&#123;code, working pack&#125;` (Source: BC 4.1-(4), BC 6.2-2, AP 4.4)
+- **[EXP-09]** `'%.Ns'` cuts in **UTF-8 bytes.** Hangul is 3 bytes and letters and digits are 1 byte. Padding and truncation of fixed-width fields are computed by bytes. The claim of "character units" is wrong. Padding formats such as `%5.3s` and `%-5.3s` exist only in external documents and have no measurement. `§` is 2 bytes and most emoji are 4 bytes (EXP-24). For the padding formats the wiki lists, see EXP-25. The CN evaluator recognizes only `%.Ns` and does not cut `%5.3s` (Appendix A C-05). `&#123;code, working pack, conflict&#125;` (Source: BA 3.1 `utf8Length` encoder, MJ 4.2-9, Appendix A C-05, BW-intro, CN-run)
+- **[EXP-10]** `'%.Ns' * X` **does not cut if `X` is a string literal.** It works on bindings (`#…`) and expressions containing bindings (`('%.7s' * (#text - ('%.6s' * #text)))`). The CN evaluator also cuts literals (`('%.3s' * 'abcdef')` -> `'abc'`). It is more likely caused not by the operator but by the rule that a binding expression without `#` does not become a binding (BND-05) (Appendix A C-42). `&#123;measured, working pack, conflict&#125;` (Source: BC-facts, AP 4.5, CN, Appendix A C-42)
+- **[EXP-11]** **Taking L bytes after N bytes** is done in three steps. `&#123;working pack&#125;` (Source: BA 3.2, AP 4.5)
+
+```json
+{ "binding_type": "view", "source_property_name": "('%.210s' * #form_button_text)",   "target_property_name": "#head" },
+{ "binding_type": "view", "source_property_name": "(#form_button_text - #head)",       "target_property_name": "#rest" },
+{ "binding_type": "view", "source_property_name": "('%.120s' * #rest)",                "target_property_name": "#raw"  },
+{ "binding_type": "view", "source_property_name": "(#raw - '$')",                      "target_property_name": "#field" }
+```
+
+- **[EXP-12]** String `-` erases **every occurrence.** So padding characters (`$`, etc.) and reserved characters must not appear in the body, and the encoder must remove them in advance. For the same reason `(#s - #head)` also erases the same string as `#head` if it appears later again. Make the head part long and unique enough. `&#123;working pack, inferred&#125;` (Source: BA 3.2, AP 4.5)
+- **[EXP-13]** The trick of erasing only the first N bytes, `(('@' + s) - ('@' + ('%.3s' * s))) - '@'`, has no measurement in the sources. To use it, choose a character not in the body, taking into account that the final `- '@'` also erases any `@` in the body. `&#123;unverified&#125;` (Source: MJ chapter 8-6)
+- **[EXP-14]** Attach a **terminator** to containment check tokens (`name.1b;`) and design them so no prefix or suffix relationship arises among tokens. `X.1b;` also matches `aX.1b;`. If built like an uppercase group + lowercase bit (`~Fo`, `~Xa`), there is no prefix relationship among them. `&#123;working pack&#125;` (Source: AP 4.1, BA 3.3)
+
+## 5.3 Numbers and types
+
+- **[EXP-15]** The engine decides the type of an expression result **by its appearance.** A string that looks like a number (`'0'`, `'3/17'`, `'12'`) becomes a number and string comparison goes wrong. Put a letter prefix on values that must not be interpreted as numbers: flags `t`/`f`, tab number `Ta`, progress `§f3/17`, percent `P050`. A string with letters mixed in (`'a123'`) does not become a number even with arithmetic. Cause: the result string of an operation is reinterpreted (EXP-30). `&#123;code, working pack&#125;` (Source: BC 4.1-(4), BA 3.1, BW-type, CN-run)
+- **[EXP-16]** The sure way to turn a string into a number is `(#v - 0)`. `(#v + 0)` becomes concatenation (`'350'`). Do not use `(#v * 1)`: it gave 0 in S12 (2026-09-17), and in the Cinnabar reconstructed evaluator string `*` number is also an empty string (EXP-31). That several working packs (BA progress, AP item ID) and S9 (2026-09-14) worked with `* 1` was most likely because the operand was already a number (`'042'` cut with `'%.3s'` is immediately the integer 42, EXP-30). The version change explanation the Bedrock Wiki wrote on 2026-10-05, "from some version the `* 1` conversion does not work", remains as a secondary hypothesis. Recheck old packs' `* 1` expressions on the latest version. The `(0 + #v)` the wiki lists as an alternative works in the CN model but has no game measurement. `&#123;measured, working pack, code, inferred&#125;` (Source: BC-S12, BC-S9, BC-facts, BA-original, AP 4.5, Appendix A C-04, BW-type, CN-run)
+- **[EXP-17]** The `#inventory_stack_count` of a chest slot is a **string** inside expressions and does not become a number even with arithmetic. Only `(#count = '19')` is true. Even binding it directly to `text` as vanilla does does not display (so the lang key workaround of TXT-12 is needed). In the CN evaluator model `((#count - 0) = 19)` is true, so whether "does not become a number even with arithmetic" also applies to `- 0` needs checking. `&#123;measured&#125;` (Source: BC-facts, CN-run)
+- **[EXP-18]** Arithmetic is integer-centered. **A decimal literal with a leading digit is an integer** (EXP-27): `0.3` is 0 and `0.001` is 0, so `((#v = #v) * 0.3)` was 0 and `(#t * 0.001) = 1` was false. A real literal starts with a dot like `.3`. Division of integers `(#v / 100)` and `(#v / 100.0)` is also an integer, so to make a 0~1 value such as `#clip_ratio` from an integer, use `(#v * .01)` (Appendix A C-16). The true result of `0.9 < (#c / 1000) < 1` in S14 is a chained comparison (EXP-28) so it is not evidence for decimal division. `&#123;measured, code&#125;` (Source: BC-S12, BC-S14, BA-original, Appendix A C-16, CN, CN-run)
+- **[EXP-19]** A boolean is `true` 1 and `false` 0 in arithmetic. Make a factory length 0/1 with `((#mode = 'on') * 1)`. `&#123;measured&#125;` (Source: BC-facts, BC-S11, BW-type)
+- **[EXP-20]** There are no floor and remainder operations, so you cannot pack several fields into one number and divide them back out. Compare values whole or by range. Send several values split into string fields or several channels. `&#123;measured&#125;` (Source: BC-S14)
+
+## 5.4 Expressions that kill the client
+
+- **[EXP-21]** A chest screen using `(#count / 19)` and `('' + #count)` together exited the client as soon as it opened, and it was normal when both were removed. Which of the two was the cause was not isolated. Vanilla uses empty string **comparison** like `(not (#texture = ''))`, so comparison is safe. Do not divide strings, and when concatenating use a non-empty prefix like `('n=' + #x)`. `&#123;measured, vanilla, conflict&#125;` (Source: BC-facts, BC-S14, VN server_form.json:159, Appendix A C-13)
+- **[EXP-22]** String + integer is concatenated but **string + float outputs nothing.** To show a float as text, split ranges with a comparison chain or send it through an integer channel. If you know the range of values, you can get the integer part by adding comparison results like `(0 + (#f > 0) + (#f > 1) + … + (#f > 9))`. Cause: the "text" of a real value is empty (CN). The literal `1.5` is the integer 1, so `('n=' + 1.5)` is `'n=1'` (EXP-27). `&#123;measured, code&#125;` (Source: BC-facts, BW-type, CN-run)
+- **[EXP-23]** The `#item_custom_color` of a dyeable custom item is a signed ARGB integer (`0x123456` -> `-15584170`). Comparing by RGB value does not match. `&#123;measured&#125;` (Source: BC-S14)
+
+## 5.5 Rules added from the Bedrock Wiki comparison
+
+These are rules added by comparing the wiki (BW) documents with vanilla 1.26.50.4. Those with only wiki sentences are marked `unverified`, and those with in-game screenshots in the wiki are marked `measured` (third-party record).
+
+- **[EXP-24]** UTF-8 byte counts: U+0000~U+007F 1 byte (letters and digits), **U+0080~U+07FF 2 bytes (including `§`)**, U+0800~U+FFFF 3 bytes (Hangul, private-use-area glyphs), U+10000 and above 4 bytes (most emoji). When doing a prefix check (EXP-08) on a title with color codes, count N taking into account that one `§a` is 3 bytes. If you cut in the middle of a multibyte character, that character is not drawn. `&#123;code, unverified&#125;` (Source: BW-intro, the UTF-8 spec, Appendix A C-35)
+- **[EXP-25]** The format specifiers the wiki documents: `'%.Ns'` (first N bytes), `'%N.Ms'` (first M bytes padded with leading spaces to N bytes), `'%-N.Ms'` (trailing spaces), `'%Ns'` and `'%-Ns'` (space padding only). The same meaning as C `printf`. Only `'%.Ns'` was confirmed to work in this project's sources, so padding of fixed-width fields is done by the encoder (script) as now and the UI only cuts. The CN evaluator recognizes only the `%.Ns` form and returns the right-hand string whole for `'%5.3s'`. `&#123;unverified, conflict&#125;` (Source: BW-intro "Format Specifiers", Appendix A C-05, CN-run)
+- **[EXP-26]** A result left with only numbers after string subtraction could be used as a number as is: putting `(#count - 'Count:' + 0)` into `#collection_length` with the title `Count:3` created 3, and putting it into `#maximum_grid_items` with `Count:15` created 15. This differs from S12 saying that doing `+ 0` on the original bound string concatenates (`'35' + 0` -> `'350'`), so treat it as a case where **the type of an intermediate result of an expression is decided again by appearance** (EXP-15). To be sure, write `((#count - 'Count:') - 0)`. `&#123;measured, inferred&#125;` (Source: BW-dyn, 2 screenshots, BC-S12)
+
+## 5.6 Rules added from the Cinnabar engine reconstruction
+
+Cinnabar (`CN`) is Rust code that reconstructs the JSON UI parser of the 26.30 native client. The level is `code`, and `CN-run` is the result of this project running that evaluator directly. If it differs from game measurement, follow measurement (Appendix A C-41~C-47).
+
+- **[EXP-27]** **A decimal literal with a leading digit is an integer.** `0.3`, `1.0` and `100.0` are 0, 1 and 100. A real literal starts with a dot like `.3` and `.01`. Division of integers is an integer. Make ratios with `(#v * .01)`. `&#123;code, measured&#125;` (Source: CN, CN-run, BC-S12 `* 0.3` -> 0)
+- **[EXP-28]** **Do not write comparisons as a chain.** `(a < #v < b)` is `((a < #v) < b)` so it is always true (or always false). Write `((a < #v) and (#v < b))`. `&#123;code&#125;` (Source: CN-run)
+- **[EXP-29]** `and` and `or` have the same precedence and are computed from the left. `a or b and c` is `(a or b) and c`. Use parentheses when mixing. `&#123;code&#125;` (Source: CN test E12)
+- **[EXP-30]** A result string of an operation is reinterpreted. If it starts like a number, the leading integer (`'3/17'` -> 3, `'10 apples'` -> 10), if `yes`, `no`, `true` or `false`, a boolean, and if it starts with `#`, a property name. So `'042'` cut with `('%.3s' * #s)` is immediately the integer 42. `&#123;code&#125;` (Source: CN-run)
+- **[EXP-31]** string `*` number is an empty string, and number `*` string is the left number. `(#s * 1)` and `(1 * #s)` are not number conversions. The conversion is `(#s - 0)` or `(0 + #s)`. `(#s + 0)` appends a 0 at the end. `&#123;code&#125;` (Source: CN-run, the same conclusion as EXP-16)
+- **[EXP-32]** string `/` string is the occurrence count (`('a-b-a' / 'a')` = 2). string `/` number is always 1. Dividing by 0 leaves the left value as it is. `&#123;code&#125;` (Source: CN-run)
+- **[EXP-33]** On a numeric string, `- '0'` erases every `0` (`'100'` -> 1). To convert to a number, use `- 0` without quotes. `&#123;code&#125;` (Source: CN-run)
+- **[EXP-34]** Comparing a string and a number with `=` is true only when both are falsy values ('' and 0). `('2' = 2)` is false and `(true = 'true')` is also false. Match the type of one side before comparing. `&#123;code&#125;` (Source: CN test E15)
+- **[EXP-35]** If the result of a parenthesized group is a `'#name'` string, it is replaced by the value in that control's bag. So a dictionary lookup result can be compared within the same expression, as in `(('#route_' + #id) = 'x')`. `&#123;code&#125;` (Source: CN-run, COL-23 reinforcement)
+- **[EXP-36]** Tokens break only at spaces, parentheses, `$` and `* + - / < = >`. Using `-` in a property name makes it subtraction, so use `_`. `:` and `.` may be used in names. `&#123;code&#125;` (Source: CN test E05)
+- **[EXP-37]** Unary `-` on a string is 0 (`(-#s)` -> 0). Unary `-` and `not` attach only to the operand right after, so `(not #a = #b)` is `((not #a) = #b)`. `&#123;code&#125;` (Source: CN-run, CN test E08)
+
+**Conclusions to use directly** (based on CN-run, game measurement in Appendix A A.3)
+
+| What you want to do | Expression to use | Expression to avoid |
+| --- | --- | --- |
+| A string binding to a number | `(#v - 0)` | `(#v * 1)` (empty text), `(#v + 0)` (a 0 is appended), `(1 * #v)` (1) |
+| Multiply by a decimal | `(#v * .3)`, `(#v * .01)` | `(#v * 0.3)` (the integer 0), `(#v / 100.0)` (integer division) |
+| Range check | `((a < #v) and (#v < b))` | `(a < #v < b)` (always true) |
+| Greater or equal | `((#v > a) or (#v = a))`, `(not (#v < a))` | `>=`, `<=` |
+| Not equal | `(not (#a = #b))` | `!=` |
+| Comparing a string and a number | `((#s - 0) = 35)` | `(#s = 35)` (false) |
+| First N bytes | `('%.Ns' * #s)` | Other formats such as `'%5.3s'` (do not cut) |
+
+## 5.7 Rules added from the research server measurement
+
+These were measured on Windows 1.26.52 while building the research server (`DF`). They came from a structure that draws several screens with one server form.
+
+- **[EXP-44]** If the cut-out front part starts with a digit, it is read as a number (EXP-30, the same in game): on the body `042§r§r§r…`, `(#form_text - ('%.12s' * #form_text))` could not erase the body and broke. Put numeric fields after letters (`§r§r§r042`). `&#123;measured&#125;` (Source: DF)
+- **[EXP-45]** If the server writes the cell count in the first 12 bytes of the body as `§r§r§r` + a three-digit number, the number can be taken out with the single expression `((('%.12s' * #form_text) - '§r') - 0)` and put into `#maximum_grid_items`. Comparing a single digit character (`'3'`) with a character using `=` did not match (EXP-34), and changing it to letters a~f matched. The body label subtracts these 12 bytes with `(#form_text - ('%.12s' * #form_text))`. `&#123;measured&#125;` (Source: DF)
+- **[EXP-46]** An expression containing `%`, `(#t - (#t % 65536))`, was left in `#item_id_aux` for a long time, yet item icons were drawn and no `Invalid expression` was left in the content log of the release client (the assert of EXP-02 is a development build record). There was an impression report that the form became faster after changing to `(#t - 0)` but it was not re-measured. `&#123;measured, inferred&#125;` (Source: DF)
+
+## 5.8 Cinnabar evaluator run results (CN-run)
+
+This section is a result table obtained by building and running the expression evaluator reconstructed by Cinnabar (`jb-cinnabar`) directly. The values are **not game measurements.** The analysis base commit is `ceb0fb6` (2026-10-21), and they were obtained with test code by building `crates/json-ui`. If they differ from the game, follow the game measurement.
+
+
+These are values obtained on 2026-10-21 by building `crates/json-ui` of Cinnabar `ceb0fb6` in this container and running the tests in `probe/`. They are **not game measurements.** They are answers of the evaluator Cinnabar reconstructed from the 26.30 native client and may differ from the game.
+
+Binding values: `#s`=the string `"35"`, `#z`=`"100"`, `#c` and `#n`=integer 10, `#i`=integer 50, `#f`=real 2.5, `#t`=true, `#x`=`"hello"`, `#r`=`"042x"`, `#k`=`"3/17"`, `#missing`=none.
+Result notation: `Int` integer, `Num` real number, `Text` string, `Bool` boolean, `Json(Null)` an invalid expression (null).
+
+#### 5.8.1 Binding expression result table
+
+| Expression | Result | Meaning |
+| --- | --- | --- |
+| `(962 < #c < 964)` | `Bool(true)` | **A chained comparison is not a range check.** `(962 < #c)` becomes a boolean and `boolean < 964` is always true |
+| `((962 < #c) and (#c < 964))` | `Bool(false)` | Write a range check split with `and` |
+| `(#s * 1)` | `Text("")` | string `*` number = an empty string. The reason the `* 1` number conversion fails |
+| `(#s - 0)` | `Int(35)` | string `-` number: there is nothing to erase so the original remains, and the result is reinterpreted as an integer |
+| `(#s + 0)` | `Int(350)` | Concatenation `'350'` -> reinterpreted as the integer 350. The value is wrong |
+| `(0 + #s)` | `Int(35)` | `'0'+'35'` -> `'035'` -> 35. The wiki's alternative also works in this model |
+| `(1 * #s)` | `Int(1)` | number `*` string = the left number as is |
+| `(#s = 35)` | `Bool(false)` | `=` between a string and a number is true only when both are falsy |
+| `((#s - 0) = 35)` | `Bool(true)` | Compare after conversion |
+| `(#z - '0')` | `Int(1)` | String subtraction erases every `0` (`'100'` -> `'1'`) |
+| `(#z - 0)` | `Int(100)` | Subtracting the number 0 leaves the string as is, 100 |
+| `(#n * 0.3)` | `Int(0)` | **`0.3` is read as the integer 0** (the integer prefix takes priority) |
+| `(#n * .3)` | `Num(3.0)` | It must start with a dot like `.3` to be a real number |
+| `(#i / 100)` | `Int(0)` | Division of integers is an integer |
+| `(#i / 100.0)` | `Int(0)` | `100.0` is also the integer 100 |
+| `(#i * .01)` | `Num(0.5)` | To get 0.5, multiply by `.01` |
+| `(#f / 100)` | `Num(0.02500000037252903)` | If either side is real it is real (float32) |
+| `('%5.3s' * 'abcdef')` | `Text("abcdef")` | A format other than `%.Ns` does not cut and returns the right side whole |
+| `('%.3s' * #r)` | `Int(42)` | The cut `'042'` is reinterpreted as the integer 42 |
+| `(('#' + 'x') = 'hello')` | `Bool(true)` | If the result of a parenthesized group is a `#name` string, that property is read |
+| `('#' + 'x')` | `Text("hello")` | The same for the result of the whole expression (dictionary lookup) |
+| `(#k + '')` | `Int(3)` | `'3/17'` -> the integer prefix 3 |
+| `('' + #k)` | `Int(3)` | Same |
+| `(#t = 'true')` | `Bool(false)` | A boolean and a string are different |
+| `(#t = true)` | `Bool(true)` |  |
+| `(#a != #b)` | `Json(Null)` | No `!=` -> null |
+| `(5 >= 3)` | `Json(Null)` | `>=` is two operators -> null |
+| `(#c % 2)` | `Json(Null)` | `%` is not an operator -> null |
+| `('n=' + #f)` | `Text("n=")` | string + real = the real part vanishes |
+| `('n=' + #n)` | `Text("n=10")` | string + integer = decimal concatenation |
+| `(not #missing)` | `Bool(true)` | A missing property is null (falsy) |
+| `(#missing = '')` | `Bool(true)` |  |
+| `(#missing = 0)` | `Bool(true)` |  |
+| `('abc' = 'ABC')` | `Bool(false)` | Case-sensitive |
+| `('10 apples' + '')` | `Int(10)` | Only the integer prefix remains |
+| `('Yes' + '')` | `Bool(true)` | `yes`/`no`/`true`/`false` are case-insensitive booleans |
+| `(#s / '5')` | `Int(1)` | string `/` string = occurrence count |
+| `(#s / 2)` | `Int(1)` | string `/` number = always 1 (an empty needle) |
+| `('' + #c)` | `Int(10)` | number -> string -> number again |
+| `(#c / 0)` | `Int(10)` | Dividing by 0 leaves the left value as it is |
+| `(-#s)` | `Int(0)` | Unary `-` on a string is 0 |
+| `(not 0.5)` | `Bool(true)` | `0.5` is the integer 0 -> `not` is true |
+| `(not .5)` | `Bool(false)` |  |
+
+#### 5.8.2 Size expression (`size` string) result table
+
+With parent 200, own width 80 and height 40, children sum 30, largest child 12, largest sibling 50 and content default size 7.
+
+| Input | Interpretation | Result |
+| --- | --- | --- |
+| `100c%` | `Terms([100.0 Percent])` | `Pixels(200.0)` |
+| `50c%` | `Terms([50.0 Percent])` | `Pixels(100.0)` |
+| `10` | `Terms([])` | `Pixels(-0.0)` |
+| `10px` | `Terms([10.0 Px])` | `Pixels(10.0)` |
+| `50%cm` | `Terms([50.0 PercentChildrenMax])` | `Pixels(12.0)` |
+| `200%cm` | `Terms([200.0 PercentChildrenMax])` | `Pixels(12.0)` |
+| `0%cm` | `Terms([0.0 PercentChildrenMax])` | `Pixels(0.0)` |
+| `100% - 10px 5px` | `Terms([100.0 Percent, -10.0 Px, -5.0 Px])` | `Pixels(185.0)` |
+| `Fill` | `Terms([])` | `Pixels(-0.0)` |
+| `fill` | `Fill` | `Fill` |
+| `DEFAULT` | `Terms([])` | `Pixels(-0.0)` |
+| `default` | `Default` | `Pixels(7.0)` |
+| `100%sm - 4px` | `Terms([100.0 PercentSiblingMax, -4.0 Px])` | `Pixels(46.0)` |
+| `56.25%x` | `Terms([56.25 PercentX])` | `Pixels(45.0)` |
+| `100 % - 2 px` | `Terms([100.0 Percent, -2.0 Px])` | `Pixels(198.0)` |
+| `%` | `Terms([0.0 Percent])` | `Pixels(0.0)` |
+
+How to read: `"100c%"` (used by vanilla progress_screen.json) is 100% of the parent, not `%c`. A unitless `"10"` is 0, and uppercase `"Fill"` and `"DEFAULT"` are not keywords but 0. `%cm` is the maximum value itself regardless of the coefficient (`50%cm` is also 12). A sign carries on to the next sign (`100% - 10px 5px` = 185).
+
+#### 5.8.3 Variable scope result table
+
+| Test | Result (created children, text) | Meaning |
+| --- | --- | --- |
+| Definition `item` has `"ignored": "$hide"` and the reference point `a@n.item` passes `"$hide": true` | `[("a", "\"A\""), ("b", "\"dflt\"")]` | **A variable passed at the reference point is not visible to that control's own `ignored`** (a is created) |
+| The parent `root2` declares `"$hide": true` | `[]` | `ignored` reads the outer (parent) scope (c is not created) |
+| Outer `$v` fixed value vs inner `$v\|default` | `[("a", "\"outer-concrete\"")]` | A fixed value beats a default regardless of depth |
+| Outer `$v\|default` vs inner `$v\|default` | `[("a", "\"inner-default\"")]` | Between defaults, the nearer one |
+| `"pre $v"`, `"$v"`, `"('pre ' + $v)"` | `[("a", "\"pre $v\""), ("b", "\"X\""), ("c", "\"pre X\"")]` | `$v` inside a string is not substituted. Combine with an expression |
+
+
+## 5.9 Techniques learned from AsaJS's expression compiler (ASJ)
+
+AsaJS (`jb-asajs`, GPL-3.0-only, `main` `9f884dc`) is a framework for making packs in TypeScript. What matters for this wiki is the **expression compiler** that converts advanced expressions such as `==`, `!=`, `>=`, `%` and the ternary `?:` into operators the engine knows and auxiliary view bindings. This section re-explains the technique in English and the code was not carried over. Notation: `[confirmed]` confirmed directly in the code, `[inferred]` judgment, `[unverified]` needs game confirmation (AsaJS was not run).
+
+#### ASJ 3. The binding expression compiler [confirmed]
+
+If `source_property_name` is wrapped in `[` and `]`, it is a compile target. The result is the original binding and auxiliary view bindings attached **before** it (the target property names are random `#…`). The auxiliary bindings come first, so computation order is kept within the same control.
+
+##### ASJ 3.1 Operator conversion table
+
+| AsaJS syntax | The JSON UI expression it emits | Guide verdict |
+| --- | --- | --- |
+| `a == b` | `(a = b)` | Right |
+| `a != b` | `(not (a = b))` | Matches EXP-03 and the chapter 5 table |
+| `a >= b`, `a <= b` | `((a > b) or (a = b))`, `((a < b) or (a = b))` | Matches EXP-03 |
+| `a && b`, `a \|\| b` | `(a and b)`, `(a or b)` (parentheses every time) | Avoids the same-precedence problem (EXP-29) with parentheses |
+| `-a`, `!a` | `(0 - a)`, `(not a)` | Turns unary `-` into binary so the unary `-` on a string = 0 problem (EXP-37) remains |
+| `a % b` | Auxiliary binding `#r = (a - (a / b * b))`, `#r` in the main expression | Assumes integer division (4.1). Conflicts with EXP-20 |
+| `c ? x : y` | String trick (3.3) | **Breaks because of mismatched parentheses** |
+| `f'Hello #{#name}!'` | `('Hello ' + #name + '!')` | String `+` concatenation |
+| `0x1F`, `0b101`, `0o17` | Converted to decimal | Right |
+| `1e3`, `1e-2` | `1000`, **`0.01`** | `0.01` is the integer 0 in the engine (EXP-27) |
+| `0.5`, `.5` | Lexer error (a decimal point is not read as a number) | No way to write a real literal -> `(#v * .01)` for `#clip_ratio` cannot be written in this syntax |
+| `a < b < c` | `((a < b) < c)` as is | Does not block chained comparison (EXP-28) |
+
+In a binding that has `source_control_name`, for each `#property` in the expression a separate auxiliary view binding is made that "reads this one property from that control", and the expression is computed in its own control. It is a way to safely make expressions that mix several values of another control (the same direction as BND-24 and BND-10).
+
+##### ASJ 3.2 Functions
+
+| Function | The expression it makes (symbols of this document) | Notes |
+| --- | --- | --- |
+| `abs(x)`, `negabs(x)` | `((-1 + (x > 0) * 2) * x)` | Boolean arithmetic (EXP-19). Right only for numbers |
+| `cache_value(c, o, r)` | `((r * c) + ((not r) * o))` | Picking a value by a boolean product. An empty text for strings (EXP-31) |
+| `contains(s, t)` | `not ((s - t) = s)` | Same as EXP-07 |
+| `starts_with(#s, 'lit')` | `('%.N s' * #s = 'lit')` (N is computed at compile time) | Same as EXP-08 |
+| `starts_with(#s, #p)` | Auxiliary `#a = (P + #s)`, `#b = (P + #p)`, main expression `not ((#a - #b) = #a)`. `P` is `'asajs:<random 5>:'` | **A new technique** (4.2) |
+| `str_slice(#s, i, j)` | Auxiliary `#t = (P + #s)`, and cutting off the head with the format `('%.' + (len(P) + i) + 's')` | A runtime format string (4.3) |
+| `strlen(#s)` | A self-referencing binding that increments by 1 until `('%.' + (n + 1) + 's') * ('a' + #s)` equals the whole | Iterative computation (4.4) |
+| `sqrt(x)`, `vector_length(x,y,z)` | Newton iteration with a self-referencing binding | Iterative computation (4.4) |
+| `bind(v, #bait)` | `((#bait - #bait) + v)` | A dependency bait (4.5) |
+| `translatable(#k)` | `'%' + #k` | Uses the `%token` translation of localized labels (TXT-17) |
+| `new(expression)`, `int(expression)` | Pulls the expression into one auxiliary binding | Putting in only literals hits BND-05 |
+
+The parser also has an `intToBin` that unpacks an integer into 30 bit bindings (the user function `bin` is commented out) [confirmed].
+
+##### ASJ 3.3 The defect of the ternary operator
+
+`c ? x : y` puts the condition into the boolean binding `#L` as `((0 + c) > 0)`, puts `x` and `y` into auxiliary bindings `#M` and `#R`, and then adds the "true side" and "false side" strings. The idea is this: `('prefix' + #L + #M)` is `prefixtrue…` if true and `prefixfalse…` if false, so erasing the string that arises only when false and then erasing `'prefixtrue'` again leaves `#M` only when true. But the parentheses of the generated string do not match. When this survey rebuilt the same string with Python and counted, the final expression had 8 opening parentheses and 10 closing ones [confirmed]. The `dev` branch is the same. In the game the expression parse would fail and the target property would stay at its default (the same failure mode as EXP-03) [inferred]. Also, all three operands must contain `#`, and the result is a string (if it looks like a number it becomes a number again by EXP-30).
+
+#### ASJ 4. New techniques in detail
+
+##### ASJ 4.1 Making remainders and bits with integer division [code, inferred, unverified]
+
+- Remainder: `(a - (a / b * b))`. `*` and `/` are at the same rank from the left, so `a / b * b` is `(a / b) * b` (EXP-01 table).
+- Bit i: `((x / 2^i) - ((x / 2^(i+1)) * 2))`. AsaJS makes 30 bindings for i=0..29.
+- Premise: both operands must be **integers.** Guide EXP-18 (measurement S12, CN code) says division of integers is an integer. If so, the EXP-20 statement that "there are no floor and remainder operations, so you cannot pack several fields into one number and divide them back out" must be narrowed to mean that **there is no `%` operator.**
+- Pitfall: collection and title strings are strings inside expressions. string `/` number is 1 (EXP-32). AsaJS does not insert conversions, so using `%` on a string binding gives a wrong value. When writing it directly, first make a number with `- 0` as in `((#v - 0) - (((#v - 0) / 10) * 10))` (EXP-16).
+- Negative numbers: if the engine's division truncates toward 0, the sign is the same as C's `%` (-7 % 3 = -1) [inferred].
+
+##### ASJ 4.2 Start check and cutting with a unique prefix [code, unverified]
+
+If the length of `#p` is not known at compile time, `'%.Ns'` (EXP-08) cannot be used. If you attach to both a prefix `P` that cannot appear anywhere else, the result changes when subtracting `(P + #p)` from `(P + #s)` only when `#s` starts with `#p` (subtraction erases every occurrence but `P` is unique so the occurrence is only the one at the very front). By the same principle, if you cut off the front of a string with `P` attached, even if the cut head appears again later in the body it is not erased (solving the problem of EXP-12). `P` must be a string that never appears in the body.
+
+##### ASJ 4.3 A runtime format string [code, working pack (SLB), unverified]
+
+It builds the format string itself by concatenation like `('%.' + (len(P) + #i) + 's')`. StarLibV2 uses the same form with `$from`/`$to` variables. Since number + string concatenation has to make a string like `'%.12s'`, it relies on the concatenation behavior of `+` (the table in 5.1). There is no game record in this project's sources.
+
+##### ASJ 4.4 Iteration with self-referencing view bindings [code, unverified]
+
+`strlen` puts two bindings on the same target, "counter = 0 (when the source changes)" and "counter = counter + (1 if not yet fully counted)". If the first binding also re-runs on every evaluation, the counter stays at 0 or 1. This design presumes the behavior that **a view binding rewrites only when its own source value changes, and the chain loops until it converges** (the Cinnabar reconstruction CN-36). Putting `#s` into the source of the first binding, as in `(0 * (#s = 'a'))`, is also a device to make it initialize "only when `#s` changes". The iteration limit and per-frame throughput were not confirmed. It is not used as a guide recipe before confirming in game.
+
+##### ASJ 4.5 A dependency bait [code, unverified]
+
+`((#bait - #bait) + v)` has the value `v` but is re-evaluated every time `#bait` changes (the 4.4 premise). With a numeric bait it is `0 + v` and with a string bait `'' + v`, so the result type depends on the bait type (string + number is concatenation).
+
+#### ASJ 5. Generated JSON compared with vanilla
+
+| Item | Contents | Verdict |
+| --- | --- | --- |
+| Property names | Of the 328 properties of the type definitions, 46 names are not in vanilla UI (`tab_control`, `tooltip_area`, `use_uuid`, `screen_scale`, `clip_offset`, etc.). Most are type declarations from the wiki and schemas and are not output unless used | Check against vanilla before use |
+| `modifications` `insert_back` | Emits `value` as an **object, not an array** (`insert_front`, `insert_after` and `insert_before` also object, only `insert_front` an array) | MOD-01 is an array. Whether an object is accepted is [unverified] |
+| `replaceChild` | Discards the child passed and writes only the property object as `value` | Defect [confirmed] |
+| Factory | Emits variable keys as `variables` (in practice there is no setter function so it is not output) | COL-08 is `factory_variables` |
+| `fixInventoryItemRenderer` | Wraps the `#item_id_aux` value of `property_bag` in the string `"(N / 1)"` | No explanation of purpose. Whether a `property_bag` value is evaluated as an expression is [unverified] |
+| Auxiliary bindings | `new('lit')`, `int(3)` and `str_slice('lit', …)` make view bindings without `#` | BND-05: all bindings of that control are discarded |
+| Exponent literals | `5e-1` -> `0.5` -> the integer 0 | Violates EXP-27 |
+| `%` | Used as is on a string binding it is wrong by EXP-32 | 4.1 |
+
+
+### 5.9.1 Proposals (not applied)
+
+Below are rules and conflicts the AsaJS analysis proposed adding to the guide. They are **not yet applied** to the guide body (5.1~5.7), so they are written with the proposal numbers as they are, and should be confirmed in game before use. The final numbers may differ in the merge record.
+
+
+- **[EXP-38]** Make remainders with integer division instead of `%`: `(a - ((a / b) * b))`. It is right only when both operands are integers, so first convert string bindings with `(#v - 0)` (string `/` number is 1, EXP-32). Put the computation in one auxiliary view binding and reuse it. `&#123;code, inferred&#125;` (Source: ASJ 3.1 and 4.1, CN EXP-18)
+- **[EXP-39]** To take bit i out of an integer, put `((#v / 2^i) - ((#v / 2^(i+1)) * 2))` (compute the power of two as a number in advance) in an auxiliary binding per bit. It lets the bit tokens of PAT-06 be sent as one number instead of a string. `&#123;code, inferred&#125;` (Source: ASJ 4.1)
+- **[EXP-40]** A start check for two runtime strings of unknown length: attach a unique prefix `P` that does not appear in the body to both to make auxiliary bindings `#a = (P + #s)` and `#b = (P + #p)`, and decide with `(not ((#a - #b) = #a))`. When cutting off the front part too, cutting from the string with `P` attached means the same head is not erased even if it appears later (a supplement to EXP-12). `&#123;code, inferred&#125;` (Source: ASJ 3.2 and 4.2)
+- **[EXP-41]** To choose one of two numbers by a condition, use `((#c * #a) + ((not #c) * #b))`, and make an absolute value with the sign `((-1 + ((#x > 0) * 2)) * #x)`. It relies on boolean arithmetic (EXP-19) and is not used with string operands (EXP-31). `&#123;code, inferred&#125;` (Source: ASJ 3.2)
+- **[BND-30]** There is a generator that does repeated calculation (counting string length, a Newton square root) by attaching two view bindings to the same target, "initialize" and "itself + increment". It needs the premise that a view binding rewrites only when its source changes and the chain loops until it converges (CN-36). The iteration limit and per-frame processing were not confirmed, so it is not used as a recipe. `&#123;code, unverified&#125;` (Source: ASJ 4.4, CN-36)
+- **[DBG-23]** Check JSON made by an expression compiler again with the rules of chapter 5. Problems confirmed in AsaJS 4.2.0: mismatched parentheses in the ternary `?:` output, an exponent literal (`1e-2`) emitted as `0.01` (the integer 0), an auxiliary binding containing only literals (BND-05), `%` applied to a string binding (EXP-32), no check for chained comparison (EXP-28), and decimal literals cannot be used. `&#123;code&#125;` (Source: ASJ 3.1, 3.3 and chapter 5)
+
+
+**Reinforcement proposals for existing rules (not applied)**
+
+
+- **EXP-20**: change it to "there is no floor or remainder **operator**" and attach EXP-38 as a reference. Read together with EXP-18, which says integer division is an integer, remainders and bit decomposition can be made with expressions (conflict C-48).
+- **EXP-03**: the approach of turning `>=` and `<=` into `((a > b) or (a = b))` is also used as the standard in the generator (ASJ). Add ASJ to the sources.
+- **TXT-17**: there is a generator function that makes a localized label translate a key by putting `'%'` before the binding result (`('%' + #key)`) (ASJ `translatable`). No level change, add ASJ to the sources.
+- **MOD-01**: the generator (ASJ) sometimes emits the `value` of `insert_back` and others as a single object. Keep the sentence saying to write an array and add "a single object is not confirmed".
+
+
+**New conflict proposal (not applied)**
+
+
+| ID | Topic | Claim 1 | Claim 2 | Basis of verdict | Verdict | Rule |
+| --- | --- | --- | --- | --- | --- | --- |
+| C-48 | Can remainders and floors be made with expressions | There are no floor or remainder operations, so you cannot pack several fields into one number and divide them back (BC-S14, EXP-20) | With integer division `(a - (a / b * b))` is the remainder. The generator lowers `%` this way (ASJ), and division of integers is an integer (EXP-18: BC-S12 measurement, CN code) | What S14 tested is the `%` operator (Invalid expression). There is no measurement record of division-based expressions | **Open, claim 2 by inference.** If the integer division measurement (EXP-18) is right, EXP-20 must be narrowed to the absence of an operator. A.3 measurement 1 | EXP-20, EXP-38 |
+
+
+**List of items needing measurement**
+
+
+1. On `#v = 17` (a numeric channel, for example durability), show `(#v - ((#v / 5) * 5))` in a label -> is it 2. On the string channel `'17'`, also `((#v - 0) - (((#v - 0) / 5) * 5))`. -> C-48, EXP-38
+2. Whether the setup that counts string length by putting two bindings "initialize + self increment" on the same target reaches the final length, and how many frames it takes. -> BND-30
+3. Whether `insert_back` works when the `value` of `modifications` is given as a single object instead of an array. -> MOD-01 reinforcement
+4. Whether a format string built by concatenation like `(('%.' + 3 + 's') * #s)` works as truncation (also in the form that puts in a binding `#n`). -> EXP-43 (starlibv2)
+
+
+## 5.10 StarLibV2's range extraction and tab padding (SLB)
+
+StarLibV2 (`jb-starlibv2`, GPL-3.0, `6bf7875`) is a library that uses server form button strings as fields. Only the part about expressions is carried over (key gates and 2D layout are in the collections and factories chapter, and the search filter in the input chapter). The code is not carried over and only the technique is written.
+
+#### SLB 5. Range extraction and tab padding [confirmed]
+
+`range_selection_binding` takes `$from` and `$to` (byte position numbers) and computes in the following order.
+
+1. Make a format string with `('%.' + $to + 's')` and cut the first `$to` bytes.
+2. Cut the first `$from` bytes the same way and subtract them from 1.
+3. Erase every tab character (`'\t'`, an escape inside a JSON string) from the remaining piece.
+4. If the result is an empty string, hide it.
+
+- `$from` and `$to` are substituted with numbers at creation time, and the assembly of the format string (`'%.' + 10 + 's'`) happens inside the expression. AsaJS also uses the same form (4.3).
+- Choosing a tab as the padding character is a choice to avoid EXP-12 (subtraction erases every occurrence). A tab rarely appears in the body and is not visible on screen. It plays the same role as the guide's `$` padding (HOST-08).
+- The subtraction of step 2 also erases the head string if it appears again later in the body (EXP-12). For a fixed-width record the head is long enough that the real problem is rare.
+- GrimUI carries five sections, "default text", "side text", "title", "background text" and "tip", in one button this way (`range_controls`).
+
+
+### 5.10.1 Proposals (not applied)
+
+
+
+- **[EXP-43]** A format string can be built inside an expression by concatenation: `(('%.' + $to + 's') * #t)`. The byte range `[from, to)` is taken out with `((('%.' + $to + 's') * #t) - (('%.' + $from + 's') * #t))`. If the front piece appears again later it is erased together (EXP-12), so make the head unique. `&#123;working pack, code, unverified&#125;` (Source: SLB chapter 5, ASJ 4.3)
+- **[HOST-34]** If you use a **tab** (`\t`) as the padding character of fixed-width fields, it almost never overlaps with the body, and after taking it out you erase it with `(piece - '\t')`. It is an alternative to HOST-08, which uses a visible character such as `$`. `&#123;working pack&#125;` (Source: SLB chapter 5)
+
+
+## 5.11 Type conversion examples (the Bedrock Wiki original and this project's verdict)
+
+The wiki's "Type Conversion" document (CC BY 4.0) shows conversion between strings and numbers with examples. The `(#str * 1)` in the original below **did not work** in this project (EXP-16, EXP-31). The wiki also writes under its first example that "from some version the `#str * 1` and `#str * #float` conversions no longer work, but `0 + #str` still does". Use `(#str - 0)` instead. `('Result: ' + #num)`, which turns a number into a string, works only for integers and a float outputs nothing (EXP-22). Arithmetic that uses a boolean as a number (`true` 1, `false` 0) is EXP-19.
+
+<Excerpt src="bedrock-wiki" title="Type Conversion (String to Number)" path="docs/json-ui/type-conversion.md">
+
+**String to Number**
+
+The following code will create a label that will contain a string data at which will get turned into number.
+
+```json
+"label": {
+    "type": "label",
+    "text": "#text",
+    "property_bag": {
+        "#str": "10",
+        // You don't need to necessarily turn this into a binding
+        // property but it alleviate problems later on the line.
+        "#float": 1.0
+    },
+    "bindings": [
+        {
+            "binding_type": "view",
+            "source_property_name": "(#str * 1)",
+            "target_property_name": "#integer"
+        },
+        {
+            "binding_type": "view",
+            "source_property_name": "(#str * #float)",
+            "target_property_name": "#float"
+        },
+        {
+            "binding_type": "view",
+            "source_property_name": "('Result: ' + #integer)",
+            "target_property_name": "#text"
+        }
+    ]
+}
+```
+
+**The Process**
+
+By doing arithmetic operation on strings (except addition), you convert a string into a number.
+
+**Notes:**
+
+-   Instances of strings that is alphanumeric (like `a123`) will not return `123`.
+-   Adding a string and float (like `'abc' + 1.2`) will not produce anything.
+-   It is not possible to directly display floats—refer to the Float to String part of the documentation.
+-   Starting from some version of minecraft the `#str * 1` and `#str * #float` conversions no longer work, however you can still use `0 + #str` method.
+
+</Excerpt>
+<Excerpt src="bedrock-wiki" title="Type Conversion (Float to String, Boolean to Number)" path="docs/json-ui/type-conversion.md">
+
+**Float to String**
+
+The following code will create a label that will contain a float data at which will get turned into string.
+
+:::tip
+There is no float to number because floats are a sub-child of numbers, so floats are already numbers by itself.
+:::
+
+```json
+"label": {
+    "type": "label",
+    "text": "#text",
+    "property_bag": {
+        "#float": 6.7
+    },
+    "bindings": [
+        {
+            "binding_type": "view",
+            "source_property_name": "(0 + (#float > 0) + (#float > 1) + (#float > 2) + (#float > 3) + (#float > 4) + (#float > 5) + (#float > 6) + (#float > 7) + (#float > 8) + (#float > 9))",
+            "target_property_name": "#integer"
+        },
+        {
+            "binding_type": "view",
+            "source_property_name": "('Result: ' + #integer)",
+            "target_property_name": "#text"
+        }
+    ]
+}
+```
+
+**The Process**
+
+It is not feasible to just add a string and a float as that will produce nothing. Therefore, the binding need to guess where the float lies on between the number 1 to 10.
+
+In this process, it also limits itself into only support floats between 1 to 10 and; the output will not include the decimal number. So in this context, it will only output `6`, not `6.7`.
+
+**Notes:**
+
+-   There is a way to include the decimal but, it requires a more complex expression.
+-   The code seen is the simplified version of the concept, there is much more better ways of doing this process.
+-   This is great if you know the range of your number reference, otherwise, you will need to guess.
+
+**Boolean to Number**
+
+The following code will create a label that will contain a boolean data at which will get turned into number.
+
+```json
+"label": {
+    "type": "label",
+    "text": "#text",
+    "property_bag": {
+        "#bool": true,
+        "#hahasixseven": false
+    },
+    "bindings": [
+        {
+            "binding_type": "view",
+            "source_property_name": "(#bool + #hahasixseven)",
+            "target_property_name": "#integer"
+        },
+        {
+            "binding_type": "view",
+            "source_property_name": "('Result: ' + #integer)",
+            "target_property_name": "#text"
+        }
+    ]
+}
+```
+
+**The Process**
+
+Any arithmetic operations done between booleans and numbers will always result a number. Internally, `true` is recognized as 1, and `false` is 0. The `boolean` can be an expression as long as it results as a boolean.
+
+</Excerpt>
+
+**Number to String.** Attach text in front of the number. Only integers work (EXP-22). The original's example applies `('Result: ' + #num)` to `"#num": 10` in `property_bag` to make `Result: 10`. A float outputs nothing.
+
+
+## How evidence is marked and source abbreviations
+
+A rule carries an ID in the form `[chapter abbreviation-number]`, and the `{…}` at the end is the verification level. The priority of verdicts is `measured` > `vanilla` > `working pack` > `code` > `inferred`, and `unverified` and `conflict` must be checked before use. `C-nn` is a number in the [conflict table](./conflicts.mdx), and the value counts of `VN` are the tallies in the [value dictionary](./value-dictionary.mdx). Rule IDs of other chapters (`LAY-`, `BND-`, `HOST-`, etc.) are on the corresponding pages of the same JSON UI chapter.
+
+| Abbreviation | Material |
+| --- | --- |
+| `VN` | Exhaustive search of vanilla resource pack `resource_pack/ui` v1.26.50.4 (bedrock-samples `46ba6ea`). `VN file:line` is that location |
+| `BC`, `BC-S1`~`BC-S14`, `BC-facts`, `BC-rules` | bedrock-core (`@bedrock-core/ui` 0.12.1, MIT) and the author's in-game measurement records (`aee2bbd`) |
+| `BA`, `BA-original` | BedrockAdvancements 2.0.3 (All rights reserved, only techniques carried over) |
+| `AP` | AdvancementPack v4.2 (MIT) |
+| `MJ` | mcbejsonuimasterAI (no license, only facts rechecked against vanilla) |
+| `BW`, `BW-intro`, `BW-dyn`, `BW-doc`, `BW-form`, `BW-btn`, `BW-type`, `BW-best`, `BW-title`, `BW-ase`, `BW-ids` | Bedrock Wiki JSON UI documents (CC BY 4.0). Respectively Intro to JSON UI, Dynamic Content Generation, JSON UI Documentation, Modifying Server Forms, Buttons and Toggles, Type Conversion, Best Practices, Preserve Title Texts, Aseprite Animations, Numerical Item IDs |
+| `CN`, `CN-run` | Cinnabar (Rust code reconstructing the 26.30 native client) and the results of this project running its evaluator |
+| `NB` | Engine behavior analysis of the Android 1.26.52.3 native client library (level `code`) |
+| `DF` | Measurement on Windows 1.26.52 with the research server |
+| `ASJ`, `SLB` | AsaJS analysis, StarLibV2 analysis (both GPL-3.0, only techniques rewritten in English) |
+| `MS` | The modal form multiselect survey |
+| `NE` | NetEase (China edition) developer documentation |

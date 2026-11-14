@@ -1,0 +1,152 @@
+---
+title: Attachables and item rendering
+description: The structure of attachables that attach 3D items to the hand and body, bindings, positioning, bows and crossbows, armor, glint, particles, item texture size
+sidebar_position: 2
+sources: [private-research, bedrock-wiki, bedrock-samples]
+---
+
+# Attachables and item rendering
+
+(Source: private research)
+
+## When it is needed
+
+Attachables are needed for items larger than 16x16 or 3D, long tools, and 3D bows and crossbows. An attachable is a resource pack `attachables/*.json` and uses the same `identifier` as the item. The basic structure is as follows.
+
+- `render_controllers`: `["controller.render.item_default"]`
+- `materials`: `default` is `entity_alphatest`, `enchanted` is `entity_alphatest_glint`
+- `textures`: `default` and `textures/misc/enchanted_item_glint`
+- `geometry`, `animations`
+- `scripts.animate`: `first_person_hold` is `c.is_first_person`, `third_person_hold` is `!c.is_first_person`
+
+To turn a vanilla item into a 3D model, use the vanilla attachable identifier (for example `minecraft:mace`). If the item does not appear without an error, copy a vanilla attachable (for example the bow) and edit it a little at a time. There is a case where a custom torch attachable failed silently and the cause was found in the content log.
+
+## Binding
+
+- The geometry root bone needs `"binding": "q.item_slot_to_bone_name(c.item_slot)"`. `binding` requires geometry format 1.16.0 or higher (1.12.0 ignores it and the item appears at the feet). `confirmed`.
+- Keep only one bound top-level bone and the rest as its children. Rename anything with the same name as a player bone (`body`).
+- In Blockbench, right-click the root folder, Edit binding, item slot, in that order.
+- If the binding looks off, add a root bone that wraps the item bones. The attachable bone structure must follow the player's hand bones. You can also bind to a bone name in the player geometry (`humanoid.geo.json`) as in `q.item_slot_to_bone_name('leftArm')`.
+- If the item renders at the player's feet or center, the hand binding is missing (see the vanilla bow sample). An animation file is also needed.
+
+## Positioning
+
+- Position, rotation and scale are set in the attachable animation, split into first person and third person (`c.is_first_person`). The pivot changes the rotation origin, and outside `visible_bounds` it is not visible in first person.
+- Blockbench's alignment and first-person and third-person perspective previews are only approximations, so adjust by bisecting per axis in the game.
+- To import an item model into a humanoid model, use Edit, Import, Import recent geometry, hide the texture with X, and then make the first-person and third-person animations. The Item Wizard Blockbench plugin makes reusable attachable animations.
+- There is a case where a skin's cape made a weapon go off position at random.
+
+## Cube count and texture mesh
+
+- With hundreds of cubes it lags or does not follow the hand. Switch to a `texture_meshes` bone (`texture` is `default`, `position`, `rotation`, `local_pivot`, `scale`, format 1.16.0).
+- The large item template uses the bone `rightitem` and `local_pivot [7,0,7]`. A cube geometry missing side pixels was fixed by rebuilding it as a texture mesh.
+- `texture_meshes` needs one geometry per texture (no variable textures), and geos can be merged into one file.
+- An enchanted high-cube block model weapon (a 256-cube 16x16 template) drops FPS.
+- Under PBR, a texture mesh silently does not appear on a block model (undocumented, may be a bug) ([VV and RTX](./vibrant-visuals-and-rtx.mdx)).
+
+## Swinging and attack animation
+
+- Format 1.10 items (not attachables) swing normally, but with large attachables the player attack animation moves the arm and makes the swing look strange.
+- A way without editing `player.entity`: in first person, release the model binding, place it directly, and animate when `c.owning_entity->v.attack_time > 0`.
+- Or edit `animation.player.first_person.attack_rotation` to `query.equipped_item_any_tag('slot.weapon.mainhand','tag') ? 0 : normal`, or cancel it the opposite way in the attachable (conflicts with the Actions & Stuff pack).
+- `variable.attack_time` cannot be used in attachable animations, so make it public in `player.entity.json` and use `c.owning_entity->variable.attack_time`.
+- For the player pose while holding a weapon, edit the player animation controller with `q.is_item_name_any('slot.weapon.mainhand','<id>')`.
+
+## Bows and crossbows
+
+- Custom crossbow and bow first-person animations depend on the item identifier. The identifier must be exactly `crossbow` (`ns:crossbow` works but adding a suffix breaks it) and it is hard-coded. Mojang later fixed 2 of 3 ranged weapon bugs.
+- Bow attachable `pre_animation`:
+
+```json
+"pre_animation": [
+  "variable.charge_amount = math.clamp((query.main_hand_item_max_duration - (query.main_hand_item_use_duration - query.frame_alpha + 1.0)) / 10.0, 0.0, 1.0f);"
+]
+```
+
+Then animate `wield_first_person_pull` under the condition `query.main_hand_item_use_duration > 0.0f && c.is_first_person`.
+
+## Off hand
+
+- The position is different, so drop `leftItem` and change the transform with `c.item_slot`. The vanilla fishing rod attachable is not in samples (fixing the flipped off-hand texture needs a new attachable).
+- There are reports that `leftItem` is less responsive than `rightItem`, and changing the player geometry breaks the item pivot (MCPE-177602). To change the position and size of a map in the off hand, change the hand anchor in the geo file or the map animation.
+- One attachable cannot handle several data values of one item.
+- Even in a resource pack, you can choose main hand and off hand models with `query.is_item_name_any('slot.weapon.mainhand',0,'ns:item')` (hand item queries are not BP-only).
+
+## Hiding it in the hand and leaving only the icon
+
+Use an attachable without cubes, an empty texture, or a scale 0 animation.
+
+## 3D items in inventory, on the ground and in frames
+
+- Create a block and an item with the same identifier and use `replace_block_item: true` of `minecraft:block_placer` on the item (you cannot place it on air with `use_on`).
+- Preview the GUI with the Blockbench block Display tab and turn off face dimming. Glint needs the opaque render method, and hand and ground glint needs an attachable. Oversized blocks were deprecated.
+- If the item model has no proper display transform, it renders as a full cube in the hand.
+- `item_display_transforms` had bugs in 1.26.40 and broke differently in .40 and .50. The slab inventory icon alignment problem was fixed in the Preview but was off in Pocket UI. Block model size is validated before the transform (MCPE-236317), and item icon face shading is applied before the display transform (MCPE-235788). The third-person rotation fix (fixing blocks that were turned 180 degrees in third person) changed the holding angle of heads, stairs and the heavy core, and the vanilla head display transform is odd.
+
+## Glint
+
+On attachables use the `entity_alphatest_glint` material or `minecraft:glint` (always on). An armor-style render controller shows only when enchanted.
+
+## Animated item textures
+
+- Animating an item texture is impossible. Imitate it with bone visibility animation, render controller texture swaps, or an animated block that cannot be placed.
+- There is a report (2026-01) that custom materials on attachables are not respected.
+- Fields such as `light_color_multiplier`, `overlay_color` and `held_item_ignores_lighting` of a render controller do not work on attachables. There was no answer on changing an attachable's color with `color` or `overlay_color`.
+- A note (2025-10) says `uv_anim` does not work on attachables, while a note (2026-06) says a flipbook works with `uv_anim` in the attachable render controller (`offset: [0,"math.mod(math.floor(query.life_time*12),12)/12"]`, `scale:[1,"1/12"]`) or with a per-frame texture array; they disagree (`conflicting`, the latest report says it works).
+
+## Glow
+
+Use `entity_emissive_alpha` for glowing parts and `breeze_wind_charge` for unshaded glow. Under VV, texture set PBR and `"capabilities": ["pbr"]` in the resource pack manifest are needed ([Materials and shaders](./materials-and-shaders.mdx)).
+
+## Turning off lighting
+
+- A note says the render controller `ignore_lighting` does not work on attachables, while another note says it works if you use `ignores_lighting` together with the material `"-defines": ["FANCY"]`; they disagree (`conflicting`).
+- `filter_lighting: false` is rejected with "Value 'false' not allowed" and only `true` is accepted. Glow of a held item is the client entity `held_item_ignores_lighting` (see `allay.entity.json` in the bedrock-samples Preview), but everything that references `held_item` excludes attachables, so make the attachable itself an emissive material. Attachables are generally buggy (MCPE-241087).
+
+## Particles and sound
+
+- Particles in an attachable animation work but not on custom locators (an about 6-year-old Mojang bug). Attachables cannot add new locators, so use a player locator (`lead_hold` and so on, reusing the player arm lead locator) or an offset. Other workarounds: computing the offset with `minecraft:particle_motion_parametric` driven by Molang (`relative_position`, no collision) or `minecraft:emitter_shape_point` (with collision), spawning from BP or script, or putting a locator on the player model.
+- A working example: register the gun model as geometry on the client player and put it as a child of `rightArm`, emit particles from a locator inside that model, and set the particle's `emitter_local_space` position, rotation and velocity to true. Define the identifier in the attachable `particle_effects` and reference it by short name in the animation's `effect`.
+- The locator of an attachable particle becomes the body root, which has the body Y rotation, not the head. In first person, the locator is pushed by the FOV, and animation sounds may not play.
+- Trick: draw the player model (with locators) with the player render controller and connect the animation. For directional particles, pass the direction with Molang or bind the particle to a locator on the player's head.
+
+## Cosmetic attachables (without an item)
+
+- Use the render controller condition `query.property('ns:cosmetic')=='hat'` and `entity.setProperty`.
+- Animate only in third person: the `scripts.animate` entry `{"third_person": "!c.is_first_person"}`.
+- State conditions: render controller `part_visibility` and `geometry` conditions (for example `q.property('seal:scope') == 'dot_sight'`).
+- For gun scope effects, use a render controller that shows the scope model by variant or tag (a tag while sneaking), or attach the scope to the head with `player.json`.
+- To change the hand item texture during a cooldown, use the remaining cooldown query in the attachable render controller (not for the inventory icon).
+
+## Armor
+
+- `controller.render.armor` is old. Use `controller.render.armor.v2` (humanoid mobs) and `controller.render.armor.player` (players, a separate file is needed).
+- Put the armor geometry in `models/entity/`, and the render controller part visibility must turn on each bone. For animated armor, add animation to an attachable with a `.player` identifier.
+- An empty `pre_animation: []` in an armor attachable (format 1.21.130) gave an error and removing it fixed it.
+- For the problem of custom armor arm bones not following on some skins, renaming the folder was suggested (`unverified`).
+- To render armor and items on a mob, the client entity must have exactly `"enable_attachables": true`. If misspelled, the entity becomes transparent. If the held and worn geometries overlap, fix it with render controller conditions and queries.
+- Elytra: The cape texture overwrites the whole elytra texture, and an extra geometry texture breaks together with the cape (unresolved).
+- An attempt to make vanilla armor trims glow under VV with a MERS PNG (min_engine 1.26.0, PBR and VV capability settings) did not glow (unresolved).
+
+## Fishing line
+
+A vanilla-like fishing line cannot be reproduced, so use particles or an entity line using catenary (cosh, sinh, tanh) expressions.
+
+## Item texture size
+
+- The icon must be 16x16. A 32x32 weapon texture needs the right geometry and texture size and the attachable texture key.
+- An item sprite larger than 16x16 (for example 20x20) is shrunk in the inventory slot, and the entity item icon background size is rounded down (maximum unknown).
+- The bug where item textures larger than 16x16 became huge or were cut off was fixed in the Preview around 2026-01-13, and the oversized 2D hand item bug was said to be "fixed soon" (2026-04-12).
+
+- Performance: Item textures over 128x128 lagged badly, and a 500x500 texture was slower than a 300-cube model. Under 512x512 is recommended. With more than 4 thousand custom items, the inventory lags.
+- A 2D item larger than 16x16 looks too close in first person, so a geo attachable is recommended. In the hand, mostly the upper half of the texture is visible.
+
+## Other
+
+- Hide the attachable of an invisible player with the render controller condition `!query.is_invisible`.
+- If an animation name conflicts with another pack, punching and mining animations break when the pack order is not at the top.
+- Use `c.is_first_person` inside attachables. Set positions with Blockbench bone binding and preview.
+- Item icons allow only fully transparent pixels and not translucent ones, while attachables allow translucency too.
+- For a transparent item frame, put an empty item frame texture in the resource pack.
+- If there are pixels at the edge of a splash or lingering potion texture, a horizontal line appears on that row.
+- For keeping the outline and enchant glint together, and attachable stencil, see the stencil section of [Materials and shaders](./materials-and-shaders.mdx).

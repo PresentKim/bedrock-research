@@ -1,0 +1,361 @@
+---
+title: "Pattern recipes (2): tabs, toasts, progress bars, icons, hover"
+description: "6 combination examples such as radio toggle tabs, HUD title toasts, stacking chat toasts, progress bars, icons and adding hover content, and proposals."
+sidebar_position: 11.5
+sources:
+  - repo-guide
+  - repo-bedrock-core
+  - private-research
+  - advancementpack
+  - bedrock-samples
+  - repo-multiselect
+  - ms-learn
+  - repo-survey
+---
+
+This continues from [Pattern recipes](./recipes.mdx). It assumes you have read recipes 1~6 of the previous page, and uses the same common premise (names are examples and files are read only if registered in `ui/_ui_defs.json`).
+
+## Recipe 7. Tabs without a script (radio toggles)
+
+- **[PAT-07]** Put the tab content inside each toggle's `checked` state control of a radio toggle group, and give all 8 states and the toggle mappings. `{measured}` (Source: BC-S4, BC chapter 5, BC-samples tabbed.document.json)
+
+Basis: INP-10~13
+
+```jsonc
+"tab_a": { "type": "toggle", "size": [ 60, 16 ],
+  "toggle_name": "myui_tabs", "radio_toggle_group": true,
+  "toggle_group_forced_index": 0, "toggle_group_default_selected": 0,
+  "toggle_on_button": "toggle.toggle_on", "toggle_off_button": "toggle.toggle_off",
+  "button_mappings": [
+    { "from_button_id": "button.menu_select", "to_button_id": "button.menu_select", "mapping_type": "pressed" },
+    { "from_button_id": "button.menu_ok",     "to_button_id": "button.menu_ok",     "mapping_type": "focused" } ],
+  "checked_control": "on", "checked_hover_control": "on",
+  "checked_locked_control": "on", "checked_locked_hover_control": "on",
+  "unchecked_control": "off", "unchecked_hover_control": "off_hover",
+  "unchecked_locked_control": "off", "unchecked_locked_hover_control": "off",
+  "controls": [
+    { "on@myui.tab_a_header_and_pane": {} },
+    { "off@myui.tab_a_header": {} },
+    { "off_hover@myui.tab_a_header_hover": {} } ] }
+// tab_b has toggle_group_forced_index: 1 and the same toggle_name
+```
+
+- The `*_control` properties are the names of the children to draw per state. Vanilla `common.toggle` specifies a different child per state like `"checked_control": "checked"`, and `storage_management.json` specifies the same child for several states (VN ui_common.json:393, storage_management.json:1313). BC puts 8 children with vanilla names (`checked`, `checked_hover` …) (BC chapter 5).
+
+### Complete files and the order of execution
+
+```jsonc
+// RP/ui/myui/tabs.json   (registered in _ui_defs.json). Two tabs share the same toggle_name.
+{
+  "namespace": "myui",
+  "tab_header": {                                      // One tab head cell (only the color differs per state)
+    "type": "image", "size": [ 60, 16 ], "texture": "textures/ui/button_borderless_light"
+  },
+  "tab_a": {
+    "type": "toggle", "size": [ 60, 16 ],
+    "toggle_name": "myui_tabs", "radio_toggle_group": true,
+    "toggle_group_forced_index": 0, "toggle_group_default_selected": 0,
+    "toggle_on_button": "toggle.toggle_on", "toggle_off_button": "toggle.toggle_off",
+    "button_mappings": [
+      { "from_button_id": "button.menu_select", "to_button_id": "button.menu_select", "mapping_type": "pressed" },
+      { "from_button_id": "button.menu_ok", "to_button_id": "button.menu_ok", "mapping_type": "focused" } ],
+    "checked_control": "on", "checked_hover_control": "on",
+    "checked_locked_control": "on", "checked_locked_hover_control": "on",
+    "unchecked_control": "off", "unchecked_hover_control": "off_hover",
+    "unchecked_locked_control": "off", "unchecked_locked_hover_control": "off",
+    "controls": [
+      { "on": { "type": "panel", "controls": [ { "h@myui.tab_header": {} },
+                { "pane": { "type": "label", "text": "Tab A content", "localize": false, "offset": [ 0, 20 ] } } ] } },
+      { "off@myui.tab_header": { "alpha": 0.5 } },
+      { "off_hover@myui.tab_header": { "alpha": 0.8 } } ]
+  },
+  "tab_b@myui.tab_a": { "toggle_group_forced_index": 1,
+    "controls": [
+      { "on": { "type": "panel", "controls": [ { "h@myui.tab_header": {} },
+                { "pane": { "type": "label", "text": "Tab B content", "localize": false, "offset": [ 0, 20 ] } } ] } },
+      { "off@myui.tab_header": { "alpha": 0.5 } },
+      { "off_hover@myui.tab_header": { "alpha": 0.8 } } ] },
+  "tabs_root": {
+    "type": "stack_panel", "orientation": "horizontal", "size": [ 120, "100%c" ],
+    "controls": [ { "ta@myui.tab_a": {} }, { "tb@myui.tab_b": {} } ]
+  }
+}
+```
+
+Put `tabs_root` in the `controls` of recipe 1's `root`. No script is needed.
+
+Step explanation
+1. Toggles with the same `toggle_name` and `radio_toggle_group: true` form one group and only one is on. `toggle_group_forced_index` is the number within the group and `toggle_group_default_selected` is the default selection.
+2. The eight `*_control` properties decide the name of the child to draw for each state (`checked`, `checked_hover`, `checked_locked`, …). In the example above, the four on states point to `on` and the off states to `off` (hover to `off_hover`).
+3. Put the tab content inside the `on` child. Only the on tab draws `on`, so the content switches without a script. If even one state is missing, the toggle disappears on hover (INP-10).
+4. The texture paths and sizes in this file are examples, so replace them with your own pack's images.
+
+---
+
+## Recipe 8. Showing a toast with a HUD title
+
+- **[PAT-08]** Place one more `hud_title_text_factory` in a layer inside the HUD to make toasts, and hide the vanilla title when it has my prefix. Every time a title is sent a control is newly created, so the animation plays from the beginning. `{working pack}` (Source: BA chapter 6, AP 4.1, AP-samples hud_screen.json)
+
+Basis: COL-14, HOST-26~28, ANI-12, MOD-04
+
+```jsonc
+// RP/ui/hud_screen.json
+{
+  "hud_title_text": { "modifications": [ { "array_name": "bindings", "operation": "insert_back", "value": [
+    { "binding_type": "global", "binding_name": "#hud_title_text_string" },
+    { "binding_type": "view",
+      "source_property_name": "(not (('%.8s' * #hud_title_text_string) = 'myhud:t:'))",
+      "target_property_name": "#visible" } ] } ] },
+  "root_panel": { "modifications": [ { "array_name": "controls", "operation": "insert_back", "value": [
+    { "myhud_toast_factory": { "type": "panel", "size": [ "100%", "100%" ],
+        "factory": { "name": "hud_title_text_factory",
+                     "control_ids": { "hud_title_text": "hud_title_text@myhud.toast" } } } } ] } ] }
+}
+```
+
+```jsonc
+// RP/ui/myhud/toast.json
+{ "namespace": "myhud",
+  "toast": { "type": "panel", "size": [ 160, 32 ], "anchor_from": "top_right", "anchor_to": "top_right",
+    "$title_text|default": " ",
+    "ignored": "(($title_text - 'myhud:t:') = $title_text)",    // Do not create if my prefix is absent
+    "anims": [ "@myhud.slide_in" ],
+    "controls": [ { "text": { "type": "label", "text": "#body", "localize": true,
+      "bindings": [
+        { "binding_type": "global", "binding_name": "#hud_title_text_string", "binding_name_override": "#raw" },
+        { "binding_type": "view", "source_property_name": "('myhud.toast.' + (#raw - 'myhud:t:'))",
+          "target_property_name": "#body" } ] } } ] },
+  "slide_in": { "anim_type": "offset", "easing": "out_back", "duration": 0.5,
+                "from": [ 200, 0 ], "to": [ 0, 0 ], "next": "@myhud.stay" },
+  "stay":     { "anim_type": "wait", "duration": 4.0, "next": "@myhud.slide_out" },
+  "slide_out":{ "anim_type": "offset", "easing": "in_back", "duration": 0.5,
+                "from": [ 0, 0 ], "to": [ 200, 0 ], "destroy_at_end": "hud_title_text" }
+}
+```
+
+- If you put it in `root_panel`, it is hidden together when the vanilla HUD is hidden. If it must show even when the HUD is hidden, put it in the `$screen_bg_content` layer (HOST-26).
+- If another add-on calls `setTitle`, the toast is overwritten (HOST-14). For several at once, recipe 9.
+- Vanilla `hud_title_text` originally has no `bindings`, so insert is safe (VN hud_screen.json:2267).
+- The top-level `ignored` of `toast` reads the `$title_text` the factory puts in the outer scope. The `"$title_text|default"` of the same object is not visible to `ignored` (FILE-34), so when using this definition outside the factory, put the gate on the parent.
+
+### Complete files and the order of execution
+
+```js
+// BP/scripts/toast.js
+import { world, system } from "@minecraft/server";
+export function toast(player, key) { player.onScreenDisplay.setTitle("myhud:t:" + key); }
+// lang: put "myhud.toast.welcome=환영한다" in RP/texts/ko_KR.lang
+system.runTimeout(() => { for (const p of world.getPlayers()) toast(p, "welcome"); }, 100);
+```
+
+The `hud_screen.json` and `toast.json` above are the two files (`toast.json` is registered in `_ui_defs.json`). 
+
+Step explanation
+1. The script sends `setTitle("myhud:t:welcome")`. The prefix `myhud:t:` is this channel's marker (HOST-15).
+2. The view binding added to vanilla `hud_title_text` hides the vanilla title if the prefix is present (`#visible` false).
+3. My `hud_title_text_factory` creates `toast` from the same title data. The top-level `ignored` does not create the control if `$title_text` has no prefix.
+4. The label of `toast` receives `#hud_title_text_string` as `#raw`, erases the prefix and assembles the lang key `myhud.toast.<key>`.
+5. The animation chain `slide_in -> stay -> slide_out` runs and finally destroys the control with `destroy_at_end`. Every time a title is resent, the control is newly created and the animation runs from the beginning.
+
+---
+
+## Recipe 9. Stacking several toasts with chat
+
+- **[PAT-09]** Place one more `chat_item_factory` in my layer (set the maximum count) and show only messages with my prefix. In the original chat, hide it in two places: `messages_text` of `chat_screen.json` and the HUD `chat_grid_item`. When disappearing, shrinking the height to 0 with a `size` animation pulls the stack up. `{working pack}` (Source: AP 4.5, AP-samples hud_screen.json and chat_screen.json)
+
+Basis: COL-14, COL-16, HOST-29, MOD-07, ANI-13, BND-15
+
+```jsonc
+"toast_stack": { "type": "stack_panel", "anchor_from": "top_right", "anchor_to": "top_right",
+  "factory": { "name": "chat_item_factory", "max_children_size": 8,
+               "control_ids": { "chat_item": "item@myhud.chat_toast" } } }
+// myhud.chat_toast: reads #chat_text (collection chat_text_grid, binding_condition once)
+// and is #visible only when it has the prefix 'myhud:c:'. Otherwise it takes no space in the stack
+```
+
+- Hidden ordinary messages also use up `max_children_size` (COL-16).
+- Hiding HUD chat lines can be done as in AP with a background `alpha: 0` + background and text moved into children + a `#propagateAlpha` binding (BND-15).
+
+### Complete files and the order of execution
+
+```jsonc
+// RP/ui/hud_screen.json  (a vanilla path)
+{
+  "root_panel": { "modifications": [ { "array_name": "controls", "operation": "insert_back", "value": [
+    { "toast_stack": { "type": "stack_panel", "anchor_from": "top_right", "anchor_to": "top_right",
+        "size": [ 160, "100%c" ],
+        "factory": { "name": "chat_item_factory", "max_children_size": 8,
+                     "control_ids": { "chat_item": "item@myhud.chat_toast" } } } } ] } ] }
+}
+```
+
+```jsonc
+// RP/ui/myhud/chat_toast.json  (registered in _ui_defs.json)
+{
+  "namespace": "myhud",
+  "chat_toast": {
+    "type": "panel", "size": [ "100%", 14 ], "visible": false,
+    "property_bag": { "#chat_text": "" },
+    "controls": [ { "msg": { "type": "label", "size": [ "100%", 12 ], "text": "#msg", "localize": false,
+      "bindings": [ { "binding_name": "#chat_text", "binding_type": "collection", "binding_collection_name": "chat_text_grid",
+                      "binding_condition": "once", "binding_name_override": "#raw" },
+                    { "binding_type": "view", "source_property_name": "(#raw - 'myhud:c:')", "target_property_name": "#msg" } ] } } ],
+    "bindings": [
+      { "binding_name": "#chat_text", "binding_type": "collection", "binding_collection_name": "chat_text_grid", "binding_condition": "once" },
+      { "binding_type": "view", "source_property_name": "(not ((#chat_text - 'myhud:c:') = #chat_text))", "target_property_name": "#visible" } ]
+  }
+}
+```
+
+```js
+world.sendMessage("myhud:c:Achievement unlocked");     // Sending to chat stacks one toast line
+```
+
+Step explanation
+1. My `chat_item_factory` creates lines from the same data as vanilla chat, and `max_children_size` is the count limit. Hidden ordinary messages also use this limit (COL-16).
+2. One line (`chat_toast`) shows only when it has the prefix `myhud:c:`, and otherwise takes no place in the stack.
+3. To hide my messages in the original chat, put the same hiding binding in two places: `messages_text` of `chat_screen.json` and the HUD `chat_grid_item` (HOST-29).
+4. When disappearing, shrinking the height to 0 with a `size` animation pulls the stack up. This file omits the animation.
+
+---
+
+## Recipe 10. Progress bar
+
+- **[PAT-10]** Give the bar image `clip_direction` and bind `#clip_ratio` (the ratio to cut off, 0~1). A decimal is needed, so avoid the integer arithmetic problem (EXP-18) by using a float channel (durability, etc.) or by making per-interval literal copies. `{vanilla, measured, conflict}` (Source: VN, BC-facts, BC-S14, BA 3.2)
+
+```jsonc
+"bar_fill": { "type": "image", "texture": "textures/myui/bar_fill", "size": [ 100, 5 ],
+  "clip_direction": "left", "clip_pixelperfect": true,
+  "bindings": [ { "binding_type": "view", "source_control_name": "data_source",
+                  "source_property_name": "(1 - (#cur / #max))", "target_property_name": "#clip_ratio" } ] }
+```
+
+### Complete files and the order of execution
+
+```jsonc
+// RP/ui/myui/bar.json   (registered in _ui_defs.json). Draws the bar from the entry text 'N07' (current 07, max 10).
+{
+  "namespace": "myui",
+  "bar_cell": {
+    "type": "panel", "size": [ 100, 5 ],
+    "bindings": [ { "binding_type": "collection_details", "binding_collection_name": "form_buttons" } ],
+    "controls": [
+      { "frame": { "type": "image", "texture": "textures/myui/bar_frame", "size": [ 100, 5 ] } },
+      { "bar_fill": { "type": "image", "texture": "textures/myui/bar_fill", "size": [ 100, 5 ],
+          "clip_direction": "left", "clip_pixelperfect": true,
+          "bindings": [
+            { "binding_name": "#form_button_text", "binding_name_override": "#raw",
+              "binding_type": "collection", "binding_collection_name": "form_buttons" },
+            { "binding_type": "view", "source_property_name": "(('%.3s' * #raw) - 'N')", "target_property_name": "#cur" },
+            { "binding_type": "view", "source_property_name": "((10 - (#cur - 0)) * .1)", "target_property_name": "#clip_ratio" } ] } } ]
+  }
+}
+```
+
+Step explanation
+1. `clip_direction` is the side the bar shrinks toward and `#clip_ratio` is the ratio to cut off (0~1).
+2. The ratio must be a decimal, so do not use integer division. `(1 - (#cur / #max))` becomes an integer when dividing integers, so only 0 or 1 comes out (EXP-18, C-16). Instead, multiply by a dot-leading decimal literal like `.1` (EXP-27). The example above fixes the max at 10, so it uses `* .1`.
+3. If the number comes from a string channel, convert it to a number with `- 0` (EXP-16). The letter prefix `N` of `N07` is erased with `- 'N'`.
+4. If a float channel (durability `#durability`) can be used as is, use `(1 - (#cur / #max))` from a `source_control_name` data source as in the code before the recipe. This example was not rerun in game.
+
+---
+
+## Recipe 11. Icon: a texture path or an item
+
+- **[PAT-11]** Receive both a texture path and a numeric item ID in one variable, and create only one of an image and an item renderer with `$v > 'a'`/`$v > 0`. For a runtime string, choose by whether the first 9 bytes are `textures/`. `{working pack}` (Source: AP 4.5 and 4.7)
+
+Basis: FILE-16, FILE-19, ANI-06
+
+```jsonc
+// Reference point: { "icon@my_ns.icon_slot": { "$icon": "textures/items/stick" } }
+// For an item, "$icon": numeric item ID x 65536 (+ data value)
+"icon_slot": { "type": "panel", "size": [ 16, 16 ],
+  "controls": [
+    { "custom_image": { "type": "image", "texture": "$icon", "ignored": "(not ($icon > 'a'))" } },
+    { "item_icon":    { "type": "custom", "renderer": "inventory_item_renderer",
+                        "property_bag": { "#item_id_aux": "$icon" }, "ignored": "(not ($icon > 0))" } } ] }
+```
+
+- `ignored` cannot see its own `$` declarations and values received at the reference point, so attach it to a **child** of the control that receives the variable (FILE-34).
+- Numeric item IDs partly shift depending on the number of custom items, so use a texture path when possible (ANI-06, C-33).
+
+### Complete files and the order of execution
+
+```jsonc
+// RP/ui/myui/icon.json   (registered in _ui_defs.json)
+{
+  "namespace": "myui",
+  "icon_slot": {
+    "type": "panel", "size": [ 16, 16 ],
+    "controls": [
+      { "custom_image": { "type": "image", "texture": "$icon", "ignored": "(not ($icon > 'a'))" } },
+      { "item_icon": { "type": "custom", "renderer": "inventory_item_renderer", "layer": 2,
+                       "property_bag": { "#item_id_aux": "$icon" }, "ignored": "(not ($icon > 0))" } } ]
+  },
+  "icon_row": {
+    "type": "stack_panel", "orientation": "horizontal", "size": [ "100%c", 16 ],
+    "controls": [
+      { "stick@myui.icon_slot": { "$icon": "textures/items/stick" } },        // Texture path
+      { "apple@myui.icon_slot": { "$icon": 17301504 } } ]                   // Numeric item ID (for example 264 x 65536)
+  }
+}
+```
+
+Step explanation
+1. One variable `$icon` receives a string (path) or a number (item aux). The string `'textures/…'` is greater than `'a'`, so `> 'a'` is true and the image is created. A number makes `> 0` true so the item renderer is created.
+2. `ignored` cannot see the control's own `$` declarations, so attach it to a **child** of the slot that receives the variable (FILE-34).
+3. Item aux is `numeric item ID x 65536`. Some IDs shift when custom items are registered, so use a texture path when possible (ANI-06, C-33).
+4. To choose by a runtime string (a form entry), split the `#visible` of the two controls by the result of comparing whether the first 9 bytes are `textures/` (AP).
+
+---
+
+## Recipe 12. Adding hover content to a vanilla button template
+
+- **[PAT-12]** Add a slot that is off by default to the vanilla button template so that only the buttons that need it get a hover tooltip. The example below is that (MOD-10). `{working pack}` (Source: AP 4.8)
+
+Basis: MOD-10
+
+```jsonc
+// ui/ui_template_buttons.json (a vanilla path)
+"focus_border": {
+  "$show_hover_content|default": false,
+  "$hover_content|default": "common.empty_panel",
+  "controls": [ { "hover_slot@common.empty_panel": {
+    "ignored": "(not $show_hover_content)",
+    "controls": [ { "content@$hover_content": { "visible": "($hover_state or $pressed_state)" } } ] } } ]
+}
+```
+
+- Only buttons that turn this variable on are affected. On a button that wants hover content, give `"$show_hover_content": true` and `"$hover_content": "my_ns.tooltip"`.
+
+### Complete files and the order of execution
+
+```jsonc
+// RP/ui/ui_template_buttons.json   (a vanilla path. Leave the focus_border modification above as it is)
+// Only buttons in my screen file that turn this variable on have hover content.
+// RP/ui/myui/hover_button.json   (registered in _ui_defs.json)
+{
+  "namespace": "myui",
+  "tooltip": {
+    "type": "panel", "size": [ 120, 20 ], "layer": 30,
+    "controls": [ { "t": { "type": "label", "text": "Save and exit", "localize": false } } ]
+  },
+  "save_button@common_buttons.light_text_button": {
+    "size": [ 100, 20 ], "$button_text": "Save",
+    "$show_hover_content": true, "$hover_content": "myui.tooltip"
+  }
+}
+```
+
+Step explanation
+1. If you put `$show_hover_content|default: false` in vanilla `focus_border`, the default is off and other buttons are not affected (MOD-10).
+2. If my button gives `$show_hover_content: true` and `$hover_content: "myui.tooltip"`, a `hover_slot` is created in that button's `focus_border` and `content@$hover_content` shows when `$hover_state or $pressed_state`.
+3. The variable names can differ by vanilla button template version, so check them in `ui_template_buttons.json`.
+
+## Proposals (not applied)
+
+Below are rule proposals from the additional material survey. They are numbered in the merge report but have not yet been reflected in the rulebook in the body above. The numbers are the final IDs in the merge report, and the strength of evidence follows the verification level of the original proposal. Check before using them.
+
+- **[PAT-13 proposal (not applied)]** A 2D layout made with keys: for each vertical factory item, (1) turn on the left and right spacers of a horizontal stack with keys in the button string to push the button sideways, and (2) put the picture inside a zero-height panel and let a sizer that can be turned off by a key decide the item height, and the item after one carrying a "no height" key is placed on the same row. The server sends only an ordinary button list and the `selection` numbers do not change. Give horizontal spacers together so that the press areas of overlapping items do not overlap. `{working pack, inferred}` (Source: StarLibV2)
+- **[PAT-14 proposal (not applied)]** A chest-style server form recipe: choose the size by a title flag (HOST-34 proposal) -> per-size templates generate only the one used with a global variable `ignored` -> `grid` + `collection_name: form_buttons` -> per cell, branch between an image and `inventory_item_renderer` with `'%.8s' = 'textures'` (PAT-11) -> quantity and durability with a fixed-width header in the button text (EXP-11) -> a tooltip on hover (INP-28). Put numeric IDs in with `(#v - 0)`. `{working pack}` (Source: Chest-UI)
+- **[INP-25 proposal (not applied), worth using as a recipe]** List search: give `common.text_edit_box` `$text_edit_text_control: "<name>"`, and row cells read the input with `source_control_name: "<name>"` and `source_property_name: "#item_name"`. Then `((not ((#name - #item_name) = #name)) or (#item_name = ''))` -> `#visible`. Remove special characters from the name before comparing. The space of hidden rows follows COL-10. `{working pack, code}` (Source: small-packs, json-ui-examples)

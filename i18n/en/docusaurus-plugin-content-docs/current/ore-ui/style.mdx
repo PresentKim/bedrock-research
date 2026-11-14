@@ -1,0 +1,135 @@
+---
+title: Minecraft UI style guidelines
+description: Units, textures, text, parts, responsiveness and Gameface cautions for drawing server-driven DDUI screens to look like JSON UI forms.
+sidebar_position: 7
+sources:
+  - repo-ore-ui-loading
+---
+
+# Minecraft UI style guidelines (server-driven DDUI)
+
+These are the look rules for DDUI screens the server draws ([DDUI guide](./ddui-server-guide.mdx)). The goal is **to carry over the JSON UI server form the server already uses (a pack that modifies `server_form.json`) almost as is**. That way JSON UI screens and Ore UI screens cannot be told apart within one game. The design system is `oui-mc.css` and the renderer is `oui-ddui.js`. Below, "form pack" means the server resource pack that decorates that JSON UI form. (Source: repo-ore-ui-loading)
+
+## 1. Principles
+
+1. **Use the same textures and the same sizes as JSON UI.** Windows, buttons, tabs and slots draw the nine-slice textures of vanilla and the form pack with `border-image`. Do not imitate colors with CSS.
+2. **Write sizes in GUI pixels.** Carry over the numbers in the form pack's JSON UI files as they are.
+3. **The GUI scale handles responsiveness.** The window has the same fixed size as the JSON UI form. When the game's GUI scale changes with screen size, `rem` follows, so the whole thing grows and shrinks like JSON UI. Do not redo the layout.
+4. **Items are the protagonist.** Items go in slots, and names and descriptions show as tooltips.
+5. **Change only values.** The screen structure is sent only when moving. Changes inside it are sent as regions (`region`) and values.
+
+## 2. Units
+
+Concept: JSON UI sizes things in GUI pixels. Ore UI sets the `html` font size to **5 x GUI scale px** (measured). So 1 GUI pixel (`u`) is **`0.2rem`**.
+
+```css
+/* 18u slot = 3.6rem */
+.mc-slot { width: 3.6rem; height: 3.6rem; }
+```
+
+- In CSS, use the calculated `rem` value directly (18u is `3.6rem`).
+- The server (Go) sends sizes with `u(n)` (`fmt.Sprintf("%.1frem", n*0.2)`).
+- Gameface ignored `calc()` and `inset` shadows inside shorthand properties that take several values (`padding: a b`, etc.) (measured). Write margins one direction at a time.
+- Images are drawn without blurring with `pack://path.png?filtering=point`. Textures of an untrusted pack are read through this path too.
+
+## 3. Textures
+
+| Part | Texture | nine-slice |
+| --- | --- | --- |
+| Window | Vanilla `textures/ui/dialog_background_opaque` | 4 |
+| Toolbar | Vanilla `textures/ui/toolbar_background` | 4 |
+| Close | Vanilla `textures/ui/close_button_default_light` (the one JSON UI `common.light_close_button` uses) | none |
+| Tab | Vanilla `TabTopBack`, `TabTopBackHover`, `TabTopFront` | 4 |
+| Button | The form pack's button textures (normal, hover, pressed) | 3 |
+| Icon button hover/pressed | The form pack's flat hover and pressed textures | none |
+| Panel | The form pack's panel texture | none |
+| Slot | Vanilla `cell_image` (10x10, cut 2px at a time) | 2 |
+| Selected slot | The form pack's selected slot texture | none |
+| Arrow | Vanilla `arrow_large`; for paging, the form pack's left and right arrows | none |
+
+- If the selected slot texture is opaque in the middle, lay it **under the icon** as JSON UI does. Putting it on top hid the icon (measured).
+- Vanilla `close_button_default` was not read through `pack://`. `_light` was (measured).
+- All item icons are `aux:AuxId` drawn by the engine. Vanilla and custom items and blocks are the same ([icons](./geo-item-and-containers.mdx)). `geo:` and `tex:` are substitutes for items the server does not have.
+- What JSON UI chose by a marker in front of the tooltip, such as the slot decoration grade, is chosen by reading the same marker ([inventory-style menus](../server-ui/inventory-menus.mdx)).
+
+## 4. Text
+
+| Use | Size | Color |
+| --- | --- | --- |
+| Window title | 1.4rem, 6u from the top, centered | `#404040` |
+| Body (on the window) | 1.4rem | `#333333` |
+| Small text (details, card and button names; 0.8x of JSON UI) | 1.12rem | `#333333` on a window, `#f2f2f7` on a button |
+| Header (0.7x of JSON UI) | 0.98rem | `#4d4d4d` |
+| Slot count (0.75x) | bottom right | white text |
+
+The font is the Ore UI default (Minecraft Seven, Noto Sans KR for Korean), used as is.
+
+### `§` color codes
+
+The `§` colors in server text are usually **based on a dark background** (chat and tooltips are dark). The renderer changes text drawn directly on the window (`ink: "panel"`, the default inside a window) as in the table below. This matches the rule that changed text on a light window in JSON UI forms.
+
+| Original | On window | Original | On window |
+| --- | --- | --- | --- |
+| `§f` | `§0` | `§a` | `§2` |
+| `§7` | `§8` | `§b` | `§3` |
+| `§8` | `§7` | `§c` | `§4` |
+| `§e` | `§1` | `§d` | `§5` |
+| `§6` | `§4` | | |
+
+Text on a button, slot counts and tooltips are on a dark background and are not changed (`ink: "dark"`). A region (`region`) remembers the background it was created with, so it uses the same rule when redrawn. `§k` is not drawn.
+
+## 5. Parts (the same sizes as the JSON UI form)
+
+| Part | Class | Size and position |
+| --- | --- | --- |
+| Screen | `mc-screen` | Centers the window |
+| Window | `mc-window` | The server gives width and height in u. Border 4u |
+| Title | `mc-title` | 6u from the top |
+| Content | `mc-content` | 18u from the top, 6u inside left, right and bottom (width - 12u, height - 24u). If it overflows, `mc-scroll` |
+| Toolbar | `mc-toolbar` | Outside the top right of the window, 22u upward, height 25u. 15x15 icon buttons (back chevron, `?`) and a 17x22 close slot |
+| Tab | `mc-tabs`, `mc-tab` | Starts at [8, -22] above the window, 24x22. The selected tab joins the window with `TabTopFront` |
+| Wide tab | `mc-tab-wide` | 96x22. The 12u icon is at x3 and the text (0.8x) at x17. A value can be bound to the text (for example "Need 3") |
+| Card | `mc-cards`, `mc-card-cell`, `mc-card` | Grid width 270u, an 86x46 button inside a 90x50 cell. A 22u icon 5u above center, the name below |
+| List button | `mc-list-row` | Height 30u (row 32u). The 20u icon is at x6 and the text at x32 |
+| Action button | `mc-action` | Height 17u, a 12u icon, 0.8x text. One per row |
+| Slot | `mc-slot` | 18u, a 16u icon. If it has a link, `pressable` (white glow on hover) |
+| Big slot | `mc-big` | The 28u slot in the detail (icon 22u) |
+| Empty frame | `mc-frame` | A slot with no image |
+| Board | `mc-board`, `mc-board-row` | 11 columns, width 198u. The arrow is 15x10 inside an 18u slot |
+| Scrollbar | `mc-scroll-wrap`, `mc-scrollbar`, `mc-scroll-rail`, `mc-scroll-handle` | The vanilla mouse scrollbar (`ui_common` `scrolling_panel`): a 4u bar with 2u on each side, the track `ScrollRail` (1x1, 3u wide), the box `ScrollHandle` (3x5, nine-slice 1 2 1 2, 5u wide). For `mc-scroll` the renderer attaches it and it shows only when the content overflows. Move it by dragging the box or pressing the track |
+| Panel | `mc-panel` | The form pack's panel background |
+| Split | `mc-split-left`, `mc-split-right` | Left 152u (an 8x6 grid of 144x108 and a paging row), right 156u **fixed** |
+| Input | `mc-search`, `mc-input` | A magnifier and a dark input field |
+| Notification line | `mc-toast` | One line below the window |
+| Tooltip | automatic | The dark vanilla tooltip. The first line is the name, the following lines the description |
+
+If you set the window height to 166u, the same as the vanilla inventory, screens do not shift against each other when switching. The widest split window is 326u, the width of the vanilla inventory.
+
+## 6. Responsiveness
+
+- Every size is `rem`, so it follows the GUI scale. The game picks the GUI scale to fit the window size, so on a small screen the whole window shrinks like JSON UI.
+- The window size does not change. If the content overflows, the inside of `mc-content` scrolls and a scrollbar shows. Gameface does not draw scrollbars, so the renderer draws them.
+- When the window size changed to fit the content, Gameface resolved the click to the position before the change and the wrong slot was pressed (measured: after a search result shrank from 481 to 1 and the window shrank, pressing the result slot opened a different item that had been at that spot before). A fixed size prevents this too.
+- The renderer measures the screen width and attaches `mc-w-s`/`mc-w-m`/`mc-w-l` to `body` (Gameface does not use `@media`). If a screen appears that the GUI scale cannot cover, this changes the layout.
+
+## 7. What to keep in mind in Gameface
+
+- `min-width: 0` has no effect. Putting long text in a growing (`flex-grow`) cell widened the cell beyond the window (measured). Fix the width of cells that hold text.
+- Putting several buttons in one row (`mc-row`) narrowed the buttons and the text broke vertically one character at a time (measured). Put only one button with long text per row.
+- Give a negative `z-index` only to children used purely as a background. Giving `z-index: -1` to the whole toolbar showed the image but none of the buttons inside could be pressed (measured). Keeping the backgrounds separately as `mc-toolbar-bg` and `mc-tab-bg` makes the buttons pressable.
+- Put button text in a `span`. Even if the bound text changes, the icon is not erased.
+- Receive clicks with `mousedown` (`click` does not arrive on a `div`).
+
+## 8. Behavior rules
+
+- A slot is pressable only when it has a link. The toolbar's back button returns to where you came from (up to 32 steps like browser history). If there is no history, the back button is not drawn.
+- Moving by tab or card starts the history anew.
+- The screen title is "parent / child".
+- Esc is the same as close.
+- Write success and failure briefly in the notification line and leave the screen as it is.
+
+## 9. Prohibitions
+
+- Do not imitate textures by making colors, gradients or rounded corners with CSS.
+- Do not use sizes that the JSON UI form does not have.
+- Do not write the same information twice as a slot and as text (the card name is an exception).

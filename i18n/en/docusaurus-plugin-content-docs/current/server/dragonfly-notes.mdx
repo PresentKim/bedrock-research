@@ -1,0 +1,70 @@
+---
+title: "Dragonfly server notes: forks, hooks, upstream behavior"
+description: "Layering when building a server on Dragonfly, criteria for patches versus hooks, client data verification, upstream behavior and how to fix it"
+sidebar_position: 8
+sources:
+  - private-research
+  - dragonfly
+  - gophertunnel
+  - private-research
+---
+
+## Concept
+
+Dragonfly (df-mc, Go, MIT) is a library for building Bedrock server software in Go. It handles the protocol on top of gophertunnel. There are two ways to change Dragonfly's behavior: fork Dragonfly and patch it, or attach hooks to packets and sessions without a fork. The upstream behavior on this page is based on Dragonfly master `1bf4e242` (after v0.11.5, 2026-10-24) plus the 1.26.60 support PR (gophertunnel v1.63.0), commit `d86aefd9ff9b6a357d6dfadab2093af811545256`. (Source: private research)
+
+## Layers
+
+| Layer | What it does |
+|---|---|
+| Dragonfly patch | Dragonfly's behavior itself (block rules, storage, ticks, chunk transfer, world hooks) |
+| Packet hook layer | Hooks that reach sessions and packets. It intercepts and modifies the packets the server sends to the client and uses the session's private methods and fields. Dragonfly internals are touched only here |
+| Client entry layer | Components added to the item and block entries the client receives at join. It uses only public registries and knows nothing about the game |
+| Game | Items and blocks implement the interfaces of the client entry layer |
+
+Try them from top to bottom. If the job can be done by intercepting packets or reading and writing session internals, put it in the packet hook layer. If it only adds client-side components, put it in the client entry layer. **Patch only when Dragonfly's behavior itself must change, or when you cannot prove that a patch-free approach gives the same result.** Mark patched places with a patch marker comment and update the patch list with it.
+
+### What to do with hooks, without a fork
+
+Jobs that only intercept packets or read and write session internals use the `bedrock-gophers/inv` approach: a packet hook in a connection that wraps the listener, `go:linkname` for the session's private methods, and reflection for private fields. The entity chest and screen operations sent to a single player (camera, field of view, HUD hiding, input locks, fake blocks, chunk center, titles) work this way. A single test that checks the internals the hooks expect by name shows right away what breaks after you upgrade Dragonfly.
+
+### What goes in patches
+
+- Work inside Dragonfly such as storage, the chunk cache, tick performance, and panic recovery of world transactions.
+- Adding hooks where none exist (changing hopper transfer rules, notification after a block changes, column load and unload notifications).
+- Work you can verify only on a real client: chunks visible to one player only, resend after `Activate`, server-side breaking of custom blocks, the grass spread check.
+- Work you cannot prove gives the same result: block rules (composter, leaves), the NetherNet listener address, per-player recipe filters, chunks per tick while loading.
+
+## Client data verification
+
+Keep a test that starts the server the same way as a real run, connects a fake client once, hashes each received block entry, item registration, crafting data and creative list entry, and compares them with a golden file. If the golden stays the same after you change a patch or upgrade Dragonfly, the data the client receives is the same. Besides item ids, keep golden entries written by item **name**. The id of a custom item is its registration order, so even a change of package initialization order changes hundreds of lines in an id-based golden, while a name-based golden stays the same.
+
+A change that moves client data or modifies a patch must leave the golden unchanged. Re-record the golden only for a change meant to alter what the client receives. If the code that reads entries meets a shape different from what it expects, have it panic with the block name, so the problem is caught here first after a Dragonfly upgrade.
+
+## Upstream behavior and how to fix it
+
+| Upstream behavior | Result | How to fix |
+|---|---|---|
+| When a session ends due to a packet handling error, it only leaves a Debug log and disconnects silently | The cause is hard to find | Write an ERROR log and send a Disconnect with the reason |
+| A panic in a world transaction (block ticks, event and packet handlers) kills the process. Only `Do`/`DoAfter` jobs are caught | An error in one world stops the whole server | Catch the panic in transaction execution, log it at ERROR with the stack, and keep the world running |
+| Inventory changes do not mark the chunk as changed | If the same chunk has no other change, the contents of chests, barrels, hoppers and furnaces are not saved | Add a function that only marks a loaded column as changed (no packets or neighbor updates) and call it from each container's `Inventory(tx, pos)` and from the `Tick` of a lit furnace |
+| The hand item read before a block `Activate` is written back after `Activate` | An item put into a block that takes the hand item inside `Activate` is duplicated | Reread the hand item after `Activate` and subtract |
+| Even when a block `Activate` succeeds, surrounding blocks are not resent | A block the client placed by prediction remains as a ghost | Resend the surrounding blocks after a successful `Activate` |
+| A real client does not send the break action even after finishing cracking a custom block | The custom block does not break | The server breaks it itself once the break time passes. While the same block keeps being mined (ContinueDestroyBlock repeating), keep the start time |
+| The crop and seeds dropped when harvesting a fully grown crop copy the fully grown state | Planting gives an instantly fully grown crop | Drop a new item with growth 0 |
+| It takes the ingredients of the recipe the client picked regardless of slot position | A shaped recipe can be crafted in any arrangement | Reject if the items in the crafting grid do not match the recipe shape (anywhere inside the grid, mirrored only when allowed). For recipes that forbid mirroring, send `AssumeSymmetry=false` to the client |
+| The result block state in vanilla recipe data (chest orientation and so on) can differ from the creative list | The client recipe book lists a recipe only when the result matches the creative entry, so some recipes do not show | Send the recipe result's block runtime ID equal to the item's creative entry (when there is only one entry) |
+| Grass and mycelium spread (`spreadDirt`) looks only at light | Grass survives and spreads even under custom solid blocks that do not block light | If a full solid block (`model.Solid`) is above, turn the grass back into dirt and do not let it spread from such dirt (same as vanilla) |
+| There is no setting to choose separately the local address to bind the NetherNet listener to and the public address to announce | A server behind 1:1 NAT or a tunnel announces an address that does not fit | Add a local address (one address to bind and announce) and a public address (announced in place of the local address) to the listener config |
+
+## Optimizations to try in a fork
+
+- Cache the list of chunks that are targets of random and block entity ticks, and recompute only when a loader is added, removed or moved, a chunk is added or deleted, or on `SetTickRange` (force a recompute every 100 ticks as a safety net). Reuse the block entity position buffer.
+- Incremental saving: save modified columns oldest first, up to 16 per second, to split up save stalls (`Save`/`Close` save everything).
+- Encode palette entry NBT once per runtime ID and reuse it.
+- Skip `Put` to LevelDB when the value has not changed (per-key hash). Delete empty subchunks.
+- Cache subchunk network data per column version.
+- Build recipe and creative data once per block registry and share it.
+- When the client is receiving chunks, increase the number of chunks sent per tick (from 4 to 16).
+- Send weather packets only when the value changes.
+- Have a temporary entity type that is not saved, such as display entities, and do not mark the column as modified for those entities.

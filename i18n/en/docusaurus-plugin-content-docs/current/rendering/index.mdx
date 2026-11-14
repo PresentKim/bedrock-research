@@ -1,0 +1,59 @@
+---
+title: Rendering overview
+description: A map and key summary of resource-pack-side rendering (models, animation, materials, particles, textures, sound, Vibrant Visuals, RTX, NetEase paper doll)
+sidebar_position: 0
+sources: [private-research, bedrock-wiki, ms-learn, bedrock-samples, particle-jester, netease-mcdocs]
+---
+
+# Rendering overview
+
+This section covers how Bedrock resource packs produce the picture and the sound. It includes entity, block and item models, client animations and controllers, render controllers, materials and shaders, particles, textures and atlases, sound, Vibrant Visuals (VV) and PBR, RTX, and the paper doll of the Chinese edition (NetEase). The source material is community research from 2025-10-22 to 2026-11-13 (84 notes from community conversations), the Bedrock Wiki, Microsoft Learn, bedrock-samples, the Particle Jester repository, and NetEase documentation.
+
+Notation: `confirmed` means several people confirmed it or it was confirmed by documentation or code, `single report` is a report from one person, and `conflicting` means the reports disagree. Version numbers are game versions, and numbers from 2026 onward (26.30 and so on) use the new numbering scheme.
+
+## Page map
+
+| Page | Contents |
+| --- | --- |
+| [Models and geometry](./models-and-geometry.mdx) | `geo.json` folder and naming rules, locators, culling, mesh models, performance, player model |
+| [Attachables and item rendering](./attachables-and-items.mdx) | Attachable binding, positioning, bows and crossbows, armor, 3D items |
+| [Block rendering](./block-rendering.mdx) | `material_instances`, render method, emission, AO bug, cracks and particles |
+| [Animations and controllers](./animations-and-controllers.mdx) | Client entity linking, state machines, transitions, keyframes, Molang expressions |
+| [Render controllers](./render-controllers.mdx) | `geometry`, `textures`, `materials`, arrays, `part_visibility`, tint, per-team visibility |
+| [Materials and shaders](./materials-and-shaders.mdx) | `.material` syntax and inheritance, emission, translucency, stencil, depth, `material.bin` |
+| [Particles](./particles.mdx) | Particle JSON, entity linking, Molang, script spawning, Particle Jester |
+| [Textures and atlases](./textures-and-atlases.mdx) | Atlases, mipmaps, flipbooks, compositing and tint, color maps, pixel-art shading and color, fonts, glyphs, panoramas |
+| [Sounds](./sounds.mdx) | `sound_definitions.json`, `sounds.json`, animation sounds, server sound definitions |
+| [Vibrant Visuals and RTX](./vibrant-visuals-and-rtx.mdx) | Enabling VV, pack compatibility, PBR texture sets, RTX and BetterRTX |
+| [VV settings files](./vv-settings.mdx) | Color grading, tone mapping, lighting, atmosphere, water, shadows, reflections, HDR |
+| [Local lighting](./local-lighting.mdx) | Point lights and static lights |
+| [Fog and sky](./fog-and-sky.mdx) | VV fog, legacy fog JSON, `/fog`, skybox, dithering |
+| [Paper doll and NetEase](./paper-doll-and-netease.mdx) | International `paper_doll_renderer`, Chinese-edition skeleton models and `netease_paper_doll_renderer` |
+| [Limits, changes by version, open questions](./known-limits-and-history.mdx) | Table of limits and workarounds, changes by version, tools and materials, open questions |
+
+## Key summary
+
+1. **Enabling VV**: If the resource pack `manifest.json` lacks `"capabilities": ["pbr"]` at the **top level** (not inside `header`), the VV option is turned off while that pack is active. A single add-on missing it turns VV off for the whole world.
+2. **PBR**: Put `<color texture name>.texture_set.json` in the same folder as the texture, and write only file names without extensions in the values. In MER, R is metalness, G is emissive, and B is roughness (255 is fully rough); in MERS the fourth channel is SSS.
+3. **Entity emission**: Without VV, use the `entity_emissive_alpha` family (the lower the alpha, the brighter). With VV, use the MER emissive channel, texture_set and the pbr capability.
+4. **Block emission**: Without VV there is no way to make only some pixels of a custom block glow. With VV, use `"emissive": true` in `material_instances` (format 1.21.120+) or MER.
+5. **Mipmaps and atlases**: Flipbooks freezing on the first frame at a distance, stripes, and broken water or lava are mostly caused by mipmaps. Set `num_mip_levels` to 0 (or 3) and use square, power-of-two, multiple-of-16 textures. Since atlas padding was removed in 26.30, stripe bugs have increased (MCPE-240144).
+6. **Entity materials** are documented practically only by the Bedrock Wiki, and they break between versions and under VV. The file name is `materials/entity.material` (no `.json` extension), and inheritance is `"child:parent"`.
+7. **Stencil** is the key to outlines, seeing through walls and portal effects. Vanilla entity shadows use `stencilRef` 1, so use 2 or higher and do not exceed 32.
+8. In a **render controller**, `textures` is always an array and `geometry` is a string. If the shapes are wrong, the entity becomes transparent with only a collision hitbox. A texture array of more than 3 entries caused crashes, so split the render controller.
+9. **Bone and animation names** must be lowercase with no spaces. With spaces or special characters, they appear in Blockbench but do not render in the game.
+10. **Attachables**: Put `"binding": "q.item_slot_to_bone_name(c.item_slot)"` on the root bone, and the geometry format must be 1.16.0 or higher.
+11. **VV settings are per biome**. Defaults for all biomes are overridden with `minecraft:` identifiers such as `minecraft:default_water`.
+12. **Auto exposure, shadow resolution and reflection quality** exist only in files in the game install folder and cannot be changed by a resource pack.
+13. **Tone mapper**: In VV only generic, reinhard, reinhard_luminance, reinhard_luma, hable and aces are available.
+14. **Point lights** are VV-only and work only on blocks (not entities).
+15. **VV's deferred rendering is weak at transparency.** Transparent particles (rain) can raise GPU time from 1.6 ms to over 20 ms.
+16. **Dithering**: Since the GDK release (2025-10-31), entities, attachables and blocks dither and disappear when the camera is close. When someone reports that a model is invisible, first turn it off under Accessibility in the settings.
+17. **Particles**: Always specify `max_particles` (up to 1000) with `emitter_rate_manual`. Without it, the memory leak is large.
+18. **RTX** does not support entity PBR, overlay textures or single-sided rendering. VV and RTX share texture_set, but fog settings are not compatible.
+
+(Source: private-research. Detailed evidence and versions for each item are on the corresponding page.)
+
+## Reading order for this section
+
+To build a model and attach it to the game, read models and geometry, animations and controllers, then render controllers. If you need glowing or transparent effects, read materials and shaders, and find the differences between graphics modes (Simple, Fancy, Vibrant Visuals, ray tracing) on the VV and RTX page. If you start from a symptom, the table of limits and workarounds is the fastest route.

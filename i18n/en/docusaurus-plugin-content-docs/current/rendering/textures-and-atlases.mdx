@@ -1,0 +1,96 @@
+---
+title: Textures and atlases
+description: terrain_texture.json and the terrain atlas, size rules, the 26.30 padding removal, mipmaps, flipbooks, compositing, tint and color maps, fonts, glyphs, UI materials and panoramas
+sidebar_position: 7
+sources: [private-research, bedrock-wiki, ms-learn]
+---
+
+# Textures and atlases
+
+## Concept
+
+Block textures do not go into the game one at a time; they gather into one large image called an **atlas**. A resource pack defines "short name to texture path" with `textures/terrain_texture.json`, puts **padding** between tiles when building the atlas, and makes **mipmaps** (copies with the resolution halved) to prevent blurring at distance. If sizes do not match or padding is insufficient, stripes and grids appear at a distance. This page is the list of those rules and bugs (Source: private-research. For a general explanation, Bedrock Wiki `concepts/texture-atlases`).
+
+```json
+{
+  "resource_pack_name": "my_pack",
+  "texture_name": "atlas.terrain",
+  "padding": 8,
+  "num_mip_levels": 4,
+  "texture_data": {
+    "my_block_tex": { "textures": "textures/blocks/my_block" }
+  }
+}
+```
+
+The key of `texture_data` is the `texture` value of the block's `material_instances`. The `textures` of an entry holds a single string, an array (variants), or an object with `path` and `tint_color` (compositing, see below).
+
+## Atlas and size
+
+- **Size rule**: Textures in the atlas must be square. In a material instance `texture`, an image taller than it is wide is treated as animation frames. Sizes that are not multiples of 16 (34x34, 44x44, 48x48) break the atlas mip chain and make water, lava and wheat break like a grid at a distance, so delete lines one at a time to find the culprit (changing the order can hide it). There is a report that since the 2026-06 update, textures that are not powers of two break the terrain atlas (the water texture). Lines that appear between blocks at a distance are also due to non-power-of-two sizes and mipmaps. Too many sub-textures lower the atlas resolution. `confirmed`
+- **Padding removal (26.30)**: Mojang removed the padding between atlas tiles in Bedrock 26.30 (75% of atlas pixels were padding). As a result, parallel lines on blocks at a distance (mobile, VV off), stripes on water, and edge problems on held blocks became common (MCPE-240144, open as of 2026-09-13). The workaround is to lower `num_mip_levels` in `terrain_texture.json` (default 4, works at 3). For the terrain atlas, `padding` no longer does anything. There is also a report (2026-06-06) that the padding removal applies in the release but not in the Preview. The block texture bleeding in 26.30 appears to be a mipmap bug from the texture loading change. Non-power-of-two sizes such as 66x66 produced grid artifacts and distant lines on the floor in 26.30 (not present around 1.26.13), so use 16, 32, 64, 128. There is a report of texture bugs appearing after updating from 1.26.10.26 to 1.26.30.20. Distant water getting blurry is also a mipmap bug, and turning off mipmaps fixes it but lowers performance.
+- **2026-06 mipmap and atlas bugs**: Changing `num_mip_levels`, `padding` and `texture_name` also changes vanilla. `num_mip_levels` 0 hid water and lava seams. The texture bug appeared only after turning on the pack and rejoining the world, and atlas bleeding showed on cross textures. The Marketplace forbids modifying vanilla files and requires `textures/<studio>/<project>/`.
+- **Other atlas bugs**: Deleting an atlas texture can break animated block textures. White lines in UVs are a texture transfer bug with no workaround (2026-07-27). Black grids seen at a distance or purple-black flashes come from flipbook mipmaps or a missing `terrain_texture` entry. In a pack with large texture array variants in `terrain_texture` (about 300, 492 entries with 1~18 variants each), block textures break at random on all devices. The cause was confirmed to be texture variants, and removing variants stops it. It was reported as MCPE-244074 and Mojang has not fixed it. The `minecraft:web` block texture array gives an "un-weighted textures" warning, and cobwebs have no variants.
+- **26.60**: Small textures stay blurry when first loaded (while loading), and in the 26.60 Preview the 3D crosshair renders oddly at extreme angles (may be anisotropic filtering).
+
+## Mipmaps
+
+- **Settings file** (exists since 1.16): `{ "num_mip_levels": 0, "padding": 8, "resource_pack_name": "<name>", "texture_name": "atlas.terrain", "texture_data": {} }`. `num_mip_levels` needs atlas padding >= 2^levels - 1 (3 for 2 levels). Many packs use level 4. It does not work on servers that turn off global resources. catgamer693 shared a "Better Mipmapping" `.mcaddon` (2026-04-25).
+- **Flipbooks freeze at a distance**: With RTX or VV on, mipmaps decide how far animated (flipbook) textures play. With mipmaps on, animation stopping beyond about 6 blocks and staying on the first frame is an old Bedrock-only bug (RGB sea lantern) and is worse with high-resolution textures. `num_mip_levels` 0 prevents the blur and the loss of distant animation. The VV problem that "the resolution slider changes the render distance of emissive textures" is presumed to have the same mipmap cause. Under RTX, mipmaps can break animated textures. There is also a report that the culling where flipbook block animation freezes on the first frame when the camera moves away (same as kelp) has no solution.
+- **Trade-offs**: There is an opinion that mipmaps help distant objects and that VV has no AA, so without mipmaps aliasing gets bad. Beyond 16x, the distant noise reduction is marginal. Mipmaps blur thin stripes in 16x16 block textures. The distant blur in screenshots is mipmaps, not DLSS. The maximum mip level does not blur nearby textures, so it cannot be used as DOF or motion blur. VV's mipmap distance blur is engine level and cannot be changed by a pack, and only GPU driver texture filtering, custom shaders and TAAU upscaling affect it. The "Better Vibrant Visuals Color Grading" add-on (catgamer693) made animated textures work even at a distance with Reinhard, contrast 1.572, saturation 1.31 and mipmaps off, but was criticized for distant textures being noisy and oversaturated.
+
+## Compositing, tint, color maps
+
+- **`terrain_texture.json` compositing**: `"textures": ["base", {"path": "overlay", "tint_color": "#RRGGBB"}], "additive": true`. Order matters (top to bottom). Under VV (pbr/texture_set files), only the top layer renders, and adding a texture_set file stops the composite layers from merging. Held and dropped items render only `texture_0` (the inventory is normal). It was reported as MCPE-237912 (a duplicate of MCPE-223126), and blocks were fixed by 2026-07-15 but items are unfixed as of 2026-10-14. The VV atlas compositing failure appears only on Fancy when in-game mode switching is turned off, and RTX still fails. There are reports that it works in one pack and not in another, and that the overlay order of items is not fixed (the additive section of Bedrock Wiki `concepts/texture-atlases`).
+- Tinted items such as potions: Add a `tint_color` layer to a grayscale texture (brightness 65, saturation 0, contrast 50).
+- Dyed items such as leather armor: Give `tint_color` and `overlay_color` per atlas `texture_data` entry, and mask the undyed parts with an alpha tint mask TGA (https://wiki.bedrock.dev/concepts/texture-atlases#tint-color ). An alternative is a texture per dye.
+- **Color maps**: The sample position is X = 256*(1-T), Y = 256*(1-T*D) (T temperature, D rainfall). Changing the `textures/colormap` image changes colors, but setting colors directly with client biome definitions is preferred (testimony that Mojang is moving toward direct specification). Per-biome grass, leaf and water tint already exist. A very dark desert color map made side textures look like snow. `grass.png` in `textures/colormap` tints only the top face, and the side overlay stays greenish in a subpack (unresolved). A white color map also removes the tint of falling leaves and vines. Per-variant `tint_color` and HSV adjustment of a custom color map got no answer or were said to be impossible (`unverified`). The color of the falling leaf particle is decided by the Molang variable in bedrock-samples `biome_tinted_leaves_particle.json`.
+- Leaf color preview: Vanilla leaf textures are grayscale. In an image editor, overlay a layer filled with the biome leaf color (for example forest `#59ae30`) with Multiply to approximate the in-game color. The hotbar and carried textures of a block can come from `carried_textures` in `terrain_texture`. A world color filter (gray and so on) requires editing textures one by one (a Python script is possible).
+
+## Flipbooks and animated textures
+
+**Concept**: A flipbook flips through one image of square frames stacked vertically over time.
+
+```json
+[
+  {
+    "flipbook_texture": "textures/blocks/my_lava",
+    "atlas_tile": "my_lava",
+    "ticks_per_frame": 4,
+    "frames": [0, 1, 2, 3, 2, 1],
+    "blend_frames": true
+  }
+]
+```
+
+- The file is `textures/flipbook_textures.json` (not `flipbook_texture.json`). Entries are `flipbook_texture`, `atlas_tile`, `ticks_per_frame`, `frames`, `blend_frames`. It also works on custom block geometry, and the texture must be a vertical strip of **square frames** (x by n*x, for example 96x3456). If not square, it is not detected. For a rotating axis, duplicate a model rotated 45 degrees and alternate them with a flipbook. Flipbook textures are mipmapped at a distance.
+- MER maps are referenced in `texture_set.json`, not `flipbook_textures.json`, and file names must exactly match the texture set entries.
+- For blocks that use texture variants and flipbooks together, match the key names to the alphabetical order of file names, and weights pick the variant. Paintings are entities, so they cannot use flipbooks. Make the vertical strip by setting the canvas height to frame count x frame height or with GIMP's Filter > Map > Tile. For short animations such as muzzle flash, step through a texture array with `q.life_time`.
+- **Animated entity textures**: The model texture size must be the size of one frame (64x64, not 64x256) and the material file name must be `entity.material` without `.json`. Speed is set with `query.life_time * N` in the render controller (180 is about 1 second) (Source: bedrock-wiki `visuals/animated-entity-texture`).
+
+## Names and references
+
+- Vanilla texture names: short grass `tallgrass.png`, dark oak leaves `leaves_big_oak_opaque.png`. The official trailer atlas was only partly leaked (about 50% of block textures, no entity and item textures or animation frames).
+- The wolf collar baby log spam `[Texture][inform]-TextureSet (textures/entity/wolf/wolf_collar_baby_mers) | Specified image could not be found` is a vanilla problem and is solved with a small resource pack that adds the missing file.
+- Custom pottery shards: A colon cannot be used in client entity texture references.
+- Paths and formats: Do not write extensions in texture paths in JSON. Just renaming a .webp file to .png makes a missing texture. Look up vanilla texture names in `item_texture.json` and `terrain_texture.json`. The inventory icon of a block is rendered at runtime (imitate it with a Blockbench isometric screenshot). New files may not appear until restart, so check with the mctools.dev problem checker.
+- `texture_list.json` lets the game skip the directory scan and speeds up loading. If you list only some, textures can go missing, a subpack's texture_list may override it, and listing a nonexistent texture gives no error. `single report`
+
+## Shading and color (pixel art)
+
+This is advice from community artists. It is a mix of taste and opinion, not rules.
+
+- **Shading**: Hue shifting, moving the hue toward the shadows, is the majority opinion, but there is a counterargument that the vanilla apple barely changes hue (355~357 degrees). Use 3~5 colors per material and a light grain, and avoid pillow and pancake shading. Use dark gray or purplish black instead of pure black, and decide the shading order per layer.
+- **Resolution consistency**: Use mixel (differences in pixel density of scaled bones) sparingly, only for faces, eyes and teeth, or raise the resolution. Mixing high resolution with vanilla 16x16 looks awkward. The vanilla face is 8x8, and to make a skin head symmetric, use an even number of pixels.
+- **Block and item textures**: Tile the texture to check seams. Give depth around ores, and make each ore's silhouette different so color-blind players can tell them apart. Repeat a rust-like brownish orange about 15%. Draw several 16x16 icons on one large canvas, and start tools from a silhouette template. Do not put small text in the pack icon.
+- **Palettes and tools**: Palette sites https://lospec.com/palette-list , https://www.blockpalettes.com/palette/57847 , https://blockcolors.app/ are used. Pixel art editors are in [Modeling and texture tools](../tools/modeling.mdx). Common traits of AI-made pixel art are white crosses in glass, a different color per pixel, and irregular pixel sizes.
+
+## Fonts, glyphs, UI materials, panoramas
+
+- **Glyph pages**: Pages before `glyph_E0` (for example `glyph_A0`, `D0`) render oddly and blurry in full-screen, so use pages E and above for custom icons (avoid the `glyph_E0` and `E1` that vanilla uses, especially the upper part of `e1`). Icons look larger in E1 than in D0. To shrink them, enlarge the canvas and shrink the glyph inside the cell. `glyph_00` has a thin font, so to avoid smoothing, switch to an 8x8 grid font. Bedrock glyphs are 256x256 and Java ones 1024x1024, so moving a Java font changes the scale. Glyph generators: mcbeeringi.github.io/apps/mc/glyph_v1.html, darkness9373.github.io/Glyph-Maker.
+- **Replacing the default font**: Put the glyph atlas at `<resource_pack>/font/default8.png`. The default font file in the game is default8, and other Unicode ranges are glyph pages such as `glyph_E0` and `glyph_E1`. TTF affects only Ore UI. High-resolution custom fonts are blurry at small GUI scales. There is a report that the `font/emoticons.json` chat shortcodes do not work. Guide: https://wiki.bedrock.dev/text/custom-emojis . The MinecraftTen font is handled similarly with a generation script.
+- **Custom ttf**: Register it in `font/font_metadata.json` (keep the vanilla entries, keys `font_format: "ttf"`, `font_name`, `font_file`, `lowPerformanceCompatible`) and then use that name in `font_type`. It works only in global resource packs, and a font changed under the same name and path stays in the cache. Examples of scale and ttf definitions are in the ZtechNetwork/MCBVanillaResourcePack repository. There is also a "Self-intersecting" ttf error thread.
+- **UI materials**: Only existing UI materials can be edited (`materials/ui.material`). There is a case where the `gradient_renderer` (`color1`, `color2`, `fill`) material was edited to invert screen colors. `anim_type: color` does not tween gradient colors, so animate alpha between two gradients. Hearts are an engine renderer and cannot be reimplemented, and the paper doll and overriding `player.entity.json` work but break other packs. Nineslice takes integers, and the wiki's `[int,int]` form does not work.
+- **UI texture locations**: Hearts and HUD are in `textures/ui` (hardcore in `textures/ui/hardcore`), and `textures/gui/gui.png` and `icons.png` are not used. Others are `textures/ui/highlight_slot`, `ScrollBox.png`, `textures/items/spawn_eggs` and `textures/ui/wither_effect.png`. Ore UI textures (hbui) are not in the vanilla resource pack. When drawing HUD icons or slot borders as entities, `entity_alphatest` or `entity_alphablend` is enough. Animated GUI images are made with texture swaps, and many images burden weak phones.
+- **Screen filter that stays in F1**: Apply a new `live_player_renderer` to the screen content with a paper doll and JSON UI, and add to the client player a large box that is visible only in the UI (paper doll). There are problems on the panorama and inventory screens. The "All Blend Modes" thread has a blend mode demo add-on.
+- **Panorama**: Take it at 90 FOV, 1024x1024, F2, at noon or midnight. Changing the window resolution needs a Python script and a square window. There is also a report that FOV 92 was best manually. The vanilla panorama has a slight tint difference that cannot be fixed. The panorama rotates only on the default start screen, and a static panorama or panning upward needs UI editing (no answer). The hard-coded new panorama (Dungeons 2 promotion) later went back to the original. There is BlockMotion Studio, which turns MP4/GIF into an animated menu background `.mcpack`. For HDR panoramas see [VV settings files](./vv-settings.mdx).

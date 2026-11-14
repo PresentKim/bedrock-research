@@ -1,0 +1,137 @@
+---
+title: Community reports and cross-checks
+description: A cross-check table (D-01~D-28) matching the guide against a year of community UI conversations, and community UI notes (current state, limits, version timeline, open questions).
+sidebar_position: 16
+sources:
+  - private-research
+  - repo-guide
+  - cinnabar
+  - repo-ore-ui-loading
+  - private-research
+---
+
+This page combines two materials. The first part is a cross-check table (D-01~D-28) that matches guide rules and community reports on the same topics, and the latter part and the three pages in the same folder are notes that organize UI topics from the past year (2025-10-22 ~ 2026-11-13) of conversations on the Bedrock OSS and community servers. The original conversations are not published, and these notes rewrite the conversations by topic.
+
+The tag at the end of a community item is a work unit id and a date, and `[supplement 2026-10-28]` is an item added by directly reading conversations after 2026-10-23. The reliability markers are as follows: *confirmed* means confirmed by several people, *single report* is one person's report, *unverified* is a guess or weakly supported content, and **conflicting** means the reports disagree. The original is community conversation, so verify important content with official documents or direct tests before use. If the guide's `measured` and a community report differ, follow the guide, but if the community side has version information, the version may have changed.
+
+## Guide and community cross-check
+
+This is the result of matching guide rules and community reports on the same topics. **Same** means independent evidence reached the same conclusion, **reinforcement** means the community added facts or version information the guide lacks, and **different** means still divided. Do not assert a "different" before confirming in game.
+
+### 16.1 Things that confirmed each other
+
+| Topic | Guide | Community | Conclusion |
+| --- | --- | --- | --- |
+| `'%.Ns'` is in bytes, `§` 2 bytes, Hangul 3 bytes | EXP-09, EXP-24 | *confirmed* (the claim of `§` 3 bytes was corrected by measurement) | Confirmed |
+| No `>=` and `<=` | EXP-03 | *confirmed* | Confirmed |
+| Label `localize` default `true` | TXT-01, C-32 | Same (points out the wiki typo) | Confirmed |
+| `visible: false` also costs creation and parsing, `ignored` and length-0 factories are cheap | COL-10~12 | Same, many performance figures | Confirmed |
+| A server form button must have `collection_details` on itself | COL-04 | *confirmed* | Confirmed |
+| `header`, `label` and `divider` shift the form collection index | COL-19 | Same (from 1.21.x) | Confirmed |
+| `ignored` sees only variables of ancestor scopes | FILE-34, FILE-43 (NB) | Same | Confirmed |
+| `variables` and `ignored` are at load (creation) time, `#binding` not allowed | FILE-13, FILE-16 | Same | Confirmed |
+| The HUD title is one channel, overwritten by other add-ons | HOST-14 | Same, if several in the same tick only the last | Confirmed |
+| Stack panel children ignore anchors and `offset` | LAY-38 | Same | Confirmed |
+| The meaning of `%cm`, `%sm` and `default` | LAY-03, LAY-37 | Explanations disagree | Sorted out by engine code (LAY-37) |
+| Writing `bindings` on a control inheriting a template removes the inherited bindings | FILE-37 | Same (the `scroll_grid` case) | Confirmed |
+| `replace` of the same target after `remove` fails | MOD-17 | Same | Confirmed |
+| String division is dangerous | EXP-21, EXP-32 | Many crash reports | Do not use |
+| Custom URLs do not open | INP-24, INP-34 (NB) | Same (QR workaround) | Confirmed |
+| `paper_doll_renderer` cannot draw custom geometry | ANI-35, ANI-36 (NB) | Same | Confirmed |
+| Ore UI cannot be changed with a resource pack | ALT-11, ALT-15 (OL) | Same | Right only for plaintext packs. A local pack with an empty `content.zipe` in its root (without a server) and a pack the server sends encrypted change the in-game Ore UI pages (measured). Even a plaintext pack changes the look of in-game buttons and `pack://` textures (measured) |
+| The crosshair moved to `hud_crosshair_overlay.json` | ANI-07 | Observed 2026-10-15 | Confirmed |
+| Numeric item IDs shift with custom items | ANI-06, C-33 | Same, the insertion point moved from 256 to 849 in 26.40 | Confirmed, recheck the range per version |
+
+### 16.2 What the community reinforced (candidates for guide inclusion)
+
+| ID | Contents | Strength of community evidence | Related rule |
+| --- | --- | --- | --- |
+| D-13 | **The preserved title (latch) pattern works.** Several people confirmed it as the standard of the HUD data channel through 2026-07 | *confirmed* | BND-18 (`unverified` -> candidate to raise) |
+| D-14 | Hidden grid items also take up space | Several reports | LAY-31 (`unverified` -> candidate to raise) |
+| D-04 | In 1.21.130 (2025-12), dynamic N (`('%.' + #n + 's')`) and formats other than `'%.Ns'` were blocked. Put the format string on the left | *confirmed* (not in the changelog) | EXP-09, EXP-25 |
+| D-01 | The `* 1` conversion stopped in turn around 1.21.130, 2026-01 and 1.26.30 | Several reports | EXP-16, C-04 (supports the version change hypothesis) |
+| D-03 | Put a real number in a JSON variable (`"$k": 0.01`) and multiply. `(#x / 1.0)` crashes | Several reports | EXP-18, EXP-27 |
+| D-23 | Marketplace add-ons cannot modify vanilla UI files (world templates can). The `%` assert is a cause of Marketplace certification failure | Several reports | EXP-02, chapter 12 |
+| D-24 | `$container_title` is compared as a copy outside `variables`. In the preview, custom block entity containers also support `title` | Several reports / preview | HOST-19, FILE-28 |
+| D-25 | How to use the renderers `live_player_renderer`, `live_horse_renderer` (`#entity_id` is a string), `3d_structure_renderer` and `gradient_renderer` | Many reports | ANI-05 |
+| D-26 | `/reload all` rereads JSON UI but often fails after 1.21.130 | Several reports | DBG-18 |
+| D-27 | The 32-bit integer limit, big entity IDs as strings | Reports | EXP-30 |
+| D-28 | The vanilla RP is distributed as `.brarchive` from 26.50 | *confirmed* | Chapter 13 how to compare against vanilla |
+
+### 16.3 What still differs
+
+| ID | Topic | Guide | Community | Current judgment |
+| --- | --- | --- | --- | --- |
+| D-02 | Number conversion `+ 0` | `(#v + 0)` is concatenation (`'350'`), `(0 + #v)` and `(#v - 0)` convert [EXP-16][EXP-31] | Recommends `(0 + #str)` or `(#str + $zero)` (`"$zero": 0.0`) | Use `(0 + #v)` and `(#v - 0)` with the number on the left. Confirm `(#v + $zero)` in game before use |
+| D-05 | `modifications` of several packs | Accumulates in pack order [MOD-02] (measured) | For the same vanilla element, only the upper pack wins (several reports) | Follow measurement, but re-measure whether the reported cases mixed in property overrides or `replace` |
+| D-06 | The scope of an error in a file | Definitions read up to before the error are loaded [FILE-30] (CN) | The whole file is ignored | Either way, assume the latter part of that file does not exist and fix the error |
+| D-07 | The `%` operator | Do not use. Assert in development builds [EXP-02], silent in release [EXP-46] | Chest-UI's `% 65536` fixed version works as *confirmed*, and it is also a cause of Marketplace certification failure | They are not contradictory. It runs in release but raises an assert. Change to an expression without `%` |
+| D-08 | String `-` | Erases **every** occurrence [EXP-12] | Most say "all", one person says "only the first" | Assume it erases all and do not put the delimiter in the body |
+| D-10 | String `<` and `>` | No rule | Lexicographic comparison (one report) | Check before use |
+| D-11 | `binding_condition` on a view binding | `always` and `visible` were effective on a layout `#visible` [BND-31][BND-32] (measured) | A report that it cannot be put on a view binding | Follow measurement |
+| D-12 | `resolve_ancestor_scope` | Do not use [BND-01] | Reports of working and not working are mixed | Do not use |
+| D-15 | A static `offset` binding | Does not work [LAY-05] (measured), CN says it works [C-44] | Reports of working and not working are mixed | Use spacer size or `#anchored_offset_value_*` |
+| D-16 | The `#alpha` binding | Only 0 and 1 apply (S12), CN takes the number as is [C-45] | Unstable, for example 0.75 not showing, replaced by `#color` | Make intermediate opacity with animation or color |
+| D-17 | Button focus | Vanilla `common.button` has focus on so the first button is drawn hovered on phones [INP-32] | Raw buttons have `focus_enabled` default false, needed for controller navigation | Both are right. The difference is template versus raw button |
+| D-18 | `$touch` in server forms | A global platform variable [FILE-29] | One report that it cannot be used in server forms | Check when using in a server form |
+| D-19 | Number of NPC dialogue buttons | Both the 6-button limit and extending to 9 with NBT are unconfirmed [HOST-24] | "Up to 6" and "limit lifted by NPC NBT" are both reported | Design with 6 as the default |
+| D-20 | The `data_control` position of the preserved title | No rule | At the root (majority) / as a child of the bar image (one tutorial) | Put it at the root |
+| D-21 | Translation with arguments `translate('key', #a)` | No rule | Reports of working and not working are mixed | Do not use. Assemble lang keys [TXT-09] |
+| D-22 | `#anchored_offset_value_*_absolute` | No rule | Reports of existing and not existing are mixed | Use ratio values |
+
+D-09 (string division) was merged into 16.1. No guide rule was changed by this cross-check. The order is to confirm the candidates to raise (D-13, D-14) and the reinforcement candidates once in game and then reflect them in the guide chapter files.
+
+## Key summary
+
+1. **The status of JSON UI**: Mojang has never officially supported JSON UI and has no plan for official documentation. It is being phased out (deprecated) and replaced by DDUI/Ore UI. Even so, as of 2026-10, JSON UI is the only means of decorating the HUD, server forms and container screens. It is not versioned, so it often breaks with each release.
+2. **DDUI runs on Ore UI**: DDUI (`CustomForm` + `Observable*` of `@minecraft/server-ui`) is based on Ore UI (Coherent Gameface web technology), so it cannot be decorated with a JSON UI resource pack. An open form can be updated in real time, but size, background, position and font cannot be changed. It entered 26.30 stable (2026-06-16).
+3. **JSON UI cannot read script state directly**: it cannot read scoreboard values, dynamic properties, tags, Molang or health. The script sends data as title/subtitle/actionbar/chat text or form title/body/button text, and JSON UI parses that string. There is also no route to send events from the UI to the script (only form submit).
+4. **The preserved title pattern is the standard of the HUD data channel**: in a size-0 `data_control` panel, bind `#hud_title_text_string` once more with `binding_condition: "visibility_changed"` + `binding_name_override: "#preserved_text"`. Then the value remains after the title disappears (wiki `preserve-title-texts`).
+5. **String operations**: `'%.Ns' * #text` (cuts the first N **bytes**), `-` (removes a substring) and `+` (concatenation) are practically all. For operators only `and`/`or`/`not`/`=`/`<`/`>` can be used and there are no `<=`/`>=`/`==`/`&&`/`||`. `§` is 2 bytes, and Hangul and emoji are 3 bytes or more.
+6. **String multiplication was restricted in 1.21.130 (2025-12)**: only the form `'%.Ns' * #x` with a literal N remains, and dynamic N (`('%.' + #n + 's')`) and other printf formats were blocked. Number conversion with `* 1` also became unstable. For now it is safe to use `(0 + #str)`.
+7. **Crash risk**: the game dies if a wrong value goes into `#size_binding_x/y` or `#anchored_offset_value_*`, if you divide a string, or if you do arithmetic on a title without the prefix. There are also cases where a world was corrupted. Use a superflat test world and run arithmetic only when the prefix matches.
+8. **`_ui_defs.json` registration**: a new UI file must be registered in `ui/_ui_defs.json`. If there is even one error in a file, the whole file is ignored as if it did not exist. Turn on the Content Log GUI and check.
+9. **`modifications` can be used only on vanilla elements**: it does not apply to elements you made yourself or elements of other packs. If several packs modify the same vanilla element, only the upper pack wins.
+10. **Server form buttons**: without `{"binding_type":"collection_details","binding_collection_name":"form_buttons"}` and `collection_index` on a button, `selection` on the script side becomes undefined. When `button.form_button_click` is pressed, the form always closes.
+11. **Form routing**: put a `§` flag prefix in the form title and choose the layout by title in `third_party_server_screen`/`server_form_factory`. `visible:false` still loads the element, so when there are many, do not create at all with factory `#collection_length` 0/1 or `ignored`.
+12. **Custom container UI (Chest UI)**: it is made by matching an entity with `minecraft:inventory` by name key. A block cannot directly show a custom UI, but a custom block entity container can change the UI per container by distinguishing them with `title` ([notes by screen](./community-reports-screens.mdx)). Item icons are rendered with the aux id (`id * 65536 + data`), and the aux id changes with the version and installed add-ons.
+13. **Performance**: the main cause of lag is bindings, not layout. Use `binding_condition: "once"`, `ignored: true` (cheaper than `visible:false`), page splitting, and grids (even 10k buttons load instantly). Reduce factories and avoid binding loops.
+14. **Same-tick collisions**: if you send a title several times in one tick, only the last remains. If other add-ons use the same title/actionbar, they overwrite each other. Use a queue and send one per tick, or bundle values into one string.
+15. **Marketplace**: add-ons cannot touch vanilla UI files. World templates can and mostly use NPC screens. It was also reported that DDUI cannot be used on the Marketplace (2026-04).
+
+## UI system status and roadmap
+
+### JSON UI
+- **Not officially supported, to be deprecated**: Mojang (relayed through the community) said JSON UI is unofficial and deprecated and that menus are being replaced one by one. There is no plan for official documentation. There is a report that there was never a JSON UI team. *confirmed*
+- **A dissenting opinion (2025-12)**: there was also the opinion that "JSON UI is still updated so it is not deprecated". Judging by later 2026 announcements and circumstances, gradual replacement is right. **conflicting** (differs by time)
+- **Outlook**: the community expects it to be deprecated within 1~3 years. It expects Ore UI replacing all screens around 2028. Mojang said it is not hurrying the Ore UI transition so as not to break Marketplace content. *unverified* (community estimate)
+- **Screens already changed to Ore UI**: out-of-game screens such as settings, the world list, the loading screen and the death screen changed to Ore UI. The button id that used to open the old settings now opens Ore UI settings. The 2026-01 preview replaced menus and settings with server "treatments" (kill switch). The gameplay HUD and server forms keep backward compatibility to a degree.
+- **Old min engine versions**: in worlds with a low pinned min engine version, JSON UI keeps working. Marketplace maps use this method. It is unknown whether old JSON UI packs will keep working in the future.
+- **China edition**: the Chinese edition has more JSON UI features. *single report*
+
+### Ore UI
+- **Identity**: a React-based web UI (github.com/Mojang/ore-ui). It runs on V8 on top of Coherent Gameface (Cohtml). One minified ~5 MiB React bundle was pointed to as a cause of slowness. Gameface does not support float. The 2026-10 stable UA is `Cohtml/2.2.8.1 (Windows; Native)` and the address is `ui://hbui/gameplay.html`.
+- **Relation to JSON UI**: you cannot modify or bypass Ore UI screens with JSON UI. The two layers can be stacked on each other. Ore UI supports TTF/OTF, GIF and video. There is an Ore UI-only font `mcFive`. A trusted resource pack can replace Ore UI files (the Ore UI modification section of the [notes by screen](./community-reports-screens.mdx)).
+- **26.60 stable (2026-10-27)**: Ore UI loading became much faster and there was a reaction that it is "similar to JSON UI". There is a report that button sounds are late on mobile. [supplement 2026-10-28]
+- **Forcing the old UI**: you can force the old UI with mods such as LeviLauncher or "Force Close OreUI". There is a case where the old world creation screen kept working by turning off Ore UI with a separate mod, or by putting the VDX legacy console UI pack near the top of the pack list. *single report*
+- **CSS and memory**: the CSS limits of the Ore UI renderer are in the community reports section of [Page environment](../ore-ui/page-environment.mdx). There is an explanation that memory spikes when opening a screen because it is a web runtime embedding V8.
+- **New main menu (seen 2026-11-12)**: a main menu with Marketplace ads, a Realms banner, servers and recent worlds, and without logo letters was seen (version unknown). It appears to be hardcoded Ore UI, and there is a mention that ads can be removed with an 8Crafter Ore UI Customizer plugin. *unverified*
+
+### DDUI roadmap (statements by Mojang's darknavi, dates undecided)
+- **What was said**: the modal form is only the first stage and layout files will be opened to creators. Layout and style will be split into separate files so that a style pack can contain only styles and images. Container (chest-like) components can be put in custom screens, and entity renderers/paperdoll are "not unreasonable". The HUD is also planned. JSON UI and DDUI will coexist for a while. *confirmed* (Mojang statement)
+- **Community summary**: layouts come before styles. Creators will not write CSS directly (g07hn: "nope"). Styles will follow web standards. There is no schedule. A Mojang developer said "stage 1 = simple modal form, stage 2 = full layout", and custom RP panels are internal-pack only until stage 2.
+- **DDUI definition**: DDUI is not Ore UI but a format running on Ore UI in which add-ons describe custom screens ("JSON UI 2.0 running on Ore UI"). The server sends JSON-shaped data as a facet to bind. The layouts are in game files (`hbui`, the resource pack `ddui` folder). There is an evaluation that its performance is worse than JSON UI. The wiki put DDUI under scripting and wrote that it can be moved.
+- **Relation to server-ui forms**: there was an answer that DDUI does not directly replace server-ui forms and server-ui will be deprecated in the distant future. There is also an opinion that the official DDUI style will be a JSON component registry form rather than JS/CSS. *unverified* (opinion)
+
+### Marketplace rules
+- **Add-ons vs worlds**: add-ons cannot modify vanilla UI files, and world templates can (mostly NPC screens). Custom JSON UI is accepted in worlds, mashups and dynamic worlds and not accepted in add-ons. The lack of custom UI is counted as a limit of Marketplace content. So Marketplace packs imitate UI with entities and render controllers.
+- **@bedrock-core/ui certification**: the modulo operation `#form_button_texture % 65536` of the button router causes an assert and fails certification. In this case, remove `item_renderer` and put all RP assets in your own pack.
+- **DDUI is not allowed on the Marketplace**: a report as of 2026-04. *single report*
+
+## Structure of the community UI notes
+
+The rest of the community UI notes are split across the three pages below. This page holds only the key summary and the system status.
+
+- [Notes by screen](./community-reports-screens.mdx) (server forms, containers and Chest UI, vanilla screen tips, Script API forms, DDUI, Ore UI modification, renderers).
+- [Data channel, HUD and expression notes](./community-reports-hud-and-expressions.mdx) (development workflow, file structure, bindings, the expression language, preserved title, HUD, layout).
+- [Limits, versions and tools notes](./community-reports-versions-and-bugs.mdx) (known limits, changes by version, tools and material, open questions).

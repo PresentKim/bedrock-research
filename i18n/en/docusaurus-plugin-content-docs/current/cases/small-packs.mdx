@@ -1,0 +1,91 @@
+---
+title: "Small public packs"
+description: "Techniques and licenses of six repositories: a pause screen rebuild, an animated pack icon, a sidebar, a 3D axis crosshair, hiding the achievements text, and a string escape tool"
+sidebar_position: 14
+sources:
+  - fumeko-packs
+  - sidebar-mcbe
+  - sidebar-hud
+  - crosshair-xyz
+  - hide-achievements
+  - json-escape
+  - repo-guide
+---
+
+## What it is
+
+This is an analysis of 5 small public JSON UI packs and 1 tool. The license differs per item. After opening `LICENSE` in each clone, only `MCBE-Crosshair-XYZ` (MIT, 2024), `Hide-Disabled-Achievements` (MIT, 2025), and `JSON-Escape` (MIT, 2025) have the file, and the other three have no LICENSE file. For fumeko-ts the README only says "usable if you include credit or a link", Sidebar-Mcbe's manifest says CC BY-ND 4.0 (no distribution of modified works), and Sidebar-HUD has no notice. So only the three MIT ones are excerpted briefly, and for the rest only facts are summarized (Source: cs-fumeko-packs, cs-sidebar-mcbe, cs-sidebar-hud, cs-crosshair-xyz, cs-hide-achievements, cs-json-escape).
+
+| Abbreviation | Repository | Content date | Target | Value |
+| --- | --- | --- | --- | --- |
+| SP-fu | fumeko-ts/example-texture-packs-mcbe (`7c4e1b5`) | 2025-12-03 | Pause pack, pack icon pack (1.21.0~1.21.132) | Medium |
+| SP-da | DeathAruban/Sidebar-Mcbe (`686e4c2`) (caution) | 2024-03-08 | min 1.19.60, README 1.20.71 | Low (old version) |
+| SP-tw | TrippleAWap/Sidebar-HUD (`9e71842`) (caution) | 2023-07-01 | min 1.19.50 | Low (old version) |
+| SP-xyz | RedStoneCraftGG/MCBE-Crosshair-XYZ (`91e8402`) (caution) | 2024-11-14 | min 1.17.0, "old abandoned project" | Low |
+| SP-ach | mittens4all/Hide-Disabled-Achievements (`2086c7b`) | 2025-09-09 | 1.21.100+ | Low |
+| SP-esc | RedStoneCraftGG/JSON-Escape (`94f91c3`) | 2025-03-21 | Tool | Low |
+
+"Time of working evidence" is the date the pack contents last changed (a HEAD date where only the README changed is not evidence). The (caution) mark lowers the evidence level because the pack predates 1.21.
+
+## SP-fu: rebuilding the pause screen
+
+In `custom_pause_ui.mcpack`, `ui/pause_screen.json` (604 lines) redeclares `pause_screen_content` wholesale at the same path and adds `ui/global.atemp` and `ui/player_list_item.atemp`. The manifest `description` is `"§z"` (an invisible description).
+
+- **The `.atemp` extension**: `_ui_defs.json` registers the `.atemp` files and the screenshot shows player list rows drawn, so they were read regardless of the extension (proposed FILE-39).
+- **Player count display (the last grid cell)**: inside `player_count_grid_holder` (size `[180, 12]`, `clips_children: true`) it attaches a `collection_name: players_collection` grid at `bottom_left` so only the last row is visible, and stamps `('players online: ' + (#collection_index + 1) + '§z')` in the cell label. It is a way to show the length of a collection for which the engine gives no count (proposed COL-33).
+- **Search filter**: each row cell reads the name `$text_edit_text_control: "search_bar_text_value"` of the search box `common.text_edit_box` with `source_control_name` to get `#item_name`, first strips special characters from the gamertag, and sets `#visible` with a contains check. When the input is empty everything is visible (proposed INP-25).
+- **World name**: it removes the front part with `(#players_list_title - 'Players in ')`, which is right only when the vanilla wording is English (TXT-01).
+- **Realms notification count**: `property_bag {"#realm_count_true": "30+", "#realm_count_false": "#realms_unread_story_count"}` + `('#realm_count_' + (... > 30))` does a dictionary lookup. The false-side value is again `'#name'`, so it expects a double lookup, but Cinnabar has no second lookup (measurement needed).
+
+In `animated_pack_icon.mcpack`, `ui/resource_packs_screen.json` and `manifest_validation_screen.json` redeclare the vanilla `icon_image` **without a namespace** at the same path (FILE-05) and add one more child image. The image is `texture: "pack_icon_animated"` (a PNG + Aseprite JSON at the pack root, a 14×196 vertical sheet with 14 frames at 50 ms per frame), `uv: {anim_type: aseprite_flip_book}`, and `uv_size [14, 14]`. It is visible only when the collection `#name` is the pack name, and `ignored` keeps it from being created anywhere other than the selected and usable lists. The README limits it to "v1.21.0 - v1.21.132", presumably because the screen later changed to something other than JSON UI.
+
+## SP-da, SP-tw: scoreboard sidebar (caution)
+
+- SP-da registers **only one file, `config.json` at the pack root**, in `_ui_defs.json` (a real case of registering outside `ui/`, FILE-25, in the 1.20.71 era). The `component_texture_sidebar` in `config.json` is a base definition holding only variables, and `scoreboards.json` redeclares the vanilla definition with a different base as `scoreboard_sidebar@sidebar_ui.component_texture_sidebar`. When the sidebar objective's display name `#objective_sidebar_name` is `'da.aru.logo'`, `'da.aru.anim'`, or `'da.logo.inv'`, the look changes by an expression, so **the scoreboard objective name becomes a channel from the server to the UI** (proposed HOST-42). The logo animation chains 8 steps with `anim_type: uv` and `from = to` through `next` in a circle and plays a 5-frame sheet back and forth (proposed ANI-33).
+- SP-tw redeclares `hud_title_text` at the same path and breaks the vanilla fade-in and `destroy_at_end` chain with `"alpha": 1` so a title stays until the next title. It loses the vanilla title display completely and competes with other HUD packs, so the approach of adding one more factory is preferred (proposed HOST-41).
+
+## SP-xyz: 3D axis crosshair (caution)
+
+`ui/hud_screen.json` inserts `live_player_renderer` (`type: custom`, size 13×13) into `root_panel` with `modifications insert_front`, and adds the render controller `controller.render.cxyz` to `entity/player.entity.json` with the condition `query.is_sneaking && !variable.is_first_person && query.is_in_ui && ...`. The bone rotation of the axis geometry uses `query.camera_rotation`. When crouching, a 3D axis that turns with the camera direction is drawn in place of the small player renderer in the HUD. It is a **way to make a UI shape from the entity rendering side instead of JSON UI** (proposed ALT-15, `{working pack, unverified}`). It uses an uppercase `"Bottom"` as an anchor value, a word not among the 9 vanilla anchor values, so its interpretation was not confirmed.
+
+## SP-ach: hiding the achievements disabled text
+
+It removes the "achievements disabled" text on the settings screen in two ways. First, it puts `options.achievementsDisabled=` (an empty value) in 29 `texts/*.lang` files (a file is needed per language). Second, it makes the text background texture `text_label_box.png` transparent, and the other vanilla controls that used the same texture are reconnected to the original copy with a **path key** in 4 UI files at the same path.
+
+<Excerpt src="hide-achievements" title="Hide-Disabled-Achievements, controls_section.json" path="RP/ui/settings_sections/controls_section.json">
+
+```json
+{
+  "keymapping_item/option_info_label_control": {
+    "texture": "textures/ui/text_label_box_original"
+  },
+
+  "gamepad_mapping_item/option_info_label_control": {
+    "texture": "textures/ui/text_label_box_original"
+  }
+}
+```
+
+</Excerpt>
+
+When changing a shared texture, copy the original under another name such as `_original` and reconnect only the controls you do not want to change to the copy with a path key (proposed MOD-22). There are 7 places where a path key is used to reconnect a texture. The manifest dresses its name and description to look like a default pack so it is inconspicuous.
+
+## SP-esc: JSON-Escape
+
+A tool that turns JSON strings into `\uXXXX` with `main.py`, `main.go`, and `main.html` to make them hard to read. It has no JSON UI technique. It has two bugs. Characters outside the BMP (emoji) are written with `hex(ord(c))[2:].zfill(4)`, which gives **five digits**, so `ὠ0` is read as `ὠ` + `0` and breaks, and they should be written as surrogate pairs. Line-by-line comment removal is `line[:line.find('//')]`, which also cuts **a `//` inside a string** (URLs and so on). UI files allow comments, so there is no need to remove them anyway (FILE-30, proposed FILE-40).
+
+## Relation to our rules
+
+| Rule ID | Relation |
+| --- | --- |
+| FILE-25, FILE-39 (proposed) | Registration outside `ui/` (`config.json`), the `.atemp` extension |
+| FILE-05, FILE-20, MOD-22 (proposed) | Redeclaration without a namespace, reconnecting textures with path keys |
+| COL-10, COL-33 (proposed), INP-25 (proposed) | Space of hidden rows, count via the last grid cell, search filter |
+| HOST-41, HOST-42 (proposed), ANI-33 (proposed) | Constant-alpha title, objective name channel, ping-pong UV |
+| ALT-15 (proposed), ALT-13 | A `query.is_in_ui` render controller, JSON UI edits to the resource pack screen work only up to 1.21.132 |
+| TXT-01, TXT-21 (proposed, C-63) | English-only prefix removal, emptying a lang key (a single-space value is a conflict) |
+| FILE-30, FILE-40 (proposed) | Comments, `\u` escapes |
+
+## Items that need measurement
+
+Whether a second lookup happens when a dictionary value is again `'#property'`, whether rows hidden by search take space in a stack, whether registering `.atemp` and a root `config.json` is read in 26.x, whether the resource pack screen after 1.21.132 uses `resource_packs_screen.json`, whether the `query.is_in_ui` condition and the uppercase `"Bottom"` anchor work in the current version, and whether a constant-alpha redeclaration keeps the title.

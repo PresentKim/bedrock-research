@@ -1,0 +1,519 @@
+---
+title: Entity component reference (6/23)
+description: 6 MS Learn component pages (minecraft:entity_sensor ~ minecraft:exhaustion_values). Property tables and sample JSON as in the original.
+sidebar_position: 105
+sources:
+  - ms-learn
+---
+
+# Entity component reference (6/23)
+
+This page carries the component pages of MS Learn (MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0). IDs, property names, types, default values and JSON are as in the original. The full list is in the [index](./entity-index.mdx).
+
+## minecraft&#58;entity_sensor
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_entity_sensor.md`)
+
+A component that owns multiple subsensors, each one firing an event when a set of conditions are met by other entities within the defined range.
+
+### Entity Sensor Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| find_players_only | false | Boolean true/false | Limits the search to Players only for all subsensors. |  |
+| relative_range | true | Boolean true/false | If true the subsensors' range is additive on top of the entity's size. |  |
+| subsensors | *not set* | Array of Subsensors items | The list of subsensors which sense for entities and emit events when all their conditions are met. | Parrot: `[{"event":"minecraft:on_riding_player","event_filters":{"all_of":[{"test":"is_riding","operator":"equals","subject":"self","value":true},{"test":"has_component","operator":"equals","subject":"self","value":"minecraft:behavior.look_at_player"}]},"range":[2,2]}]`, `[{"event":"minecraft:on_not_riding_player","event_filters":{"all_of":[{"test":"is_riding","operator":"equals","subject":"self","value":false},{"test":"has_component","operator":"not","subject":"self","value":"minecraft:behavior.look_at_player"}]},"range":[2,2]}]` |
+
+#### Subsensors
+The list of subsensors which sense for entities and emit events when all their conditions are met.
+
+
+##### Subsensors Properties
+
+**JSON path:** `subsensors`
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| cooldown | -1 | Decimal number | How many seconds should elapse before the subsensor can once again sense for entities. |
+| event | *not set* | Minecraft Event Trigger | Event to fire when the conditions are met. |
+| event_filters | *not set* | Minecraft filter | The set of conditions that must be satisfied to fire the event. |
+| maximum_count | -1 | Integer number | The maximum number of entities that must pass the filter conditions for the event to send. |
+| minimum_count | 1 | Integer number | The minimum number of entities that must pass the filter conditions for the event to send. |
+| range | [10, 10] | a, b coordinate array | The maximum horizontal and vertical distance another entity can be from this and have the filters checked against it. |
+| require_all | false | Boolean true/false | If true requires all nearby entities to pass the filter conditions for the events to send. |
+| y_offset | 0 | Decimal number | Vertical offset applied to the entity's position when computing the distance from other entities. |
+
+##### cooldown
+
+How many seconds should elapse before the subsensor can once again sense for entities. The cooldown is applied on top of the base 1 tick (0.05 seconds) delay. Negative values will result in no cooldown being used.
+
+
+### Samples
+
+##### [Parrot](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/parrot.json)
+
+At /minecraft:entity/component_groups/minecraft:parrot_not_riding_player/minecraft:entity_sensor/: 
+
+```json
+"minecraft:entity_sensor": {
+  "relative_range": false,
+  "subsensors": [
+    {
+      "event": "minecraft:on_riding_player",
+      "event_filters": {
+        "all_of": [
+          {
+            "test": "is_riding",
+            "operator": "equals",
+            "subject": "self",
+            "value": true
+          },
+          {
+            "test": "has_component",
+            "operator": "equals",
+            "subject": "self",
+            "value": "minecraft:behavior.look_at_player"
+          }
+        ]
+      },
+      "range": [
+        2,
+        2
+      ]
+    }
+  ]
+}
+```
+
+At /minecraft:entity/component_groups/minecraft:parrot_riding_player/minecraft:entity_sensor/: 
+
+```json
+"minecraft:entity_sensor": {
+  "relative_range": false,
+  "subsensors": [
+    {
+      "event": "minecraft:on_not_riding_player",
+      "event_filters": {
+        "all_of": [
+          {
+            "test": "is_riding",
+            "operator": "equals",
+            "subject": "self",
+            "value": false
+          },
+          {
+            "test": "has_component",
+            "operator": "not",
+            "subject": "self",
+            "value": "minecraft:behavior.look_at_player"
+          }
+        ]
+      },
+      "range": [
+        2,
+        2
+      ]
+    }
+  ]
+}
+```
+
+## minecraft&#58;environment_sensor
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_environment_sensor.md`)
+
+Creates a trigger based on environment conditions.
+
+### Environment Sensor Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| triggers | *not set* | Array of objects | The list of triggers that fire when the environment conditions match the given filter criteria. Can be an array of trigger objects or a single trigger object. | Breeze: `[{"event":"minecraft:stop_playing_idle_ground_sound","filters":{"all_of":[{"subject":"self","test":"on_ground","value":true},{"subject":"self","test":"has_target","value":true},{"domain":"minecraft:is_playing_idle_ground_sound","operator":"==","test":"bool_property"}]}},{"event":"minecraft:start_playing_idle_ground_sound","filters":{"all_of":[{"domain":"minecraft:is_playing_idle_ground_sound","operator":"!=","test":"bool_property"},{"any_of":[{"subject":"self","test":"on_ground","value":false},{"subject":"self","test":"has_target","value":false}]}]}}]`, Cave Spider: `{"event":"minecraft:become_neutral","filters":{"operator":">","test":"is_brightness","value":0.49}}`, `{"event":"minecraft:become_hostile","filters":{"operator":"<","test":"is_brightness","value":0.49}}` |
+| triggers (as Object) | *not set* | Object |  |  |
+
+### Samples
+
+##### [Breeze](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/breeze.json)
+
+
+```json
+"minecraft:environment_sensor": {
+  "triggers": [
+    {
+      "event": "minecraft:stop_playing_idle_ground_sound",
+      "filters": {
+        "all_of": [
+          {
+            "subject": "self",
+            "test": "on_ground",
+            "value": true
+          },
+          {
+            "subject": "self",
+            "test": "has_target",
+            "value": true
+          },
+          {
+            "domain": "minecraft:is_playing_idle_ground_sound",
+            "operator": "==",
+            "test": "bool_property"
+          }
+        ]
+      }
+    },
+    {
+      "event": "minecraft:start_playing_idle_ground_sound",
+      "filters": {
+        "all_of": [
+          {
+            "domain": "minecraft:is_playing_idle_ground_sound",
+            "operator": "!=",
+            "test": "bool_property"
+          },
+          {
+            "any_of": [
+              {
+                "subject": "self",
+                "test": "on_ground",
+                "value": false
+              },
+              {
+                "subject": "self",
+                "test": "has_target",
+                "value": false
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+##### [Cave Spider](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/cave_spider.json)
+
+At /minecraft:entity/component_groups/minecraft:spider_hostile/minecraft:environment_sensor/: 
+
+```json
+"minecraft:environment_sensor": {
+  "triggers": {
+    "event": "minecraft:become_neutral",
+    "filters": {
+      "operator": ">",
+      "test": "is_brightness",
+      "value": 0.49
+    }
+  }
+}
+```
+
+At /minecraft:entity/component_groups/minecraft:spider_neutral/minecraft:environment_sensor/: 
+
+```json
+"minecraft:environment_sensor": {
+  "triggers": {
+    "event": "minecraft:become_hostile",
+    "filters": {
+      "operator": "<",
+      "test": "is_brightness",
+      "value": 0.49
+    }
+  }
+}
+```
+
+##### [Dolphin](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/dolphin.json)
+
+At /minecraft:entity/component_groups/dolphin_swimming_navigation/minecraft:environment_sensor/: 
+
+```json
+"minecraft:environment_sensor": {
+  "triggers": [
+    {
+      "filters": {
+        "all_of": [
+          {
+            "test": "on_ground",
+            "operator": "==",
+            "value": true
+          },
+          {
+            "test": "in_water",
+            "operator": "!=",
+            "value": true
+          }
+        ]
+      },
+      "event": "navigation_on_land"
+    }
+  ]
+}
+```
+
+At /minecraft:entity/component_groups/dolphin_on_land_in_rain/minecraft:environment_sensor/: 
+
+```json
+"minecraft:environment_sensor": {
+  "triggers": [
+    {
+      "filters": {
+        "test": "in_water",
+        "operator": "==",
+        "value": true
+      },
+      "event": "navigation_off_land"
+    },
+    {
+      "filters": {
+        "test": "in_water_or_rain",
+        "operator": "!=",
+        "value": true
+      },
+      "event": "start_dryingout"
+    }
+  ]
+}
+```
+
+##### [Drowned](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/drowned.json)
+
+At /minecraft:entity/component_groups/minecraft:look_to_start_transformations/minecraft:environment_sensor/: 
+
+```json
+"minecraft:environment_sensor": {
+  "triggers": [
+    {
+      "event": "minecraft:start_transforming_into_zombie",
+      "filters": {
+        "all_of": [
+          {
+            "test": "in_block",
+            "value": "minecraft:powder_snow"
+          },
+          {
+            "test": "has_equipment_tag",
+            "domain": "armor",
+            "operator": "not",
+            "value": "minecraft:leather_tier"
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+At /minecraft:entity/component_groups/minecraft:start_zombie_transformation/minecraft:environment_sensor/: 
+
+```json
+"minecraft:environment_sensor": {
+  "triggers": [
+    {
+      "event": "minecraft:stop_transforming",
+      "filters": {
+        "any_of": [
+          {
+            "test": "in_block",
+            "operator": "not",
+            "value": "minecraft:powder_snow"
+          },
+          {
+            "test": "has_equipment_tag",
+            "domain": "armor",
+            "value": "minecraft:leather_tier"
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+##### [Player](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/player.json)
+
+
+```json
+"minecraft:environment_sensor": {
+  "triggers": {
+    "event": "minecraft:gain_raid_omen",
+    "filters": {
+      "all_of": [
+        {
+          "subject": "self",
+          "test": "has_mob_effect",
+          "value": "bad_omen"
+        },
+        {
+          "subject": "self",
+          "test": "is_in_village",
+          "value": true
+        }
+      ]
+    }
+  }
+}
+```
+
+## minecraft&#58;equip_item
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_equip_item.md`)
+
+The entity puts on the desired equipment.
+
+### Equip Item Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| can_wear_armor | false | Boolean true/false | If true, the entity can pick up and wear armor items from the ground. |  |
+| excluded_items | *not set* | Array of Excluded Items items | List of items that the entity should not equip. | Bogged: `[{"item":"minecraft:banner:15"},{"item":"minecraft:wolf_armor"},{"tags":"q.any_tag('minecraft:horse_armor', 'minecraft:nautilus_armor')"}]` |
+
+#### Excluded Items
+
+##### Excluded Item Properties
+
+**JSON path:** `excluded_items`
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| item | *not set* | String |  |
+
+### Samples
+
+##### [Bogged](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/bogged.json)
+
+
+```json
+"minecraft:equip_item": {
+  "excluded_items": [
+    {
+      "item": "minecraft:banner:15"
+    },
+    {
+      "item": "minecraft:wolf_armor"
+    },
+    {
+      "tags": "q.any_tag('minecraft:horse_armor', 'minecraft:nautilus_armor')"
+    }
+  ]
+}
+```
+
+## minecraft&#58;equipment
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_equipment.md`)
+
+Sets the Equipment table to use for this Entity.
+
+### Equipment Properties
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| slot_drop_chance | *not set* | Array of strings | A list of slots with the chance to drop an equipped item from that slot. Can be an array of slot name strings or an array of objects with slot and drop_chance properties. |
+| slot_drop_chance (Slot Drop Chance Item) | *not set* | Array of Slot Drop Chance (Slot Drop Chance Item) items |  |
+| table | *not set* | String | The file path to the equipment table, relative to the behavior pack's root. |
+
+#### Slot Drop Chance (Slot Drop Chance Item)
+
+##### Slot Drop Chance Item Properties
+
+**JSON path:** `slot_drop_chance`
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| drop_chance | *not set* | Decimal number | The chance to drop the equipped item (0.0 to 1.0). |
+| slot | *not set* | String | The equipment slot name. |
+
+### Samples
+
+## minecraft&#58;equippable
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_equippable.md`)
+
+Defines an entity's behavior for having items equipped to it.
+
+> [!Note]
+> In 1.26.0, `on_equip` and `on_unequip` events on each slot no longer fire on world load; they now run only as a result of an in-game equip or unequip interaction.
+
+### Equippable Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| slots | *not set* | Array of Slots items | List of slots and the item that can be equipped. | Llama: `[{"slot":1,"item":"carpet","accepted_items":["carpet"]}]` |
+
+#### Slots
+List of slots and the item that can be equipped.
+
+
+##### Slots Properties
+
+**JSON path:** `slots`
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| accepted_items | *not set* | Array of strings | The list of items that can go in this slot. |
+| interact_text | *not set* | String | Text to be displayed when the entity can be equipped with this item when playing with Touch-screen controls. |
+| item | *not set* | String | Identifier of the item that can be equipped for this slot. |
+| on_equip | *not set* | Minecraft Event Trigger | Event to trigger when this entity is equipped with this item. |
+| on_unequip | *not set* | Minecraft Event Trigger | Event to trigger when this item is removed from this entity. |
+| slot | 0 | Integer number | The slot number of this slot. |
+
+### Samples
+
+##### [Llama](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/llama.json)
+
+
+```json
+"minecraft:equippable": {
+  "slots": [
+    {
+      "slot": 1,
+      "item": "carpet",
+      "accepted_items": [
+        "carpet"
+      ]
+    }
+  ]
+}
+```
+
+## minecraft&#58;exhaustion_values
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_exhaustion_values.md`)
+
+Defines how much exhaustion each player action should take.
+
+### Entity Exhaustion Values Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| attack | 0.10000000149011612 | Decimal number | Amount of exhaustion applied when attacking. | Player: `0.1` |
+| damage | 0.10000000149011612 | Decimal number | Amount of exhaustion applied when taking damage. | Player: `0.1` |
+| heal | 6 | Decimal number | Amount of exhaustion applied when healed through food regeneration. | Player: `6` |
+| jump | 0.05000000074505806 | Decimal number | Amount of exhaustion applied when jumping. | Player: `0.05` |
+| lunge | 4 | Decimal number | Amount of exhaustion applied when triggering the Lunge enchantment, multiplied by the enchantment level. This item requires a format version of at least 1.21.130. | Player: `4` |
+| mine | 0.004999999888241291 | Decimal number | Amount of exhaustion applied when mining. | Player: `0.005` |
+| sprint | 0.009999999776482582 | Decimal number | Amount of exhaustion applied when sprinting. | Player: `0.1` |
+| sprint_jump | 0.20000000298023224 | Decimal number | Amount of exhaustion applied when sprint jumping. | Player: `0.2` |
+| swim | 0.009999999776482582 | Decimal number | Amount of exhaustion applied when swimming. | Player: `0.01` |
+| walk | 0 | Decimal number | Amount of exhaustion applied when walking. |  |
+
+### Samples
+
+##### [Player](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/player.json)
+
+
+```json
+"minecraft:exhaustion_values": {
+  "sprint": 0.1,
+  "jump": 0.05,
+  "attack": 0.1,
+  "damage": 0.1,
+  "heal": 6,
+  "lunge": 4,
+  "sprint_jump": 0.2,
+  "mine": 0.005,
+  "swim": 0.01,
+  "walk": 0
+}
+```

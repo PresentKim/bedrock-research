@@ -1,0 +1,161 @@
+---
+title: Models and geometry
+description: Folder and naming rules for entity geometry files, format versions, locators, culling and visible bounds, mesh models, performance, the player model
+sidebar_position: 1
+sources: [private-research, bedrock-wiki, ms-learn]
+---
+
+# Models and geometry
+
+An entity model is geometry in the resource pack `models/entity/*.geo.json`. The client entity points to it with a `geometry` short name, and the render controller chooses which geometry to draw. Below are rules and pitfalls gathered from the community research (Source: private research). For attachables (3D items held in the hand), see [Attachables and item rendering](./attachables-and-items.mdx), and for block models see [Block rendering](./block-rendering.mdx).
+
+## Concept: three files linked by short names
+
+The look of an entity is shared by three files. The resource pack entity file (`entity/*.json`, the client entity) only imports assets by **short names (shortname)**, the render controller picks and combines those short names, and the geometry file defines the shape of bones and cubes. Geometry is referenced from the entity file by identifier. A common cause of visual problems is a typo in these short names (Source: bedrock-wiki, `entities/entity-intro-rp`).
+
+```json
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "wiki:example",
+      "materials": { "default": "entity_alphatest" },
+      "textures": { "default": "textures/entity/example" },
+      "geometry": { "default": "geometry.example" },
+      "render_controllers": ["controller.render.default"],
+      "animations": {},
+      "scripts": {},
+      "sound_effects": {},
+      "particle_effects": {},
+      "enable_attachables": false
+    }
+  }
+}
+```
+
+A geometry file looks like this. Each bone has a pivot and cubes (`origin`, `size`, `uv`).
+
+```json
+{
+  "format_version": "1.12.0",
+  "minecraft:geometry": [
+    {
+      "description": {
+        "identifier": "geometry.example",
+        "texture_width": 64,
+        "texture_height": 64,
+        "visible_bounds_width": 2,
+        "visible_bounds_height": 2.5,
+        "visible_bounds_offset": [0, 1.25, 0]
+      },
+      "bones": [
+        { "name": "body", "pivot": [0, 12, 0],
+          "cubes": [ { "origin": [-4, 12, -2], "size": [8, 12, 4], "uv": [16, 16] } ] }
+      ]
+    }
+  ]
+}
+```
+
+The role of each key of the entity file (`materials`, `textures`, `geometry`, `render_controllers`, `animations`, `scripts`, `sound_effects`, `particle_effects`, `spawn_egg`, `enable_attachables`, `hide_armor`) is covered on the corresponding page. Below are rules and pitfalls gathered from the community research.
+
+## Folders and identifiers
+
+- Geometry must go in `models/entity/*.geo.json`. If placed directly under `models/`, the player geometry is not found. There are more reports that it was not visible outside `models/entity/` (2025-12), and block `.geo.json` goes in `models/blocks`. On the other hand, there are answers (2026-02/03) that only the identifier matters regardless of subfolders. That the file name does not matter is agreed, and the folder requirement is `conflicting`.
+- Hang all bones from a single root, and to fix locators, cancel the parent rotation with an inverse rotation.
+- "geometry not found" is a wrong folder or a JSON error (missing comma, a deleted cube). A case that failed from stuffing the client entity with an armor render controller and `geometry` blocks (armor.head and so on) was solved by reducing it to `render_controllers: ["controller.render.default"]`. If the geo identifier is a value like `unknow`, the model was not visible.
+- A resource pack entity file loads only if the folder is named `entity`.
+- Blockbench exports entity geometry as `format_version` 1.12, which is right, so do not change it. The format version is not the game version (Source: bedrock-wiki, `guide/format-version`).
+- "child 'identifier' not valid here" means the `identifier` is in the `description` of a `minecraft:geometry` of the wrong format version or location.
+
+## Naming rules
+
+- If bone and group names contain spaces or odd symbols (for example `Bottom Cushion`), the entity does not render. Join them like `BottomCushion`. An empty `sound` block in the client entity also broke the entity.
+- The hand item bones of the vanilla humanoid are `rightItem` and `leftItem`. If the names are wrong, the limbs disappear.
+- If a bone name identical to vanilla causes problems, rename it. In an Enderman replacement it was solved by appending `2` to the end of every bone name. Conversely, using the same bone names as the player (`rightItem`, `leftItem`, head and so on) lets you reuse vanilla humanoid and player animations.
+- Write animation and bone names in lowercase with no spaces ([Animations and controllers](./animations-and-controllers.mdx)).
+
+## Entities that render transparent
+
+- If the texture size does not match the geometry's `texture_width` and `texture_height`, or the material is wrong, the entity can render transparent (some cases unresolved). There is a case where it looked wrong until the PNG used as the entity texture was changed to 512x512 (a power of two).
+- A new cube needs its own texture, and a resized cube distorts the UV of the existing texture. To put an image on only one face, you need per-face UVs or per-cube textures. Adding cubes after painting in Blockbench makes the UVs overlap, so enlarge the texture and set UVs manually (turn off auto UV).
+- A texture that is invisible or broken in Blockbench can be due to nearly transparent pixels whose alpha is not 0. Check with the color picker. Blockbench rendering is not exactly the same as the game, and turning off hardware acceleration fixes flickering textures. An animation mismatch is usually a wrong geo file.
+
+## Visible bounds and culling
+
+- Culling needs the geometry's `visible_bounds_width`, `visible_bounds_height` and `visible_bounds_offset`. If the model vanishes off screen, enlarge `visible_bounds_*`, or set `should_update_bones_and_effects_offscreen` or `should_update_effects_offscreen` in the client entity `scripts` to turn off frustum culling.
+- `should_update_bones_and_effects_offscreen: true` renders the model even if the hitbox is off screen, but it is bound to a render range of about 64 m.
+
+## Long-distance rendering
+
+- Large entities vanish when the hitbox leaves the view (the render distance is tied to the hitbox and entity). Only the Ender Dragon renders from far away, and claims conflict: that it works through `runtime_identifier`, reports that it does not, and a claim that it was patched in 1.17 (`conflicting`).
+- Alternatives: an animation that offsets a proxy entity near the player, proxy teleport, the `minecraft:ender_dragon` identity and component groups. Large hitboxes have an upper limit, so a very large sign needs several connected entities. `query.client_max_render_distance` cannot be used outside an entity-only context (error).
+- The entity render distance is limited to 64 blocks (measured 73) and cannot be extended by an add-on. Extending the culling value is possible only with a native mod. A way to draw distant 3D models is with particles (3D shape particles in [Particles](./particles.mdx)).
+- LOD query: `query.lod_index(d1, d2, d3, ...)` returns the index of which distance band the actor is in from the camera (local player) (0 if under d1, N beyond the last). It is for switching to low-resolution textures and geometry for performance, not for making distant entities. Example: `(q.lod_index(2, 5, 10)+1)/3`. The "atomic client entities" gist for Preview 1.26.70.21 (gist.github.com/theaddonn/79745d88f86710003b18efc5919c0b66) also mentions LOD queries for model quality by distance.
+- Entity fade (dithering) is a global toggle under Accessibility in the settings and cannot be changed per entity (the dithering section of [Fog and sky](./fog-and-sky.mdx)).
+
+## Locators
+
+- Locator names must be unique within one model. Even in other models that are not loaded at the same time, the same name gives "already has a locator with the same name".
+- If several geometries of one entity use the same name (`armor_offset.default_neck`, `lead`), they conflict (particles appear at the origin) and the names must be changed per geometry (for example `..._neck2`). Only the locators of the top-level render controller are used and multiple locators are not supported. Do it like `v.gender_index == 0 ? geometry.female : geometry.male` or use separate render controllers and models.
+- The problem of a floating lead position (locator name `lead`, MCPE-184865) was solved by splitting an entity that switched between several geometries with a render controller into separate entities.
+- In the 2025-11 build, the entity locators of the player and attachables broke (particles did not come out of locators). `rightItem` is a child of rightHand and there is no independent equipment locator. In a custom player geo the arm is a child of body in the game but not in samples.
+- For how to link with particles, see [Particles](./particles.mdx).
+
+## Mesh (poly mesh) models
+
+- The Blockbench "Meshy" plugin exports meshes as `geo.json` (Bedrock entity format). Meshes are not natively supported so it is not perfect, tri-mesh is not yet properly supported, and poly mesh is planned for deprecation so attachable meshes may become invisible. The Marketplace does not allow polymesh. In skin terminology, "4D" is a custom geometry skin and "5D" is polymesh.
+- Size: 797 models were 83.4 MB, and after VV launched, consoles had trouble joining servers. Minify the JSON, put a group per mesh object (a 1.5 MB model shrank to 787 KB), and update Blockbench (a case in 2026-04 where the export size went from 220 KB to 89 KB).
+- If it is too bright and shiny, turn off "Skip Mesh Normals" in Meshy (when on, normals face up). Turning it off may create odd shadows. Odd mesh entity shadows are fixed with the skip vertex scan option or by flipping normals.
+- Since late 2026-01, low-poly mesh models render with smooth shading on Fancy (normal flat shading on VV and Simple). There is no solution; one person attributes it to face dimming and said the material's `"-defines": ["FANCY"]` turns it off (it is not among the preset materials).
+- Meshes can be used only on entities and attachables and not on blocks (Meshy also imports .obj only to the entity format). There are statements that polymesh is to be deprecated but texture mesh is fine, and that polymesh is supported only without animation and not on the Marketplace. A per-bone poly_mesh tears at joints and has no skin weight deformation. A specific `format_version` may be needed, and there is a case where a format 1.16 mesh was invisible. Blockbench links animations by bone name, so bones with the same name in different folders conflict.
+- Importing polymesh JSON into Blender with Mcblend creates `custom_normals` (and `sharp_edge`) attributes that make the shading look inverted. Keep only `position`, `sharp_face` and `UVMap` in Attributes and delete `custom_normals` (Recalculate Outside has no effect). Observed in Blender 4.5.
+
+## Cube count and performance
+
+- A model with too many cubes slows the game. Keep the total of the player entity geometry files (excluding textures) under about 1.15 MB. Beyond that, lag spikes occur (for the player only), and the geometry loads and spikes even if the render controller does not reference it.
+- The more groups and bones, the slower, so keep to the minimum, and minified JSON was slightly faster.
+- **Bone cost**: Since the VV era the render cost per bone has grown and cubes are cheap. There is a claim that 50 cubes in one bone is about 200 times faster than 50 bones, and another test gave a result of about 30 times per-bone cost under VV. Bones hidden with `bone_visibility` or animation scale also cost, and deactivating the render controller costs nothing. Bug tracker search terms are "structura" and "holoprint". The claim that a model attached to the player has a limit of about 1.13 MB and is sent in the join packet is `unverified`.
+- **Cube count rules of thumb**: There are opinions that in Blockbench over 500 cubes is about 20 fps, the low-end limit is about 250, and 50 is enough for items (a counterargument that the game can do thousands, `unverified`). On a phone, 30 entities of 800 cubes ran at 30 fps. There are examples of reducing a blade from 451 to 53 and a katana from 575 to 183 cubes. Sizes were about 271 KB for 536 cubes and a 721 KB pack for 728 cubes. There is also a warning that many cubes throw off placement. For big models, turn off Blockbench auto backup and work with a proxy texture.
+- **z-fighting and flicker**: Overlapping cubes or cubes on the same plane are a common cause of flicker and black borders. Separate them with about 1.0005 times scale or 0.01 inflate or deflate. Cubes hidden in Blockbench do not disappear in the game, so delete them or match the texture and geometry ratio (a 48:48 case). There is a case where seams of a large multi-cube model were hidden by raising the texture resolution from 32 to 128.
+- A way to place blocks as entities (offsetting 8 block bones per render controller by animation) is written up on a separate blog (Source: the link collected in private-research, theaddonn/Blogs `block_as_entities`).
+
+## Conversion and extraction
+
+- Java models have a different format and cannot be used directly, so convert them in Blockbench. Marketplace add-on models cannot be extracted and must be remade.
+- Moving from Java to Bedrock with GeyserMC Rainbow loses animated item textures (fix manually with per-frame textures on the attachable).
+
+## Player related
+
+- Editing the player client entity (`player.entity.json`) turns off persona skins and everyone becomes Steve (imported and Marketplace skins are exceptions, and adding a min engine version supports custom skins).
+- There are reports that the latest bedrock-samples player client entity (1.21.130.3) is broken or outdated, so use the file in the installed game folder.
+- Entities cannot use player skins and add-ons cannot read skins. Custom player skins per event are impossible.
+- The outer skin layer is a separate bone (`leftLeg` and `leftPants`), so to fit thin armor, animate the scale to 0 or small.
+- The paper doll (pause screen) ignores `player.json` variables and queries, so it draws all or none of the extra geometry and textures ([Paper doll and NetEase](./paper-doll-and-netease.mdx)).
+- NPC texture swaps are in the pack's `textures/entity/npc/` (74 files).
+- The player model geometry names are `geometry.humanoid.custom` (wide arms) and `geometry.humanoid.customSlim` in `mobs.json`.
+- Some example player.json packs lack `"min_engine_version": "1.8.0"`, so copying them breaks Marketplace skins. The default Steve files are in `C:\XboxGames\Minecraft for Windows\Content\data\skin_packs\vanilla\` (steve.png, geometry.json). There is a report that the skin texture limit is 128x128 (`single report`). Custom entities cannot use custom skins, so pre-load them as variants. Add-ons that edit player.json conflict with each other (Actions & Stuff, gun add-ons).
+- Slim skin detection (Molang): `v.is_slim_skin = !v.is_paperdoll && !q.is_in_ui && q.get_default_bone_pivot('rightarm', 1) < 21.75;` (the rightArm pivot y is 22 for custom and 21.5 for customSlim). It gives an error in `pre_animation`, so compute inside an animation. Character Creator skins have different values and `v.short_arm_offset_*` does not work. Armor trim detection cannot be done with Molang or a resource pack.
+
+## Other model tips
+
+- A projectile model such as an arrow uses a render controller and `animation.arrow.move` style rotation.
+- To make dropped items look flat, use a rotation animation on the client entity id `minecraft:item`. The item sprite entity uses `geometry.item_sprite`, the snowball material and `animation.actor.billboard`.
+- Make 3D title text with the Blockbench "title generator" plugin, and rotate a flat billboard with `query.camera_rotation_x` and `query.camera_rotation_y + 180`.
+- A trick for using 2~3 textures in one model (camo/skin) was shared, and a custom iron golem transparent texture and variants are unresolved. The Bedrock entity format has one texture per model, so split the parts and combine them with render controllers.
+- Entity models have inconsistent lighting (passable only under ray tracing), so there was a judgment that a map built from one entity per room is hard. A case that replaced a large creature with a multi-part swarm model instead of the vanilla bee model worked for over a year.
+- For Blockbench work tips, see [Modeling and texture tools](../tools/modeling.mdx).
+
+## Overriding vanilla entities
+
+- An entity named with the `minecraft:` namespace overrides vanilla. Vanilla husk and vex may ignore a modified entity file.
+- The 26.0 change to baby mob models (villager, piglin) broke the old custom entity code of a pack.
+- An item held by an armor stand cannot be hidden with a resource pack alone (scale, offset, `part_visibility`, `hand_item_scale_offset` and pivot edits all failed). In other cases part visibility is better than scale.
+
+## Camera
+
+The resource pack camera file is said to have been removed in 1.18.30 (one member), so a ride camera cannot be moved from a resource pack. The only visual hack for a wrong ride viewpoint is a player animation controller that uses `q.is_riding_any_entity_of_type`.
+
+## AI modeling
+
+There are reports of using Blockbench MCP and a skill (mcbemodelingmasterAI) with an AI agent. Static models are fine, animation is bad because it analyzes frame by frame, and simple wheel and wing animations work.

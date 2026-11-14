@@ -1,0 +1,357 @@
+---
+title: Input, buttons and toggles
+description: button_mappings, button IDs, the 8 toggle states, radio tabs, focus, chest input, and the hyperlink allow list (INP-01~36).
+sidebar_position: 7
+sources:
+  - repo-guide
+  - bedrock-samples
+  - bedrock-wiki
+  - ms-learn
+  - private-research
+  - bedrock-core
+  - advancementpack
+  - private-research
+  - starlibv2
+---
+
+Input controls are the parts of a screen that receive the user's actions. This page covers three things.
+
+- **Buttons (`button`)**: connect a press to a **button ID** with `button_mappings`. Button IDs are split into ones the engine understands (`button.form_button_click`, `button.menu_exit`, etc.) and ones the pack names arbitrarily. An ID the engine knows triggers an action (submitting a server form, closing), and an unknown ID does nothing but can still be used for in-UI events such as the animation `play_event`.
+- **Toggles (`toggle`)**: buttons with an on/off state. A child control is defined for each of the 8 states (on and off x default, hover, locked, locked hover), and only the one matching the current state is drawn. The toggle state is read by other controls through `#toggle_state`.
+- **Input boxes and focus**: the targets keyboards and controllers point to are set with the `focus_*` properties.
+
+## 7.0 The smallest examples
+
+**Example 1. Making a close button with a vanilla button template.** Reuse the vanilla template (`common_buttons.light_text_button`) with variables instead of building it yourself. If you give `$pressed_button_name` a button ID the engine knows, that action happens.
+
+```json
+"close_button@common_buttons.light_text_button": {
+  "size": [ 64, 32 ],
+  "$button_text": "Close",
+  "$pressed_button_name": "button.menu_exit"
+}
+```
+
+**Example 2. Showing and hiding an image by toggle state.** The toggle's `$toggle_view_binding_name` becomes the name of the toggle control, and other controls read its state with `source_control_name` and `#toggle_state`.
+
+```json
+"my_toggle@common_toggles.light_text_toggle": {
+  "size": [ 64, 32 ], "$button_text": "Toggle",
+  "$toggle_name": "my_toggle",
+  "$toggle_view_binding_name": "my_toggle_state" },
+"my_image": { "type": "image", "texture": "textures/items/apple", "size": [16, 16],
+  "bindings": [ { "binding_type": "view",
+    "source_control_name": "my_toggle_state",
+    "source_property_name": "#toggle_state",
+    "target_property_name": "#visible" } ] }
+```
+
+### 7.0.1 The Bedrock Wiki explanation (Buttons and Toggles) and button_mappings
+
+Below is the original "Buttons and Toggles" of the Bedrock Wiki (`bedrock-wiki` 0930b39) (CC BY 4.0). It shows how to make toggles and buttons with vanilla templates, a content button that shows hover text, and playing an animation by button ID.
+
+<Excerpt src="bedrock-wiki" title="Buttons and Toggles" path="docs/json-ui/buttons-and-toggles.md">
+
+**Toggles**
+
+In this example, we will reference `ui/ui_template_toggles.json`
+
+```json
+{
+  "our_toggle@common_toggles.light_text_toggle": {
+    "size": [
+      64,
+      32
+    ],
+    "$button_text": "Click me!",
+    "$toggle_name": "wiki_toggle", // Required, but it has no effect unless a hardcoded toggle name is used.
+    "$toggle_view_binding_name": "wiki_toggle_state" // The toggle name that allows us to retrieve data.
+  }
+}
+```
+
+And that's it! You now have a working toggle. You can test it by adding it to any screen.
+
+Additionally, you can utilize toggles to control the visibility of UI elements.
+
+```json
+{
+  "our_toggle@common_toggles.light_text_toggle": {
+    "size": [
+      64,
+      32
+    ],
+    "$button_text": "Click me!",
+    "$toggle_name": "wiki_toggle", // Required, but it has no effect unless a hardcoded toggle name is used.
+    "$toggle_view_binding_name": "wiki_toggle_state" // The toggle name that allows us to retrieve data.
+  },
+  "our_image": {
+    "type": "image",
+    "texture": "textures/items/apple",
+    "size": [
+      16,
+      16
+    ],
+    "offset": [
+      0,
+      20
+    ],
+    "bindings": [
+      {
+        "binding_type": "view",
+        "source_control_name": "wiki_toggle_state", // // The toggle name specified in the $toggle_view_binding_name
+        "source_property_name": "#toggle_state", // The binding data that returns the toggle state as a boolean value
+        "target_property_name": "#visible"
+      }
+    ]
+  }
+}
+```
+
+**Buttons**
+
+Generally, buttons have limited functionality, as they are primarily used in hardcoded instances, such as navigating to a screen or opening a dialog.
+
+In this example, we will reference `ui/ui_template_buttons.json`
+
+```json
+{
+  "our_button@common_buttons.light_text_button": {
+    "size": [
+      64,
+      32
+    ],
+    "$button_text": "Click me!",
+    "$pressed_button_name": "button.menu_exit" // Required, you can put in any global button names or hardcoded button names.
+  }
+}
+```
+
+And that's it! You now have a working button, clicking on it exits you to the current screen you're in. You can test it by adding it to any screen.
+
+**Advanced Buttons and Toggles**
+
+**Hover Text**
+
+In order to make buttons that shows a text when you hover into it, we will need to use **Content Buttons**.
+
+In this example, we will reference `ui/ui_template_buttons.json` and `ui/ui_common.json`
+
+```json
+{
+  "our_button@common_buttons.light_content_button": {
+    "size": [
+      18,
+      18
+    ],
+    "$button_content": "namespace.our_button_content_panel", // Reference our content element.
+    "$pressed_button_name": "button.menu_exit" // Required, you can put in any global button names or hardcoded button names.
+  },
+  "our_button_content_panel": {
+    "type": "panel",
+    "controls": [
+      {
+        "our_image": {
+          "type": "image",
+          "texture": "textures/items/apple",
+          "size": [
+            16,
+            16
+          ]
+        }
+      },
+      {
+        // You can use any element but we'll just use the hover text when you hover an item in-game.
+        "our_hover_text@common.hover_text": {
+          "ignored": "$default_state", // Required, this will make the element not visible if the button is in a default state or isn't hovered.
+          "property_bag": {
+            "#hover_text": "" // You can put your text here. It doesn't support localizing so if that's what you are looking to do, create a custom hover text.
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+**Play Animation**
+
+If you want to play an animation when you click a button, you have to use `$pressed_button_name` in your animation's `play_event` property.
+
+For example:
+
+```json
+{
+    "example_animation": {
+        "anim_type": "offset",
+        "easing": "linear",
+        "duration": 2,
+        "from": [
+            0,
+            0
+        ],
+        "to": [
+            -50,
+            0
+        ],
+        "play_event": "button.example_button_id"
+    },
+    "example_button@common_buttons.light_text_button": {
+        "$pressed_button_name": "button.example_button_id", // use this button id in play_event property of your animation
+        "$button_text": "Play Animation",
+        "size": [
+            80,
+            20
+        ]
+    },
+    "example_label": {
+        "type": "label",
+        "text": "Example Text",
+        "anims": [
+            "@namespace.example_animation" // add your animation here
+        ],
+        "anchor_from": "top_right",
+        "anchor_to": "top_right"
+    }
+}
+```
+
+</Excerpt>
+
+### 7.0.2 The structure of `button_mappings` (Bedrock Wiki Intro and MS Learn)
+
+`button_mappings` is an array of objects, and an item has `from_button_id` (the button ID that comes in as input), `to_button_id` (the ID to treat as actually pressed), `mapping_type` and the optional `input_mode_condition` (the same as the MS Learn `ui_element` reference table). If `from_button_id` is omitted, "pressing this control" itself is the input.
+
+| `mapping_type` | Meaning | Vanilla count |
+| --- | --- | --- |
+| `pressed` | When the control is pressed by click or touch | 599 |
+| `focused` | When the control received hover or focus first (for example confirming with Enter) | 145 |
+| `global` | When that key is pressed anywhere while the control is on screen | 536 |
+| `double_pressed` | When pressed twice | 20 |
+
+```json
+"sample_button@common.button": {
+  "$pressed_button_name": "button_id",
+  "button_mappings": [
+    { "from_button_id": "button.menu_ok", "to_button_id": "$pressed_button_name", "mapping_type": "focused" },
+    { "from_button_id": "button.menu_select", "to_button_id": "$pressed_button_name", "mapping_type": "pressed" },
+    { "from_button_id": "button.menu_up", "to_button_id": "$pressed_button_name", "mapping_type": "global" }
+  ]
+}
+```
+
+The mapping between button IDs and keys is in the INP-21 table (the wiki original). The wiki also lists controller mappings: `button.controller_select` X/A, `button.menu_secondary_select` Y, `button.menu_exit` and `button.menu_cancel` B, `button.menu_up/down/left/right` D-pad. It recommends supporting several input methods together. The `input_mode_condition` table of MS Learn has empty values, so follow INP-02 for values (vanilla tally: `gamepad`, `gamepad_and_not_gaze`, `not_gamepad`).
+
+## 7.1 Buttons
+
+- **[INP-01]** A button specifies per-state child controls with `default_control`, `hover_control`, `pressed_control` and `locked_control`. Usually, rather than building one yourself, you reuse a vanilla template (`common_buttons.light_text_button`, etc.) with variables such as `$pressed_button_name` and `$button_text`. `&#123;vanilla&#125;` (Source: VN default_control 34, hover_control 42, pressed_control 36, locked_control 18 uses, VN server_form.json:211)
+- **[INP-02]** An item of `button_mappings` has `from_button_id`, `to_button_id`, `mapping_type` (`pressed` 599, `global` 536, `focused` 145, `double_pressed` 20), and optionally `input_mode_condition` (`gamepad`, `gamepad_and_not_gaze`, `not_gamepad`) and `ignored`. `&#123;vanilla&#125;` (Source: VN, Appendix B)
+- **[INP-03]** The button IDs the engine understands are fixed per screen. `&#123;vanilla, working pack, measured&#125;` (Source: VN server_form.json:212 and 321, npc_interact_screen.json:1222, BC-S14)
+
+| Action | `to_button_id` |
+| --- | --- |
+| Pressing an action form entry | `button.form_button_click` |
+| Submitting a modal form | `button.submit_custom_form` |
+| NPC dialogue button | `button.student_button` |
+| Close | `button.menu_exit` |
+| Dropping one from a chest cell | `button.drop_one` |
+
+- **[INP-04]** To make a form entry pressable, give the two mappings `button.menu_select -> button.form_button_click` (`pressed`) and `button.menu_ok -> button.form_button_click` (`focused`), and put a `collection_details` binding on the button itself (COL-04). `&#123;code, working pack, vanilla&#125;` (Source: BC 4.1-(3), BA chapter 5, VN)
+- **[INP-05]** For a button that only detects hover (a tooltip) and does not submit, empty `button_mappings` or set `$pressed_button_name` to a value the engine does not know (`"unset"`) and receive only focus with `focus_enabled` and `focus_magnet_enabled`. To remove the click sound, `sound_volume: 0`. `&#123;working pack&#125;` (Source: BA chapter 5, AP 4.8)
+- **[INP-06]** The visibility of a button's default, hover and pressed state controls is **owned by the button state machine.** Put the app's visibility gates inside the state controls or outside the button, and do not let bindings and the state machine touch the same control. `&#123;measured&#125;` (Source: BC-rules, BC 4.1-(6))
+- **[INP-07]** For a disabled button, overlay a disabled copy that looks the same as the real (enabled) button and show only one with the same data (`binding_condition: "always"`). The disabled copy must keep its disabled look even under the pointer. `&#123;code, measured&#125;` (Source: BC 4.1-(6), BC-rules)
+- **[INP-08]** Give the content layers inside state controls a higher value than the background (bedrock-core convention: background 1, caption and icon 12). `&#123;code&#125;` (Source: BC 6.5-3, BC-rules)
+- **[INP-09]** Inside a button template, button state variables can be used in expressions: `"visible": "($hover_state or $pressed_state)"`. `&#123;working pack&#125;` (Source: AP 4.8)
+
+## 7.2 Toggles
+
+The 8 toggle state controls (vanilla names):
+
+```
+checked_control          unchecked_control
+checked_hover_control    unchecked_hover_control
+checked_locked_control   unchecked_locked_control
+checked_locked_hover_control  unchecked_locked_hover_control
+```
+
+- **[INP-10]** A toggle draws **only one** child, the one the current state points to. If it enters an undefined state (for example hover), the control disappears, so define **all 8 states.** `&#123;measured, vanilla&#125;` (Source: BC-S4, VN each of the 8 names 2 or more times)
+- **[INP-11]** For clicking to work, `toggle_on_button`, `toggle_off_button` and `button_mappings` (`button.menu_select` and `button.menu_ok`) are needed. Without them it is only drawn and cannot be pressed. `&#123;measured&#125;` (Source: BC-S4)
+- **[INP-12]** A radio group is made with `toggle_name` (the group name), `radio_toggle_group: true`, `toggle_group_forced_index` and `toggle_group_default_selected`. `&#123;vanilla, measured&#125;` (Source: VN radio_toggle_group 59, toggle_group_forced_index 210, toggle_group_default_selected 24 uses, BC chapter 5)
+- **[INP-13]** **Tabs that need no script**: make a radio toggle group and put the tab content **inside** each toggle's `checked` state control. There is no need to observe the state from outside, so nothing is sent to the server. It worked both under an action form and on a chest screen inserted with `modifications`. `&#123;measured&#125;` (Source: BC-S4, BC chapter 5)
+- **[INP-14]** Between manual radio peers that share the same forced index, state is not mirrored reliably. Each input reads its own state. A native (modal form) radio shares the group's collection scope, so read values coming from the form with a separate data source and put the radio outside that index collection item. `&#123;measured&#125;` (Source: BC 6.7-3 and 4, BC-rules)
+- **[INP-15]** Collapse/expand (Disclosure) is made with one toggle and a sibling that shows and hides following that toggle's state. A collapsed row pulling what is below up is thanks to the property that a stack panel gives no space to hidden children (LAY-04). `&#123;code&#125;` (Source: BC chapter 5)
+
+## 7.3 Input on the HUD, input on chests
+
+- **[INP-16]** For a button drawn on the HUD to receive hover and scrolling, `hud_screen` needs `always_accepts_input: true`. It was confirmed only with a mouse, and whether hover works with touch or a controller was not confirmed. `&#123;working pack, unverified&#125;` (Source: AP 3.1)
+- **[INP-17]** To use a chest screen cell like a button, map every input (click, right click, shift click, Q, double click, gamepad) to `button.drop_one`. Exactly one drops per press and the cursor does not change, and events arrive in the same tick in the order `entitySpawn` -> `entityItemDrop` (including the player). `&#123;measured&#125;` (Source: BC-S14)
+- **[INP-18]** Do not use the approach of picking up items with the cursor in a chest. If the inventory is full the press disappears, and an item held by the cursor is drawn directly by the engine and cannot be hidden with JSON UI. `&#123;measured&#125;` (Source: BC-S13, BC 4.3-(4))
+
+## 7.4 Rules added from the Bedrock Wiki comparison
+
+These are rules added by comparing the wiki (BW) documents with vanilla 1.26.50.4. Those with only wiki sentences are marked `unverified`, and those with in-game screenshots in the wiki are marked `measured` (third-party record).
+
+- **[INP-19]** In vanilla toggle templates (`common_toggles.light_text_toggle`, etc.), `$toggle_view_binding_name` becomes the name of the toggle control, so another control reads the state with `"source_control_name": "<that name>"` and `"source_property_name": "#toggle_state"` (61 uses in vanilla). `$toggle_name` is required but is said to have no effect unless it is a name the engine knows. `&#123;vanilla, unverified&#125;` (Source: BW-btn, VN)
+- **[INP-20]** If you use a **button ID** in an animation event (`play_event`, `start_event`), it plays when that button is pressed: button `"$pressed_button_name": "button.my_anim"`, animation `"play_event": "button.my_anim"`. Vanilla also has `"start_event": "button.menu_achievements"` once. It is an ID the engine does not know, so nothing goes to the server. `&#123;unverified, vanilla&#125;` (Source: BW-btn, VN)
+- **[INP-21]** Default key mappings (wiki table): `button.menu_select` left click, `button.menu_secondary_select` right click and Y, `button.menu_ok` Enter, `button.menu_cancel` and `button.menu_exit` Esc and B, `button.menu_up/down/left/right` arrow keys and D-pad, `button.menu_autocomplete` Tab, `button.controller_select` X/A, `button.menu_tab_left/right` the tab key and bumpers, `button.menu_inventory_cancel` the inventory key. There is also `from_button_id: "any"` (once in vanilla, `gamepad_layout_screen.json`). `&#123;unverified, vanilla&#125;` (Source: BW-intro, BW-doc, VN)
+- **[INP-22]** For gamepad and arrow key focus, name targets with `focus_identifier` and specify the next target with `focus_change_up/down/left/right`. To prevent leaving, use `FOCUS_OVERRIDE_STOP` as the value (226 uses in vanilla). At the container level, use `focus_container: true` and `focus_container_custom_*` (`other_focus_container_name`, `focus_id_inside`). `&#123;vanilla&#125;` (Source: BW-doc Focus table, VN)
+- **[INP-23]** `follows_cursor: true` (4 uses in vanilla) makes a control follow the cursor, and `draggable` (`vertical`, `horizontal`, `both`, `vertical` once in vanilla) makes a control draggable when given to a control that receives input (`input_panel`, `button`) together with a button mapping. `&#123;vanilla, unverified&#125;` (Source: BW-doc Layout table, VN)
+- **[INP-24]** The `#hyperlink` of a button opens only what is in the engine's allow list (116 URLs that must match literally, INP-34). Custom URLs do not open. The wiki's "about 30" was wrong. `&#123;code&#125;` (Source: NB-08, VN `#hyperlink` use)
+
+## 7.5 Rules added from the research server measurement
+
+These were measured on Windows 1.26.52 while building the research server (`DF`). They came from a structure that draws several screens with one server form.
+
+- **[INP-31]** A server form button can be turned off. If you set the button template's `$pressed_button_name` to a name the engine does not know (`button.df_noop`), pressing it did not answer the form and the hover tooltip still showed (INP-05 confirmed in a server form). Use it on buttons that merely resend the same screen, such as the chosen tab or chosen cell. `&#123;measured&#125;` (Source: DF)
+- **[INP-32]** Vanilla `common.button` and `common.toggle` have `focus_enabled` on, so opening a form on a phone drew the first button in the hover state. Give every button of the form `$focus_enabled: false`, and radio toggles `$toggle_group_default_selected: -1` and `$toggle_focus_enabled: false`. Radio toggles are one group only among siblings, so they were not exclusive in a grid where each cell has a different parent (a different result with static toggles, INP-35, C-66). `&#123;measured&#125;` (Source: DF)
+
+## 7.6 Rules added from the engine behavior analysis
+
+These were read from the native library of the Android 1.26.52.3 client (`NB`). The level is `code`.
+
+- **[INP-33]** There are 31 `button.menu_*` button IDs in the engine (including `button.menu_emote_slot_0` to `3`). Those not in the wiki table of INP-21 are `button.menu_tertiary_select`, `button.menu_auto_place`, `button.menu_inventory_drop`, `button.menu_inventory_drop_all`, `button.menu_inventory_cancel`, `button.menu_alternate_tab_left` and `_right`, `button.menu_autocomplete` and `_back`, `button.menu_textcursorleft` and `right`, `button.menu_textedit_up` and `down`, `button.menu_clear`, `button.menu_play` and `button.menu_edu_play`. Only that the names exist was confirmed, and which key each corresponds to is unknown. `&#123;code&#125;` (Source: NB chapter 4)
+- **[INP-34]** A `#hyperlink` opens only if it passes the engine's allow list when the button is pressed. The list is **116 URLs that must match literally** (87 of `https://www.minecraft.net/<language>/terms/r1~r3`, 20 of `https://aka.ms/…`, EULA, copyright notice, account settings, etc.). Only when some condition (appears to be an edition or platform decision) is true, URLs that **start with** `https://education.minecraft.net/`, `https://aka.ms/` or `ms-windows-store:` also pass. URLs put in by a pack or server do not open, and even a URL in the list does not open if it differs slightly (the conclusion of INP-24 is right and "about 30" was wrong). `&#123;code&#125;` (Source: NB-08)
+## 7.7 StarLibV2's client search filter (SLB)
+
+StarLibV2 (`jb-starlibv2`, GPL-3.0) uses a method that filters server form buttons with the text of an input box. Only the technique is rewritten.
+
+#### SLB 6. Client search filter [confirmed (structure), unverified (behavior)]
+
+- Search box: inherit vanilla `common.text_edit_box` and give `$text_box_name` and `$text_edit_text_control` the same name (default `search_field`). The vanilla text input template puts `"#property_field": "#item_name"` in `property_bag` and writes the input text to its own `#item_name` (11 uses in vanilla, for example `ui_common.json:1416`).
+- Button side: a view binding `source_control_name: "search_field"`, `source_property_name: "#item_name"` -> `#search`. It shows if `(#search = '')` or if `#form_button_text` (or a range fragment from chapter 5) contains `#search`.
+- Initial value: put `#default_search` in `property_bag` and copy it once into `#search` with a `binding_condition: "once"` view. Then at first only buttons with that default word show, and when the user types it changes to the typed word [inferred].
+- Hidden items give up space in a vertical stack (LAY-04), so the list actually shrinks. With a grid template, empty cells remain (LAY-31).
+
+
+### 7.7.1 Proposals (not applied)
+
+- **[INP-25 proposal]** The text of an input box goes into the `#item_name` of that input box control, following the `property_bag` `"#property_field": "#item_name"` of vanilla `common.text_edit_box`. Other controls read it with `source_control_name` (the input box name = `$text_box_name`) and `source_property_name: "#item_name"`. If you hide action form buttons by a containment check on this value, it becomes a search filter with no server round trip. `{vanilla, working pack, unverified}` (Source: VN ui_common.json:1416 and 11 other uses, SLB chapter 6). It is not yet applied to the guide body.
+
+**Measurement needed**: whether `#item_name` read by another control while typing in `common.text_edit_box` updates per character, and whether it is emptied when the form is reopened.
+
+## 7.8 Rules added from the server form test add-on measurement
+
+These were measured on mobile with the server form factory and lag test add-on (`FFR`) (2026-11-14). The add-on setup is in [Server form research screen](../design/server-form-research-screen.mdx).
+
+- **[INP-35]** A radio group was bound by `toggle_name`, not by parent. Even when 48 toggles of the same name were split into 6 horizontal stack rows, only one was selected at a time. With `toggle_group_default_selected: -1`, nothing is selected at first. This differs from INP-32 (DF, not exclusive in a grid where each cell has a different parent) (C-66). FFR placed the toggles statically in the definition, and whether the cells of the DF grid were made by a grid or a factory was not checked. `&#123;measured, conflict&#125;` (Source: FFR)
+- **[INP-36]** Tabs and list selection inside a server form can be switched with radio toggles without going through the server. If you put that cell's detail panel inside the `checked` state control of a cell toggle, only the detail changes when the cell is pressed and the form does not close. Only the actions that must be told to the server (the proceed button) are form buttons (`button.form_button_click`). `toggle_group_default_selected` is a static value, so keep a separate layout per tab to open first and choose by title. `&#123;measured&#125;` (Source: FFR)
+
+## How evidence is marked and source abbreviations
+
+A rule carries an ID in the form `[chapter abbreviation-number]`, and the `{…}` at the end is the verification level. The priority of verdicts is `measured` > `vanilla` > `working pack` > `code` > `inferred`, and `unverified` and `conflict` must be checked before use. `C-nn` is a number in the [conflict table](./conflicts.mdx), and the value counts of `VN` are the tallies in the [value dictionary](./value-dictionary.mdx). Rule IDs of other chapters (`LAY-`, `BND-`, `HOST-`, etc.) are on the corresponding pages of the same JSON UI chapter.
+
+| Abbreviation | Material |
+| --- | --- |
+| `VN` | Exhaustive search of vanilla resource pack `resource_pack/ui` v1.26.50.4 (bedrock-samples `46ba6ea`). `VN file:line` is that location |
+| `BC`, `BC-S1`~`BC-S14`, `BC-facts`, `BC-rules` | bedrock-core (`@bedrock-core/ui` 0.12.1, MIT) and the author's in-game measurement records (`aee2bbd`) |
+| `BA`, `BA-original` | BedrockAdvancements 2.0.3 (All rights reserved, only techniques carried over) |
+| `AP` | AdvancementPack v4.2 (MIT) |
+| `MJ` | mcbejsonuimasterAI (no license, only facts rechecked against vanilla) |
+| `BW`, `BW-intro`, `BW-dyn`, `BW-doc`, `BW-form`, `BW-btn`, `BW-type`, `BW-best`, `BW-title`, `BW-ase`, `BW-ids` | Bedrock Wiki JSON UI documents (CC BY 4.0). Respectively Intro to JSON UI, Dynamic Content Generation, JSON UI Documentation, Modifying Server Forms, Buttons and Toggles, Type Conversion, Best Practices, Preserve Title Texts, Aseprite Animations, Numerical Item IDs |
+| `CN`, `CN-run` | Cinnabar (Rust code reconstructing the 26.30 native client) and the results of this project running its evaluator |
+| `NB` | Engine behavior analysis of the Android 1.26.52.3 native client library (level `code`) |
+| `DF` | Measurement on Windows 1.26.52 with the research server |
+| `FFR` | Mobile measurement of the server form factory and lag test add-on (2026-11-14) |
+| `ASJ`, `SLB` | AsaJS analysis, StarLibV2 analysis (both GPL-3.0, only techniques rewritten in English) |
+| `MS` | The modal form multiselect survey |
+| `NE` | NetEase (China edition) developer documentation |

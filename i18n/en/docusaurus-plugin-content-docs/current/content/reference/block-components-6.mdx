@@ -1,0 +1,348 @@
+---
+title: Block component reference (6/8)
+description: MS Learn block components, traits, and states.
+sidebar_position: 87
+sources:
+  - ms-learn
+---
+
+# Block component reference (6/8)
+
+This page excerpts the reference from MS Learn (MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0). Relative links in the original are removed.
+
+(Source: ms-learn, `creator/Reference/Content/BlockReference/Examples/traits/multi_block.md`)
+
+
+### Block Traits: multi-block
+
+The `minecraft:multi_block` block trait contains information about whether the block is composed of multiple block parts that act as a single block.
+
+> [!IMPORTANT]
+>
+> The `minecraft:multi_block` trait requires Bedrock Edition 1.26.10 or higher. For vertical directions if the block `format_version` is less than 1.26.40 then it requires that the "Upcoming Creator Features" experimental toggle is set on. For horizontal directions the experiment is required for `format_version` less than 1.26.50.
+
+There is only one valid state for `enabled_states` in this trait: `minecraft:multi_block_part`. This integer state indicates which part of the multi-block the block permutation is. Block permutations with state `minecraft:multi_block_part` set to `0` are considered the starting block part.
+
+#### Properties
+
+The `minecraft:multi_block` block trait contains two properties to define the multi-block:
+
+- `parts:` This integer property indicates how many block parts compose the multi-block. For example, if `parts` is set to `4`, then the multi-block is composed of 4 block parts. This property is optional and defaults to 2, however, if defined the value is clamped between 2 and at most 4 parts.
+- `direction`: This **required** string property defines what direction axis the block parts are placed in from part 0 to part N. If the direction is horizontal, and the block also defines the trait `minecraft:placement_direction`, and that trait enables the state `minecraft:cardinal_direction`, then the direction of placement is overridden by the `placement_direction` trait. Valid values for this property are:
+  - `up`
+  - `down`
+  - `north`
+  - `south`
+  - `east`
+  - `west`
+
+#### Requirements and restrictions
+
+A block with the `minecraft:multi_block` trait has a number of requirements and restrictions for other parts of the block definition.
+
+##### Traits
+
+A block with the `minecraft:multi_block` trait cannot define any other trait, except the `minecraft:placement_direction` trait that sets only the `minecraft:cardinal_direction` state.
+
+##### Components
+
+A block with the `minecraft:multi_block` trait has the following requirements and restrictions for block components:
+
+- It must define the `minecraft:movable` component in the base components and the `movement_type` property must either be `popped` or `immovable`. Cannot be defined in the permutations array.
+- It cannot define the `minecraft:placement_filter` component in the permutations array.
+- It cannot define the `minecraft:replaceable` component in the permutations array.
+- It cannot define the `minecraft:random_offset` component in the permutations array, and only vertical direction multi-blocks can use the random offset component.
+- If the direction is `up` or `down`, it cannot define the `minecraft:precipitation_interactions` component in the permutations array, to prevent partial vertical snow accumulation.
+
+#### Example
+
+The example light post block below is a vertical multi-block composed of 3 block parts. The block parts are placed in the `up` direction, meaning that part 0 is the bottom part of the light post, part 1 is the middle, and part 2 is the top. See the Create a Multi-Block page for a complete implementation of this block.
+
+```json
+{
+  "format_version": "1.26.40",
+  "minecraft:block": {
+    "description": {
+      "identifier": "multiblock:light",
+      "traits": {
+        "minecraft:multi_block": {
+          "enabled_states": [
+            "minecraft:multi_block_part"
+          ],
+          "parts": 4,
+          "direction": "up"
+        }
+      }
+    },
+    "components": {
+    }
+  }
+}
+```
+
+
+(Source: ms-learn, `creator/Reference/Content/BlockReference/Examples/traits/placement_direction.md`)
+
+
+### Block Traits: placement_direction
+
+The `minecraft:placement_direction` block trait records information about the direction the player was facing when the block was placed. You can use one of three states in the `enabled_states` block:
+
+- `minecraft:cardinal_direction` allows the cardinal placement direction of the block to be read by querying this trait. The value will be one four strings:
+  - `north`
+  - `south`
+  - `east`
+  - `west`
+- `minecraft:facing_direction` is similar to the `cardinal_direction` state, but records one of six string values:
+  - `north`
+  - `south`
+  - `east`
+  - `west`
+  - `up`
+  - `down`
+- `minecraft:corner_and_cardinal_direction` allows _two_ pieces of information to be queried: in addition to querying `minecraft:cardinal_direction`, you can query `minecraft:corner` to get a value for the corner shape of a block. There are five values `minecraft:corner` may return:
+  - `inner_left`
+  - `inner_right`
+  - `outer_left`
+  - `outer_right`
+  - `none`
+
+#### Rotation offset
+
+This trait supports an additional property: `y_rotation_offset` lets you specify a value to rotate the stored cardinal direction counter-clockwise from the direction the player had been facing. A value of `90.0`, for example, would cause a block placed when the player faced south to store the state of `east`, a 90-degree rotation from south.
+
+The valid values for `y_rotation_offset` are `0.0` (the default, no rotation), `90.0`, `180.0`, and `270.0`. The offset only applies to horizontal (Y-axis) directions.
+
+#### Examples
+
+##### Using a rotation offset
+
+```json
+{
+  "format_version": "1.21.130",
+  "minecraft:block": {
+    "description": {
+      "identifier": "custom:custom_block",
+      "menu_category": {
+        "category": "construction"
+      },
+      "traits": {
+        "minecraft:placement_direction": {
+          "enabled_states": ["minecraft:cardinal_direction"],
+          "y_rotation_offset": 90.0
+        }
+      },
+      // ...
+    }
+  }
+}
+```
+
+##### Using corner states
+
+```json
+{
+  "format_version": "1.21.130",
+  "use_beta_features": true,
+  "minecraft:block": {
+    "description": {
+      "identifier": "custom:custom_stairs_traits",
+      "menu_category": {
+        "category": "construction"
+      },
+      "traits": {
+        "minecraft:placement_position": {
+          "enabled_states": ["minecraft:vertical_half"]
+        },
+        "minecraft:placement_direction": {
+          "enabled_states": ["minecraft:corner_and_cardinal_direction"],
+          // Default is to corner with same block name
+          "blocks_to_corner_with": [{"tags": "q.any_tag('minecraft:cornerable_stairs')"}]
+        }
+      }
+    },
+    "permutations": [
+       {
+          "condition": "query.block_state('minecraft:cardinal_direction') == 'west' && query.block_state('minecraft:corner') == 'inner_left'",
+          "components": {
+              // ... 
+          }
+        }
+    ]
+  }
+}
+```
+
+
+(Source: ms-learn, `creator/Reference/Content/BlockReference/Examples/traits/placement_position.md`)
+
+
+### Block Traits: placement_position
+
+The `minecraft:placement_position` block trait records information about where the player placed the block in relation to other blocks. This allows a block to replicate the upside-down placement of slabs and stairs, as well as the attachment behavior of torches and vines.
+
+You can use one of two states in the `enabled_states` block:
+
+- `minecraft:block_face` represents the face of _another_ block on which this block was placed. For example, if the block is placed against the south face of a neighboring block, the state value will be `south`. It can be one of six string values:
+  - `north`
+  - `south`
+  - `east`
+  - `west`
+  - `up`
+  - `down`
+- `minecraft:vertical_half` specifies whether a block was placed against the top half or bottom half of a neighboring block. For example, if the block is placed on the `down` face of a block, or sits above the midline of another block's horizontal face, the state value will be `top`. It can be one of two values:
+  - `bottom`
+  - `top`
+
+#### Examples
+
+##### Using block_face
+
+The sample torch block is an excellent representation of the `minecraft:block_face` state; torches can be placed on the sides and upward faces of blocks. Additionally, torches placed on the side of a block have a different geometry than torches places on top of a block.
+
+```json
+{
+ "format_version": "1.20.20",
+ "minecraft:block": {
+  "description": {
+   "identifier": "testpack:torch_block",
+   "menu_category": {
+    "category": "construction"
+   },
+   "traits" : {
+    "minecraft:placement_position": {
+     "enabled_states": ["minecraft:block_face"]
+    }
+   }
+  },
+  "components": {
+   "minecraft:collision_box": {
+    "origin": [-0.5, 0, -0.5],
+    "size": [1, 10, 1]
+   },
+   "minecraft:selection_box": {
+    "origin": [-1, 0, -1],
+    "size": [2, 10, 2]
+   },
+   "minecraft:geometry": "geometry.torch",
+   "minecraft:material_instances": {
+    "*": {
+     "texture": "torch",
+     "render_method": "opaque"
+    }
+   },
+   "minecraft:placement_filter":{
+    "conditions": [
+     {
+      "allowed_faces": ["up", "side"]
+     }
+    ]
+   },
+   "minecraft:light_emission": 14
+  },
+  "permutations": [
+   { // north
+    "condition": "query.block_state('minecraft:block_face') == 'north'",
+    "components": {
+     "minecraft:transformation": {
+      "rotation": [0, 0, 0]
+     }
+    }
+   },
+   { // south
+    "condition": "query.block_state('minecraft:block_face') == 'south'",
+    "components": {
+     "minecraft:transformation": {
+      "rotation": [0, 180, 0]
+     }
+    }
+   },
+   { // west
+    "condition": "query.block_state('minecraft:block_face') == 'west'",
+    "components": {
+     "minecraft:transformation": {
+      "rotation": [0, 90, 0]
+     }
+    }
+   },
+   { // east
+    "condition": "query.block_state('minecraft:block_face') == 'east'",
+    "components": {
+     "minecraft:transformation": {
+      "rotation": [0, -90, 0]
+     }
+    }
+   },
+   { // all side faces
+    "condition": "query.block_state('minecraft:block_face') != 'up' && query.block_state('minecraft:block_face') != 'down'",
+    "components": {
+     "minecraft:collision_box": {
+      "origin": [-2, 3, 4],
+      "size": [4, 10, 4]
+     },
+     "minecraft:selection_box": {
+      "origin": [-2, 3, 4],
+      "size": [4, 10, 4]
+     },
+     "minecraft:geometry": "geometry.wall_torch"
+    }
+   }
+  ]
+ }
+}
+```
+
+##### Using vertical_half
+
+This slab block behaves similarly to a Vanilla slab, thanks to the `minecraft:vertical_half` state. If a player clicks the bottom face of the block, or the side face of a block in the upper half (click position y-value > 0.5), the `minecraft:vertical_half` state will be "top"; otherwise, it will be set to "bottom".
+
+> [!NOTE]
+> Slab blocks will not combine into a double slab; the block only replicates the Vanilla slab top/bottom placement behavior.
+
+```json
+​
+{
+ "format_version": "1.20.20",
+ "minecraft:block": {
+  "description": {
+   "identifier": "testpack:slab_block",
+   "menu_category": {
+    "category": "construction"
+   },
+   "traits" : {
+    "minecraft:placement_position": {
+     "enabled_states": ["minecraft:vertical_half"]
+    }
+   }
+  },
+  "components": {
+   "minecraft:geometry": "geometry.slab",
+   "minecraft:material_instances": {
+    "*": {
+     "texture": "slab",
+     "render_method": "opaque"
+    }
+   },
+   "minecraft:selection_box": {
+    "origin": [-8, 0, -8],
+    "size": [16, 8, 16]
+   },
+   "minecraft:collision_box": {
+    "origin": [-8, 0, -8],
+    "size": [16, 8, 16]
+   }
+  },
+  "permutations": [
+   { // upper_slab
+    "condition": "query.block_state('minecraft:vertical_half') == 'top'",
+    "components": {
+     "minecraft:transformation": {
+      "translation": [0, 0.5, 0]
+     }
+    }
+   }
+  ]
+ }
+}
+```
+

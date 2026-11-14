@@ -1,0 +1,85 @@
+---
+title: "upgrader (a probability wheel server form screen)"
+description: "A probability arc and needle effect that reskins a single ActionFormData. Rotation with pre-drawn frames, a bound-texture flipbook, stopping on the last frame, and a fallback body"
+sidebar_position: 16
+sources:
+  - upgrader
+  - repo-guide
+---
+
+## What it is
+
+upgrader is a probability-style "upgrader" server form pack by `hash2444` (the `/upgrader` command, a CS2-style screen). You put in an item and choose a more expensive target, and a probability arc (green) and needle spin to show success or failure. The whole screen is **a resource pack reskinning a single `ActionFormData`**. The repository `0119a5a` (2026-09-23) has only a README, SETUP-HELP.md, `Upgrader-v1.0.2.mcaddon`, and a preview PNG, and the source is inside the mcaddon (RP `min_engine_version` 1.21.110, BP `@minecraft/server` 2.1.0, `@minecraft/server-ui` 2.0.0). The clone has no `LICENSE`, so no code or images are copied and only the techniques are summarized (Source: cs-upgrader).
+
+Note the evidence level. The repository is a v1.0.2 uploaded one day earlier, and the README pictures are rendered previews and not game screens. So there is no record of "this is how it looked in game", and the working-pack level only means "a distributed pack was built this way".
+
+## Screen structure
+
+1. `server_form.json` redeclares `long_form` at the same path without `@` (`type: panel`, two `controls`). The vanilla look is shown when the title has no flag, and its own screen `upgrader.root` when it does. It works the same way as Chest-UI, so the two packs cannot be used together (proposed MOD-21).
+2. Inside `upgrader.root` there are several stage-specific `collection_panel`s (`collection_name: form_buttons`), and each panel's `#visible` is decided by **an exact match** of the title (spin `...§2`, result `...§3`, main screen `...§1`).
+3. The children of each panel have a fixed `collection_index` (0, 1, 2, ..., 22 times) and are placed with `anchor_from/to: top_left` and an absolute `offset`. The whole screen is a canvas with fixed coordinates. Text is `#form_button_text` to `#entry_text`, and the icon is `#form_button_texture` to `#texture`.
+4. The background uses the literal `"nineslice_size": 8` inside the UI JSON and there is no sidecar next to `panel.png`. Vanilla does not use this literal and Cinnabar reads it only from the sidecar (LAY-27, effect needs measurement).
+
+## The protocol from script to UI
+
+| Item | Value |
+| --- | --- |
+| Title | `MARKER` = `§u§p§g§q§r` + a screen code (`§1` main screen, `§2` spin, `§3` result). A `§` before each character keeps it invisible in the title even without the resource pack |
+| Body | Always a fallback sentence ("the resource pack is off so the default layout is shown"). The custom screen does not draw the body area |
+| Button 0 | Probability ID `"000"`~`"100"` to the arc texture |
+| Button 1 | Result ID `"00"`~`"99"` to the needle and spin sheet |
+| Buttons 2~7 | Probability text, multiplier text, input value, target value, reserved, guide text |
+| Buttons 8~ | Input slots (up to 3), target, run button, close |
+| Reverse mapping | For each button it builds `layout[i] = {kind}` and turns the `selection` number back into an action. A text-only button is `kind: "none"` and harmless when pressed |
+
+Numbers are sent as zero-padded fixed-width strings, so the path concatenation matches the file name exactly (`arc_037`). Checking with Cinnabar, the string `'037'` is joined as is, but the integer 37 gives `arc_37`. If a value goes through an operation even once it is reinterpreted as a number and the zeros are lost (EXP-30).
+
+## Key techniques
+
+### 1. Rotation with pre-drawn frames
+
+JSON UI has no image rotation property. So it prepares 101 probability arcs (`arc_000`~`arc_100`), 100 stopped needles (`needle_00`~`needle_99`), and 100 spin sheets (`spin_00`~`spin_99`, each 1280×1280 with 100 frames of 128px) and chooses by appending the number to the path.
+
+```jsonc
+// An example newly written to explain the technique (not the original)
+"arc_entry": {
+  "type": "image",
+  "bindings": [
+    { "binding_type": "collection", "binding_collection_name": "form_buttons",
+      "binding_name": "#form_button_text", "binding_name_override": "#upg_id" },
+    { "binding_type": "view",
+      "source_property_name": "('textures/ui/upgrader/arc/arc_' + #upg_id)",
+      "target_property_name": "#texture" } ]
+}
+```
+
+Instead of computing an angle or ratio, it pre-draws a picture for every possible result (1% steps, proposed ANI-29).
+
+### 2. Bound textures and `aseprite_flip_book`
+
+The spinning needle is an image with an `anim_type: aseprite_flip_book` animation on `uv`, `uv_size [128, 128]`, and `disable_anim_fast_forward: true`, and its `texture` is bound to `('textures/ui/upgrader/spin/spin_' + #upg_roll)`. The sidecar `spin_NN.json` (Aseprite Array format) is **a frame list that picks cells in deceleration order** (141~144 frames, mostly 20 ms, toward the end 40, 60, 80, 100, and 200 ms), and the last frame is the result cell NN. Each of the 100 results has its own sidecar, so changing the texture makes the same control play the spin program that matches the result. The vanilla tip screen (`game_tip_screen.json`) also uses `"texture": "#texture"` + `aseprite_flip_book` + `disable_anim_fast_forward: true` (proposed ANI-30).
+
+### 3. Lengthening the last frame to stop at the end
+
+A flipbook returns to the start and repeats by itself when it ends. Giving the last frame a long `duration` of 3,600,620 ms (about 1 hour) effectively stops it at the end. Some sheets are set to 3,600,600 ms so the total length is exactly 3,604,000 ms. Cinnabar's flipbook always loops with `ms % total length`, so this means "it stays on the last cell for about an hour" (one of the bases of proposed ANI-26). `disable_anim_fast_forward` keeps it from skipping the time that has already passed when the form opens (21 times in vanilla).
+
+### 4. Stage switching and the fallback
+
+- The title splits stages with an exact match (`#title_text = MARKER§N`) and uses a contains check to switch `long_form`. Only a one-character code follows the prefix, so an exact match is safe (proposed HOST-40).
+- After opening the spin form, the script counts elapsed time every tick and plays `random.click`, and when the time (4 seconds + 10 ticks of margin) has passed it closes with `uiManager.closeAllForms` and opens the result form. The result is settled before the spin is shown. The input item is removed 4 ticks later, because according to the author's comment Bedrock shows the normal game screen with the hotbar for one frame when switching from form to form (unverified).
+- It puts a fallback notice in the body, and the custom screen does not draw the body. Even if the form is closed or the connection is dropped, the prize to be received stays in a dynamic property and is paid out on the next connection (proposed HOST-39).
+
+## Relation to our rules
+
+| Rule ID | Relation |
+| --- | --- |
+| ANI-15, ANI-19, ANI-08, ANI-20 | Flipbook texture binding, `disable_anim_fast_forward`, rotation with frame images |
+| COL-06 | A large-scale example of building the whole screen with fixed indexes + absolute `offset` |
+| EXP-07, EXP-30 | Distinguishing contains check from exact match, number reinterpretation |
+| HOST-10, HOST-15, HOST-34 | Reset on form reopen, prefix and stage codes, a `§` flag on every character |
+| MOD-20, MOD-21 (proposed) | Packs that redeclare `long_form` cannot coexist |
+| LAY-27 | The effect of a literal `nineslice_size` needs measurement |
+
+## Items that need measurement
+
+Whether changing `#texture` restarts from the new sidecar or continues the elapsed time, the 3,600,000 ms stop of the last frame duration and its upper limit, whether the game screen shows for one frame between form-to-form switches, whether a literal `nineslice_size` draws a 9-slice without a sidecar, and whether the whole pack renders on 1.21.110 and 26.x (the repository has no game screen record).

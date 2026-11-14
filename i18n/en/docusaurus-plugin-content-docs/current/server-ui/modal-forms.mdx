@@ -1,0 +1,264 @@
+---
+title: Server form API and form types
+description: "How to use ActionFormData, MessageFormData and ModalFormData of @minecraft/server-ui, response handling, raw form JSON sent by server software, and the structure of the vanilla server form screen"
+sidebar_position: 2
+sources: [ms-learn, bedrock-wiki, bedrock-samples, repo-multiselect, private-research]
+---
+
+A server form is a feature where the server opens one window for a player and receives the response. There are three kinds of form, and the server decides only the kinds and order of text, buttons and input fields. The shape is drawn by the client's vanilla UI (`server_form.json`). This page covers how to make forms with the Script API, how to read responses, the shape of forms when server software (Dragonfly and others) sends them directly as JSON, and the structure of the vanilla screen. How to change the shape of a form is in [Reskinning server forms](./reskinning-server-forms.mdx), and the checkbox list row is in [multiselect](./multiselect.mdx).
+
+## 1. The `@minecraft/server-ui` module
+
+The module name is `@minecraft/server-ui` (formerly `mojang-minecraft-ui`, first appeared in 1.18.30). The list of versions at the time this page was written (MS Learn documentation commit `a9fd1c0`) is as follows (Source: ms-learn).
+
+| Version | Notes |
+| --- | --- |
+| `2.0.0` | Added `divider`, `header` and `label` to `ActionFormData`. Peer dependency `@minecraft/server@2.0.0` |
+| `2.1.0` | Added `CustomForm`, `MessageBox` and 4 `Observable*` types (DDUI), and added the enums `DataDrivenScreenClosedReason`, `FormVisibilityErrorReason` and `TextFilteringError` |
+| `2.2.0` | Added `CustomForm.image` |
+| `2.3.0` | Stable release. Added `MessageBox.button1WithOptions` and `button2WithOptions` |
+| `2.4.0-rc.1.26.70-preview.24` | Added `CustomForm.multiButtonRow` and `MessageBox.button3WithOptions` |
+| `2.5.0-beta.1.26.70-preview.24` | Added an `options` argument to the `CustomForm` constructor and to `MessageBox.body` |
+| `1.0.0`~`1.3.0` | The 1.x line. It is in a separate document |
+
+The manifest dependency is written like this (Source: bedrock-wiki).
+
+```json
+{
+  "dependencies": [
+    { "module_name": "@minecraft/server", "version": "2.0.0" },
+    { "module_name": "@minecraft/server-ui", "version": "2.0.0" }
+  ]
+}
+```
+
+The names imported from the module are the three form classes.
+
+```js
+import { ActionFormData, MessageFormData, ModalFormData } from "@minecraft/server-ui";
+```
+
+This page covers these three classes (forms drawn by the vanilla UI). `CustomForm`, `MessageBox` and `Observable*` (DDUI), which the client draws with Ore UI, are in the [DDUI server guide](../ore-ui/ddui-server-guide.mdx).
+
+### Conditions for a form to open
+
+- If another UI is open, the form cannot appear and comes back as canceled. The same applies when the chat window is open, so to open a form from a chat command, you must first close the chat UI. The safest approach is to open it from another event such as `itemUse` (Source: bedrock-wiki).
+- `show()` cannot be called in restricted-execution mode. So inside a `beforeEvents` callback (restricted execution), do not call it directly; open it one tick later with `system.run` (Source: derived from the MS Learn phrase "This function can't be called in restricted-execution mode").
+- `show()` can throw `EngineError`, `InvalidEntityError` and `RawMessageError` (Source: ms-learn).
+
+## 2. Common parts of the response
+
+The three responses (`ActionFormResponse`, `MessageFormResponse`, `ModalFormResponse`) inherit from `FormResponse` (Source: ms-learn).
+
+| Property | Meaning |
+| --- | --- |
+| `canceled: boolean` | True if the player canceled by pressing the close button (X) |
+| `cancelationReason?: FormCancelationReason` | Reason for cancellation |
+
+`FormCancelationReason` has two values.
+
+| Value | Meaning |
+| --- | --- |
+| `UserBusy` | Canceled because the player was using another UI (chat, inventory and so on) |
+| `UserClosed` | The player closed it directly |
+
+A form canceled with `UserBusy` can be reopened after a moment. An achievements add-on reopens up to 20 times at 10-tick intervals (Source: private research).
+
+When the Promise of `show()` is rejected, a `FormRejectError` arrives and its `reason` (`FormRejectReason`) tells the cause (Source: ms-learn).
+
+| `FormRejectReason` | Meaning |
+| --- | --- |
+| `MalformedResponse` | The client response could not be parsed |
+| `PlayerQuit` | The player left before responding |
+| `ServerShutdown` | The server shut down before the response |
+
+A canceled form also enters `.then()`, so checking `canceled` before using the response is the basic rule (Source: bedrock-wiki).
+
+```js
+form.show(player).then((r) => {
+  if (r.canceled) return;      // closed, or canceled because of another UI
+  // use r.selection or r.formValues
+}).catch((e) => {
+  console.error(e, e.stack);
+});
+```
+
+## 3. ActionFormData: button list
+
+A form that lines up buttons vertically. It is used for shops, minigame selection and menus.
+
+| Method | Meaning |
+| --- | --- |
+| `title(text)` | Window title |
+| `body(text)` | Body text above the buttons |
+| `button(text, iconPath?)` | Add a button. The second argument is the icon texture path |
+| `header(text)` | Heading (since 2.0.0) |
+| `label(text)` | Label text (since 2.0.0) |
+| `divider()` | Divider (since 2.0.0) |
+| `show(player)` | `Promise<ActionFormResponse>` |
+
+Text arguments are strings or a `RawMessage` (an object such as `{ translate: ... }`). `ActionFormResponse.selection` is the index of the pressed button (from 0). `header`, `label` and `divider` are rows that cannot be pressed (the vanilla factory does not attach `button.form_button_click` and draws them as separate controls `{vanilla}`). I could not confirm whether these rows take up `selection` indexes. When you use them, print `selection` and decide the numbering.
+
+The icon path is a vanilla texture (`textures/items/compass`) or a custom texture in a resource pack (`textures/wiki/icons/btn_icon_3`). A custom texture requires that resource pack to be in the world (Source: bedrock-wiki). This path string is read by the UI side as `#form_button_texture`, so an application is possible where the pack reads a numeric string and draws an item icon ([Chest UI](./chest-ui.mdx)).
+
+Up to 256 buttons is safe. Adding more can break the form (Source: bedrock-wiki). One button expands into tens to hundreds of controls on the client, so in practice it is better to use far fewer (see the performance item in [Inventory-style menus](./inventory-menus.mdx)).
+
+```js
+const form = new ActionFormData()
+  .title("Minigames")
+  .body("Choose the games")
+  .button("Spleef", "textures/items/diamond_shovel")
+  .button("Murder Mystery", "textures/items/iron_sword");
+
+form.show(player).then((r) => {
+  if (r.canceled) return;
+  switch (r.selection) {
+    case 0: /* Spleef */ break;
+    case 1: /* Murder Mystery */ break;
+  }
+});
+```
+
+## 4. MessageFormData: two-button confirmation
+
+A form with a large body and two buttons. It is used for yes/no and confirm/cancel questions (Source: ms-learn, bedrock-wiki).
+
+| Method | Meaning |
+| --- | --- |
+| `title(text)`, `body(text)` | Title, body (5 or more lines fit; line break is `\n`) |
+| `button1(text)`, `button2(text)` | The two buttons |
+| `show(player)` | `Promise<MessageFormResponse>` |
+
+`MessageFormResponse.selection` is 0 for `button1` and 1 for `button2`. There is no close button, but closing with Esc gives `canceled`. So if you put "Yes" on `button2` and "No/Cancel" on `button1`, you can handle cancel and `button1` as one case.
+
+```js
+form.show(player).then((r) => {
+  if (r.canceled || r.selection === 0) return; // closed, or button1
+  // button2 was pressed
+});
+```
+
+## 5. ModalFormData: input form
+
+A form that lays out several controls like a questionnaire and sends them all at once. It has no body (Source: bedrock-wiki). A submit button is attached at the bottom.
+
+| Method | Response value type |
+| --- | --- |
+| `toggle(label, options?)` | `boolean` |
+| `slider(label, min, max, options?)` | `number` |
+| `dropdown(label, items, options?)` | `number` (the index of the chosen item, from 0) |
+| `textField(label, placeholder, options?)` | `string` |
+| `header(text)`, `label(text)`, `divider()` | No value (see below) |
+| `title(text)`, `submitButton(text)` | Title, submit button text |
+| `show(player)` | `Promise<ModalFormResponse>` |
+
+The properties of the options objects (`ModalFormData...Options`) are as follows (Source: ms-learn).
+
+| Control | Properties |
+| --- | --- |
+| `toggle` | `defaultValue?: boolean`, `tooltip?: RawMessage or string` |
+| `slider` | `defaultValue?: number`, `valueStep?: number` (default 1), `tooltip?` |
+| `dropdown` | `defaultValueIndex?: number` (default 0), `tooltip?` |
+| `textField` | `defaultValue?: RawMessage or string`, `tooltip?` |
+
+`tooltip` appears as an exclamation icon next to the control, and the text shows when you hover.
+
+A dropdown returns the index, not the chosen text. If you keep the options array separately and look up values by index, you can keep the visible text and the internal value different (Source: bedrock-wiki).
+
+### Response: `formValues`
+
+`ModalFormResponse.formValues` is `(boolean | number | string | undefined)[]`, holding the values from top to bottom in the order the controls were added. Receive them into variables with destructuring.
+
+```js
+const form = new ModalFormData()
+  .title("Effect Generator")
+  .textField("Target", "Target of Effect")
+  .dropdown("Effect Type", ["Regeneration", "Protection", "Poison", "Wither"])
+  .slider("Effect Level", 0, 255, { defaultValue: 1 })
+  .toggle("Hide Effect Particle", { defaultValue: true });
+
+form.show(player).then((r) => {
+  if (r.canceled) return;
+  const [target, effectIndex, level, hideParticles] = r.formValues;
+});
+```
+
+Whether `label`, `header` and `divider` also take up a position can differ by version, so do not count value positions by hand; it is safer to check with `console.warn(r.formValues)`. In a form the server sent directly as JSON, the label position arrives as `null` (the measurement in section 6 below).
+
+Version compatibility note. Old documentation examples use positional arguments such as `slider(label, min, max, step, default)` and pass a boolean directly as in `toggle(label, true)`. In the current 2.x signature, the last argument is an options object as in the table above (Source: the two examples in ms-learn and bedrock-wiki differ).
+
+### Value validation
+
+Form values are sent by the client. It is safer for the server to recheck the range (`min`~`max`) and the validity of dropdown indexes. When the server sends JSON directly, follow the validation items in section 7.
+
+## 6. Raw forms sent by server software
+
+Servers of the Dragonfly, PocketMine and Nukkit families and proxies have no Script API. They put the form JSON directly in a `ModalFormRequest` packet. Taking one environment as an example, Dragonfly provides `form.Menu` (action form) and `form.Custom` (modal form), and the button text, icons, body and title are the data channel (Source: private research).
+
+### 6.1 Kinds of form JSON
+
+| Form | `type` | Response (`ResponseData` of `ModalFormResponse`) |
+| --- | --- | --- |
+| Action form | `form` | Index of the pressed button (integer) |
+| Confirmation | `modal` | `true`/`false` |
+| Input form | `custom_form` | An array with one position per `content` row |
+
+If the window is closed, `ResponseData` does not arrive and `CancelReason` arrives.
+
+### 6.2 Row types of `custom_form`
+
+The client binary (Android 1.26.52.3) has a schema for form JSON with description strings, and the row `type` has nine kinds (`NB-16`, Source: repo-multiselect).
+
+`label`, `toggle`, `slider`, `step_slider`, `dropdown`, `multiselect`, `input`, `header`, `divider`
+
+`text` is "the text shown above the control". Six row types have `tooltip` ("the text shown as a tooltip"). The vanilla UI factory (`generated_contents`) also has the same names (`label`, `toggle`, `slider`, `step_slider`, `dropdown`, `input`, `header`, `divider`, `multiselect`) as `control_ids` (Source: bedrock-samples 1.26.50, facts only).
+
+This is one shape of sent JSON. It is an example gathering the behaviors actually exchanged with the test server into one form (Source: repo-multiselect).
+
+```json
+{
+  "type": "custom_form",
+  "title": "Notification settings",
+  "content": [
+    { "type": "toggle", "text": "Receive notifications", "default": true },
+    { "type": "dropdown", "text": "Language", "options": ["Korean", "English"], "default": 0 },
+    { "type": "label", "text": "Choose, then press Submit" }
+  ]
+}
+```
+
+The response is an array with one position per row of `content`, in order. The label position is `null` `{measured}`. The positions for headers and dividers were not checked.
+
+| Row | Response value |
+| --- | --- |
+| `toggle` | `true`/`false` |
+| `dropdown` | Index (integer) |
+| `label` | `null` |
+| `multiselect` | Array of indexes, `null` if none was chosen ([multiselect](./multiselect.mdx)) |
+
+The response JSON arrives with a trailing newline. Strip whitespace before parsing `{measured}`.
+
+### 6.3 Dragonfly-side constraints
+
+Dragonfly's `form.Custom` requires a private method in the `form.Element` interface, so you cannot create new row types from outside. For rows that are in the schema but unknown to the library (`multiselect`), you must send a raw packet and read the response yourself (Source: repo-multiselect).
+
+## 7. Form behavior a server should know
+
+- **Modal forms do not take the server form theme**: `modal_form` (the confirmation window) does not use the `long_form` and `custom_form` themes of `server_form.json` and appears as a light default window. If you need a confirmation window in a server form screen whose shape you changed, send it as two buttons of an action form `{record}` (Source: private research).
+- **The same form piles up**: While the use button is held, the client repeatedly sends the item use packet. If you send a form on every use, the same form piles up and the next one appears each time you close one. When opening a form from a use event, add a cooldown or a check for an already open form `{record}` (Source: private research).
+- **Toast**: The client shows toasts one at a time in turn. Toasts show even while a form is open and do not block the next form `{record}`.
+- **Transitions between forms**: While one form is replaced by the next, the conditions of the previous layout may briefly match and remain on top of the next form. The conditions when choosing the layout by a title marker in a resource pack are in [Reskinning](./reskinning-server-forms.mdx).
+- A 1.26.40 change fixed the problem where `ModalFormData` and `MessageFormData` were not shown right after a `CustomForm` or `MessageBox` (Source: ms-learn Update1.26.40).
+
+## 8. Structure of the vanilla server form screen
+
+This is the skeleton of vanilla `resource_pack/ui/server_form.json` (1.26.50.4, Source: bedrock-samples, facts only). To redraw forms with a resource pack, you need to know this structure.
+
+- The entry screen `third_party_server_screen` inherits `common.base_screen` and uses `server_form.main_screen_content` as `$screen_content`. It maps `button.menu_cancel` to `button.menu_exit` (globally).
+- `server_form_factory` in `main_screen_content` is `type: factory`, and its `control_ids` link `long_form` (action form) and `custom_form` (input form) to `@server_form.long_form` and `@server_form.custom_form`. Depending on the form type, one of them is created.
+- **Action form (`long_form`)**: A 225x200 window that inherits `common_dialogs.main_panel_no_buttons`. The title is `#title_text` and the body is `#form_text`. Inside is a scroll panel, and the `long_form_dynamic_buttons_panel` in it builds the button list with a `factory` (`name: buttons`, `control_ids`: `button`, `label`, `header`, `divider`). The collection name is `form_buttons` and the length takes `#form_button_contents` as `#collection_length`.
+- One button (`dynamic_button`) is a horizontal stack of height 32. The 32x32 image on the left takes its path from `#form_button_texture` (a collection binding), and hides the image if the value is empty or `loading` (a progress bar if `loading`). The `form_button@common_buttons.light_text_button` on the right has `$pressed_button_name` as `button.form_button_click` and its text is `#form_button_text`.
+- Header and label rows are `dynamic_header` and `dynamic_label`, which use `#form_button_text` as text.
+- **Input form (`custom_form`)**: Likewise a 225x200 window. The `generated_contents` inside expands the `custom_form` collection with a factory (length `#custom_form_length`). The binding names differ per row: label and header `#custom_text`, toggle `#custom_toggle_state`, slider `#custom_slider_text` and `#custom_slider_value`, step slider `#custom_slider_step_text`, `#custom_slider_step_value` and `#custom_slider_steps`, dropdown `#custom_dropdown_length`, `#custom_radio_text` and `#custom_radio_toggled`, input field `#custom_input_text` and `#custom_placeholder_text`, tooltip `#custom_tooltip_text`. The submit button at the bottom has `$pressed_button_name` as `button.submit_custom_form` and its text is `#submit_text`.
+
+These binding names are not a channel through which the server loads data; they are values the client passes to the UI after parsing the form JSON. The only way for the server to distinguish screen types is to put a marker in the title or button text ([Reskinning](./reskinning-server-forms.mdx)).

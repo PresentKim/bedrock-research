@@ -1,0 +1,111 @@
+---
+title: Biomes and custom dimensions
+description: Behavior/client biome formats, replace_biomes, surface builders and noise_type, biome tags and structures, custom dimension registration and JSON definition, and limits.
+sidebar_position: 8
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+---
+
+# Biomes and custom dimensions
+
+A biome is a file that cannot change the terrain shape and decides the surface blocks, climate, tags and client effects (color, atmosphere). Features and structures are covered in [Worldgen](./worldgen-and-features.mdx). The evidence is community research (2025-10~2026-11), MS Learn and the Bedrock Wiki (0930b39) (Source: private research). Verification levels are written as `(conflicting)`, `(single report)` and `(unverified)`.
+
+## Key summary
+
+1. The terrain shape cannot be changed with biome files. A custom biome only replaces part of a vanilla biome with `minecraft:replace_biomes`, and only the Overworld and (after the fix around 2026-05) the Nether are possible, while the End is not.
+2. Custom dimensions left experimental in 26.30. The only generator is `void`, and feature rules and structure sets do not run naturally, so content is placed with scripts. From 26.50, BP `dimensions/` JSON definitions are also supported.
+3. `/locate` finds only jigsaw structures and custom biomes.
+
+## 1. Biomes
+
+### Format and concept
+
+A biome consists of two files: the behavior biome (BP `biomes/`) and the client biome (RP `biomes/`). The behavior biome uses `1.21.110` and the client/resource biome uses `1.21.120` (by the latest Mojang samples, and one member said only 1.21.120 worked). An old 1.13.0 client biome fails with `Cannot load client_biome with format_version 1.13.0`, and 1.20.70 and others give `[BiomeRegistry] unsupported version: no parser available`. There is also a `format_version must be 1.21.110 or higher` error. A client biome must be in namespaced form. The old wiki biome info (1.16.210) and the "experimental" label are outdated, and the MS docs are the latest.
+
+### replace_biomes
+
+- `minecraft:replace_biomes` is needed for a custom biome to generate. A custom biome cannot generate on its own and appears only as a replacement (a biome that replaces nothing is not possible, and both a biome and a client biome file are needed). `targets` must be vanilla biome IDs with the `minecraft:` prefix (tags are not allowed). There is no filter based on neighboring biomes (such as only a beach next to a jungle). A replacement changes only the biome/block kinds and keeps the terrain shape. You cannot mix the vanilla biome layout on the same seed or block the default biomes by any method other than replacement (an attempt at "ocean only" produced only stone).
+
+```json
+"minecraft:replace_biomes": {
+  "replacements": [
+    { "dimension": "minecraft:overworld", "targets": [ "minecraft:plains" ], "amount": 1, "noise_frequency_scale": 25 }
+  ]
+}
+```
+
+- Patch shapes: square or sparse replacements are fixed by raising `noise_frequency_scale` (MS example 25), lowering `amount` and adding more targets. "Chunk border" squares come from old chunks stored on disk, so recreate the world. Replacing many vanilla biomes makes world loading slow. `/locate biome` is limited to a radius of about 500 blocks, so when testing raise `amount` or teleport far away and check real load failures in the Content Log. `/locate biome` fails for a completely replaced vanilla biome, so look for the custom biome.
+- Dimensions (by period): in 2025-11 only the Overworld was supported. Replacing in the Nether as documented (`"dimension": "minecraft:nether"`, targets `soul_valley`, `basalt_deltas` and so on) had a bug and was fixed in the 2026-05 Preview/hotfix (MCPE-236399). Custom Nether biomes need no scripts or beta modules. A custom End biome is impossible. With non-VV lighting a custom End biome shows the Overworld sky (unresolved).
+
+### Components
+
+- Components confirmed to work in 1.21.110: `minecraft:climate`, `minecraft:overworld_height {noise_type}`, `minecraft:surface_builder {builder:{type:"minecraft:overworld", sea_floor_depth, sea_floor_material, foundation_material, mid_material, top_material, sea_material}}` (replacing the old `minecraft:surface_parameters`). The Nether uses `type: "minecraft:capped"` with `floor_materials`, `ceiling_materials`, `beach_material` and `foundation_material`. `minecraft:surface_material_adjustments` is a biome component, not a feature (about 17 biomes such as `minecraft:hell` use it for surface decoration without features).
+- Valid `noise_type` presets (1.21.110 samples): default, default_mutated, river, ocean, deep_ocean, lowlands, taiga, mountains, highlands, extreme, less_extreme, beach, stone_beach, mushroom, swamp (`forest` is invalid).
+- No effect on terrain: `overworld_generation_rules` is legacy/non-functional, `minecraft:overworld_height` has almost no effect, and `sea_floor_depth` seems to change only the surface layer thickness or have no effect at all. Biome height is at most about 128. Foundation material cannot overwrite the deepslate layer, so a "down to bedrock" block fails (below that the cave biomes take over and only replacing stone with a feature works). `multinoise_generation_rules` can be overridden for vanilla biomes but cannot be used to place custom biomes. The vanilla biome distribution/noisemap is not exposed.
+- The `minecraft:noise_gradient` surface builder (new in 1.26.30) uses `noise_descriptor` (`name`, `first_octave`, `amplitudes`) and `noise_block_specifiers` (`range` min/max). The meaning of octaves and ranges is unresolved.
+
+### Tags and vanilla structures
+
+Tags do nothing by themselves and are used in spawn rules, feature rules and jigsaw. Replacing a vanilla biome loses villages, temples, shipwrecks and trial chambers (because they look for vanilla IDs/tags). Adding the tags of the replaced biome brings back vanilla structures (for example the `plains` tag gives plains villages, and ice plains needs both `ice_plains` and `mutated`). Keeping the vanilla ID and tags makes structures appear but loses custom effects (rain and so on). Village generation can be turned on and off with the biome JSON (including variant selection). The wiki tag page only lists them and is generated from `tags.json` / `tags_per_biome.json`.
+
+### Other
+
+- Cave biomes: replace lush caves/dripstone/deep dark, or make a custom "X-cave" biome matched to the surface. A cave biome only tags the area, so decorate it directly with features (cave_carver, snap_to_surface, ore, growing_plant, vegetation_patch).
+- Grass side color: the top of grass in a custom biome uses the colormap, but the sides are fixed in terrain_textures so the color does not match (an old bug). A workaround of giving `overlay_color` to `grass_side` in `terrain_texture.json` (`{"textures":[{"overlay_color":"#2eabf9","path":"textures/blocks/grass_side"}]}`) worked for one person and not for another.
+- Weather is global, so an always-raining biome is impossible (fake rain with script checks or collision particles). Negative fog values tint the screen. To remove the snow layer of a replaced ice plains, change temperature/downfall. A modified swamp biome did not work on Realms (unresolved).
+- For extra biomes, duplicate all files and rename them. Superflat + biomes still works in 2026 except for the tree problem.
+
+## 2. Custom dimensions
+
+### Registration
+
+Register with `event.dimensionRegistry.registerCustomDimension(id)` in the script `system.beforeEvents.startup` (startup only, cannot be rerun with `/reload`). It left experimental in 26.30 and was in the stable release on 2026-06-23 (unstable and laggy at first).
+
+```javascript
+import { system } from "@minecraft/server";
+
+system.beforeEvents.startup.subscribe((event) => {
+  event.dimensionRegistry.registerCustomDimension("ns:dimension");
+});
+```
+
+### Generation
+
+Only the `void` generator (`"generator_type": "void"`) exists, and the default biome is `minecraft:ocean` (ocean mobs spawn). It does not inherit Overworld terrain/biomes and is just a void with Overworld mechanics. Structure sets and feature rules do not run naturally. The ocean biome tag rules were not placed either. Place things only with commands/scripts (jigsaw + script worldgen, features for small additions) and imitate terrain with scripts. QuickJS noise and `Dimension.fillBlocks` on large volumes are the bottlenecks, so split volumes, schedule with `system.runJob` and batch native calls. The dimension biome cannot be changed at runtime (use an Editor mod, the offline Amulet API, or the Java to Bedrock Chunker).
+
+### JSON dimension definition (26.50 and above)
+
+`BP/dimensions/<name>.json` was added in Preview 26.50.25. Both script and JSON registration work, and JSON overrides script registration. JSON is better for setting the height range and default biome. Script registration will be kept for the time being. The bug that tied dimension bounds to the Overworld -64..320 (MCPE-241528) was fixed and -512..512 returned (2026-08-18). The components changed from min_y/max_y to `minecraft:dimension_height {min_y, height_range}`. `minecraft:default_biome {biome}` is an object for future extension. In 26.45 the height limit could not be set. A 1.26.60 working example (derived from the schema, and a schema validator may show the format_version wrongly):
+
+```json
+{
+  "format_version": "1.26.60",
+  "minecraft:dimension": {
+    "description": { "identifier": "ns:dimension" },
+    "components": {
+      "minecraft:clouds": { "height": -64 },
+      "minecraft:dimension_height": { "min_y": -512, "height_range": 1024 },
+      "minecraft:generation": { "generator_type": "void" },
+      "minecraft:default_biome": { "biome": "minecraft:forest" }
+    }
+  }
+}
+```
+
+- The earlier data-driven dimension file (format 1.18.0) used `minecraft:dimension_bounds` (min/max) and `minecraft:generation` (void) in `minecraft:dimension`, and was used for things like void generation of vanilla dimensions. In 1.26.20, having several crashed pack loading (MCPE-238456, fixed around 2026-05-14), and giving custom bounds to a vanilla dimension gave an error. Overlapping void generation with custom generation is impossible.
+- ID: the 26.10 world NBT has a dimension ID map. Custom dimension numeric IDs start at 1000 and go up to 57089 (some say they saw 58079/65376), and the total limit is stored on disk. Dimension 3 is unused. Most Unicode can be used in namespace IDs.
+- Sky, clouds, weather: sky/fog color is set only by a custom (client) biome inside the dimension. The `minecraft:clouds` (height) component was added in 26.60 (at first limited to Overworld height, MCPE-242282). The `in_clouds` entity filter works in custom clouds at any height. Weather/ambient particles are controlled by the biome.
+- Bugs and behavior: `/setworldspawn` does not work in custom dimensions. You can enter with `/execute in <dim> run tp`, but changedimension does not work. Saving and quitting inside a custom dimension leaves the screen blue until you go to the Overworld and back. In single player, when nobody has the destination loaded, moving between dimensions with `entity.teleport` despawned persistent mobs or put them in the wrong place (fix confirmed 2026-07-28). Whether custom dimensions work on BDS is unresolved.
+- World editing and transfer: with Chunker (HiveGamesOSS) you can put chunks into leveldb and put a prebuilt world into a custom dimension (several dimensions succeeded, no documentation). Amulet does not support custom dimensions. Bedrock World Editor (8Crafter-Studios) does. Encrypted Marketplace worlds cannot be edited.
+- Requests (unreleased): per-dimension time/world clock, gravity, game rules, weather, sky, portal API (workaround: a custom block without a hitbox + step/inside detection, player.json `inside_block_notifier`), dimension reset/temporary dimensions, dimension_types templates, Java-like worldgen JSON, client-side dimension definition in the RP.
+
+## 3. Known limits and workarounds
+
+- Custom components disappear from permutations (MCPE-234714): define every custom component in every permutation.
+- Blocks placed by worldgen do not tick: use x/z 0..15 (without negative extents), `final_pass`, search + feature, or check near players with scripts.
+- Block size over 30px: use multi-block, several blocks or entities. Only one selection box: multi-block + voxel shape (planned), entities.
+- onStepOn not firing on thin blocks: use a 4px floor cube, `onEntityFallOn` or player tick checks.
+- Changing terrain: not possible with biomes, so place air/stone with the features in [Worldgen](./worldgen-and-features.mdx).

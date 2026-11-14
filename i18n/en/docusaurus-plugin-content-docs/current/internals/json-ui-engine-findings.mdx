@@ -1,0 +1,282 @@
+---
+title: JSON UI engine findings
+description: JSON UI resolution rules confirmed by engine behavior analysis (modifications, factories, collections, bindings, ignored, the color table, hyperlinks, the paper doll, the server form schema).
+sidebar_position: 2
+sources:
+  - private-research
+  - repo-guide
+  - private-research
+  - repo-survey
+---
+
+
+The JSON UI engine reads a resource pack's `ui/*.json` and builds the screen. There is no official documentation, so "does the engine read this key, in what order does it evaluate, what errors does it raise" was long guessed only from measurements and reconstructed code. This page collects what was learned by reading the actual client binary, **by topic**: modification (`modifications`), factories and collections, bindings and variables, input (hyperlinks), text (the color table), renderers (the paper doll), the server form schema, and error messages.
+
+
+All verification levels are `code`. It was read from compiled output, so it does not guarantee game behavior, and if it differs from in-game measurement, follow the measurement. `@0x…` is an analysis address in the Android 1.26.52.3 arm64 build and changes when the version changes. The analyzed code is not included, and only the behavior is rewritten in English.
+
+## 0. At a glance: what was confirmed and what was overturned
+
+- **Overturned**: the verdict that `target_control` has no basis (MOD-03) was wrong. It is a key the engine reads. `#hyperlink` is not "about 30" but exactly 116 URLs that must match. The judgment that there is no color variable for `§w` was only a naming difference (`$party_blue_color`).
+- **Confirmed**: `factory_variables` passes variables of the declaring scope (COL-15), the naming rule of `type: factory` (COL-25), `control_name` before `control_ids` (COL-28), `collection_index` only on direct children of a collection parent (COL-02, COL-38), the 6 `binding_condition` values (BND-22), `ignored` before `variables` (FILE-34).
+- **Newly learned**: `ignoreCollectionItem`, the 7 keys of a `modifications` item, the required keys and error messages per binding type, the fact that `_first_hidden_child_index` is exclusive to the store screen, the 9 row types of the server form schema, and the fact that the international edition has no NetEase skeleton model.
+
+### Guide rule verdict table
+
+| Rule | Earlier level | What was seen in the binary | Verdict |
+| --- | --- | --- | --- |
+| MOD-14 | unverified, code | The operation name table has exactly 11 entries (numbers 1~11): `insert_back`, `insert_front`, `insert_after`, `insert_before`, `move_back`, `move_front`, `move_after`, `move_before`, `swap`, `remove`, `replace` (NB-01) | The name list is confirmed. The in-game behavior of each operation still needs measurement |
+| MOD-03 | measured, unverified | Reads `target_control` (a string) and reads `target` only when it is absent (NB-02). `array_name` is not a fixed list but looks up the same-named member of the definition (NB-03) | The `target_control` part is refuted. The array range conflicts (Appendix A C-64) |
+| COL-15 | vanilla, code, inferred | `factory_variables` is a string array, and each name is looked up in the scope that declared the factory and its value is passed (NB-04) | The inference was right |
+| COL-25 | unverified, vanilla | A `type: factory` control does not read a factory name separately. It reads `name` only for a `factory` object (NB-05) | Confirmed |
+| COL-28 | code (CN) | `control_ids` is read only when `control_name` is empty (NB-06) | Confirmed |
+| COL-02, COL-38 | measured, code, conflicting / measured | Only direct children of a parent with a collection name become collection items, and `collection_index` is read only then (NB-07) | Matches the measured conclusion |
+| INP-24 | unverified | Opens only the 116 exactly matching URLs. Under some condition it also allows 3 prefixes (NB-08) | The conclusion that custom URLs do not open is confirmed. "About 30" was wrong |
+| BND-22, BND-23, BND-24, BND-25 | code (CN) | 6 `binding_condition` values with `none` when omitted, and 3 scopes for view bindings (NB-09) | Confirmed |
+| FILE-34 | code (CN) | `ignored` is evaluated before that control's `variables` (NB-10) | Supported |
+| TXT-08 (`§w` in the survey) | measured, vanilla, working pack | The 29-color `§` color table is built from 29 variables in `_global_variables.json` (NB-11) | The color of `§w` is `$party_blue_color` |
+| COL-27, COL-29 | code (CN) | The store description component gives the length binding an array of kind names (`["tag", …]`) (NB-14). `control_name` is built directly in the declaring scope at resolution time (NB-13) | Supported |
+| (new rule) | - | The factory resolution path, `max_children_size` default 0, the identity of `_first_hidden_child_index` (NB-13, NB-14) | New rules COL-45, COL-46 |
+| ANI-05, NetEase `paper_doll` and `netease_paper_doll_renderer` | vanilla / [China edition] | 0 `netease` strings, 0 NetEase skeleton model property names. The vanilla paper doll properties exist (NB-12) | International edition UI cannot draw skeleton models or entities (new rules ANI-35, ANI-36) |
+
+
+## 1. `modifications`
+
+`modifications` is the mechanism by which a pack inserts, moves, replaces and deletes controls of a vanilla screen. The engine reads operation names and item keys as below. The guide's MOD rules (the modification chapter) assume these facts.
+
+### NB-01 There are only 11 `modifications` operation names
+
+The `modifications` resolve function (`@0x098474d4`) and the operation name table function (`@0x09845574`) map the same 11 names to numbers 1~11. A name must match exactly, and there are no other operation names.
+
+### NB-02 `target_control` is read before `target`
+
+In an operation item, if `target_control` is a string it is used as the second criterion, and otherwise the `target` value is read. If both exist, `target_control` wins. After that, the target element is chosen together with the operation number. The item keys this function reads are seven: `array_name`, `control_name`, `operation`, `where`, `target_control`, `target` and `value`.
+
+### NB-03 `array_name` looks up the same-named member of the definition
+
+- `array_name` is not compared against a fixed list (`controls`, `bindings`). It takes the member of that name directly from the definition JSON and uses it as the target if it is an array.
+- If `array_name` is empty and `control_name` is a string, `array_name` is filled with `"controls"`. An item that handles a control may omit `array_name`.
+- So at the resolution stage, array members other than `controls` and `bindings` (for example `variables` written as an array, `button_mappings`) can also be targets. But there is an in-game measurement that `variables` was ignored (BC-facts). It may be resolved but have no effect because variables are fixed earlier than that, and this analysis could not tell (Appendix A C-64).
+
+
+## 2. Factories and collections
+
+A factory creates as many controls as there is data, and a collection is list data the engine supplies. Which control becomes a collection item and how the factory name is decided come from the engine structure. The rule-side summary is in the collections and factory chapter (`COL-nn`).
+
+### NB-04 `factory_variables`
+
+- Read only when it is an array. If it is not an array, it is ignored silently.
+- If an item is not a string, it leaves `JSON UI parse failure: factory_variables should all be strings of json variables created higher up the tree.` in the content log.
+- It looks up each string (`"$a"`) in the scope of the control that declared the factory and stores that name and value in the factory. The controls that are created receive this value.
+
+### NB-05 Factory name
+
+- If the `type` of a control is a factory and that control directly has `control_name` or `control_ids`, that control itself is read as the factory definition. In this case a factory name is not read separately (the control name is the factory name).
+- Other controls create a factory only when a `"factory": { … }` object exists. In this case it reads `name`, and if it is empty it leaves `JSON UI parse failure: The factory name should not be empty!`.
+
+### NB-06 `control_name`, `control_ids`, `max_children_size`, `insert_location`
+
+- It reads `control_name` first and reads `control_ids` (an object) only when it is empty.
+- `max_children_size` is read as an integer.
+- `insert_location` defaults to `back` and inserts at the front only when the value is exactly `front`. Any other value means back.
+
+### NB-07 A collection item is determined by its parent
+
+The function that creates controls (`@0x097988e8`) does the following for each control.
+
+1. If `ignoreCollectionItem` is not true, it checks whether the parent control has a collection component and its collection name is not empty.
+2. If so, it attaches a collection item component to this control.
+3. `collection_index` is read only then (default -1, none). If a value exists, the index is fixed to it.
+
+So `collection_index` is meaningful only on **a direct child of a parent that has a collection name**. Written elsewhere it is not read. `ignoreCollectionItem: true` is a property the guide did not have, a switch that places the control under a collection parent without making it a collection item (for example a decorative panel inside a list). The content log's `Unknown property [collection_index]` (COL-38) is a warning from the separate property check stage.
+
+### NB-13 The factory resolution function
+
+The function that creates controls (`@0x097988e8`) calls the factory resolution function (`@0x097a0b00`) (2026-10-23, analysis rounds 3 and 4).
+
+- **Which path it resolves by**: if the control type is a factory (type number 5) and it **directly** has `control_name` or `control_ids`, it resolves without a name. Otherwise, regardless of type, it resolves only when the `factory` member is **an object** and reads `name`. So a `"type": "factory"` control can also be used on the `factory` object side, and then `name` is needed.
+- **One factory per control**: when resolving, the control's factory component slot is replaced with a new factory.
+- **`control_name` is built right at resolution**: if the name is not empty, it builds that definition on the spot with the variable scope of the control that declared the factory and stores it as a prototype. Only when it is empty does it walk the `control_ids` object and store "kind -> definition string" (values are read converted to strings). The COL-29 difference, that the `control_name` cell sees the `$variables` of the declaring site while the `control_ids` cell sees only the passed variables, appears to come from here (only the first part of the prototype creation function was read).
+- `max_children_size` is read as an integer and is **0** if omitted.
+- `insert_location` is `"back"` if omitted and inserts at the front only for the five characters `"front"` (the same as NB-06).
+- This resolution function does not read `collection_name` or `property_bag_for_children`. The function that uses `property_bag_for_children` was not found by `ADRP`+`ADD` search.
+
+### NB-14 `_first_hidden_child_index` is exclusive to the store description screen
+
+The strings `tags_factory_first_hidden_child_index`, `languages_factory_first_hidden_child_index` and `_first_hidden_child_index`, which vanilla does not have, were identified. All three functions are inside `store/servicecomponent/DescriptionComponent.cpp` (the description component of the store and marketplace detail screen). This path is attached to the assert message `Attribute does not exist at these indices` inside the functions.
+
+- **Two dedicated functions** (`@0x0b76397c` tags, `@0x0b7642b0` languages): they read `tags_factory_first_hidden_child_index` (or `languages_…`) as an integer from the control's property bag. If it is absent, they use the number of tags (languages) of that product. They build a string array repeating `"tag"` (`"language"`) that many times and use it as the binding value. Vanilla `pdp_screen.json` has controls named `tags_factory` and `languages_factory`, and the `control_ids` kinds of those factories are `tag` and `language`. Vanilla moves this binding value to `#collection_length` (for example `#tag_collapsed_collection_length` -> `#collection_length`). Which binding name this responds to was not settled because the calling side was not read.
+- **The generic function** (`@0x0b743554`): it builds a key by appending `_first_hidden_child_index` to a prefix and reads an integer from the bag. It is called from two places, with prefixes `"tag_row"` (`@0x0b763d90`) and `"language_row"` (`@0x0b7646cc`). It splits off the items from that number onward and moves them to the next row. It appears to be used to show tags and languages folded into several rows.
+- **Meaning**: it is a **store screen internal value** that decides "when the description is folded, from which tag onward to hide or push to the next row". It is not a general JSON UI factory feature and has nothing to do with server form, HUD or chat factories.
+- **Who uses this value was not found.** Vanilla UI JSON never uses it. It appears that the engine layout records the number of the overflowing child, but this was not checked.
+- **Bonus**: it is an actual example of the engine directly giving a factory's length binding an **array of kind names**. It backs COL-27 (`CN`), that `#collection_length` receives an array of kind names, with the binary.
+
+
+## 3. Bindings and variables
+
+A binding connects a data source to a control property, and `ignored` and `variables` filter controls or set values at creation time. The reading order and error messages of the two functions were confirmed (BND and FILE rules).
+
+### NB-09 Binding resolution
+
+The binding resolve function (`@0x0979f9b8`) does the following.
+
+- If `bindings` is not an array, it leaves `Must define bindings as an array.`. Inside the array it reads only object items.
+- For each item it reads `binding_type`, `binding_name`, `binding_name_override`, `binding_collection_name`, `binding_collection_prefix` and `binding_condition`, and branches by type.
+  - Global type: `Must define a binding name!` if there is no `binding_name`.
+  - Collection type: both `binding_name` and `binding_collection_name` are needed. If the name is missing, `Must define a collection name for the binding!`.
+  - Collection details type: uses `binding_collection_name` and `binding_collection_prefix`.
+  - View type: reads `source_control_name`, `source_property_name`, `target_property_name`, `resolve_sibling_scope` and `resolve_ancestor_scope`. If the source or target property name is missing, each leaves an error.
+- The lookup range of a view type is **itself when `source_control_name` is empty** (the control name points to itself), and otherwise one of three: the default range, the sibling range (`resolve_sibling_scope`) or the ancestor range (`resolve_ancestor_scope`). If both are true, it leaves `resolve_ancestor_scope and resolve_sibling_scope cannot both be set!` and acts as the **sibling range**.
+- `binding_condition` (`@0x09843c50`) must be a string (otherwise `- expected a string.`), and the values are six: `none`, `once`, `always`, `always_when_visible`, `visible` and `visibility_changed`. **If omitted or an unknown value, it is `none`.**
+
+The function that converts the `binding_type` string into the four types above and its default when omitted were not read (BND-02, and the "omitted or unknown value is `global`" in BND-22 rests on CN as is).
+
+### NB-10 The order of `ignored` and `variables`
+
+The function that resolves definitions (`@0x0983e680`) evaluates **`ignored` first** for each control.
+
+- `ignored` accepts null, boolean, integer, and variable or expression strings. Anything else (real number, array, object) leaves `An invalid value was provided for "ignored" field.`.
+- If true, it does not do the later processing (applying `variables`, etc.).
+- Only when false does it apply that control's `variables`. `variables` accepts one object or an array of objects, and items in the array that are not objects are skipped.
+
+Since `ignored` is calculated before its own `variables`, values set by its own `variables` (including conditional variables) do not reach its own `ignored`. This supports FILE-34 (CN). At which stage the `$x|default` declaration inside a definition is applied was not checked.
+
+
+## 4. Input: `#hyperlink`
+
+### NB-08 The `#hyperlink` allow list
+
+When a button is pressed, the engine reads `#hyperlink` from that control's property bag and passes it to the check function (`@0x0a54bb74`), and calls the open function (`@0x0a21dab4`) only when it passes. The check has two stages.
+
+1. **Prefix list (conditional)**: only when a certain condition function is true, a URL passes if it **starts with** one of `https://education.minecraft.net/`, `https://aka.ms/` and `ms-windows-store:`. What the condition is (it appears to be an edition or platform decision) was not checked.
+2. **Exact match list**: otherwise it must be **literally equal** to one of 116 URLs. The list is `https://www.minecraft.net/<language>/terms/r1`, `r2`, `r3` (29 languages each, 87), 20 `https://aka.ms/…` help and terms entries, a few EULA, copyright notice and terms entries, account settings (`https://account.xbox.com/Settings`), the gamertag change (`https://social.xbox.com/changegamertag`), and one iOS App Store address.
+
+So an arbitrary URL put in by a resource pack or a server does not open. Even a URL in the list does not open if the query or path differs slightly.
+
+
+## 5. Text: the `§` color table
+
+### NB-11 The `§` color table is built from global variables
+
+The function that reads `ui/_global_variables.json` (`@0x098625b8`) reads the file and then takes out 29 variables to build one color table. They are the 16 `$0_color_format` to `$f_color_format`, 11 of `$coin_color` and `$material_quartz_color`, `iron`, `netherite`, `redstone`, `copper`, `gold`, `emerald`, `diamond`, `lapis`, `amethyst` and `resin`, and `$party_blue_color`. The count and order match Bedrock's `§` color codes (`0` to `f`, `g` coin, `h` to `v` materials, `w` party blue).
+
+- The actual color of a `§` color code is the value of this global variable. If you change these variables in a resource pack's `_global_variables.json`, the `§` colors appear to change too (not verified in game).
+- The color of `§w` is `$party_blue_color` (present in vanilla). So `$party_blue_color` can also be used for a label's `color` (the survey's judgment that "there is no `$w_color_format` so there is no value to use" was only a naming difference).
+- The mapping between variables and codes (`$coin_color` is `§g`, etc.) was judged from the order and vanilla comments.
+
+
+## 6. Renderer: the paper doll and NetEase
+
+### NB-12 The paper doll (`paper_doll_renderer`) and the NetEase skeleton model
+
+The NetEase (China edition) documentation lists a renderer and properties that draw skeleton models and entities inside UI. Those names were searched as strings in this binary (whole file byte search, 2026-10-23).
+
+| String | Count | Where it is used |
+| --- | --- | --- |
+| `netease`, `NetEase` | 0, 0 | - |
+| `netease_paper_doll`, `skeleton_model_name`, `netease_models` | 0 | NetEase `netease_paper_doll_renderer`, `RenderSkeletonModel`, `netease_models.json` |
+| `modelname`, `modelsize`, `screen_scale`, `init_rot_y`, `render_depth`, `freedom_gesture` | 0 | NetEase `paper_doll` and `netease_paper_doll` properties |
+| `use_selected_skin`, `camera_tilt_degrees`, `starting_rotation`, `enable_scissor_test`, `skin_rotation`, `animation_reset_name` | 1 each | Properties of the vanilla `paper_doll_renderer` control (below) |
+| `PaperDollRenderer`, `PaperDollPropertyBagSource`, `PaperDollResolvedUIDefSource`, `IPaperDollUIDefSource`, `IOffscreenPaperDollRenderer`, etc. | 26 (strings containing `PaperDoll`) | C++ type information (RTTI) names |
+
+- **The NetEase skeleton model feature is not in the international client.** There is not a single `netease` in the whole 328MB, and the long NetEase-only property names (`skeleton_model_name`, `netease_paper_doll`, etc.) are absent too. Even if you write NetEase properties in a resource pack, the international engine has no code that knows them.
+- But short names cannot be judged by string search. `paper_doll_renderer` and `gesture_x`, which vanilla uses 13 times, are also 0. The compiler appears to turn short strings into immediate values inside instructions or put them in a hash table. So the "absent" conclusion rests on the long names and the `netease` string, and each short name is not asserted to be absent (`code, inferred`).
+- The international paper doll appears to receive properties from **two places, the property bag and the UI definition** (`PaperDollPropertyBagSource`, `PaperDollResolvedUIDefSource`). This matches vanilla using `#skin_rotation` of `property_bag` and the control property `rotation` together. Only the type names were seen and the functions were not read.
+- The control properties at the 13 vanilla `paper_doll_renderer` sites (VN exhaustive): `use_selected_skin` 12 (all `false`), `layer` 11, `animation_reset_name` 10, `anims` 10, `rotation` 8 (`gesture_x` 6, `auto` 1, variable 1), `camera_tilt_degrees` 8 (all `-10`), `starting_rotation` 8 (all `30`), `enable_scissor_test` 4 (all `true`), `property_bag` 2 (`#skin_rotation`). The NetEase documentation's `modelname`, `modelsize`, `animation` and `animation_looped` are 0 times.
+
+
+## 7. Server form schema
+
+### NB-16 The server form JSON schema has 9 row types and includes `multiselect`
+
+The question was "can a server use the `multiselect` that appeared in modal forms" (2026-10-23, analysis rounds 6 and 7). The whole survey, including measurements, is in the multiselect page.
+
+- The client has a cereal schema of the server form JSON (with a description string per field). The `form`, `modal` and `custom_form` schema function (`@0x1126decc`) calls the row type schema (`@0x112718f0`), and the enumerated values of `type` ("Type of control used") are nine: `label`, `toggle`, `slider`, `step_slider`, `dropdown`, `multiselect`, `input`, `header` and `divider`.
+- Six row schemas have `tooltip` (`@0x112700ac`, `@0x112703c0`, `@0x112708c0` slider, `@0x11270d24` dropdown, `@0x112710d8`, `@0x112714d0` input). `@0x112710d8` has `options` (string array), `defaults` (integer array) and `tooltip`, so it appears to be multiselect. The dropdown has `default` (integer). Neither has `control_locked`.
+- **The schema and the measurement differ**: in the 1.26.52 Windows measurement, `defaults` was ignored and `default` (an array of numbers) set the default checks (`MS`). This schema appears not to be the real parser.
+- The word `multiselect` appears only in this schema and the pack manifest setting (`MultiSelectSetting`). The modal form bindings (`#custom_multiselect_toggled`, etc.) are not present as strings (they appear to be included as hashes).
+
+
+## 8. Outside JSON UI: equipment slots
+
+### NB-15 There are 5 equipment slots, and the renderer draws numbers 0~4 fixed (outside JSON UI)
+
+This is not JSON UI, but it was confirmed with the same binary. The question was "equipment slots are known to be 4, so why, when a server sends a 5th slot in a packet, is that equipment drawn, while from the 6th on it is not" (2026-10-23, analysis round 5).
+
+- **The equipment slot enumeration has 5 entries.** The function that registers `SharedTypes::Legacy::ArmorSlot` (`@0x0cce15f8`) registers `Head`, `Torso`, `Legs`, `Feet` and `Body` in this order (0~4). The slot name table for commands (`@0x127005c8`) also has five: `slot.armor.head`, `chest`, `legs`, `feet` and `body`. There is the message `Invalid armor slot '%s' specified. Only 'slot.armor.chest' and 'slot.armor.body' are supported.`, so Body appears to be a slot for animal armor such as wolf and horse armor.
+- **The equipment read function** (`@0x0f6797ac`): it takes the actor's equipment container and returns the item at the slot number through a virtual function (`+0x40`, read slot item). It is called from 53 places, and most call 0~4 expanded as constants without a loop (such as `MobArmorHeadId` to `MobArmorBodyId` in the mob kill telemetry `@0x0ba412e8`).
+- **The worn item render function** (`@0x0a00007c`, handles `variable.is_first_person` and `variable.gliding_speed_value`): it reads equipment 0~4 in turn and passes them with numbers 0~4 to the worn item handling functions (`@0x0a00101c`, `@0x0a0012b4`), then passes the main hand item as number 5 and the offhand item as number 6. The same order appears in two places. Whether the actor type is `0x13f` (player) is checked only when reading the first-person variable. In other words, this path draws the Body slot without distinguishing players from mobs.
+- **Conclusion**: the player inventory UI shows only 4 slots, but the engine has 5 equipment slots. If a server puts an item into the player's slot 4 (Body), the renderer reads and draws it. From 5 onward, the renderer uses the number for hand items and does not read it as an equipment slot, so nothing sent is drawn.
+- **Not checked**: whether the equipment container stores 6th slot data (or discards it by a size limit), the internals of the two worn item handling functions, the field layout of `MobArmorEquipmentPacket` (the Body field is known from a 1.21-era protocol change), and in-game measurement. The verdict level is `code`.
+
+
+## 9. Confirmed by strings
+
+
+- **31 `button.menu_*` button IDs**: `menu_alternate_tab_left`, `menu_alternate_tab_right`, `menu_auto_place`, `menu_autocomplete`, `menu_autocomplete_back`, `menu_cancel`, `menu_clear`, `menu_down`, `menu_edu_play`, `menu_exit`, `menu_inventory_cancel`, `menu_inventory_drop`, `menu_inventory_drop_all`, `menu_left`, `menu_ok`, `menu_play`, `menu_right`, `menu_secondary_select`, `menu_select`, `menu_tab_left`, `menu_tab_right`, `menu_tertiary_select`, `menu_textcursorleft`, `menu_textcursorright`, `menu_textedit_down`, `menu_textedit_up`, `menu_up`, `menu_emote_slot_0` to `menu_emote_slot_3` (all with the `button.` prefix). The 4 emote slots are also used by vanilla `persona_common.json` (recounted by byte search on 2026-10-23. The 28 first recorded was a miscount). This list says only that the names exist in the engine. Which key each corresponds to cannot be known from strings (the wiki table of INP-21 stays unverified as is).
+- **Candidate values of `grid_rescaling_type`**: `horizontal`, `vertical` and `none` exist as strings. The function that reads them was not found (chapter 5).
+- **`#size_binding_x`**: the whole string does not exist. It appears to be assembled at runtime. `#total_size_binding` does exist.
+- **JSON UI resolution error messages** (they appear in the content log as they are):
+  - Type checks: `JSON UI parse failure - expected a bool.` / `a number.` / `a string.` / `an object.` / `an array.` / `an array or a number.` / `an array or a string.`
+  - Bindings: `Must define bindings as an array.`, `Must define a binding name!`, `Must define a collection name for the binding!`, `Must define a source property name in the binding!`, `Must define a target property name in the binding!`, `resolve_ancestor_scope and resolve_sibling_scope cannot both be set!`
+  - Factories: `The factory name should not be empty!`, `factory_variables should all be strings of json variables created higher up the tree.`
+  - Animation, image and state: `Invalid anim reference!`, `Must define 'images' as an array!`, `Must define state_controls as an array!`
+  - Focus: `Expected a focus identifier.`, `Expected a focus direction override.`, `Expected an array for property 'focus_mapping'.`, `Expected an object inside array for property 'focus_mapping'.`, `Up/Down/Left/Right Override set to blank string. This is redundant as blank strings imply no override.`
+  - Fonts: `Expected a string for 'font_type'.`, `Expected a string for 'backup_font_type'.`
+  - References: `Expected variable not found in ancestor tree: '%s'`, `UI control reference not found: '%s'`
+
+
+
+## 10. Comparison with other sources
+
+This is the result of matching the binary findings against other sources (the wiki, the community, reconstructed code, measured packs). R is "things learned only through reverse engineering" and C is "things that confirmed or corrected another source's claim". `Community` means reports from the Bedrock OSS and Add-Ons community.
+
+### 10.1 Things learned only through reverse engineering
+
+| # | Contents | What other sources had | NB | Guide |
+| --- | --- | --- | --- | --- |
+| R-01 | **The reality of the `#hyperlink` allow list.** 116 URLs that must match literally (87 `https://www.minecraft.net/<language>/terms/r1` to `r3`, 20 `https://aka.ms/…`, EULA, copyright notice and terms, account settings, the gamertag change, one iOS App Store). Only when some condition (appears to be an edition or platform decision) is true, URLs that **start with** `https://education.minecraft.net/`, `https://aka.ms/` or `ms-windows-store:` also pass | Wiki: "about 30 Microsoft and Minecraft domains". Community: "add-ons cannot open links, work around with a QR image" | NB-08 | INP-34 |
+| R-02 | **The actual colors of `§` color codes are 29 `_global_variables.json` variables.** `§0` to `§f` are `$0_color_format` to `$f_color_format`, `§g` is `$coin_color`, `§h` to `§v` are `$material_quartz_color`, `iron`, `netherite`, `redstone`, `copper`, `gold`, `emerald`, `diamond`, `lapis`, `amethyst`, `resin`, and `§w` is `$party_blue_color` | Community: "new color codes cannot be made, vanilla colors are in `_global_variables.json`". web-tutorials: "there is no `$w_color_format`" | NB-11 | TXT-24 |
+| R-03 | **The meaning of `ignoreCollectionItem`.** A switch that places a control under a parent with a collection name without making it a collection item (decorative panels inside a list, etc.) | Vanilla uses it once but no source states its meaning | NB-07 | COL-44 |
+| R-04 | **The engine reads 7 keys of a `modifications` item** (`array_name`, `control_name`, `operation`, `where`, `target_control`, `target`, `value`), and for the second criterion **`target_control` comes before `target`** | The MJ dictionary had only the name `target_control` and no evidence (C-02 below) | NB-02 | MOD-24 |
+| R-05 | **The keys read for each binding type and the error when missing.** Global type `binding_name`, collection type `binding_name`+`binding_collection_name`, collection details type `binding_collection_name`+`binding_collection_prefix`, view type `source_control_name`, `source_property_name`, `target_property_name`, `resolve_sibling_scope`, `resolve_ancestor_scope`. If `bindings` is not an array it is `Must define bindings as an array.` and items that are not objects are skipped | Community: "what `binding_collection_prefix` does is not known" | NB-09 | BND-35, BND-36 |
+| R-06 | **`factory_variables` is read only when it is an array, and ignored silently if not.** If an item is not a string, `factory_variables should all be strings of json variables created higher up the tree.` | The community and CN described only the passing behavior | NB-04 | COL-41 |
+| R-07 | **The values `ignored` accepts and the error for invalid values.** It accepts null, boolean, integer, and variable or expression strings, and leaves `An invalid value was provided for "ignored" field.` for a real number, array or object. `variables` is one object or an array of objects, and non-object items in the array are skipped | CN described only the result interpretation (boolean, integer, string) | NB-10 | FILE-43 |
+| R-08 | **The list of JSON UI resolution error messages.** 7 type checks (`- expected a bool.`, etc.), 6 bindings, 2 factories, `Invalid anim reference!`, `Must define 'images' as an array!`, `Must define state_controls as an array!`, 5 focus (`Expected a focus identifier.`, etc.), 2 fonts (`Expected a string for 'font_type'.`, etc.), `Expected variable not found in ancestor tree: '%s'`, `UI control reference not found: '%s'` | The community reported only `JSON UI parse failure - expected a string`, `Must define a source property name` and "cannot find variable in ancestor tree". The last has no such text in the binary and `Expected variable not found in ancestor tree` exists, so it appears to be wording from another version or a paraphrase | NB chapter 4 | DBG-34 |
+| R-09 | **4 button IDs not in vanilla.** `button.menu_tertiary_select`, `button.menu_textcursorleft`, `button.menu_textcursorright` and `button.menu_edu_play` have names in the engine but are 0 times in vanilla UI. The engine has 31 `button.menu_*` in all | Cannot be known from the wiki table and vanilla use | NB chapter 4 | INP-33 |
+| R-10 | **The international client has no NetEase UI 3D model feature.** There are 0 `netease` strings in the whole 328MB, and the long NetEase-only property names such as `skeleton_model_name` and `netease_paper_doll` are 0 too | The NE documentation lists only China edition features, and no one checked whether the international edition has them | NB-12 | ANI-36 |
+| R-11 | **The paper doll appears to receive properties from two places.** There are the types `PaperDollPropertyBagSource` and `PaperDollResolvedUIDefSource`. This matches vanilla using `#skin_rotation` of `property_bag` and the control property `rotation` together. Only type names were seen, so it is `inferred` | None | NB-12 | ANI-35 |
+| R-13 | **Details of factory resolution.** `type: factory` can also be resolved on the `factory` object side, and there is one factory per control. `control_name` builds the prototype right at resolution with the declaring scope, and `control_ids` stores only strings. The `max_children_size` default is 0 | CN described only the result (the scope difference) | NB-13 | COL-45 |
+| R-14 | **The identity of `_first_hidden_child_index`.** The store detail screen description component (`DescriptionComponent.cpp`) folds tags and languages or pushes them to the next row with this integer in the property bag. It is not a general factory feature. The engine directly gives the length binding an array of kind names such as `["tag", …]` | None. It was investigated as a candidate for the story that "something new appeared in factories" | NB-14 | COL-46, COL-27 |
+| R-15 | **The server form JSON schema.** The client has a form schema with description strings, and the row types are the 9 `label`, `toggle`, `slider`, `step_slider`, `dropdown`, `multiselect`, `input`, `header` and `divider`. The row that appears to be multiselect has `options`, `defaults` (integer array) and `tooltip`, but in the measurement (`MS`) `defaults` was ignored and `default` (an array of numbers) took effect. The schema appears not to be the real parser | Community and guide: only "multiselect cannot be sent through the Script API" | NB-16 | HOST-46 |
+| R-12 | **Size binding names.** `#total_size_binding` exists as an engine string but vanilla uses it 0 times. `#size_binding_x` has no whole string, so it appears to be assembled at runtime | None | NB chapter 4 | - |
+
+### 10.2 Things that confirmed or corrected other sources' claims
+
+| # | Claim | Who | Reverse engineering result | Result | NB | Guide |
+| --- | --- | --- | --- | --- | --- | --- |
+| C-01 | There are 11 `modifications` operations | Wiki (unverified), CN. The community list has 10, missing `swap` | The engine name table has exactly 11 (numbers 1~11). `swap` exists too | Names confirmed. The in-game behavior of 8 still needs measurement | NB-01 | MOD-01, MOD-14, MOD-23 |
+| C-02 | There is a `target_control` key | MJ dictionary (the guide had judged it "no basis") | The engine reads it, and before `target` | **Corrected the guide's verdict.** MJ was right | NB-02 | MOD-03, MOD-24, Appendix A C-10 |
+| C-03 | `modifications` can be applied to the arrays `controls`, `bindings`, `button_mappings` and `variables` | Community, MJ (`button_mappings`). Conversely, the BC-facts measurement says "`variables` is ignored" | `array_name` is not a fixed list but looks up the same-named member of the definition. Resolution works for any array | The resolution stage is on the community's side. The effect stays in conflict with measurement | NB-03 | MOD-25, Appendix A C-64 |
+| C-04 | `#hyperlink` opens only about 30 domains | Wiki | Exactly matching 116 URLs (R-01) | **Corrected.** The conclusion that "custom URLs do not open" is right | NB-08 | INP-24 |
+| C-05 | `factory_variables` passes variables of the declared scope | Guide (inferred), community, CN | Each name is looked up in the scope of the control that declared the factory and the value is stored | Confirmed | NB-04 | COL-15, COL-41 |
+| C-06 | For a `type: factory` control, the control name is the factory name | Wiki (unverified), community | In that case the factory name is not read separately. Other types read `name` of the `factory` object, and if empty `The factory name should not be empty!` | Confirmed | NB-05 | COL-25, COL-42 |
+| C-07 | 6 `binding_condition` values, unknown values are `none` | Community (meaning unverified), CN | The name table has exactly 6, omitted or unknown values are `none`, and a non-string is an error | The value list and the default are confirmed. The meaning of each value still rests on CN | NB-09 | BND-22, BND-23, BND-35 |
+| C-08 | There is no variable to use for the `§w` color | survey, web-tutorials | The color of `§w` is `$party_blue_color` (present in vanilla) | **Corrected.** It was only a naming difference | NB-11 | TXT-24 |
+| C-09 | `collection_index` takes effect only on direct children of a collection parent | DF and BC-facts measurements | Only direct children of a parent with a collection name become collection items, and `collection_index` is read only then | The cause of the measured result is explained by the engine structure | NB-07 | COL-02, COL-38, COL-44 |
+| C-10 | `ignored` does not see its own `$` declarations | CN, CN-run | The engine evaluates `ignored` first for each control and does not apply `variables` if it is true | The part about its own `variables` is confirmed. The stage where `$x\|default` is applied is unchecked | NB-10 | FILE-34, FILE-43 |
+| C-11 | Custom geometry cannot be used in a paper doll | Community | The international edition has no NetEase skeleton model code (R-10) | Supported | NB-12 | ANI-35, ANI-36 |
+
+
+Some of the guide IDs in the last column of the tables, such as `MOD-24`, `BND-35`, `INP-33` and `DBG-34`, are numbers assigned at the merge stage and may not yet be in the guide body (proposals based on the survey reflection record, not applied).
+
+
+## 11. What remains
+
+
+- For `grid_rescaling_type`, `propagate_alpha`, `clip_direction`, `Expected variable not found in ancestor tree` and `UI control reference not found`, even the `ADRP`+`ADD` search could not find the function that uses them. They appear to be accessed another way (a literal pool, a hashed property name table, etc.). LAY-32 (the `vertical` crash) and LAY-33 stay unverified as they are.
+- The `binding_type` string resolve function, the stage where `$x|default` inside a definition is applied, and the condition function of the `#hyperlink` prefix list have not yet been read.
+- Which properties `PaperDollPropertyBagSource` and `PaperDollResolvedUIDefSource` of the paper doll read, and the defaults of `use_selected_skin`, `camera_tilt_degrees` and `starting_rotation`, are unknown because the functions were not read (NB-12).
+- The binding expression evaluator (`not`, `and`, `%`, `'%.Ns'`, etc.) has almost no error messages and could not be found with this method. The expression rules (chapter 5) still rest on `CN` and measurement.
+- Whether the equipment container stores a 6th slot, and what the worn item handling functions (`@0x0a00101c`, `@0x0a0012b4`) draw, were not read (NB-15).
+- All these verdicts are at the `code` level. If they differ from game behavior, follow the measurement.

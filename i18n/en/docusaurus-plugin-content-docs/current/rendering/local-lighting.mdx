@@ -1,0 +1,73 @@
+---
+title: Local lighting (point lights and static lights)
+description: How to make blocks static lights or point lights with local_lighting.json, the default point light blocks, count and performance, per-platform constraints, known bugs
+sidebar_position: 11
+sources: [private-research, ms-learn]
+---
+
+# Local lighting: point lights and static lights
+
+## Concept
+
+The directional lighting of the sun and moon affects the whole scene, so it is "global lighting". A light contribution limited to a small area is "local lighting", handled with the pack's `local_lighting` settings and the block's light emission component. `local_lighting.json` decides (1) which blocks are local light sources, (2) the light source type, and (3) the light color (Source: ms-learn, Lighting Customization).
+
+- **Static light**: A simple lighting scheme baked into the scene. It has no specular highlights or dynamic shadows, and position and brightness are fixed. Light source blocks such as torches, glowstone and lanterns already use static light with a uniform color. The reach (in blocks) is decided by the light emission component, and this value is a separate concept from PBR's "emissive". `light_color` is an array of 3 RGB values in 0~255 or a 6-digit RGB hex string. A light source block with no `static_light` entry in `local_lighting.json` uses the standard Minecraft light color. For performance, it is better to reuse colors across many blocks (many unique colors cost).
+- **Point light**: Emits light from a single point at the center of the block. Like directional lighting, it produces diffuse and specular highlights and dynamic shadows. It suits point sources like torches, and blocks that emit light from a surface (area) use static light, texture set emission and the light emission component. Point lights are additive, so they do not interfere with emissive textures or static lights, but they are much more expensive than the other methods. The reach intensity is decided by the light emission component.
+
+Blocks the game treats as point lights by default (cannot be changed, color can be overridden): `minecraft:torch` `#EFE39D`, `minecraft:redstone_torch` `#FF0000`, `minecraft:end_rod` `#FFFFFF`, `minecraft:lantern` `#CE8133`, `minecraft:soul_lantern` and `minecraft:soul_torch` `#00FFFF`, `minecraft:candle` `#EFE39D` (including colored candles and candle cakes), `minecraft:sea_pickle` `#FFFFFF`, `minecraft:copper_torch` and `minecraft:copper_lantern` `#B8EF8D` (including waxed, weathered and oxidized variants).
+
+## Configuration file example
+
+```json
+{
+  "format_version": "1.21.120",
+  "minecraft:local_light_settings": {
+    "minecraft:torch": { "light_color": "#00ff00", "light_type": "point_light" },
+    "minecraft:glow_lichen": { "light_color": [15, 25, 20], "light_type": "static_light" }
+  }
+}
+```
+
+The file is `local_lighting/local_lighting.json`. The rules and bugs below are from community research (Source: private research).
+
+## Settings and requirements
+
+- The old `point_lights/global.json` was deprecated, and the new path is `local_lighting/local_lighting.json` with `"format_version": "1.21.120"` (the documentation was wrong). If the game version is low or the version string is wrong, you get "unsupported version: no parser available for version 1.21.120".
+- `light_color` can also be written as an RGB array (for example `"minecraft:torch": {"light_color": [125,67,38], "light_type": "point_light"}`). Very low color values give dark light and may need clamping like MER 0~15. MER emission seems not to affect static light. A wrong block identifier leaves "not a block" in the log (magma is `minecraft:magma`, amethyst cluster is `minecraft:amethyst_cluster`). Reports that it does not work in Preview 26.10.x either (2026-02-17, 2026-03-04) are unresolved.
+- **Requirements**: To use custom point and static lights in a resource pack, you must add the block identifier to the `local_lighting` settings and turn on the `pbr` capability and the "Render Dragon Features for Creators" experiment. It does not work in shared worlds. Point lights and point light shadows were merged into a single "Point light quality" setting (2026-06-20) and this experiment is needed. As of 2026-04-30, point lights were Preview-only and the old RenderDragon experiment toggle was gone.
+- **Not per block state**: `local_light_settings` cannot differ per block state. Make on and off separate block identifiers, like vanilla `minecraft:furnace` and `minecraft:furnace_lit`. The answer was that per-state flood-fill colored light for custom blocks is impossible, and there was a request for per-state colors for candles. Per-block-state lighting (a permutations array with Molang queries like `sounds.json` variants) was also proposed.
+- **Glowing torch looks washed out**: This was because the `local_lighting` type was `static_light`, and with `point_light` it looked right. Color grading highlights and tone mapping also affect it.
+
+## Characteristics of static light
+
+~1.21.12x Preview, VV only, almost zero cost (+60 fps compared with point lights in one test). Full blocks and some partial blocks (campfire, firefly bush, amethyst) use it. It only tints block light with a color, and the spread is the same as the diamond shape of vanilla block light, so mushrooms at light level 1 and glow lichen and candles look too bright. The block light emission component changes only the reach, not the intensity. Custom block intensity is decided by the light emission component and the intensity of built-in blocks cannot be changed. Mojang (aajabrams) asked about a way to separate emission and spread per `block_lighting.json` entry. Glowstone and waxed or oxidized copper lanterns were missing from the list, and mobs and players do not receive colored light. Static light gives only a weak effect on normals and heightmaps and has no direction, so no specular. Block light has no effect on mob and item heightmaps.
+
+## Characteristics of point lights
+
+- It is a small shadow-casting light source with only sharp shadows (no PCSS). Beyond the shadow distance, you can see through blocks. Tinted glass blocks static and block light but not point light, so it can be used for directional lighting builds. Point lights affect SSS and use volumetric lighting if volumetric is on. Entities cannot be point lights; only blocks can. There are no colored light blocks in vanilla, so add-ons and maps must make them (this is also a way to give entities dynamic colored light).
+- **Count and priority**: In the 2026-01 Preview, light distance depends on point light quality (20~100 blocks on high-end PC) and the count on shadow quality (4~16). Nearby lights take priority and the rest are replaced with static light. Lights are ranked by contribution (with 3 torches and a redstone torch, the redstone one does not become a point light), and if it cannot be afforded, it is replaced with static light. The more shadow casters, the slower the shadow updates. There were observations that only about 9 show at once and that only 2~5 are rendered, and according to the patch notes the count is hardware based (for reference, Unity URP 8, Unreal/HDRP 64).
+- **Maximum count (by version)**: The "point lights", "+" and "++" tiers are 16/32/64 (the low tier was removed in 2026-07). A dynamic shadow atlas replaced the cubemap array (64 = 64*6 tiles, tile resolution by priority). In 2026-08 current-gen consoles had 32, and in 2026-09 it became 96 on Series S and 256 on Series X/PC. The mention of "up to 64" as of 2026-07-28 is a value from before that.
+- **Shadow updates**: Depending on the local light count and camera frustum, the ranking system grows, shrinks and updates atlas tiles, and round robin takes priority so that all lights get updated (sherrifj, 2026-07-13). Cached point light shadows stopped updating until midnight once the sun set (2026-07-12). In the 2026-10-20 Preview, point light shadows were pixel aligned and real-time again, but only the first closest group is real-time and the rest update periodically, and self shadowing returned. Shadow filtering and softness are still requests.
+- **Supported blocks**: Full blocks (since 2026-01-24), lava and the Nether portal can have point lights and shadows. Copper torches are fine, but in the 26.20.x Preview the waxed copper lantern ignored `light_color` in `local_lighting`. When the copper lantern state changes, the color resets. Some blocks (piston head) do not receive colored light.
+
+## Performance
+
+Defining point lights for many block types (glowstone, fire, magma, soul fire, lava) gave about 0.1 FPS especially in the Nether (even lights that are not visible seem to be computed). The 26.1x Preview Nether stuttered badly even on an RTX 5090, and turning off magma's point lights helped. The cause was moving the evaluation of the colored block light volume to the GPU, and it was fixed in the 2026-07-10 code review and 26.50. On a Deep Dark seed (RTX 5070 Ti, RenderDragon toggle on) it was about 100 fps against 180, and Nether lava 10 against 170 fps, improving to about 80 fps in 26.50. The volumetric block light setting broke on Mali G57/Adreno (2026-07-23).
+
+## Platforms
+
+In spring 2026, because of OpenGL-era engine limits (texture + sampler pairs, an upper limit of 16 samplers on some APIs), point lights were removed on Android and PS4/Xbox One. Mojang plans to turn them back on for Xbox/PS4 and is "increasingly considering" Vulkan. It was a compatibility-breaking change for community shader compilers. The lack of support on older-generation consoles was said to be temporary, and Android is unclear. There is an observation (not confirmed) that 1.26.60.28 added the shader platform ESSL_320, which supports separable samplers, so point lights may return on OpenGL ES 3.2 Android.
+
+## Known bugs
+
+Shadows stop deeper than Y31 (through 2026-07-21, chunk culling suspected), NaN on torches at the screen edge, no point light shadows in the Nether (2026-07-08), light remains after breaking a block or pouring water (fixed by reconnecting), heightmaps and normal maps looking odd under volumetric block light (2026-07-31, 2026-10-01), bad shadow bias, light leaking (being fixed 2026-10-01), and after turning shadows off and restarting, point lights are not rendered at all. Point lights sometimes do not turn on or off. There is also a report (2025-10-29 Preview) that point light shadow quality is worse at high shadow quality. In the late 2026-10 Preview, Xbox Series X crashed while using point lights, and there were ranking problems where point light shadows stopped or concentrated on only the nearest light.
+
+## Volumetric block light and existing lighting
+
+- Volumetric block light cannot have its intensity adjusted without making the fog thicker. If you need a strong volumetric effect, change that block to a point light.
+- VV also draws non-VV vanilla lighting in addition to point lights, so torch brightness could not be lowered with point light settings. The sun flare radius was reduced by lowering the illuminance in lighting. `single report`
+
+## Applications and wish list
+
+- Spotlight and decal: Wrapping a point light in a cube with a texture that has a round alpha-tested hole gives a spotlight effect (the shadow follows the cutout). An additive decal is made with additive blending of particles and entities and 100% emissive PBR.
+- Wish list: Separate fog multiplier and color per static and point light, per-block attenuation and color curves, light color keyframes, and fog influence of static light (in progress in 2026-02) were discussed. Mojang (aajabrams) put static light in volumetric fog on the roadmap after moving the data to the GPU, and weather will receive only block light support. Colored point light lighting was in the Deferred Technical Preview and was once removed.

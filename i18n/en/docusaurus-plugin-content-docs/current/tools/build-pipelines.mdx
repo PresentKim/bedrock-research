@@ -1,0 +1,404 @@
+---
+title: "Build pipelines: Regolith and GDK deployment"
+description: "Regolith, jsonte, bedrock-boost, the GDK path, the filter ecosystem, build frameworks"
+sidebar_position: 5
+sources:
+  - private-research
+  - regolith
+  - jsonte
+  - bedrock-boost
+  - ms-learn
+---
+
+This page covers the build tools, template languages and deployment paths that turn add-on BP/RP sources into game-ready packs. A small add-on can be put straight into `development_behavior_packs` without tools, but a compiler is needed to generate JSON with filters, bundle TypeScript, or export to several environments.
+
+| Tool | What it does | License |
+|---|---|---|
+| Regolith | An add-on compiler (Go) that copies the project folder, runs filters and exports to com.mojang | MIT |
+| jsonte | A JSON template engine and query language (Go, a Regolith filter) | MIT |
+| bedrock-boost | A utility library for the Script API (npm) | MIT |
+| `@minecraft/core-build-tasks` | Mojang's official just-scripts deployment tasks | Microsoft package |
+
+## Regolith
+
+**What it does.** Like `bridge. v2`, it uses a "project folder" (RP, BP, models, textures and settings in one folder), and in the simplest case "compiles" (copies) the RP and BP to the com.mojang folder. During the copy it runs filters (programs) in order to transform files. Its value is in tying tools made in different languages into one compile flow (Source: tool-regolith, `README.md`, MIT, Copyright 2021 Bedrock-OSS, examined commit `eeaf064`). Filters are programs, so run only ones you trust.
+
+**Installation.** The user installation guide is the Installation section of the docs (channel differences such as winget, MSI and Homebrew are in the notes below), and building from source needs Go.
+
+```bash
+go install github.com/Bedrock-OSS/regolith@latest
+```
+
+**Basic commands.**
+
+```bash
+regolith init                 # Create a project with a config.json
+regolith install jsonte       # Install a filter from the filter registry
+regolith install-all          # Install every filter in the config
+regolith run dev              # Run one profile and then export
+regolith watch dev            # Rerun whenever files change
+regolith apply-filter <filter>   # Apply the filter result to the source
+```
+
+In game, reload with `reload all` (`reload` if only scripts and functions changed).
+
+**config.json.** The `config.json` at the project root records pack paths, profiles, filter definitions and export targets. This is a minimal example taken from the repository's test project.
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/Bedrock-OSS/regolith-schemas/main/config/v1.2.json",
+  "name": "my_project",
+  "author": "me",
+  "packs": { "behaviorPack": "./packs/BP", "resourcePack": "./packs/RP" },
+  "regolith": {
+    "profiles": {
+      "dev": {
+        "filters": [ { "filter": "test_exe_filter" } ],
+        "export": { "target": "development", "readOnly": false }
+      }
+    },
+    "filterDefinitions": {
+      "test_exe_filter": { "runWith": "exe", "exe": "./executables/test_exe_filter" }
+    },
+    "dataPath": "./packs/data"
+  }
+}
+```
+
+`runWith` is how the filter is run (`python`, `nodejs`, `deno`, `bun`, `shell`, `exe`, `dotnet`, etc.), and the `data` folder holds per-filter data. Export targets are `development` (the development folder in com.mojang), `local`, `exact` (specify a path directly) and so on. Setting the com.mojang path with the user environment variable `COM_MOJANG` is recommended.
+
+**Limits.**
+- One BP and one RP per project, and the temporary folder names are fixed as `BP`, `RP` and `data`.
+- `regolith watch` runs an infinite loop if a filter modifies the source.
+- In big projects, filter I/O takes most of the time (jsonte is often the culprit).
+- Release binaries are flagged as false positives by some antivirus software.
+
+Details (features per release from 1.6 to 1.8, runners, filter development, multiple packs) are in the notes below.
+
+## jsonte (JSON Templating Engine)
+
+**What it does.** A JSON-only template engine that generates large amounts of repetitive JSON, as in Minecraft add-ons, with little script. It has its own query language. An online demo and an interactive tutorial are at `mcdevkit.com` (Source: tool-jsonte, `README.md`, MIT, Copyright 2021 MCDevKit, commit `73a3c3b`).
+
+**Installation.**
+
+```powershell
+regolith install jsonte                       # As a Regolith filter
+go install github.com/MCDevKit/jsonte@latest  # Standalone (Go 1.18 or later)
+```
+
+For source development, run `go mod vendor`, then the ANTLR configuration and grammar compile scripts in the `scripts` folder, and `go build`. The VS Code extension is `MCDevKit.jsonte-vscode`. Its limits are the same performance problem as Regolith above (a Deno-only setup compiles 5000 files in under 1 second, and adding jsonte makes it about 10 seconds) and the cost of learning the syntax.
+
+## bedrock-boost
+
+**What it does.** A Script API helper library that provides the `Vec3` vector, `Cache` which caches dimension lookups and block permutations (reducing native calls), player polyfills (`applyImpulse`, `clearVelocity`), a polyfill that sends `console.log` to chat, a profiling aid (`addIdleDummy`), `Timings`, a `Logger` with levels, tags and filters, `ChatColor`, `ColorJSON`, the `PulseScheduler` family that spreads work across ticks (`PlayerPulseScheduler`, etc.), `BlockUtils`, `CommandUtils`, `EntitySaver` and `JobUtils` (Source: tool-bedrock-boost, `README.md`, MIT, Copyright 2023 Bedrock-OSS, commit `1314f85`).
+
+```bash
+npm install @bedrock-oss/bedrock-boost
+```
+
+```typescript
+import { Vec3 } from "@bedrock-oss/bedrock-boost";
+import { world } from "@minecraft/server";
+
+world.beforeEvents.itemUse.subscribe((event) => {
+  event.source.applyImpulse(Vec3.from(event.source.getViewDirection()).setY(0).normalize().multiply(2));
+});
+```
+
+Get a logger with `Logger.getLogger("main", "tag1")` and change the level with `scriptevent logging:level <level>`. A bundler (esbuild, etc.) is required, and the bundling rules of the [Script API overview](../scripting/overview-and-modules.mdx) apply.
+
+## Community notes
+
+The following covers the GDK path move, Regolith releases and bugs, the filter ecosystem, other build tools, TypeScript development tools, community libraries and Molang tools, gathered in the community survey.
+
+Terms such as `(confirmed)`, `(single report)` and `(conflicting)` are reliability markers of the reports.
+
+### The GDK path move and deployment
+
+- **Paths**: from 1.21.120 (2025-10) it uses `%AppData%\Minecraft Bedrock\Users\Shared\games\com.mojang` (shared) and `...\Users\<per-user number>\games\com.mojang` (per user). The old UWP LocalState path is not used. There were cases where dev packs looked erased during the move. Keep development packs in Shared. Migration docs: `https://learn.microsoft.com/en-us/minecraft/creator/documents/gdkpcprojectfolder?view=minecraft-bedrock-stable` , `https://jaylydev.github.io/posts/bedrock-gdk/#restore-your-data` (confirmed)
+- **Duplicate dev packs**: there is a case where duplicate dev packs appeared in the numbered folder during migration and `/reload all` seemed unable to see new files. If a duplicate pack (an old copy) exists, changes are not reflected.
+- **Multiplayer texture cache**: after GDK it is under `%temp%/Minecraft Bedrock`. Another report says the resource pack cache is at `%LOCALAPPDATA%\Temp\minecraftpe\packcache\resource` and `AppData\Roaming\Minecraft Bedrock\premium_cache` has only skin data (**conflicting**). OneDrive can also redirect the folder. The content log accumulates in `AppData/Roaming/Minecraft Bedrock/logs` and can grow to tens of GB if left on. Vanilla game files are under `C:\XboxGames`.
+- **`@minecraft/core-build-tasks` local-deploy**: raise it to ^5.5.0 (or latest), change the product in `.env` to `MINECRAFT_PRODUCT="BedrockGDK"` (the old values were MinecraftW8P/UMP), and run `npm run local-deploy -- --watch`. Creating a new starter project also works.
+- **Junction script**: LuckedCoronet's PowerShell `mc-link.ps1` gist makes a junction to com.mojang. For Linux/macOS, see minecraft-linux.github.io.
+- **Support status after the GDK switch**: MCPE-tool (jeanmajid) supports the GDK path. The bridge. compile target setting follows `https://wiki.bedrock.dev/guide/project-setup#windows` . Haze (a world file moving tool) does not work after the path change.
+- **UWP servers**: UWP is going away, but as of 2025-11 many servers still used 1.21.94 UWP.
+- **Block mismatch between platforms**: after the GDK switch, "blocks between client and server do not match" can occur between platforms. Match the versions on both sides. (single report)
+- **loopback exemption**: the loopback exemption/UPnP loopback in the BDS docs was a UWP constraint and is not needed on GDK. The old way is `CheckNetIsolation.exe LoopbackExempt -a -p=<SID>`.
+- **Running multiple instances**: on GDK you have to duplicate the installation (a duplicated exe skips the start screen).
+  - gdk-version-archiver (`gdkva`, github.com/conmaster2112/gdk-version-archiver, npm, needs Bun): `gdkva archive --tag=stable`, `gdkva archive *windowsbeta* --tag=preview`, `gdkva list`, `gdkva run --tag=stable`.
+  - Multiple instances broke in the 2026-03 preview. Account switching is tied to Xbox login.
+  - You cannot open one world in two instances with the same account (Blaze error).
+  - Copy installed GDK files inside the package context. Example: `Invoke-CommandInDesktopPackage -PackageFamilyName "Microsoft.MinecraftUWP_8wekyb3d8bbwe" -App Game -Command "powershell" -Args "-Command Copy-Item 'C:\XboxGames\Minecraft for Windows\Content' -Destination 'C:\MinecraftBedrockInstances' -Recurse"`. Preview uses `Microsoft.MinecraftWindowsBeta_8wekyb3d8bbwe` and `C:\XboxGames\Minecraft Preview for Windows\Content`. To sign in with the exe of the copied folder, register the folder with the GDK tool `wdapp`.
+  - MCLauncher (`https://github.com/MCMrARM/mc-w10-version-launcher`) supports GDK builds through PR #359.
+- **Version archiving**: `urls.json` of GdkLinks (`https://raw.githubusercontent.com/MinecraftBedrockArchiver/GdkLinks/refs/heads/master/urls.json`) collects download URLs per version, and the Archiver (`https://github.com/MinecraftBedrockArchiver/Archiver`) preserves builds (the Viewer shows only metadata and the archive is about 1TB). Old preview builds become unavailable after a few weeks. The Xbox app downloads `.msixvc` from assets2.xboxlive.com.
+- **User folder names**: the `Users\<number>` folder name is the FNV-1 64 (not FNV-1a) hash of the UTF-8 bytes of the XUID decimal string. There is an explanation that the game uses fnv1_64 for palette block sorting and fnv1a_32 for block hashes.
+- **dev pack location**: there is a report that `development_*_packs` is recognized even when placed in the same folder as `Minecraft.Windows.exe` (worlds are in com.mojang). (single report)
+- **MCBE protocol URIs**: in the late 2025-10 GDK release, most did not work except Editor, and were restored later.
+- **Linux path**: under Wine/GDK, `development_*_pack` inside com.mojang does not work (cause unknown). mcpelauncher uses two locations, native and flatpak.
+
+### Developing on other operating systems
+
+- **WineGDK** (`https://github.com/Weather-OS/WineGDK`): runs GDK builds with Wine.
+  - vkd3d is faster than wineD3D and Vibrant Visuals works. There is a report that it crashes beyond about 40 chunks.
+  - Forcing Vulkan on AMD crashes while NVIDIA worked. There is a case of signing in to preview with GE-Proton (2026-04).
+  - Structure export fails because of file dialog problems.
+  - Settings reset in a new prefix, so back up `options.txt` or make it read-only.
+  - There is a report that the Android build on the same machine is about twice as fast on AMD. (single report)
+- **Linux launchers**: BedrockOnLinux (`https://github.com/Wyze3306/BedrockOnLinux`), the umu/WineGDK GE-Proton launcher, mcpelauncher-linux (`https://github.com/minecraft-linux/mcpelauncher-manifest`), mcarm.
+- **macOS**: there are macrock (`https://github.com/vincenzopio/macrock`), blockintosh.multision.dev and the nyx wrapper. PlayCover on Apple Silicon runs the iOS version but cannot log in. Development is often done in a Windows VM, but Parallels blocks Store installs and has no arm64 build.
+- **Windows and Android launchers**: Amethyst, LeviLaunchroid (`docs.levimc.org/LeviLaunchroid/`, there is no Android mod loader), Bedrock Launcher (pins old versions from the UWP era). LeviLauncher (GPL-3.0) supports version isolation and .zip/.dll mods, and LeviLamina integration works only on GDK builds.
+
+---
+
+### Regolith
+
+#### Basics
+- **How it works**: `regolith run`/`regolith watch` copies the project, runs filters and exports to `development_behavior_packs`/`development_resource_packs`. In game, reload with `reload all` (`reload` if only scripts and functions changed). Filters are programs, so run only ones you trust. Docs: `https://regolith-docs.readthedocs.io/en/stable/introduction/introduction/`
+- **Python filters**: they use the `python` command (on Windows `python` then `python3`, the reverse order on Linux). If there are no external modules, they run with the default interpreter, so `.regolith/cache/venvs` is empty. To choose a version, put it first in PATH.
+  - bump_manifest needs Python 3.9+ (1.1.1 supports the new manifest).
+  - The install manager of Python 3.15 does not put `Scripts` in PATH, so use `python -m pip`.
+  - A trailing `\` on a PATH entry causes "Python version check failed".
+- **Settings location**: Regolith does not read `.env` (supported from 1.7.0). config.json is a per-project setting, so put machine-specific paths in environment variables.
+- **Update channels**: winget updates are handled by an UnownBot PR and can be about 1 week late. Use the MSI to get it sooner. The release binary is flagged as a false positive by Malwarebytes. Homebrew (goreleaser `brews`, PR #362) was merged into develop on 2026-07-17 and will be available from the next release.
+- **Studio use**: XP Games uses Regolith for every project. There is an opinion that the benefit is small if you use a few filters in only one language. Filters can also be written in compiled languages. A question about Windows ARM support got no answer.
+- **Contribution rules**: fork and target the `develop` branch (`main` is for releases and lags behind). New features are released after the documentation (the docs repository, Bedrock-OSS/regolith-schemas) is ready. Logo and assets: `https://github.com/Bedrock-OSS/regolith-docs/tree/main/docs/_static`
+
+#### GDK path and export target
+- **Recommended method**: set the user environment variable `COM_MOJANG` to the folder that contains `development_behavior_packs` and `development_resource_packs`. Another way is to write the path in config.json with an `exact` target, but it differs per machine, so an environment variable is better for teams. (confirmed)
+- **When environment variables take effect**: an environment variable is visible only to processes started after it is set. Close all VS Code windows, not only the integrated terminal. Most reports of "it still exports to the old path" were this case.
+- **A method that does not work**: `"COM_MOJANG": "..."` inside the profile `export` block does not work with `"target": "development"`. Use an environment variable or `"target": "local"`/`exact`.
+- **Environment variable list**: `COM_MOJANG`, `COM_MOJANG_PREVIEW`, and `COM_MOJANG_PACKS`, `COM_MOJANG_WORLDS`, `COM_MOJANG_PACKS_PREVIEW` and `COM_MOJANG_WORLDS_PREVIEW`, which take priority in each context. Usually none are set. Inside an export path, `${var}` and `$var` can be used along with `%var%` (1.6.0). Docs: `https://regolith-docs.readthedocs.io/en/stable/project-configuration/export-targets/#export-target-environment-variables` , how the path is determined: `https://regolith-docs.readthedocs.io/en/1.6.0/project-configuration/export-targets/#how-does-regolith-determine-the-com-mojang-path`
+- **No UWP fallback**: from 1.6.0 the GDK path is the default and it does not fall back to UWP. UWP users must set the environment variable. Other tools have discussed approaches such as `output: "stable"|"preview"|"stable_uwp"|"preview_uwp"`.
+- **Multiple export targets (1.8.0)**: a profile can specify several targets as a list. `https://regolith-docs.readthedocs.io/en/stable/project-configuration/export-targets/#single-or-multiple-export-targets`
+
+#### Features and bugs per release
+- **1.6.0 (2025-11-08)**: `watchPaths` (at first not in the docs and schema), the `symlink_export` experiment, stopping watch earlier after a subfilter of remote filters, the `initial`/`mode` variables of go-simple-eval, the GDK default path, Go 1.25.3. Bug: a maximum formatVersion of 1.4.0 was hardcoded in `export.go`, so a new `regolith init` project (1.6.0) failed with "Incompatible formatVersion".
+- **1.6.1 (2025-11-10)**: fixed the formatVersion 1.6.0 crash. `arguments` that is not a string list raises an error instead of crashing.
+- **1.6.2 (2025-12-02)**: fixed the Windows junction recursive copy bug. From Go 1.23, junctions are not reported as symlinks, so `otiai10/copy` copied a junction like a file and recursed, and `tmp` preparation failed in projects that kept `node_modules` in `data`. The hotfix was building with Go 1.18.
+- **1.7.0 (2026-01-25)**
+  - `asyncFilters`: runs filters in parallel with `{"asyncFilters":[{"filter":"a"},{"filter":"b"}]}`.
+  - `extraArguments` (`ignore` default / `override` / `append`): decides how the arguments of `regolith run <profile> -- args...` are passed. The original order is `settings` first, then `arguments`.
+  - `when`/`disabled` can be used in profile filters.
+  - go-simple-eval reads environment variables and the `nested` flag.
+  - `.env` support (PR #348) and a global `--env`.
+  - `preShell`/`postShell`: run in the regolith shell context, and environment variables made in `preShell` are visible to filters and `postShell`.
+- **1.8.0 (announced 2026-05-14, performance focused)**
+  - user config `tmp_dir`
+  - the Bun filter type (`"runWith": "bun"`)
+  - runner executable specification (`node_runner`, `deno_runner`, `dotnet_runner`)
+  - `node_runner_override` (for example `regolith config node_runner_override *:bun`, `my_filter:node`). Only Node filters can be overridden. In an unofficial comparison Node was the fastest and Deno could slow down on CommonJS (single report).
+  - `--unsafe` (tracking of edited export files, that is, skipping the deletion safety check. Benchmark 7.34s -> 6.64s (new safe) -> 6.35s (unsafe))
+  - parallelized directory sync, multiple export targets
+  - `size_time_check` became the default and `symlink_export` also graduated from experiment.
+  - `regolith init` uses the unified `$schema`.
+  - Docs: `https://regolith-docs.readthedocs.io/en/1.8.0/using-regolith/performance-tips/` , `https://regolith-docs.readthedocs.io/en/stable/using-regolith/user-configuration/` (there is also a record that the GitHub tag `1.8.0` dates to around 2026-06)
+- **Explanation of experiments**: `size_time_check` skips copying unchanged files by size and mtime. Nearly everyone uses it, and the only theoretical flaw is filters that tamper with mtime. `symlink_export` (PR #328) still breaks many filters and deletes the output before knowing whether the run succeeded. Before 1.8.0 it was enabled with `regolith run debug --experiments size_time_check`. There is a proposal to expose an environment variable so filters can tell whether `size_time_check` is used (for the JSONTE cache, not implemented).
+- **`tmp_dir` and a RAM drive**: set with `regolith config tmp_dir <path>` and reset with `-d`. Pointing it at a RAM drive (ImDisk on Windows, tmpfs on Linux) makes it faster. It is a user-level setting so only one regolith instance runs at a time. Bun fails when the filter script and the working directory are on different Windows drives, so the RAM drive + bun combination does not work.
+
+#### Watch mode and known bugs
+- **An infinite loop if a filter modifies the source**: the loop runs even when it rewrites the same content. For example, if the gametests filter edits the modules in `package.json` a loop runs, so set it through the filter settings. There was a case where the loop kept running until `node_modules` was deleted. Formatting the source with a `runWith: shell` filter (for example prettier) also loops. To apply to the source, use `regolith apply-filter`.
+- **Repeated runs of `"when": "initial == true"` (2026-03~04)**: if a filter writes to the pack/data folder, an interrupted build restarts with `initial` still true and repeats. A filter cannot read `initial` directly. Proposals: pass the `when` scope as a JSON environment variable or write `regolith-meta.json` in `data`.
+- **When the RP/BP directory is missing**: `regolith watch` raises a "Could not start watching" error and `run` only warns. An empty string path is skipped. There is a bug that creates an empty RP folder in `development_resource_packs` even if only a BP is defined (`regolith/profile.go`).
+- **Recursive file watching**: fsnotify officially supports only Windows. regolith forces arexon's fork on Linux. As of 2026-10-30, `regolith watch` does not work on macOS, and the PR that fixes it (`https://github.com/Bedrock-OSS/regolith/pull/349`) was not merged because of a Windows bug. There is an explanation that macOS supports recursive watching with FSEvents and it is Linux (inotify) that has to walk the tree itself. On macOS use a manual `regolith run` or the rgl branch below.
+- **Missed quick edits**: with very fast consecutive edits, watch sometimes fails to update the dev folder (cause not identified).
+- **The effect of parallel filters**: most filters depend on the output of the previous filter, so speed gains are rare. If an error occurs, only the error of one filter is reported.
+
+#### Runners (Node, Deno, Bun)
+- **Deno and Bun**: Deno fails on filters that use `require()`/`import()` (`require()` in a non-CJS scope). `require("node:os")` works in Deno. The gametests filter may not work in bun. regolith cannot pass flags to Node, so use an `exe` filter as a workaround (`"bun": {"runWith":"exe","exe":"filters/bun/bun.exe"}`). Node 24 strips TS types by default. Regolith runs Deno filters with all permissions.
+- **Performance**: an all-Deno filter setup compiles a 5000-file project in under 1 second. Adding jsonte makes it about 10 seconds.
+- **Running TS watch alongside**: running it together with regolith through `concurrently`, or transpiling in a filter, is better (the gametests filter bundles with esbuild).
+
+#### Filter development
+- **No reading input**: Python `input()` raises EOFError because stdin is not connected. Throw an error or use profile settings. If a filter throws an error, the whole run stops.
+- **The `data` folder**: `data/<filtername>` is read-only by default. With `exportData: true` it is written back to the source. To write outside, using the environment variable `ROOT_DIR` (the project root) is better. A filter's `test` folder is excluded from cache downloads.
+- **Designing settings**: a filter should take per-profile settings and not guess intent from the profile or filter name. A JSON schema cannot be attached to filter settings, so make a schema for the whole config yourself. Do not mix PascalCase and snake_case keys in filter config.
+- **Publishing**: do not commit `node_modules` to the filter repository (`regolith install`/`install-all` installs them). Version with the git tag `<filter-name>-<semver>` (for example `git tag loot_tabler-1.0.0`). Docs: `https://regolith-docs.readthedocs.io/en/stable/developing-filters/publishing-filters/#versioning-your-filter`
+- **Filter registry**: `regolith install <name>` works only after adding an entry through a PR to Bedrock-OSS/regolith-filter-resolver (`https://github.com/Bedrock-OSS/regolith-filter-resolver`). You can also attach a custom resolver (for example `regolith config resolvers --append github.com/Alien-Edds/Regolith-Filters/resolver.json`). A filter rejected from the standard repository, like the brarchive filter, is hosted in your own repository.
+- **filter-manifest PR #323**: a PR to distribute executable filters by release zip URL, stalled over authentication for private repositories.
+- **`regolith install --profile`**: only adds the installed filter to that profile.
+- **A profile that uses another starter filter**: make it with `{ "filter": "starter_filter", "settings": {...}}, {"profile": "main_profile"}`. The `profile` variable of go-simple-eval holds the current profile even when nested.
+- **Getting the git version**: run `git describe --tags --always --abbrev=0` in `ROOT_DIR` (without a tag, the commit id comes out).
+
+#### Project structure and multiple packs
+- **One BP/RP pair**: one BP and one RP per project, and the tmp folder names must be `BP`, `RP` and `data` (part of project-config-standard and bridge. uses them too).
+  - Workarounds: put extra packs in `data` and copy them with a filter, or split profiles or projects.
+  - Proposal (Draft PR #363): add a configuration stage such as `{"bpOrder":[0,1],"rpOrder":[1,0]}` to `filters` to change the pack directory names in tmp.
+- **Project Config Standard**: in the shared `config.json` of `https://github.com/Bedrock-OSS/project-config-standard/` , put `name`, `packs: {behaviorPack, resourcePack}` and `targetVersion`, and each tool adds its own namespace section (for example `"bedrock-cli": {...}`).
+- **Complaints about big projects**: compiles take over 30 seconds, and there are no parallel profiles (a `regolith run profile1 profile2` proposal).
+  - Most of the time goes to filter IO, and jsonte is often the culprit. Rewriting json_cleaner in Rust took it from 150ms to 16~20ms, mostly thanks to a single-pass algorithm.
+  - An alternative is rgl (`https://github.com/ink0rr/rgl`, a Rust rewrite). It is said that the `port-missing-features` branch (`https://github.com/ink0rr/rgl/tree/port-missing-features`) has all the features to replace Regolith, but as of 2026-10-30 it was not merged into main.
+  - The Molang one-line limit is solved with a project compiler.
+
+---
+
+### The Regolith filter ecosystem and template languages
+
+#### JSONTE (stirante, `https://github.com/MCDevKit/jsonte`)
+- **Design principle**: templates (`.templ`, modules `.modl`) must themselves be valid JSON. In VS Code, link them with `"files.associations": {"*.templ": "jsonc", "*.modl": "jsonc"}`.
+- **2.16.0 (2026-05-28)**
+  - Syntax: backtick template strings `` `$&#123;a&#125; + $&#123;b&#125;` ``, `+=`, block lambdas, first-class lambdas
+  - `.molang` files: `#{expr}` interpolation, `# ` comment stripping, minify (`query.foo` -> `q.foo`)
+  - `.jsonte` scope scripts: modify the scope in the form `$scope.key = value`.
+  - Functions: `loadText(path)`, `join()` without a separator
+  - CLI: `--workers N` (0 means the CPU core count), `jsonte help`, `--scope '{"debug":true}'`, symlink directory cycle detection
+  - Benchmark: 2.4x faster and 9.5x less memory. In one user's comparison, compile went from 18s to 3s.
+- **2026-09 changes**
+  - The `$molang:` field prefix (for example `$molang:pre_animation`) minifies and validates Molang.
+  - `loadMolang(file, scope)`: for example giving `{test: 5}` to `variable.i = #{test};` produces `v.i=5;`.
+  - `brarchive` support
+  - Object shorthand, computed keys, array slicing, `in`, ternaries without else, compound assignment, `++`/`--`, hexadecimal and scientific notation literals
+  - It was claimed to be about 80% faster after optimizing with Claude's help.
+- **The `$scope` pitfall**: values within the same scope cannot reference each other with `{{=floor(x/y)}}` (the earlier entry arrives as a string or NaN). Generating with JS is the recommended workaround.
+- **Removing dev-only templ files from a release**: there is no built-in feature, so use a small filter or script that deletes the `dev` folder.
+- **VS Code extension**: `MCDevKit.jsonte-vscode`. Supports templ/modl schemas, autocomplete, and injection inside .molang/.lang/.mcfunction.
+- **The jsonte author's "fast json" parser (Go)**: full parsing and traversal take 91.5µs, faster than the standard library's 146.8µs. It is the slowest when reading only one key.
+
+#### ModularMC (nusiq, System Template 2)
+- **Location**: `https://github.com/Nusiq/regolith-filters` (`modular_mc`), docs `https://modular-mc-docs.readthedocs.io` (llms.txt: `https://modular-mc-docs.readthedocs.io/llms.txt`). It is based on Deno and esbuild.
+- **A `{ts: ... :}` block is actually JS** (`new Function()`): adding type annotations raises "Unexpected token ':'". Put typed helpers in a `.ts` file and import them in `_map.ts` to pass into the scope. You cannot change `_map.ts` to `.js`.
+- **Comments in scope JSON**: `import x from "./_scope.json" with { type: "json" }` does not allow comments, so use `_scope.ts`.
+- **No default `onConflict`**: for `terrain_texture.json`, `sounds.json` and so on, fill in `onConflict: "merge"` with a plugin function (for example `defaults([...])`). You can also create files directly in `_map.ts` with `Deno.writeTextFile(...)`.
+- **Build-only npm packages**: put them in `deno.json` (if game scripts do not import them, they do not enter the bundle).
+- **Execution order**: compilation is in alphabetical order. The `executionOrder` MAP property (1.3.0, 2026-09-14) replaces `prioritized_systems`.
+- **Version history**: 1.1.1 (2026-06-05, parallel reading, about 15% faster), 1.2.0 (fixed `deno.json` relative imports on Deno 2.6+), 1.3.0 (`executionOrder`). You can pin it in config with `"version": "<commit sha>"`.
+- **Examples**: putting the git version in the scope with `Deno.Command("git", {args:["describe","--tags","--always","--abbrev=0"], cwd: Deno.env.get("ROOT_DIR")})`. Appending `**/*.lang` to `RP/texts/` with `onConflict: "appendEnd"`. Making terrain_texture variants with `__unpack__` and `::` expressions. Write `{i}` inside a map arrow as `({i})`.
+- **System Template compared with Lantern**: System Template (now ModularMC) needs a filter, but in exchange it can define what a single "thing" consists of, create several files from one file, and split files such as `sounds_definitions.json`.
+
+#### The gametests filter (stirante)
+- **1.8.0 (2026-06-11)**
+  - `comptime(fn)`: imported from the virtual module `"comptime"`. It runs the callback in Node at build time and inlines the serialized result. Example: `comptime(() => JSON.parse(fs.readFileSync("data/blocks.json","utf8")))`. To turn it off, `comptime: false`.
+  - `buildOptions.dropLabels: ["LOGGING"]` also removes function calls whose whole body was dropped (turn off with `dropLabeledCalls: false`).
+  - `modules: "auto"`: pulls the manifest dependencies from `data/gametests/package.json` (`"auto-dev"` includes devDependencies). Runtime libraries such as `@minecraft/math` are bundled, and engine modules such as `@minecraft/server` become external.
+- **Docs**: `https://github.com/Bedrock-OSS/regolith-filters/blob/master/gametests/readme.md`
+- **The `regolith install gametests` pitfall**: duplicate `node_modules` appeared under `data/gametests` and broke the `@minecraft/server` types (for example `Player.selectedSlotIndex` missing). It is usually not needed.
+
+#### Other filters
+- **Packaging**: `packer` `https://github.com/MCDevKit/regolith-library/tree/main/packer` . A copy of the old Makercamp exporter is at `https://github.com/Fabrimat/regolith-filters/tree/main/exporter` .
+- **Pack Anything (nusiq)**
+  - 1.2.0 runs git commands in the root dir.
+  - 1.3.0 (2026-05-18) treats `\` in config as `/`. Files with `\` in their name (which can occur on Linux or GitHub Actions) raise an error without `allow_backslash_paths`. This is because Python normalizes paths differently on Windows and Linux.
+- **`git_metadata`** (`https://github.com/MCDevKit/regolith-library/tree/main/git_metadata`): writes git tag and commit information as JSON. Build constants can also be injected with esbuild `define`.
+- **Shapescape NBT Replacer** (`https://github.com/ShapescapeMC/Shapescape-NBT-Replacer`)
+  - Replaces strings inside NBT/mcstructure with regex.
+  - It swaps placeholders such as `#1` and `#2` in jigsaw structures with the pool/name/target name, so connection relationships can be managed in code.
+  - Jigsaw cannot pass information about previously placed structures, so a pool has to be duplicated for each variant.
+  - Fixed some mcstructure loading problems in 2026-04 (PR #2).
+- **Replacements (pixelmancer)**: since 2026-03-27 it also replaces strings inside mcstructure. CLI: `regolith run default -- --replace "old" "new"`.
+- **Loot Tabler** (`https://github.com/TaisenSchettler/regolith-loot-tabler`): assigns loot tables to mcstructure block entities (chests, barrels, decorated pots, suspicious sand/gravel). The most specific path rule wins. You cannot give a different table to each chest inside one structure.
+- **Edds' Regolith Filters** (`https://github.com/Alien-Edds/Regolith-Filters`): Addon Packer, Image Duplicator (`.duplicate.json`), Image Merge (`.merge.json`), Image Tint (`.tint.json`), JSON File Maker (`.files.json`).
+- **Addon Docs** (`https://github.com/thePixelmancer/regolith-filters/tree/main/addon_docs`): creates markdown documentation from JSON and `/** */` comments. It uses the experimental `bedrock-kit` API.
+- **Jsonify and multifeatures**: Jsonify lets you write sources in YAML/TOML/JSONC/JSON5. multifeatures lets you write a feature and a feature rule in one file.
+- **bedrock-core filters** (`https://github.com/bedrock-core/regolith-filters/tree/main/item-aux` and others): see section 13.
+- **The `type_gen` filter**: it overwrote a hand-written enum file with the auto-generated result.
+- **`blockbench_convert`**: crashes on `group.origin` undefined with new Blockbench exports (2026-10, unresolved).
+- **Aggressive Optimizer** (`https://github.com/acoolg/agr_opt`): chains Rollup, Closure, Terser and Prettier. It gave almost no gain on real add-on code.
+- **Shapescape Cutscenes**: outdated because it is `/tp` based. It uses scripting and camera commands.
+- **Nusiq filters**: ModularMC and System Template. `https://github.com/Nusiq/regolith-filters/tree/master/modular_mc`
+
+#### Nolana (arexon, `https://github.com/arexon/nolana`)
+- **Overview**: a Molang superset. It supports functions, match expressions, static arrays, bit/shift operators, compound assignment operators and pipes.
+- **Function behavior**: functions are inlined at the call site ("glorified templating"). Recursion is an intentional error. Early return is compiled into a result variable and branches.
+- **Plans**: `local.*` scope, constant folding, variable name minification, struct, `$` placeholder pipes, `if` expressions, `case`, block scope.
+- **Pitfall**: statements inlined from a called function run before the ternary, so a function call inside a condition has to be handled separately.
+- **Status**: it is on a separate branch (`feat/functions`) and unfinished.
+
+---
+
+### Other build tools and frameworks
+
+#### Bedrock CLI / bedrock-build (keyyard)
+- **Repositories and getting started**: CLI `https://github.com/Keyyard/create-mc-bedrock-cli` , compiler `https://github.com/Keyyard/bedrock-build` (npm `@keyyard/bedrock-build`), templates `https://github.com/Keyyard/custom-mc-scripting-templates` , docs `https://bedrockcli.keyyard.xyz/docs` . Start with `npx create-mc-bedrock`, and mainly use `deploy`, `deploy:watch` and `npm run pack`/`release`. Maintained by one person who accepts PRs.
+- **Version history**
+  - v1.5.0 (2026-04-14): choice of a Regolith-compatible layout
+  - v2.0 (2026-05-14): the bedrock-build compiler (.mcaddon output, hot updates while editing, about 0.03s from workspace to Minecraft)
+  - v2.1 / bedrock-build 1.1.0: the `folders` command (generates canonical folder names, prevents confusing `entity` and `entities`)
+  - bedrock-build 1.2.1 / create-mc-bedrock 2.2.1 (2026-06-14): supports the Project Config Standard `config.json` (`bedrock-cli` namespace) (the old `bedrock.config.json` still works), mixed TS/JS (`allowJs`), about 26% faster builds (parallel bundling + copying, diff-based deployment), recommends Blockception + Lantern through `.vscode/extensions.json`, language choice at creation
+  - 3.0 (2026-06-21): unified into one starter, `npm run create:weapon|tool|armor|item|entity|block` generators (BP+RP JSON, texture atlas, lang registration, idempotent, `--dry-run`). Custom models/animations/textures must be imported first.
+  - bedrock-build 3.1.0 (2026-10-20): `build` mirrors `packs/` into `dist/` (cleaning up deleted/moved files) and builds incrementally by size and mtime. `--clean` is only an optimization option. `<out>/packs/BP/scripts/` is excluded from mirroring. The `syncTree(src, dst, { skipSource, keepInDest })` options were added.
+- **Platform limits**: the deployment path is Windows-centric. Linux needs custom settings, and there was a request for a custom deploy path. macOS has no Bedrock so it is not supported.
+
+#### Frameworks and generators
+- **Anvil** (`https://github.com/StarkTMA/Anvil` , PyPI `mcanvil`, docs `https://anvil.starktma.net/`): generates packs with Python/TypeScript OOP. It directly supports .bbmodel and PBR, converts CSV to .lang, validates schemas, deploys automatically to the dev folder, and packages. Native `.brarchive` export is under development.
+  - Versions: v0.9.92 (cross-platform, 2026-09-04), v0.9.96 (2026-10-03), 1.0.0 (2026-11-05), 1.0.2 (2026-11-10).
+  - 1.0.0: typed validated JSON models for all add-on files, 1.26.60 support, `anvil.api.dimension`, `features.experimental`, a new `anvilconfig.json`.
+  - 1.0.2: release workflow fix, Python 3.15 support, non-Windows OSes export to `output/com.mojang`, Script API package version warnings, `anvil.anvil_version` recorded.
+  - It fails on Android with a platform error.
+  - kit: the single line `WoodSet("maple", exclude=[WoodBlock.SAPLING]).build()` creates 84 JSON files. Example `https://github.com/StarkTMA/anvil_samples/tree/main/wood_set` , docs `https://anvil.starktma.net/kit/`
+- **Efficient Boilerplate**: running `npx efficient-boilerplate` in a world folder creates a manifest, links the RP/BP to the world and lets you choose script modules.
+- **Go CLI attempt**: an interactive manifest generator and a Go path resolver that rewrites imports in `dist/` to match tsconfig `paths` were shared.
+- **bedrock-core** (drav0011, `https://bedrock-core.drav.dev/` , `https://github.com/bedrock-core/ui`)
+  - It is based on Regolith. After preparing Node.js 20+ and Regolith, start with `corepack enable` and `npx @bedrock-core/cli`.
+  - Filters: `generator` (generates types from the official schemas), `i18n` (replaces the deprecated `translation-keys`, migration needed), `guides` (turns MDX into in-game guides), a manifest filter (per-profile manifests)
+  - Server packages: `@bedrock-core/sync` (an inter-add-on message bus, peer discovery, typed RPC, replicated KV), `@bedrock-core/server-runtime` (registry, state, config, features, host election, guides/translations)
+  - bds-runner: runs gametests from the CLI.
+- **ingot** (C#, .NET 10, NuGet 1.0.0 stable 2026-08-13): `https://github.com/pyroboots/ingot` . A v2 rewrite with Regolith-style post-processing is planned.
+- **woah** (Rust): `https://github.com/NaKeRNarolino/woah` , wiki `https://github.com/NaKeRNarolino/woah/wiki/Start-developing` (the API has changed a lot).
+- **rustRock**: `https://github.com/Bissolis/rustRock` , an early-stage Rust macro library.
+- **Converters**
+  - Modmorpher (Java mods -> Bedrock, AI-made mappings): github.com/indozilla1234/modmorpher
+  - A Java-to-Bedrock converter (bbmodel, GeckoLib, ItemsAdder, ModelEngine, OptiFine CIT, Geyser mappings. Weak on attachables): `https://github.com/boredape874/Java-to-bedrock` . The same repository has a Korean-language Java porting guide (`JE_TO_BE_PORTING_GUIDE.md`).
+- **scriptup** (npm `@nano191225/scriptup`, github.com/Nano191225/scriptup): `scriptup new`, `build --release`, `build --watch --bundle`, `--lib`. npm packages must be bundled, and Node built-in modules (fs, path, net) do not exist at runtime. It scans around package.json (depth 3) to find manifest.json.
+- **mcaddon-generator** (`https://github.com/AngrySalt/mcaddon-generator`): creates and packages .mcaddon in the terminal. Lighter than Regolith.
+- **bds-mcbe** (pypi `bds-mcbe`, `https://github.com/PhantomXD-nepal/bds`): `bds init` creates a manifest with the latest dependencies, and `bds add` adds community scripts.
+- **mcbe-mods/create**: `https://github.com/mcbe-mods/create` , a scaffolder.
+- **MCX/mbler** (`https://github.com/RuanhoR/mcx-core` , `https://github.com/RuanhoR/mbler`): a .mcx DSL, automatic manifest, rolldown build, .mcaddon packaging, type checking. The community considers it overly complicated.
+- **Visual Bedrock** (`https://visualbedrock.com/`): an Electron-based node visual scripting app. It exports to JS and contains a form builder and a DB manager (WIP).
+- **The hakomc-server framework**: TSX forms, timer wrappers, debug helpers, fetch.
+- **TriggerScripts**: a scripting language that runs inside Bedrock. `https://github.com/TheoristMC/TriggerScripts`
+- **Microsoft MCTools** (alpha, v0.16.2 in 2026-04, `https://mctools.dev/`)
+  - It has an add-on maker, an embedded BDS and validation. It can also be used as an npm package, a Regolith filter and for CI/CD.
+  - It provides templates, npm modules, entity JSON and armor examples, and a script box add-on (runs code snippets).
+  - The `.mcstructure` renderer handles only basic shapes (full cube, trapdoor).
+  - Evaluation: there is an opinion that the Add button makes you choose a template first and does not suit mobile, so it is not recommended as a long-term tool. When a basic pack was tried with Mojang's web "Add-On maker" on 2026-10-21, the export was broken and the two export buttons did the same thing. (single report)
+- **mccreator.tools**: Waypoint Studios, Sparks, Shapescape tools.
+- **Workspace Creator and Compiler**: for the `development_*_packs` path of 1.21.120+. A symlink is recommended as a simpler alternative.
+
+#### Community technical discussions (build/code generation)
+- **A feature generator pattern (TS)**: provide helpers such as `scatterFeature({identifier, feature: singleBlockFeature({block})})`. Child ids are appended as `__<n>` (avoid chains like `__1__1`), property names are snake_case, and interfaces are used over classes. There is arexon's `https://github.com/arexon/mcbe-types` (`FeatureRule`, `AggregateFeature`, `ScatterDistribution`; features branch). Of public feature-rule generators, only MachineBuilder's was mentioned. Definitions can be partly generated from BDS data.
+- **Library version policy for frequently changing formats** (for example material.bin): decide according to maintenance capacity. Protocol projects support the latest 3~4 versions.
+- **Discussion of git-based dependency tools**: it was agreed to set `destination` to the actual clone location.
+- **The oxc toolchain** (oxlint, oxfmt, tsgo, Rolldown): CI lint/format/typecheck went from 30s to 10s. The VS Code oxc extension is unstable. When emitting JS from an IR, a string buffer writer is recommended over an AST.
+- **Script bundling guides**: for esbuild, follow `https://jaylydev.github.io/posts/bundle-minecraft-scripts-esbuild/#project-setup` , and for rolldown there is a recommendation that about 10 lines of configuration are enough.
+- **Go-native TypeScript compiler**: typescript-go was moved into the main microsoft/TypeScript repository on 2026-08-20.
+- **Runtime news**: Bun merged the Rust port on 2026-05-14. Deno PR `https://github.com/denoland/deno/pull/36194` , `https://github.com/littledivy/v8x` .
+- **Optimizing the JS compile stage has almost no effect**: when compilecat (`https://github.com/isaac-mason/compilecat`) was tried, the bottleneck was Script API calls. Even cutting the perlin computation from 46s to 1s, `fillBlock` calls dominated the total time.
+
+---
+
+
+### Community libraries and Molang tools
+
+- **bedrock-boost (Bedrock-OSS, stirante)**
+  - Vec3 is immutable and slow in hot paths, so MutVec3 was added. MutVec was written by AI based on the existing Vec.
+  - 2026-09-15 release: smaller bundle and about 35% faster vector math.
+  - `src/utils/EntitySaver.ts`: saves entities into a structure and restores them later.
+  - `isItem` (testfor), a camera shake command wrapper.
+  - Releases are done locally with `npm publish` (2FA). The GitHub Action was unstable.
+- **Inter-add-on communication (IPC)**: all use scriptevent as the transport.
+  - MCBE-IPC (github.com/OmniacDev/MCBE-IPC, MIT, single file): the de facto standard. `IPC.handle/invoke` (invoke uses scriptevent twice), typed `PROTO` serialization. Union/Any types are deliberately absent. DirectIPC moved to a separate repository (v3.0.4 was the last bundle). Versions v3.2.1 (2026-01), v3.3.x (2026-02), v3.4.0 (2026-03). Docs: `https://deepwiki.com/OmniacDev/MCBE-IPC/` . There is a fork that received a DMCA notice for removing the copyright notice when copying MIT code.
+  - AddonAPIKit (github.com/ForestOfLight/AddonAPIKit, `AddonAPIServer`/`AddonAPICaller`)
+  - mcbe-mods/runtime (ipc, rpc, discover, bedrock-url)
+  - Bedrock Registry (xXDMOGXx/mcbe-registry-client)
+  - `@bedrock-core/sync`
+  - The IPC standard (`https://github.com/Bedrock-OSS/bedrock-ipc-standard`) will adopt the XP Games implementation (`https://github.com/XPGAMESLLC/ipcs-be`).
+  - Data is not shared between packs. To keep dynamic properties across updates, do not change the UUID. Only scriptevent was suggested as a way to move data between add-ons with different UUIDs.
+- **Physics**: there is a way to run the JS physics engine `crashcat` (said to be faster than cannon-es) at 20Hz and interpolate on the client, and Physics-Test (`https://github.com/MajestikButter/Physics-Test/`). Server physics such as Jolt needs a custom server.
+- **Helper add-ons**: TPS viewer (CurseForge), Jade Bedrockified, Canopy (`https://github.com/ForestOfLight/Canopy`).
+- **Other script libraries**
+  - Data Handler (`https://github.com/SilencedPlayz/Data-Handler-MC`), Chunk Loader V1.2.0 (`https://github.com/gamezaSRC/ChunkLoader/releases/tag/V1.2.0`)
+  - Script-API-Utilities (runJob), SuperStack (stacks above 64), QIDB (item DB), script-api-database (`https://github.com/AutoAsteroid/script-api-database`)
+  - WorldEdit-BE (`https://github.com/SIsilicon/WorldEdit-BE`, with a CurseForge version too), Sweep-N-Slash, Detect-Health v2.0.0, Detect-Click, Netbound
+  - Paradox AntiCheat (GPL-3, see below), dynamic entity hitboxes, Dynamic Lighting API (credit attribution or linking the API pack dependency when used)
+  - PimpMyConfig API (a shared add-on settings menu, JS gist `https://gist.github.com/Alien-Edds/0ecc000faaff856eac2f0afbe96c260e` , TS gist `https://gist.github.com/Alien-Edds/afee960b97de3edcf20c8cddc2c8b9f6`)
+  - Novelty API (accessory compatibility), Furnace API, Chest UI
+  - 8Crafter AndexDB (a script REPL, docs.api.8crafter.com/andexdb), Canopy (a tech add-on, shows saturation in `/debugentity`)
+  - Entity component visualization (`https://zeonplay.github.io/Minecraft-Entity-Component-Visualizer/`)
+  - Persona emote id list (`https://github.com/TwistedAsylumMC/Bedrock-Emotes`)
+  - A* pathfinding (nox7, scripting-resources channel)
+  - An aim assist guide (elzonim)
+- **Paradox AntiCheat** (`https://github.com/Visual1mpact/Paradox_AntiCheat`, rewrite branch): has a `data-hive.ts` DB wrapper. Test with BDS using `npm run update-bds` and `npm run test`. It has noclip detection based on sweep collision. The `bin/` build script includes a loopback exemption. In the past it did hidden chat encryption with a beta chat event, which led to account suspensions (Microsoft monitors chat).
+- **molang-go (stirante)**: `https://stirante.github.io/molang-go/` . It includes vanilla Molang unit tests and verified queries by injecting a DLL into Bedrock (`q.noise` was not tested in the game but is a 1:1 implementation). Another implementer reported a few inaccuracies (details unknown).
+- **A Python Molang parser (kiteob)**: Lark-based with an EBNF `MolangGrammar.py`. It is extending `reticulator`.
+
+---
+

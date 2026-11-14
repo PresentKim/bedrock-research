@@ -1,0 +1,208 @@
+---
+title: Sounds
+description: Sound events and definition files (sound_definitions.json, sounds.json), replacing vanilla sounds, distance attenuation and playsound volume calculation, animation sounds, server sound definitions
+sidebar_position: 8
+sources: [bedrock-wiki, ms-learn, bedrock-samples, private-research]
+---
+
+# Sounds
+
+This page was filled in anew by reading the Bedrock Wiki (commit 0930b39) and Microsoft Learn (a9fd1c0), because the community research has no sound section. Sound-related fragments from the community research are attached at the end.
+
+## Concept
+
+Sound is made of four layers.
+
+- **Sound files**: `.wav`, `.ogg`, `.fsb`. Up to 32 can play at the same time (Source: ms-learn, Introduction to Sounds).
+- **Sound events** (short names): An in-game occurrence that groups one or more files. The same file can be in several events (`mob.drowned.sim` and `random.swim` share `sounds/random/swim1`).
+- **Category**: A classification by which the engine decides which channel to play a sound on (weather is a child of ambient), and it is tied to the volume sliders in the settings.
+- **Distance**: Attenuation is controlled with `min_distance` and `max_distance`. The defaults are a minimum of 1.0 m and a maximum of 10,000 m. `volume` also acts as a range, "playback is attempted only within this distance", not just as intensity, and by default the listener must be within 16 blocks of the sound source.
+
+The structure of every vanilla sound can be referenced in bedrock-samples `resource_pack/sounds`.
+
+## The two files
+
+When adding sounds in a resource pack, you touch two files. `sound_definitions.json` goes inside the `sounds` folder and `sounds.json` at the pack root. Sound files go under `sounds/` (Source: bedrock-wiki `concepts/sounds`).
+
+```
+RP/sounds/example.ogg
+RP/sounds/sound_definitions.json
+RP/sounds.json
+```
+
+### sound_definitions.json: linking a short name to files
+
+<Excerpt src="bedrock-wiki" title="Sounds" path="docs/concepts/sounds.md">
+
+```json
+{
+    "format_version": "1.14.0",
+    "sound_definitions": {
+        "example.toot": {
+            "category": "neutral",
+            "sounds": ["sounds/trumpet"]
+        }
+    }
+}
+```
+
+</Excerpt>
+
+A sound made this way is played with `/playsound`. `playsound` has no auto-correction, so watch for typos in names. New file paths (sounds and so on) load only after a **full client restart, not a world reload**.
+
+If you put several entries in the `sounds` array, one is chosen at random when playing. Entries are strings or objects and can be mixed.
+
+| Key | Meaning |
+| --- | --- |
+| `category` | Top-level key. `block`, `bottle`, `bucket`, `hostile`, `music`, `neutral`, `player`, `record`, `ui`, `weather`. `ui` ignores the range limit |
+| `min_distance` | Attenuation starts after this distance. Default 0.0. It must be a float (for example `1.0`), otherwise it is ignored |
+| `max_distance` | It is quietest after this distance. Must be a float |
+| `name` | (object entry) File path. Example: `sounds/music/game/creative/creative1` |
+| `stream` | Limits the number of simultaneous plays and reads in pieces without loading everything into memory. Good for performance in worlds with many sounds |
+| `volume` | 0.0~1.0, default 1.0. It cannot be made louder than the encoded one. Another explanation says values above 1.0 work in custom resource packs |
+| `pitch` | Positive. 2.3 plays 2.3 times faster and higher. Default 1.0 |
+| `is3D` | If true, directional. Default true. Ignored for `music` and `ui`. Stereo only when false |
+| `interruptible` | Default true |
+| `weight` | Integer. Relative probability of being chosen from the list (10 and 2 give 83.3% to 16.7%). Default 1 |
+| `subtitle` | Localization key shown in the subtitles (Closed Captions) |
+| `load_on_low_memory` | Forces loading even when memory is low. Deprecated since 1.16.0 |
+
+A more realistic example:
+
+```json
+"block.beehive.drip": {
+    "category": "block",
+    "max_distance": 8,
+    "sounds": [
+        { "name": "sounds/block/beehive/drip1", "load_on_low_memory": true },
+        "sounds/block/beehive/drip2",
+        "sounds/block/beehive/drip3"
+    ]
+}
+```
+
+### sounds.json: linking to game events automatically
+
+`sounds.json` ties definitions to game events and plays them automatically without `/playsound`. The top-level categories are `block_sounds` (hit, step and break of blocks), `entity_sounds` (death, ambient, hurt and so on of entities, including custom entities), `individual_event_sounds` (beacon activation, chest closing, explosions and so on), and `interactive_sounds` (unfinished). Common events for entities are as follows.
+
+| Event | Meaning |
+| --- | --- |
+| `ambient` | A sound made at random (oink, cluck and so on) |
+| `attack`, `attack.strong` | Melee attack, `behavior.delayed_attack` attack |
+| `cast.spell`, `prepare.attack` | Summon start, summon end |
+| `death`, `hurt` | Death, damage |
+| `fall.big`, `fall.small` | Landing from a high place, from a low place |
+| `roar`, `shoot`, `splash`, `step` | Roar, shoot, splash in water, footstep |
+
+There are others such as `ambient.in.water`, `breathe`, `death.in.water`, `eat`, `hurt.in.water`, `jump`, `mad`, `scream`, `sleep`, `sniff`, `spit`, `stare`, `swim` and `warn`, but the wiki also could not confirm their automatic trigger conditions.
+
+```json
+{
+    "entity_sounds": {
+        "entities": {
+            "wiki:elephant": {
+                "volume": 1,
+                "pitch": [0.9, 1.0],
+                "events": {
+                    "step": { "sound": "elephant.step", "volume": 0.18, "pitch": 1.1 },
+                    "ambient": { "sound": "elephant.trumpet", "volume": 0.11, "pitch": 0.9 }
+                }
+            }
+        }
+    }
+}
+```
+
+## Replacing vanilla sounds
+
+Find the vanilla file you want to replace in bedrock-samples, create the same folder structure in the pack, and put a file whose **name before the extension is exactly the same**. The format may differ (`rain1.fsb` can be replaced with `rain1.ogg`). For example, the chest opening sound is `sounds/random/chestopen`. To change an event itself or create a new event, use the two files above. Example: define the event in `sounds.json` as `"individual_event_sounds": {"events": {"chest.open": {"pitch": [0.9, 1.0], "sound": "random.chestopen", "volume": 0.5}}}` (Source: ms-learn, Add Custom Sounds). For audio, any tool that can export `.ogg`, such as Audacity, will do.
+
+## Volume and range of `/playsound`
+
+(Source: bedrock-wiki)
+
+- The game clamps the command's volume to 1.0 and multiplies it with the `volume` of the sound definition. The maximum distance you can hear from `/playsound` is `min(max_distance, max(volume * 16, 16))`. If the definition has no `max_distance`, it equals the `playsound` volume x 16.
+- The final volume is `min(playsound_volume, 1) * graph_volume * sound_definition_volume`. Here `graph_volume` is the attenuation coefficient by distance, an approximate graph that may not be linear.
+- The command's volume argument does not affect the shape of attenuation by distance of the heard sound; it only extends the audible range. Example: `mob.ghast.affectionate_scream` has `min_distance: 100.0`, but `/playsound` at volume 1 is heard only up to 16 blocks. Giving a large volume makes it audible from farther, and it starts to get quieter only beyond a distance of 100.0.
+- To make a sound that is audible from far away and keeps getting quieter with distance, put a small value such as `"volume": 0.01` in the definition and use a large volume in the command (for example 4 gives 64 blocks). The high command volume extends the audible range, and the low definition volume keeps the sound from being capped at 1.0 early.
+
+## Playing sounds from animations and controllers
+
+Sounds are played through the short-name definitions of the client entity. First link a short name to a sound definition in the entity file:
+
+```json
+"sound_effects": { "wing_flap": "wiki.dragon.wing_flap" }
+```
+
+Then call it at the right time from an animation keyframe.
+
+```json
+"sound_effects": { "3.16": { "effect": "wing_flap" } }
+```
+
+In an animation controller, call it the same way inside a state.
+
+```json
+"explode_state": {
+    "sound_effects": [ { "effect": "explosion" } ],
+    "transitions": [ { "default": "q.mark_variant == 0" } ]
+}
+```
+
+(Source: bedrock-wiki. For delayed repeating sounds and use on the BP animation side, see [Animations and controllers](./animations-and-controllers.mdx).)
+
+## Server sound definitions (BP, beta)
+
+The behavior pack also has `BP/sounds/sound_definitions.json`, but only the name is the same; the format and purpose are completely different. It attaches metadata such as length and music information to sounds played by script. **It does not register audio.** The sound event must exist as a custom sound in the resource pack's `sound_definitions.json`. Vanilla does not provide a server sound definition file, and `sound_event_name` must have a namespace, so a definition cannot be attached to vanilla events (`random.pop` and so on) (Source: bedrock-wiki `concepts/server-sounds`).
+
+```json
+{
+    "format_version": "beta",
+    "minecraft:server_sound_definitions": [
+        {
+            "sound_event_name": "wiki:my_cool_song",
+            "duration_info": { "mode": "game_time", "seconds": 180.0 },
+            "music_info": { "genres": ["electronic"], "moods": ["calm"], "artist": "A", "title": "T" },
+            "tags": { "category": "background", "regions": ["overworld", "nether"] },
+            "broadcast_range": 64
+        }
+    ]
+}
+```
+
+| Key | Meaning |
+| --- | --- |
+| `sound_event_name` | Required. Must have a namespace, no spaces, case ignored |
+| `duration_info` | Optional. `seconds` (float) and `mode` (`game_time` is tick based so it stops on pause or reduced tick speed, and `real_time` is wall-clock time). If present, both are required |
+| `music_info` | Optional. `genres`, `moods` (arrays), `artist`, `title` (strings) |
+| `tags` | Optional. A map from tag names to a string or an array of strings. No spaces. The game does not interpret it; it is for script filters |
+| `broadcast_range` | Optional. XZ distance (blocks). When `dimension.playSound()` is broadcast without a target player, only players within this horizontal range receive it |
+
+Script API (`beta` of `@minecraft/server`): `world.soundDefinitionRegistry.getDefinitions(filter?)` (the filter has `minDuration`, `maxDuration`, `genres`, `moods`, `artists`, `titles` and `tags`; strings ignore case, and arrays match if any overlap), `SoundDefinition` (`soundEventId`, `durationInfo`, `musicInfo`, `tags`), `player.playSound(definition)` (a definition object or an ID string), `SoundInstance` (`id`, `soundEventId`, `recipient`, `isActive` and `getPlaybackPosition()` of `durationInfo`), `world.afterEvents.soundCompleted` (fires once the declared length has passed, with `soundInstanceId` matching `SoundInstance.id`).
+
+```js
+import { world } from "@minecraft/server";
+
+world.afterEvents.playerSpawn.subscribe(({ player, initialSpawn }) => {
+    if (!initialSpawn) return;
+    const songs = world.soundDefinitionRegistry.getDefinitions({ moods: ["calm"], minDuration: 60 });
+    if (songs.length === 0) return;
+    const song = songs[Math.floor(Math.random() * songs.length)];
+    const instance = player.playSound(song);
+    const done = world.afterEvents.soundCompleted.subscribe(({ soundInstanceId }) => {
+        if (soundInstanceId !== instance.id) return;
+        world.afterEvents.soundCompleted.unsubscribe(done);
+    });
+});
+```
+
+These classes are beta, so they may change with each Preview.
+
+## Sound-related fragments from the community research
+
+(Source: private research)
+
+- Since 1.21.90, sound attenuates by camera distance, and you cannot choose the listener between the camera and the player (dungeon-style camera).
+- Per the Snowstorm documentation, the sound of a particle event can use only vanilla sound events (a bug), and playing sounds on the server side is an open question.
+- Sounds of attachable animations may not play in first person ([Attachables and item rendering](./attachables-and-items.mdx)).
+- RP animation controllers cannot run commands, so play delayed repeating sounds inside a looping BP animation and turn them on and off with a controller.

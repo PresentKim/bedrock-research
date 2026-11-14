@@ -1,0 +1,70 @@
+---
+title: "Resource pack delivery: how a server sends packs"
+description: "Resource pack negotiation at join, gophertunnel chunk delivery settings, content key encryption, content.zipe, minify and version hashes, CDN, limits of pack encryption"
+sidebar_position: 3
+sources:
+  - private-research
+  - gophertunnel
+  - repo-ore-ui-loading
+  - ms-learn
+---
+
+## Concept
+
+A server **sends resource packs down to the client** during join. The client caches a pack by `UUID + version`, and the server does not resend a pack whose UUID and version the client already has. So if you change the contents but the `manifest.json` version stays the same, the client does not receive the changed pack. Negotiation uses the `ResourcePacksInfo`, `ResourcePackStack` and `ResourcePackClientResponse` packets, and pack data is delivered in `ResourcePackDataInfo` and `ResourcePackChunkData` chunks. BDS handles this stage through the world's pack list (`world_resource_packs.json`) and `texturepack-required`, and custom servers handle it through library settings. The BDS-side settings are in [../basics/pack-delivery-and-encryption.mdx](../basics/pack-delivery-and-encryption.mdx).
+
+## gophertunnel delivery settings (MIT)
+
+The gophertunnel `Listener` splits pack data into chunks and sends them. (Source: gophertunnel-repo, minecraft/resource_pack_delivery.go)
+
+<Excerpt src="gophertunnel" title="resource_pack_delivery.go" path="minecraft/resource_pack_delivery.go">
+
+```go
+const (
+	// DefaultResourcePackChunkSize is the size of a single chunk of data from a resource pack sent by a
+	// Listener: 128 KiB.
+	DefaultResourcePackChunkSize = 1024 * 128
+	// DefaultResourcePackChunkSendDelay is the delay a Listener leaves between ResourcePackChunkData
+	// packets, so slow clients are not flooded while downloading packs. Clients after 1.26.30 may fail
+	// resource pack downloads when pack chunks are sent too aggressively.
+	DefaultResourcePackChunkSendDelay = 200 * time.Millisecond
+)
+```
+
+</Excerpt>
+
+- Tune it with `ChunkSize` in `ResourcePackDeliveryConfig` (0 means 128KiB) and `ChunkSendDelay` (0 means 200ms, negative means no delay). Clients after 1.26.30 can fail the download if chunks are sent too aggressively.
+- A pack object has methods such as `Name`, `UUID`, `Version`, `Modules`, `Dependencies`, `HasScripts`, `HasBehaviours`, `HasTextures`, `HasWorldTemplate`, `DownloadURL`, `Checksum` and `Encrypted` (`resource.Pack`). `Pack.WithContentKey` supplies the content key of an encrypted pack.
+
+## Server-side pack processing
+
+A custom server can embed the resource pack in its executable (`go:embed` in Go) and process it into the form to send to clients when the server starts. The source files stay as they are, and only a temporary copy is changed. (Source: private research)
+
+1. **Version**: The `manifest.json` version is set automatically from a hash of the pack contents. The same contents give the same version, so the client cache is kept; when the contents change, the version changes and the client downloads again. If you encrypt, put the secret in the hash too.
+2. **JSON minify**: Remove `//` and `/* */` comments and whitespace from `.json` files (key order and strings stay as they are). Do not touch `manifest.json`. If the file is still not valid JSON after removing comments, the server refuses to start (the game cannot read such a file either). JSON UI files have many comments, so this saves quite a lot of size.
+3. **Encryption**: This works the same way as vanilla marketplace packs. During play, the game fetches Ore UI pages only from packs that are encrypted or have a `content.zipe`. So even a pack you do not encrypt must be sent with an empty `content.zipe` for the pack's DDUI and Ore UI screens to draw as usual `{measured}`.
+   - Each file is encrypted with AES-256-CFB8 using a 32-character key (the IV is the first 16 bytes of the key). `manifest.json` and `pack_icon.png` stay as they are.
+   - `contents.json` lists the paths and keys (the first 256 bytes are the header: version 0, magic `FC B9 CF 9B`, pack UUID), and the list is encrypted the same way with the pack's **content key**. The server gives the content key to the client at join (gophertunnel `Pack.WithContentKey`).
+   - If you derive the key from the server secret with HMAC, the same contents give the same key and version. **If you lose or change the secret, the keys and versions of every pack change and clients download the packs again.** Do not put the secret in the repository.
+   - The format is the same as the community tools (`akmalfairuz/bedrockpack`, `EncryptMyPack`).
+4. **Limits**: Encryption only makes picking up the files inconvenient. Because the key is given to the client, any connecting client can decrypt it, and a tool (`bedrockpack steal`) decrypts everything at once. It is deterrence, not real protection. Do not put anything that must not be seen in the pack.
+
+In Dragonfly, the server setting `Resources.Required = true` forces the client to apply the pack at join.
+
+The evidence that an encrypted pack is trusted in Ore UI file lookup, and what `content.zipe` is, are in [../basics/pack-delivery-and-encryption.mdx](../basics/pack-delivery-and-encryption.mdx) (Source: repo-ore-ui-loading).
+
+## Pack encryption and CDN (community)
+
+- **CDN (`cdn_config.json`)**: The client is picky. The Content-Type must be zip (`application/zip`; the `application/x-zip-compressed` that GitHub Pages sends is also accepted) and a `Content-Length` header is required. There is a case where a Cloudflare Workers response had no Content-Length and the client waited forever at "loading resources". For BDS to give a CDN link, the pack must be registered as required (for example the uuid/version in `system_resource_packs`). The system folder cannot properly override the vanilla loot tables or the crafting catalogue, so putting the pack in the world is another option. Geyser also supports remote pack URLs: https://geysermc.org/wiki/geyser/packs *(confirmed)*
+- **CDN hosting**: There is a case using Cloudflare R2 (free tier). If BDS does not recognize the resource pack, first check `pack_id` and `version` in `world_resource_packs.json`.
+- **Server-encrypted packs and Ore UI**: A pack the server encrypted and sent makes Ore UI load that pack's `hbui/`. In gophertunnel, give the key with `pack.WithContentKey(key)`.
+- **Pack encryption (EncryptMyPack and others)**: It is for RPs only and does not work on vanilla BDS. You need PocketMine, Endstone, Dragonfly (recommended for Geyser users) or a proxy in front of BDS. The decryption key is received locally for an add-on, or during data exchange for a server pack. Skin packs share a single key.
+- **Audio constraint**: By protocol, audio can be played only from a dynamic RP sent in advance. `PlaySoundPacket` was mentioned for client music.
+
+### CDN summary example (cdn_config.json)
+
+```json
+{ "<pack UUID>_<pack version>": "https://cdn.example.com/my_pack.zip" }
+```
+
+The detailed requirements (list every non-vanilla RP with its exact version, a direct link, a correct `Content-Length`) are in [../basics/pack-delivery-and-encryption.mdx](../basics/pack-delivery-and-encryption.mdx).

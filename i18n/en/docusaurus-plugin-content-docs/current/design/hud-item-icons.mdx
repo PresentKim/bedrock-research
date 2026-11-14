@@ -1,0 +1,268 @@
+---
+title: Drawing item icons and counts dynamically on the HUD
+description: Three ways to draw the item icon of the block you look at and the counts of storage slots on the HUD like WAILA (inventory mirror, carrying a numeric ID in the title, texture path), and the data format, pack setup and pitfalls of reading a numeric ID through title factory variables.
+sidebar_position: 2
+sources:
+  - repo-guide
+  - private-research
+  - waila-r4isen1920
+  - bedrock-samples
+---
+
+# Drawing item icons and counts dynamically on the HUD
+
+A panel that floats the name and icon of the block you look at and the items and counts inside a chest over the screen (like Java's WAILA and Jade) is counted as a hard feature in JSON UI. Text is easy to send, but an **item icon** cannot be drawn directly from a string.
+
+To state the conclusion first: a side that knows the numeric ID of items (a custom server that sends the item list directly to the client) can draw icons and counts without touching the player inventory. The key is two things.
+
+1. The server carries the item's **runtime ID x 65536** in the subtitle as fixed-width text fields.
+2. The pack cuts that value out of **the variable the title factory provides** (`$subtitle_text`), not out of a binding, and puts it in `#item_id_aux` of `property_bag`. Taking it out with a binding left the icon empty.
+
+A side that does not know numeric IDs, such as a Script API add-on, still uses the inventory mirror or the texture path (section 2).
+
+## 1. Why it is hard
+
+- An item icon is drawn by giving `#item_id_aux` to `inventory_item_renderer` (`"type": "custom"`, `"renderer": "inventory_item_renderer"`). The value is `numeric item ID x 65536 (+ data value)` (ANI-06). A block item is drawn in 3D in the inventory, so it is hard to substitute with a single texture.
+- The only routes for data into the HUD are **strings**: title, subtitle and actionbar ([HUD and titles](../server-ui/hud-and-titles.mdx)). A number has to be taken out of that string and fed to the renderer, and this path is blocked in many places (section 4).
+- Numeric IDs can differ per world because some shift when custom items are registered (ANI-06). The community's conclusion is that the Script API has no way to get an item's numeric ID directly (community report).
+- Conversely, engine collections such as `container_items` and `hotbar_items` give `#item_id_aux` and `#inventory_stack_count` per slot (the engine collection table in the COL chapter). So public add-ons chose the route of "putting the item to show into a real inventory slot".
+
+## 2. Three methods
+
+| Method | Principle | Where it can be used | Cost |
+| --- | --- | --- | --- |
+| Inventory mirror | A script puts the item to show into a player inventory slot, and the pack reads that slot with a collection binding | Script API add-ons | It moves the player's real items. Backup and restore are needed |
+| Carry the numeric ID in the title | The server carries runtime ID x 65536 in the subtitle as text, and the pack cuts it out of the title factory variable and puts it in the renderer | Custom servers that send the item list directly (Dragonfly, etc.) | A fixed expression must be made per cell. The format must be matched byte by byte |
+| Texture path | Give the item texture path to `image` | Anywhere | Only a flat picture. The 3D icon of block items does not work |
+
+### 2.1 Inventory mirror (the public WAILA add-on)
+
+The script of the public WAILA add-on (r4isen1920/WAILA, MIT) serializes the items in slots 9~26 of the player inventory and backs them up to a dynamic property (split into several pieces because of the size limit), puts the item to display into those slots, and restores them later (Source: waila-r4isen1920 `InventoryMirror.ts`). The pack reads fixed slots of an inventory collection such as `hotbar_items` with `collection_index` and `collection` bindings and moves `#item_id_aux` and `#inventory_stack_count` to the renderer.
+
+- It does not need to know numeric IDs and works with the Script API alone.
+- In exchange it actually moves the player's items. If backup and restore go out of sync, items can be lost, so backup storage, handling disconnects and conflicts with other add-ons must be handled separately.
+- An older version of this add-on used a renderer that read the number from the title and put it in `property_bag`, and it has since been replaced by a renderer that reads the inventory (the pack's `item_aux_renderer` definition has a "Deprecated" comment).
+
+### 2.2 Texture path
+
+If you give an item texture path (`textures/items/...`) as the `texture` of an `image`, you can draw a picture similar to an icon. The community recommends it as a way to avoid the problem of aux ids shifting with version and add-ons (community report). It is a flat picture, so the shapes the renderer draws, such as block items and dyed items, do not appear.
+
+### 2.3 In server forms, the binding route also works
+
+Server form buttons are different. Carrying a value like `aux:65536` in the button image string `#form_button_texture` and binding `(#texture - 'aux:')` to `#item_id_aux` works in the Chest-UI family (PAT-11, community report). The "does not work with bindings" in section 4 below is the result for the **HUD title channel**.
+
+## 3. How to carry a numeric ID in the title
+
+This is a setup built by measurement on a Dragonfly-based server (Source: private research). The server finds the block the player looks at with a ray check and sends the panel contents as title and subtitle. The pack hides the vanilla title and draws the panel in its place.
+
+### 3.1 Data format
+
+The **title** carries a marker prefix for the panel and the name and info lines. The pack uses the prefix to tell whether it is a panel title, and hides the vanilla title label.
+
+The **subtitle** carries icons and cells at fixed widths.
+
+| Position (bytes) | Length | Contents | Example |
+| --- | --- | --- | --- |
+| 0 | 1 | String marker `i` | `i` |
+| 1 | 11 | Item of cell 0: runtime ID x 65536 padded with `x` on the left. An empty cell is `xxxxxxxxxx0` | `xxxxx327680` (runtime ID 5) |
+| 12 | 8 | Count of cell 0: `§f` + number padded with `~`. For 1 item, only `~` | `§f12~~~` |
+| 20 | 11 | Item of cell 1 | `xxxxxxxxxx0` |
+| 31 | 8 | Count of cell 1 | `~~~~~~~~` |
+
+- One cell is 19 bytes (item 11 + count 8). The item of cell `n` starts at byte `1 + 19n` and the count at byte `12 + 19n`.
+- The pack's truncation `'%.Ns'` is in **bytes**. `§` is 2 bytes, so `§f12` is 4 bytes. Keep the leading cells that are cut by position in ASCII, and put multibyte characters such as Hangul only at the very end.
+- Padding with 0 or sending a value with something added was not read as an item. Removing the padding characters (`x`, `~`) in the pack worked.
+- The leading `i` of the subtitle keeps the subtitle a string. Sending only a number broke the vanilla check that treats the subtitle as a string, giving gray cells and an "expected a string" warning.
+
+An example of building cells on the server side (Go):
+
+```go
+func itemField(runtimeID int32) string {
+	if runtimeID == 0 {
+		return "xxxxxxxxxx0"
+	}
+	n := strconv.Itoa(int(runtimeID) * 65536)
+	return strings.Repeat("x", 11-len(n)) + n
+}
+
+func countField(count int) string {
+	s := ""
+	if count > 1 {
+		s = "§f" + strconv.Itoa(count)
+	}
+	return s + strings.Repeat("~", 8-len(s))
+}
+```
+
+The runtime ID is the number in the item list the server sent to the client. Dragonfly gets it with `world.ItemRuntimeID(item)`.
+
+### 3.2 Attaching to the vanilla title (`ui/hud_screen.json`)
+
+The vanilla title label is hidden when it is a panel title, and the engine factory `hud_title_text_factory` of the same name is declared once more in `root_panel` (COL-14). The control this factory creates receives the title and subtitle as the **variables** `$title_text` and `$subtitle_text` (COL-17).
+
+```json
+{
+  "namespace": "hud",
+
+  "hud_title_text": {
+    "modifications": [
+      {
+        "array_name": "bindings",
+        "operation": "insert_front",
+        "value": [
+          { "binding_type": "global", "binding_name": "#hud_title_text_string", "binding_name_override": "#text" }
+        ]
+      },
+      {
+        "array_name": "bindings",
+        "operation": "insert_back",
+        "value": [
+          { "binding_type": "view", "source_property_name": "(not ('%.6s' * #text = 'panel:'))", "target_property_name": "#visible" }
+        ]
+      }
+    ]
+  },
+
+  "root_panel": {
+    "modifications": [
+      {
+        "array_name": "controls",
+        "operation": "insert_front",
+        "value": [
+          {
+            "item_hud_host": {
+              "type": "panel",
+              "size": [ "100%", "100%" ],
+              "factory": {
+                "name": "hud_title_text_factory",
+                "control_ids": { "hud_title_text": "panel@item_hud.panel" }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### 3.3 Icon and count cells (`ui/item_hud.json`)
+
+The example below is a two-cell rewrite of the measured setup. The expressions and structure are the same as the measured setup, but this exact form was not tested in game.
+
+```json
+{
+  "namespace": "item_hud",
+
+  "panel": {
+    "type": "stack_panel",
+    "orientation": "horizontal",
+    "size": [ "100%c", 18 ],
+    "anchor_from": "top_middle",
+    "anchor_to": "top_middle",
+    "offset": [ 0, 26 ],
+    "ignored": "(not ('%.6s' * $title_text = 'panel:'))",
+    "controls": [
+      { "slot0@item_hud.slot": { "$index": 0 } },
+      { "slot1@item_hud.slot": { "$index": 1 } }
+    ]
+  },
+
+  "slot": {
+    "type": "panel",
+    "size": [ 18, 18 ],
+    "$index|default": 0,
+    "$aux|default": "0",
+    "variables": [
+      {
+        "requires": "($index = 0)",
+        "$aux": "((((('%.11s' * ($subtitle_text - ('%.1s' * $subtitle_text))) - 'xxxxxxxx') - 'xxxx') - 'xx') - 'x')"
+      },
+      {
+        "requires": "($index = 1)",
+        "$aux": "((((('%.11s' * ($subtitle_text - ('%.20s' * $subtitle_text))) - 'xxxxxxxx') - 'xxxx') - 'xx') - 'x')"
+      }
+    ],
+    "controls": [
+      {
+        "icon": {
+          "type": "custom",
+          "renderer": "inventory_item_renderer",
+          "size": [ 16, 16 ],
+          "property_bag": { "#item_id_aux": "$aux" }
+        }
+      },
+      {
+        "count": {
+          "type": "label",
+          "anchor_from": "bottom_right",
+          "anchor_to": "bottom_right",
+          "font_scale_factor": 0.75,
+          "shadow": true,
+          "localize": false,
+          "$count|default": "",
+          "variables": [
+            {
+              "requires": "($index = 0)",
+              "$count": "((((('%.8s' * ($subtitle_text - ('%.12s' * $subtitle_text))) - '~~~~~~~~') - '~~~~') - '~~') - '~')"
+            },
+            {
+              "requires": "($index = 1)",
+              "$count": "((((('%.8s' * ($subtitle_text - ('%.31s' * $subtitle_text))) - '~~~~~~~~') - '~~~~') - '~~') - '~')"
+            }
+          ],
+          "text": "$count"
+        }
+      }
+    ]
+  }
+}
+```
+
+Register `ui/item_hud.json` in `_ui_defs.json` (FILE-01).
+
+How to read the expressions:
+
+- `($subtitle_text - ('%.20s' * $subtitle_text))` is the remainder after removing the first 20 bytes. Cutting 11 bytes from it with `'%.11s' *` gives the item field of cell 1 (truncation in the EXP chapter).
+- `- 'xxxxxxxx' - 'xxxx' - 'xx' - 'x'` erases the padding characters. This expression, which subtracts groups of 8, 4, 2 and 1 in turn, worked in measurement.
+- If you put the remaining digit characters into `#item_id_aux` of `property_bag`, the renderer draws that item. An empty cell becomes `0` (air) and draws nothing.
+- The count starts with `§f`, so it is not converted to a number and shows as text.
+
+### 3.4 When there are many cells
+
+- `$variable`s cannot be used in a binding expression, and an expression from a variable block put inside another expression was not computed. So **a fixed expression per cell number** is made in advance and picked in with `requires` of `variables`. With 28 cells that is 28 item expressions and 28 count expressions. Do not write them by hand: build them with a generator, and check with a test that the server's cell width constants and the pack's expressions are the same.
+- When cells of a row are empty, do not make that whole row `ignored` (for example, not creating the second row when its first cell is empty). `ignored` is evaluated once at creation, but when the title changes the factory recreates the controls, so it is judged again for each new title (FILE-17, COL-17).
+
+### 3.5 Rules for the sending side
+
+- Send the subtitle before the title. A subtitle that holds icons had to arrive paired with its title.
+- Send the fade-in and fade-out times as 0 and the stay time long (for example 60 seconds), and resend only when the content changed. Even if unchanged, resend before the stay time ends (for example every 30 seconds).
+- Only one title is visible at a time. When sending an ordinary title such as a level-up, do not send the panel until that title ends. Move text that must always be up to another channel such as a sidebar scoreboard (section 6 of [HUD and titles](../server-ui/hud-and-titles.mdx)).
+- Do the gaze tracking when moving or turning and at a short interval. For crops, use a box whose height grows with the stage, and for blocks without a collision box, judging by the whole cell matches the client crosshair.
+
+## 4. Pitfalls
+
+| Symptom | Cause and fix |
+| --- | --- |
+| The icon is empty | When the cell was taken out with a `#hud_subtitle_text_string` **binding** expression, the icon was empty in every form: truncation, fixed width, adding and subtracting, erasing padding characters. Take it out of the title factory variable `$subtitle_text` and put it into `property_bag` |
+| Gray cells and "expected a string" | The subtitle was sent as only a number. Put a character (`i`) at the front |
+| Counts or digit characters do not show | Values converted to numbers did not show in the label (`" 219"`, `"1,532/4,096"`). Send them in a cell that starts with `§f`, and to make them text in an expression use `'§r' + value` |
+| The count expression is not computed | Put the count expression in the **label's own** `variables`. An expression put on the parent panel or `('§r' + $variable)` inside `text` was not computed |
+| A one-character flag comparison does not match | A single-digit character was converted to a number and the text comparison went wrong. Write flags as letters such as `a`~`k`, and in a variable block pick by a fixed character, not an expression |
+| "Must define a source property name" | There is a view binding expression that uses no `#binding` at all. Keep a calculation that uses only variables as a variable, not a binding |
+| Cell positions shift by one | Multibyte characters were mixed into the leading cells. Cells cut by position use only ASCII |
+
+## 5. If you are a Script API add-on
+
+- There is no public API to get the numeric ID, so using the method of section 3 needs a table connecting item names to numeric IDs. There are reports that such tables (`typeIds`, etc.) shift vanilla IDs when custom items are added and go stale with every release (community report). There was also a proposal to build the table at runtime with `ItemTypes.getAll()`, but whether that order equals the client's numeric IDs was not confirmed (*unverified*).
+- So Script API add-ons still find the inventory mirror (section 2.1) or the texture path (section 2.2) realistic. If you use the inventory mirror, design the backup and restore of the player's items first.
+
+## Related documents
+
+| Document | Contents |
+| --- | --- |
+| [HUD and titles](../server-ui/hud-and-titles.mdx) | Title and actionbar data channels, value preservation, the sidebar scoreboard channel |
+| [Images and animation](../json-ui/images-and-animation.mdx) | ANI-06 the item renderer and `#item_id_aux` |
+| [Collections and factories](../json-ui/collections-and-factory.mdx) | COL-14 engine factory redeclaration, COL-17 factory variables |
+| [Files and definitions](../json-ui/files-and-definitions.mdx) | FILE-17 `ignored` and factory variables |
+| [JSON UI optimization](./json-ui-performance.mdx) | Creation cost of panels with many cells |

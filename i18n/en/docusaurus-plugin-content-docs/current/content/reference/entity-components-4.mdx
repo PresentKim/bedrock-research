@@ -1,0 +1,560 @@
+---
+title: Entity component reference (4/23)
+description: 14 MS Learn component pages (minecraft:breathable ~ minecraft:color2). Property tables and sample JSON as in the original.
+sidebar_position: 103
+sources:
+  - ms-learn
+---
+
+# Entity component reference (4/23)
+
+This page carries the component pages of MS Learn (MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0). IDs, property names, types, default values and JSON are as in the original. The full list is in the [index](./entity-index.mdx).
+
+## minecraft&#58;breathable
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_breathable.md`)
+
+Defines what blocks this entity can breathe in and gives them the ability to suffocate.
+
+### Breathable Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| breathe_blocks | *not set* | Array of strings | List of blocks this entity can breathe in, in addition to the selected items above. |  |
+| breathes_air | true | Boolean true/false | If set, this entity can breathe in air. |  |
+| breathes_lava | true | Boolean true/false | If set, this entity can breathe in lava. |  |
+| breathes_solids | false | Boolean true/false | If set, this entity can breathe in solid blocks. |  |
+| breathes_water | false | Boolean true/false | If set, this entity can breathe in water. | Bogged: `true` |
+| can_dehydrate | false | Boolean true/false | If true, entities that only breathe water (for example, fish) will take dehydration damage when out of water. This item requires a format version of at least 1.21.130. |  |
+| generates_bubbles | true | Boolean true/false | If set, this entity will have visible bubbles while in water. |  |
+| inhale_time | 0 | Decimal number | Time in seconds to recover breath to maximum. |  |
+| non_breathe_blocks | *not set* | Array of strings | List of blocks this entity cannot breathe in, in addition to the selected items above. |  |
+| suffocate_time | -20 | Integer number | Time in seconds between suffocation damage. |  |
+| suffocateTime | *not set* | Decimal number |  |  |
+| total_supply | 15 | Integer number | Time in seconds the entity can hold its breath. | Bat: `15` |
+| totalSupply | *not set* | Decimal number |  | Allay: `15` |
+
+### Samples
+
+##### [Allay](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/allay.json)
+
+
+```json
+"minecraft:breathable": {
+  "suffocateTime": 0,
+  "totalSupply": 15
+}
+```
+
+##### [Bat](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/bat.json)
+
+
+```json
+"minecraft:breathable": {
+  "suffocate_time": 0,
+  "total_supply": 15
+}
+```
+
+##### [Bogged](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/bogged.json)
+
+
+```json
+"minecraft:breathable": {
+  "breathes_water": true,
+  "suffocate_time": 0,
+  "total_supply": 15
+}
+```
+
+## minecraft&#58;breedable
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_breedable.md`)
+
+Allows an entity to establish a way to get into the love state used for breeding.
+
+> [!Note]
+> This component is commonly used in conjunction with the 'minecraft:behavior.breed' component.
+
+> [!Note]
+> In 1.21.130 the `transform_to_item` field on each entry of `breed_items` was renamed to `result_item`. The new field is defined per-item, so different breed items can transform into different result items on use.
+
+> [!Note]
+> In 1.26.0 the offspring-related fields were split out into the separate `minecraft:offspring_data` component. `minecraft:breedable` now contains only love-state, taming/health requirements, and pregnancy-flow data; the new `minecraft:offspring_data` component is required to actually spawn the child entity.
+
+### Breedable Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| allow_sitting | false | Boolean true/false | If true, entities can breed while sitting |  |
+| blend_attributes | true | Boolean true/false | If true, the entities will blend their attributes in the offspring after they breed. For example, horses blend their health, movement, and jump_strength in their offspring. |  |
+| breed_cooldown | 60 | Decimal number | Time in seconds before the Entity can breed again. |  |
+| breed_items | *not set* | Array of strings | The list of items that can be used to get the entity into the 'love' state. Can be a single item or an array. | Chicken: `["wheat_seeds","beetroot_seeds","melon_seeds","pumpkin_seeds","pitcher_pod","torchflower_seeds"]`, Cow: `["wheat"]`, Frog: `["slime_ball"]` |
+| breed_items (as String) | *not set* | String |  |  |
+| breeds_with | *not set* | Array of Breeds With items | The entity definitions that this entity can breed with. Can be a single object or an array. | Chicken: `{"minecraft:chicken":{}}`, Cow: `{"minecraft:cow":{}}`, Frog: `{"minecraft:frog":{"event":"become_pregnant","target":"self"}}` |
+| breeds_with (as Object) | *not set* | Breeds With (Breed With Single) item |  |  |
+| causes_pregnancy | false | Boolean true/false | If true, the entity will become pregnant instead of spawning a baby. | Frog: `true` |
+| combine_parent_colors | false | Boolean true/false | If true and no color mutation occurs, the baby's `minecraft:color` is set to a blend of the parents' colors (following DyeItem combination rules). |  |
+| deny_parents_variant | *not set* | Deny Parents Variant item | Determines how likely the baby of parents with the same variant will deny that variant and take a random variant within the given range instead. |  |
+| environment_requirements | *not set* | Array of Environment Requirements items | The list of nearby block requirements to get the entity into the 'love' state. |  |
+| extra_baby_chance | 0 | Percent Range | Chance that up to 16 babies will spawn. |  |
+| inherit_tamed | *not set* | Boolean true/false | If true, the babies will be automatically tamed if its parents are. |  |
+| love_filters | *not set* | Minecraft filter | The filters to run when attempting to fall in love. |  |
+| mutation_factor | *not set* | Mutation Factor item | Determines how likely the babies are to NOT inherit one of their parent's variances. |  |
+| require_full_health | false | Boolean true/false | If true, the entity needs to be at full health before it can breed. |  |
+| require_tame | true | Boolean true/false | If true, the entities need to be tamed first before they can breed. | Llama: `true` |
+
+#### combine_parent_colors
+
+If true and no color mutation occurs, the baby's `minecraft:color` is set to a blend of the parents' colors (following DyeItem combination rules). If the parents' colors aren't compatible, the baby inherits one parent's color at random. This item requires a format version of at least 1.21.60.
+
+
+#### Breeds With
+
+##### Breeds With Properties
+
+**JSON path:** `breeds_with`
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| baby_type | *not set* | String | The entity definition of this entity's babies. |
+| breed_event | *not set* | String | Event to run when this entity breeds. Can be a simple event name string or a trigger object with event and optional filters. |
+| breed_event (as Object) | *not set* | Object |  |
+| mate_type | *not set* | String from a list of choices | The entity definition that this entity can mate with. |
+
+#### Breeds With (Breed With Single)
+
+Same structure as Breeds With.
+
+
+#### Deny Parents Variant
+
+##### Deny Parents Variant Properties
+
+**JSON path:** `deny_parents_variant`
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| chance | *not set* | Decimal number | The percentage chance of denying the parents' variant. |
+| max_variant | *not set* | String | The inclusive maximum of the variant range. |
+| min_variant | *not set* | String | The inclusive minimum of the variant range. |
+
+#### Environment Requirements
+
+##### Environment Requirements Properties
+
+**JSON path:** `environment_requirements`
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| block_types | *not set* | Array of strings | The block types required nearby for the entity to breed. |
+| count | *not set* | Integer number | The number of the required block types nearby for the entity to breed. |
+| radius | *not set* | Decimal number | How many blocks radius from the mob's center to search in for the required blocks. Bounded between 0 and 16. |
+
+#### Mutation Factor
+
+##### Mutation Factor Properties
+
+**JSON path:** `mutation_factor`
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| color | *not set* | Percent Range | The percentage chance of denying the parents' variant. |
+| color (as Decimal number) | *not set* | Decimal number |  |
+| extra_variant | *not set* | Percent Range | The percentage chance of a mutation on the entity's extra variant type. |
+| extra_variant (as Decimal number) | *not set* | Decimal number |  |
+| variant | *not set* | Percent Range | The percentage chance of a mutation on the entity's variant type. |
+| variant (as Decimal number) | *not set* | Decimal number |  |
+
+### Samples
+
+##### [Chicken](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/chicken.json)
+
+
+```json
+"minecraft:breedable": {
+  "require_tame": false,
+  "breeds_with": {
+    "minecraft:chicken": {}
+  },
+  "breed_items": [
+    "wheat_seeds",
+    "beetroot_seeds",
+    "melon_seeds",
+    "pumpkin_seeds",
+    "pitcher_pod",
+    "torchflower_seeds"
+  ]
+}
+```
+
+##### [Cow](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/cow.json)
+
+
+```json
+"minecraft:breedable": {
+  "require_tame": false,
+  "breed_items": [
+    "wheat"
+  ],
+  "breeds_with": {
+    "minecraft:cow": {}
+  }
+}
+```
+
+##### [Frog](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/frog.json)
+
+
+```json
+"minecraft:breedable": {
+  "breed_items": [
+    "slime_ball"
+  ],
+  "breeds_with": {
+    "minecraft:frog": {
+      "event": "become_pregnant",
+      "target": "self"
+    }
+  },
+  "causes_pregnancy": true,
+  "require_tame": false
+}
+```
+
+##### [Goat](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/goat.json)
+
+
+```json
+"minecraft:breedable": {
+  "require_tame": false,
+  "breed_items": [
+    "wheat"
+  ],
+  "breeds_with": {
+    "minecraft:goat": {}
+  }
+}
+```
+
+##### [Llama](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/llama.json)
+
+
+```json
+"minecraft:breedable": {
+  "require_tame": true,
+  "breeds_with": {
+    "minecraft:llama": {}
+  },
+  "breed_items": [
+    "hay_block"
+  ]
+}
+```
+
+## minecraft&#58;bribeable
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_bribeable.md`)
+
+Defines the way an entity can get into the 'bribed' state.
+
+### Bribeable Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| bribe_cooldown | 2 | Decimal number | Time in seconds before the Entity can be bribed again. |  |
+| bribe_items | *not set* | Array of strings | The list of items that can be used to bribe the entity. Can be an array or a single item string. | Dolphin: `["fish","salmon"]` |
+| bribe_items (as String) | *not set* | String |  |  |
+
+### Samples
+
+##### [Dolphin](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/dolphin.json)
+
+
+```json
+"minecraft:bribeable": {
+  "bribe_items": [
+    "fish",
+    "salmon"
+  ]
+}
+```
+
+## minecraft&#58;buoyant
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_buoyant.md`)
+
+Enables an entity to float on the specified liquid blocks.
+
+> [!Note]
+> In 1.26.10 the `simulate_waves` boolean was replaced with the `movement_type` string field (`waves` / `bobbing` / `none`). `big_wave_probability` and `big_wave_speed` only apply when `movement_type` is `waves`.
+
+### Entity Buoyant Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| apply_gravity | true | Boolean true/false | Applies gravity each tick. Causes "movement_type" to be more impactful, but also gravity to be applied more intensely outside liquids. |  |
+| base_buoyancy | 1 | Decimal number | Base buoyancy used to calculate how much will a entity float. |  |
+| big_wave_probability | 0.029999999329447746 | Decimal number | Probability for a big wave hitting the entity. Only used if "movement_type" is "waves". |  |
+| big_wave_speed | 10 | Decimal number | Multiplier for the speed to make a big wave. Triggered depending on "big_wave_probability". |  |
+| can_auto_step_from_liquid | false | Boolean true/false | Whether the entity can step out of a liquid block onto a neighboring solid block when pushed against it. This item requires a format version of at least 1.26.10. |  |
+| drag_down_on_buoyancy_removed | 0 | Decimal number | How much an entity will be dragged down when the component is removed. |  |
+| liquid_blocks (Liquid Blocks) | [] | Array of Liquid Blocks items | List of blocks this entity can float on. Must be a liquid block. | Xp Orb: `["minecraft:flowing_water","minecraft:water"]` |
+| liquid_blocks (as String) | *not set* | String |  |  |
+| liquid_blocks (as Object) | *not set* | Object |  |  |
+| movement_type | waves | Movement Type choices | Type of vertical movement applied to the entity. |  |
+
+#### movement_type
+
+Type of vertical movement applied to the entity. `waves` simulates wave movement based on the entity's speed (default). `bobbing` moves the entity up and down at a constant pace. `none` disables wave movement. Replaces the previous `simulate_waves` boolean. This item requires a format version of at least 1.26.10.
+
+
+#### Liquid Blocks
+
+##### Liquid Blocks Properties
+
+**JSON path:** `liquid_blocks`
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| name |  | String |  |
+| states | &#123;&#125; | Integer number |  |
+| states (as String) | *not set* | String |  |
+| states (as Boolean true/false) | *not set* | Boolean true/false |  |
+| tags |  | String |  |
+
+#### Movement Type choices
+
+| Value | Title | Description |
+| --- | --- | --- |
+| bobbing | Bobbing |  |
+| none | None |  |
+| waves | Waves |  |
+
+### Samples
+
+##### [Xp Orb](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/xp_orb.json)
+
+
+```json
+"minecraft:buoyant": {
+  "apply_gravity": false,
+  "liquid_blocks": [
+    "minecraft:flowing_water",
+    "minecraft:water"
+  ]
+}
+```
+
+## minecraft&#58;burns_in_daylight
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_burns_in_daylight.md`)
+
+Specifies that this entity takes fire damage when exposed to direct sunlight. This component is used by undead mobs like zombies, skeletons, and phantoms. The entity will catch fire when in sunlight unless it is wearing armor in the protection slot, standing in water, or in a shaded area.
+
+### Entity Burns In Daylight Properties
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| protection_slot | slot.armor.head | Protection Slot choices | The equipment slot that provides protection from burning in sunlight. |
+
+#### protection_slot
+
+The equipment slot that provides protection from burning in sunlight. If armor is equipped in this slot, the entity will not burn. Commonly set to 'slot.armor.head' for helmets or 'slot.armor.body' for horse armor. This item requires a format version of at least 1.21.130.
+
+
+#### Protection Slot choices
+
+| Value | Title | Description |
+| --- | --- | --- |
+| slot.armor.body | Slot.armor.body |  |
+| slot.armor.chest | Slot.armor.chest |  |
+| slot.armor.feet | Slot.armor.feet |  |
+| slot.armor.head | Slot.armor.head |  |
+| slot.armor.legs | Slot.armor.legs |  |
+| slot.weapon.mainhand | Slot.weapon.mainhand |  |
+| slot.weapon.offhand | Slot.weapon.offhand |  |
+
+### Samples
+
+##### [Bogged](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/bogged.json)
+
+
+```json
+"minecraft:burns_in_daylight": {}
+```
+
+## minecraft&#58;can_climb
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_can_climb.md`)
+
+Allows an entity to climb ladders.
+
+### Samples
+
+##### [Blaze](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/blaze.json)
+
+
+```json
+"minecraft:can_climb": {}
+```
+
+## minecraft&#58;can_fly
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_can_fly.md`)
+
+Marks the entity as being able to fly, the pathfinder won't be restricted to paths where a solid block is required underneath it.
+
+### Samples
+
+##### [Allay](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/allay.json)
+
+
+```json
+"minecraft:can_fly": {}
+```
+
+## minecraft&#58;can_join_raid
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_can_join_raid.md`)
+
+Specifies if an entity can join a raid.
+
+### Samples
+
+## minecraft&#58;can_power_jump
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_can_power_jump.md`)
+
+Allows the entity to power jump like the Horse does in Vanilla.
+
+### Samples
+
+## minecraft&#58;cannot_be_attacked
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_cannot_be_attacked.md`)
+
+When set, blocks entities from attacking the owner entity unless they have the "minecraft:ignore_cannot_be_attacked" component.
+
+> [!Note]
+> This item requires a format version of at least 1.21.50.
+
+### Samples
+
+## minecraft&#58;celebrate_hunt
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_celebrate_hunt.md`)
+
+Specifies hunt celebration behaviour.
+
+### Celebrate Hunt Properties
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| broadcast | true | Boolean true/false | If true, celebration will be broadcasted to other entities in the radius. |
+| celeberation_targets | *not set* | Minecraft filter | The list of conditions that target of hunt must satisfy to initiate celebration. |
+| celebrate_sound | *not set* | String | The sound event to play when the mob is celebrating |
+| duration | 4 | Integer number | Duration, in seconds, of celebration |
+| radius | 16 | Decimal number | If broadcast is enabled, specifies the radius in which it will notify other entities for celebration. |
+| sound_interval | 0 | Range of integers | The range of time in seconds to randomly wait before playing the sound again. |
+
+### Samples
+
+## minecraft&#58;collision_box
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_collision_box.md`)
+
+Sets the width and height of the Entity's collision box.
+
+### Entity Collision Box Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| height | 1.7999999523162842 | Decimal number | Height of the collision box in blocks. A negative value will be assumed to be 0. Value must be &gt;= -100000000. Value must be &lt;= 100000000. | Allay: `0.6`, Armor Stand: `1.975`, Arrow: `0.25` |
+| width | 0.6000000238418579 | Decimal number | Width and Depth of the collision box in blocks. A negative value will be assumed to be 0. Value must be &gt;= -100000000. Value must be &lt;= 100000000. | Allay: `0.35`, Armor Stand: `0.5`, Arrow: `0.25` |
+
+### Samples
+
+##### [Allay](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/allay.json)
+
+
+```json
+"minecraft:collision_box": {
+  "height": 0.6,
+  "width": 0.35
+}
+```
+
+##### [Armor Stand](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/armor_stand.json)
+
+
+```json
+"minecraft:collision_box": {
+  "height": 1.975,
+  "width": 0.5
+}
+```
+
+##### [Arrow](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/arrow.json)
+
+
+```json
+"minecraft:collision_box": {
+  "height": 0.25,
+  "width": 0.25
+}
+```
+
+##### [Bat](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/bat.json)
+
+
+```json
+"minecraft:collision_box": {
+  "height": 0.9,
+  "width": 0.5
+}
+```
+
+##### [Blaze](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/blaze.json)
+
+
+```json
+"minecraft:collision_box": {
+  "height": 1.8,
+  "width": 0.5
+}
+```
+
+## minecraft&#58;color
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_color.md`)
+
+Defines the entity's main color.
+
+> [!Note]
+> This attribute only works on vanilla entities that have predefined color values (sheep, llama, shulker).
+
+### Color Properties
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| value | 0 | Integer number | The Palette Color value of the entity. |
+
+### Samples
+
+## minecraft&#58;color2
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_color2.md`)
+
+Defines the entity's second texture color.
+
+> [!Note]
+> Only works on vanilla entities that have a second predefined color values (tropical fish).
+
+### Color2 Properties
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| value | 0 | Integer number | The second Palette Color value of the entity. |
+
+### Samples

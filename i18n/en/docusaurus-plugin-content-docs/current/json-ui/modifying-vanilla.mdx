@@ -1,0 +1,265 @@
+---
+title: "Modifying vanilla screens"
+description: "The modifications syntax, property overriding, redeclaration, wrapping and rules for coexisting with other packs (MOD-01~MOD-25)"
+sidebar_position: 3
+sources:
+  - repo-guide
+  - repo-survey
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+  - private-research
+  - cinnabar
+  - bedrock-core
+  - advancementpack
+  - private-research
+  - chest-ui
+  - upgrader
+  - repo-small-packs
+---
+
+## Concept: three ways to modify vanilla
+
+A resource pack does not replace a vanilla screen wholesale. The game stacks the packs' same-path files on top of the vanilla `ui/` files in pack order and merges them. So whether you coexist with other packs depends on "what you write and how".
+
+The Bedrock Wiki's best practices boil down to three principles (Source: bedrock-wiki, Best Practices).
+
+1. **Change only what you need.** JSON UI is not versioned, so if Mojang changes vanilla, a pack can break. To turn off the XP bar shadow, do not copy the whole label definition and write only the property to change. Copying a whole vanilla file in is the wrong way.
+
+   ```json
+   { "progress_text_label": { "shadow": false } }
+   ```
+
+2. **Use the modification strategy.** If you write your own control directly into the `controls` of vanilla's root panel again (which requires copying every vanilla item), it breaks when vanilla names change. Splice it in with `modifications`.
+
+   ```json
+   {
+     "root_panel": {
+       "modifications": [
+         { "array_name": "controls", "operation": "insert_front",
+           "value": [ { "custom_ui@namespace.custom_ui": {} } ] }
+       ]
+     }
+   }
+   ```
+
+3. **Avoid deep trees and many entry points.** Deep controls can be fixed with path keys (`"panel_with_label_and_bg/bg_image": { "size": [...] }`), but if the child pointed to does not exist a resource pack error is left (the UI works normally). If possible override the definition itself (`"label": { "color": [0.5, 0.5, 0.5] }`) and gather the entry points where you attach your controls into one place (MOD-15).
+
+### The 11 operations of `modifications`
+
+This is the list of operations the wiki documented. The engine's name table also has exactly these 11 (MOD-23).
+
+<Excerpt src="bedrock-wiki" title="Intro to JSON UI, Modifications" path="docs/json-ui/json-ui-intro.md">
+
+| Modification    | Description                                 |
+| --------------- | ------------------------------------------- |
+| `insert_back`   | **insert** at end of array                  |
+| `insert_front`  | **insert** at start of array                |
+| `insert_after`  | **insert** after target in array            |
+| `insert_before` | **insert** before target in array           |
+| `move_back`     | **move** target to end of array             |
+| `move_front`    | **move** target to start of array           |
+| `move_after`    | **move** target after second target         |
+| `move_before`   | **move** target before second target        |
+| `swap`          | **swap** first target with second target    |
+| `replace`       | **replace** first target with second target |
+| `remove`        | **remove** target                           |
+
+Add the new `foo` control below the `second_target` control from the list:
+
+```json
+{
+    "control_name": "second_target",
+    "operation": "insert_after",
+    "value": [ { "foo@example.bar": {} } ]
+}
+```
+
+Move the existing `#example_binding_1` binding below the `#example_binding_2` binding from the list:
+
+```json
+{
+    "array_name": "bindings",
+    "operation": "move_after",
+    "where": { "binding_name": "#example_binding_2" },
+    "target": { "binding_name": "#example_binding_1" }
+}
+```
+
+Swap the position of the existing `#example_binding_1` and `#example_binding_2` bindings:
+
+```json
+{
+    "array_name": "bindings",
+    "operation": "swap",
+    "where": { "binding_name": "#example_binding_1" },
+    "target": { "binding_name": "#example_binding_2" }
+}
+```
+
+</Excerpt>
+
+How to read the wiki examples: use `control_name` when a control is the reference, use `array_name: "bindings"` and `where` when a binding is the reference, and `move_after`, `move_before` and `swap`, which need a second reference, use `target` (the engine reads `target_control` first, MOD-24). In this project, only `insert_back`, `insert_front` and `remove` have confirmed in-game behavior (MOD-01, MOD-14).
+
+### A one-page example of the three forms written in a same-path file
+
+```jsonc
+// RP/ui/hud_screen.json  (the same path as vanilla)
+{
+  // (1) Property override: write only the properties to change in a same-named definition. The later pack wins
+  "progress_text_label": { "shadow": false },
+
+  // (2) Path key: overrides only the properties of a deep child (a Content Log error if the child is missing)
+  "hud_content/root_panel/some_child": { "alpha": 0.5 },
+
+  // (3) modifications: insert into and remove from arrays. Accumulated in pack order
+  "root_panel": {
+    "modifications": [
+      { "array_name": "controls", "operation": "insert_back",
+        "value": [ { "my_layer@my_ns.layer": {} } ] }
+    ]
+  }
+}
+```
+
+The core of the rules below is that for (1) and (2), if several packs write the same property only one remains, and only (3) accumulates.
+
+## Rules
+
+Most resource pack UI work is putting something into a vanilla screen (HUD, server form, chest, NPC dialogue, etc.). There are three methods.
+
+| Method | How to write | Coexistence with other packs | Representative cases |
+| --- | --- | --- | --- |
+| `modifications` | Insert into and remove from arrays (`controls`, `bindings`) in a same-path file | **Accumulates** in pack order | BC form hook, AP HUD |
+| Property override | Write only properties with a same-named definition or path key in a same-path file | If the same property, **the later pack wins** | BA `control_ids` replacement, AP `in_bed_screen` |
+| Redeclaration | Rewrite the screen definition from `@base` in a same-path file | Only one side remains | AP `npc_screen`, BC `small_chest_screen` |
+
+When coexistence matters, choose in order from top to bottom.
+
+### 2.1 The `modifications` syntax
+
+```jsonc
+"root_panel": {
+  "modifications": [
+    { "array_name": "bindings", "operation": "remove",
+      "where": { "binding_name": "#hud_visible" } },
+    { "array_name": "bindings", "operation": "insert_front",
+      "value": [ { "binding_type": "global", "binding_name": "#hud_visible" } ] },
+    { "array_name": "controls", "operation": "insert_back",
+      "value": [ { "my_layer@my_ns.layer": {} } ] }
+  ]
+}
+```
+
+- **[MOD-01]** `modifications` is written with `array_name`, `operation`, `value` (the array of items to insert) and `where` (the condition that finds the item to delete). The `operation`s confirmed in this project's sources are `insert_back`, `insert_front` and `remove`. Vanilla itself never uses `modifications` (a pack-only feature). The engine's operation name table has 11 kinds (MOD-23), and the in-game behavior of the other 8 was not confirmed in this project's sources (MOD-14). `{working pack, code, vanilla}` (Source: AP-samples hud_screen.json, BA chapter 2, BC 4.1, VN 0 uses, NB-01)
+- **[MOD-02]** `modifications` is interpreted **per file path.** Only what is written in a copy at the same path as a vanilla file applies to vanilla definitions, and those of several packs stack in pack order. If written in a file at a different path, the pack's own namespace definition is read as a new definition and replaces the original definition (`Type not specified`, `Unknown property [modifications]`), and a vanilla definition is silently ignored (FILE-22). The Cinnabar reconstruction merges by namespace and name only without this distinction, but measurement is followed (conflict C-46). `{measured}` (Source: BC-facts, conflict C-46)
+- **[MOD-03]** In game, the arrays `modifications` reached were `controls` and `bindings`, and when `variables` was specified it was ignored. The engine does not filter `array_name` by a fixed list (MOD-25), so other arrays such as `button_mappings` are also resolved but their effect was not measured (conflict C-64). The engine actually reads the `target_control` key (MOD-24). `{measured, code, conflict}` (Source: BC-facts, NB-02, NB-03, conflict C-10, conflict C-64)
+- **[MOD-04]** If you insert into an **array the target does not declare directly but only inherits**, a new array is created and hides the inherited content (the vanilla content disappears wholesale). So put it into a definition that declares the array directly. Putting into a definition where the inherited array originally does not exist (for example `bindings` of `hud_title_text`, which has no bindings) is no problem. `{measured, working pack}` (Source: BC-facts, AP-samples hud_screen.json)
+- **[MOD-05]** If you `remove` an **inherited child control** in a derived definition, with no log, all modifications of that file do not apply. On the other hand, `remove` of a **binding item** the definition itself has, specified with `where`, works. The settings and inventory screens also have required toggles that must not be deleted (MOD-16). The Cinnabar reconstruction leaves only a diagnostic and applies the rest, but measurement is followed (conflict C-47). `{measured, working pack}` (Source: BC-facts, AP 4.4, BW-doc, conflict C-47)
+- **[MOD-06]** Do not delete vanilla controls; **hide them with a binding.** Add the hide condition as a `#visible` view binding, or hide with the visibility of a wrapping panel. Required toggles on the settings and inventory screens raise an assert in development builds if removed, so keep them even if hidden (MOD-16). `{measured, working pack}` (Source: BC 6.3-7, BA chapter 2, AP 4.4, BW-doc)
+
+### 2.2 Adding my condition to a vanilla visibility condition
+
+- **[MOD-07]** To AND the vanilla `#visible` binding with my condition, `remove` the original binding (specified with `where`) and then `insert_front` to read the original value and my value again and combine them. `{working pack}` (Source: AP 4.4, AP-samples chat_screen.json)
+
+```jsonc
+"messages_text": { "modifications": [
+  { "array_name": "bindings", "operation": "remove",
+    "where": { "binding_name": "#chat_visible", "binding_name_override": "#visible" } },
+  { "array_name": "bindings", "operation": "insert_front", "value": [
+    { "binding_type": "global", "binding_name": "#chat_visible" },
+    { "binding_type": "global", "binding_name": "#text" },
+    { "binding_type": "view", "source_property_name": "(('%.5s' * #text) = 'myui:')", "target_property_name": "#is_mine" },
+    { "binding_type": "view", "source_property_name": "(#chat_visible and (not #is_mine))", "target_property_name": "#visible" } ] } ] }
+```
+
+- **[MOD-08]** For a definition that originally has no `#visible` binding, you can hide with just a view binding appended with `insert_back` (the approach of attaching a title prefix check to vanilla `long_form` and `custom_form`). `{code}` (Source: BC 4.1-(1), BW-form, BW-intro)
+
+### 2.3 Wrapping: how to avoid clashing with UI packs
+
+- **[MOD-09]** Do not modify the vanilla definition directly; **wrap it.** `"wrapper": { "controls": [ { "long_form@server_form.long_form": {} } ] }` references the final merge result even if another UI pack replaces `long_form` wholesale, so the visibility condition put on the wrapper survives. In 2.0.2, BA used this structure to fix the problem of "screens getting mixed up when used with UI packs" regardless of pack order. `{working pack}` (Source: BA chapter 2)
+- **[MOD-10]** When adding a feature to a vanilla template, put it in as a **slot that is off by default.** Example: if you add `"$show_hover_content|default": false` and a child wrapped with `ignored` to `common_buttons.focus_border`, only buttons that turn that variable on are affected. `{working pack}` (Source: AP 4.8)
+
+```jsonc
+// ui/ui_template_buttons.json (a vanilla path)
+"focus_border": {
+  "$show_hover_content|default": false,
+  "$hover_content|default": "common.empty_panel",
+  "controls": [ { "hover_slot@common.empty_panel": {
+    "ignored": "(not $show_hover_content)",
+    "controls": [ { "content@$hover_content": { "visible": "($hover_state or $pressed_state)" } } ] } } ]
+}
+```
+
+### 2.4 Redeclaration and replacing screen content
+
+- **[MOD-11]** To replace the content of a screen wholesale, redeclare the screen definition in a same-path file and change `$screen_content`. Vanilla also makes screens the same way, like `shulker_box_screen@chest.small_chest_screen` and `barrel_screen@chest.small_chest_screen`. `{vanilla, measured}` (Source: VN chest_screen.json:240 and 258, BC 4.3-(2), BC-facts)
+- **[MOD-12]** If you redeclare a screen definition, only one side remains against other packs that redeclare the same screen. Vanilla features such as the ordinary NPC dialogue also receive the redeclared properties (`render_game_behind`, etc.). Use it only when truly necessary, and wrap the vanilla content so the original features keep working. `{working pack, inferred}` (Source: AP 4.2)
+- **[MOD-13]** If several add-ons must attach to the same vanilla screen, use **only `modifications` that define nothing.** If you write definitions in a vanilla file (including property overrides), you compete in overriding with the same definitions of other packs. `{measured, inferred}` (Source: BC 6.3-9, BC-facts, BW-best)
+
+### 2.5 Summary of how to choose
+
+1. If you only need to hide -> add a view binding to `bindings` (MOD-08) or AND with the existing condition (MOD-07).
+2. To splice in my control -> `insert_back` into the `controls` of a definition that **declares the array directly** (MOD-04).
+3. If another UI pack is likely to change the same vanilla definition -> wrapping (MOD-09).
+4. To replace the whole screen with other content -> redeclaration (MOD-11), preserving the vanilla content by wrapping it.
+5. Template extension -> an off-by-default slot (MOD-10).
+
+### 2.6 Rules added from the Bedrock Wiki comparison
+
+These are rules added by comparing the wiki (BW) documents with vanilla 1.26.50.4. Those with only wiki sentences are marked `unverified`, and those with in-game screenshots in the wiki are marked `measured` (third-party record).
+
+- **[MOD-14]** The wiki documents 11 `operation`s: `insert_back`, `insert_front`, `insert_after`, `insert_before`, `move_back`, `move_front`, `move_after`, `move_before`, `swap`, `replace` and `remove`. The reference item is found with `"control_name": "name"` in `controls` and with `"where": { "binding_name": "#x" }` in `bindings`, and `move_after`, `move_before` and `swap`, which need a second reference, use `"target": { … }`. `replace` swaps the item found with `where` for `value`. Only `insert_back`, `insert_front` and `remove` were confirmed to work in this project's sources, so confirm the rest on an experiment screen before use (DBG-04). The engine's operation name table also has exactly these 11 (MOD-23), and for the second reference it reads `target_control` first and `target` if absent (MOD-24). The names and keys were confirmed in the engine, but the in-game behavior of each operation has not yet been measured. `{unverified, code}` (Source: NB-01, NB-02, conflict C-39)
+- **[MOD-15]** Gather the points that attach to a vanilla screen (entry points) into **one place.** If you `insert` into several child controls separately, even if the name of just one changes part of it breaks, and there are more places to debug. Put your controls inside a wrapper panel placed at a single entry point. `{inferred}` (Source: BW-best, BW-hud)
+- **[MOD-16]** The settings screen and the inventory screen have toggles the engine assumes always exist (the accessibility tab in settings, the construction, equipment, items and nature tabs in the inventory, etc.). If you replace a screen wholesale and leave these toggles out, an assert occurs in development builds. Keep them even if hidden (MOD-06). `{unverified}` (Source: BW-doc "HardCoded Toggles")
+
+### 2.7 Rules added from the Cinnabar engine reconstruction
+
+Cinnabar (`CN`) is Rust code that reconstructs the JSON UI parser of the 26.30 native client. The level is `code`, and `CN-run` is the result of this project running that evaluator directly. If it differs from game measurement, follow measurement (conflicts C-41~C-47).
+
+- **[MOD-17]** `modifications` is applied **after** the ordinary property merge of the same item is finished. Within one `modifications`, later operations can pick only original elements, so you cannot move or delete in the same list an element inserted earlier. `{code}` (Source: CN)
+- **[MOD-18]** If `where` is an object, it picks the first element where **even one member** is equal (they need not all be equal). `where: {}` picks nothing, and with no condition it picks the first element. Specify the binding to delete by a unique member (`binding_name`). `{code}` (Source: CN)
+- **[MOD-19]** If a redeclaration at the same path writes a **different `@base`** from the existing one, the existing definition (type, factory, bindings) is discarded and it becomes a new definition. Do not write `@` when only changing properties of a vanilla definition. `{code}` (Source: CN)
+
+### 2.8 Rules added from the engine behavior analysis
+
+These were read by analyzing the native library of the Android 1.26.52.3 client (`NB`). It is actual compiled output, not a reconstruction, so it is more direct than `CN`, but the level is `code`. If it differs from game measurement, follow measurement.
+
+- **[MOD-23]** The engine's `operation` name table is exactly the 11 of MOD-14 (numbers 1~11). Names must match exactly and there are no other operations. The in-game behavior of each operation still needs measurement (MOD-14). `{code}` (Source: NB-01)
+- **[MOD-24]** For the second reference of an operation item, **`target_control` (a string) is read first** and `target` only when it is absent. The item keys the engine reads are `array_name`, `control_name`, `operation`, `where`, `target_control`, `target` and `value`. The statement in MOD-03 that "`target_control` has no basis" was wrong at the resolution stage. `{code}` (Source: NB-02)
+- **[MOD-25]** `array_name` is not compared against a fixed list; it finds the **same-named member** in the definition and uses it as the target if it is an array. If `array_name` is empty and `control_name` is a string it is filled with `"controls"`, so control operations may omit `array_name`. So at the resolution stage arrays outside `controls` and `bindings` can also be targets, but this conflicts with the measurement that `variables` was ignored (MOD-03) and the effect was not confirmed. `{code, conflict}` (Source: NB-03, conflict C-64)
+
+## Facts added by community reports (community)
+
+(Source: private research) All are at the report level.
+
+- `insert_back`, `insert_front` and `remove` were confirmed, and the community also uses `replace` and `where` filters. If you `replace` after `remove`-ing the same control, it fails, which is the same as the property that within one `modifications` a later operation cannot pick again an element an earlier operation inserted (MOD-17).
+- An idiom for adding content to a vanilla screen: leave the vanilla namespace as is and fill a slot variable. Example: `"inventory_screen": { "$additional_screen_content": "crafting.custom_panel" }`. When complete, replace the whole screen with `$screen_content` (MOD-11).
+- **D-05 conflict (open)**: several reports say that when several packs `modifications` the same vanilla element, only the upper pack wins. The guide follows the measurement that `modifications` accumulates in pack order (MOD-02). Whether the reported cases mixed in property overrides or `replace` needs re-measurement.
+- Marketplace add-ons cannot modify vanilla UI files (world templates can, D-23).
+
+## Proposals (not applied)
+
+These are proposals from the new survey. They have not yet been merged into the body, and the numbers are the final numbers of the merge record.
+
+- **[MOD-20]** (proposal) The official guideline for Marketplace cooperative add-ons forbids overriding `ui/` and `font/` files (because several add-ons cannot modify the same asset together). A pack to be released as cooperative should avoid even the `modifications` of MOD-13 and first choose a workaround outside JSON UI. `{inferred}` (Source: ms-learn, Guidelines for Building Cooperative Add-Ons) It is a policy document, not a measurement, so whether a pack using only `modifications` is also rejected in actual review needs to be checked.
+- **[MOD-21]** (proposal) Server form packs that change the `controls` of `server_form.long_form` at the same path (Chest-UI, upgrader) cannot coexist with each other. Both packs redeclare `long_form` at the same path without `@` (`type: panel`, two `controls`) and split the vanilla look and their own screen with a title prefix check expression. Only the `controls` of the later pack in pack order remain (FILE-21). If coexistence is needed, switch to MOD-09 wrapping or MOD-13 `modifications` only. `{working pack, inferred}` (Source: jua-chest-ui, jua-upgrader)
+- **[MOD-22]** (proposal) When replacing a texture shared by several vanilla controls, copy the original under another name such as `_original`, and relink the controls you will not change to the copy with path keys in a same-path UI file (`"parent/child": {"texture": "…_original"}`). `{working pack}` (Source: jua-small-packs)
+- **Reinforcement proposals (not applied)**: add operation usage records to MOD-01 (in this project's sources `insert_back` 11, `insert_front` 4, `remove` 3), the same-path file merge verdict (C-50) and the cooperative guideline basis to MOD-02, MOD-04 and MOD-13, and the China edition documentation's description to MOD-14.
+
+## Conflict verdicts (related to this chapter's rules)
+
+| ID | Topic | Claim and evidence | Verdict |
+| --- | --- | --- | --- |
+| C-10 | `modifications` targets | The MJ repository spec mentions the `button_mappings` array and the `target_control` key, and the bedrock-core measurement says only `controls` and `bindings` are reached and `variables` is ignored. The engine actually reads `target_control` (NB-02) and does not filter `array_name` by a fixed list (NB-03) | Partly resolved: the `target_control` key is right. The array scope is passed to C-64 |
+| C-39 | `modifications` operations | This project's sources confirmed only `insert_back`, `insert_front` and `remove`, and the wiki has 11 kinds and the `control_name` and `target` keys. Vanilla does not use `modifications`. The engine name table has the same 11 (NB-01) | Names confirmed. The in-game behavior of the other 8 is unverified |
+| C-46 | Scope of redeclaration and `modifications` | Measurement says per path, Cinnabar merges by namespace and name only | Measurement first: MOD-02 kept |
+| C-47 | `remove` of an inherited child | Measurement says all modifications of the file silently become invalid, Cinnabar leaves only a diagnostic and applies the rest | Measurement first: MOD-05 kept |
+| C-64 | The arrays `modifications` reaches | Measurement says only `controls` and `bindings` and `variables` is ignored. The engine resolution finds the same-named member so any array is resolved (NB-03). It may have no effect because variables are fixed earlier than that | Unresolved: do not use anything outside `controls` and `bindings` before measuring |
+
+## Items that need measurement
+
+- The actual behavior of `insert_after`, `insert_before`, `move_*`, `swap` and `replace` (MOD-14, C-39).
+- Whether `modifications` accumulates when several packs apply it to the same vanilla element (D-05).
+- Whether arrays outside `controls` and `bindings`, such as `button_mappings`, have an effect (C-64).

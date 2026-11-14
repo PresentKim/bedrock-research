@@ -1,0 +1,74 @@
+---
+title: "Fake blocks and chunks, and the entity chest"
+description: "Blocks and chunks visible to one player only, a map view example, the entity chest window, chunk center, block state order"
+sidebar_position: 7
+sources:
+  - private-research
+  - bedrock-protocol-docs
+  - gophertunnel
+  - dragonfly
+---
+
+## Concept
+
+The client draws the block update (`UpdateBlock`) and chunk (`LevelChunk`, `SubChunk`) packets the server sends as they are. So a server can send different blocks or chunks to one player **without changing the world**, and show only that person a different landscape. These are called fake blocks and fake chunks. To restore, send the real values again the same way. This is used for map views, previews, and correcting ghost blocks the client predicted and drew. (Source: private research)
+
+## Fake blocks
+
+Send `UpdateBlock` (position, block runtime ID, layer 0 block or layer 1 liquid) only to that player's session. If the block has block entity data, send that data separately too. To restore, send the world's real block the same way. In Dragonfly this is built with a packet hook that reaches the session's packet writes and the block registry.
+
+- A block the client predicted and drew when it was not actually placed is also corrected by resending the real block. Resending the surrounding blocks after a block `Activate` succeeds erases the ghost block the client placed by prediction.
+- On top of a block the server sent as an interactive block (Dragonfly `Activatable`), the client does not predict placing the block it holds.
+
+## Fake chunks
+
+Dragonfly has no chunk visible to only one player, so the fork adds it to the session. While a fake chunk is shown, world block updates for that chunk are not sent to that player, and chunk resends or subchunk requests are answered with the fake chunk. If you cache subchunk data, keep fake chunks out of the cache.
+
+If you send the chunk center to another position with `NetworkChunkPublisherUpdate`, the client keeps and draws the chunks around that position instead of around the player (until it next moves to a different chunk). The client discards chunks outside the chunk center, so this is needed when showing a fake chunk right after a teleport. The SubChunk request protocol is in [protocol-basics.mdx](protocol-basics.mdx).
+
+### Example: a top-down map
+
+A region of the world is shown like a map far away (about +30000 in x and z). (Source: private research)
+
+1. For each chunk, send that player only a fake chunk in which only the top block of each cell is pressed down to a low height and glass is laid over it. If the top block is not a full opaque block, the first block under it is also laid one cell lower.
+2. The body also moves to the map and is fixed 4 cells above the camera. The camera narrows the field of view to 30 degrees and looks down from 65 cells up ([camera-and-input.mdx](camera-and-input.mdx)).
+3. When finished, restore the body and field of view and send the real chunks again.
+
+## Entities visible to only one player
+
+To show a player model that exists in no world to just one client, put the skin in `PlayerList`, add the model, then remove it from the list. The model stays and the player list shows no new person. If a model with the same runtime ID exists, remove it first.
+
+A Dragonfly session remembers hidden entities (private field `hiddenEntities`). If you clear this list when the player changes worlds, the hidden entities become visible again afterwards. They are not created at once; the new world shows its own entities as chunks arrive. It must be cleared inside the player's transaction.
+
+Floating text is sent as a `minecraft:falling_block` entity with a name tag (specify an air block if there is no block variant).
+
+## Entity chest: a chest window with a chosen slot count
+
+This works the same way as PocketMine's CustomSizedInvMenu, Muqsit/InvMenu and bedrock-gophers/inv. Only the client behavior that server implementations rely on is written here. (Source: private research)
+
+This works the same way as PocketMine's CustomSizedInvMenu, Muqsit/InvMenu and bedrock-gophers/inv. Only the client behavior that server implementations rely on is written here [record].
+
+- Send an invisible client-only entity with `AddActor`. The metadata is transparent and NoAI, `ContainerType` = INVENTORY(-1), `ContainerSize` = slot count, and the name = window title. The identifier can be appended to the `AvailableActorIdentifiers` sent at join, and no entity definition file is needed.
+- Then sending `ContainerOpen` (`ContainerTypeContainer` + `ContainerEntityUniqueID`) and the contents opens the chest window.
+- While the entity chest is open, the client sends a window 255 close when a form closes or when it overlaps with a block click. The server must ignore it for the window to stay.
+- The client ignores an open that arrives while the window is closing. When you close a window and open another right away, confirm the close was processed with a `NetworkStackLatency` round trip, then open.
+- If the player moves away from the entity, the client closes the window. Attaching the entity to the player with a ride link keeps it from closing when the player moves.
+- If `ContainerOpen` arrives again for an already open window, the client answers with `PacketViolationWarning` (type -1).
+- The resource pack tedo0627/InventoryUIResourcePack (MIT) reads `§{row count 1~6}§{scroll 0/1}` and nine `§r` at the start of the title to decide the window size. Beyond 54 slots it scrolls at a height of 6 rows. Without the pack, it appears only as a 27-slot chest.
+
+
+Example: packet order
+
+```text
+1. Append the identifier to AvailableActorIdentifiers and send it at join (no entity definition file needed)
+2. AddActor { transparent, NoAI, ContainerType=INVENTORY(-1), ContainerSize=slot count, name=window title }
+3. ContainerOpen { ContainerTypeContainer, ContainerEntityUniqueID }
+4. Send the contents (InventoryContent)
+5. When you close a window and open another right away, confirm the close was processed with a NetworkStackLatency round trip, then open
+```
+
+## Block state order and orientation
+
+- The client matches block runtime IDs **in block state order**. If you merge the state into one number, the order cannot drift from the server. Properties are sorted by name (to match the order in which the client numbers states). With `block-network-ids-are-hashes` (BDS default true), a stable hash ID is used instead of the sequence number.
+- Entity models are drawn half a turn from the world (the model's front faces north). When converting world coordinates to model coordinates, flip only the sign of z and leave x as it is.
+- `Rotation` of a debug shape is [pitch, yaw, roll] in degrees, and yaw 0 reads from north. The reference differs from entity yaw (south 0, north 180), so using it as is flips north and south. A value in radians is effectively 0 degrees.

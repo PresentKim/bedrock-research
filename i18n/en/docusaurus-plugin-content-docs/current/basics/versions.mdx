@@ -1,0 +1,108 @@
+---
+title: "Version scheme and releases"
+description: "The year-based 26.x version scheme, release date table, Script API npm version trend, release cadence, Windows GDK transition"
+sidebar_position: 1
+sources:
+  - private-research
+  - ms-learn
+---
+
+## The 26.x version scheme
+
+Starting with the 2025-12-05 Preview, the game version number became year-based. The version that would have been 1.26.0 is called "26.0" (official announcement: the new-version-numbering-system article on minecraft.net). However, **internal notation and the manifest still use the `1.XX.X` scheme**. Game "26.30" is `[1, 26, 30]` in the manifest (`"1.26.30"` in format 3). (Source: private research)
+
+| Game version | Stable date | Alias | Notes |
+|---|---|---|---|
+| 1.21.120 | 2025-10-28/29 | | Windows GDK transition |
+| 1.21.130 | 2025-12-09 | Mounts of Mayhem | Spear |
+| 1.21.132 | 2026-02-07 (stable) | | |
+| 26.0 (= 1.26.0) | 2026-02 (about 02-10) | | Preview 2026-02-03 |
+| 26.10 / 26.11 | around 2026-03-24 | | |
+| 26.14 | 2026-04-16 | | 26.12 -> 26.13 (hotfix) -> 26.14 |
+| 26.20 | 2026-05-05 | | |
+| 26.21 | 2026-05-15 | | BDS 1.26.21.1 on 2026-05-23 |
+| 26.30 | 2026-06-16 | Chaos Cube | |
+| 26.33 | 2026-07-09 | | Released without a changelog |
+| 26.40 | 2026-08-04 | | Entity format 1.26.40 is game 26.44 |
+| 26.42 / 26.44 / 26.45 | 2026-08 | | 26.42 is 2026-08-07, no notes |
+| 26.50 | 2026-09-15/16 | Wilderness Bound | 26.51 around 2026-09-17 |
+| 26.52 | 2026-10 | | Hotfix. BDS 1.26.52.3 |
+| 26.60 | 2026-10-28 | | Build 26.60.29, Editor 26.60 on 10-27 |
+| 26.61 ~ 26.63 | 2026-10 ~ 11 | | BDS 1.26.61.1, 26.63 (package 1.26.6301.0) around 2026-11-06 |
+
+- The Preview line is one step ahead of the stable release. When 26.20 is stable, the Preview is 26.30; when 26.30 is stable, it is 26.40, and so on. As of 2026-11-13 the stable release is 26.63 and the Preview is the 26.70 line.
+- 26.62 is confirmed to exist through the stable-channel beta tag `1.26.62-stable`.
+- Individual release dates are the dates of the reports, and exact dates were matched against the Editor release mapping and npm publish dates. Version numbers from some sources are estimates.
+- 1.21.114 (store 1.21.114.1, `@minecraft/server` 2.2.0 stable) is the last major reference point before 26.x. The last UWP stable releases for servers are 1.21.94 and .114 UWP.
+
+## Windows GDK transition (1.21.120)
+
+In 1.21.120 (2025-10-28) the Windows build changed from UWP to GDK, and the `com.mojang` path changed. Performance reactions were mixed, accessibility fade/dithering was added, UI settings were reset, and there were complaints about input lag. The mcpelauncher for Linux/mac could not run the latest release for a while. (Source: private research)
+
+| Use | Path |
+|---|---|
+| Packs (shared) | `%AppData%\Minecraft Bedrock\Users\Shared\games\com.mojang` |
+| Worlds and settings | `%AppData%\Minecraft Bedrock\Users\<random number>\games\com.mojang` |
+| Game internal data (vanilla) | `C:\XboxGames\Minecraft for Windows\Content\data` |
+| Logs | `%AppData%\Minecraft Bedrock\logs\` (when turned on in the Creator tab of Settings) |
+| Preview packs | `%AppData%\Minecraft Bedrock Preview\users\shared\games\com.mojang` |
+| Preview logs | `%AppData%\Minecraft Bedrock Preview\logs\` |
+
+The shared `com.mojang` contains `development_behavior_packs`, `development_resource_packs`, `development_skin_packs`, `behavior_packs` and `resource_packs`. If you are not signed in to a Microsoft account, packs are stored in `C:\XboxGames\Minecraft for Windows\Content`. The official guide is the GDK Migration document on MS Learn (Source: ms-learn, `Documents/GDKPCProjectFolder.md`).
+
+**Migration pitfall**: in some cases packs were moved to the per-user (random ID) folder instead of Shared. Moving the packs to the Shared `com.mojang` fixes it. Cases where packs disappeared or were hidden for some users after an update past 1.21.120 were fixed the same way. (Source: private research)
+
+- **UWP path before GDK**: `%localappdata%\Packages\Microsoft.MinecraftUWP_8wekyb3d8bbwe\LocalState\games\com.mojang`.
+- **First-run migration**: takes up to 13 minutes, and one case with 32GB of data took more than 5 hours. In one case only `uwpMigration.dat` remained after migration, so back up `com.mojang` first. Administrator rights are required. There was a report in 2025-11 that `com.mojang` was deleted on uninstall, and a report in 2026-01 that reinstalling the GDK does not delete worlds. Community guide: https://jaylydev.github.io/posts/bedrock-gdk/
+- **User folder**: the GDK keeps data in a folder per Microsoft account XUID. If the `options.txt` of the Shared `com.mojang` and the numbered-folder `com.mojang` differ, settings can be reset. The Windows settings reset bug was not fixed as of 2026-10-27.
+- **Preview**: a separate app ("Minecraft Bedrock Preview"), with game data in `C:\XboxGames\Minecraft Preview for Windows\Content`. The stable development folders do not carry over to Preview. Realms can also run on Preview.
+- **Early 1.21.120 GDK problems**: reports included the `.msixvc` package, a black window for 5 ~ 20 minutes on first run, settings reset, mouse not captured, broken Game Bar recording, a memory leak, 30% CPU in menus, and the double-click import popup disappearing. Turning off vsync and improved input response reduced lag. Bedrock Launcher is not supported. Vanilla RP/BP in the install folder can be edited directly.
+
+## Script API npm version trend
+
+Based on JaylyBot posts (Source: private research).
+
+| Date | Game stable | `@minecraft/server` stable | Stable-channel beta | Preview line |
+|---|---|---|---|---|
+| 2025-10-22 | 1.21.114 | 2.2.0 | 2.3.0-beta.1.21.114-stable | 1.21.130 (2.4.0-rc / 2.5.0-beta) |
+| 2025-10-29 | 1.21.120 | 2.3.0 | 2.4.0-beta.1.21.120-stable | 1.21.130 |
+| 2025-12-05 | 1.21.120 | 2.3.0 | | 1.26.0 (2.5.0-rc / 2.6.0-beta) |
+| 2025-12-11 | 1.21.130 | 2.4.0 | 2.5.0-beta.1.21.130-stable | 1.26.0 |
+| 2026-02-10 | 26.0 | 2.5.0 | 2.6.0-beta.1.26.0-stable | 26.10 (2.6.0-rc / 2.7.0-beta) |
+| 2026-03-25 | 26.10 | 2.6.0 | 2.7.0-beta.1.26.10-stable | 26.20 (2.7.0-rc / 2.8.0-beta) |
+| 2026-05-06 | 26.20 | 2.7.0 | 2.8.0-beta.1.26.20-stable | 26.30 (2.8.0-rc / 2.9.0-beta) |
+| 2026-06-18 | 26.30 | 2.8.0 | 2.9.0-beta.1.26.30-stable | 26.40 (2.9.0-rc / 2.10.0-beta) |
+| 2026-08-05 | 26.40 | 2.9.0 | 2.10.0-beta.1.26.40-stable | 26.50 (2.10.0-rc / 2.11.0-beta) |
+| 2026-09-17 | 26.51 | 2.10.0 | 2.11.0-beta.1.26.51-stable | 26.60 (2.11.0-rc / 2.12.0-beta) |
+| 2026-10-20 | 26.5x | 2.10.0 | | 26.70 (2.11.0-rc / 2.13.0-beta) |
+| 2026-11-03 | 26.60 (26.63 around 11-06) | 2.11.0 | 2.12.0-beta.1.26.60-stable (later 1.26.62-stable) | 26.70 (2.12.0-rc / 2.13.0-beta) |
+
+- The stable-channel beta moved from 2.11.0-beta to 2.12.0-beta around 2026-10-22.
+- `@minecraft/server-ui` stable stayed at 2.0.0 for a long time, then became 2.1.0 on 2026-06-21, 2.2.0 in 26.50/51 and 2.3.0 in 26.60. At 26.60 the beta is `2.4.0-beta.1.26.60-stable` and the Preview is `2.5.0-beta.1.26.70-preview.21`.
+- `server-net`, `server-admin`, `server-gametest`, `debug-utilities` (`1.0.0-beta.1.26.3-stable` first on 2026-03-08) and `diagnostics` are beta only. At 26.60 server-gametest is `1.0.0-beta.1.26.60-stable`.
+- Other modules: `@minecraft/common` 1.2.0 -> 1.3.0 (2026-06-28), `@minecraft/math` 2.2.11 -> 2.4.0 (same on all channels), `@minecraft/vanilla-data` 1.21.120 -> 1.26.2 -> 1.26.10 -> 1.26.32 -> 1.26.40 (2026-08-16), `@minecraft/server-editor` 0.1.0-beta (first on 2026-07-11), `@minecraft/server-editor-bindings` 0.1.0-beta.
+- Beta/Preview strings embed the game version: `-beta.<game version>-stable` or `-preview.<number>`. Install with `npm i @minecraft/server@<version>`.
+- Changelog: scriptapi/minecraft/server/changelog on learn.microsoft.com.
+
+## Release cadence
+
+Features go Preview -> beta API in the release -> stable. The Preview cutoff is usually on Friday. The Editor is numbered to match the Bedrock version from 26.40, and major features arrive every 2 releases (changelog: discussions 268 ~ 355 in github.com/Mojang/minecraft-editor). (Source: private research)
+
+- **Editor versions**: 1.21.120 is v1.1.5, 1.21.130 is v1.2.0, 26.10 is v1.3.0, and from 26.20 on it equals the game number.
+- **Feedback channels**: Preview changelogs are on feedback.minecraft.net, bugs go to report.bugs.mojang.com (login required), and mojira.dev is the read-only mirror. After the old documentation service shut down in 2026-09, send documentation feedback to the `Mojang/bedrock-samples` or `MicrosoftDocs/minecraft-creator` repositories or to the community feedback thread. The Script API channel on the Minecraft Feedback server was restored on 2026-08-30.
+
+## Recommended stable combinations (by period)
+
+Script module dependencies must be paired (see [manifest.mdx](manifest.mdx) for the detailed rules). The stable combinations reported for each period are as follows. (Source: private research)
+
+| Period | Combination |
+|---|---|
+| 2025-11 | server 2.3.0 + common 1.2.0 |
+| 2026-03 | server 2.5.0 |
+| 2026-04-17 | server 2.6.0 + server-ui 1.3.0 |
+| 2026-05 | server 2.7.0 |
+| 2026-07 | server 2.8.0 + server-ui 2.1.0 |
+| 26.50 | server 2.10.0 + server-ui 2.2.0 (2.3.0 failed to load scripts in one pack) |
+| 26.60 (2026-11-03) | server 2.11.0 + server-ui 2.3.0, server-gametest `1.0.0-beta.1.26.60-stable` |
+
+server-gametest/net for BDS use the `1.0.0-beta.1.26.34-stable` format. The available versions listed by an error message on 2026-07-05 were server 0.1.0, 1.19.0, 2.8.0, 2.9.0-beta, 3.0.0-alpha, and server-ui 0.1.0, 1.3.0, 2.1.0, 2.2.0-beta, 3.0.0-alpha.

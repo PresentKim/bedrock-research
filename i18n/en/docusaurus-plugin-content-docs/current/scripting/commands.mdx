@@ -1,0 +1,147 @@
+---
+title: "Custom commands"
+description: "customCommandRegistry registration, parameters, permission problems and workarounds"
+sidebar_position: 6
+sources:
+  - private-research
+  - ms-learn
+  - bedrock-wiki
+---
+
+## Concept
+
+With scripts you can make your own slash commands such as `/creator:hello`. These commands can use the whole Script API and free-form logic, so they suit initialization and test tools, server administration commands and builder helpers. Registration is done with `customCommandRegistry` in `system.beforeEvents.startup`, and the name requires a namespace in the form `namespace:commandname` (Source: ms-learn, `creator/Documents/scripting/custom-commands.md`).
+
+## Registration example
+
+```javascript
+import { system, world, CustomCommandParamType, CustomCommandPermissionLevel, CustomCommandStatus } from "@minecraft/server";
+
+system.beforeEvents.startup.subscribe((init) => {
+  init.customCommandRegistry.registerCommand(
+    {
+      name: "creator:hellocustomcommand",
+      description: "Celebration size",
+      permissionLevel: CustomCommandPermissionLevel.GameDirectors,
+      optionalParameters: [{ type: CustomCommandParamType.Integer, name: "celebrationSize" }],
+    },
+    helloCustomCommand
+  );
+});
+
+function helloCustomCommand(origin, celebrationSize) {
+  // The callback is restricted execution. Defer world changes.
+  system.run(() => {
+    for (const player of world.getPlayers()) {
+      player.dimension.createExplosion(player.location, celebrationSize ?? 1);
+    }
+  });
+  return { status: CustomCommandStatus.Success, message: "Boom!" };
+}
+```
+
+The fields of the registration definition are as follows.
+
+| Field | Description |
+|---|---|
+| `name` | Command name with a namespace |
+| `description` | Description shown in autocomplete |
+| `permissionLevel` | Permission level that can run it |
+| `mandatoryParameters` | Required parameters (front order) |
+| `optionalParameters` | Optional parameters (back order) |
+
+## Permission levels
+
+| Level | Meaning |
+|---|---|
+| `Any` | Any player or environment can run it |
+| `GameDirectors` | Players with "Operator Commands" permission, and automation environments such as command blocks and scripts |
+| `Admin` | Only players with Operator permission. Cannot be used from automation (commands, scripts) |
+| `Host` | Only the game owner (host) |
+| `Owner` | Only from the dedicated server console |
+
+## Parameter types and enums
+
+The callback is called as `(origin, ...args)`, and if an optional parameter is omitted, `undefined` comes in.
+
+| Parameter type | Value passed to the script |
+|---|---|
+| `BlockType` | `BlockType` |
+| `Boolean` | `boolean` |
+| `EntitySelector` | `Entity[]` |
+| `Float`, `Integer` | `number` |
+| `ItemType` | `ItemType` |
+| `Position` | `Vector3` |
+| `PlayerSelector` | `Player[]` |
+| `String` | `string` |
+
+Register an enum first with `registerEnum`, and make the parameter name the same as the enum name.
+
+```javascript
+system.beforeEvents.startup.subscribe((init) => {
+  const reg = init.customCommandRegistry;
+  reg.registerEnum("creator:my_enum", ["foo", "bar", "baz"]);
+  reg.registerCommand(
+    {
+      name: "creator:pick",
+      description: "Enum example",
+      permissionLevel: CustomCommandPermissionLevel.Any,
+      mandatoryParameters: [{ type: CustomCommandParamType.Enum, name: "creator:my_enum" }],
+    },
+    (origin, choice) => ({ status: CustomCommandStatus.Success, message: `Picked: ${choice}` })
+  );
+});
+```
+
+## Community notes
+
+Below are permission bugs, Realms limits and subcommand workarounds gathered from the community research.
+
+
+`*confirmed*`, `*single report*` and `**conflicting**` are reliability marks for reports. The basis of this page is community reports, and they may differ from the official Mojang documentation.
+
+### Custom commands
+
+#### Registration and basic form
+
+- **History**: Beta from Preview 1.21.80.22 through .9x, stable in 1.21.100 (@minecraft/server 2.1.0). On older versions you get `Could not find export 'CommandPermissionLevel'/'CustomCommandParamType'`. Documentation: `https://wiki.bedrock.dev/scripting/custom-commands` , `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/custom-commands`
+- **Basic code**:
+
+```js
+import { system, CommandPermissionLevel, CustomCommandParamType, CustomCommandStatus } from "@minecraft/server";
+system.beforeEvents.startup.subscribe(({ customCommandRegistry }) => {
+  customCommandRegistry.registerEnum("wiki:mode", ["on", "off"]);          // enum first
+  customCommandRegistry.registerCommand({
+    name: "wiki:goto", description: "...",
+    permissionLevel: CommandPermissionLevel.Any,   // Any | GameDirectors | Admin | Host | Owner
+    cheatsRequired: false,                          // default is true -> disappears in worlds/Realms without cheats
+    mandatoryParameters: [{ name: "wiki:mode", type: CustomCommandParamType.Enum }],
+    optionalParameters: [{ name: "target", type: CustomCommandParamType.PlayerSelector }],
+  }, (origin, mode, targets) => {
+    system.run(() => origin.sourceEntity?.teleport({ x: 0, y: 80, z: 0 })); // writes go in system.run
+    return { status: CustomCommandStatus.Success, message: "ok" };
+  });
+});
+```
+
+- **Name**: A namespace is required (`ns:cmd`). If it does not collide with other packs or vanilla aliases, an alias without the prefix is generated automatically so it can also be typed as `/cmd` (on a collision the pack loaded first gets it and `/ns:cmd` is needed). The namespaced version cannot be hidden and can be hidden only by permission level. Use a unique prefix per pack (`const name = n => \`prefix:$&#123;n&#125;\``). If two packs register the same name, only one wins.
+- **Registration time**: Only in startup. Runtime registration (unlocking with a password and so on) is impossible. Changing parameters needs a full world restart, not `/reload` (`cannot change parameters ... during reload`). Use inside function files works without `/reload`.
+- **Callback signature**: `(origin, ...args)`, with parameters coming in order (mandatory -> optional) as separate arguments (not an array or object). There is a report that when an alias is used, the command name is included in args. `origin.sourceEntity` (an Entity, undefined for the console and command blocks; check with `instanceof Player`; do not compare with strings), `origin.sourceType`, `origin.initiator`, `origin.sourceBlock`. There is no `origin.player`/`origin.target`. When run under `/execute`, `sourceEntity` becomes the `as` target, and when an NPC runs it, `initiator` is the NPC.
+- **Return value**: Synchronously `{status: CustomCommandStatus.Success|Failure, message?}` or undefined. An async callback (returning a Promise) is impossible, so use `system.run(async () => ...)` and return Success. For forms, attach `form.show(...).then(...)` and return right away, and report errors with `sendMessage`. `message` is a string (no Error objects, use `` `$&#123;err.message&#125;` ``), limited to 512 characters (a world crash was reported when exceeded), and `%` is a translation marker so escape it as `%%` (keys such as `%gui.confirm` work but extra arguments are not possible). Returning `Failure` (not `Fail`) without a message gives an empty message (a bug). Using it together with `sendMessage` shows the message twice. In 26.70 `message` accepts a RawMessage.
+- **Execution**: A custom command can also be run with `runCommand`, but `runCommand` does not return the command result text. Running a custom command closes the chat window, so it is a good time to show a form right after (the chat `!prefix` method has the chat window open and gives `UserBusy`).
+- **Wrappers/tools**: `command-wrapper` (npm, github.com/Aevarkan/command-wrapper; `defineParameter`, `defineCommand`, `new CommandRegister("prefix", CommandPermissionLevel.GameDirectors, true)`; enums with `as const`; bundling needed, guide `https://wiki.aevarkan.dev/dev/mc-bundling`), a `CustomCommand` class that bundles registration into one startup callback (a type wrapper `CustomCommand.register({ ..., addSystemRunBeforeExecution, parameters, callback })`: typed parameter arguments, automatic enum registration, `data.getArgument`, an option to run the callback outside restricted execution; not a verified library), a GUI builder `https://leowascoding.github.io/studio/html/custom-commands.html`
+
+#### Parameters
+
+- **Types**: `String`, the `Integer` and `Float` family, `Boolean`, `Enum`, `PlayerSelector`, `EntitySelector`, position and so on. `PlayerSelector` is `Player[]` (can be an empty array; `JSON.stringify` gives only `{id,typeId}`). Enum values arrive as strings. There is a report that one command is limited to 8 parameters (*single report*).
+- **enum**: `registerEnum("ns:name", [...])` must come before the command, and the parameter `name` must exactly equal the enum name (including the namespace) (there are both reports that an `enumName` field exists and reports that it does not, **conflicting**; the sure method is param `name` = enum name, so enum names must be unique across commands). The enum example without a namespace in the Jayly documentation is wrong.
+- **Missing features**: Subcommands/overloads/conditional parameters (an optional argument only for a specific enum value), hiding aliases, mixed (number|string), any and command types, rest-of-string (greedy) arguments. A String is one token (quotes if it contains spaces), and quotes are also needed when putting a number in a String. Workarounds: chaining N optional String arguments, separating with `_` and then `split`, taking a String and parsing it yourself (handle `~`/`~N` relative coordinates yourself), separate commands, `!prefix` chat commands. Mojang: "the parser is fragile", no schedule. Vanilla command behavior cannot be redefined (only permissions). (One reporter's claim that "subcommands are possible with enums" is *unverified*)
+- **`execute in <dim>`**: `CommandOrigin` has no dimension, so it cannot receive the `execute in` context (use `origin.sourceEntity?.dimension`/`sourceBlock` or a dimension argument). `execute as/at/positioned` work.
+
+#### Permission problems
+
+- **MCPE-230568**: When a non-OP uses a command that has a selector parameter (PlayerSelector/EntitySelector), even typing a player name directly gives `<insufficient permissions for selector expansion>` (even with `permissionLevel: Any`). Unresolved from 2025-11 through after 2026-05. Workaround: take the name as a String parameter and look it up yourself, or handle permissions in the script. There is also a report that a `PlayerSelector` + Integer combination worked only after changing to `cheatsRequired: false`. *confirmed*
+- **OP on Realms/servers maps to GameDirectors**: `CommandPermissionLevel.Admin` or higher does not work or is hidden even for the Realm owner and OPs (it also failed on Aternos with `Admin` + `cheatsRequired:true`). Use `GameDirectors`, but since command blocks can also run it, check the origin. Do an extra check with tags when running.
+- **Command versus `scriptevent`**: `/scriptevent` does not consume a command name, is hidden from users and changes without reloading, so it suits calls within a pack or between packs. Custom commands work on Realms (more portable than the beta `chatSend`).
+- **Other**: Scripts cannot run high-permission commands such as `op` (to prevent backdoors). `player.commandPermissionLevel` is writable (lowering to `Any` removes access to OP commands, but the badge remains), and `deop` is impossible. `/transfer` also works in ordinary worlds but needs a permission higher than host. Script commands run at the GameDirectors level and `/connect` cannot be run. Education's `education.json` hides commands for all players, so gate teacher features with custom commands.
+- **Troubleshooting**: If a new command does not show, the pack was not applied to the world or is in a wrong folder (isolated build). There is a case where it worked only after calling it once in the namespaced form (suspected bug).

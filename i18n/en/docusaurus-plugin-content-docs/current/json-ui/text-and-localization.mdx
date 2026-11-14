@@ -1,0 +1,139 @@
+---
+title: Text and localization
+description: Label properties, lang files, assembling translation keys, color codes, fonts, and properties of server form strings (TXT-01~24).
+sidebar_position: 8
+sources:
+  - repo-guide
+  - bedrock-samples
+  - bedrock-wiki
+  - ms-learn
+  - private-research
+  - bedrock-core
+  - advancementpack
+  - private-research
+  - cinnabar
+  - private-research
+---
+
+Text is drawn by `label` controls. A label gets its characters in three ways: a literal (`"text": "Hello"`), a variable (`"text": "$title"`) or a binding (`"text": "#form_text"`). By default it is **localized**: the text is looked up as a translation key first and printed as is if there is none (TXT-01).
+
+## 8.0 The smallest examples
+
+**Example 1. Literal, translation and color codes.**
+
+```json
+"title_label": { "type": "label",
+  "text": "my_pack.title",
+  "font_type": "smooth", "font_size": "large", "color": [ 1, 0.8, 0.2 ],
+  "shadow": true, "text_alignment": "center" }
+```
+
+Define the key in `RP/texts/ko_KR.lang`. For a language without the value, it falls back to `en_US` (TXT-10).
+
+```
+my_pack.title=§l나의 팩
+```
+
+**Example 2. Printing bound text as is.** For text that must not be translated, such as user input, chat and titles, give `localize: false`.
+
+```json
+"form_title": { "type": "label", "localize": false, "text": "#title_text",
+  "bindings": [ { "binding_type": "global", "binding_name": "#title_text" } ] }
+```
+
+**Example 3. A number as text.** A label cannot draw a numeric binding directly, so join it to a string (TXT-06).
+
+```json
+{ "binding_type": "view", "source_property_name": "('Score: ' + #score)", "target_property_name": "#text" }
+```
+
+## 8.0.1 Label property table (MS Learn and the Bedrock Wiki)
+
+This combines the Text tables of the MS Learn `ui_element` reference (`ms-learn` a9fd1c0) and the Bedrock Wiki JSON UI Documentation (0930b39). Defaults follow the wiki table, and the default of `localize` was corrected to `true` in TXT-01 (the `false` in the wiki table is a typo, Appendix A C-32).
+
+| Property | Type | Meaning |
+| --- | --- | --- |
+| `text` | string | The text. A literal, `#binding`, `$variable` or translation key |
+| `color` | `[r, g, b]` (0.0~1.0) | Text color. Default `[1, 1, 1]` |
+| `locked_color`, `locked_alpha` | color, real number | The color and opacity when the parent is `enabled: false` |
+| `shadow` | boolean | Text shadow |
+| `font_size` | `small`, `normal`, `large`, `extra_large` | Text size. Default `normal` |
+| `font_scale_factor` | real number | Text scale. Default 1.0. The MS Learn table wrongly lists the type as boolean |
+| `font_type` | `default`, `rune`, `unicode`, `smooth`, `MinecraftTen` or a custom font | Font |
+| `backup_font_type` | font | The font to use when `font_type` does not work |
+| `localize` | boolean | Whether to translate `text` |
+| `line_padding` | number | Line spacing |
+| `hide_hyphen` | boolean | Hides the hyphen produced when wrapping a word |
+| `enable_profanity_filter` | boolean | Profanity filter |
+| `text_alignment` | `left`, `center`, `right` | Alignment. If not specified, automatic according to `anchor_from` and `anchor_to` |
+| `notify_on_ellipses` | string array | The names of controls to notify when an ellipsis appears or disappears. Those controls read `#using_ellipses` |
+| `wrap`, `clip` | boolean | Old properties the wiki marks as "no longer working" |
+
+`notify_on_ellipses` is mainly used for hardcoded text. If you give a label `"notify_on_ellipses": [ "my_button" ]` and `my_button` binds `"source_property_name": "#using_ellipses"` to `#visible`, the button shows only when the text is cut off (the wiki example, TXT-16).
+
+## 8.1 Label basics
+
+- **[TXT-01]** A label is **localized by default**. It looks up the text as a translation key first and prints it as is if there is none. For text that must be printed as a literal (user input, chat, titles, etc.), give `"localize": false`. When vanilla uses `localize` it almost always uses `false` (31 to 1). The default `false` in the wiki property table is a typo (Appendix A C-32). `&#123;measured, vanilla&#125;` (Source: BC-facts, VN, BW-doc)
+- **[TXT-02]** Main label properties: `text` (literal, `#binding`, `$variable`), `color`, `font_type`, `font_size`, `font_scale_factor`, `text_alignment` (`left`, `center`, `right`), `shadow`, `enable_profanity_filter`, `localize`. `&#123;vanilla&#125;` (Source: VN hud_screen.json:2287-2310, Appendix B)
+- **[TXT-03]** The `font_type` values are `default`, `smooth`, `rune`, `unicode` and `MinecraftTen`. Vanilla mainly uses `smooth` (193) and `MinecraftTen` (21). Using an internal font name such as `MinecraftSeven` **draws nothing** with no error. `&#123;measured, vanilla&#125;` (Source: BC 6.6-6, BC-S7, VN)
+- **[TXT-04]** `#font_type` is an engine-reserved property, so it is validated the moment it is used. A wrong alias is logged line by line in `NonAssertErrorLog` and blocks marketplace submission. `&#123;code&#125;` (Source: BC 6.6-7)
+- **[TXT-05]** `font_size` is `small`, `normal`, `large` and `extra_large`, and vanilla also uses `medium`, which is not in the official enum, 4 times. `&#123;vanilla&#125;` (Source: VN, Appendix B)
+- **[TXT-06]** A label **cannot draw a numeric binding as is.** Join it to a string and bind it to `text`: `('n=' + #raw)`. Only integers join, and **string + float outputs nothing.** `&#123;measured&#125;` (Source: BC-facts, BC 6.6-5, BW-type)
+- **[TXT-07]** An empty label, or a `default` size label containing only `§r`, still has a height of one line. It does not collapse to 0, so to remove a row, hide it with `#visible`. `&#123;measured&#125;` (Source: BC-S10)
+- **[TXT-08]** `§` color codes are kept in bound text too. Vanilla `_global_variables.json` defines the 16 color codes as `$0_color_format` … `$f_color_format`, so you can write `"color": "$f_color_format"`. `&#123;measured, vanilla, working pack&#125;` (Source: BC-S7, VN _global_variables.json:247, AP 4.9)
+
+## 8.2 lang files and key assembly
+
+- **[TXT-09]** **Send only a number and let the RP do the translation.** Attach a key prefix to a piece cut out of the data string and put it in a `localize: true` label: `('myui.toast.' + #category)`. The script sends only fixed-width numbers (padded with 0). AP, which supports 28 languages, works this way. `&#123;working pack&#125;` (Source: AP 4.5, BA chapter 6)
+- **[TXT-10]** lang value rules. `&#123;measured&#125;` (Source: BC-S10, BC-facts)
+  - If the value is empty (`key=`), the key itself is printed. If a language file lacks the key, the en_US value is printed.
+  - If the value is only `§r`, nothing is drawn and the width is also 0.
+  - Spaces around a value are kept. But if **the whole value is a single space**, the parser erases it and it becomes an undefined key. If you need a single space, wrap it as `§r §r`.
+- **[TXT-11]** Properties of server form entry strings: the `§` color codes are kept, starting with a digit is no problem, even 200 characters work, **a bare translation key string is not translated by the engine**, and **a RawMessage (`{ rawtext: [...] }`) is translated into the player's language by the client and put into the binding**. So a sentence made of several translation keys can also be sent as one entry. `&#123;measured&#125;` (Source: BC-S7, BC 4.1-(4))
+- **[TXT-12]** To write text on a surface that cannot handle text directly (a chest slot), convert **number -> lang key -> character**. Make the slot stack count n into the key `('core.ui.c.' + #count)` and put `core.ui.c.<n>=<character>` in `.lang`. A count of 1 leaves `#inventory_stack_count` empty, so set it to a space character. `&#123;measured, code&#125;` (Source: BC 4.3-(3), BC-facts)
+- **[TXT-13]** `'%.Ns'` is in bytes, so cutting a Hangul field in the middle breaks the character (EXP-09). Fixed-width fields that contain Hangul are padded by the encoder with UTF-8 bytes. The color code `§` is 2 bytes and most emoji are 4 bytes (EXP-24). `&#123;code, inferred&#125;` (Source: BA 3.1, BW-intro)
+- **[TXT-14]** When hardcoding a lang key, such as for an empty-screen message, a typo in the key name shows up only as the key itself printed on the screen (`_r4ui:ancements.empty` in AP v4.2). Compare the lang file and the key list mechanically. `&#123;working pack, inferred&#125;` (Source: AP chapter 5)
+
+## 8.3 Rules added from the Bedrock Wiki comparison
+
+These are rules added by comparing the wiki (BW) documents with vanilla 1.26.50.4. Those with only wiki sentences are marked `unverified`, and those with in-game screenshots in the wiki are marked `measured` (third-party record).
+
+- **[TXT-15]** A string put into vanilla `common.hover_text` through `#hover_text` of `property_bag` is not localized. If translation is needed, make the tooltip label yourself. `&#123;unverified&#125;` (Source: BW-btn)
+- **[TXT-16]** Label helper properties: `line_padding` (line spacing, vanilla 14), `backup_font_type` (4), `hide_hyphen` (3), `locked_color` and `locked_alpha` (when the parent is `enabled: false`, 4 and 17), `notify_on_ellipses` (when an ellipsis appears or disappears, `#using_ellipses` of the specified control changes, 4). `&#123;vanilla&#125;` (Source: BW-doc Text table, VN)
+
+## 8.4 Rules added from the Cinnabar engine reconstruction
+
+Cinnabar (`CN`) is Rust code that reconstructs the JSON UI parser of the 26.30 native client. The level is `code`, and `CN-run` is the result of this project running that evaluator directly. If it differs from game measurement, follow measurement (Appendix A C-41~C-47).
+
+- **[TXT-17]** If the text of a localized label has `%`, each `%token` (letters, digits, `-`, `.`, `_`) is translated separately, and a token that does not exist is left as literal text. So the `%` in text like `"50%"` disappears. To show `%`, use `localize: false`. `&#123;code&#125;` (Source: CN)
+
+## 8.5 Rules added from the research server measurement
+
+These were measured on Windows 1.26.52 while building the research server (`DF`). They came from a structure that draws several screens with one server form.
+
+- **[TXT-22]** A hover box drawn directly next to a cell was clipped by the scroll window. If you put vanilla `common.hover_text` (`hover_text_renderer`) as a child of the button's hover state and put the button text in `#hover_text`, it appears next to the pointer without being clipped. With `$hover_text_max_width` at 0, lines break only at `\n` in the text, and at 150 Hangul broke at about five characters. `&#123;measured&#125;` (Source: DF)
+- **[TXT-23]** When a scoreboard line label went through translation, `%` disappeared (TXT-17 confirmed in game). `localize: false`. `&#123;measured&#125;` (Source: DF)
+
+## 8.6 Rules added from the engine behavior analysis
+
+These were read by analyzing the native library of the Android 1.26.52.3 client (`NB`). The level is `code`.
+
+- **[TXT-24]** The actual colors of `§` color codes are built from 29 variables in `ui/_global_variables.json`: `$0_color_format` to `$f_color_format`, `$coin_color` (`§g`), `$material_quartz_color`, `iron`, `netherite`, `redstone`, `copper`, `gold`, `emerald`, `diamond`, `lapis`, `amethyst` and `resin` (`§h` to `§v`), and `$party_blue_color` (`§w`). So to use the `§w` color in a label `color`, use `$party_blue_color`. If a pack changes these variables, the `§` colors appear to change too, but this was not checked in game. The mapping between variables and codes was judged from the order and vanilla comments. `&#123;code, inferred&#125;` (Source: NB-11, VN _global_variables.json:238-312)
+## How evidence is marked and source abbreviations
+
+A rule carries an ID in the form `[chapter abbreviation-number]`, and the `{…}` at the end is the verification level. The priority of verdicts is `measured` > `vanilla` > `working pack` > `code` > `inferred`, and `unverified` and `conflict` must be checked before use. `C-nn` is a number in the [conflict table](./conflicts.mdx), and the value counts of `VN` are the tallies in the [value dictionary](./value-dictionary.mdx). Rule IDs of other chapters (`LAY-`, `BND-`, `HOST-`, etc.) are on the corresponding pages of the same JSON UI chapter.
+
+| Abbreviation | Material |
+| --- | --- |
+| `VN` | Exhaustive search of vanilla resource pack `resource_pack/ui` v1.26.50.4 (bedrock-samples `46ba6ea`). `VN file:line` is that location |
+| `BC`, `BC-S1`~`BC-S14`, `BC-facts`, `BC-rules` | bedrock-core (`@bedrock-core/ui` 0.12.1, MIT) and the author's in-game measurement records (`aee2bbd`) |
+| `BA`, `BA-original` | BedrockAdvancements 2.0.3 (All rights reserved, only techniques carried over) |
+| `AP` | AdvancementPack v4.2 (MIT) |
+| `MJ` | mcbejsonuimasterAI (no license, only facts rechecked against vanilla) |
+| `BW`, `BW-intro`, `BW-dyn`, `BW-doc`, `BW-form`, `BW-btn`, `BW-type`, `BW-best`, `BW-title`, `BW-ase`, `BW-ids` | Bedrock Wiki JSON UI documents (CC BY 4.0). Respectively Intro to JSON UI, Dynamic Content Generation, JSON UI Documentation, Modifying Server Forms, Buttons and Toggles, Type Conversion, Best Practices, Preserve Title Texts, Aseprite Animations, Numerical Item IDs |
+| `CN`, `CN-run` | Cinnabar (Rust code reconstructing the 26.30 native client) and the results of this project running its evaluator |
+| `NB` | Engine behavior analysis of the Android 1.26.52.3 native client library (level `code`) |
+| `DF` | Measurement on Windows 1.26.52 with the research server |
+| `ASJ`, `SLB` | AsaJS analysis, StarLibV2 analysis (both GPL-3.0, only techniques rewritten in English) |
+| `MS` | The modal form multiselect survey |
+| `NE` | NetEase (China edition) developer documentation |

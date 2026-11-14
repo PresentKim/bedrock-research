@@ -1,0 +1,453 @@
+---
+title: Blocks
+description: A rulebook for custom block JSON format_version, script custom components, states, traits and permutations, multi-block, block entities, geometry and collision boxes, textures, mining, placement and redstone.
+sidebar_position: 1
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+---
+
+# Blocks
+
+This page collects how to make custom blocks and the known limits. The evidence is community research (2025-10~2026-11), the blocks docs of the Bedrock Wiki (0930b39) and the vanilla block JSON of bedrock-samples (15701fa9) (Source: private research). Verification levels are written as `(confirmed)`, `(conflicting)`, `(single report)` and `(unverified)`.
+
+## Key summary
+
+1. Block features are decided by the `format_version` of the block file (the manifest `min_engine_version` affects only the Molang/commands of the BP). Custom components v2 need 1.21.90 or higher, `connection_rule` and the new traits need 1.26.0 or higher, and the `minecraft:tags` array needs 1.26.20 or higher.
+2. Register custom components with `blockComponentRegistry.registerCustomComponent("ns:id", {...})` in `system.beforeEvents.startup`, and write `"ns:id": {}` directly in the block `components`. The `minecraft:custom_components` array and `world.beforeEvents.worldInitialize` are dropped.
+3. Putting a custom component in a permutation makes the custom components in the base `components` disappear (MCPE-234714, unresolved). Define them again in every permutation.
+4. A block model is about 30px per axis (at most 14px outside the block), and only cubes are allowed. Geometry that is too large or invalid makes all custom blocks in that subchunk invisible.
+5. `minecraft:collision_box` accepts an array of several boxes (1.21.130 experiment -> 26.0 stable). There is only one selection box.
+6. The JSON, loot tables and behavior of vanilla blocks cannot be modified by add-ons. Silk Touch and Fortune are hardcoded, so handle them with scripts.
+7. For custom blocks placed by worldgen, `onTick`/`onPlace` often do not run.
+
+## 1. Concept and minimal example
+
+Block files are in `BP/blocks/*.json` and have `description`, `components`, optional `permutations` and `traits`. Textures are defined in `RP/textures/terrain_texture.json` and referenced with `minecraft:material_instances`. The name is the lang key `tile.<ns>:<id>.name`. The following is a minimal glowing block valid in 1.26.30.
+
+```json
+{
+  "format_version": "1.26.30",
+  "minecraft:block": {
+    "description": {
+      "identifier": "wiki:glow_block",
+      "menu_category": { "category": "construction" }
+    },
+    "components": {
+      "minecraft:geometry": { "identifier": "minecraft:geometry.full_block" },
+      "minecraft:material_instances": {
+        "*": { "texture": "glow_block", "render_method": "opaque" }
+      },
+      "minecraft:light_emission": 15
+    }
+  }
+}
+```
+
+```json
+{
+  "resource_pack_name": "wiki",
+  "texture_name": "atlas.terrain",
+  "texture_data": { "glow_block": { "textures": "textures/blocks/glow_block" } }
+}
+```
+
+```lang
+tile.wiki:glow_block.name=Glow Block
+```
+
+The spelling is `light_dampening` (not damping). A block that uses geometry must not have `textures` in `blocks.json`, and only `sound` is valid.
+
+## 2. format_version and file rules
+
+### format_version
+
+- Only the format_version of the block file matters. A 1.21.90 block got the new traits working just by raising the number to 1.26.0 (no component changed format between 1.21.90 and 26.0). If the Realm is not yet on that version, it is ignored or fails.
+- Effects per format_version (compiled by ciosciaa, official changelogs are often wrong): 1.19.10 map color/flammability, 1.19.20 friction, 1.19.40 geometry + material_instances, 1.19.50 collision + crafting table, 1.19.60 display name/selection/adjacency filter, 1.19.80 transformation, 1.20.10 Molang bone visibility in geometry, 1.21.30 mining destructibility hardness override, 1.21.70 intrinsic particles + `isotropic`, 1.21.90 UV lock + destruction particle count, 1.21.110 atlas tile in texture variations, 1.21.120 alpha-based tint masking, 1.26 fix for hardcoded full-block bottom face rotation, 1.26.20 trailing comma/tags component/block entity component/visual rotation state binding in geometry/lava flammability/versioned Molang in permutation conditions/relaxed identifier and state name validation/stricter placement_direction and geometry validation/flower_pottable banned inside permutations, 1.26.30 instrument sound component. Multiple collision boxes also worked in 1.20.80 (the bug fix is in 1.26.30).
+- 1.26.20 new parser: the `ambient_occlusion` boolean was removed and it accepts a number 0-10 (using a boolean gives an unrelated `invalid string` error). Error messages have no location info. In 1.26.20 `menu_category` was wrongly required for blocks with item overrides (worked around with `"menu_category": {"category": "none"}`, fixed by 2026-03-31). Going back to an older version still loads but loses the new components.
+- Components outside `components` are silently ignored. For example, `"minecraft:collision_box": false` placed outside gives a unit cube collision with no error.
+- 1.16.100-style syntax is dropped. Blocks from the 1.16 era appear as "?" / "update block" until migrated.
+
+### Legacy renames
+
+`minecraft:entity_collision` -> `minecraft:collision_box`, `minecraft:block_light_dampening` -> `minecraft:light_dampening`, `minecraft:pick_collision` -> `minecraft:selection_box`, `minecraft:block_light_emission` -> `minecraft:light_emission`, `minecraft:destroy_time` -> `minecraft:destructible_by_mining.seconds_to_destroy`, `minecraft:rotation` -> `minecraft:transformation`, the `minecraft:block_property` query -> `q.block_state`, `properties` -> `states` (1.20.30). `minecraft:ticking` does not exist and is `minecraft:tick`. Block events (`events`, `minecraft:on_placed`, `set_block_state`) were removed around 2024, so use scripts.
+
+### File locations and names
+
+- Put `terrain_texture.json` (singular) and `item_texture.json` in `RP/textures/`. Putting the `.png` extension in a path breaks PBR texture sets. Invalid JSON or a UTF-8-SIG (BOM) file gives `failed to parse`.
+- The lang key is `tile.<ns>:<id>.name`. Do not use uppercase in identifiers.
+- Put `menu_category` directly inside `description` (not inside `traits`). Values are lowercase (`"Construction"` or the typo `menu_catagory` silently hides it from creative). To hide, use `"none"` or omit it (omitting was allowed again from Preview 26.20.23). If you use `replace_block_item`, the item's menu_category takes priority. `register_to_creative_menu` stopped working in 1.26.20. Put `traits` inside `description` too.
+
+### Reading the Content Log
+
+- Order of block errors: the first line says the block is invalid, the second says which component, the third gives the reason (the real cause), and the fourth is data that does not match the format_version. `Unexpected version for the loaded data` usually comes along with an earlier real error, so scroll up in the log.
+- A missing registry warning means the pack is not turned on or not fully reloaded. After changing geometry/textures, put it in a development pack and use `/reload all`.
+- Editor false positives: the Blockception VS Code extension wrongly flags `minecraft:geometry.full_block` and the `wool`/`carpet` block filter. The bridge. schema wrongly rejects `block_face`, integer `count` and numeric `ambient_occlusion`.
+
+## 3. Custom components (scripts)
+
+### Registration
+
+In the block JSON, write `"ns:id": {}` directly in `components`, and a script registers it. The requirements are block format 1.21.90 or higher, `@minecraft/server` 2.0.0 or higher in the BP manifest, a script entry in `modules`, and importing the component file from the entry file.
+
+```javascript
+import { system } from "@minecraft/server";
+
+system.beforeEvents.startup.subscribe(({ blockComponentRegistry }) => {
+  blockComponentRegistry.registerCustomComponent("ns:id", {
+    onPlace(e) {},
+    onTick(e) {},
+  });
+});
+```
+
+```json
+{ "type": "script", "language": "javascript", "entry": "scripts/main.js", "uuid": "...", "version": [1, 0, 0] }
+```
+
+- One note said a `minecraft:custom_components` array is needed, but that is the old format that has been invalid since 1.21.90.
+- Conflicting gametest dependency versions break script loading. At that time on the stable release use `@minecraft/server` 2.7.0 and server-ui 2.0.0, and leave out the unused `@minecraft/server-gametest`. (single report)
+- Causes of `child 'x:y' not valid here` / `component found in input but not present in Schema`: the component not registered with the API, registered in the wrong registry (itemComponentRegistry), an old format_version (for example 1.20.80), no script module in the manifest, a script error or wrong import, or one of several manifests in a folder. `bone_visibility` placed outside `minecraft:geometry` gives the same error. Wrapping in a fake `minecraft:components` object is not a solution.
+- Registration timing: importing main one tick late, as in `system.run(() => import("./main"))`, breaks startup registration. If there is even one script error, block/item components may not attach. `/reload` does not run startup again.
+- `Block custom component 'x' is not being used by a block` means the format_version or location is wrong. `component used on block but not registered in script` means it is not registered or the `@minecraft/server` metadata version is wrong. Right after the 2026-03 block schema change, every custom component got `No transformer found for component ... Cannot downgrade from modern slice to legacy component` (MCPE-237057).
+- The nesting depth of custom component parameters is at most 2. `tag` is also a valid custom component namespace.
+
+### Hooks
+
+- Available hooks: `onPlace`, `onTick`, `onRandomTick`, `onPlayerInteract`, `beforeOnPlayerInteract`, `onPlayerBreak` (formerly `onPlayerDestroy`), `onBreak`, `onStepOn`, `onStepOff`, `onEntityFallOn`, `beforeOnPlayerPlace`, `onRedstoneUpdate`. `beforeEvents.blockTick`, `permutation.getMaterial()`, `onEntityStepOn` and `onEntityInside` do not exist.
+- `onBreak` appeared as an experiment in 1.21.130. It gives `brokenBlockPermutation` and `entitySource` and also fires when broken by pistons, explosions and loss of support. It does not fire when broken by a survivability failure (MCPE-240755).
+- `onPlayerInteract` blocks normal use and placement against that block (placing works only while sneaking). Even if it is on only one permutation, every permutation becomes interactable (MCPE-225746). If any active custom component exists, the block becomes interactable. To avoid blocking, use `world.beforeEvents.playerInteractWithBlock` and handle it inside `system.run`.
+- `beforeOnPlayerPlace` changes `e.permutationToPlace` or blocks with `e.cancel = true`. Using this hook turns off client prediction, which makes fast bridging hard. On a `replace_block_item` block it runs after the block is placed.
+- `onPlace` fires on every placement. If broken in the same tick, `e.block` can be `minecraft:air`. It can run before neighbors settle, so delay with `system.run`.
+- Tick timers: `minecraft:tick` has no count limit and supports delayed queued ticks, but one block cannot have two tick timers. `onRandomTick` is preferred for performance. To turn ticking off, use one state and two permutations (only one containing `minecraft:tick`).
+- Scheduled tick throughput: for each chunk-dimension pair only 100 blocks per tick run scheduled-tick behavior, and the rest cycle. When about 30 pressure plates used block `onTick`, 10-15ms spikes occurred. Player-side ticks or the projectile hit event are recommended.
+- If you change the permutation of a placed block with `onTick`/a redstone clock, the player cannot place against that block during that tick. Half of the block component events force the hand swing animation.
+
+### Permutations and the custom component bug (MCPE-234714)
+
+Only the custom components of the last (bottom-most) matching permutation apply, and those defined elsewhere are ignored. If it is in both the root and the default permutation, only the permutation side is read. The workaround is to define every custom component in every permutation. Unresolved as of 2026-10.
+
+## 4. States, traits, permutations
+
+### States
+
+States are defined in `description.states` and read with `q.block_state('ns:name')`.
+
+```json
+"description": {
+  "identifier": "wiki:crop",
+  "states": {
+    "wiki:growth": { "values": { "min": 0, "max": 7 } },
+    "wiki:kind": [ "a", "b" ]
+  }
+},
+"permutations": [
+  { "condition": "q.block_state('wiki:growth') < 7",
+    "components": { "minecraft:tick": { "interval_range": [ 20, 40 ] } } }
+]
+```
+
+- State names need a namespace (`gen:type`). Without it, `Identifier must have a namespace / Failed to create Block State Description` appears. At most 16 values per state, and if you need more, use two states.
+- Bitmask: to attach 6 faces like moss/sculk vines, set faces to 1,2,4,8,16,32 and use sums 1-63.
+- A block always creates every permutation of its states. You cannot reuse vanilla states that have fewer values. A changed state in an existing world updates only when it ticks.
+- Block components are not saved. Components are derived from the permutation (identifier + state values), and the only thing saved is the queued tick of `minecraft:tick`. There is no `block.setTexture`. To change geometry with scripts, tie permutations to a state and use `block.setPermutation`.
+- Script API: many state values are strings (`turtle_egg_count: "one_egg"`). `BlockStates.get(name).validValues` gives `[]` for flattened legacy types (`stone_type`, `sand_type` and so on). `BlockPermutation.getAllStates()` gives only current values. Deprecated states (`color`, `old_log_type`) are also exposed for compatibility.
+- States are local to the block type. Generating every combination creates permutations that do not exist, so try `BlockPermutation#withState` and skip failures. Internal blocks that are in the palette but not in the metadata: chalkboard, client_request_placeholder_block, deprecated_anvil, deprecated_purpur_block_1/2, end_gateway, glowingobsidian, info_update, info_update2, invisible_bedrock, moving_block, netherreactor, reserved6, stonecutter.
+- Item data values work in `testfor`/`give` but block data values do not. Block aux IDs are fixed and item numeric IDs are assigned at runtime. Command autocomplete renumbers numeric state values from 0 (MCPE-236301).
+
+### Permutation rules and limits
+
+- Components may overlap between permutations or with the base, but do not repeat the same condition. Permutations can be separate by feature (rotation 4 + texture 2) and need not be a Cartesian product. Conditions can use `&&`, `||` and parentheses, and can see only their own states (not neighbors).
+- Limits: at most 65,536 permutations per block type (there is also a separate second limit, and vanilla is about 16,000). One add-on can register up to 32,767 blocks including vanilla. There is also a world-wide permutation warning (one add-on 40k, about 93,220). Connecting texture blocks exceed the limit, so map one numeric state to an X,Y grid or use entities.
+- States vs separate blocks: one opinion is that there is no performance difference, and another is that separate blocks are better for redstone and lighting. Decide by whether each variant needs its own item. Traits probably count toward the permutation count like states.
+
+### Direction traits
+
+```json
+"traits": {
+  "minecraft:placement_direction": { "enabled_states": [ "minecraft:cardinal_direction" ], "y_rotation_offset": 180 },
+  "minecraft:placement_position": { "enabled_states": [ "minecraft:block_face" ] }
+}
+```
+
+Using `q.block_state('minecraft:block_face')` without the trait gives `making use of non-registered block state`.
+
+- `placement_direction` (`minecraft:cardinal_direction` N/E/S/W or `minecraft:facing_direction`) follows the direction the player looks, furnace style. `placement_position` (`minecraft:block_face`, `minecraft:vertical_half`) follows the clicked face, log/pillar style. Make the model front face north and give `y_rotation_offset: 180`. `y_rotation_offset` is supported only for some hardcoded `enabled_states`. With corner+cardinal it fails if cardinal is not included (MCPE-240709).
+- For pillar rotation permutations, depending on `q.block_state('minecraft:block_face')`, give `minecraft:transformation` rotation west/east `[0,0,90]`, north/south `[90,0,0]`, up/down `[0,0,0]`.
+- Placing a `block_face` trait block with `/setblock` gives the default `down` (the vanilla item frame is the same). A cardinal block also faces differently than when placed by hand, so specify the state explicitly. The `cardinal_direction` order (NWSE) differs from expectations, so west is not -90/270.
+- 16-way rotation `minecraft:sixteen_way_rotation` / `n_way_visual_rotation` was confirmed in the 2026-08-04 stable release. It cannot be used inside permutations, and a permutation that overrides geometry removes it. It does not work with hardcoded full-block models. The bug where the rotation was not visible to remote players/BDS/Realms (MCPE-241952) was reportedly fixed in 26.60.28/29, but reports that it does not work on Realms remain. It does not follow structure rotation (MCPE-243539).
+- Random rotation: a lily pad style texture gets position-based random rotation with the material instance `"isotropic": true`. To randomize per placement, use `e.permutationToPlace = e.permutationToPlace.withState("minecraft:cardinal_direction", directions[Math.floor(Math.random()*4)])` in `beforeOnPlayerPlace`.
+- Custom directional blocks with state-based rotation rotate wrongly when saved in a structure and rotated. Pipe/connection blocks placed by scripts need their connection state recomputed after loading a structure (unresolved).
+
+### Connection and stair traits
+
+- `minecraft:connection` trait: `enabled_states: ["minecraft:cardinal_connections"]` adds the automatically managed `minecraft:connection_north/south/east/west` states. It can be used in `bone_visibility` or permutations without scripts and is reflected faster than the script method. There are no up/down connections, and it cannot be limited to similar blocks or tags. It connects to vanilla full blocks, custom blocks without `connection_rule`, and blocks with the `minecraft:has_fence_connections` tag under a rule other than "none". Using `y_rotation_offset` breaks connections with blocks that have no offset. Putting a connection trait or the `has_fence_connections` tag in a permutation crashes the game (MCPE-236302).
+
+```json
+"minecraft:geometry": {
+  "identifier": "geometry.fence",
+  "bone_visibility": { "north": "q.block_state('minecraft:connection_north')", "centre": "true" }
+}
+```
+
+- `minecraft:corner_and_cardinal_direction` is used as an enabled state of `placement_direction`, with 4 directions x 5 corners (none, inner_left, outer_left, inner_right, outer_right) = 20 permutations, and adds a `minecraft:corner` state. For `blocks_to_corner_with` give a list of block IDs or `{"tags":"q.any_tag('mytag')"}`. There is no `minecraft:cornerable_block` tag, so use a custom tag or your own ID. Connecting with vanilla stairs needed the Beta APIs experiment in 26.0, and a non-connecting bug remained in 2026-04. The bug where corner became none next to an inner piece (MCPE-232019) was fixed in 26.10.
+- `minecraft:vertical_half` is a `placement_position` enabled state that decides top/bottom of a slab.
+
+## 5. Multi-block
+
+```json
+"traits": { "minecraft:multi_block": { "enabled_states": [ "minecraft:multi_block_part" ], "parts": 2, "direction": "up" } }
+```
+
+(Source: ms-learn multi-blocks, bedrock-wiki multi-blocks)
+
+- Stabilization history (some conflicting): vertical multi-block was due to be stable in 1.26.40 but was dropped, and Mojang said it is stable in the 1.26.50 release. Horizontal multi-block (beds) went through the 1.26.40 Preview experiment and became stable in 26.50. The final stable release is taken to be 26.50.
+- Requirements and limits: `minecraft:movable` must be defined (immovable or popped, piston movement is not supported). `placement_filter`, `replaceable`, `random_offset`, `movable`, `precipitation_interactions` and `minecraft:block_entity` are root only (putting them in a permutation gives `Component ... is not valid in multi block permutations`). block_entity became valid again around 1.26.50 and one is attached per part. Putting `precipitation_interactions` in a permutation makes the whole block fail to load from 26.30.25. For direction traits only `cardinal_direction` works (connection, placement_position and n-way are not supported).
+- Direction: if `placement_direction` turns on `cardinal_direction`, the trait's `direction` is ignored and it follows the placement direction (including `y_rotation_offset`). Only one axis is supported, so make 3D/multi-axis with scripts.
+- Behavior: placing the base part places the rest. Placing a non-base part with `setblock`/`fill` fails (fixed 2026-03-11). Breaking any part breaks them all, and only the loot of the part broken first drops. To make loot differ per part, put the loot in a permutation conditioned on `q.block_state('minecraft:multi_block_part')`. `onBreak` fires once and `onPlayerBreak` does not fire. Non-base parts skip the entity collision check on placement. Each part counts as one pending tick.
+- State changes: from 2026-05 (around 1.26.20), the states of all parts must be changed in the same tick, and changing only part 0 breaks the block. Mojang said that setting one part at a time with scripts/commands was blocked on purpose. `permutationToPlace` in `beforeOnPlayerPlace` updates all parts.
+- Scripts: `block.setType(typeId)` places the default permutation (the first part) and creates the whole thing. `setPermutation()` places only one part, and writing to part 0 creates only a ghost part on the client. To change states, set each part with `block.getParts()` (order guaranteed).
+
+```javascript
+part.setPermutation(BlockPermutation.resolve(part.typeId, {
+  ...states,
+  "minecraft:multi_block_part": part.getState("minecraft:multi_block_part"),
+}));
+```
+
+  In a random tick, read `minecraft:multi_block_part` and skip if it is not 0. The vanilla door is a legacy method that changes only the upper state.
+- Block entities and inventory: each part gets a separate block entity and they are not synced (the vanilla double chest is also 2 linked entities). There is no way to detect inventory changes, so there is a duplication risk when two players use different parts.
+- Other bugs: a part with its selection box turned off is treated as 16x16x16 in outline calculation. Running `fill ... replace bed[...]` in chat with a custom multi-block can crash. A multi-block that defines geometry/materials only in permutations gives an error if the root has `minecraft:flower_pottable` (MCPE-237910). Mojang said it intends multi-block + voxel shape to be used for outlines beyond block bounds.
+
+## 6. Block entities, containers, dynamic properties
+
+- `minecraft:block_entity` arrived in Preview 26.30.28. Experimental in 26.40, and in 26.50 the block entity itself (dynamic property storage) is no longer experimental while `container {slot_count}` is still experimental in 2026-11 (it needs Upcoming Creator Features and format 1.26.20 or higher, and in a world created without the toggle it disappears from creative). The UI is barrel style only (modifiable with JSON UI), with no chest rendering and no hopper suction. The container title is `title` inside container (a localization key or a plain string for testing).
+- What cannot be done: falling blocks (the hardcoded `minecraft:falling_block` entity) and animations. A chest opening animation is imitated by changing geometry in steps with states and permutations. A multi-block sharing one block entity also does not work yet.
+- Bugs: changing container items with scripts after a redstone update closes the open UI (26.50). A snowlogged container block entity drops its items.
+- Giving `dynamic_properties:true` to the loot function `carry_over_block_entity_data` passes block dynamic properties to the item (26.40).
+- Storage methods before block entities: keep per-block data in world or entity dynamic properties. Entity-based storage lags with many blocks and disappears with `/kill @e`. A block entity can show items with an attachable.
+
+## 7. Geometry, size, collision/selection boxes
+
+### Model size and format
+
+- The size limit is about 30x30x30px including rotation ("1 + 14/16ths" per axis, 14px outside the 16 cube). The error is `Total length of parts for schematic ... greater than 1 + 14/16ths`. A model taller than about 30px disappears in the game. Only cubes are allowed, and poly_mesh and locators give a `is not included within the unit cube` error. Larger shapes are made with several blocks, multi-block or entities. Size is checked before the transformation is applied (MCPE-236317).
+- Fallout of invalid geometry: if one subchunk has a block with invalid geometry, every geometry-based block in that subchunk (including cobwebs) is not rendered (`A block must have baked material data in order to tessellate`). The causes are a model that is too large, a texture that is not 16x16 and so on.
+- Decimals: coordinates are rounded to one decimal place. Fix z-fighting with 7.9 or `inflate`. Using a second decimal place causes gaps and render errors.
+- UV: Bedrock drops faces that have no explicit UV. If it is fine in Blockbench but has holes in game, use per-face UV (`uv`, `uv_size` on `north/south/east/west/up/down`) instead of the box UV. Turn off faces that will not be seen. Planes with zero thickness are also supported. Using several PNGs on one model failed.
+
+### Vanilla geometry
+
+- What can be used is `minecraft:geometry.full_block` and `minecraft:geometry.cross` and so on (the `minecraft:` prefix is required). For cross use `alpha_test_single_sided` to avoid flicker. Other vanilla models such as slime, lantern, cauldron and sign must be made by hand. Reusing full_block reduces pack size.
+- Internals of `minecraft:geometry.cross` (extracted from BDS): 2 cubes (origin [-10.2,0,0], size [20.4,16,0], Y axis +-45 degrees, pivot [0,8,0], material instance "cross", format 1.21.60).
+- Characteristics of full_block: the bottom face is rotated 180 degrees (fixed in format 1.26). It has no named main bone, so culling rules cannot reference a bone and UV lock does not apply. An `opaque` full_block is forced into unit cube culling. Transforming a full_block with transformation breaks culling (MCPE-241209). The only way to cast shadows on neighbors is `minecraft:geometry.full_block` + `opaque` (hardcoded). `minecraft:embedded_visual` is for flower pots only.
+
+### bone_visibility
+
+- Written inside the `minecraft:geometry` object as `{"identifier": ..., "bone_visibility": {...}}`, and values are booleans or Molang. In 1.26.20 and above a raw boolean fails with `invalid string`, so use the strings `"true"`/`"false"` or 0/1 (MCPE-238524). A key controls only the cubes directly under that bone and ignores nested groups, and adding `*` to the end of the key includes nested bones. Bone visibility does not accumulate across permutations, so a 6-face block like glow lichen needs all 64 permutations.
+- Uses: showing flowers in pots, doors/hinges, cake stages, wall torch variants, fence connections. Flower pot example:
+
+```json
+"minecraft:material_instances": {
+  "*": { "texture": "pot", "render_method": "opaque" },
+  "flower": { "texture": "flower_1", "render_method": "alpha_test_single_sided" }
+}
+```
+
+### Collision/selection boxes
+
+- Multiple collision boxes: `minecraft:collision_box` accepts an array of boxes (boxes only, no curved surfaces). They appeared in the 1.21.130 Preview (2025-11) as an Upcoming Creator Features experiment and became stable in 26.0. Stair example:
+
+```json
+"minecraft:collision_box": [
+  { "origin": [ -8, 0, -8 ], "size": [ 16, 8, 16 ] },
+  { "origin": [ -8, 8, 0 ], "size": [ 16, 8, 8 ] }
+]
+```
+
+  A single report says there is a limit of 16 boxes (unverified). Before 1.21.130 the player was pushed out by geometry that did not fill the cell.
+- Collision size is up to about 16x30x16 (about 8px upward). `collision_box: []` is not "no collision" but full collision. A transformation can push the box out of block space (MCPE-236325).
+- There is only one selection box (arrays are not supported). It can be defined up to 24 model units, but the engine clips it to block bounds. Projectiles use the selection box, so do not turn off `selection_box` if arrows should hit. Conversely, having only collision makes a "barrier that projectiles pass through".
+- Step detection: if the collision height is about 3.2px (0.2 block) or less, it is a "thin" block that cannot be stood on and `onStepOn`/`onEntityFallOn` do not fire (wiki 3.2, measured about 3.25, 4px recommended in practice). Another report said about 0.4 block or more is needed. (conflicting) For spike blocks, put the spike on a 4px floor cube, or use `onEntityFallOn` (gives the fall distance, does not fire when walking) or scripts.
+- Entities spawn on blocks with full collision. There is no API that tells whether a collision box is full.
+- Tools: Kaioga's Collision Box Editor (web), the Blockbench plugin block_multi_collisions (auto-generation, ignores cube rotation).
+
+### transformation
+
+- `minecraft:transformation` specifies rotation/scale/translation, and scale is around the block center. Collision/selection box scale applies only when that component is specified explicitly (MCPE-238027). A block rotation cannot exclude specific bones and there is only UV lock. `uv_lock` rotates square faces around the face center, not the block center. Snowlogging ignores transformation (MCPE-240710).
+- There are five coordinate systems: model/collision/selection (model units, bottom center, x+ is west), leashable offset (x+ is east), transformation translation/pivot (block units, center), voxel shape (model units, bottom north-west corner), item_display_transforms. Voxel shapes have a limit of 4500 unique ones after deduplication on world load.
+
+### Item display
+
+- `minecraft:item_visual` changes the hand/inventory model with `{geometry, material_instances}` (no `minecraft:` prefix inside). `carried_textures` in `blocks.json` does not work. If the item looks upside down because the default `block_face` is down, define item_visual to fix it.
+- `item_display_transforms` needs block geometry format 1.21.110 or higher. Defaults are firstperson_righthand rotation [0,45,0] scale 0.4, thirdperson_righthand translation [0,2.5,0] rotation [75,225,0] scale 0.375. To match the vanilla slab use `thirdperson_righthand.translation [0,2.9,1.5]` and `firstperson_righthand [0,1.58,0]`. A wrong property name (`translate`) crashes the game. `fit_to_frame:false` is forced to center in icons (MCPE-240720).
+- Block as an item: put `minecraft:block_placer {block, replace_block_item:true}` on an item with the same identifier as the block. It must be the same ID to be pick-blockable. A flat 2D icon, `max_stack_size`, head-wearing `minecraft:wearable` and `minecraft:glint` can be used. If you omit the icon it is rendered as a block. A custom block cannot exist without a block item.
+- Side effects of item overrides: it inherits block tags (MCPE-235805). Block-oriented AI such as `move_to_block` and `lay_egg` fails (MCPE-240457). Fast bridging is turned off (MCPE-234686). `aligned_placement` of `minecraft:block_placer` affects the `block_face` state.
+
+## 8. Textures, material_instances, rendering
+
+### material_instances
+
+- A block that uses geometry must use `minecraft:material_instances`. Keys are face names (`up`, `down`, `north` and so on, not top/bottom, `*` is the default, and custom face names from Blockbench also work). The fields of each instance are `texture` (not `textures`), `render_method`, `face_dimming` (bool), `ambient_occlusion` (a number in 1.26.20 and above, `0.55` for sand-style partial darkening), `tint_method` and `isotropic`. The texture name is a key of `terrain_texture.json` (not a path). Vanilla textures must also be defined in terrain_texture, and a short name alone is not enough.
+- Instances of one block cannot mix `render_method` (`MaterialInstances can't mix and match`). A block mixing opaque and translucent is thought to be impossible, and for a beacon style set both to blend.
+- Choosing a render method: `alpha_test_to_opaque` fixes disappearing at a distance and is used for leaves. `alpha_test` is for cutouts. `blend` has ordering problems, so put translucent cubes last or use `alpha_test_single_sided`/`double_sided`. With complex geometry, blend is drawn over blocks in front. A `double_sided` block disappears at half the render distance. Opaque with transparent pixels looks black. For cobweb/outline style use `alpha_test_single_sided`. Add-on maker apps ignore `blend`/`alpha_test`, so write the JSON by hand. `render_method` is a material instance field, not in blocks.json.
+- `emissive` was renamed to `shaded` (an alias of face_dimming/ambient_occlusion). True glow works only in Vibrant Visuals, and a glowing texture without VV/RTX is impossible, so make an illusion with a flipbook.
+- Tint: `tint_method: grass` tints every non-alpha pixel (with vanilla grass_side even the dirt part). `alpha_masked_tint` needs 1.21.120 or higher and the toggle, and had a problem tinting transparent pixels until 26.0. For transparent blocks use `tint_color`, not `overlay_color`.
+- Texture size: it need not be 16x16, but normal cube UVs assume 16, so other sizes need custom geometry. Textures must be square. 8x8 is stretched to 16x16. A 64x64 whole-model atlas makes huge cracks and break particles, so use several 16x16 per-face textures. For the shrinking to 8x8 after editing the RP, there is a workaround of copying the RP, modifying the copy and overwriting the original, and do not keep `contents.json`.
+
+### Shading, AO, shadows
+
+- Custom block AO has the problem that flowers/crops with a model inside a neighbor look dark or black. `ambient_occlusion: false` was fixed to turn it off completely in 26.10. Only opaque full blocks cast AO. The darker side of sand slabs looks like a game bug (0.55 per face).
+- A fully bright block (emits no light and has no shading) is made with `face_dimming` false + `ambient_occlusion` 0. If too bright, adjust `minecraft:light_dampening`. AO/dimming can be toggled with permutations.
+- For black faces against walls, add a plane, move the face 0.1 forward or use custom culling. For a head shadow, put one more top-UV plane 0.125 above the floor.
+- With `light_dampening` of 1 or higher mobs below do not burn in sunlight, and at 15 light bleeding is also blocked. With high dampening the grass below turns into dirt and path blocks revert.
+- Vibrant Visuals: in 26.0 some custom blocks rendered black until the hotfix. Texture layering breaks only in VV. VV turns off face dimming for entities but not for blocks. The automatic attachable of a held block ignores MER (MCPE-237517). The combination of `blend` and reflective MER is unresolved. PBR/MER works with `*.texture_set.json` + `_mer` and the pack capability "pbr", and it fails if `.png` is used in the terrain_texture path.
+
+### Texture variations, flipbooks, break particles
+
+- Weighted variations are written in `terrain_texture.json`. It needs block (material) format 1.21.110 or higher. Vanilla dirt uses `flattened_dirt`, stone `flattened_stone`, and sand the `flattened_sand`/`red_sand` keys. A custom block can reference only the first entry of a vanilla texture array. Break particles do not follow variations, and when buried in snow it returns to the first variation.
+
+```json
+{ "textures": { "variations": [ { "path": "textures/blocks/x", "weight": 50 }, { "path": "textures/blocks/x2", "weight": 50 } ] } }
+```
+
+- A flipbook uses `flipbook_textures.json` entries (`flipbook_texture`, `atlas_tile`, `ticks_per_frame`) and registers the atlas_tile in terrain_texture as well. Because of mipmapping it falls back to the terrain_texture texture at a distance, so if it is not defined there it becomes a black/purple texture. Thin stripes also blur from mipmapping, so use a separate thin block.
+- `minecraft:destruction_particles {texture}` (format 1.21.90 or higher) sets the texture when breaking.
+- For blocks that use data-driven tessellation only `sound` is valid in blocks.json. Putting `textures` on a geometry block gives a `trying to override the Geometry component with blocks.json settings` error. blocks.json maps vanilla blocks to terrain names.
+- Hardcoded vanilla rendering: chests, beds and banners are rendered as block entities. The copper golem statue texture is hardcoded. Beds have no color state (stored in the block entity, all are `minecraft:bed`).
+
+## 9. Culling rules
+
+Put `minecraft:block_culling_rules` (format 1.21.80) in an RP `block_culling/` file and reference it from `minecraft:geometry`.
+
+```json
+"minecraft:geometry": {
+  "identifier": "geometry.x",
+  "culling": "namespace:culling.example",
+  "culling_layer": "minecraft:culling_layer.leaves"
+}
+```
+
+- The rule fields are `cull_against_full_and_opaque`, `condition` (`same_block`, `same_culling_layer`) and `geometry_part`. `geometry_part.face` must be a single string, and an array gives `Failed to parse block culling file`.
+- A rule only removes parts of the model and cannot turn them on, and checks a neighbor in only one direction. There is one rule per face but also one per bone, so to remove top and bottom together, split the bone. A culling rule cannot be used on full_block geometry. `cull_against_full_and_opaque:false` is ignored (MCPE-240757). If permutations have different transformations, the culling layer breaks (MCPE-234754).
+- Connecting textures are possible only with glass-style model culling or a mod. A connection table can be made with per-bone culling `"condition": "same_block"` and `cull_against_full_and_opaque: false`, but it fails at T intersections. Otherwise set per-leg states with onPlace/onBreak scripts.
+- Voxel shapes in the BP `shapes` folder are a new feature and are currently used only for culling faces hidden by other blocks. Because of regex validation custom blocks cannot use vanilla voxel shapes (MCPE-240758). Vanilla block shape IDs shifted from the wiki values (sculk_sensor 125, azalea/flowering_azalea 132, glow_frame 133, glow_lichen 134). If leaves become see-through, turn off the voxel shapes experiment.
+
+## 10. Sound
+
+`sound` in blocks.json is still valid. `default` is a stone sound with only a different pitch. A blocks.json sound changes every block of that name, and to change it globally replace the audio file of the same name. End moss sounds are `moss_block` and `moss_carpet`, and the wood placement sound is `use.wood`. The gold block uses the same "metal" sound as stone, and iron/copper have their own IDs. No placement sound plays when placing in water (vanilla is the same). The instrument sound component was added in 1.26.30.
+
+## 11. Mining, tools, loot tables
+
+### Mining speed
+
+- Putting `"tag:minecraft:is_pickaxe_item_destructible": {}` (or axe/shovel/hoe) as a component outside `destructible_by_mining` makes vanilla tools mine fast and applies Efficiency automatically. The tag is adjusted in proportion to hardness, so for axes `tag:minecraft:is_axe_item_destructible` is better than `item_specific_speeds`, and the `<material>_tier` tag is used only to lock tiers. A custom pickaxe must check this tag in the digger component.
+- `item_specific_speeds` is an array of `{item, destroy_speed}` in `minecraft:destructible_by_mining`, with item written like `{"tags": "q.all_tags('minecraft:is_pickaxe','minecraft:stone_tier')"}`. Tier tags such as `minecraft:wooden_tier` exist but `minecraft:is_wooden_pickaxe` does not. Vanilla pickaxe tags are `minecraft:digger`, `is_pickaxe`, `is_tool` and `<tier>_tier`. Below format 1.21.30 it fails without a warning.
+- Matching vanilla speed: `seconds_to_destroy` is not real seconds, and by default the real time is 1.5 times the value. Vanilla is 3.33 times slower when mining with the wrong tool, but custom blocks are not, so multiply it yourself. The method is `seconds_to_destroy` = vanilla hardness x 3.33 (bare hand) and `item_specific_speeds[].destroy_speed` = hardness + pickaxe tag. The wiki penalty formula is right tool hardness x 1.5 and wrong tool x 5, but Bedrock always applies 1.5, so wrong tool = H x 5/1.5 and right tool = H.
+- Tags that do not work: tier destroy tags (`minecraft:iron_tier_destructible`) and sword/mace tags (`is_sword_item_destructible`) have no effect on drops and penalties of custom blocks (MCPE-189586). `minecraft:is_shears_item_destructible` was fixed around 2026-08. There is no "drop only with the right tool" option. Block tags are for mining speed, item tags are for loot conditions/recipes, and only the loot table decides whether it drops.
+- `minecraft:digger` limits (as of 2026-02): a custom item with digger is always treated as the right tool for vanilla blocks and drops regardless of tier. It does not reduce durability and supports only integer speeds, and there is no `sword_efficient` block tag or custom tier. The first-person tool animation is also broken.
+- There is no API to judge whether a block can be broken, so keep your own list. Vanilla unbreakable blocks: command_block, chain_command_block, repeating_command_block, end_portal_frame, bedrock, structure_block, barrier, allow/deny.
+
+### Explosions
+
+For `explosion_resistance` of `minecraft:destructible_by_explosion` use the blast resistance from minecraft.wiki. Negative values are not accepted. Explosion destruction resistance is about 5 times weaker than the vanilla value, so there is advice to give the expected value x5 with a comment. Even with `false` the Wither breaks blocks. Raise the resistance very high or cancel the destruction with a custom component.
+
+### Loot tables
+
+- Specify with `"minecraft:loot": "loot_tables/..."`. With a custom table the block does not drop itself unless you list it explicitly, and to drop both an item and the block use two pools. A loot table inside a permutation also works. Make data value drops with the `set_data` function and `count {min,max}`.
+- `match_tool` gives item tags (for example `["minecraft:is_shears"]`) to `minecraft:match_tool_filter_all/any/none`. Without `"count": 1` an empty hand matches too. For tier-only drops list the allowed pickaxes in the `items` list. Since 26.30 (user report), the "bare hand" condition can no longer be expressed with `match_tool_filter_none`, so use scripts. A Count 1 drop ignores explosions, and pistons or loss of support can drop both pools, so use `onBreak` for exact control.
+- Silk Touch is hardcoded, ignores loot tables, and cannot be blocked even with an empty loot table. Workarounds are canceling `world.beforeEvents.playerBreakBlock` and in `system.run` doing `block.setType("minecraft:air")`, playing the sound, removing the default drops and creating the item after checking Silk Touch, or replacing with air in `onBreak`. The vanilla Fortune formula cannot be reproduced with loot tables, so use scripts.
+- Ore XP cannot be given by loot, so spawn `minecraft:xp_orb` in `onPlayerBreak` if it is not Silk Touch. The consensus is items by loot table and only XP by script. In scripts you can read block + tool loot with `getLootTableManager()`.
+- Vanilla block drops cannot be changed except for the new "data-driven" vanilla blocks of 26.50. The only way is deleting the drop and generating it with scripts. The dropped item texture does not change per state, so a separate item is needed, and for a block like a leaf litter pile a loot table per state is easier.
+- To keep achievements even with a behavior pack, put `"metadata": {"product_type": "addon"}` in the manifest.
+
+## 12. Placement, support, liquids
+
+- `placement_filter` format: `{"conditions":[{"allowed_faces":["up"],"block_filter":["minecraft:glass",{"tags":"q.any_tag('dirt')"}]}]}`. The block filter list is limited to 64. There is no general "solid/non-solid" check or tag that requires full support, and you cannot require all conditions at once.
+- Breaking on loss of support is unstable. It works only when blocks are listed concretely in the filter (glass types are not caught by tags), and with cardinal+tag it stays if only one side is valid. With only `allowed_faces` and no `block_filter`, it only blocks placement on other faces. Client prediction always uses the default permutation/`block_face="down"`. The filter ignores rotation (MCPE-236323). To make dependent blocks (doors, supports) break exactly along, delete neighbors in the destroy event.
+- `minecraft:support` is `{"shape": "fence"|"stair"}`, decides only what can attach to the block and is unrelated to collision. It blocks torches, levers, buttons and redstone dust from attaching to a face. If `stair` has no cardinal_direction/vertical_half, no face counts as full. A fence blocks the sides and allows only the top. It cannot be used in permutations. On a custom fence `{shape:"fence"}` breaks its own connections. The vanilla face support types are none, center, edges and both.
+- `minecraft:connection_rule` went from the 1.21.130 beta experiment to stable in 26.0 and needs format 1.26.0 or higher. It decides what connects to this block. `accepts_connections_from` is `"none"` (blocks fence/wall/pane/bars connections and also blocks its own type), `"only_fences"` (wooden fences + only customs that have the trait/tag), or `"all"` (all fences, walls, panes, bars, customs). There is no "same block" option, so connecting to itself needs scripts or culling. For a rotated block put the direction after transformation in `enabled_directions` (for example `"enabled_directions":["north"]` for rotation [0,180,0]). Connections ignore rotation (MCPE-235806). For a custom fence to connect to the vanilla nether brick fence it needs the `minecraft:has_fence_connections` tag. `tag:one_way_collidable` stops pushing out a player inside the block.
+
+### Liquids and snow
+
+- `minecraft:liquid_detection` decides waterlogging and breaking in water. The only liquid kind is water. `on_liquid_touches` is `"blocking"`, `"popped"` or `"no_reaction"`. `stops_liquid_flowing_from_direction` blocks water flow from a specific direction. It ignores transformation rotation (MCPE-234654) and has a flow bug (MCPE-234648).
+
+```json
+"minecraft:liquid_detection": {
+  "detection_rules": [ { "can_contain_liquid": true, "liquid_type": "water", "on_liquid_touches": "no_reaction" } ]
+}
+```
+
+- `use_liquid_clipping` is a known bug that has never worked (MCPE-236319). `minecraft:liquid_clipped` is an item component, and since 26.10, if true on a block placer item it is placed only on water (lily pad style). A seagrass style block needs a tick custom component that checks `isWaterlogged`. Custom fluids, water/powder snow fog and custom cauldron liquids are impossible.
+- Snowlogging: `"minecraft:precipitation_interactions": {"precipitation_behavior": "snowlogging"}` (the schema name is `snow_log_no_collision`). It must have no collision and was experimental until 1.26.30. To avoid being buried like flowers in snow, use `none`. When buried in snow, containers drop their items and texture variations return to the first value. The snow layer on custom blocks cannot be blocked in worldgen.
+
+## 13. Redstone
+
+- `minecraft:redstone_producer` replaces the "block swap + redstone block below" hack used for buttons. It gives power (0 or 15) per permutation. `strongly_powered_face` is a single direction (a string) and a warning appears if omitted. To make redstone dust connect to the block, use `connected_faces`. With `transform_relative: true` faces are relative to the block itself. From 1.26.20 it must also be in the base `components` to be placed in a permutation. The same block cannot be both a producer and a consumer in its main components.
+
+```json
+"minecraft:transformation": { "rotation": [ 0, 180, 0 ] },
+"minecraft:redstone_producer": { "power": 15, "connected_faces": [ "east", "south" ], "strongly_powered_face": "east", "transform_relative": true }
+```
+
+- producer bugs: the output direction does not update when the permutation changes (MCPE-242205), and it does not face adjacent dust correctly (MCPE-242204).
+- `minecraft:redstone_consumer` has `min_power` and `propagates_power`, is used together with format 1.26.0 or higher and the `onRedstoneUpdate` (`e.powerLevel`) custom component, and is cheaper than a per-tick check. Without turning on `propagates_power` it does not conduct even with full geometry. For side dust to connect, `redstone_conductivity.redstone_conductor` is needed. A consumer has no direction so a repeater cannot be made. A block that is also a consumer cannot give comparator output.
+- `onRedstoneUpdate` also fires on first placement and chunk load, so toggle blocks such as doors/trapdoors need a separate power state to detect a change. The beta `firstUpdate` boolean filters the initial load event. Do not use onTick for redstone behavior.
+- Lit/unlit ore changes light_emission and texture with a `pro:lit` state and a `query.block_state('pro:lit') == true` permutation, and reverts with random tick or tick.
+
+## 14. Other components
+
+- `minecraft:friction` (conflicting): there is a report that the default is 0.4 so the 0.6 on the wiki is wrong. Opinions split on direction (one side says higher is more slippery, the other says lower means more friction). One value changes two internal things together, so a soul sand style block is impossible. If you want the default, omit it.
+- The value of `minecraft:flammable` is an object (`catch_chance_modifier`, `destroy_chance_modifier`, `lava_flammable`). `lava_flammable` works in format 1.26.20 or higher. The default is `"never"` (MCPE-240718, intended behavior). A block that burns forever or a flammable block immune to lava cannot be made. Fire and soul fire are hardcoded.
+- `minecraft:replaceable` accepts only `{}` and makes a block replaceable like grass. `minecraft:crafting_table` gives a custom crafting UI (there is no furnace component).
+- `minecraft:map_color` specifies the block map color (the map color of vanilla blocks cannot be changed). `BlockMapColorComponent` does not work on vanilla blocks (MCPE-240722).
+- `minecraft:flower_pottable` + `minecraft:embedded_visual` need format 1.21.124 or higher. Even if every permutation has geometry + material_instances, it must also be in the root separately (MCPE-237910), and from 1.26.20 it is banned in permutations.
+- `minecraft:chest_obstruction` applies to chests, ender chests, trapped chests and copper chests and not to shulkers. The `"shape"` mode uses the collision box and fails if it overlaps origin [-7,0,-7] size [14,8,14].
+- Tags (conflicting): the older format writes block tags as `"tag:ns:name": {}` components. From format 1.26.20 a `"minecraft:tags": ["ns:tag"]` array is said to replace it, but there is a report that around 1.26.20 the array did not load and the `tag:` form was needed. More recent 2026-08~09 reports confirm that in 1.26.20 and above the array is correct and the old `tag:` key is a schema error. `query.block_neighbor_has_any_tag`/`block_has_any_tag` can no longer be used.
+- Mob spawning: mobs did not spawn on custom full blocks of an old format, but this was fixed in format 1.21.90 or higher (one user needed 1.26.0). The block must be solid/opaque. There is a report that entities do not spawn if a custom block is used as the biome `top_material`.
+- A trial spawner spawns only when natural mob spawning rules are on. A workaround is to block natural hostile mob spawning with BP spawn_rules (format 1.8.0 `minecraft:spawns_on_block_filter: ["minecraft:deny"]` or weight 0).
+- Component ordering (ciosciaa's suggestion): METADATA (display name, loot, transformation, random offset, tags) -> PRESENTATION (geometry, material instances, item visuals, embedded visuals, destruction particles, map color) -> PHYSICS (selection/collision box, friction, light dampening/emission, precipitation, destructible by mining/explosion, liquid detection, flammable, movable) -> RELATIONS (placement filter, replaceable, support, connection rule) -> FEATURES (redstone, crafting table, leashable, flower pottable) -> EVENTS (tick, fall-on).
+
+## 15. Patterns made with blocks
+
+- Doors: in `onPlayerInteract(event, definition)` toggle a boolean state with `permutation.withState` and play the sound with `dimension.playSound(sound, block.center())`. A parameter example is `"ns:door": {"block_state":"ns:open_bit","enable_sound":"open.wooden_door","disable_sound":"close.wooden_door"}`. Open/hinge are handled with `bone_visibility` Molang (`"door_open": "q.block_state('ns:open_bit') && !q.block_state('ns:door_hinge_bit')"`). A 2-tall door uses multi-block. Define the geometry once in the base. Combine block and item with `block_placer` + `replace_block_item` and use the `minecraft:is_axe_item_destructible` tag.
+- A trapdoor does `block.permutation.withState("ns:open", !isOpen)` in `onPlayerInteract({block, dimension})` and plays `open.wooden_trapdoor`/`close.wooden_trapdoor` at `block.center()`. A pressure plate toggles a boolean with `onStepOn`/`onStepOff`, but a thin plate is hard because of the height constraint.
+- A slab switches one full-block geometry with two bones using `vertical_half` and adds a double state. To replicate vanilla slab behavior use `minecraft:support {shape:"stair"}` + `minecraft:vertical_half` (without cardinal/facing traits). support cannot be in permutations, so keep the double slab as a separate block file. Stacking needs scripts. Method 1: check `minecraft:vertical_half`, `blockFace` and the held item in the `ns:is_double_slab` state and `beforeEvents.playerInteractWithBlock`, then after `event.cancel = true` do `withState(state, true)` in `system.run`. Method 2: make the item not place itself with `"minecraft:block_placer": {"aligned_placement": true, "block": "...", "replace_block_item": true, "use_on": [{"tags": "q.any_tag('this_tag_should_not_be_used_on_any_block')"}]}` and let an item custom component handle placement and merging. Method 3: in the item component `onUseOn`, look at `usedOnBlockPermutation`, `blockFace` and `faceLocation.y` and place a half in the adjacent cell (`faceLocation.y` is flipped when y is 0 or below, so MCPE-236442 needs correction). After 26.20 a ghost block shows when placing a double slab.
+- Stairs: the 26.0 stable traits (`placement_direction` + `vertical_half` + `corner_and_cardinal_direction`) combine into 40 permutations. UV lock changes only the UV mapping and does not work properly on rotated stairs. Collision uses two multi boxes and the selection box stays a full cube. The stair self-cornering bug is MCPE-234801.
+- Fences: a collision width of exactly 16 gives a water glitch, so use 15.999. A fence gate needs a custom component, and fences also connect to the front and back of the gate. In the wall template `sticky:"same"` blocks piston movement so use "none", and panes must be treated as attachable to walls. The upper part of a wall depends on the connections and the wall above, so 6 boolean states are needed. A custom pane was not possible natively on stable releases before 1.26 and needs scripts (100-300 lines). Vanilla wall states (165 wall shapes) are not exposed.
+- Crops and vines: grow with `minecraft:tick` (or the cheaper `onRandomTick`) + `permutation.withState(state, value+1)`, and handle the fully grown stage with a permutation condition component. If farmland is below, give slow_falling to prevent trampling. For vines, `onRandomTick` turns the tip into a body and places a new tip below. Bone meal does `cancel = true` in `playerInteractWithBlock` and is handled with `system.run`, and survival consumption does `stack.amount--; slot.setItem(stack)` with `getEquipmentSlot(EquipmentSlot.Mainhand)` and skips in `GameMode.Creative`. Vanilla plants cannot be placed on custom blocks, and sugar cane style support did not work with the sand tag.
+- Saplings: features are placed on top of saplings, so the sapling must be in the feature's `may_replace` or erased first. Use `dimension.placeFeature`.
+- Stripping logs: if there is an axe in the main hand, do `block.setType(stripped)` in `onPlayerInteract`, and reduce durability with `item.getComponent("minecraft:durability").damage++` and then `slot.setItem(item)`. Replacing a block after a delay uses `system.runTimeout`, and a 2-tall block places the upper block with `permutationToPlace` in `beforeOnPlayerPlace` and copies `minecraft:cardinal_direction`.
+- A bouncy block does `applyImpulse` from the `onEntityFallOn` fall distance, and fall damage is canceled in before entity hurt by checking the cause fall and the block below. Cactus damage uses `system.runInterval` instead of per-block ticks. Fire detection is done with a tick component that checks for `minecraft:fire` nearby. A portal is made as a normal block with custom geometry, collision, an animated texture and an axis state.
+- Structure void style blocks (a transparent block visible only when held): `minecraft:geometry.full_block`, `minecraft:collision_box: false`, `"*": {texture:"invisible", render_method:"blend"}`, `minecraft:selection_box: true`, `minecraft:tick` interval [1,1], and an onTick that emits `minecraft:shulker_bullet` particles when the player holds the item (format 1.21.90). With `player.spawnParticle` only that player sees it. Barrier visibility is hardcoded.
+- Summoning entities from blocks: have a `complete` boolean state, and the tick of the complete=false permutation summons the entity and then changes complete to true. Dynamic lighting all places or moves a `light_block` at the player position.
+- Updating multi-block structures: walk the neighbors with a BFS queue and a visited Set keyed by `x,y,z`, comparing typeId and `minecraft:cardinal_direction` (recursion without visited loops forever). A `Block` object is created anew on every access, so using position + permutation can be faster. To break blocks from scripts use `/setblock ... destroy` with runCommand.
+- The template collection Kaioga's Block Templates is about 80 vanilla block recreations (BP+RP pairs and .mcaddon, with comments and no experimental toggles) and was updated to 1.26.50. It includes cactus, cake, vines, ladder, walls, snow layers, ore, doors and slime blocks.
+
+## 16. What blocks cannot do and entity alternatives
+
+- Impossible (replace with entities or scripts): falling/gravity blocks (a custom falling entity with the same texture), animation controllers and continuous animation, chests/containers (before 26.50 block_entity), signs/text, custom fluids, barrier visibility, end gateway effect, blocks visible through walls, non-solid blocks that cannot be attached, blocking mob pathing (decided by the entity-side `behavior.avoid_block`), setting vanilla map colors, modifying/replacing vanilla blocks, dispenser detection, XP drops from blocks (scripts needed), neighbor change events (`onNeighbourUpdate`).
+- Entity alternative patterns: interactive furniture, item displays, storage drawers and pedestals are made with invisible entities (summoned on placement, removed on destruction, collision from entity components). Inventory block = inventory entity, and `player.openInventory` does not exist. An entity chest can despawn on close and save its inventory with scripts, but many entities cause lag. To protect against `/kill @e`, give minimum health 1. Needing one more click on a furniture entity is because the hitbox is small, so enlarge the hitbox. The detailed entity-side rules are in section 16 of [Entities](./entities.mdx).
+- Custom heads are 16-direction and wearable. The charged creeper drop is hardcoded, and only the wither skeleton loot is data-driven. Block geometry has no Molang, so there are only 4 head bones.
+- What custom wood sets lack (2026-02): sign text, double slab pick block, shelf item display/comparator, block sounds for sound blocks, lava flammability (added later in 1.26.20).
+
+## 17. Case study: a block texture that moves only while active (a Dragonfly-based server)
+
+A way to show a moving texture only while a machine is running (Source: private research). Block texture animation is done with `textures/flipbook_textures.json` of the resource pack. The image is a vertical strip of width 16 and height 16 x the number of frames, and one entry animates one atlas tile (a key of `terrain_texture.json`).
+
+```json
+[
+  {
+    "flipbook_texture": "textures/blocks/harvester_side_on",
+    "atlas_tile": "custom_harvester_side_on",
+    "ticks_per_frame": 2,
+    "blend_frames": false
+  }
+]
+```
+
+- `ticks_per_frame` is ticks per frame (20 ticks = 1 second), and `frames` (an array of frame order) can give the order and repetition directly. `blend_frames` mixes between frames to smooth it (on by default, `false` for a pixel look). There are also `atlas_index`, `atlas_tile_variant` and `replicate`. A custom block moves as it is if the texture name in `material_instances` is that atlas tile. `terrain_texture.json` and `flipbook_textures.json` are merged across packs.
+- A flipbook is always run by the client, so turning it on and off is done by changing the texture with a block state (permutation). The off state uses a still texture, and the on state uses the moving tile (`..._on`). The server does `SetBlock` only when the machine starts or stops work. A Dragonfly-based server uses the block state `custom:active` (`off`/`on`) and keeps it on for 40 ticks after the last work to prevent flicker.
+- Constraints: every block moves on the same beat (it does not start from frame 0 the moment it turns on), and a progress picture matched to a server value is not possible (use per-state textures/models). Only the texture moves, so if you need to show parts turning, you must float entities over it, which is much heavier. In item icons a flipbook does not work depending on the version, so leave a still image. If it does not move under an `alpha_test` material or the transition is late, try changing `blend_frames` and the render method.

@@ -1,0 +1,129 @@
+---
+title: "AdvancementPack (r4isen1920)"
+description: "An advancement UI that draws a HUD over the NPC dialog screen. A model case for the factory variable ignored, chat toasts, and fixed-offset parsing"
+sidebar_position: 1
+sources:
+  - advancementpack
+  - repo-guide
+  - bedrock-wiki
+---
+
+## What it is
+
+AdvancementPack is an "advancements" add-on for Minecraft Bedrock made by r4isen1920. It implements an advancement window with tabs, like Java Edition, and achievement toasts with resource pack JSON UI and scripts. The analyzed version is v4.2 (CurseForge upload 2024-06-04, `min_engine_version` 1.20.80, requires the Beta APIs world experiment) and the repository HEAD is `0a79929`. The license, confirmed by opening the repository `LICENSE`, is MIT (Copyright 2024 r4isen1920), so code excerpts are possible (Source: cs-advancementpack). HEAD (2025-12-29) only rewrites the scripts for Scripts 2.0; the UI files are the same as v4.2 apart from whitespace.
+
+This pack matters because it does not use the server forms that BedrockAdvancements and bedrock-core use. It is a model for sending screen data somewhere other than a form.
+
+## How it works
+
+The data a screen needs is split into three channels.
+
+| Channel | What it sends | Where the UI receives it |
+| --- | --- | --- |
+| NPC dialog text `#dialogtext` | Screen ID (`_r4ui:story_tab` and so on) | `npc_interact_screen` draws the window, tabs, and background |
+| HUD title (`setTitle`) | Tab name and the list of achieved item names | The HUD overlay draws icons, lines, and scrolling |
+| Chat (`sendMessage`) | A fixed-width record for one toast | The HUD chat factory stacks the toasts |
+
+Every data string starts with the prefix `_r4ui:`. The vanilla UI hides when this prefix is present, and the custom UI appears only when it is present. A hidden NPC entity (scale 0, invulnerable) is summoned 8 blocks above the player, and the `dialogue open` command opens the dialog screen.
+
+## Key techniques
+
+### 1. Overlaying the HUD on the NPC screen
+
+The data the NPC dialog screen gives the client is only one line of dialog text and a list of button names, so it is hard to carry a per-player achievement list. The achievement list is therefore sent as a title and the HUD draws it. The screen below gets `force_render_below: true` and `screen_draws_last: false`, and the HUD gets `screen_draws_last: true`. The HUD also needs `always_accepts_input: true`. According to the author's notes, hover and scrolling work only with a mouse, and touch and controller were not verified.
+
+### 2. Branching per generated unit with the factory-supplied `$title_text`
+
+Controls created by `hud_title_text_factory` receive `$title_text` as a variable. The author sets a default with `$title_text|default` and uses that value in the expressions of `ignored` and `variables.requires`.
+
+```jsonc
+"story_tab@advancement_items_story_tab": {
+  "ignored": "(($var_title_text - 'story_tab:') = $var_title_text)"   // do not create the control unless 'story_tab:' is present
+},
+"mine_stone@advancement_item_base": {
+  "$unlock_condition": "(not (($var_title_text - 'mine_stone.1b;') = $var_title_text))"
+}
+```
+
+A variable is fixed once when the control is created, so invisible tabs and items are never created at all (the `#visible` binding is evaluated after creation). When the title changes the factory recreates the controls, so the script resends `setTitle` on every tab switch. The data format is `_r4ui:<tab>:<name>.1b;<name>.1b;...` and `(#s - 'X') = #s` checks for inclusion. A `.1b;` terminator after each name prevents overlapping suffixes from matching by mistake (confirmed that none of the 137 names has an overlapping pair).
+
+### 3. ANDing a condition onto the vanilla `#visible`
+
+The following is part of the real `hud_screen.json` at the repository HEAD.
+
+<Excerpt src="advancementpack" title="AdvancementPack, hud_screen.json" path="packs/RP/ui/hud_screen.json">
+
+```json
+"root_panel": {
+  "modifications": [
+    { "array_name": "bindings", "operation": "remove",
+      "where": { "binding_name": "#hud_visible" } },
+    { "array_name": "bindings", "operation": "insert_front",
+      "value": [
+        { "binding_type": "global", "binding_name": "#hud_visible" },
+        { "binding_type": "global", "binding_name": "#hud_title_text_string" },
+        { "binding_type": "view",
+          "source_property_name": "((#hud_title_text_string - '_r4ui:') = #hud_title_text_string)",
+          "target_property_name": "#not_showing_custom_hud" },
+        { "binding_type": "view",
+          "source_property_name": "(#hud_visible and #not_showing_custom_hud)",
+          "target_property_name": "#visible" }
+      ] }
+  ]
+}
+```
+
+</Excerpt>
+
+It removes the original `#visible` binding, reads the same value again, and combines it with its own condition. The custom UI is placed in `$screen_bg_content` (`root_panel_bg`) rather than `root_panel`, so the toasts and the overlay remain even when the vanilla HUD is hidden.
+
+### 4. Wrapping the NPC screen to switch
+
+It redefines `npc_screen` but keeps the vanilla `npc_screen_contents` wrapped as is, and switches the visibility of its own screen and the vanilla screen according to `#dialogtext`. It uses a slot pattern that passes a control array as a variable, like `"controls": "$target_control"`. The downside is that redefining the whole `npc_screen` leaves only one side when other packs do the same, and ordinary NPC dialogs also receive settings such as `render_game_behind`.
+
+### 5. Tabs are a dialog button collection and the name picks the shape
+
+The dialog button name (`tab.story` and so on) is used as the tab ID, every slot holds all six tab shapes, and `(#student_button_text = 'tab.story')` shows only one. For the selected tab, a copy with `$is_tab_selected` on is overlaid and `"ignored": "$is_tab_selected"` is given to the `button_mappings` entry so it cannot be pressed (`ignored` per array element). Tab switches and real closing are told apart by the dialog's `on_close_commands` and a tag (`has_screen_opened`).
+
+### 6. Several toasts with a chat factory
+
+The title channel is a single one, so overlapping toasts overwrite each other, but chat creates a control per message. A second factory with the same name as the vanilla HUD chat factory (`chat_item_factory`) is declared at another position to build a second list from the same data, and the original chat is hidden in two places (the chat screen `messages_text` and the HUD `chat_grid_item`). The toast record is cut at fixed offsets.
+
+```
+_r4ui:toast_0.header.01.body.006.slideshow_0.textures/items/iron_ingot
+```
+
+| Field | Extraction expression |
+| --- | --- |
+| Template | `('%.7s' * (#text - ('%.6s' * #text)))` |
+| Header (lang key) | `('r4ui.toast' + ('%.10s' * (#text - ('%.13s' * #text))))` |
+| Icon | `(#text - ('%.45s' * #text))` |
+
+The cut-out number is prefixed with the lang key and put in a `localize` label, so the RP lang files (28 languages) handle translation. When a toast disappears, a `size` animation shrinks the height to 0 so the stack closes up.
+
+### 7. Other points
+
+- The icon picks a control with `$v > 'a'` (an image if it is a string) and `$v > 0` (an `inventory_item_renderer` if it is a number, with the value `ID x 65536`), so one variable accepts both a path and a numeric ID.
+- It adds a `$show_hover_content|default: false` slot to the vanilla `common_buttons.focus_border` to place a hover tooltip. Other vanilla buttons are not affected.
+- Registering four files with the `.r4ui` extension in `_ui_defs.json` still loads them. The connecting lines are one pre-drawn PNG per tab.
+- It overrides only deep vanilla elements with a path key (`"recipe_unlocked_popup/input_panel/label_panel/horizontal_padding_1": { "size": [3.75, 9] }`).
+
+## Known pitfalls
+
+- When another add-on calls `setTitle`, the overlay disappears, and chat that starts with `_r4ui:` is hidden (the data channel is shared).
+- `destroy_at_end: "chat_grid_item"` differs from the control name `modified_item` that the factory creates, so it is uncertain whether anything is actually destroyed.
+- It broadly modifies the vanilla `npc_screen`, the HUD root, two chat locations, and `focus_border`, so it may conflict with other UI packs.
+
+## Relation to our rules
+
+| Rule ID | Relation |
+| --- | --- |
+| FILE-02, FILE-14, FILE-18, FILE-19, FILE-20 | The `.r4ui` extension, control array variables, array element `ignored`, string and number discrimination, and path keys came from this pack (supports) |
+| FILE-17, FILE-34 | The basis for filtering the factory variable `$title_text` with `ignored` at creation time. `ignored` looks at the outer scope, not its own declaration (a child of `category_tab_icon`) |
+| MOD-07, MOD-10, MOD-12 | `#visible` replacement, slots that default to off, and the coexistence problem of redeclaring `npc_screen` |
+| BND-06, BND-15, HOST-14, HOST-15 | `once` bindings, the `#propagateAlpha` binding, the title being a single channel so overlapping notifications go through chat, the prefix protocol |
+| LAY-22, LAY-23, LAY-27, LAY-28 | `allow_clipping: false` tooltips, dark images, 9-slice, tiled backgrounds |
+
+## Comparison
+
+BedrockAdvancements wraps the server form `long_form`, computes coordinates with spacers, and sends toasts over the title channel. bedrock-core uses server forms and chest containers and compiles JSX. AdvancementPack decides at creation time (`ignored`), so it has fewer controls, but adding a new item means editing the UI JSON by hand. Chat fits notifications that can overlap, and the title fits state where only the latest value is needed. Read it together with the [BedrockAdvancements](./bedrockadvancements.mdx) and [bedrock-core](./bedrock-core.mdx) pages.

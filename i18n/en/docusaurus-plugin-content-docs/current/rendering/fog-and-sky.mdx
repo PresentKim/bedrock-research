@@ -1,0 +1,75 @@
+---
+title: Fog and sky
+description: fog JSON (legacy distance fog and VV volumetric fog), god ray tuning, the /fog command, skyboxes, camera fade, dithering and the accessibility fade
+sidebar_position: 12
+sources: [private-research, ms-learn, bedrock-samples]
+---
+
+# Fog and sky
+
+## Concept
+
+A Bedrock fog file is a `minecraft:fog_settings` JSON in the resource pack's `fogs/`. The identifier (`description.identifier`) must include a namespace, and a client biome points to that identifier to apply it to the biome. The settings have two branches. **Distance fog** gives `fog_start`, `fog_end` and `fog_color` per medium the camera is in (air `air`, water `water`, lava `lava`, `lava_resistance` during the lava resistance effect, powder snow `powder_snow`, `weather` during weather), and if `render_distance_type` is `fixed` it is read as a distance in blocks, and if `render` as a value multiplied by the current render distance. `transition_fog` (`init_fog`) is extra fog that slowly transitions to the biome's distance fog when entering another medium. **Volumetric fog** (VV only) makes light shafts (god rays) with density, medium coefficients (scattering, absorption) and the phase function asymmetry `henyey_greenstein_g` (Source: ms-learn, `minecraft:fogs` reference).
+
+A legacy format (format 1.16.100) example:
+
+```json
+{
+  "format_version": "1.16.100",
+  "minecraft:fog_settings": {
+    "description": { "identifier": "my_pack:thick_air" },
+    "distance": {
+      "air": { "fog_start": 0.2, "fog_end": 0.9, "fog_color": "#b7c3d8", "render_distance_type": "render" },
+      "water": { "fog_start": 0, "fog_end": 40, "fog_color": "#1c4d6b", "render_distance_type": "fixed" }
+    }
+  }
+}
+```
+
+The VV format (format 1.21.90) adds `volumetric` to the same file.
+
+```json
+"volumetric": {
+  "density": {
+    "air": { "max_density": 1.5, "uniform": false, "max_density_height": 80, "zero_density_height": 130 },
+    "water": { "max_density": 0.15, "uniform": true }
+  },
+  "media_coefficients": {
+    "air": { "scattering": [1, 1, 1], "absorption": [1, 1, 1] }
+  },
+  "henyey_greenstein_g": { "air": 0.65, "water": 0.3 }
+}
+```
+
+The vanilla fog samples are in bedrock-samples `resource_pack/fogs`. Below are rules gathered from the community research (Source: private research).
+
+## VV volumetric fog
+
+- **fog JSON structure** (format_version 1.21.90): `distance` (air, water, weather: `fog_start`, `fog_end`, `fog_color`, `render_distance_type: "render"`), `volumetric.density` (air: `max_density`, `uniform`, `max_density_height`, `zero_density_height`. water: `max_density`, `uniform`. weather), `volumetric.media_coefficients` (air, water, cloud: scattering[rgb], absorption[rgb]), `henyey_greenstein_g` (air, water). Example: air `max_density` 1.5, `max_density_height` 80, `zero_density_height` 130, `uniform` false. A thicker variant: `max_density` 0.15, `zero_density_height` 87, `max_density_height` 30. If high Y is thick, lower `max_density`.
+- **God ray**: Raise the volumetric density and set `henyey_greenstein_g` to about 0.65 (0.35 for more even fog, above 0.75 is counterproductive). The higher the value, the more the fog gathers toward the light and the sharper the god rays. Sharpness also depends on density, so you need fog that is crisp but not thick. For god ray density use 0.001~0.09, and 0.45 or more looks like radiation. One user's failure was not the values but a structure error in the biome fog file. There was also a suggestion that a double lobe (forward 0.65 and backward -0.25) is a better design. Default RTX uses 0.4 and Better RTX default uses 0.075, and under RTX it cannot be set by a pack (a VV-only key).
+- **Color**: Under VV, scattering hardly changes the fog color and absorption does (under RTX, scattering changes the color and a very small value is needed). Keep `scattering` and `absorption` equal for fog color (1,1,1 = white). Absorption is a strong setting (RTX fog uses red and green absorption of 2 or more). Volumetric fog can tint the sky bluer. "Cinematic" fog is very thick volumetric for screenshots and bad for gameplay.
+- **VV distance fog**: Always the same as the sky color (black in the Nether/End without a flash). It renders in its own color only during the End flash, so a purple custom distance fog cannot be reproduced under VV and the rest behaves like vanilla. Fixed fog such as `{"render_distance_type":"fixed","fog_start":16,"fog_end":1024,"fog_color":"#b7c3d8"}` looks worse under VV, so keep separate per-mode fog (subpacks or script), push `fog_start` farther, or widen the distance fog range. Lowering `fog_end` made the sky visible underwater. Judge fog from a ground-level play viewpoint.
+- **Block light and volumetric fog**: Block and point lights were deliberately separated from volumetric fog (they worked around 1.20.80~1.21.80). Since 26.10 stable, static light (flood-fill block light) and colored block light affect volumetric fog. That contribution is scaled by the internal value `block_light_indirect_contribution_multiplier` = 0.05 (a Mojang developer used 200.0 locally and considered exposing a dedicated multiplier for packs, with no promise). Volumetric fog is hardly visible without light sources.
+- **Caves and the End**: Distance and volumetric fog do not work properly in caves (skylight 0). In the End, only the End flash brightens fog. While the Ender Dragon is alive the End fog is stronger and it changes when it dies (observed in the 2026-04-21 Preview).
+- **Nether fog**: Horizon and zenith gradient colors create a distinct horizon, so a single color is preferred. Volumetric density 0.04 and a fog end of 320 blocks looked good for the vanilla Nether.
+- **Morning fog and rain**: Making the sun slightly brighter at dawn (reducing the exposure problem) brightens the fog, and height-based fog helps too (a low sun passes through thick fog). Light shafts cannot be limited to sunrise and sunset only, so thin fog and a bright sun at those times is the best option. Rain cannot be customized and looks like VV is off, so adjusting volumetric when it rains is the best workaround.
+- **Keyframed fog**: Since the Preview around 2026-04-30, volumetric fog density, scattering and absorption can be keyframed, so night fog can be adjusted separately. It was added for VV but also works under RTX (distance fog does not work under RTX).
+- **Tuning tips**: Adjust sun illuminance, the HG g value and clear height and density together, and emphasize fog with color grading so the scene does not get clogged. One creator used 3 times less fog with the same clarity through a grading trick. An open-source example is stephenle19/LerianX-Visuals.
+- **Changing fog at runtime**: A way to toggle atmosphere/fog at runtime (blood moon and so on) is not known, and swapping fog by condition is not possible with a resource pack alone and needs an add-on. A custom moon texture is a workaround. For the command approach, see `/fog` below. `/fog @a push minecraft:fog_warped_forest fog1` tints the sky on Fancy but not under VV.
+- **What you cannot see**: VV has no depth of field (DOF) (the Windows-only ReShade is an alternative, and RTX needs a mod). The wish list includes an adjustable ambient term for volumetric fog (the old VV had it; with only scattering it looks flat), `fog_start_height` and world-space fog blending, and separating HG parameters for point lights and the sun. Fog renders incorrectly depending on the angle above banners.
+
+## Legacy fog (non-VV, common)
+
+- **Properties of non-VV fog**: It fades with camera distance. To thicken indoors, use `render_distance_type: fixed` and a `fog_end` of 8~20. Fixed fog in format 1.21.90 piles up near the camera and has no easing. The color of distant blocks can also be changed with custom fog, always or per dimension. In non-VV, fog also changes the sky color. There is an unconfirmed report that fog did not limit the render distance (`unverified`).
+- **fog JSON (legacy)**: `minecraft:fog_settings` (format 1.16.100) puts `fog_start`, `fog_end`, `fog_color` and `render_distance_type` in `distance.air/water/weather`, and water supports `transition_fog`. Fog color brightness cannot be adjusted (`#FF9900` and `#5A3600` look the same). Vanilla fog files (resource pack `fog/`) can set underwater fog properties even without VV. The blindness fog distance cannot be set. Custom fog sometimes stutters on mobile.
+- **Modifying vanilla fog**: It cannot be edited with the identifier `minecraft:...` ("identifier minecraft cannot be used"), so create new fog with your own identifier and point the client biome (`fog_identifier`) to it. Client biome files in `biomes/` still use `fog_identifier` per biome, and the old `biomes_client.json` is said to be no longer used. The client biome `fog_appearance` points to the fog settings file. Adding a rain fog file to override vanilla fog, adding `weather` fog to client_biomes, and overriding the savanna vanilla fog with `fog_identifier` of the client_biome `"minecraft:fog_appearance"` had no effect (unresolved). Vanilla fog location: https://github.com/Mojang/bedrock-samples/tree/main/resource_pack/fogs
+- **Removing fog completely**: There is a report (2026-09) that `fog_start` 999 and `fog_end` 1000 effectively remove fog, and a report (2026-09) that large or equal values do not remove it (fixed or render distance type) and a shader is needed. `conflicting` There is a remark that `default_fog` may not clear "air" fog and that fog is not in only one file. An example fog removal pack: https://www.curseforge.com/minecraft-bedrock/texture-packs/no-fog-ultra (there is a case where turning off render distance fog in settings had no effect).
+- **Dynamic fog**: Change it with `/fog <player> push <fog_id> <user_id>`, `pop <user_id>`, `remove <user_id>` (a per-player stack). A TS wrapper class around these commands was shared. Pushing too much fog gives the error "Size limit reached for fog identifier for player". I do not know how to change the sky color immediately after applying fog (the default is a fade transition).
+- **Skybox**: A custom biome can change only the sky color (PNG and cubemaps not yet, custom dimension feedback 2026-10). The skybox cannot be changed dynamically, and ways to change the custom dimension sky, End sky and skybox from the server are not known. For VV cubemaps see [VV settings files](./vv-settings.mdx), and for a skybox without fog through materials see multipass in [Materials and shaders](./materials-and-shaders.mdx). Turning rain into snow works only visually (textures). The question about toggling cloud movement had no answer. Cloud rendering cannot be turned off directly from a pack, and there was an answer to turn on Beautiful Skies and then turn off clouds and sky (`single report`).
+- **Large models and fog**: There was no answer on making a large model ignore fog independently of render distance. There is also no clean way to hide it by light level.
+- **Camera fade**: The script API `fade` has only RGB, is an opaque overlay with a maximum duration of 10 seconds, and has no alpha. The flashing of `/camera fade` is limited to prevent photosensitive seizures. Alternatives are a black particle attached to the player or a black cube in the player geometry. For camera cutscenes use the Camera API (`player.camera`).
+
+## Dithering (accessibility fade)
+
+- Since the GDK release (around 2025-10-31), when the camera is close, entities, attachables and blocks vanish by dithering in which opaque and transparent pixels alternate per bone. It can be turned off in the settings under Accessibility, and turning it off resolved the reports of "the model is missing or see-through". They say translucency was not used because of depth sorting, cost and random transparent draw order.
+- Dithering breaks VFX and was extended to hand items in 2026-01, and packs such as Poppy Playtime and A&S had to make last-minute fixes or tell users to turn it off. In the 2025-12-15 release, first-person attachables using `entity_alphablend` or `entity_beam_additive` lost partial alpha (cut off near 50%). For such problems, try turning off dithering first. After the GDK update, screen animations (Settings, Video) caused UI lag, and all UI settings were reset at the update. `confirmed`

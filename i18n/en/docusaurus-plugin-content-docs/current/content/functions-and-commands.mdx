@@ -1,0 +1,130 @@
+---
+title: Functions (mcfunction) and command patterns
+description: .mcfunction file structure and folder rules, tick.json, why to use functions instead of command blocks, calling functions from events, and command patterns commonly used in add-ons.
+sidebar_position: 6
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - repo-damage-indicator
+---
+
+# Functions (mcfunction) and command patterns
+
+A function is a `.mcfunction` file that holds several lines of commands, and it is run in game with the `/function` command. A function pack is a pack that builds a system from function files alone. Functions cut the time spent going back and forth between command blocks to debug, and make it easier to move a system between worlds. The evidence is the command docs of the Bedrock Wiki (0930b39, provided by the BedrockCommands community), FunctionsIntroduction on MS Learn (a9fd1c0) and community research.
+
+## 1. File structure
+
+Functions go in the `functions/` folder of the behavior pack.
+
+```text
+BP/functions/this_code.mcfunction
+BP/functions/tick.json
+BP/functions/wiki/teleport/zone/hell.mcfunction
+```
+
+Recommended rules (Source: bedrock-wiki):
+
+1. Put every `.mcfunction` file in a namespace root folder under `functions` (`BP/functions/wiki/random_number.mcfunction` is good, and putting it directly in the root is bad).
+2. Write folder and file names in snake_case (lowercase, digits, underscores).
+3. Nest properly (`wiki/teleport/zone/hell` is better than `wiki/teleport_hellzone`).
+4. Follow the verb-first `action_object` structure for names (`add_all`, `shuffle_position`).
+5. Keep the whole path length at or below 80 characters (console limit).
+6. Use either singular or plural consistently for content folders.
+
+A function file has one command per line. The slash is omitted, and a line that starts with `#` is a comment.
+
+```mcfunction
+# BP/functions/wiki/ability/ice_blast.mcfunction
+effect @e[r=5,type=!player] slowness 5 3
+particle minecraft:snowflake_particle ~ ~1 ~
+playsound random.glass @a ~ ~ ~
+```
+
+`tick.json` lists the functions to run every tick.
+
+```json
+{ "values": [ "wiki/main_loop" ] }
+```
+
+## 2. How to call
+
+- In game: `/function wiki/ability/ice_blast`.
+- From an entity event: put `function wiki/ability/ice_blast` or `scriptevent ns:id` in the `command` of `queue_command`. Entities cannot run `/place` and op-only commands, so pass such commands to a script with `/scriptevent` and work around them with `placeFeature` and so on (Source: private research).
+- From a player controller: detect input such as right click with the state `on_entry: "/function ..."` of a BP animation controller and run a function (example transition query: `query.is_item_name_any('slot.weapon.mainhand','ns:item') && query.is_using_item`).
+- From scripts: call `source.runCommand` wrapped in `system.run(...)`. `dimension.runCommand('... @s')` fails because `@s` becomes the dimension. On Realms, use `runCommand` instead of the removed `runCommandAsync`.
+
+## 3. Commonly used command patterns
+
+- Scoreboard timers, movement detection, player join/death/respawn detection and entity counters are covered by the wiki commands section (mcfunctions, scoreboard-timers, on-player-death and so on).
+- Play an animation with `/playanimation @p <anim> <next_state> <blend_out_time> "<stop_expression>" <controller>` and set a variable with the stop expression (for example `playanimation @s animation.first_person.attack_rotation_item x 900 "v.attack_time=1;"`).
+- Force aggro: `damage @s 0 entity_attack entity <target>` (melee only).
+- Restrict movement: `/inputpermission set <player> movement disabled`. Hide the horse health bar: `/hud @s hide horse_health` (restore with `/hud @s reset horse_health`).
+- Give equipment: `replaceitem entity @s slot.armor.feet 1 id`, `/loot replace entity @s slot.armor.chest 0 loot "..."`. Item locking is the `item_lock` mode `lock_in_slot`.
+- Summon and events: `/summon minecraft:camel_husk ~ ~ ~ ~ ~ minecraft:spawn_with_rider`, `/summon custom:mob ~~~ minecraft:promote_to_illager_captain`, `/event entity @s name`.
+- `/gamerule domobspawning false` turns off natural spawning so custom mobs can be spawned by commands/scripts.
+- Placing features: `/place feature`, `/place featurerule` and `/place jigsaw <pool> <target> <depth> ~~~ true` cannot be run from command blocks or functions. Structures are `/structure load ns:name`, and deleting is `/structure delete <name>`.
+- Example of a command condition that checks line of sight: `if block ^ ^ ^0.25 air` checks for obstacles and can be steered with facing teleports.
+- Several `/event entity` commands in a command block each fire their event.
+- Block centering is `execute align xz positioned ~0.5 ~0.5 ~0.5 run ...`, and dimension travel is `/execute in nether run tp <target> ~ ~ ~`. The last `true` in `/tp @e ^^^+3 true` checks blocks along the path.
+- If `/fill` fails with "world not loaded", the simulation distance is low and the whole fill area is not inside the ticking area.
+- `/camera @s fade ...` can cover the screen with a solid color. Updating `/camera` every tick looks choppy to players who are not the host, and curved movement is only the spline mode. Using `camera ... facing @s` together with `execute at @s` made the screen flicker in one case (unresolved).
+- Game rule facts: turning off `dofiretick` also stops fire caused by lightning, and turning off `showtags` hides the locked item indicator. A day is 24000 ticks.
+- `/spreadplayers` makes a safe random teleport. The result placed by `/place feature minecraft:coal_ore_feature` sometimes does not show until the world is reopened. Commands alone cannot make particles that look different per player.
+
+## 4. Case study: drawing damage numbers with particles
+
+An analysis of an add-on that shows hit numbers with scripts + particles, not commands/functions (Source: repo-damage-indicator). That add-on uses no JSON UI at all and consists of a BP script, one RP particle and one PNG. The key techniques are as follows.
+
+- Glyph atlas: a 1024 by 64 PNG with 16 square cells of 64px, and 12 cells for `0`~`9`, `-` and `.` drawn as white letters with a black outline. They are drawn in white and the color is applied by tint. The particle UV is `"uv": ["variable.glyph * 64", 0]`, `"uv_size": [64, 64]`, and `variable.glyph` picks the cell.
+- The script spawns one particle per character with `attacker.spawnParticle("pdi:damage_glyph", pos, vars)`. `Player.spawnParticle` is visible only to that player, and `Dimension.spawnParticle` is visible to everyone nearby.
+
+```javascript
+const vars = new MolangVariableMap();
+vars.setFloat("variable.glyph", glyph);
+vars.setFloat("variable.scale", scale);
+vars.setColorRGBA("variable.tint", color);
+attacker.spawnParticle("pdi:damage_glyph", pos, vars);
+```
+
+- `setColorRGBA("variable.x", ...)` unfolds into four values, `variable.x.r/.g/.b/.a`. In a tint gradient, if RGB is a variable and only alpha is given as keyframes (0 -> 1 -> 1 -> 0), color and fade can be separated. Translucent is `particles_blend` and cutout is `particles_alpha`.
+- Character placement: take `view`, the attacker's line of sight normalized onto the XZ plane, compute `right = (-view.z, 0, view.x)` and shift by 0.155 x `(i - (len-1)/2)` of spacing. Combined with `facing_camera_mode: lookat_xyz` it reads from any angle. For consecutive displays, pick the candidate offset farthest from the most recent 5.
+- A critical hit is a heuristic estimated as `isFalling`, not in water, swimming or climbing, and without blindness or slow falling. Only melee and mace smash attacks are shown. Indicators attached to the world (numbers above heads and so on) must be made with particles or entities, not JSON UI.
+
+## 5. Function rule details (merged from community research packs-versions)
+
+- Line endings are LF (not CRLF) and commands do not start with `/`. If you break this, the function silently does not appear. Making it with bridge. or copying an existing function avoids this. (confirmed)
+- If the BP manifest/format is above 1.17.0, `#` comments do not work, and a function that failed to load does not appear in the list. (The comment example in section 1 is the wiki convention, and if it conflicts with this report, remove the comments.)
+- `Unexpected @a / @e` errors or `execute` parse failures happen because the manifest is parsed with the syntax from before 1.19.50. Fix it with `"format_version": 2` + `"min_engine_version": [1,19,50]` or higher, or use the old syntax. Conversion: `execute @a ~ ~ ~ <cmd>` = `execute as @a at @s positioned ~ ~ ~ run <cmd>`, `detect ~ ~ ~ air` = `if block ~ ~ ~ air`.
+- `tick.json` goes in `functions/` and lists the functions to run every tick. The tick.json functions of several add-ons run at the same time. A recommended setup is one `main.mcfunction` that conditionally calls other functions with score holder flags (`execute if score map_1 wiki:q.is_active matches 1 run function maps/map_1/on`). Reports differ on the performance of tick.json vs an entity `environment_sensor` runner. Polling with tick.json is slower than event-based scripts.
+- There are no conditional chains, so use `execute if/unless` or scoreboards instead. `/schedule` can be used inside functions and `/schedule on_area_loaded` waits for chunk loading. However, in one case `/schedule delay add <function> 60` inside an mcfunction called from a tick function did not run while the same command worked in a command block (cause unconfirmed, 2026-11).
+- Calling a function from a script is `player.runCommand('function name')`. A function containing a command that scripts do not allow (`/place`) does not run even when started from a script. `/op` and `/connect` fail in the script engine.
+- Command strings in NPC/dialogue JSON escape inner quotes: `"on_open_commands": ["/tellraw @a {\"rawtext\":[{\"text\":\"hi\"}]}"]`. In 2026-01 there was a report that the `selector` `@initiator`/`score` rawtext in NPC dialogue text does not work. The cause of an item-use trigger function failing silently was wrong `execute` syntax.
+- Permission level: functions are parsed at permission level 1 and `/place` is level 2, so `/place` (jigsaw, feature) cannot be run from command blocks, functions or tick.json. Work around it with `runCommand` in a script. `/reload` is also not possible from command blocks/functions/NPCs.
+- A function inherits the caller's execution context. Called from chat, it has the player's position/rotation/executor. From a command block, it has the block position with no executor (`@s` is not defined until `execute as`). In tick.json it runs at 0,0,0, so position selectors (`y=0,dy=-600`) are silently checked relative to 0,0,0. Fix example: `execute in the_end as @a[rm=0] at @s if entity @s[tag=eternal,y=0,dy=-600] run function eternal_void` (`in` changes only the dimension of the following subcommands, so filter per dimension with `as @a[rm=0]` or `r=999999999`). (confirmed)
+- Selectors: `r`/`rm` are relative to the entity's feet position, and the volume `x,y,z,dx,dy,dz` is a hitbox contact check (when sneaking the hitbox gets smaller, so sneaking can be detected). A volume selector accepts `~` relative coordinates and is at least 1x1x1. Ring check: `execute as @a at @s if entity @e[type=!player,r=6,rm=5]`, and `rm=0.001` (or 0.01) excludes yourself.
+- For timers, scoreboard timers are recommended over chain delays or redstone. `^^^` in `tp` is relative to the execution position, so to move each target use `execute as <targets> at @s run tp @s ^..`. `/execute facing` rotates before the teleport and `tp ... facing` rotates after. 10 blocks backward is `execute as @a at @s rotated ~ 0 run tp @s ^^^-10`. Block comparison is `execute if blocks <ref> <ref> <target> all|masked` (`all` includes air, `masked` ignores it), the offset is relative to the destination corner, and since it also compares signed books and names it can be unstable. Waterlogging cannot be checked with block states.
+- There is a consensus that custom commands (`namespace:name`, callable without the namespace if the name is unique) are preferable. `/scriptevent` does not consume a command name, is hidden from users and changes without a reload, so it suits calls inside a pack and between packs, but users can run it, so deop or permission limits are needed. Custom commands work on Realms (more portable than beta `chatSend`) and can be run with `runCommand`, but the result text is not returned. Running a custom command closes the chat window, so it is good for showing a form right after.
+- Permission level of custom commands: for a command that is used in command blocks but needs op in chat (for example `/effect`), give a lower permission level. The reference is in [Bedrock Wiki custom-commands](https://wiki.bedrock.dev/scripting/custom-commands#command-permission-level). A report that a script custom command did not run from a command block is unresolved.
+
+## 6. Summary for scripting and tooling (merged from scripting / tooling-server)
+
+- Before events, command callbacks and startup are restricted (early) execution, so `runCommand`, `setItem`, `spawnParticle`, `addTag`, form `show` and so on fail with `Native function [...] cannot be used in restricted execution`. Wrap them in `system.run(() => ...)`. `runCommandAsync` was removed in the 2.x migration, so use `runCommand`.
+- `system.afterEvents.scriptEventReceive` (not world) gives `{id, message, sourceType, initiator, sourceEntity, sourceBlock}`, and `ScriptEventSource` is Block, Entity, NPCDialogue or Server. Send with `/scriptevent ns:id msg` or `system.sendScriptEvent(id, message)`. Entity JSON `queue_command` sends a signal to scripts. Communication between add-ons (IPC) all use scriptevent as the transport (MCBE-IPC is effectively the standard).
+- Blocks have no `runCommand`, so use `block.dimension.runCommand("execute positioned x y z run function ...")` (`/setblock ... destroy` drops items, and `block.below().setType("minecraft:air")` does not). There is no `player.kick` API, so use `kick @s "reason"` with `runCommand` inside `system.run`. `Player.stopSound` is beta, and the stable way is `runCommand("stopsound ...")`.
+- Writing mob equipment is `entity.runCommand("replaceitem entity @s slot.armor.head 0 diamond_helmet")` (the RP entity needs `"enable_attachables": true`), and reading is `testfor @s[hasitem={item=...}]`. Structure loading is asynchronous so a fixed tick wait is needed, and a large structure (96x96) can crash the native call, so split it into jigsaw pieces. `dimension.placeFeature(feature, location, true)` and `Dimension.placeFeatureRule()` are expensive in bulk. Entities cannot run `/place`, so request it from a script with `/scriptevent`.
+- `/connect` or `/wsserver host:port` is a command the client runs, so it cannot be run with a script's `runCommand` and `successCount` is always 0. WebSocket/HTTP are not possible in scripts. server-net/server-admin are BDS only.
+- Tools: bridge. (web editor) supports generating mcfunction, the VS Code extension MCBE Command Checker validates mcfunction, and `MCDevKit.jsonte-vscode` supports injection inside .mcfunction. There is a comment that the wiki's long `/execute` chain articles are of limited use in Bedrock with scripting. AI answers are hard to trust for Bedrock commands and the Script API.
+- Multiplayer sync: continuously using `tp` on many entities looks like lag for players who are not the host. Selectors and forks grow with the number of players, so command cost rises.
+- BP animation controllers are trigger-based so they are cheap, while scripts have a higher ceiling and are easier to combine. Running a function on right click is also possible with the player.json controller (`query.is_using_item && query.is_item_name_any('slot.weapon.mainhand', 'ns:item')` -> `on_entry` `/function`).
+
+### Molang usage rules
+
+- Molang short-circuits left to right. Putting a check first, as in `!q.is_in_ui && ...`, avoids the "called on an entity with no actor" error. Write boolean queries as `q.is_sprinting` and `!q.is_sprinting` instead of `q.is_sprinting == true`.
+- `q.scoreboard` can be used only in a BP, and `q.is_local_player` only in an RP.
+- `math.clamp(value, min, max)` takes 3 arguments. Instead of assigning inside a ternary, use `q.in_range(v, lo, hi)`.
+- An RP alone cannot get the distance between players.
+
+## 7. Full reference
+
+The command list and introduction documents are included as MS Learn original excerpts in the [command list](./reference/commands-1.mdx).

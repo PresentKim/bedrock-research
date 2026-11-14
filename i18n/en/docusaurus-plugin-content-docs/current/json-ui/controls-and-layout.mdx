@@ -1,0 +1,295 @@
+---
+title: "Controls and layout"
+description: "Control types, size, anchors, stacks, layers, clipping, grids and 9-slice rules (LAY-01~LAY-57) and proposals"
+sidebar_position: 4
+sources:
+  - repo-guide
+  - repo-survey
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+  - private-research
+  - cinnabar
+  - bedrock-core
+  - advancementpack
+  - private-research
+  - mcbejsonuimasterai
+  - private-research
+  - netease-docs
+  - repo-tool-analyses
+  - jsonforge
+  - bedrock-json-ui-editor
+  - json-ui-examples
+---
+
+## Concept: controls form a tree, and layout is decided by size, anchors and stacks
+
+A screen is a tree of controls. Children go in the parent control's `controls` array, and a child is placed inside its parent by size (`size`), reference points (`anchor_from`/`anchor_to`), movement (`offset`) and overlap order (`layer`). If the parent is a `stack_panel`, children are stacked in one direction, and if it is a `grid`, they are placed in cells.
+
+### A working example
+
+An info card attached to the top right of the screen. A title label and a body label are inside a vertical stack, and the card shrinks to fit its children.
+
+```jsonc
+{
+  "namespace": "my_addon",
+  "info_card": {
+    "type": "panel",
+    "size": ["100%c + 8px", "100%c + 8px"],   // Sum of children + margin
+    "anchor_from": "top_right",               // Attach to the parent's top right
+    "anchor_to": "top_right",                 // and align its own top right
+    "offset": [-4, 4],                        // Push inward (for a right anchor, negative x is inward, LAY-17)
+    "controls": [
+      { "bg": { "type": "image", "texture": "textures/ui/white_icon",
+                "color": [0, 0, 0], "alpha": 0.6, "layer": 1,
+                "size": ["100%sm", "100%sm"] } },    // A background matched to the largest sibling
+      { "rows": {
+          "type": "stack_panel", "orientation": "vertical", "layer": 2,
+          "size": ["100%c", "100%c"],
+          "controls": [
+            { "title": { "type": "label", "text": "Title", "color": [1, 1, 0] } },
+            { "body":  { "type": "label", "text": "Body", "size": ["default", "default"] } }
+          ] } }
+    ]
+  }
+}
+```
+
+The size `"100%c"` is the sum of visible children and `"100%sm"` matches the largest sibling (LAY-03, LAY-07). Giving the background a low `layer` guarantees front and back order (LAY-19).
+
+### The Bedrock Wiki property table (with defaults)
+
+<Excerpt src="bedrock-wiki" title="JSON UI Documentation, Control and Layout properties" path="docs/json-ui/json-ui-documentation.md">
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| visible | boolean | `true` | If the UI element should be visible |
+| enabled | boolean | `true` | If true and the element or any child has the locked state then they will be in the locked state |
+| layer | int | `0` | Z-Index relative to the parent element. Higher values render above, negative values render below the parent element |
+| alpha | float | `1.0` | Alpha of the element. It will only affect the UI element. Its children will be unaffected. Use `propagate_alpha` to apply to children too |
+| propagate_alpha | boolean | `false` | If `alpha` should apply to all children as well |
+| clips_children | boolean | `false` | Cuts off visually and interactively everything beyond the boundaries of the UI element |
+| allow_clipping | boolean | `true` | If `clips_children` of an ancestor works on this element |
+| use_child_anchors | boolean | `false` | Use the `anchor_from` and `anchor_to` of the children of the UI element |
+| grid_position | Vector | | Position that the control will take inside the grid. Also allows modifying specific grid items of a hardcoded grid |
+| collection_index | int | | Index that the control takes in the collection |
+| size | Vector [width, height] | `["default", "default"]` | `"default"`, a number of pixels (`0` or `"0px"`), a percentage of the parent (`"50%"`), and sums such as `"100% - 4px"` |
+| max_size, min_size | Vector | `["default", "default"]` | Maximum and minimum size the element can have |
+| offset | Vector [x, y] | `[0, 0]` | Position relative to the parent, based on the top left corner |
+| anchor_from | enum | `center` | Anchor point in the parent element |
+| anchor_to | enum | `center` | Anchor point in the element |
+| orientation | enum | `vertical` | Direction the elements stack inside `stack_panel` (`vertical`, `horizontal`) |
+| grid_dimensions | Vector [columns, rows] | | Number of columns and rows the grid has |
+| maximum_grid_items | int | | Maximum number of items the grid will generate |
+| grid_item_template | string | | An element capable of handling collections |
+
+Anchors allow the elements to align to a certain point. `anchor_to` is the anchor point in the element that will be attached to the `anchor_from` in the parent element. For `anchor_from: center` and `anchor_to: top_left`, the top left point of the element is in the center point of the parent element.
+
+</Excerpt>
+
+Note: the wiki table says the default `"default"` is the same as "100%", but it differs per type (LAY-03, C-36). The wiki writes `grid_position` as `[row, column]`, but checking against vanilla shows `[column, row]` is correct (the LAY-29 correction below and C-48). Of the wiki's 3 values for `grid_fill_direction`, only `vertical` has vanilla evidence (LAY-26).
+
+### The element property reference of Microsoft Learn
+
+The MS Learn `minecraft:ui_element` document (commit a9fd1c0) lists element properties by name, type and description (Source: ms-learn). The main items this wiki treats as rules are as follows.
+
+| Category | Properties |
+| --- | --- |
+| Size and placement | `size` (`[width, height]`, numbers are pixels, `'100%'`, `'fill'`, `'100%c'`, `'100%cm'`), `min_size`, `max_size`, `offset` (`[x, y]` pixels), `anchor_from`, `anchor_to`, `layer` (higher is on top), `orientation` |
+| Display | `visible`, `alpha` (0.0~1.0), `propagate_alpha`, `color` (`[r, g, b]`), `clips_children`, `allow_clipping`, `ignored`, `shadow`, `grayscale` |
+| Texture | `texture`, `uv`, `uv_size`, `tiled`, `keep_ratio`, `bilinear`, `nine_slice_left/top/right/buttom` (original spelling), `fill` |
+| Text | `text`, `text_alignment`, `font_size`, `font_type`, `font_scale_factor`, `max_length`, `place_holder_text` |
+| Collection and grid | `collection_name`, `grid_dimension_binding`, `grid_item_template`, `grid_rescaling_type`, `factory`, `bindings`, `variables`, `controls` |
+| Input and focus | `button_mappings` (`from_button_id`, `to_button_id`, `mapping_type`, `input_mode_condition`), `focus_enabled`, `focus_change_up/down/left/right`, `default_focus_precedence`, `modal`, `consume_event`, `prevent_touch_input` |
+| Scroll and slider | `scroll_content`, `scroll_view_port`, `scrollbar_box`, `scrollbar_track`, `scroll_speed`, `slider_range`, `slider_steps` |
+| Accessibility | `tts_control_type_order_priority`, `tts_ignore_count`, `tts_skip_message` |
+
+The enum tables of this document (types, anchors, etc.) are empty and some names (`scrollbar_track`, `nine_slice_buttom`) differ from vanilla. Judge types by vanilla usage (table 3.1 below) (LAY-01, C-34, C-60).
+
+## Rules
+
+### 3.1 Control types
+
+These are the values used as `"type"` in vanilla 1.26.50.4 and their counts (VN exhaustive search). Note that they differ from the official enum (`forms/ui/ui_element.form.json`).
+
+| Type | Vanilla | Official enum | Use |
+| --- | ---: | :---: | --- |
+| `panel` | 4,092 | O | An empty box. Child placement, binding host |
+| `stack_panel` | 1,461 | O | Stacks children in one direction |
+| `image` | 1,318 | O | Texture |
+| `label` | 814 | O | Text |
+| `grid` | 132 | O | Grid, collection |
+| `input_panel` | 108 | O | A panel that receives input (hover, drag, modal) |
+| `custom` | 105 | O | What the engine draws through `renderer` |
+| `button` | 54 | O | Button (mostly written with the `common_buttons.*` templates) |
+| `factory` | 36 | **X** | A factory control that creates controls per kind of data (collections and factories chapter) |
+| `screen` | 7 | O | Screen root |
+| `collection_panel` | 3 | **X** | Collection + factory host |
+| `scroll_view`, `scrollbar_box`, `scroll_track` | 2, 1, 1 | O, O, X | Scroll components |
+| `edit_box`, `toggle`, `slider`, `slider_box`, `dropdown` | 2, 1, 1, 1, 1 | O | Mostly used through templates |
+| `tooltip_trigger`, `selection_wheel`, `label_cycler`, `image_cycler`, `grid_page_indicator`, `carousel_label` | 2, 1, 1, 1, 1, 1 | X | Special |
+
+- **[LAY-01]** Judge the list of valid types by vanilla usage, not by the official enum. The official enum is missing types vanilla uses, such as `factory`, `collection_panel`, `tooltip_trigger` and `scroll_track`. `scrollbar_track` in the wiki type table is a typo (vanilla has `scroll_track`, conflict C-34), and the legacy types `tab`, `grid_item` and `scrollbar` never appear in vanilla. `carousel_label`, which the wiki classifies as legacy, remains once in vanilla. `{vanilla}` (Source: VN, BC-facts official schema section, BW-doc)
+- **[LAY-02]** `scroll_box` is not a type but a **control name** in `ui_common.json`. Do not assemble scrolling by hand; reuse the `common.scrolling_panel` template with variables such as `$scrolling_content`. `{vanilla, working pack}` (Source: VN server_form.json `scrolling_panel@common.scrolling_panel`, BA expressions and operators chapter, AP, MJ 4.2-2)
+
+### 3.2 Size
+
+| Notation | Meaning | Vanilla |
+| --- | --- | ---: |
+| `16` or `"16px"` | Pixels | `px` 2,606 |
+| `"50%"` | A ratio of the parent size | many |
+| `"100%c"` | Size based on children. In the main axis of a stack panel, **the sum of visible children** | 2,201 |
+| `"100%cm"` | The largest child | 419 |
+| `"100%sm"` | The largest sibling | 263 |
+| `"100%x"`, `"100%y"` | A ratio of its own other axis size (square, fixed ratio) | 162, 150 |
+| `"fill"` | The remaining space in a stack panel | 668 |
+| `"default"` | The default size of the content (label text, etc.) | 963 |
+| `"100% - 4px"`, `"100%c + 12px"` | Expression | `%c +` 288 |
+
+- **[LAY-03]** Use the size keywords in the table above. The meaning "based on the other axis" for `%x`/`%y` was judged from a vanilla comment (`25%x * 56.25%`) and usage. The meaning of `"default"` differs by type: a panel appears to be 100% and a label the text size (conflict C-36). In the Cinnabar reconstruction, an omitted size is `100%c` if it is the main axis of a stack panel, the texture ratio for a ratio image, and the parent size otherwise (LAY-38). In size expressions `%c` and the like are written after `%` (LAY-36). `{vanilla, code, inferred}` (Source: VN store_search_screen.json:64 comment, VN exhaustive search, BW-doc, CN)
+- **[LAY-04]** **A stack panel gives no space to hidden (`#visible` false) children.** Collapsing a conditional row pulls what is below up, and turning power-of-two spacers on and off makes the sum the coordinate (pattern recipe 6). `{working pack, measured}` (Source: BA chapter 4, BC-S12)
+- **[LAY-05]** The position (`offset`) of a static control cannot be bound. To change a position, bind **the size of a spacer placed before it** so the stack pushes the next child. The Cinnabar reconstruction accepts an `[x, y]` binding on `#offset`, but measurement is followed (conflict C-44). `{measured, working pack}` (Source: BC-S12, BA chapter 4, conflict C-44)
+- **[LAY-06]** Make responsiveness with `max_size` and `min_size`. Example: with `"size": [314, "100% - 64px"]` and `"max_size": [314, 236]`, the window height shrinks on small screens. `{working pack, vanilla}` (Source: BA expressions and operators chapter, VN max_size 204 uses)
+- **[LAY-07]** If you put a background as `"100%sm"` inside a `"100%cm"` box, when a row inside hides, the box and background shrink together and what is below follows up. `{measured}` (Source: BC-S12)
+- **[LAY-08]** If you put a label and a `"100%sm"` button inside a `"100%cm"` panel, the button hitbox fits the text size exactly in each language. Using `"100%c"` in the same place makes the button fall below the label. `{measured}` (Source: BC-S10)
+- **[LAY-09]** When putting an icon-only button in a row whose height is set by its children, give an explicit square size. A percentage height does not decide the row height. `{measured}` (Source: BC-rules)
+
+### 3.3 Size, position and opacity bindings
+
+- **[LAY-10]** A size binding writes values to `#size_binding_x` and `#size_binding_y`. The value is a **multiplier**, not pixels. There are two interpretations of what it multiplies: the declared size (the interpretation of S12) and the parent size (the Cinnabar reconstruction: it turns value v into `v x 100%`, and `#size_binding_x_absolute` and `_y_absolute` are pixels). The S12 observation that the value becomes pixels inside a `[1, 1]` size frame matches both interpretations, and conflict C-14 leaned toward the parent size. Keep the declaration as `["100%", "100%"]`. The earlier record that an out-of-range value draws nothing was most likely caused by a `[0, 0]` declaration. Vanilla's only size binding (`resizing_xp_bar_with_hotbar`) is used with `use_anchored_offset: true`, and the wiki also says this property is needed (CN does not require it). Until it is reconciled with the S12 record that it works on a static control without it, using both together is safer (conflict C-37, note LAY-14). `{measured, code, conflict}` (Source: BC-S6, BC-S12, conflict C-14, BW-doc, VN hud_screen.json:319, CN)
+- **[LAY-11]** A size binding binds **both axes.** If only one axis is bound, the other axis becomes 0 and it looks as if the binding failed. In the Cinnabar reconstruction an unbound axis keeps its declared value, so if the declaration is `[0, 0]` that axis stays 0, the same phenomenon (conflict C-14). `{measured, code}` (Source: BC-S12, CN)
+- **[LAY-12]** What can be bound where depends on where the control was created. Whether a size binding needs `use_anchored_offset` is unresolved (conflict C-37). `{measured}` (Source: BC-S12, BW-doc)
+
+| Property | Static control | A cell created by a computed length factory | A cell of the engine `form_buttons` factory |
+| --- | --- | --- | --- |
+| `#size_binding_x/y` | works | does not work | works |
+| `#anchored_offset_value_x/y` (+ `use_anchored_offset: true`) | does not work | does not work | works |
+| `"alpha": "#alpha"` | only 0 or 1 (C-45) | - | only 0 or 1 (C-45) |
+| `visible`, text, `#collection_length` | works | works | works |
+
+- **[LAY-13]** A bound `alpha` applies only as 0 and 1. If you need translucency, make copies with different literal alpha and show only one. The Cinnabar reconstruction accepts the number of a bound `alpha` as is. If the measuring expression used a literal like `0.5`, that value is the integer 0 (EXP-27) and may have looked like "only 0 and 1", so it must be measured again with `.5` (conflict C-45). `{measured, conflict}` (Source: BC-S12, CN, conflict C-45)
+- **[LAY-14]** The combination of a size binding + `use_anchored_offset` + a collection cell crashed the client twice on a chest screen. Avoid this combination. `{measured}` (Source: BC-S6)
+- **[LAY-15]** Whether layout is redone when the size binding value changes while the screen is open was not measured. `{unverified}` (Source: BC-S6, BC text and localization chapter)
+
+### 3.4 Anchors and offsets
+
+- **[LAY-16]** `anchor_from` is the parent's reference point and `anchor_to` is its own reference point. The values are 9: `top_left`, `top_middle`, `top_right`, `left_middle`, `center`, `right_middle`, `bottom_left`, `bottom_middle` and `bottom_right`. `{vanilla}` (Source: VN all 9 used, value dictionary)
+- **[LAY-17]** `offset` is movement relative to the anchor and uses the same units as size (pixels, `%`, expressions). Example: `"offset": [0, "50%-68px"]`. `{vanilla}` (Source: VN hud_screen.json:2146)
+
+### 3.5 Layers and draw order
+
+- **[LAY-18]** `layer` is a **relative value** to the parent. To know which of two overlapping controls is in front, you must compare the layers of the whole ancestor chain. `{measured}` (Source: BC-rules)
+- **[LAY-19]** For siblings on the same layer, **array order does not guarantee draw order.** If front and back matter, give different layers. `{measured}` (Source: BC-rules, MJ 4.2-10)
+- **[LAY-20]** If the same data must be drawn in the order "all outlines -> all lines -> all nodes -> hover", raising layers within one item is not enough (the next item's outline covers the previous item). Draw the same collection several times with factories on different layers. `{working pack}` (Source: BA expressions and operators chapter)
+- **[LAY-21]** Layers of 50 or more are common in vanilla too. A warning that the layer is high can be ignored. `{vanilla, inferred}` (Source: MJ expressions and operators chapter)
+
+### 3.6 Clipping and overlays
+
+- **[LAY-22]** `clips_children: true` clips children to its own area. Giving a child `allow_clipping: false` draws it outside the ancestor's clipping (a tooltip that goes out of a scroll area). `{vanilla, working pack}` (Source: VN clips_children 27 uses and allow_clipping 7 uses, BA expressions and operators chapter, AP 4.8)
+- **[LAY-23]** To darken the surroundings when a tooltip shows, put a very large translucent black image (BA 4000x4000 alpha 0.3, AP 500x500 alpha 0.225) behind the tooltip and give it `allow_clipping: false`. `{working pack}` (Source: BA expressions and operators chapter, AP 4.8)
+- **[LAY-24]** If you need a background fitted to the text width, grow the parent to `"100%c"`/`"100%cm"` with a measuring label of `alpha: 0`, and draw the visible label separately on top. `{working pack}` (Source: BA expressions and operators chapter)
+
+### 3.7 Grids
+
+- **[LAY-25]** A grid is made with `grid_dimensions` (fixed size) or `grid_dimension_binding` (bound size), `grid_item_template` and `maximum_grid_items`. `{vanilla}` (Source: VN by property key 37, 79, 117 and 11 uses)
+- **[LAY-26]** `grid_fill_direction` uses only `vertical` in vanilla. Values like `left_to_right` have no basis. `grid_rescaling_type` uses only `horizontal` (21) and `vertical` (1) in vanilla and does not use `none` of the official enum. Of the 3 values of `grid_fill_direction` the wiki lists (`vertical`, `horizontal`, `none`), only `vertical` has vanilla evidence. `grid_rescaling_type: "vertical"` has a crash warning (LAY-32). `{vanilla}` (Source: VN, MJ 4.2-3 and 4, BW-doc, BW-dyn)
+
+### 3.8 9-slice and tiles
+
+- **[LAY-27]** For 9-slice, put a `.json` of the same name next to the texture file and write `nineslice_size` (`[left, top, right, bottom]` or one value) and `base_size`. Vanilla UI JSON does not use `nineslice_size` as a literal property and uses it once through a binding (`#banner_nineslice_size` -> `#nineslice_size`). `{working pack, vanilla}` (Source: BA expressions and operators chapter, AP 4.9, VN start_screen.json:1639)
+- **[LAY-28]** For a repeating background, give the image `"tiled": true`. `{vanilla, working pack}` (Source: VN 44 uses, AP 4.9, BA expressions and operators chapter)
+
+### 3.9 Rules added from the Bedrock Wiki comparison
+
+These are rules added by comparing the wiki (BW) documents with vanilla 1.26.50.4. Those with only wiki sentences are marked `unverified`, and those with in-game screenshots in the wiki are marked `measured` (third-party record).
+
+- **[LAY-29]** To place a static child directly in a grid cell, give the child `"grid_position": [row, column]` (from 0). Vanilla also uses it 71 times, and it is also used to overwrite a specific cell of an engine-made grid. `{vanilla, measured}` (Source: VN, BW-doc Control table, BW-dyn screenshot)
+- **[LAY-30]** For a grid whose count is decided by a binding, give `grid_rescaling_type: "horizontal"` and a fixed width and set the count with `#maximum_grid_items` (or `maximum_grid_items`). The column count is `floor(grid width / template width)` (160px / 32px = 5 columns, count 15 -> 3 rows). Set the height to `"100%c"`. `{measured}` (Source: BW-dyn screenshot)
+- **[LAY-31]** **A grid gives space to hidden (`visible` false) items too.** This is the opposite of a stack panel (LAY-04), so putting conditional items in a grid leaves empty cells. Make lists that must collapse with a stack panel. In the Cinnabar reconstruction too, grid cell positions are decided by index, so hidden cells take up space. `{code, unverified}` (Source: BW-dyn "Useful Information", CN)
+- **[LAY-32]** There is a warning that `grid_rescaling_type: "vertical"` can crash the game. Vanilla uses it once (`store_item_list_screen.json`). When making something new, use `horizontal`. `{unverified, vanilla}` (Source: BW-dyn, VN)
+- **[LAY-33]** `alpha` makes only that control transparent and is not propagated to children. To make children transparent too, give `propagate_alpha: true` (BND-15). `layer` may be negative and then draws below the parent. `{unverified, vanilla}` (Source: BW-doc Control table)
+
+### 3.10 Rules added from the Cinnabar engine reconstruction
+
+Cinnabar (`CN`) is Rust code that reconstructs the JSON UI parser of the 26.30 native client. The level is `code`, and `CN-run` is the result of this project running that evaluator directly. If it differs from game measurement, follow measurement (conflicts C-41~C-47).
+
+- **[LAY-34]** The size keywords `"fill"` and `"default"` are keywords only when exactly in lowercase. A unitless numeric string (`"10"`) becomes 0. Write it as a number or as `"10px"`. `{code}` (Source: CN-run)
+- **[LAY-35]** The sign in a size expression carries on to the next sign: `"100% - 10px 5px"` is 100% - 15px. Write a sign on every term. `{code}` (Source: CN-run)
+- **[LAY-36]** `%c`, `%cm` and `%sm` are written **after** `%`. `"100c%"` and `"50c%"` in vanilla progress_screen.json are read as parent-based `%`. `{vanilla, code}` (Source: VN progress_screen.json:21, 31 and 48, CN-run)
+- **[LAY-37]** `%cm` and `%sm` ignore the coefficient and are the maximum value itself. `"50%cm"` is also the largest child size. If you need half, shrink again with `%` in a wrapping panel. `{code}` (Source: CN-run, CN tests G06 and G07)
+- **[LAY-38]** Children of a stack panel ignore `offset`, and ignore anchors too unless `use_child_anchors: true`. The main axis size of an omitted stack panel is `100%c`. `{code}` (Source: CN test S04, CN)
+- **[LAY-39]** If minimum and maximum conflict (`min > max`), the larger value is clipped to the maximum. `fill` outside the stack's main axis is 0. `{code}` (Source: CN)
+- **[LAY-40]** With a stack's `use_priority: true`, when the sum of children overflows, children with the lowest `priority` are kept first (0 or lower always kept) and children that do not fit are hidden. `{code}` (Source: CN test S05)
+- **[LAY-41]** A grid cell ignores its own `anchor` and `offset`. A template grid fills cells in row-first creation order and does not create cells beyond capacity. `{code}` (Source: CN tests D01 and D08)
+- **[LAY-42]** A scroll view searches for the role controls (viewport, content, track, box, bar panel) breadth-first by name, so their position in the tree is free, but if any one of the four is missing it does not scroll. The bar panel hides when the box is 10% or more of the track and the content fits. `{code}` (Source: CN tests V02, V07 and V06)
+- **[LAY-43]** The anchor value is decided by whether the name contains `left`, `right`, `top` or `bottom`, and the default is `center`. `{code}` (Source: CN)
+
+### 3.11 Rules added from the research server measurement
+
+These were measured on Windows 1.26.52 while building the research server (`DF`). They came from a structure that draws several screens with one server form.
+
+- **[LAY-51]** Putting two columns as two vertical stacks in a horizontal `stack_panel` gave height 0. Put two vertical stacks attached to the top left and top right inside a `panel` (height `100%cm`). `{measured}` (Source: DF)
+- **[LAY-52]** With a left panel and a right detail in a horizontal stack, `100%c` added the two heights and `100%cm` collapsed the right detail. Put the panels inside a `panel` with a top-left reference and `offset`, and use that `panel`'s `100%c` (the child extent). `{measured}` (Source: DF)
+- **[LAY-53]** Fitting the window height to the content with `100%c` made the window and content refer to each other and collapse (buttons went outside the window). Keep a server form window at a fixed pixel size and handle overflowing content with an inner `scrolling_panel` or server-side paging. Phones draw the UI large, so a window bigger than the vanilla inventory (326x166) does not fit on screen. `{measured}` (Source: DF)
+- **[LAY-54]** Making a list cell the content height (`100%c + 8px`) made an empty list a thin bar and let a long list go outside the window. Fix the list cell to the window height and put `common.scrolling_panel` inside it. If you fix a button cell at a fixed height, a scrollbar appears when a body is attached above it, so use a `stack_panel` `100%c` so that it takes only as much as the buttons. `{measured}` (Source: DF)
+
+### 3.12 Rules added from the server form test add-on measurement
+
+These were measured on mobile with the server form factory and lag test add-on (`FFR`) (2026-11-14). The add-on setup is in [Server form research screen](../design/server-form-research-screen.mdx).
+
+- **[LAY-55]** When the label of a cell created by a factory or grid inside a scroll area was put on the same layer as the background image (default 0), icons and progress bars showed immediately but text was empty until something touched it (sometimes only the touched cell appeared). Putting the label on a layer higher than the background (icon 2, label 3) made everything visible as soon as it opened. Vanilla button labels are also `layer: 2`. `binding_condition`, having an expression or not, having a factory or not, clipping and scroll refresh had nothing to do with this symptom. `{measured}` (Source: FFR)
+- **[LAY-56]** The `offset` given to `stack_panel` children did not move the position the stack decided. When 48 cells were put in a horizontal stack and folded per row with `offset`, they ran in one line out of the window. For 2D layout, put horizontal stack rows inside a vertical stack. `{measured}` (Source: FFR)
+- **[LAY-57]** A scroll area covering the whole screen (`common.scrolling_panel`) took over touches of that area even when its content was empty. When it was always placed in `$screen_content`, the vanilla buttons and close button of other forms could not be pressed and only scrolling worked. Create or show a scroll area only in the form that uses it. `{measured}` (Source: FFR)
+
+## Facts added by community reports (community)
+
+(Source: private research) All are at the report level.
+
+- The type of a text control is `label`, not `text`. The anchor value is `left_middle`, not `middle_left` (LAY-16).
+- The `"default"` size differs by type: a panel 100%, a label the text size, a stack panel `["100%","100%c"]`, a grid `["100%c","100%c"]` (the same as LAY-03 and LAY-38). There is a report that the unitless string `"10"` gives a `Dangling number` error, and Cinnabar reads it as 0 (LAY-34).
+- Several reports say hidden grid items take up space, so the `unverified` of LAY-31 has effectively been confirmed (D-14). Buttons that will always be hidden (tab, back) go at the end of the collection (COL-35).
+- For bottom alignment inside a stack panel, put a `["100%","fill"]` panel as the first child so it eats the remaining space.
+- If you need a moving position, use `use_anchored_offset: true` and `#anchored_offset_value_x/y` (a ratio against the parent size). A fixed-size parent and a top-left anchor are the most stable. Reports that a view binding on the `offset` array worked and did not work conflict (D-15, LAY-05).
+- There is a report that `#size_binding_x/y` is "a ratio against the parent (2.5 is 250%), pixels are `_absolute`", which supports the Cinnabar interpretation (LAY-10). There is a report that the control needs an explicit placeholder size like `"size": [0, 0]`, the value must be a number, and a wrong value crashes. Reports on whether `#anchored_offset_value_*_absolute` exists are mixed, so it is not used (D-22).
+- There is a report that a bound `#alpha` is unstable, for example 0.75 not showing, so produce intermediate opacity with animation or color (D-16, LAY-13).
+- The grid property name is `grid_dimensions` (`grid_dimension` gives a type error). Subpixel gaps sometimes appear in windowed mode. The GUI scale can neither be read nor ignored, so use `%` rather than fixed pixels.
+- Scrolling: use the variables of `common.scrolling_panel`, `$scrolling_pane_size` applies only when specified in `size`, and hiding the scrollbar is `"$scroll_bar_and_track_size": [0,0]` (LAY-02, LAY-42).
+- Phones draw the UI large, so the screen height is small at about 200px. Keep a server form window at fixed pixels and handle overflowing content with inner scrolling (LAY-53, LAY-54).
+
+## Proposals (not applied)
+
+These are proposals from the new survey. They have not yet been merged into the body, and the numbers are the final numbers of the merge record.
+
+- **[LAY-44]** (proposal) Use only `+` and `-` in size and position expressions. The 551 kinds of vanilla size strings (12,806 uses, 12,712 elements on recount) never have `*` or `/`, and Mojang does ratio calculations in a comment and then writes the resulting coefficient (`"34.628%x + 2px"` in `store_common.json:5870`, a comment in `store_search_screen.json:64`). Decimal coefficients (`56.25%x`, `1.1249px`) and negative terms (`"-50% + 10px"`) are used. `{vanilla}` (Source: jua-jsonui-schemas, bedrock-samples) Measurement task: whether using `*` in a size expression (`"50% * 2"`) is ignored or an error.
+- **[LAY-45]** (proposal) Write `anchor_from` and `anchor_to` together. Vanilla writes both in 2,985 of 2,997 places (99.6%), and in 106 of those they differ from each other (12 places write only one, 6 each). Tools assume different defaults when they are omitted (JsonForge and Cinnabar assume `center`, and the w1zardz editor treats `anchor_to` as equal to `anchor_from`). `{vanilla, code}` (Source: jua-jsonforge, jua-bedrock-json-ui-editor, jua-cinnabar, bedrock-samples)
+- **[LAY-46]** (proposal) Do not give a child inside a `"100%c"` parent a `%` size on the same axis. The child size decides the parent and the parent size decides the child, making a cycle where nothing is drawn, according to a record by a tool author. Give children of a content panel pixels or `default`. The merge record treated the evidence as a comment by the editor author, not engine code, and lowered the level to `vanilla, unverified` (the basis is the vanilla 0/1,972 tally). (Source: jua-jsonforge, bedrock-samples) In the same merge, a reinforcement to LAY-17, "the axis is not flipped even for right and bottom anchors" (C-49 resolved), was proposed together: in the distribution over 206 vanilla files, right-anchor x is negative 104 to positive 37 and bottom-anchor y is negative 190 to positive 45, and `common.close_button` uses `[-2, 2]` with a `top_right` anchor (`ui_common.json:3239-3246`).
+- **[LAY-47]** (proposal) The UI pixel size of a screen is not a fixed value. It varies with window size and GUI scale, and visual editors also assume different values (w1zardz 427x240, 520x240, 320x240, JsonForge 384x216). Fixed px are drawn multiplied by an integer scale, and vanilla layouts assume minimum virtual screens of pocket 320x210 and desktop 376x250 (comments at `ui_common.json:6380` and `6430`). If you keep the top-level window within this size it is not cut off at any resolution. Elements attached to the screen edge are placed with the corresponding corner anchor and a small pixel offset. But the scale system changed in 1.26.0 (the minimum scale is half the maximum, and handheld devices are DPI based), so the scale calculation itself must be rechecked in 1.26.50 (MS Learn Update1.26.0). `{vanilla, unverified}` (Source: jua-netease-docs, ms-learn, jua-bedrock-json-ui-editor, jua-jsonforge)
+- **[LAY-48]** (proposal) `common.scrolling_panel` creates only one of the `scroll_touch` (touch) and `scroll_mouse` (mouse) subtrees depending on `$touch` (`ui_common.json:4718-4750`). The path to the scroll content and the size variables (the `_touch` pair) differ per input mode, so when pointing inside a scroll with path keys or `source_control_name`, consider both paths or pin one side by passing `"$touch": true` to the instance (`resource_packs_screen.json:2685` does the same). `{vanilla}` (Source: jua-netease-docs, bedrock-samples)
+- **[LAY-49]** (proposal) `#anchored_offset_value_x/y` pushes in the anchor direction by value times the parent size on a control with `use_anchored_offset: true`. It has no effect if `anchor_from` is `center`. To use it on a static control, give a corner or edge anchor. `{code, unverified, conflict}` (Source: jua-cinnabar, jua-json-ui-examples, jua-bedrock-core) Conflict C-61.
+- **[LAY-50]** (proposal) When drawing an engine collection grid (`hotbar_items`, etc.) in another shape, copy the vanilla definition while removing the `grid_dimension_binding` property itself and fixing `grid_dimensions`. Just emptying `bindings` makes the dimension binding automatically reattach in the Cinnabar model. `{code, unverified, conflict}` (Source: jua-cinnabar, jua-json-ui-examples, bedrock-samples) Conflict C-62.
+- **Correction (to be applied)**: the `grid_position` of LAY-29 is `[column, row]` (C-48 resolved). The evidence is `inventory_screen.json:1200` (in the 3x3 crafting cells, `crafting_input_item_top_mid` is `[1, 0]` and `mid_left` is `[0, 1]`), `trade_screen.json:327` (the children of the `[4, 1]` grid are `[0, 0]` to `[3, 0]`) and `inventory_screen.json:1054` (the children of the armor `[1, 4]` grid are `[0, 0]` to `[0, 3]`).
+- **Reinforcement proposals (not applied)**: add the `$touch` branch of `scrolling_panel` to LAY-02, vanilla's 0 uses of `wrap_content` to LAY-03, the third evidence of the China edition documentation (C-37) to the LAY-10 and LAY-12 tables, the wiki and NE `layer` descriptions to LAY-18 and LAY-33, the Mojira record to LAY-27, and to LAY-40 the 3 vanilla `#priority` bindings (`store_common.json:732, 8239, 8503`, parent stack `use_priority: true`) and the MS Learn Update1.26.0 description. The caution that previews of visual editors differ from engine rules (editors approximate `%c` and stack layout) moves to the debugging chapter.
+
+## Conflict verdicts (related to this chapter's rules)
+
+| ID | Topic | Claim and evidence | Verdict |
+| --- | --- | --- | --- |
+| C-14 | `#size_binding` unit | S6 says a 0~1 ratio of the declared size, S12 says a multiple of the parent size (pixels inside a `[1,1]` frame). The S6 body itself says the S6 failure was due to the `[0,0]` declaration, and S12 is later. Cinnabar turns value v into `v x 100%` (parent-based) and turns `_absolute` suffix bindings into pixels | Partly resolved: it is a multiplier. It leans toward the parent size (code). The upper limit is unconfirmed |
+| C-34 | Control type `scrollbar_track` | The wiki type table lists it as a type, but vanilla has `scroll_track` once and `scrollbar_track` 0 times | Resolved: `scroll_track`, the wiki typo |
+| C-36 | `size: "default"` | The wiki says it is the same as `"100%"`. Of 963 vanilla uses, many are label axes. In Cinnabar an omitted size is `100%c` for a stack main axis, the texture ratio for a ratio image, and the parent size otherwise | Partly resolved (inferred, code): differs by type and axis |
+| C-37 | The condition of `#size_binding` | The wiki says `use_anchored_offset` is needed, S12 says it works on a static control. Vanilla's only size binding (`hud_screen.json:319`) is used with `use_anchored_offset: true`. Cinnabar does not require it but may be a lenient implementation. NE is a third source | Open: the S12 experiment setup needs checking. Until then use them together (note the LAY-14 crash combination) |
+| C-43 | A binding expression without `#` | Measurement discards the whole `bindings` array, Cinnabar only that one binding | Measurement first (BND-05) |
+| C-44 | Static `offset` binding | Measurement says it does not work (LAY-05), Cinnabar accepts `[x, y]` for `#offset`. It may be a difference by creation site (static, factory) | Measurement first: LAY-05 kept |
+| C-45 | Bound `alpha` | Measurement says only 0 and 1, Cinnabar accepts the number as is. If the measuring expression used a `0.5` literal, it became integer 0 and may have looked that way | Open: measure again with `.5` |
+| C-48 | The axis order of `grid_position` | Comparison of three vanilla places | Resolved: `[column, row]` |
+| C-49 | The offset sign of right and bottom anchors | Vanilla distribution and `common.close_button` | Resolved: not flipped |
+| C-56 | Search scope without `resolve_sibling_scope` | Breadth-first from the screen root (Cinnabar, vanilla) | Resolved: the Cinnabar and vanilla side |
+| C-61, C-62 | Static `#anchored_offset_value`, a grid that left `grid_dimension_binding` | LAY-49 and LAY-50 above | Open |
+
+## Items that need measurement
+
+- The upper limit of size bindings and relayout on an open screen (C-14, LAY-15), whether `use_anchored_offset` is needed (C-37).
+- Whether `"100c%"` is parent-based and whether `"50%cm"` is the largest child as is (LAY-36, LAY-37).
+- Whether giving the binding `#alpha` `.5` makes it translucent (C-45), and `#anchored_offset_value` of a static panel with a `top_left` anchor (C-61).
+- Whether a grid gives space to hidden items (LAY-31), whether a `100%` child inside a `100%c` parent is drawn (LAY-46), and the relation between the window size at which a `[376, 250]` panel starts to be cut off and the GUI scale (LAY-47).

@@ -1,0 +1,83 @@
+---
+title: Server-driven Ore UI screen operations notes
+description: Structure, how to write the data store, Gameface input behavior, inventory click rules, client settings and things to watch when a server runs menus and inventories as Ore UI DDUI screens.
+sidebar_position: 9
+sources:
+  - private-research
+  - repo-ore-ui-loading
+---
+
+# Server-driven Ore UI screen operations notes
+
+These are findings from running the experiments in the previous pages as menu screens on a real server. The server sends only a screen name and data, and the layout is decided by the pack's in-game page. (Source: private research)
+
+## 1. Structure
+
+- Page: can be built with React 18 + react-facet (TypeScript). Components are built on ore-ui-react and `@react-facet/dom-fiber`.
+- Resource pack: replaces the in-game page `hbui/gameplay.html`. It loads the vanilla bundle and then adds its own CSS and JS. An unencrypted pack needs an empty `content.zipe` for the page to be used ([resource pack delivery](../server/resource-pack-delivery.mdx)).
+- Server: opens the DDUI screen, sends the root to the data store and receives presses. The client's DDUI packets are intercepted in a packet hook. If no new screen is shown after a press, closing the screen feels the same as a form button.
+- When a new root for the same form arrives, React patches only what changed, so the window, scroll position, input field text and loaded item images stay as they are. A root for a different form is redrawn from scratch.
+- Gameface does not send `click` to a plain `div`, so presses are received with `mousedown`.
+
+## 2. Packets and the data store
+
+| Direction | Packet | How to write it |
+| --- | --- | --- |
+| S to C | `ClientBoundDataDrivenUIShowScreen` | `ScreenID` `minecraft:custom_form`, `FormID` is a new number per form, `DataInstanceID` 1 |
+| S to C | `ClientBoundDataStore` | Writes the form number, root and settings to `custom_form_data_1` of the `minecraft` store |
+| S to C | `ClientBoundDataDrivenUICloseScreen` | Closes the screen |
+| C to S | `ServerBoundDataStore` | An event the page wrote to the event path |
+| C to S | `ServerBoundDataDrivenScreenClosed` | The screen was closed |
+
+- Instead of value patches, you can send the whole root of the same form anew every time it changes and let the client use the newest one. In that case every write is a `Change` and `UpdateCount` is incremented by one across the whole server. To use the path update `Update`, set `PropertyUpdateCount` equal to the last `Change.UpdateCount` of that property and raise only `PathUpdateCount` ([DDUI guide](./ddui-server-guide.mdx)).
+- When a screen is swapped and reopened, the client reports the previous form's close after the new form opens, so handle a close only when its `FormID` equals the current form.
+- The phone back button can arrive as a key other than Esc (Android `KEYCODE_BACK` 4, browser back 166, `GoBack`, `BrowserBack`). The page also treats these keys as close.
+- A hidden vanilla form (`custom_form` root) also writes to its own path. If the path contains `close`, you can receive it with Esc.
+- What a pack cannot do: change the vanilla DDUI layout, open a real container with Ore UI, or change the HUD. Container screens are decorated with JSON UI.
+
+## 3. Gameface input and layout behavior
+
+- When the window size changes, Gameface resolves a press to the position before the change. So windows of the same size switch an open screen in place, and windows of a different size open the screen anew.
+- Gameface does not deliver a press to an empty transparent element. A press on an empty spot inside the window is handled in the document's `mousedown` and `touchstart` by checking whether the target is inside the window.
+- On touch, a `mousedown` follows a tap. A `mousedown` within 700ms after a tap is treated as the same tap and ignored.
+- Gameface subtracts the `min-height` of a growing box from the height it receives, so do not put `min-height` on a growing row.
+- Gameface does not stretch an empty flex item, so set the row and cell sizes of a grid in percent.
+- The page has no canvas (`getContext`). Pixel art (for example an 8x8 skin face) is sent by the server as a pixel list and drawn by laying boxes out as rows and cells.
+- There is no engine command that opens the game chat window from a page. Commands are taken from an input field on the page and sent to the server.
+- To leave a server, the page can call vanilla `vanillaGameplayLeaveGameCommandGroup.leaveGame()` and let the client leave on its own. Only for a client without this command does the server drop the connection.
+
+## 4. Inventory click rules the server implements
+
+Because a real container cannot be opened with Ore UI, drawing an inventory screen with Ore UI means the server has to implement vanilla inventory handling itself. The Bedrock edition rules are as follows.
+
+- Left click: an empty cursor picks up the whole slot, a held stack is placed into an empty slot or onto the same item as far as it fits, and is swapped with a different item.
+- Right click: an empty cursor picks up half (rounded up), and a held stack places one into an empty slot or onto the same item. Nothing happens over a different item.
+- Double click: a second left click on the same slot within a short time (250ms) with the same shift state is a double click. Only while holding an item, it gathers the same item into the cursor, and with an empty cursor it is a normal click. A shift double click moves every item of the first shift-clicked kind out of the inventory.
+- Drag: a press holding an item places it into that slot right away, and while dragging, each time a new slot is touched, the stack held before the press is redistributed across all touched slots (left spreads evenly with the remainder staying on the cursor, right places one each).
+- Press outside the window: drops the held stack at the feet (one for right click).
+- The server has to hold the cursor item for each player. When the screen closes, it returns it to the inventory, and drops it at the feet if there is no room.
+- Touch screens have no slot tooltip.
+
+## 5. Client settings
+
+An Ore UI page can read and change the settings the game's settings screen uses ([page environment](./page-environment.mdx)).
+
+- The UI profile is `video.ui_profile` (0 is classic). The `UIProfile` in the login data tells you the profile of the connected client.
+- The content logs are `creator.contentLog.gui.enable`, `creator.contentLog.gui.showErrors`, `creator.contentLog.file.enable` and `creator.scriptDiagnostic.enableClient`.
+- A setting is a game option stored on the device, so it remains after leaving the server. The setting id is the name in the settings screen tree. Get the player's consent when the server changes it.
+
+## 6. Notifications and input
+
+- Chat is not visible while a screen is open, so send notifications as toasts.
+- The client shows toasts one at a time in order. Merge a burst of notifications on the server with a gap between them.
+- While the use-item button is held, the client keeps sending use packets repeatedly. If you open a screen on item use, debounce it.
+
+## 7. GUI scale and safe zone
+
+The GUI scale arrives as the `html` font size, so `rem` sizes follow it. The safe zone comes from the facet `core.safeZone` and is stored in CSS variables, and that margin is added to the screen and to boxes attached to the edge. On phones and tablets, the camera cutout and system handles can intercept presses at the edge.
+
+## 8. Things to keep in mind
+
+- **When the game updates, match the vanilla bundle file names (hashes) written in the pack's `hbui/gameplay.html` to the install.** If they are wrong, the whole in-game Ore UI does not appear. Match the font file names in the CSS `@font-face` too.
+- Set the screen-size box with `vw` and `vh`, not percent (on iPad the body height is 0).
+- Do not depend on the vanilla CSS and JS for a screen (on iOS the pack's `hbui` folder replaces the game's wholesale). The pack CSS declares fonts directly through `ui://hbui/fonts`.

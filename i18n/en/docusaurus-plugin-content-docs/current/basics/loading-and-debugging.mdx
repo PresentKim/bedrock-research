@@ -1,0 +1,46 @@
+---
+title: "Diagnosing load failures: reload, cache, Content Log"
+description: "Content Log setup, reload scope, cache hiding edits, common load failure causes"
+sidebar_position: 4
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+---
+
+## Concept
+
+A pack that "does not load" almost always comes down to one of four causes: (1) a manifest error, (2) a JSON syntax error, (3) a cached old pack, (4) a path or name error. Start the diagnosis in the **Content Log**. Turn on the Content Log GUI and file output in Settings > Creator, and per-file JSON, Molang and Geometry errors appear. It is common for "One of your resource or behavior packs failed to load" to show even though the log is clean, and it can be ignored.
+
+## Example check order
+
+1. Turn on the Content Log, clear the log, create a new world, apply the pack and close the game (the log is flushed only when the game closes).
+2. Check that `manifest.json` is valid JSON, that the header UUIDs differ between the BP and the RP, and that the version format matches `format_version`.
+3. Check that the pack copy inside the world is not an old version, then raise the version and try again.
+4. Check that no leftover zip or second copy of the same pack remains in the development folder.
+
+## Rules and reports
+
+### Reload and cache
+
+- **`/reload`** rereads scripts and functions of development packs, and **`/reload all`** also rereads root tables and more. Resource packs are not reloaded, so reopen the world. If you added a new function/script file (including .js), close and reopen the world (since 2026-02). Binding `/reload` to a key macro is convenient.
+- **The bug where `/reload all` broke resource packs was fixed in 26.0.**
+- **VV/capabilities changes after a manifest edit were not applied by reload**, and the game had to be fully restarted.
+- **A cached old pack hides edits**: raise the version or test in a new world. It is also common to have two copies of the same pack so that the wrong one is equipped. After editing a UUID/version, delete the RP/BP copies in the world and raise the version.
+- **"Resource pack has item definitions not found in the behavior pack"**: the BP copy in the world was an old version.
+- **An unsaved editor buffer** caused a phantom import failure in one case, and a bridge. v2 root folder problem stopped sync in another. Pointing the bridge. watch mode at the shared com.mojang syncs automatically on save.
+
+### Debugging with the Content Log
+
+- **Turn on the Content Log GUI and file output in Settings > Creator**. Per-file JSON/Molang/Geometry errors appear. In some cases, such as a wrong item ID, no log is left at all. Clear the log, restart, create a new world and close the game so that the log is flushed. Ctrl+H shows the history. To see `console.log`, include info in the log level.
+- **An item with no icon and no log** is usually a case where the BP manifest lacks the RP dependency or the file name is wrong.
+- **Harmless errors**: `[Blocks] ... Unexpected version for the loaded data` (a false error in 26.10, fixed in 26.20), "couldn't find version 1.26.10 for blocks", duplicate vanilla recipe errors not caused by a pack, recipe errors caused by the Education Edition toggle, `attack_interval is disabled (max <= 0)` on 1.21.130 hostile mobs (hidden by raising the log level to warn), the copper_golem TextureSet Inform message (reportedly fixed in 26.0).
+- **Error location**: check "line N, column M" in the message first. bridge. v2 can show schema errors that the game does not report. Validation aids: https://github.com/Blockception/Minecraft-bedrock-json-schemas , mctools.dev, jsonlint.com.
+- **Silent failures**: a vanilla entity override with a syntax error falls back to the vanilla definition with no error. A missing geometry file makes the item very small or invisible with no error. "Item is an invalid json object" is a JSON syntax error.
+- **Unresolved**: packs duplicated on import even after changing the version, and "Multiple manifests found" appearing when there is no second manifest.
+- **`Missing referenced asset geometry.x`** errors are often a cache problem or an identifier clash with another pack.
+- **Content log files can grow to 50~500GB**, so clean them up.
+- **Schema warning "this member was found in the input, but is not present in the Schema"**: comes from old vanilla BP files (`conditional_bandwidth_optimization`, `physics` and `pushable` of `dragon_fireball`) and cannot be removed by overriding. In general, adding `min_engine_version` sometimes resolves schema errors.
+- **A Blockception `.mcattributes`** file can silence validation errors.
+- **JSON pitfalls**: a trailing comma, too many closing brackets or curly (typographic) quotation marks break the whole file. `//` comments mostly work in the game (the editor warns).
+- **Add-on files made by chatbots are often wrong**. Use the MS docs, bedrock.dev and wiki.bedrock.dev as the standard.

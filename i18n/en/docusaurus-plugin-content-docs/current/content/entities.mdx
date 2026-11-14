@@ -1,0 +1,637 @@
+---
+title: Entities (behavior side)
+description: A practical rulebook for BP entity format_version, component groups and events, properties, damage, AI, movement, riding, projectiles, breeding, spawning, inventory, client animation and player.json.
+sidebar_position: 3
+sources:
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+---
+
+# Entities (behavior side)
+
+This page covers the behavior of custom and vanilla entities. The rendering side (materials, particles, long-distance rendering techniques) is covered by the rendering section, and this page holds only BP entities, the behavior wiring of client entities, `player.json` and `player.entity.json`. The evidence is 130 community research notes from 2025-10-22 to 2026-11-13 (Source: private research). The `(confirmed)`, `(conflicting)`, `(single report)` and `(unverified)` at the end of sentences are the verification levels at the time of research.
+
+Entities change state with "component groups + events + `client_sync` properties", and complex logic is handed to the Script API.
+
+## Concept: components, component groups, events
+
+A BP entity file (`BP/entities/*.json`) has four chunks under `minecraft:entity`: `description`, `components`, `component_groups` and `events`. Confusion here is the most common cause of errors, so the distinctions are made clear. (Source: bedrock-wiki, entity-intro-bp)
+
+- A **component** is a feature unit made by Mojang. You cannot make your own, and the whole list is hardcoded. The form is `"minecraft:<name>": { settings }`, and if placed in `components` it is always on.
+- A **component group** is a "folder" that holds components. The name is free (vanilla adds a suffix like `minecraft:cat_persian`, but it is not a component). Components inside a group do nothing until the group is added. You cannot borrow the groups of another entity.
+- An **event** is the syntax that adds/removes groups. Events also must be defined by each entity (to use `minecraft:ageable_grow_up` in your own entity you must make the group and the event yourself). What an event can add/remove is only component groups, and you cannot add or remove a component directly. If the same component is in an already-on group, the group added later overrides it.
+
+A minimal example where the size doubles when a player interacts.
+
+```json
+{
+  "format_version": "1.26.40",
+  "minecraft:entity": {
+    "description": { "identifier": "wiki:example", "is_spawnable": true, "is_summonable": true },
+    "components": {
+      "minecraft:type_family": { "family": [ "wiki_mob" ] },
+      "minecraft:collision_box": { "width": 0.6, "height": 1.8 },
+      "minecraft:health": { "value": 20, "max": 20 },
+      "minecraft:interact": {
+        "interactions": [
+          { "on_interact": { "filters": { "test": "is_family", "subject": "other", "value": "player" },
+                             "target": "self", "event": "wiki:on_interact" } }
+        ]
+      }
+    },
+    "component_groups": {
+      "wiki:interacted": { "minecraft:scale": { "value": 2 } }
+    },
+    "events": {
+      "wiki:on_interact": { "add": { "component_groups": [ "wiki:interacted" ] } }
+    }
+  }
+}
+```
+
+The responses an event can give are as follows (Source: bedrock-wiki, entity-events).
+
+```json
+"wiki:ranged_attacker": {
+  "add": { "component_groups": [ "attacker", "ranged" ] },
+  "remove": { "component_groups": [ "standby", "melee" ] }
+},
+"wiki:execute_event": {
+  "queue_command": { "target": "self", "command": [ "summon pig", "say A pig appears" ] }
+},
+"minecraft:entity_spawned": {
+  "randomize": [
+    { "weight": 95, "add": { "component_groups": [ "minecraft:cow_adult" ] } },
+    { "weight": 5,  "add": { "component_groups": [ "minecraft:cow_baby" ] } }
+  ]
+}
+```
+
+`randomize` picks only one item by weight. `queue_command` runs at the end of the tick. `sequence` applies filters to change groups conditionally. Vanilla uses these tools to make behavior such as a zombie turning into a drowned in water, fox color variants (`minecraft:fox_red`) and Enderman anger. The vanilla chicken splits `ageable`, `breedable`, `loot` and `experience_reward` into the `minecraft:chicken_baby`/`minecraft:chicken_adult` groups and uses the `climate_variant` enum property (`client_sync: true`) (Source: bedrock-samples, behavior_pack/entities/chicken.json, format 1.26.50).
+
+## Key summary
+
+1. A `not present in the Schema` warning mostly comes from a low `format_version`. Raise it to the latest value (entity `1.26.40` as of 2026-08) and turn on the Content Log. After raising it, fix old forms such as `"minecraft:fire_immune": true` to `{}`.
+2. `run_command` in events became `queue_command`. What events can do is only register command queues, add/remove component groups and set properties. Hand heavy logic to scripts with `/scriptevent`.
+3. Component groups override. Removing a group does not return to the base `components` value. If the same component is in several groups only one works, and `minecraft:timer` is valid only once per entity.
+4. A resource pack cannot read tags. Give a BP property `client_sync: true` and read it in the RP with `q.property('ns:x')`. Properties are at most 32 per entity.
+5. The value form of `deals_damage` in `damage_sensor` differs by version and reports disagree. Reports also disagree on whether `/kill` can be blocked (there are reports of `min` of `minecraft:health` and damage_sensor `cause: all`, and also an answer that it cannot be blocked).
+6. An attacking mob needs navigation, movement, `follow_range`, a targeting goal, an attack behavior and `minecraft:attack`, all of them. Every `behavior.*` needs a `priority` (lower is higher priority).
+7. Climbing ledges is done with `minecraft:variable_max_auto_step`. `can_climb` does not make it climb walls.
+8. Custom entities are not rendered beyond about 64~70 blocks.
+9. Projectiles depend heavily on `runtime_identifier`. When firing from scripts, use `projectile.owner = player` then `shoot()`. Since the 2026-08 stable release projectile damage is proportional to speed.
+10. To override `player.entity.json`, always start from the latest vanilla file of the installed game. The `player.json` of several packs does not merge and only one applies.
+
+## 1. File basics, format_version, error resolution
+
+### format_version and schema errors
+
+- `found in the input, but is not present in the Schema` mostly means the entity `format_version` is low compared to the component. It was reported for `minecraft:is_sheared`, `rotation_locked_to_vehicle`, `remove_in_peaceful`, `swing` in interact and `deals_damage` of `damage_sensor`. Raise to 1.21.100 or higher. Putting an event or a listener such as `minecraft:on_death` in the wrong place gives the same warning. Events must be inside `"events"`.
+- The latest format is roughly the same as the latest game version (entity 1.26.40, game 26.44 as of 2026-08-20). bridge. does not support format 1.26.20 or higher, so VS Code is recommended.
+- If an entity disappears after raising the format, the cause is an old form such as `"minecraft:fire_immune": true` (content log: `expected an object`). The Blockception VSCode plugin flags old components.
+- As a counter case, there is a report that a mob that did not chase was fixed by adding the `attack` component and changing the format from 1.26 to 1.16. (single report)
+- Change `run_command` to `queue_command`. If a component exists only in format 1.16.0, replace it with the Script API.
+- `minecraft:remove_in_peaceful` was added in 1.21.90.20 and dropped from the example in 1.21.90.25 with no changelog entry and gives a schema error. Together with `is_sheared` it is uncertain whether it really exists. (unverified)
+- Molang cannot be used in most component values. They accept only constants, strings are parsed as 0.0, and putting `query.scoreboard` in `minecraft:health.max` kills the entity. To change values, use component groups. Molang expressions cannot be used in filter `value` either.
+- `minecraft:scale` is an object: `{ "value": 0.5 }`.
+- Wrongly writing a component that should be an object, such as `"minecraft:burns_in_daylight": true`, can make the entity disappear with no content log error (no spawn egg and cannot be summoned). It was fixed by changing to `{}`. (single report)
+- In format 1.26.50, `interactions` of `minecraft:interact` must be an array (several interaction triggers can be placed). This came to light while raising the format to use `leap_at_target`.
+
+### Common load errors
+
+- JSON parse errors give a line number in the content log. `Missing ',' or '}'` literally means a missing comma or a leftover bracket. Check with an IDE, bridge. or jsonlint.
+- `[Actor][error]-error parsing entity/x.json:` with no details is resolved, if the JSON is fine, by restarting the game or reimporting the pack (clearing the cache).
+- Typo errors: `child 'intitial_state' not valid here`, `overlay_colour` -> `overlay_color`.
+- Namespaces cannot be used in geometry identifiers (`geometry.bm65:name` is an error). Use a namespace only in the entity `identifier`. Adding a namespace to animation/material names inside a client entity makes even projectiles invisible. A colon cannot be used in animation names.
+- Folder names: the RP entity folder is `entity` (not `entities`), geometry is `models/entity/`, and the geometry ID must match the client entity.
+- A `.mcaddon` must have the BP and RP folders at the top level and must not be nested inside `behavior_packs`/`resource_packs`.
+- If spawn eggs disappear or baby horses/rabbits reset in an old pack, raise the manifest `min_engine_version` to the current value (for example `[1,21,130]`).
+- To diagnose an invisible mob, turn on Content Log GUI/File and test the render controller with `controller.render.default`. An `animation_controllers` key directly under `description` is not valid in 1.10.0 and above. An old format (1.8.0 style) render controller gives `Error parsing render Controllers`.
+- The vanilla behavior files in `behavior_pack/entities` of bedrock-samples are always the latest (zombie about 600 lines, wolf about 1200 lines). However, the sample client entities lack some things (controller and spear variable errors in zombie.entity.json, the missing `controller.render.iron_golem` in the iron golem RP). The boat entity can only change its texture (boat bones and animations are hardcoded). The event list in the entity docs lacks many vanilla events, and the `damage_sensor` doc has no data types or version info. (Source: bedrock-samples)
+- `minecraft:lightning_bolt` has only type_family in the resource template and no geometry or animation. Lightning with no fire or damage is made with a dummy entity that has its own model.
+- Third-party add-on maker apps (MAM) are not recommended. Use Blockbench and hand-written JSON.
+- Structure errors: a component placed directly under `component_groups` without a group name blocks entity loading, and `events` nested inside `component_groups` made a vindicator clone float up and freeze. Avoid JSON that writes the same key twice (`minecraft:physics` twice).
+- Do not use uppercase in entity identifiers. Of two behavior files with the same file name one did not apply, and a custom entity that reused a vanilla render controller ID (`controller.render.npc`) broke. (single report)
+- A new animation controller or entity file is recognized only after fully reopening the game, not with `/reload all`. "controller not recognized" may be an add-on load failure. Pack changes are downloaded again only when the manifest version changes.
+- Other causes of invisible mobs: slightly transparent texture pixels, a large pivot offset (it seems to appear at the map center), a location other than `models/entity/<name>.geo.json`, and an unconverted old-format geometry.
+
+### runtime_identifier in general
+
+- There is one `runtime_identifier` per entity, and the hardcoded behaviors tied to it (panda eating, parrot dismounting a shoulder, zombie/skeleton undead handling, phantom ignoring spawn rules) cannot be mixed. `minecraft:copper_golem` was suggested as a candidate with little hardcoded behavior. (unverified)
+- Even if you add `runtime_identifier`, mobs already spawned keep old data, so kill them and spawn again. Experienced members recommend not using it if possible.
+- A goat runtime ID clone did not spawn on snowy peaks, and removing the runtime ID loses ramming and horn drops. There is a report that the guardian's attack, eye animation and spawning are also hardcoded.
+- Using the `armor_stand` runtime ID on a decorative entity removes the hit sound and the red hit effect.
+
+### Entity version upgrade system
+
+- In format 1.26.20 and `use_beta_features: true`, use `description.entity_version.upgrades: [{"upgrade_to": 1, "name": "x"}]` and the top-level `"upgrades": {"x": {"add": {"component_groups": ["ww"]}}}`. It applies automatically and is better than the old way. As of 2026-04 no vanilla mob uses it. (single report)
+- The old way was, like the vanilla wolf, to put a bool property `minecraft:was_upgraded_to_1_21_100` (`client_sync` false), fire an event that adds a group with a `bool_property != true` filter, and then do `set_property` true.
+- Atomic client entities appeared in Preview 1.26.70.21. Animations must be duplicated per piece and are not shared. (unverified)
+
+## 2. Component groups, events, timers, sensors
+
+### Meaning of component groups
+
+- Adding overrides and removing removes completely. If you remove a group that has `behavior.random_stroll`, that component disappears entirely and does not return to the base `components` value. In some cases a value such as the speed set in the group remains, so add the group that has the original value again and then remove it.
+- Put behaviors to turn on and off in groups, not in `components`. Normal `components` cannot be removed. Conversely, if you put a component that is always needed (physics that gives gravity and so on) in a group like `awake`, it disappears together when that group is removed, so put it in `components`.
+- There is no `has_component_group` filter. When adding a group, also set a bool property and filter with `bool_property`.
+- If an attack component exists but it does not attack, check whether a sensor event is repeatedly removing/adding the attack component.
+- If the same component is in several groups they conflict and only one works. Like the moobloom with 9 variants, put one interact and filter by variant. Two components of the same kind in one group (two navigations, `movement.basic` + `movement.fly`) are also not allowed. Putting `nearest_attackable_target` in both `components` and a group conflicts.
+- Component groups are for behavior only. Geometry and textures are picked by render controllers with properties, variant, `mark_variant` and `skin_id`. You cannot specify a render controller with `/event`.
+- Values such as collision size and gravity can be changed during play only with groups + events. There is no script API and NoAI cannot be set by scripts either.
+- In a mob using `behavior.owner_hurt_by_target`, a case where putting a behavior in a dynamic group broke deaggro was fixed by moving `player_ride_tamed`, `ranged_attack` and `random_stroll` out of the group.
+- Even if you delete a component from a vanilla entity, hardcoded behavior remains (the wither keeps attacking). It is possible to reuse the vanilla identifier (`minecraft:zombie`) in a BP, add groups and events, and fire them with `/event entity @s name`.
+
+### Events
+
+- An event reference must be an object `{"event": "name"}`. Pick at random with `randomize` (`weight`) and branch with `sequence` + `filters` (`has_property`/`enum_property`). (Source: bedrock-wiki, entities/entity-events)
+- Filters in the same `sequence` right after `set_property` do not see the new value. Split into separate events.
+- To do several things in `minecraft:entity_spawned`, wrap them in a `sequence` array. You can give `weight` to `randomize` items and nest a `sequence` inside. Bool property filter example: `{"test":"bool_property","domain":"ns:prop","operator":"==","value":true}`.
+- Do not put `/` on `queue_command` in an event, but commands in animation controller `on_entry`/`on_exit` need `/`. Commands in entity events already run at the entity position, so use `execute as @e[...] at @s` only in command blocks or functions. Distance range selectors such as `@e[r=12,rm=4]` are valid.
+- A custom event fires at spawn with `minecraft:entity_spawned`, so set the default groups there.
+- Debugging: put `say` in an event with `queue_command` to see whether it fires. Hit in survival mode to check `hurt_by_target`. The Content Log history is Settings > Creator > Content Log History.
+- The target `other` of `queue_command` did not work in an entity_sensor event. (single report)
+- Calling scripts from events: `queue_command` -> `scriptevent ns:id` or `function name`, and the script receives it with `system.afterEvents.scriptEventReceive` (`sourceEntity`, `id`). Entities cannot run `/place` and op-only commands, so work around it as `/scriptevent` -> `placeFeature`.
+- Several `/event entity` command blocks each fire their event. There is a report that the `on_kill` entity event is broken. (single report)
+- `minecraft:entity_placer` spawns a variant by firing an event with `"entity": "your:mob<event_name>"`. The spawn event needs a namespace.
+
+### Timers
+
+- `minecraft:timer` is valid only once per entity. Even in another group, the later one overrides the earlier. Workarounds are to use `minecraft:ageable` (`is_baby`) as a second timer or to rebuild it with timeline commands of a BP animation/controller.
+- Repeating effect: a repeating `minecraft:timer` (time 0.2) -> `time_down_event` -> a `queue_command` that applies an effect to a radius. An idle such as random blinking is made with a repeating timer with a random time range. (Source: bedrock-wiki, entities/timers)
+- For per-entity proximity handling, do not loop over all entities in scripts. Have the timer in the entity JSON fire an event and check with `dimension.getPlayers({location, maxDistance})`.
+- Despawning after N seconds is done with a timer and an `instant_despawn` group.
+- Other timer candidates: `minecraft:attack_cooldown` (also used to reset the breeding cooldown), `minecraft:ageable` (acts as a baby), and a drying timer that resets in water. There are reports that a timer inside a group did not fire and that a timer does not run while dying. (single report)
+- `minecraft:scheduler` (`min_delay_secs`, `max_delay_secs`, `scheduled_events`) is a periodic check lighter than environment_sensor. Block the same event from firing continuously with a bool property.
+
+### Sensors
+
+- `minecraft:entity_sensor` detects nearby entities. There is no filter that checks scoreboard values, so use tags or properties. Using `has_component` on `behavior.look_at_player` did not work as expected. "No player nearby" is made with the `distance_to_player` filter.
+- `minecraft:environment_sensor` fires an event with time-of-day or light filters. Repeated firing breaks things like `minecraft:breathable` (bubble flicker), so add a filter so that it fires only once.
+- "Is holding something" is checked with the `any_slot_empty` filter. The state of being hit only by rain is `in_water_or_rain` AND NOT `in_water` (wrong if you stand in 1-block water on a rainy day).
+- The `entity_sensor` of the current format needs a `subsensors` array (`event`, `event_filters`, `range`). A cooldown of 1 second is actually about 1.05 seconds. Giving `minimum_count: 0` and `maximum_count: 0` together makes a "none nearby" condition.
+- Only one sensor is active per component, so two environment_sensors cannot be placed at the same time. Active sensors are evaluated every tick.
+- Filter notes: weather is `weather`/`weather_at_position` (`is_weather` is deprecated), altitude is `is_altitude`, effects are `has_mob_effect`, the held item is `has_equipment`, and the health threshold is `actor_health`. Empty-hand interaction cannot be detected. `minecraft:is_block` works only in components that give a block subject, and there is a report that `rider_count` did not work.
+- `minecraft:block_sensor` reacts only to block breaking. The `on_exit` of `minecraft:inside_block_notifier` does not fire while any part of the hitbox is inside the block, so for plant-type entities `in_block` of environment_sensor is recommended.
+
+## 3. Properties and variants
+
+- Definition and use: define in BP `description.properties` as follows.
+
+```json
+{ "ns:x": { "type": "int", "range": [0, 2], "default": 0, "client_sync": true } }
+```
+
+  Set it with the event `set_property` or `entity.setProperty` and read it in the RP with `q.property('ns:x')` (render controller `Array.x[query.property('ns:x')]`, geometry arrays also work). Without `client_sync: true` the client cannot see it. If an enum property has no `default` and `client_sync`, every RP query fails. This was also the cause of a `player.json` property failing. (confirmed, Source: bedrock-wiki entities/entity-properties)
+- The limit is 32 per entity (`player.json` is also 32). Use only a few enum/int with many values, and for booleans use bit packing, put several values in the decimal places of one number, or split them across several entities. There is also a case that used a float range [0,200] as a 200-way variant switch. For bulk data such as pixel-level particle skins, Molang variables are faster than properties.
+- The limit is **conflicting**. There is a report that put the entity property limit at 30, and a case where a large pack hit the player property limit. There is also a case that packed 20-bit flags into one int property (max 1,048,575).
+- An enum value must start with a letter. Write Molang booleans as `q.property(...)`/`!q.property(...)`, and wrap an expression such as `!query.variant == 8` in parentheses like `!(query.variant == 8)`.
+- Random variants: giving `math.random_integer(0, 100)` to the int property `default` lets you pick geometry/textures at random without a spawn script. If you need weights, use `randomize` in the spawn event. A random variant made with only an RP disappears on unload and looks different per player. Packing baby/adult/variant into one `randomize` creates "dead" mobs with no group at all, so use a property set at spawn for texture variants.
+- Breeding inheritance (conflicting): there is a report that client_sync enum properties are inherited while `skin_id`/`variant`/`mark_variant` are not passed on in custom breeding, and a 2026-11 report that variant/mark_variant is used for mixing breeding variants.
+- `minecraft:mark_variant` is a read-only component of the form `{ "value": 0 }` in scripts. Using a dummy component that does nothing as a state flag is a technique from before properties.
+- There is no way to change properties directly with commands. Use the script `setProperty` or put an event per value and fire it with `/event`.
+- Inside a particle the entity emits, you can read the emitting entity's property with `q.property`. Putting an int property in a float field gives an "allowed type: float_range" error.
+- Float range error: `"range":[0.0,0.5]` can give `'range' array should contain only 'float' type elements`. This is because JSON editors save `0.0` as `0` (bridge. v2 does too). Use a value that does not look like an integer, such as 0.01.
+- The bool default is JSON `true` (not the string `"true"`).
+- A bool toggle is `"set_property": {"ns:p": "!q.property('ns:p')"}` and cycling is `"math.mod(query.property('x') + 1, 14)"` (Molang has no `%`). In an animation controller compare with `query.property('ns:p') == value`.
+- In pre_animation read it with `v.x = query.property('ns:prop')`. Use `:` in the ID, not `.`. If an error occurs on an entity without the property, wrap it in `q.has_property`.
+- Tags cannot be read on the client (`has_tag` and `query.any_tag` are not client entity queries). The flow is BP (environment_sensor detects the tag) -> set a property with an event -> use it in the RP. Dynamic properties are script-only and cannot affect appearance.
+- `minecraft:variant` is synced automatically from server to client and read with `q.variant` (wolf pattern). There is no "set_variant" in events, so set a property or add a group that has `minecraft:variant`.
+- Climate variant vanilla mobs (pig, chicken, cow; format 1.21.90) use the `minecraft:climate_variant` property (enum temperate/warm/cold, client_sync) instead of the old `minecraft:variant` and change it with a `set_property` event. `minecraft:loot` cannot go inside `set_property` ("unknown token"), so put a group with loot per variant.
+- For per-growth-stage models and textures, put a group with `minecraft:mark_variant` + `minecraft:skin_id` per stage, switch groups with custom age events, and reference both in the RP render controller.
+- Eye color example: in RP `scripts.pre_animation` turn `query.property('ns:eye_colour')` into an index with `math.clamp(v.eye_index,0,9)`, and in the render controller `"textures": ["Array.eyes[v.eye_index]"]`. The cause of the bug was forgetting to put that render controller in the entity's `render_controllers`.
+- For per-player appearance/display, read the script `setPropertyOverrideForEntity` + a bool property in the render controller or `part_visibility`.
+- Properties update at most 20 times per second, so they are not smooth and have about 1 tick of delay.
+- Properties used by scripts must also be defined in the BP (`type`, `default`, `client_sync`). `getProperty`/`setProperty` work, and there is a case that adjusted scale with a float property. Vanilla boat variants cannot be read.
+
+## 4. Health, damage, invulnerability
+
+### damage_sensor
+
+- Put `deals_damage` and `cause` beside `on_damage`, not inside it. Wrong nesting gives `unknown child schema option type. Allowed types: 'string'`. `any_of` is OR and `all_of` is AND. Joining two different causes with `has_damage` `all_of` is never true.
+- `deals_damage` value form (conflicting):
+  - The old format was invulnerable with `"triggers":{"cause":"all","deals_damage":false}`.
+  - There is a report that in format 1.21.50 and above (broken from 1.21.50 to 1.26.0) it is `"yes" | "no" | "no_but_side_effects_apply"` and booleans were removed.
+  - A currently working invulnerability example: `{"triggers": [{"filters": {}, "deals_damage": false}]}`. The non-array `"no"`/`"cause":"all"` is unstable.
+  - In format 1.26.30 `"no"` failed and was fixed with `false`.
+  - For letting projectiles pass, use `"no"` and avoid `"no_but_side_effects_apply"` (the projectile may explode).
+  - Recommended: in the latest format try `false` first and then `"no"` if that does not work.
+  - There are also the claim that the `"no"` form changed in the 1.21.40 changelog (failed in 1.20.80, 1.10.0 is `false`) and the 2025-11 report of `"yes"`/`"no"` strings.
+- Suffocation immunity turns off `deals_damage` for `cause: suffocation`. To block damage only while an effect is active, join `is_family` and `has_mob_effect` with `all_of`. In the latest schema, filter parse errors such as "failed to parse inputs -> has_damage" and "must be a preset string" appeared but the entity still worked.
+- Custom damage causes cannot be made. Even with damage multiplier 0, resistance 255 and script cancellation all applied to a boss, it can still die from `self_destruct` damage.
+- To block only melee attacks and allow projectiles, put a separate projectile trigger first and then use the following trigger.
+
+```json
+{ "on_damage": { "filters": { "test": "is_family", "subject": "other", "value": "player" } }, "deals_damage": "no" }
+```
+
+- Letting projectiles pass between factions: `cause: "projectile"` + `on_damage.filters` (`is_family` or `is_owner`, subject `other`) + `"deals_damage": "no"`.
+- Per-tag PvP blocking joins subject self/damager tags with `all_of`. To block explosion damage, put deals_damage no on `cause: entity_explosion` and `block_explosion`.
+- For magma blocks the `has_damage` value `contact` worked, but it also blocked sweet berry bush damage.
+- `knockback_filters`/`damage_filters` accept `none_of`/`all_of` lists and several can be given as an array.
+- Using several damage sensors at once interferes (the `hurt` and `hurt_2` triggers of a group overwrite each other). If you need two outputs, detect with scripts.
+- The damage sensor is the most stable way to cancel damage. Canceling hurt with scripts does not cancel the mob's aggro or hit effect. Removing fall damage is also done with `minecraft:damage_sensor`.
+- The list of damage causes is in the addonentitydamagesources reference of MS Learn (Source: ms-learn).
+
+### /kill, minimum health, explosions
+
+- `/kill` (conflicting): there is an answer that `/kill` is not damage so damage_sensor cannot block it, and there is also a report that it was blocked with damage_sensor `cause: all` + `deals_damage: false`. There is a report that setting min equal to value/max in `minecraft:health`, as in `"value":1,"max":1,"min":1`, also blocks /kill but the "died" message still appears (Source: bedrock-wiki entities/invulnerable-entities). One user said min did not work, another said `min` is not in the official docs, and on 2026-10-27 there was an answer that the minimum of `health` was not made to be defined. The alternative is to spawn a clone on death.
+- `health.min` keeps it from dying but also does not despawn it, so a despawn component is needed. The alternative is resistance 255. There is a bug that once `health.min` is reached it takes no damage at all afterwards (permanently invulnerable even after healing or re-adding), and several people said it has been known since around 2020 (one could not reproduce it). Script KO mechanic: cancel the fatal hit in `world.beforeEvents.entityHurt` and do `health.setCurrentValue(1)` inside `system.run`, with the filter `{entityFilter: {families: ['dynamic_npc']}}` (families is an array, `type` is a single string).
+- An entity immune to the script `entity.remove()` cannot be made.
+- There is a case that worked around undead entities dying to TNT/explosions by moving them 1000 blocks above the ground. (single report)
+- `minecraft:explode` with `"breaks_blocks": false` gives only damage and does not break blocks. With `power: 0` it has no effect. To spread fire like a Molotov, `breaks_blocks: true` is needed.
+- Items disappearing in lightning could be blocked neither with fire_immune nor with damage_sensor.
+
+### Max health, knockback, death presentation
+
+- Max health is set only in entity JSON. There is a report that script setters do not update the UI. For players, set both `value` and `max` of `minecraft:health` in a `player.json` group (for example 22/22) and fire it with `player.triggerEvent('evt')`. This method is not compatible with other add-ons that modify `player.json`. Spawning with very high health kills it immediately, so halve damage with damage_sensor or use resistance.
+- Knockback: `knockback_resistance` value 1 means no knockback. A wind charge is also knockback so the same value blocks it, and `is_pushable:false` does not block it. There is a report that it does not work on players. Sprint knockback applies separately (no resolution). There is no component that turns off attack knockback, so cancel the `entityHurt` beforeEvent and use `applyDamage`, or clear the velocity on the next tick.
+- For damage during invulnerability frames, setting health with scripts is the only workaround. In the beforeEvent cancel a non-fatal hurt and set health directly, but let fatal hits through so that the death message appears. Hit/death sounds are not exposed to scripts.
+- Canceling the vanilla death animation: use damage_sensor `has_damage fatal`, `deals_damage:false` and an event, or cancel with scripts and then `entity.remove()`. The tilting effect when a mob dies cannot be removed easily.
+- Experience drop: `"minecraft:experience_reward": {"on_death": "query.last_hit_by_player?5:0"}`. Rather than spawning many xp_orbs, it is easier to spawn and kill an entity that reads the experience from a property.
+- Effect immunity is done with `minecraft:mob_effect_immunity` `{"mob_effects":["poison"]}` (see nautilus). The amplifier of an effect applied by an attack cannot be set with JSON, so use scripts.
+- A mob that does not hurt players but is not passive still lands hits with damage 0, so use a strong Weakness or a reach multiplier of 0 like the creeper.
+- Combat notes: a critical hit is 1.5 times and Bane of Arthropods applies to the `arthropod` family. `minecraft:cannot_be_attacked` was added in 1.21.50.25. Daytime burning is blocked by the fire resistance effect or a glass helmet. There is a report that the hearts of a mount with health above 80 are cut off at 4 rows in multiplayer and absorption hearts are capped at 8 cells. (single report)
+
+## 5. AI, targeting, combat
+
+### Attack requirements
+
+- An attacking mob needs navigation (`navigation.walk`), `movement`/`movement.basic`, `follow_range`, a targeting goal (`nearest_attackable_target`, `hurt_by_target`), an attack behavior (`melee_attack`, `melee_box_attack`, `ranged_attack`, `delayed_attack`) and `minecraft:attack`, all of them. An attack behavior includes moving to the target. With only `behavior.move_towards_target` it approaches and then loses interest. Even an attacker standing in place needs navigation and pathfinding. (confirmed)
+- Every `minecraft:behavior.*` needs a `priority`, and lower is higher priority (0 is the highest). A low-priority `look_at_player` can stop an attack. If a sitting entity slides, raise the sit priority above follow/interact. The `probability` 0.05 of `look_at_player` is evaluated every tick, so raise it to 0.5 to make it noticeable.
+- Common causes are the Peaceful difficulty and using `is_player` instead of `is_family` in the target filter.
+- If `nearest_attackable_target` has no `entity_types`, it attacks everything its hitbox touches. To make it not attack players unless provoked, remove player from entity_types and keep `hurt_by_target`. Include/exclude with the filter `is_family`, `subject: other` and `operator` `!=`.
+- For targeting through walls set `"must_see": false` and a large `max_dist`, and to keep chasing also set `must_reach`. The range is limited by `minecraft:follow_range` (default 16, and the vanilla zombie's random 16~48 is hardcoded). `within_radius` must follow the simulation distance, and a `must_see_forget_duration` that is too large can break targeting. If it cannot see beyond 10~12 blocks, add `follow_range` and `move_towards_target`.
+- Speed is decided by `minecraft:movement` (the value is multiplied) and the `speed_multiplier` of melee_attack. The speed multiplier inside `nearest_attackable_target` has no effect.
+- Filters for tag-based targeting accept only hardcoded tag values. You cannot exclude by changing properties, so use a `has_tag` filter, scripts or `hurt_on_condition`. There is no native team target support.
+- To prevent allies from attacking each other, use `is_family` + `not` in the `behavior.hurt_by_target` filter. Group aggro (zombified piglin style) is `minecraft:angry` (`broadcast_anger`). There is a report that `broadcast_anger`/`broadcast_range`/`broadcast_targets` did not work in format 1.26.20.
+- The `target_distance` filter is evaluated only when a target already exists, so it cannot be used to narrow the selection range of `nearest_attackable_target`. The same kind is not excluded automatically, empty `filters` aim at everything, and villagers that were only given an attack fight each other. To keep raiders from targeting allies, exclude them in the filter.
+- To ignore a player with a tag, put a `has_tag` + `"operator": "!="` filter in targeting and the same filter in `behavior.stop_attacking_if_target_invalid` (subject target) too. `area_attack` works the same way. Even with a mask, mobs already aiming keep attacking, and a setup that used two `entity_types` entries to change aggro distance by armor gave unstable results.
+- To limit group anger to its own kind, use `"broadcast_targets": ["family"]`. `minecraft:angry` also needs a priority and filters.
+- `owner_hurt_target` also needs an attack component. `hurt_by_target` is fixed to the first attacker. How much invisible/sneaking players are ignored is decided by the multiplier of the targeting component.
+- Forcing aggro with a command: `damage @s 0 entity_attack entity <target>` (melee only). Giving the player family to a custom entity has a bug where it gets dragged by camels. To reduce player aggro (like invisibility), change the player family in `player.json` or use an armor render trick.
+
+### Attack modes and special attacks
+
+- Switching between melee/ranged modes changes the `melee_mode`/`ranged_mode` groups with `minecraft:target_nearby_sensor` (`inside_range`, `outside_range`, the `on_inside_range`/`on_outside_range` events) (see blaze, breeze, drowned). Put a guard so that it does not switch in the middle of an attack.
+- For several attacks, put one group per attack and remove the other groups when switching. Pick with `randomize` and do not repeatedly use `entity_sensor` for patrol mode switching (it resets the other modes).
+- Do not use `delayed_attack` and `melee_attack` together on one mob. The `on_attack` event of `behavior.delayed_attack` does not fire (a bug), so use a timer component.
+- Shooting without line of sight (Breeze style) uses `behavior.fire_at_target` (`pre_shoot_delay`, `post_shoot_delay`, `attack_cooldown`, `attack_range`, `projectile_def`, `owner_anchor`/`owner_offset`, `target_anchor`/`target_offset`, `ranged_fov`) instead of `behavior.ranged_attack`. There is no `burst_shots`, so fire in bursts with `minecraft:timer` and a group-adding event. The wither's shooting is hardcoded.
+- `behavior.ranged_attack` has burst and charge settings such as `burst_shots`, `burst_interval` and `charge_charged_trigger`/`charge_shoot_trigger`. Read the aiming state with `query.facing_target_to_range_attack`. Both `ranged_attack` and `fire_at_target` did not shoot beyond about 16 blocks. `attack_cooldown` only blocks choosing a new target. To change the projectile per target kind, add a different shooter group with environment_sensor.
+- A cannon is `minecraft:shooter` (`def`, `power`) + `behavior.ranged_attack`. Using `move_around_target` together makes it shake, so remove the `target_distance` filter.
+- Leaping uses `behavior.jump_around_target` (`jump_angles`, `prepare_jump_duration`, `jump_cooldown_duration`, `filters` `has_target`, animation query `query.is_jump_goal_jumping`) and `behavior.leap_at_target`. `stalk_and_pounce_on_target` is limited. `applyImpulse` for script leaps is rough, so teleport-based is smoother. `applyImpulse`/`applyKnockback` also apply to creative players, so filter by game mode.
+- `behavior.sonic_boom` keeps firing on non-warden mobs, so adjust priority and cooldown or put it in a group. Spear use is `behavior.use_kinetic_weapon` (zombie). No vanilla mob uses a shield, so make it with scripts and components.
+- For lasers, to avoid projectile lag, small invisible damage entities are placed in a row with `summon <entity> ^^^N`.
+- For sound hunting (warden style), the warden runtime ID gives sniffing but `vibration_listener` did not react (no resolution).
+- The turret view cone compares the angle `acos(dot/(|a||b|))` between the view vector and the vector from the head to the target against half the FOV (79/2). The vectors are normalized. Attack range is measured to the hitbox, not the target center.
+
+### Avoidance, gaze, other goals
+
+- `behavior.avoid_mob_type`: the `target_distance` filter works only when the mob has a target, and avoidance seems to happen only within about 3 blocks. There is a report that `max_flee` does not work.
+- `filters` of `behavior.look_at_entity` is ignored (it looks at the nearest entity). The workaround is nearest_attackable_target with a family filter + look_at_target.
+- Known behavior bugs (2026-08): `move_to_land` ignores custom entities, `random_look_around_and_sit` ignores look time, swim navigation ignores `avoid_water` when on, and on_start/on_end of `behavior.tempt` do not fire. `behavior.lay_egg` crashes if the egg block is replaced with an item. `circle_around_anchor` works only on flying mobs. `stomp_turtle_egg` is hardcoded to turtle eggs.
+- Behaviors that are mob-specific or conditional: `run_around_like_crazy` is horse only, `swell` is creeper only, `dash_action` must be on the ground, and `break_blocks` needs mobGriefing. `move_towards_target` ignores the speed value, and `play_dead` has `force_below_health`. Following is `follow_mob`/`follow_parent`/`follow_caravan`, and finding a mount is `find_mount`. The direction a mob looks follows its movement direction.
+- The `spawn_category` component is not used (the iron golem targets by the family `monster`). (speculative)
+- Raider patrols are spawn rules (the captain and then followers). A custom patrol is made with a `minecraft:patrol_follower` group, `behavior.follow_target_captain` (priority 5, speed_multiplier 0.6, within_radius 64, follow_distance 5) and `minecraft:is_illager_captain` in components. Spawning is `summon custom:mob ~~~ minecraft:promote_to_illager_captain` and `minecraft:spawn_as_patrol_follower`. Raids have the `minecraft:can_join_raid` component and the spawn rule has `mobevent_filter`.
+- Sharing the target of summoned mobs: the old `vex_copy_target` is dropped. Digging (sniffer style) is `behavior.random_search_and_dig` (`target_blocks`, `item_table`, `on_*` events).
+- Villager professions (conflicting): there is a report that professions are hardcoded so new ones cannot be added, and a 2026-11 answer that workstation assignment is in the villager BP. Villager breeding food is hardcoded, and a custom `behavior.sleep` ignores vanilla beds. For trade randomness see the wandering trader file.
+- There is no native way to make a custom villager profession block. Use `move_to_block` + a profession group event and store block positions with scripts. To refresh the trade table you must despawn and respawn. `minecraft:dweller` makes villagers claim beds and workstations. Even one missing comma in a trade table breaks the whole file (`Failed to load trade table`). Map trades use `destination` of the `exploration_map` function (for example `village_taiga`).
+- If mob griefing is off, mobs do not pick up items (behavior change in 1.21.44).
+
+## 6. Movement, navigation, pathfinding, physics
+
+### Climbing ledges and jumping
+
+- `minecraft:variable_max_auto_step` corresponds to stepHeight in Java. Write it as below, where 0.5625 is half a block and 1.0 is one block. At about 1.2 mounts also climb blocks. `minecraft:is_stackable` blocks climbing. It is a component since 1.20, and to climb while ridden all three values must be set. Above 1.6 it crosses fences, and the camel uses 1.5625. (confirmed)
+
+```json
+"minecraft:variable_max_auto_step": { "base_value": 1.5625, "controlled_value": 1.5625, "jump_prevented_value": 0.5625 }
+```
+
+- `can_climb` used alone gives neither auto jump nor wall climbing. Wall climbing needs `navigation.climb` + `can_climb`, and the spider runtime ID also changes the collision box.
+- `jump.static` (conflicting): there is a report that a mob with `navigation.walk` `can_jump: true` that does not climb a 1-block ledge needs `minecraft:jump.static`, and also a 2026-04 report that an entity using `jump.static` stopped climbing and was fixed with `"minecraft:variable_max_auto_step": {}`. `minecraft:jump.dynamic` did not work. There is also a report that jitter of a fast pathfinding mob stopped when `jump.static` was put back. (single report)
+- For a mount to climb a half block, copying horse.json needs `minecraft:horse.jump_strength` (and `input_ground_controlled` + rideable). If a follow_owner entity jumps in place in front of a 1-block ledge, use a `follow_mob` with an owner filter or `variable_max_auto_step`. For a greatly enlarged quadruped, if the base pivot is too high, melee attacks miss and it cannot climb blocks well.
+
+### Pathfinding
+
+- Vanilla pathfinding range is about 16 blocks. For far routes, put a target or checkpoints that move step by step. `follow_range` does not extend it.
+- To make it walk to a destination, spawn an invisible target entity at the destination and make the mob aim at it. Scripts have no pathfinding API. Instead, check obstacles with `if block ^ ^ ^0.25 air` and steer with facing teleports, or give `applyKnockback`/`applyImpulse` along the route.
+- `behavior.move_to_block` is the recommended route/waypoint tool. Place blocks as waypoints, change groups in `on_reach` to aim at the next block kind, and give it top priority to avoid jitter. The limits are as follows.
+  - It detects only within about 20 blocks (64 is too large). It is very slow if the list is large or there are many blocks around (30~60 seconds in caves). A list of 21 failed.
+  - If the collision box is larger than `goal_radius`, it stops right in front. Shrink the collision box and use `custom_hit_test`, or remove the component on arrival.
+  - flower_pot, cauldron, hopper, brewing_stand and cake were not targeted. A custom block with no block item can also fail.
+  - A block that shares the ID with an item is caught with the `tile.` prefix (`tile.ns:block`), but entities ignore blocks that use `replace_block_item` (also `behavior.avoid_block`).
+  - The tag form `"tags": "q.any_tag('x')"` is undocumented in move_to_block (in `items` of `behavior.tempt` it works in the latest version).
+  - Opening doors uses `move_to_block` + `on_reach`, and to make it get pulled like a bee use `move_to_block` + `minecraft:home` set at spawn.
+- `minecraft:preferred_path`: `default_block_cost`, `jump_cost` (higher is chosen less and 1 is most preferred), `preferred_path_blocks:[{blocks,cost}]`, `max_fall_blocks`. The iron golem uses it. There are two reports that a mob with this component did not leave low-cost blocks even while attacking.
+- Pathfinding bugs and limits: in 1.21.114 pathfinding through custom doors failed, and the problem of pathfinding on dirt paths is MCPE-160960. The problem of large-hitbox mobs moving along walls is unresolved. To make it avoid fire, use `avoid_damage_blocks` of navigation.
+- `navigation.walk.blocks_to_avoid` avoids by tag with `[{"tags": "query.any_tag('trapdoors')"}]`. Making it pass through blocks is impossible. `behavior.mount_pathing` also finds paths while ridden, but only when the player is not controlling.
+
+### Water, flight, swimming
+
+- To make it sink and drown, remove `behavior.float` or give `can_sink: true` to `navigation.*`. An underwater mob that digs through blocks needs `underwater_movement` + `breathes_water`/`breathes_air` and `minecraft:physics` `has_gravity: true` (see squid/fish).
+- A flying entity trapped in water is solved with `minecraft:underwater_movement` (value 0.5, max 0.5), `minecraft:floats_in_liquid` and `minecraft:water_movement` (drag_factor 0.8).
+- Flying + swimming (parrot-based) switches between a flight group and an underwater movement group with `minecraft:environment_sensor`. For walking + flying, copying the parrot is the template. A custom flying mob copies the phantom behavior or moves with `entity.tryTeleport` every tick. There is no flight speed API, the speed effect does not work, and repeated `applyImpulse`/`applyKnockback` works.
+- A floating horse: `behavior.float` (priority 0), `navigation.walk` (`can_path_over_water`, `avoid_water`, `avoid_damage_blocks`), `minecraft:physics`. `minecraft:buoyant` is for floating on liquid like a boat.
+- Swimming state queries: land is `!query.is_in_water && query.is_on_ground`, and swimming is `query.is_in_water && !query.is_on_ground`. Swimming and aligning direction like a dolphin is animation math, not a component (dolphin.animation.json in bedrock-samples).
+- Flight methods copy vanilla combinations: parrot (flying), ghast (floating), bee/allay (hovering), phantom (gliding). Other movement notes: leaping above the surface is the dolphin's `behavior.random_breach`, walking on lava is a strider-style setup, swimming copies the drowned, and floating is a levitation effect trick. The `move_to_water` of an adult mob needed a fix.
+- There is a bug report that `query.is_on_ground` comes out true on mobs with no gravity. (single report)
+- After the Happy Ghast update, if a floating mob does not look in its direction of travel, try `minecraft:body_rotation_always_follows_head`. There is no component equivalent to the dolphin's grace.
+
+### Pushing, physics
+
+- An entity standing on a block pushed by a piston moves even without a pushable component. `minecraft:pushable` has not been parsed since 1.26.10. Workaround: `world.afterEvents.pistonActivate`, `piston.getAttachedBlocksLocations()`, and a teleport back to a position stored in dynamic properties.
+- Water flow is not blocked by pushable false, and with `has_gravity false` it drifts away. Teleporting every tick is the only fix.
+- Drift is due to vertical inertia. There are `minecraft:friction_modifier` and `uses_uniform_air_drag` but no liquid drag component and no XZ deceleration component.
+- Ball physics (1.26.30): `minecraft:bounciness`, `friction_modifier`, `air_drag_modifier`, `buoyant` (movement_type "bobbing"), the `pushable_by_entity` preset (`push_mode: "ball"`, kick speed field). The docs are late.
+- Stopping movement is movement value 0 (at 0 the mob twitches). In scripts it is `Entity.clearVelocity()`.
+- Behaving like a block (rotation/placement) uses `minecraft:body_rotation_blocked` and `minecraft:rotation_axis_aligned`. `rotation_axis_aligned` locks to 90-degree steps and breaks movement on moving mobs, so in that case lock only visually with a `-q.body_y_rotation` animation. A facing teleport can rotate it instantly, but frog rotation was not fixed by tp (north yaw 180), and `max_turn` had no effect. Teleport interpolation cannot be turned off and can only be corrected with animations.
+- `rail_movement` entities are lifted above rails, so fit them with `tryTeleport` with the keep-velocity option. `minecraft:dimension_bound` for portal blocking affects both dimensions.
+
+## 7. Riding (rideable) and seats
+
+- Ground control is `minecraft:input_ground_controlled`, and it uses `seat_count` and `seats[].position` (0,0,0 is the floor). Add seats in JSON, not in Blockbench. Decide what can ride with `min_rider_count/max_rider_count` and `family_types` (if not removed, zombies ride horses). The order of `getRiders` is the same as the seat order.
+- To put a mob on a horse, it needs a family that matches the horse's `family_types`, otherwise "riders that did not meet ride conditions" appears. A reference hoglin seat position is `[0, 1.35, -0.2]`.
+- You cannot dismount with an event, so use `/ride ... stop_riding`. Grabbing is done with `/ride ... start_riding ... teleport_rider`. To keep entities out of boats, detect riding with a controller and teleport. There is no filter for minecart pulling, so block wide mobs with `passenger_max_width`.
+- `on_rider_enter_event`/`on_rider_exit_event` go on the `minecraft:rideable` component itself, not inside a `seats` entry (needs about 1.21.100).
+- If a multi-seat mount does not move, set `controlling_seat` in `minecraft:rideable` (whoever sits first becomes the driver).
+- To make a rider control the mount, copy the Chicken Jockey code and lock the rider rotation. With `body_rotation_always_follows_head` the mount turns with the rider's gaze. Controlling by a non-player rider is unresolved.
+- A custom mount's rotation jumps when it passes a certain angle (`lock_rider_rotation`/`minecraft:rotation_locked_to_vehicle` also jump or are slow). No fix was found.
+- `rider_can_select_entity` lets you hit the mount, so cancel it with a damage sensor. For tall riding entities use `rider_can_interact` and `custom_hit_test`. In survival mode, hits above about 6 blocks of height are not registered.
+- The problem of dismounting when entering water needed the seat to be raised. Reloading the world can dismount, so detect it with a sensor, respawn the dummy and ride again.
+- If a seat is more than about 5.8 blocks from the origin, the entity inventory closes immediately (a distance check, no fix). The problem of a rider's `is_collidable` pushing the mount could not be turned off with `minecraft:physics` either.
+- For several fixed seats, use a body that has the seats and pre-spawned riding entities. A rotating turret puts a child entity as a rider of the body and puts the player on the turret.
+- To put an entity on a player, use `/ride` and a parrot-line family (`parrot_tame`) or modify `player.json` rideable. Position and rotation are decided by `player.json` rideable. Fish mobs cannot ride other entities (hardcoded). A ridden entity is vulnerable to attacks, tripwires, pistons, pressure plates and flowing water. Riders are not pushed and are not rendered in first person.
+- Zombie riders: `/ride ... start_riding ... teleport_rider` fails on adult zombies and works only on baby zombies. Only baby piglins ride hoglins. The Camel husk (1.21.130) is summoned with `/summon minecraft:camel_husk ~ ~ ~ ~ ~ minecraft:spawn_with_rider`.
+- Hiding the horse health bar is `/hud @s hide horse_health` (restore with `/hud @s reset horse_health`) or health value=max=min=1. The seat positions of vanilla horses/camels/pigs change only in the behavior file. For the leash position, add a `lead` locator to the model.
+- To keep boats/minecarts from carrying entities, use the warden runtime ID or make the width larger than 1.375.
+- A minecart-style mount is `runtime_identifier: minecraft:minecart` + `minecraft:rail_movement`. On curves, rotate the root bone with an animation to match `q.body_y_rotation` (+90/180/270 offset). For big trains, a script + Bezier spline is recommended.
+- WASD control of flying mounts is `minecraft:free_camera_controlled` + animation queries (unresolved), and turning visually to follow the rider's gaze uses `q.rider_head_x_rotation(0)` (the argument is the seat index). Climbing for a controllable spider mount is impossible. A flying mount pattern shared in 2026-11 keeps it in ground movement mode while ridden and gives a levitation or slow falling effect depending on gaze pitch.
+- `can_power_jump` (conflicting): there is a report that it caused dismounting on jump and a report that a tank made with it worked.
+- The display of a custom saddle item disappears on rejoin and only `minecraft:saddle` is kept. If the saddle is not visible, check `minecraft:is_saddled` in the BP.
+- For an owner-only tamed mount there is no "rider is the owner" JSON filter, so use scripts. The Happy ghast/ghastling is a moving platform you can ride standing, and you can stand on top with `"minecraft:is_collidable": {}`.
+
+## 8. Projectiles
+
+### Components and runtime_identifier
+
+- Basic damage:
+
+```json
+"minecraft:projectile": {
+  "on_hit": { "impact_damage": { "damage": 6, "knockback": true, "destroy_on_hit": true }, "stick_in_ground": {} },
+  "power": 6.7
+}
+```
+
+  For an arrow that cannot be picked up, use `remove_on_hit`/stick-in-ground.
+- The `damage` of the vanilla arrow.json is 0 and the real damage comes from multiplying by `power_multiplier`. A projectile is also an entity so the model needs only geometry, but mesh (flat texture) models are not supported on entities.
+- The vanilla fireball has `is_summonable` false so it cannot be `/summon`ed. The projectile `shoot_sound` seems not to work and `hit_sound`/`hit_ground_sound` work. For a projectile fired by an item, create it in only one of the item definition and the script (creating it in both spawns two).
+- A projectile with no collision box also deals damage. It is treated as a box of size 0 and the hit margin grows by 0.05 per tick up to 0.3 blocks. `on_hit` also fires without a collision box. Conversely, enlarging `collision_box` beyond 1 block does not enlarge the hit range.
+- Effect of runtime_identifier:
+  - `minecraft:arrow` is the only case where gravity 0 works properly. The owner is respected and the direction is right.
+  - `minecraft:snowball` fixes block placement interference and parabola problems but breaks other components. It ignores the owner in scripts (damagingEntity becomes the projectile). There is also a report that snowball was needed so that a mob has aggro only toward the shooter. (conflicting)
+  - Copying a vanilla fireball copies fireball.json including `"runtime_identifier":"arrow"` and the client entity. A custom dragon fireball that exploded the moment it spawned was fixed with `"runtime_identifier": "minecraft:dragon_fireball"`.
+  - Projectile `isolated_physics` has no effect with a vanilla projectile runtime ID (Preview content error).
+- Some components need a runtime ID, but the list is not known. Avoid runtime_identifier if possible.
+- Straight flight is gravity 0 + `inertia`, and slowdown in water is `liquid_inertia`. The homing flag did not work.
+- `ignored_entities` (conflicting): it works for vanilla IDs but was unstable for custom IDs (experimental). The reliable workaround is to give the shield entity a vanilla `runtime_identifier` and put that vanilla ID in. Another user said custom IDs also worked in format 1.21.40/1.26.0.
+- For the problem of exploding early when passing through a shield, start with a non-exploding projectile group (a 0.1~0.3 second timer in `minecraft:entity_spawned`) and then switch to the exploding group.
+- Explosion on hit is done with `minecraft:explode` inside a group, but breaking obsidian and bedrock could not be blocked. `minecraft:shooter` `power` 0.2 gave an "instantly removed" bug. `impact_damage.catch_fire` makes fire-immune mobs take no damage.
+- Reflection: `minecraft:reflect_projectiles` (`azimuth_angle`, `reflection_scale`) did not reflect custom projectiles. There is also the projectile `reflect_on_hurt`.
+- The `definition_event` on_hit may not fire on an entity hit, so use the script projectile hit event. Projectile collision cannot be detected in the RP, so set a property from scripts.
+- Since the stable patch around 2026-08 projectile damage is proportional to speed (projectiles with power above 50 jumped from about 6 to 100 or more). Give fixed damage with scripts. Automatic guns lose hits because of damage immunity ticks, so use override damage that ignores immunity.
+- Arrow knockback is given by a custom projectile or by scripts on hit. To let a tagged player pass through, use a `has_tag` filter in the `player.json` damage_sensor. To fire `skin_id` variant projectiles, make separate entity files. Projectiles are not perfectly synced visually and can "hit" and vanish on a target that looks out of reach.
+- There is a report that the behavior of `offset`/`anchor` of `minecraft:projectile` changed after an update. An `offset` inside a group was the cause of ranged mobs dropping out of the air and losing collision. Custom sounds of `minecraft:shooter` are buggy.
+
+### Direction
+
+- To make it face its direction of travel, you need an animation like the arrow. Bone `body` rotation `["variable.shake_power - query.target_x_rotation","-query.target_y_rotation",0]` or `["query.target_x_rotation","query.target_y_rotation",0]`, and put `anim.arrow.target_rotation` in the client entity `animations`. Copy arrow.animation.json. Use `target_x/y_rotation`, not `body_x_rotation`. There is a report that `target_y_rotation` did not work for vertical shots. There is a report that the problem of the x rotation sign flipping when shooting downward was solved with the isolated projectile physics approach described by MS Learn. Fixing a 2D sprite flat on the screen is possible only with particles.
+- For a projectile spawned by script, do `projectile.setRotation({x: player.getRotation().x, y: player.getRotation().y})` before `shoot()`. It needs a runtime ID and resets after landing.
+
+### Script firing
+
+```javascript
+const proj = entity.getComponent('projectile');
+proj.owner = player;
+proj.shoot({ x: v.x * 1.5, y: v.y * 1.5, z: v.z * 1.5 });
+```
+
+- Compute the direction from `player.getHeadLocation()`/`getViewDirection()`. If the owner is set, the shooter is not hit and mobs have aggro toward the owner. Use `shoot` rather than `applyImpulse`. If a transformed projectile loses momentum, store the velocity and `projectile.shoot()`.
+- The `iconcrack` hit particle of a custom projectile shows the wrong atlas texture (not resolved).
+- For spear-like projectiles (javelins), the snowball runtime ID does not persist like a trident and the trident runtime ID breaks other behavior. Work around it with a timer that kills and respawns it about every 30 seconds while it is stuck in the ground.
+
+## 9. Breeding, taming, age
+
+- The taming pattern is `minecraft:tameable`, `minecraft:is_tamed` and `behavior.follow_owner` (priority 1, speed 1.5, start_distance 16, stop_distance 10). A custom taming entity needs both `is_tamed` and `tameable`. Vanilla mobs lose `tameable`/`tame_mount` after taming (intended).
+- `tame_event.event` is a string, not an array (`"event": ["x"]` silently does not fire): `"tame_event": {"event": "my_ns:enable_doors", "target": "self"}`. To open doors only after taming, add `can_pass_doors`/`can_open_doors` of `navigation.*` and `behavior.open_door` as a group and remove the default group in the same event.
+- For a pet that does not teleport to its owner, switch to allay's follow-owner component or use `follow_owner` `can_teleport:false`.
+- The taming/owner system targets only players. There is no "is following the owner" query, so use a property set by group swapping or the `owner_distance` filter of a sensor.
+- Script taming uses `entity.getComponent("minecraft:tameable").tame(player)` after spawning and fires `minecraft:on_tame` if needed. The entity needs follow_owner, tameable and sittable (owner_hurt* to fight). Setting the owner with scripts skips the food taming logic and eating particles but hearts appear. A saddled horse is made with `spawnEntity("minecraft:horse", loc, {spawnEvent:"minecraft:spawn_tame_adult"})` followed by `replaceitem slot.saddle`.
+- The taming hearts and eating particles are hardcoded. The tamed entity death message `Unknown was slain by` is the known bug MCPE-38136 and is worked around with a name tag. It occurs only on custom-namespace taming mobs (the death message is built before the event), there is a workaround of setting `nameTag` at spawn, and with the pig runtime ID it shows as "Pig".
+- `minecraft:trusting` is a mob stopping its fleeing (ocelot, fox) and `minecraft:tameable` is a player becoming the owner (horse, wolf). `sittable` seems to block inventory interaction of tamed entities (no answer).
+- Going through a transformation (`minecraft:transformation`) loses the taming state and properties and the new entity gets full health. Health is kept only when transforming by group/event, and equipment is kept. The workaround is to fire an event, read the properties in `dataDrivenEntityTriggerEvent` (afterEvent), remove it yourself, spawn it and apply the properties again. An event can be attached with `into: "ns:bull<minecraft:entity_born>"`.
+- Check for a baby with `entity.hasComponent("minecraft:is_baby")`. If a baby grew up but does not enter the breeding state, put adult group adding and baby group removal inside every `randomize` item of the grow event and put the offspring component in the adult group too.
+- Breeding items can also be the string `"breed_items": ["storm:item"]`. `breeds_with` is either an object keyed by mob ID as in the vanilla wolf (`"minecraft:wolf": {}`) or an array with `mate_type`/`baby_type`/`breed_event`. A higher-priority avoid goal can block breeding, so set the breed priority to 0.
+- Several offspring are decided with `spawn_entity` and the breeding event, and when spawning a baby with scripts use `dimension.spawnEntity(typeId, loc, { spawnEvent: "minecraft:entity_born" })`. To use a spawn egg on a parent mob, use `minecraft:spawn_egg_interaction` + `offspring` (bedrock-samples cow.json), and love mode needs `breeds_with`.
+- Laying eggs: an item egg (chicken) is `minecraft:spawn_entity`, and a block egg (turtle/frog) is `minecraft:behavior.lay_egg`. There is a bug where `target_materials_above_block` does not recognize water so eggs cannot be laid in water.
+- For loot of baby variants, if `minecraft:ageable` is present the baby loot table may not apply, so put the loot component inside the group. For a custom wolf armor style item, an implementation that decreased an int property on each damage and broke it at 0 worked.
+- A mob that spits out an item when fed uses `on_interact.filters` (`is_family` player, `has_equipment` hand), `use_item`, `swing`, `play_sounds`, `interact_text` and `spawn_items.table` (loot table path) in `minecraft:interact`. The `playerInteractWithEntity` after event fires on custom entities only if `minecraft:interact` exists. The sneaking filter is `is_sneaking`.
+- Leash: `on_leash`/`on_unleash` of `minecraft:leashable`. For `on_unleash` to fire when the leash breaks, `on_unleash_interact_only: false` is needed. The default of this value is true, unlike the docs (related bugs MCPE-228197, MCPE-166369). A leash that does not drag cannot be made, and a leash cannot be attached during a trade. Leash knot behavior changed and broke the wiki's movement detection trick.
+- Vanilla breeding produces only one baby. A second color like tropical fish is not supported on custom mobs. An inventory entity that only the owner can open stores the owner ID in dynamic properties and cancels other players' interaction with scripts.
+
+## 10. Spawn rules, despawn, persistence
+
+### Spawn rules
+
+- Natural spawning needs a `spawn_rules` file (without it, only by egg). The spawn rule format is 1.8.0 or 1.13.0, the `brightness_filter` light is 0~15, `minecraft:spawns_on_block_filter` is an array, and when testing use a weight of about 200 (1 is rare). (Source: bedrock-wiki entities/spawn-rules)
+- Without a biome filter it does not spawn. Join several biomes with `any_of` + `has_biome_tag`, and the `overworld` tag is not needed separately. The higher the weight, the more common.
+- What spawn rules cannot do: fire by events or scoreboards, X/Z coordinate filters, elapsed day conditions, variants by placed block, and spawning in the air. If one mob has several rule files, the later one seems to override.
+- Spawning inside villages: use `player_in_village_filter` and `density_limit` or put a temporary sensor that despawns if there are no villagers. A filter based on a bell block failed, and a village is judged by a collection of villagers.
+- Mob caps cannot be changed. Spawners, spawn eggs, reinforcements and event summons ignore the cap.
+- Vanilla spawn rules are overridden at the same path. The 40~50 Enderman herd comes from the `herd` setting. Modifying the vanilla zombie spawn rule did not stop vanilla spawning. Turn it off with `/gamerule domobspawning false` and spawn custom mobs with commands/scripts or despawn vanilla mobs. Deleting the vanilla spawn rule file of a specific mob caused bugs (not resolved).
+- `delay_filter`/`world_age_filter` are in seconds, not ticks. `delay_filter` guarantees spawning only according to `spawn_chance` after the min/max time.
+- Daytime spawning is blocked by `population_control: monster` (and the `monster` family). There is a trick of filtering `is_daytime` in the `minecraft:entity_spawned` sequence of a spawner entity and doing a `queue_command` summon. There is an answer that using `population_control: monster` on herd animals that appear in the day is wrong and `animal` should be used, but there is also a case fixed by changing animal to monster (conditional).
+- To spawn only once, use scripts + dynamic properties (better than scoreboards).
+- Spawning on custom blocks (conflicting): there is a report that mobs cannot spawn on custom blocks, and also a report that if the custom block is defined in `blocks.json` (with geometry and material_instances removed) or is `minecraft:geometry.full_block`, spawn rules treat it as "solid". Spawning not working on custom blocks in a custom biome was reported as a bug (2026-03-17). In 2026-08 there was also an answer that vanilla full-block geometry and a matching render method are needed, and a case that failed even with opaque.
+- Underwater mobs in a custom water biome spawn only on the floor without an underwater runtime ID (worked around with a proxy entity). Spawning above the water surface is not possible. Leaving them in a sitting state in water prevents drowning.
+- Other: lava spawning is `"minecraft:spawns_lava": {}` (a report that it breaks when used with spawns_on_surface), and on ground/underground is `minecraft:spawns_on_surface`/`spawns_underground`. Whether the sky is visible is checked with scripts (the top block y). In a void Nether pack with no ceiling, Nether mobs do not spawn (seems hardcoded). There is a report that `minecraft:spawn_event` in spawn rules does not fire. Behind the monster `brightness_filter` there is an engine light limit, so even removing it does not make mobs spawn in bright places. (unverified)
+- Herd spawning is where the spawn rule spawns only the leader and the leader spawns the members. `entity_spawned` inside a rule does not work, so use `entity_type: "NS:NAME<NS:EVENT>"` in `minecraft:permute_type`.
+- Structure mobs: only mobs saved in a jigsaw structure spawn with it (domobspawning true). Spawning after generation is not possible, so use a block or command block that spawns entities.
+- In Peaceful, `monster` type mobs despawn. A spawn rate slider is impossible.
+- Split spawning (slime style, without a runtime ID) was added in Preview 26.20. Particles of the slime runtime ID cannot be removed, so copy the file, drop the runtime ID and use your own particles.
+- `/summon` needs `is_summonable` true (if false, the script `spawnEntity` is also blocked), and the `spawnEntity` identifier must match exactly. There is no way to hide it only from the summon command list. With `is_spawnable` true a spawn egg is made automatically. For variant spawning, define a group + event and use `spawnEntity(id, loc, {spawnEvent})`.
+
+### Despawn and persistence
+
+- `minecraft:persistent` blocks despawning (even outside the simulation distance). Summoned mobs do not despawn. Conversely, a naturally spawned mob can vanish in front of you unless you add a despawn with a distance filter.
+- `minecraft:tick_world` (conflicting): there is a report that to keep it in a loaded state so that `@e` catches it, use `minecraft:persistent` + `minecraft:tick_world` (`never_despawn`). Remarks that the radius is 1 and that it is 2~6 disagree, and on 2026-10-26 there was a remark that entities cannot keep chunks loaded (no answer). `/tickingarea` is limited to 10.
+- `minecraft:despawn` only makes random despawning possible. Instant removal is `minecraft:instant_despawn`. There is a report that `despawn` through a group stopped working in some version and a report that it does not despawn with `/kill`.
+- An entity that disappears when the player leaves is `minecraft:transient` (removed when loaded again and it conflicts with persistent). An entity for wide areas disappears at about 70 blocks and there is no fix.
+
+## 11. Inventory, equipment, names, boss bar, loot
+
+### Inventory
+
+- Size (conflicting): there is a report of a max of 256 slots, but with `inventory_size: 54` in `container_type: container` only 27 cells showed. The entity inventory UI shows at most 27 cells, and a chest UI needs a custom screen. To exceed 27, raise `inventory_size` and add cells to the JSON UI. The player inventory size cannot be changed.
+- `container_type` is required. `behavior.pickup_items` works only with a type other than "none" (for example `inventory`) and otherwise fails silently. `behavior.equip_item` and `minecraft:shareables` also need `inventory`. Flying-pattern mobs such as bees/bats/ghasts cannot pick up items well.
+- `private: true` makes the inventory not viewable.
+- For picking up items, configure the options of `behavior.pickup_items`, inventory and `behavior.equip_item` together, and decide items to exclude with `excluded_items` (query filters possible).
+- Using inventory and equippable slots together broke the display and duplicated items. To lock a slot, put a placeholder item with an item lock. `"*"` in `accepted_items` is invalid.
+- For backpack/chest UIs the common pattern is to use a transparent container entity.
+- Opening/closing the inventory cannot be detected (no event). The interact component overrides opening the inventory. The container of a custom entity cannot be opened by scripts and opens only through player interaction. Make a fake chest with a modal form.
+- Inventory drops on death cannot be blocked with scripts (the container cannot be used in the die beforeEvent).
+- If the entity inventory title is "Unknown", an entity name lang entry is needed (`tile.x.name` did not work). There are reports that `nameable` is needed, that the title follows the name tag, and that even the lang key did not fix it. (conflicting)
+
+### Equipment
+
+- Equipment is given with `minecraft:equipment` (see piglin). Enchanted/trimmed armor is given with `/loot replace entity @s slot.armor.chest 0 loot "equipment/trial_chamber_diamond"` or `replaceitem entity @s slot.armor.feet 1 id` in `queue_command`.
+- The equipment loot table is specified with `table` of `minecraft:equipment`. The `hasitem` selector also works on entities. There was no lag difference between random equipment of one kind and several variant mobs.
+- Equipment of non-player entities cannot be read or written by scripts. The `equippable` component supports only the player type. Use `/replaceitem` as a substitute. Enchantments of other entities (such as piercing on a pillager's crossbow) cannot be read either, and scripts cannot add components to vanilla spawned entities.
+- To make an entity hold an item, poll the player equipment with scripts and apply it with replaceitem, and put `enable_attachables: true` in the client entity. A fox-style mouth item follows the wiki's entity-holds-item doc. Left-hand item rendering problems come from the model bone name or the `cape` pivot.
+- Horse armor and saddle slots use `accepted_items`/`on_equip`/`on_unequip` events in the `minecraft:equippable` slots, where slot 0 is the saddle and slot 1 is horse armor.
+
+### Names and lang
+
+- The lang keys are `entity.<ns:id>.name=...` and `item.spawn_egg.entity.<ns:id>.name=...` (no spaces around `=`, no `%` prefix, files are `texts/*.lang`). If the name is Unknown, the game language may be en_GB with only en_US.lang present, so create all the lang files.
+- There is no component that sets a default name tag. Use a script at spawn or a summon command. Show it with `minecraft:nameable` `always_show: true`. Name tags are not rendered on BP-only entities with no client file. A name tag visible to only some players is impossible.
+- For an always-visible NPC name, override `minecraft:npc` (format 1.19.30) and put `"minecraft:nameable": {"always_show": true, "allow_name_tag_renaming": true}`, physics with no gravity/collision, `collision_box` 0, `damage_sensor` deals_damage false, `persistent` and `fire_immune`.
+
+### Boss bar and loot
+
+- If "Unknown" shows in `minecraft:boss`, add the `"name"` field. Changing or removing the boss bar after changing phases needs a rejoin. `hud_range` disappears at a similar distance regardless of the value and does not reappear (it gets better if you raise the simulation/render distance). A dynamic boss bar links the health of a hidden dummy entity to the boss with `healthChanged`. Removing `minecraft:boss` with a group does not update the boss bar. The boss bar color can be changed only with a custom UI, and phase transitions are done with health queries or scripts.
+- Loot tables cannot be appended and only replaced. To add items to a vanilla chest, modify the vanilla table. To keep boss loot from being exploited, add the condition that the player made the last hit.
+- An entity loot table needs `rolls` and `entries` in every pool. Minimal form:
+
+```json
+{ "pools": [ { "rolls": 1, "entries": [ { "type": "item", "name": "ns:item", "weight": 1,
+  "functions": [ { "function": "set_count", "count": { "min": 1, "max": 1 } } ] } ] } ] }
+```
+
+- The count of a dropped item cannot be changed, so despawn it and spawn it again with the new count. Canceling cactus damage on an item entity hides it on the client but it can still be picked up, a bug.
+
+## 12. Client entity animation and controllers (behavior view)
+
+### Wiring
+
+- `animations` is an object (short name -> ID), and `scripts.animate` is an array of those short names (`"animate": ["controller"]`). `{"controller": {}}` or `" controller "` (with spaces) gives `unknown child schema option type. Allowed types: 'molang'`. If the form is wrong, it becomes a transparent mob with only a shadow and collision, and the spawn egg is transparent too. If you fixed it by hand, export again from Blockbench.
+- Children of `animation_controllers` are valid only in format 1.8.0. In 1.10.0 and above put the controller ID as a short name in `animations` and reference it in `animate`. The controller name prefix is `controller.animation.<name>`.
+- To always play, put the short name in `scripts.animate`. The default playing `look_at_target` needs no controller. If it works with `/playanimation` but does not play in game, the controller is missing from `animate`. To play once on taming, put it in the client entity `scripts` instead of a controller.
+- Put initialization of variables in `initialize` and updates in `pre_animation`. Using a variable made in `pre_animation` before `initialize` gives `unknown variable`. The `variable.melee_spear_equipped` error of entities such as zombies is fixed with `"scripts": {"initialize": ["variable.melee_spear_equipped = 0.0;"]}`.
+- Controller file rules: the ID must keep the `controller.animation.` prefix (otherwise it is not recognized), there is no `description` block, and the `animations` of a state is an array. Animation names in a controller must be the short names of the client entity, and if they differ it fails silently or all of them play. Entities with the same short names can share a controller.
+- `scripts.initialize`/`pre_animation` are string arrays. In format 1.8.0 `initialize` did not work. `scripts.scale` changes the model size and can use a ternary. Missing `&&` in a transition expression or a wrong comma/symbol in the animation file breaks silently with no error.
+- If an animation is not found, check the folder name, short name mismatch and renaming. Blockbench animations may contain `NaN`, so change it to `0`. `State moving not found` happened because `blend_transition` was not a number.
+
+### Attack and state animations
+
+- The attack trigger is `v.attack_time > 0` (custom entities only, not attachables) and the exit is `!v.attack_time`. To let a long animation finish, also use `q.all_animations_finished`. `v.attack_time` lasts only about 0.2 seconds, so to hit a fixed moment of a long attack animation use `query.is_delayed_attacking` of `behavior.delayed_attack` (true throughout the windup). For an entity with no swing behavior, `attack_time` is 0 and `query.is_swinging` does not exist. There is a report that a delayed attack animation was off from the real hit by about 80%.
+- Random attack animation: controller `pre_animation: ["variable.attack_rand = math.die_roll_integer(1, 0, 2);"]`, an `attack_selector` state, a `query.is_delayed_attacking && variable.attack_rand == N` transition, and it returns to idle if `!query.is_delayed_attacking`. For walk variants, put an intermediate state that sets a variable with `math.random` on entry.
+- There is no native hit animation (the warden runtime ID + `query.hurt_time > 0` trick, which works only on some entities). Ranged charging is `query.is_charged`/`q.is_charging`, and in scripts `entity.hasComponent(EntityComponentTypes.IsCharged)`. Sneaking is `query.is_sneaking`.
+- There is no "running" query. `query.ground_speed` is speed, not direction, and is hard to trust. Tell forward/backward apart with `query.movement_direction` or a combination of tags/properties/scripts. To turn off the movement animation during knockback, `query.is_moving` is better.
+- To make a walk animation stop at the last pose, update anim_time with `query.modified_distance_moved / <n>` and wrap it in a `query.modified_move_speed > 0.01` state. Stretch and shrink with the speed using `anim_time_update` (for example `q.modified_distance_moved * 0.08`).
+- A crawling motion changes the collision box with scripts, or uses an RP-only controller that detects the block one cell above and a 1-block-high collision box. For landing detection, have an animation controller fire fall/landing script events.
+
+### Gaze, rotation
+
+- To make the head look at the target, put head rotation `["Math.clamp(query.target_x_rotation,-30,45)","Math.clamp(query.target_y_rotation,-45,45)",0]` and `relative_to.rotation: "entity"` in a `"loop": true` animation (without clamp the head spins). To look instantly with no server delay, use `"rotation": [0, "query.rotation_to_camera(1) - this", 0]` + `relative_to: {rotation: entity}`. A head rotation animation needs the bone name to be exactly `head`.
+- A billboard is `["query.camera_rotation(0)", "-query.body_y_rotation + query.camera_rotation(1)", 0]` or `["query.camera_rotation(0)","query.camera_rotation(1)",0]` (see the vanilla snowball client entity).
+- Airplane bank smoothing: pre_animation `v.bank = math.clamp(math.lerp(v.bank, query.yaw_speed*-1, 0.12), -30, 30)`.
+- Blending between 0 and 360 jumps backward, so keep a continuous value beyond 360 in chained animations and normalize interpolation differences to +-180. `q.bone_orientation_trs().r.y` is limited to -90..90. Euler order is X, Y, Z.
+- Locking the visual rotation of a mount is calculated with a `-q.body_y_rotation` animation and then `query.movement_direction`, `q.position` and trigonometry. To make the body face like a boat, use `query.ride_body_y_rotation` and `ride_body_x_rotation`, and for truck wheels `query.rider_head_y_rotation(0)` (sign inverted).
+- Fixing the player body while riding is the root bone animation `"-q.body_y_rotation+math.min(math.max(math.mod(q.body_y_rotation - q.ride_body_y_rotation + 540, 360) - 180, -60), 57)"` + `override_previous_animation`. To ride standing, change `query.is_riding` to `query.is_riding&&!query.is_riding_any_entity_of_type('<your:entity>')` in the player animation controller.
+
+### Other animation rules
+
+- Random values inside keyframes are re-evaluated every frame, so store them in a variable and use it. For a random idle, set the transition probability very small. Play death animations/particles on a `query.health` or `!q.is_alive` condition. `look_at_target` works only if there is an attack or target behavior, and for several heads reuse the wither animation.
+- The problem of snapping to the default pose was fixed with blend 0.6 and linear keyframes. Give `loop: true` to walk/idle, and use step interpolation and a return animation if needed. Split controllers for attack and movement. When stacking over other animations, use `- this`, `override_previous_animation` and cancel-out animations.
+- Molang animation: `math.lerprotate`, lerp/sin/cos and accumulated tail rotation are used. If speed differs per device, correct it with `q.delta_time` (affected by FPS limits).
+- Flicker at animation borders: the first and last keyframes must be the same, and the last one should be linear, not smooth. `loop: "hold_on_last_frame"` keeps the last pose. If the timeline events of a repeating short attack animation do not fire, fix it with `loop: true`. For smooth transitions use `"blend_transition": 0.2` and `blend_via_shortest_path`.
+- Two controllers that touch the same bone fight (both play). Merge them into one or add conditions. Two animations that use the same variable, the last one wins. Per-axis keyframe interpolation cannot be separated, so nest bones (outer Y, inner X).
+- Molang keyframe interpolation (without frame definitions): `v.time = (v.time ?? 0) + q.delta_time;`, `v.smooth_time = math.hermite_blend(v.time)`, `v.ypos = math.lerp(v.start, v.end, v.smooth_time)`. The segment formula is `v.segment = math.min(math.floor(v.t),2); v.local_t = v.t - v.segment;`. `q.life_time` can have bugs in easing, so use your own time variable.
+- To adjust animation speed with a property, let a variable decide the speed as in `"animations": [{"dance": "v.dance"}]` (there is a report that using `q.property` directly scaled the keyframe values).
+- BP (server) animations/controllers run only commands and Molang and do not run client animations. `/event entity @s ...`, timeline timestamp commands, `/effect` and `/replaceitem` are possible. An RP controller cannot run `/scriptevent` or commands. A BP animation controller runs every time the entity loads, so it can be used as an "on load" event. `query.scoreboard` works only in a BP.
+- Playing an animation at spawn is impossible with an RP alone, so use `playanimation` in a BP event. Client variables cannot be sent to the BP (only BP -> client, properties) and scripts cannot read client Molang variables.
+- `/playanimation @p <anim> <next_state> <blend_out_time> "<stop_expression>" <controller>`. A variable can be set with the stop expression (for example `playanimation @s animation.first_person.attack_rotation_item x 900 "v.attack_time=1;"`). If sound events are defined in the entity resource file, animation sounds also play. Scripts cannot cancel a playing animation, so use a `q.property()` condition in the controller or a reset animation with override true. The controller name is the name used at runtime, and to keep a pose give a long value like `a 999999` in the blend out slot. Any RP animation can be played, but `loop: true` is ignored. There is also a report that the stop expression accepts only queries, which disagrees with the variable-setting example above. (conflicting)
+- Entity sounds are played by animations (`sound_effects`). Entity events (`ambient`, `hurt`, `death`, `step`) in `sounds.json` must be valid LevelSoundEvent names. A custom entity sound must be in both sound_definitions.json and `sound_effects` of the client file. Put repeating sounds in a `loop: true` animation. The location in `sounds.json` is `entity_sounds.entities.<id>.events` and the usual sound event name is `ambient` (not `ambient.name`). To turn off the hurt sound, set `events.hurt` to `""`. Even when giving a second group to `minecraft:ambient_sound_interval`, the default `ambient` kept playing (not resolved). A sound put in a controller state plays every time that state is entered, and animation sounds have no distance attenuation.
+- Deprecated queries: use `query.is_item_name_any` instead of `query.get_equipped_item_name`. `q.get_name` is also deprecated, so for name-based behavior set a property or variant with `name_actions` of `minecraft:nameable` and read that. There is no query that returns the ridden entity, so check with `query.is_riding_any_entity_of_type`. RP Molang has no selected hotbar slot query and cannot log from Molang either. Wheel rotation switches with `query.modified_move_speed > 0.01` or `query.is_moving`. There is a report that the `q.cardinal_facing_2d` family does not work. (unverified)
+- Animation key query notes: `query.equipped_item_all_tag('slot.weapon.mainhand','tag')`, `query.is_item_name_any('slot.weapon.mainhand', 0, 'ns:item')`, `query.entity_biome_has_any_tags`, `query.is_riding_any_entity_of_type('id')`, `query.is_in_water_or_rain`. `query.foo` is only a placeholder and not a real query. For early termination of a controller, use `q.state_time` and `q.all_animations_finished`. A `;` or a leftover quote at the end of a transition expression gives `unrecognized token`.
+- Armor stand poses are hardcoded in runtime ID variables (12~13). To add poses, put a `pose_index` property and a `math.mod(...)` event on your own entity or copy the armor stand geo.
+- If bone names match the player (`rightItem`, `leftItem`, head and so on), vanilla humanoid/player animations can be reused. Items held in a special way such as bows, crossbows, spears and shields need `"enable_attachables": true` in the client entity.
+- `scripts.should_update_bones_and_effects_offscreen: true` renders the model even when the hitbox is off screen (still limited to about 64m). There is also a `should_update_effects_offscreen` flag that updates only effects, and culling is based on the bounding box.
+
+## 13. Render distance, dithering, shadows, hitboxes
+
+- Render distance: custom entities are not rendered beyond about 64~70 blocks and this cannot be extended. Rendering is tied to whether the hitbox is in view. For a large model that disappears when behind you, enlarge `visible_bounds_width/height/offset` in the geometry description. A ticking area and `should_update_bones_and_effects_offscreen` do not help. The same answer appeared again in 2026-11. A very large entity disappears even with a bigger `visible_bounds`. (confirmed)
+- Ender dragon runtime ID (conflicting): only the ender dragon is rendered from far away. Some say it works with the `minecraft:ender_dragon` runtime ID and some say it does not, and it has side effects. Alternatives are to replace the vanilla ender dragon client entity and swap models with a float property and render controller, to put a proxy entity near the player, or to switch LOD with particles for distant planets (particles are visible from far). A trick of placing a transparent ender dragon alongside was also shared. A trick of rendering far with another runtime ID broke the entity.
+- Dithering (fading near the camera) comes from the player accessibility setting "mob dithering" and cannot be turned off by a pack. There is a report that it turns off with hitbox 0, but other things may break.
+- Shadow size follows the hitbox/scale component. To remove the shadow when invisible, use `minecraft:renders_when_invisible` + infinite invisible `spell_effects`.
+- A collision box has only width/height and x/z cannot be given separately, and there are no multiple boxes. Workarounds are a transparent block or a box sticking into a block. There is `custom_hit_test`, which changes only the damage hitbox, but it is fixed, does not rotate and cannot be detected by scripts. For a head hitbox, have a separate head entity riding the body pass the damage along (two entities, a performance cost).
+- An entity can be hit even with hitbox size 0. Collision boxes do not rotate, and `custom_hit_test` cannot be used with `is_collidable`. There was also a phenomenon where block placement became fast because of the collision of a hugely scaled entity.
+- Whether `minecraft:scale` enlarges the hitbox is **conflicting** (reports that it does and that it does not). It is recommended to match collision_box as well.
+- For solid entities (can be stood on), put `"minecraft:is_collidable": {}` on the entity in the latest format. For an entity that does not push other entities like an armor stand, there is no known method, and the NPC runtime ID has side effects.
+- There is an inefficiency report that bones hidden with part visibility still submit draw calls (only the rasterizer culls).
+- Not supported: making an entity appear as a player list entry (use a GameTest simulated player), display entities (use the block entity trick MBE armor stand scale, FMBE), and reading the player skin in an add-on (on BDS an external API adds the skin as a variant on the next restart). To use a skin as a texture the pack must have the png.
+- Model error: if there are several geometries (adult + baby) and a `head` bone, `model already has a locator armor_offset.default_neck / lead ... doesn't exactly match` appears. Rename the bone `head` to `skull`, remove the `lead` locator from the baby model, or make pivots integers (MCPE-218065). There is a report that the same error occurred even with no locator. The 2026-01 game update added baby mob models and broke packs that override vanilla mobs, and custom armor works around it by coming after the baby armor model. The bug where the item position changes on mobs with model variants is MCPE-184865. For odd shadows of large meshes, flip the normals. Convert Java models in Blockbench.
+- Mob armor attachment bones: mobs use a different armor attachable file from players. The chestplate is `body`, leggings are `leftLeg`/`rightLeg`/`body`, and the helmet is `head` (root if absent). `context.item_slot` corresponds to the equippable slot (`q.item_slot_to_bone_name`).
+
+## 14. Player entity
+
+### player.json (BP)
+
+- If several add-ons each include a `player.json`, only one wins depending on pack order and they do not merge. Merge them by hand or make a combined pack. damage_sensor modifications conflict between add-ons.
+- A `queue_command` event in `player.json` fires on every hit and cannot tell the kind of attacker. Distinguish with the script `entityHurt`/`entityHitEntity`.
+- Player size (conflicting): there is an answer that `minecraft:scale` in a `player.json` group changes the player size, and a report that animation scale changes only the visible size while the `scale` component also changes collision but small scales have bugs. The hitbox cannot be changed without `player.json`. Use a group that changes the collision box by tag or property together with animation scale, and to make the player sit low use a mount with a low seat.
+- A bug was reported that with `player.json` the hitbox becomes 1 block after respawn with about 50% probability, and a workaround was shared. There is a report that the fire resistance component cannot be removed. (single report)
+- Players have no target so `has_target`/`is_target` are useless, so use the script `entityHurt` instead. To block the death of a tagged player, put `fatal` + `has_tag` in the `player.json` damage_sensor. There are also patterns that change `player.json` components by held item or use an offhand `hasitem` command.
+- Movement restriction is `/inputpermission set <player> movement disabled` (or scripts). A simple forced animation is `/playanimation` or `Entity.playAnimation`.
+- A case where a custom `player.json` broke rotation (`getRotation()` jittered within about 30 degrees) was fixed by reverting to the sample pack version.
+- Right click detection: attach a BP animation controller to `minecraft:player` in `player.json` (`description.scripts.animate` + `animations`), and use `on_entry: "/function ..."` on a state and the transition query `query.is_item_name_any('slot.weapon.mainhand','ns:item') && query.is_using_item`. Without `&&` it fires as soon as you hold it. Defining the controller twice gives a content log error.
+- There was advice to change the event `run_command` left in the `player.json` of an old pack to `queue_command` (the asker's problem was not resolved).
+- Vanilla hardcoding limits: vanilla armor has no JSON so toughness cannot be given and vanilla damage reduction cannot be removed. Values such as the number of bookshelves for the enchanting table are also hardcoded. Preview features mostly cannot be reproduced. The sun and moon cannot be removed for only one dimension, so work around it with the biome sky and fog.
+- Adding to the player's look is possible only with attachables or `player.json` properties. There are no custom equipment slots. The Totem of Undying effect cannot be shown without the pop presentation, and the totem pop animation is hardcoded.
+
+### player.entity.json (RP)
+
+- Broken by the 1.21.130 spear update. Mojang added `variable.melee_spear_equipped`, two spear controllers and a changed first-person controller, so packs that override with an old copy break spear animations, swing/attack, swimming and first person, and `Unknown variable` appears. The fix is to start from the latest vanilla file of the installed game (`...\Content\data\resource_packs\vanilla_1.21.130\entity\player.entity.json`) and add your own animations, scripts and controllers again. Also bring the animation controllers and first-person animation files. (confirmed)
+- There was a period when bedrock-samples lagged behind. The 1.21.130.3 player client entity lacked `first_person_item_rotation_factor` and pre_animation/initialize and gave spear errors. The community vanilla resource pack repository also lacked `variable.melee_spear_equipped`. Use the files in the game install folder.
+- Variables needed for spear animations: `variable.melee_spear_equipped`, `variable.first_person_item_rotation_factor = 0.625` and so on in the player `initialize`. Spears have a separate animation controller file. After editing, restart the whole game. The spear attachable error `q.item_slot_to_bone_name(c.item_slot) returned a bone name that doesn't exist` means the `spear` bone is missing and is related to a min_engine_version mismatch.
+- `can't find animation first_person_breathing_bob` is fixed by adding `"first_person_breathing_bob": "animation.player.first_person.breathing_bob"` to animations. To remove the vanilla sway, override that animation.
+- Persona/character creator skins (conditional): overriding `player.entity.json` turns off persona skins and everyone becomes Steve. Defining `min_engine_version` in the player client entity inserts the persona render controller. If the empty template in bedrock-samples contains `player.entity.json`, all default skins become Steve, so delete it. The default skin textures are hardcoded.
+- To add a render controller to the player you must override `player.entity.json` (the alternative is a BP entity riding the player). Put an extra controller in `controller.render.player.third_person` and hide limbs with `part_visibility` (`rightArm`, `rightSleeve`, `leftArm`, `leftSleeve`, `head`, `hat`). To hide the vanilla player, put a copy of `controller.render.default` that hides all bones in front (scaling the root to 0 also makes custom arms and items disappear).
+- The paper doll (pause screen) error `query.property/has_property does not have an actor` is blocked with `!variable.is_paperdoll`/`!query.is_in_ui`. While the paper doll is visible, using `/playanimation` and particles creates copies. An example first-person extra render controller condition: `!variable.is_paperdoll && !variable.map_face_icon && !query.is_spectator && query.property('addon:extra') != 'x'`.
+- An invisible player is caused by an invalid render controller reference. `friendly name 'geometry.default' not found` occurs when the geometry short name and the render controller reference do not match or have a typo. The default model cannot be replaced, so add one and hide the default.
+- For custom player models and item position, keep the `leftItem`/`rightItem` pivots the same as the default player geo (leftItem pivot [6,15,1] parent leftArm, rightItem pivot [-6,15,1] locator `lead_hold`). Do not move bones, and move the position with animations. Adding bones breaks item placement. The player geometry for Blockbench is `humanoid.custom:geometry.humanoid` in bedrock-samples `resource_pack/models/mobs.json`.
+- Player animations: walking is `animation.player.move.arms` + `animation.player.move.legs` (NPCs use the merged `animation.humanoid.move`). The vanilla swing is hardcoded, driven by `v.attack_speed`/`v.attack`, and read-only in Molang. The first-person attack is `animation.player.first_person.attack_rotation`. Mining speed is changed with haste/mining_fatigue and the arm does not swing.
+- If it flickers when playing/stopping an RP animation in first person, put the overriding animation at the very end of player.animation.json and reduce the gap. For first/third person the animation states are separate but Molang variables are shared. A custom player controller that reads blocked/private Molang variables breaks hit animations and the third-person bow.
+- There is a mention that the player model registration limit is about 1.14MB. (single report) The offhand map position/size is decided by entity/player files, not JSON UI. After the 26.x "tiny takeover" update, baby animals look gigantic when used with old health display packs.
+- To play player animations without overriding `player.entity.json`, use `/playanimation` or the script `playAnimation`. In 2026-10 there was again a report that adding animations to `player.entity.json` can break skins and first person. The offhand display cannot be changed with an RP alone.
+- For Actions & Stuff compatibility, merge your content into that pack's `player.json` by hand or use a subpack.
+- The first-person hit red effect is turned off with `is_hurt_color`. View bobbing cannot be changed by a resource pack and the attack raycast origin is fixed too.
+- Skins: 3D creator skins cannot be detected and they break custom models. Only 2D 64x/128x skins work, and classic skins do not use custom geometry. Tell slim/classic apart with `v.short_arm_offset_left == 0.5` (the value is set only after going through first person once). There is a report that they cannot be told apart when the model is forced.
+- Unresolved: Elytra forward-lean correction, ride position/camera movement (the camera cannot be changed in the RP), making a camel-style seat follow the back, and syncing mount/rider rotation.
+
+## 15. Scripts and entity integration
+
+- A hybrid approach is recommended. Rather than rewriting AI in scripts, control groups with entity file properties and let scripts drive the JSON AI by firing events and setting properties/tags.
+- Script custom components can be registered only on blocks and items. There is no `entity.target`, and estimating the target with raycasts is inaccurate. `entityBeforeHurt` was beta until 2026-03-07.
+- Interaction (conflicting): events of `minecraft:interact` must be defined in `events`. There is a 2026-11-12 report that `playerInteractWithEntityAfterEvent` did not fire on a custom entity, which disagrees with the explanation in section 9. If one entity has several interaction points, split them with a ray-box intersection check.
+- Script-driven combat animations use `hold_on_last_frame`, animations longer than the cooldown and combo frames, and go out of sync depending on ping. Cache `getPlayers()` results in a Map.
+- To show an animation to only some players, play a 0-scale or outline animation with `entity.playAnimation(name, { players: [...] })`.
+- Scripts cannot drive animation controllers directly. Use the `stopExpression`/controller option of `playAnimation` or the way (FMBE style) where a variable set by a script is read in pre-animation Molang. A method that worked was `player.inputInfo.getMovementVector()` + `stopExpression: "v.movement_x=...; return 0;"` + a random controller name per call to push variables into the attachable (the property method has about 1 tick of delay). The server `player.playAnimation` moves only third person. Vanilla first-person animations cannot be changed or triggered by scripts.
+- Passing data from the BP to attachables/RP is `player.setProperty(...)` or the Molang attachable `scripts.parent_setup: "t.bp_x = v.bp_x ?? 1;"` and `pre_animation: ["v.rp_x = t.bp_x ?? 1;"]`. The property method breaks compatibility with other player animation packs.
+- Grabbing mechanics teleport the grabbed player to the hand position every tick with `system.runInterval` or put them on a dummy and animate. Telekinesis uses `applyImpulse` for entities, and for blocks puts them inside an entity and scales it with animation.
+- The hit position/direction is detected with a hitbox entity (expensive), the relative position of `projectileHitEntity`, or entityHurt + position comparison. The gaze direction method fails with touch players, and the vector between the attacker and victim positions works.
+- For floating text, use the Script API TextPrimitive (entities have collision/push problems). Click detection is `world.afterEvents.playerAttack`, hotbar slot change is `world.afterEvents.playerHotbarSelectedSlotChange`, and explosion detection is `explosionAfterEvent`.
+- The duration of `Entity.addEffect(effect, duration, {amplifier})` is in ticks, while JSON components (cooldown and so on) are in seconds.
+- Breaking vanilla armor stands/paintings/boats/minecarts is forced by the runtime ID and cannot be blocked even by canceling EntityBeforeHurt. Use custom entities or adventure mode.
+- For custom skins by player name or property, use entity properties or `q.variant`. Target-locked markers or glow cannot be done with scripts alone, and a glow material controlled by properties is used on the client.
+
+## 16. Block helper entities, dummy entities, holograms
+
+- Entities that behave like blocks (inventory, item display, animation, interactive furniture, drawers) are made by spawning a transparent entity in `playerPlaceBlock` (`system.run` + `dimension.spawnEntity(id, block.center())`) and killing it on destruction. One entity per block lags when there are many and is wiped together by `/kill @e`. A falling-block style custom block needs a custom entity with the same texture. Multi-block summons like iron golem/wither are hardcoded, so reproduce them with scripts.
+- A block with an inventory has no inventory component on the block, so put a transparent entity at the block position. Give it `minecraft:inventory` (`inventory_size`, `container_type` `"inventory"` to avoid hopper interaction, no `can_be_siphoned_from`), `minecraft:physics` `{has_gravity:false, has_collision:false, push_towards_closest_space:false}`, and `minecraft:breathable` to prevent suffocation (`breathes_solids:true`, `suffocate_time:0`, `breathes_air/water/lava:true`, `generates_bubbles:false`). Find it with `dimension.getEntitiesAtBlockLocation` and drop the inventory in the block's `onBreak`. The UI needs JSON UI.
+- A dummy entity is good for keeping tags or states even after other entities are removed (few components and no RP needed). A transparent hologram entity uses an empty model (better) or a transparent texture. A fake dropped item gives a textureless entity a mainHand item and a rotation animation.
+- Auction house pattern: put item stacks in a chest entity and save it as a structure (`structureManager.createFromWorld(id, dim, loc, loc, {saveMode: StructureSaveMode.World, includeBlocks:false, includeEntities:true})`), and keep display info for the UI separately.
+- A weeping angel entity can use the `look` component of the creaking instead of a script FOV check. Dynamic lighting made with light blocks is unstable and there is no component for it. To make a sulfur cube accept a custom block, use the block/item tag `minecraft:sulfur_cube_archetype_bouncy`.

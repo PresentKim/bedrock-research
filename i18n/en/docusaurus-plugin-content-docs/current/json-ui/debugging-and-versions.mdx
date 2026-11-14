@@ -1,0 +1,150 @@
+---
+title: Debugging, verification and version management
+description: Reading logs, a symptom table, schema pitfalls, vanilla comparison, 1.26.50 changes, and measured rules (DBG-01~34).
+sidebar_position: 13
+sources:
+  - repo-guide
+  - repo-bedrock-core
+  - private-research
+  - mcbejsonuimasterai
+  - repo-testpack
+  - bedrock-samples
+  - cinnabar
+  - ore-ui-customizer-app
+  - private-research
+  - repo-multiselect
+  - netease-mcdocs
+  - bedrock-wiki
+  - ms-learn
+  - repo-survey
+  - private-research
+
+---
+
+## Concept: how to handle silent failures
+
+JSON UI has no version field and no friendly error window. A wrong property is ignored or the whole file is discarded, and nothing is drawn on screen. So debugging goes in this order: (1) check in the log that the screen actually opened, (2) change only one thing at a time, and (3) tell whether the failure is in mounting, bindings or layout. The starting point is turning on the Content Log GUI (the Creator item in settings) and looking for lines such as `Unknown property`. The Bedrock Wiki's Best Practices document points the same way, recommending to write only the properties to change, use `modifications` and reduce the number of expressions and bindings (in performance terms JSON UI is the second most expensive subsystem after entities, Source: bedrock-wiki).
+
+If a new UI file does not show, first check whether it is registered in `ui/_ui_defs.json`.
+
+```json
+{ "ui_defs": [ "ui/my_screen.json", "ui/my_common_elements.json" ] }
+```
+
+This format is the same as the MS Learn JSON UI reference (`ui_defs`: an array of paths relative to the resource pack root, required for user UI screens). MS Learn has four documents, `ui_defs`, `ui_element`, `ui_global_variables` and `ui_screen`, and since they are auto-generated from vanilla examples and are said to be sloppy (community report), check the property dictionary against this chapter and the value dictionary page. (Source: ms-learn)
+
+
+
+## 13.1 Reading logs
+
+- **[DBG-01]** JSON UI errors are often silent (nothing drawn, a button is `canceled`, all modifications ignored). Turn on the Content Log and look in the client log `Debug_Log<session>.txt` (Windows: `%APPDATA%/Minecraft Bedrock/logs/`) for the lines `Unknown property`, `Type not specified (or @-base not found)`, `Must define a source property name in the binding!`, `Invalid expression` and `Assertion failed`. Use the layout line (`Full re-layout of N controls`) to see whether the screen opened. But this number is counted before the factory creates cells, so the effect of a factory gate cannot be measured. `{measured}` (Source: BC-S8, BC-facts, BC-S12, MJ chapter 8-8)
+- **[DBG-02]** **Change only one thing in an experiment, and first confirm from the log that the screen actually opened** (whether the title string is in the log). A session in which the probe did not run at all proves nothing. "Do not infer what seems like it will work; copy what works" is the lesson the bedrock-core author left after seven failures. `{measured}` (Source: BC-S6, BC-S8, BC chapter 7-9)
+- **[DBG-03]** Do not lump a failure into "not visible". Draw the frame (a border that is always drawn), the value display (the same value as text) and the real target (size, visibility) together to tell "mount failure / binding failure / layout failure". For gates, draw both the expression and its negation (`YES`/`no`) to check whether the expression itself failed. `{measured}` (Source: BC-S6, BC-S14)
+- **[DBG-04]** Put experiments that could break the screen (with a chance of a crash) on a separately made experiment screen, not on the screen under development. `{measured}` (Source: BC-S6)
+
+## 13.2 Common symptoms and causes
+
+| Symptom | What to look at first | Rule |
+| --- | --- | --- |
+| Pressed a form button but the script got `canceled` | The button's own `collection_details` | COL-04 |
+| The hide condition is ignored and always visible | An operator the expression lacks, such as `>=` or `%` | EXP-02, EXP-03, BND-09 |
+| All of one control's bindings do not work | One expression with no `#property` | BND-05 |
+| None of my `modifications` apply | `remove` of an inherited child, the file path | MOD-05, MOD-02 |
+| The vanilla screen content disappears wholesale | insert into an inherited array | MOD-04 |
+| A label is blank | The binding placed on another control, factory cell binding timing | BND-04, BND-07 |
+| A number does not show | Whether it was joined to a string, whether it is a float | TXT-06, EXP-22 |
+| The translation key is printed as is | A key typo, a single-space value | TXT-10, TXT-14 |
+| A toggle disappears on hover | The 8 states | INP-10 |
+| Slow on every form open, hidden slider assert | Everything attached with a `visible` gate is created | COL-10, HOST-12 |
+| A size binding does not work | Declaration `[0,0]`, binding only one axis | LAY-10, LAY-11 |
+| The game exits as soon as it opens | String division, size binding + anchored offset + cell | EXP-21, LAY-14 |
+| Hangul fields break | Byte-based truncation | EXP-09 |
+| My UI disappears when used with other add-ons | Sharing the title channel, overriding definitions | HOST-14, MOD-13 |
+
+## 13.3 Validation tools and schema pitfalls
+
+- **[DBG-05]** `schemas/rp/ui/index.schema.json` of the official schemas (`@minecraft/bedrock-schemas`) checks only `namespace`, so it is useless for validating UI files. The real enum values are only in `forms/ui/ui_element.form.json`, and `types/rp/ui/UiElement.d.ts` has empty enum members. `{measured, code}` (Source: BC-facts)
+- **[DBG-06]** The official enum and vanilla use do not contain each other. Vanilla uses types not in the enum (`factory`, `collection_panel`, `tooltip_trigger` …), `binding_condition: "none"`, `font_size: "medium"` and `input_mode_condition: "gamepad"`/`"not_gamepad"`, and does not use the enum's `grid_rescaling_type: "none"`. `collection_index`, `localize`, `clip_ratio`, `property_bag`, `modifications`, `variables` and the array form of `nineslice_size` are in no official material. `{vanilla, measured}` (Source: VN, BC-facts, Appendix B)
+- **[DBG-07]** Check the property and value dictionary in **both directions.** If you only look at "is the name vanilla uses in the dictionary", you cannot catch names not in vanilla creeping into the dictionary (`resolve_ancestor_scope`, the `scroll_box` type, `z_order`, etc.). `{vanilla, code}` (Source: MJ 4.2 cause, MJ chapter 8-3, BW-doc)
+- **[DBG-08]** Common false positives of community pack checkers: no namespace in vanilla merging files, the `_global_variables.json` not-registered warning, and high-layer warnings. Conversely, some tools do not check and simply pass UI files registered with an extension other than `.json`. `{code, inferred}` (Source: MJ chapter 5)
+- **[DBG-09]** "Flat top-level definitions + absolute px" JSON made with a generator tool does not show in the game unless it is connected to some vanilla screen. Before using it as an example, check the host connection (chapter 10). `{code}` (Source: MJ chapter 5)
+
+## 13.4 Principles of evidence management
+
+- **[DBG-10]** The evidence priority is (1) the target pack and logs, (2) the pinned vanilla version, (3) confirmed external sources, (4) inference. When writing in a document, mark which stage of evidence it is. The verification level notation of this guide is that format. `{code, inferred}` (Source: MJ chapters 2 and 8-4)
+- **[DBG-11]** Do not write highly repetitive structures (a bit decoder, hundreds of nodes) by hand; build them with a generator. If the script encoder and the UI generator read one spec file together, the two do not go out of sync. `{working pack, code}` (Source: BA chapters 1 and 9-9, BC chapter 3)
+## 13.5 How to compare against vanilla
+
+```bash
+git clone --depth 1 --filter=blob:none --sparse https://github.com/Mojang/bedrock-samples
+cd bedrock-samples && git sparse-checkout set resource_pack/ui
+git log -1 --format='%h %cd %s'          # This guide: 46ba6ea 1.26.50.4
+cd resource_pack/ui
+rg -c '"resolve_ancestor_scope"' . | wc -l          # Is the name actually used
+rg -o --no-filename '"type"\s*:\s*"[a-z_]+"' . | sort | uniq -c | sort -rn   # Value distribution
+rg -n -A10 '"server_form_factory"' server_form.json  # Check the structure
+```
+
+- **[DBG-12]** When a new version comes out, first diff the vanilla points this guide relies on (the factory structure of `server_form.json`, `hud_title_text`, `root_panel` and `chat_grid_item` of `hud_screen.json`, `npc_interact_screen.json`, and `small_chest_screen` of `chest_screen.json`). `{vanilla, inferred}` (Source: VN, MJ 4.1)
+
+## 13.6 Things to watch among the 1.26.50 (1.26.10.4 -> 1.26.50.4) changes
+
+| Change | Impact | Where to check |
+| --- | --- | --- |
+| A `multiselect` row added to the modal form `custom_form` factory | The Script API has no method to send it. A server that sends form JSON directly can use it (HOST-46) | VN server_form.json:294 |
+| Action form row types `label`, `header`, `divider` | A difference between `selection` and the index | VN server_form.json:126-134 |
+| HUD subtitles moved to `subtitle_container_factory` | Check modifications that depend on subtitle position | VN hud_screen.json:3340 |
+| `cursor_renderer` removed from the HUD root, moved to `hud_crosshair_overlay.json` | HUD patches based on the cursor break | VN hud_crosshair_overlay.json:4 |
+| Inventory close button id `button.menu_inventory_exit` | The close mapping of inventory reskins | VN inventory_screen.json |
+| The inventory tab factory uses `#*_tab_visible` global bindings | Tab customization | VN `#items_tab_visible` etc. |
+| Chat label width `100% - 3px` | Chat reskin width | VN chat_screen.json:286 |
+
+- **[DBG-13]** The changes above are a sample recheck against vanilla of another project's (MJ) version comparison table. When using a pack from an earlier version on 1.26.50 or later, check from these points. `{vanilla}` (Source: MJ 4.1 and 8-1, VN)
+- **[DBG-14]** Add-on frameworks (bedrock-core 0.x, etc.) have made protocol changes that break with each version. When depending on one, pin the version and follow the source code rather than the documentation site. `{code}` (Source: BC chapter 8)
+
+## 13.7 Rules added from the Bedrock Wiki comparison
+
+These are rules added by comparing the wiki (BW) documents with vanilla 1.26.50.4. Those with only wiki sentences are marked `unverified`, and those with in-game screenshots in the wiki are marked `measured` (third-party record).
+
+- **[DBG-15]** JSON UI has no version field. If vanilla changes, a pack breaks as it is. The order for reducing contact points: write only properties to change (FILE-21) -> `modifications` (MOD-13) -> one entry point (MOD-15) -> minimize path keys (FILE-27). `{inferred}` (Source: BW-best)
+- **[DBG-16]** Mojang is moving screens to Ore UI, and plaintext resource packs cannot change the layout or behavior of Ore UI screens (only the look of buttons and textures are reached, ALT-15). A pack with an empty `content.zipe` in its root or a pack the server sends encrypted can change the in-game Ore UI pages (ALT-11). For each new version, first check whether the target screen is still a JSON file in vanilla `resource_pack/ui/` (for example, 1.26.50 does not have the `feed_screen`, `comment_screen` and `manage_feed_screen` files the wiki lists). If you have the install, also look at `supportedRoutes` in `data/gui/dist/hbui/routes.json` (ALT-11, ALT-13). `{unverified, vanilla, code}` (Source: BW-intro warning, BW-font, VN, OUC)
+- **[DBG-17]** Performance: the wiki counts JSON UI as the second most expensive subsystem after entities. Reduce the number of expressions and bindings (`(2 * (-1 * $n))` -> `(-2 * $n)`), merge several controls of the same shape into one binding such as `#texture`, and delete unused controls or set `ignored: true`. `{unverified, inferred}` (Source: BW-best)
+
+## 13.8 What was obtained from this guide's in-game measurements
+
+- **[DBG-18]** The game reads the development pack folder (in the Windows 1.26.52 of this measurement, `%APPDATA%/Minecraft Bedrock/Users/Shared/games/com.mojang/development_*_packs`) and the world list **at startup.** A game left running for a long time does not see newly placed packs or copied worlds, so restart the game if you placed a pack for the first time. When attaching a pack to a world, activating it from the behavior pack and resource pack lists of the world edit screen is the surest. `{measured}` (Source: TP)
+- **[DBG-19]** In a setup where a probe screen attached to the server form is created in every form through a `visible` gate, if there was an expression that puts `(#v - 0)` or `(#v * 1)` against a non-numeric body (`'pick probe'`) into `#size_binding_x`, or puts `/ 100` into `#clip_ratio`, the 1.26.52 client exited the moment an action form was opened (once). An earlier setup containing a `collection_panel` computed length gate, path dictionary lookup and `factory_variables` cells froze at the same point (twice). Which element was the cause could not be isolated. Considering that the expressions of every control that can be created **must be safe even for wrong input (an empty string, another form's body)**, make an expression that goes into a numeric property get created only inside a gate that checks the input format first (COL-10, EXP-21, LAY-14). `{measured, inferred}` (Source: TP)
+
+## 13.9 Rules added from other engine and tool analyses
+
+These are methods obtained from the Ore UI patch tool (`OUC`) and the Cinnabar reconstruction engine (`CN`).
+
+- **[DBG-20]** The Ore UI patch tool (OUC) re-extracts short names from minified code using stable strings such as translation keys and `data-testid` as anchors, and applies only the rest, leaving out failed patches. JSON UI packs also break less on version changes if they follow the same principles (rely only on stable names, localize failures). The same conclusion as DBG-15. `{code, inferred}` (Source: OUC 4.2)
+- **[DBG-21]** To preview layout, variables and expressions without the game, you can use the Cinnabar JSON-UI editor (jsonui.cinnabar.gg). The engine rules are a native reconstruction but fonts, the HUD and error handling differ from vanilla, so make the final check in game. It has a noncommercial license. `{code}` (Source: CN)
+- **[DBG-22]** To check the result of expressions without vanilla, build and run the evaluator of Cinnabar `crates/json-ui`. Method: clone the Cinnabar repository (checked at `ceb0fb6`), append the test code `predicate_probe.rs` this project newly wrote to the end of `crates/json-ui/src/predicate/tests.rs` and put `zz_probe.rs` in `crates/json-ui/tests/`, and run `cargo test -p json-ui --locked --lib zz_probe -- --nocapture` (expressions, `PROBE` lines) and `cargo test -p json-ui --locked --test zz_probe -- --nocapture` (size expressions and variable scopes, `LEN` and `SCOPE` lines). `rust-toolchain.toml` pins Rust 1.99.0 so rustup downloads it the first time, and building only the `json-ui` crate has few dependencies and finishes in a few minutes. These results were used for C-04, C-16, C-41 and C-42 of the conflict table. Crashes and asserts are not reproduced. `{code}` (Source: CN-run)
+
+## 13.10 Rules added from the research server measurement
+
+These were measured on Windows 1.26.52 while building the research server (`DF`, a Go server made with Dragonfly). They came from a structure that draws several screens with one server form.
+
+- **[DBG-33]** The content log of the Windows release client accumulated in `%APPDATA%/Minecraft Bedrock/logs/ContentLog<date>.txt`. `Unknown property` was left, but `Invalid expression` of a `%` expression was not (EXP-46). An expression is not right just because it is absent from the log. `{measured}` (Source: DF)
+
+## 13.11 Rules added from the engine behavior analysis
+
+These were read from the native library of the Android 1.26.52.3 client (`NB`). The level is `code`.
+
+- **[DBG-34]** You can find the cause right away from the `JSON UI parse failure` messages in the content log. Messages in the engine: type checks `- expected a bool.`, `a number.`, `a string.`, `an object.`, `an array.`, `an array or a number.`, `an array or a string.`; bindings `Must define bindings as an array.`, `Must define a binding name!`, `Must define a collection name for the binding!`, `Must define a source property name in the binding!`, `Must define a target property name in the binding!`, `resolve_ancestor_scope and resolve_sibling_scope cannot both be set!`; factories `The factory name should not be empty!`, `factory_variables should all be strings …`; others `Invalid anim reference!`, `Must define 'images' as an array!`, `Must define state_controls as an array!`, and the focus and font messages. Reference errors are `Expected variable not found in ancestor tree: '%s'` (variable) and `UI control reference not found: '%s'` (`@` reference). `{code}` (Source: NB chapter 4)
+
+## Proposals (not applied)
+
+Below are rule proposals from the additional material survey. They are numbered in the merge report but have not yet been reflected in the rulebook in the body above. The numbers are the final IDs in the merge report, and the strength of evidence follows the verification level of the original proposal. Check before using them.
+
+- **[DBG-23 proposal (not applied), schemas]** Community UI schemas produce errors on vanilla too. Validating the 205 vanilla 1.26.50.4 files, the Blockception latest source gives 116 errors in 43 files (50 unknown properties), Bugrock (KalmeMarq) 2,224 errors in 186 files (size expression and texture path regular expressions), and the 2025-09 schema bundled in Blockception VS Code extension v8.0.46 2,251 errors in 193 files (rejects `"100%c"`, negative offsets and size expressions). For a schema error, first grep whether vanilla has the same form to tell whether it is a false positive. `{code}` (Source: jsonui-schemas)
+- **[DBG-24 proposal (not applied)]** Passing a schema does not mean the game accepts it. The Blockception schema attaches an "any identifier" alternative to every enum, letting through `clip_direction: "dwn"` and `font_size: "huge"`, puts `left`, `top` and `center_middle`, which vanilla lacks, in the anchor enum, and puts `top` and `bottom`, which vanilla does not use (vanilla uses `up` and `down`), in the `clip_direction` enum. Bugrock lets through 51 NetEase-only types and properties. Check names and values with the value dictionary and a vanilla grep (DBG-07). Grep vanilla use for names generators and schemas produce (for example, the scroll view roles are `scrollbar_track`/`scrollbar_box` and not `scroll_bar_track`, and the toggle forced index is `toggle_group_forced_index`). `{code, vanilla}` (Source: jsonui-schemas, EasyUIBuilder, jsonui-lsp, VN)
+- **[DBG-25 proposal (not applied)]** Vanilla also has broken values left: `"size": [ "fill%", "100%" ]` (sidebar_navigation.json:881), a one-element `"size": [ "100%, 100%" ]` (store_promo_timeline_screen.json:1380), an `"ignored": "($nx_os or $is_ps4"` with unclosed parentheses (xbl_console_signin_succeeded.json:221), `"max_size": []` (ui_common.json:6551), and `"100c%"` of LAY-36. **A value that appears once or twice in vanilla is not evidence that it is valid.** When using it as evidence, check whether it is used with the same intent in several screens. `{vanilla}` (Source: jsonui-schemas, VN)
+- **[DBG-26 proposal (not applied)]** Do not use the Microsoft Learn JSON UI reference (`JsonUiReference`, AI-assisted generation, 2025-02-11) as a source. Use it only as a list of property names and check types and meanings against vanilla. It lists `font_scale_factor` and `default_focus_precedence` as Boolean, `grid_item_template` as Integer and `factory` as String, mixes in China-edition-only `nine_slice_buttom`, `place_holder_text` and `slider_range` (0 uses in vanilla), and its enum table is only `undefined`. Also, jsonui-lsp (the VS Code extension `jsonui-support`, MIT) suggests `$variables` that vanilla templates accept and goes to definitions using a "control -> type and `$variable`" dictionary extracted from all of vanilla 1.26.50.4 `ui/`, but has no diagnostics, hover, layout or expression checks, and the Marketplace version (v0.3.1) is the 1.21.120.4 dictionary. `{vanilla, code}` (Source: web-tutorials, jsonui-lsp)
+- **[DBG-27 proposal (not applied)]** JSON made by China edition (NetEase) documents and UI editors mixes in properties the international edition lacks (`is_new_nine_slice`, `nine_slice_top/left/right/bottom` and `nine_slice_buttom`, `rotate_pivot`, `rotate_angle`, `is_handle_button_move_event`, `is_swallow`, `gradient_direction`), types (`stack_grid`, `rich_text`, `combox`, `joystick`, etc.), templates (`common_selection_wheels`, `combo_box`, `mini_map`) and `%module.method` mappings. Filter by vanilla use counts before using. `{vanilla}` (Source: NetEase documentation, VN 0 uses)
+- **[DBG-28 proposal (not applied)]** The preview of a visual editor is not the engine layout. The JsonForge canvas computes `anchor_from`/`anchor_to` backwards, does not stack stack panels, propagates `alpha` to children, and does not handle `%`, `%c`, `fill` and `default`. The w1zardz editor treats `%c` as the largest child and `default` as content size and uses the offset and anchors of stack children as they are. The two tools also assume different screen sizes (384x216, 427x240). Use the preview only for rough placement and check positions in game. If you need a preview closer to the engine rules, use the Cinnabar editor (DBG-21). `{code}` (Source: JsonForge, w1zardz, Cinnabar)
+- **[DBG-29 proposal (not applied)]** JsonForge's "Export JSON" puts only names for children without `@` references so all child properties are lost, and drops some binding keys (`binding_collection_name`, `source_control_name`). If you use it, use "Export add-on", but fix the HUD overlay (insert into an inherited array, MOD-04), the close button offset (C-49), and the server form router that makes a blank screen for forms whose title does not match (HOST-15). Put a `server_form.json` made by a generator next to vanilla and check whether `controls` is an array, the inheritance target of the redeclaration key (`long_form@common_dialogs.main_panel_no_buttons`), and whether the multi-screen exclusion gate expression is a chain of `and` or subtraction. `{code, inferred}` (Source: JsonForge, EasyUIBuilder)
+- **[DBG-30 proposal (not applied)]** Check JSON made by an expression compiler (AsaJS 4.2.0) again with the expression rules. Confirmed problems: mismatched parentheses in the ternary `?:` output, an exponent literal (`1e-2`) emitted as `0.01` (the integer 0), an auxiliary binding containing only literals (BND-05), `%` applied to a string binding (EXP-32), no check for chained comparison (EXP-28), and decimal literals cannot be used. `{code}` (Source: AsaJS)
+- **[DBG-32 proposal (not applied)]** If an obfuscation or build tool **changes the path** of UI files, redeclaration of vanilla definitions and `modifications` silently become invalid (FILE-22, MOD-02). The JsonEncryptor zip mode defaults (name hashing, per-definition splitting, moving to `ui/obfuscated/`) do this. Process vanilla path files while keeping their path and first check that vanilla modifications are visible in the resulting pack. Tools that insert comments into JSON with regular expressions ("scrambling") stop at `,` and `}` inside strings and turn `"Hello, world"` into `"Hello/*…*/, world"`, which shows in labels, and expressions break silently, so turn it off if there is text or an expression containing commas. `{code, inferred}` (Source: JsonEncryptor)

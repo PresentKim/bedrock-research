@@ -1,0 +1,155 @@
+---
+title: Inventory-style menus and slot decoration
+description: The pictures and values of vanilla inventory, chest and furnace screens, how to edit the slot template to draw badges and tiers with markers in item names, block workstation window layout, client behavior when a server sends items, blocks, translations and recipes
+sidebar_position: 6
+sources: [private-research, bedrock-samples, bedrock-wiki]
+---
+
+This page collects what a server needs to build a screen that looks like an inventory. It covers the pieces and values of vanilla screens (pictures, colors, sizes), slot decoration that draws badges and tier borders over item slots, how to turn a chest window into a block workstation window like a furnace, and the client behavior that shows up when such screens have the server send items, blocks, names and recipes. How to open a chest window is in [Chest UI](./chest-ui.mdx).
+
+## 1. Pictures and values of vanilla screens
+
+These were read from `furnace_screen_pocket.json`, `inventory_screen.json`, `ui_common.json`, `ui_template_tabs.json` and `_global_variables.json` in vanilla `resource_pack/ui` (Source: bedrock-samples 1.26.50.4, facts only). **The pictures are already in the client, so the pack only points to them by `textures/ui/...` path and does not copy the files** (Source: private research).
+
+| Piece | Vanilla picture or control |
+| --- | --- |
+| Window background (light gray) | `textures/ui/dialog_background_opaque` (`$dialog_background` of `common.common_panel`) |
+| Top control bar | `textures/ui/toolbar_background` (`common.toolbar_background_image`, size `["100%cm", "100% + 8px"]`) |
+| Close button (light background) | `common.light_close_button`: `close_button_default_light`, `_hover_light`, `_pressed_light`, picture 15x15, button 21x21 |
+| Help button | `common.help_button` (15x15): `how_to_play_button_default_light`, `_hover_light`, `_pressed_light` |
+| Top tabs | `TabTopBack` (unselected tab), `TabTopFront` (selected tab), hover `...Hover`, both ends `...LeftMost` and `...RightMost`. Side tabs are `TabLeft*` and `TabRight*`. Tabs with only an icon are 24x25 |
+| Layout toggle | `common.layout_toggle` (25x18), `recipe_book_button_borderless_light...` |
+| Item slot | `textures/ui/cell_image`, selection `highlight_slot` and `pocket_ui_highlight_slot` |
+| Inside the recipe list | `recipe_book_pane_bg`, `recipe_back_panel` |
+| Search field | `edit_box_indent` (`_hover`) |
+| Scroll | `ScrollHandle`, `ScrollRail`, `ScrollGutterWithBG` |
+| Dividers | `dialog_divider`, `divider2`, `divider3` |
+
+The text color variables are as follows.
+
+| Variable | Value |
+| --- | --- |
+| `$pocket_title_text_color` | `[0.3, 0.3, 0.3]` (title, no shadow, centered) |
+| `$tab_unchecked_text_color` | `[0.8784, 0.8784, 0.8784]` (unselected tab, light) |
+| `$tab_checked_text_color` | `[0.3, 0.3, 0.3]` (selected tab) |
+| `$pocket_item_details_color` | White (tooltip and detail text) |
+
+The picture of an unselected tab is dark and the picture of a selected tab is light. What the structure teaches:
+
+- **A tab is a toggle** (`common.toggle` inside `common_tabs.base_tab`). For each state (unchecked, unchecked_hover, locked, checked and so on), only the picture and the text color and icon color variables are swapped into the same `tab_panel`. On screens where the server resends tabs, the same look is made with a "selected tab" style instead of a toggle.
+- The **control bar** is, in order, a horizontal stack with padding, layout toggles, help, close, padding (`toolbar_panel` in `inventory_screen.json`). The close slot width is 15 and help is `100%c`.
+- The window title is written in the center with `anchor center`. The header height is 28 (`header` in `furnace_screen_pocket.json`).
+- A slot uses `common.pocket_ui_container_item` and puts `cell_image` in `$background_images`. When naming, it refers to the collection with `$item_collection_name`.
+
+Servers that draw server form shapes to match the vanilla inventory use these values as they are: the window is `dialog_background_opaque`, the control bar `toolbar_background`, close `light_close_button`, help `how_to_play_button_*_light`, top tabs `TabTopBack`/`TabTopFront`, slots `cell_image`.
+
+## 2. Slot decoration: drawing badges with markers in item names `{record}`
+
+### 2.1 Principle
+
+JSON UI cannot read a slot's item data (kind, count, durability). The only thing readable from the slot collection is `#hover_text` (the text shown in the hover box: name + description). So **put a marker that is invisible on screen inside the item name**, and the pack's binding looks for that marker.
+
+The way to make an invisible marker is to put `§r` right after `§k` (flickering text). `§k` is released at once by `§r`, so nothing remains on screen (Source: private research).
+
+| Marker | Shape | Meaning |
+| --- | --- | --- |
+| Tier | `§k§r§a` / `§k§r§b` / `§k§r§d` / `§k§r§6` before the name | Fine / rare / epic / legendary. The color code that follows paints the name in the same color |
+| Front | `§k§l§r§N§r` after the name (N = 1~6) | 1~4 level dots (iron, gold, diamond, purple), 5 warning (red exclamation mark), 6 lock |
+
+Make sure markers are not parts of each other (for example, check that tier and front markers are not substrings of each other).
+
+### 2.2 Bindings
+
+Multiply the value that is 1 if the marker is present and 0 if absent by a number and add them to make one number. For each slot there is one control (front) and four bindings.
+
+```json
+{
+  "binding_type": "view",
+  "source_property_name": "(not ((#hover_text - '§k§l§r§1§r') = #hover_text)) * 1",
+  "target_property_name": "#tier_1"
+}
+```
+
+Add the values of several markers to make a number such as `#tier`, pick the texture with `('textures/ui/my_pack/front_' + number)`, and make it visible only when `number > 0`. Write the marker as literal text in the expression, not as a variable.
+
+### 2.3 Insert into both slot templates
+
+- `container_item` (`ui_common.json`): chests, block workstation windows, inventory viewing and so on.
+- `inventory_container_item` (`inventory_screen.json`): bag and crafting slots. This one has its own `controls`, so a change to the former does not reach it.
+
+Insert the controls into both with `insert_front`. The layers are slot background 1 and item 7, so put the back decoration at 6 and the front decoration at 9.
+
+### 2.3.1 Limits
+
+- The PC hover box is drawn by the engine (`hover_text_renderer`) and its frame cannot be changed. Only the name color becomes the tier color. On the touch UI's selected item bubble (`item_panel_image`), you can draw a tier border over it.
+- One more control per slot adds cost proportional to the slot count. For windows with many slots such as inventory viewing (72 slots), measure the opening time.
+- The color code of a marker continues into the following text, so if you put a name containing a marker in the middle of a sentence, the color bleeds. Server code that compares or searches names should skip color codes or remove the marker first.
+- For slots of an Ore UI (DDUI) screen, the same markers are handled by page CSS, not by the pack. A server module strips the rarity marker from the first tooltip line and sends the tier number to the page to paint the slot's tooltip border in the tier color. It does not draw level dots or badges.
+
+### 2.4 Server-side conventions
+
+- Keep three functions: one to attach markers (tier, front number, name -> name), one to remove them, and one to read them.
+- For fixed items with no name set directly, put the marker in the name in the language file (`texts/<language>.lang`). If you generate the language file from code, the tier and level do not drift.
+- For items that have a name per stack, attach it when building the name.
+- Keep a separate function that returns the name without markers, and use markers only for names on slots.
+- Provide a setting to turn the pack on and off. It changes the vanilla slot template, so turn it off if the screen looks wrong (the markers remain in the names but are invisible).
+- To add a new badge, extend the number, `front_N.png` and the pack's two expressions together. For the texture, you can keep the 9-slice `.json` and swap the PNG.
+
+## 3. Block workstation window `{record}`
+
+A custom block window with input, progress and output slots like a furnace. It uses the entity chest window (27 slots) as it is, chooses a per-block layout with a title marker, and shows only the input, progress, output and withdraw slots.
+
+- Branch with the title marker `§d§m§<n>`. The last code is a color code, so the server appends `§r` after the marker. It exists only on PC screens, and mobile shows the sized chest as it is.
+- Items `progress_0` to `progress_10` (a filling arrow) go in the progress slot so the arrow looks like it fills up.
+- In the dark control bar at the top right of the window, an info icon sits to the left of the close button at 18x18 without a slot background, and the tooltip is the block description.
+- The look is the same as the vanilla furnace screen. A light gray window (`dialog_background_opaque`), slots (`cell_image`), and the title centered above the window 4px down. The output slot of a window with a single output is 26x26 like the furnace result slot. The progress slot is a picture only without a slot background, and the empty part of an arrow, ring or battery is the same light gray as the vanilla furnace arrow (`arrow_inactive`), with the filled part white or orange.
+- Take-all and put-all use the method of section 5.3 of [Chest UI](./chest-ui.mdx). The block workstation window filters the slots to take out with an expression.
+- `collection_index` takes effect only on the direct children of an element that has `collection_name`. Using it on a `stack_panel` child inside a `collection_panel` gives an "Unknown property [collection_index]" error, so give `"collection_name": "container_items"` to the `stack_panel` itself.
+- Using a variable in a factory's `control_ids` gives a "UI control reference not found" error. For places like `grid_item_template` and an inherited `$scrolling_content`, also define a control separately instead of a variable.
+
+## 4. Inventory viewing and entity chest applications
+
+- **Inventory viewing** (another player's inventory in a chest window, 72 slots, 8 rows, scrolling): inventory 27 + hotbar 9 / armor 4 + off-hand 1 / ender chest 27. If the target is in the same world, it stays in sync in real time (synchronize every 1 second + right before a move; if the screen and the target differ, that move is canceled). For a target who is not online, lock and edit the saved state, and if it cannot be locked, open it read-only.
+- Menus (screens with no putting in or taking out) are made as forms, not chests (DDUI for an Ore UI screen).
+
+## 5. Client behavior when a server sends items, blocks and names
+
+These behaviors were collected during server development. The notation is `{measured}` (verified in game) and `{record}` (written in documents as behavior a server implementation relies on, but no measurement conditions remain) (Source: private research).
+
+### 5.1 Names and translation
+
+- **Translation key in an item name** `{measured}`: When a translation key was put in an item's custom name and description, the tooltip showed it literally. This was the same for `item.diamond.name`, `%item.diamond.name` and `%item.diamond.name%`, whether the key was the whole line or in the middle of text (1.26.50). If translation is needed, use a rawtext translation (`{ translate: ... }`).
+- **Legacy translation keys** `{record}`: Many blocks do not find their name through `tile.<modern ID>.name`. The names are under legacy keys (`oak_planks` is `tile.planks.oak.name`, `oak_sapling` is `tile.sapling.oak.name`). If sent as is, the key text or the identifier shows. You can build a table by converting the ID to title form ("Oak Planks") and pairing it with the English value in `bedrock-samples`' `en_US.lang`, and about 190 (Education Edition, test blocks, `element_*` and so on) have no match.
+- **Language fallback** `{record}`: On the client, `en_US.lang` is the fallback for every other language. Put the pack's block and item names in `en_US.lang` too.
+- **Going through translation removes `%`** `{measured}`: When a scoreboard line label went through translation, the `%` disappeared. Use `localize: false`.
+
+### 5.2 Pictures of items and blocks
+
+- **Held pose** `{record}`: Sticks and bones are drawn in a tool-like grip in the third-person hand, but vanilla data has no `minecraft:hand_equipped`. It is hard-coded in client code. In the data, only `breeze_rod` and spears (`*_spear`) have this component set to true.
+- **Showing an item in front of a block** `{record}`: Item entities always spin and bob on the client, merge with nearby identical items, and get sucked into a hopper below. Use a custom entity that holds the item in its hand (`MobEquipment`, `enable_attachables`) instead.
+  - The bone structure is `root > body > rightarm > rightitem_pose > rightitem_handheld > rightitem` and `body > leftarm > leftitem`. The values that cancel the third-person hand pose are `rightitem_pose` pivot [-1, -6, -6], rotation [-75, -12, -16], and `leftitem` pivot [5.5, 1, -3], rotation [-20, 45, 0].
+  - An entity can look at the main hand item with `query.is_item_name_any('slot.weapon.mainhand', 0, ...)` and rotate only the held-pose items separately to correct them. The third-person item transform values are not in public material, and scale 0.65 fit for sticks.
+  - A client entity texture cannot be chosen per item (the render controller array and variant values would be needed for as many items as there are).
+  - Full cube blocks are drawn in 3D in the hand, so the angle differs. Cube blocks were fitted in the off hand and everything else in the main hand.
+- **Break cracks and particles** `{record}`: The client draws break cracks and particles on the block geometry cube. If the cube is small or transparent they are not visible, and the particles take their color from texture pixels.
+- **Block item picture** `{record}`: A block item is drawn in the shape of the block in inventories and forms, and scaled up to fill the slot. To make it appear at 9/16 size, put it inside a transparent 16-pixel frame cube. In inventories the south face is visible, so put the front on the south. The item icon texture is not required.
+- **Block state order** `{record}`: The client matches block runtime IDs in block state order. If you merge the state into one number, the order cannot drift from the server.
+- **Entity model orientation** `{record}`: Entity models are drawn half a turn from the world (the model's front faces north). When converting world coordinates to model coordinates, flip only the sign of z and leave x as it is.
+- **Block texture animation** `{record}`: One entry in `textures/flipbook_textures.json` animates one tile of `terrain_texture.json`. The image is a vertical strip (width 16, height 16 x frame count) and takes `ticks_per_frame`, `frames` (an ordered array) and `blend_frames` (on by default). A custom block animates with no other component if the texture in `material_instances` is that tile. The two files are merged across packs. All blocks animate at the same tempo, and switching it on and off is done by changing the texture through block state permutations. In item icons it does not animate depending on the version (Source: the bedrock-wiki flipbook document).
+- **Interactive blocks** `{record}`: On top of a block the server sent as an interactive block (Dragonfly `Activatable`), the client does not predict placing the block it holds.
+- **Debug shape text direction** `{record}`: `Rotation` is [pitch, yaw, roll] in degrees, and yaw 0 reads from north. The reference differs from entity yaw (south 0, north 180), so using it as is flips north and south. A value in radians is effectively 0 degrees.
+
+### 5.3 Recipes and performance
+
+- **Replacing the recipe list** `{record}`: The client knows only the recipes the server sent with `CraftingData` (recipe book, crafting grid results). Resending this packet with `ClearRecipes` can replace the whole list at any time, so recipes can be unlocked during play.
+- **Recipe book** `{record}`: The recipe book lists only recipes whose result is in the creative inventory list (`CreativeContent`) and whose block state also matches. Many block results in vanilla `crafting_data.nbt` have a different state than the creative entry (about 30 kinds, such as chests and composters), so unless you match the runtime ID they are missing from the book.
+- **The client gets heavy first** `{measured}`: In a world with 1000 display entities and several thousand custom block models, the server tick had headroom at under 20% of the budget, but the client lagged. It looks like a rendering load `{inferred}`.
+- Slots and form controls cost something. For screens with many slots, measure the opening time and reduce the number of records sent (section 5 of [Reskinning](./reskinning-server-forms.mdx)).
+
+## 6. Rule summary
+
+1. Do not copy vanilla pictures; point to them by `textures/ui/...` path.
+2. Carry information on slots as `§k§r` markers inside item names and read it from `#hover_text`. Insert into both slot templates (`container_item`, `inventory_container_item`).
+3. Do not put a name containing a marker in the middle of a sentence.
+4. Do not put translation keys directly in server names and descriptions. Use rawtext translation.
+5. Measure the cost proportional to slot count by opening time.

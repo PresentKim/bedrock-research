@@ -1,0 +1,259 @@
+---
+title: "Entities, items, custom components"
+description: "Entity and Player APIs, custom block and item components, ItemStack and containers"
+sidebar_position: 4
+sources:
+  - private-research
+  - ms-learn
+---
+
+## Entities and players
+
+`Entity` is every individual in the world and `Player` is its subclass. An entity's features are divided into components and accessed like `entity.getComponent("minecraft:health")`, and if the component is absent it is `undefined`. In 2.x, `getComponent` throws an exception when the entity is invalid (`isValid === false`), so check `isValid` first inside deferred execution (Source: ms-learn, `v2-overview.md`).
+
+```javascript
+import { world, system } from "@minecraft/server";
+
+system.runInterval(() => {
+  for (const player of world.getAllPlayers()) {
+    const health = player.getComponent("minecraft:health");
+    if (health && health.currentValue < 6) {
+      player.addEffect("minecraft:regeneration", 100, { amplifier: 1 });
+      player.onScreenDisplay.setActionBar("Health is low!");
+    }
+  }
+}, 20);
+```
+
+When finding entities on the world side, use `Dimension.getEntities(EntityQueryOptions)` or `getPlayers()` and leave filters (`type`, `tags`, `location` with `maxDistance` and so on) to the API. It is faster than filtering in a script loop (Source: ms-learn, `world-apis.md`, `script-performance.md`).
+
+```javascript
+const overworld = world.getDimension("overworld");
+for (const skeleton of overworld.getEntities({ type: "minecraft:skeleton" })) {
+  skeleton.kill();
+}
+```
+
+## ItemStack and containers
+
+An `ItemStack` is a copy of a stack of items. Create one with `new ItemStack("minecraft:diamond", 3)`, its properties are `typeId`, `amount`, `maxAmount`, `nameTag`, `lockMode` and `keepOnDeath`, and its methods are `getLore/setLore`, `getComponent`, `getDynamicProperty/setDynamicProperty`, `clone`, `isStackableWith` and so on (Source: ms-learn, `ItemStack.md`). Because it is a copy, after editing you must write it back to the container or slot for it to take effect.
+
+```javascript
+const inv = player.getComponent("minecraft:inventory").container;
+const item = inv.getItem(0);
+if (item) {
+  item.setLore(["§7Special item"]);
+  inv.setItem(0, item);          // write back
+}
+// slots reflect in real time
+const slot = inv.getSlot(1);
+slot.nameTag = "Renamed";
+```
+
+## Custom components
+
+A custom component is attached by name in block/item JSON, and is connected by registering a script event function for that name in `system.beforeEvents.startup`. The official documentation describes this as "a combination of JSON-based configuration and script". The event functions are stateless, and the arguments tell which block (or item) the call is about (Source: ms-learn, `creator/Documents/scripting/custom-components.md`).
+
+The block component handlers (`BlockCustomComponent`) are: `beforeOnPlayerPlace`, `onBlockStateChange`, `onBreak`, `onEntity`, `onEntityFallOn`, `onNamedTick`, `onNeighborChanged`, `onPlace`, `onPlayerBreak`, `onPlayerInteract`, `onRandomTick`, `onRedstoneUpdate`, `onStepOff`, `onStepOn`, `onTick`. The item component handlers (`ItemCustomComponent`) are `onBeforeDurabilityDamage`, `onCompleteUse`, `onConsume`, `onHitEntity`, `onMineBlock`, `onReleaseUse`, `onUse`, `onUseOn` (Source: ms-learn, `BlockCustomComponent.md`, `ItemCustomComponent.md`).
+
+### Registration
+
+```javascript
+import { system, BlockPermutation } from "@minecraft/server";
+
+system.beforeEvents.startup.subscribe((init) => {
+  init.blockComponentRegistry.registerCustomComponent("content:turn_to_air", {
+    onStepOn: (e) => {
+      e.block.setPermutation(BlockPermutation.resolve("minecraft:air"));
+    },
+  });
+
+  init.itemComponentRegistry.registerCustomComponent("starter:add_night_vision_on_consume", {
+    onConsume: (arg) => {
+      arg.source.addEffect("minecraft:night_vision", 600);
+    },
+  });
+});
+```
+
+The component name requires a namespace, and registration is done only inside startup. If you use a class, `this` is lost when you pass methods, so bind it in the constructor with `this.onStepOn = this.onStepOn.bind(this);`.
+
+### JSON connection (custom components V2)
+
+In V2 a component is not put in the `minecraft:custom_components` array but written directly in `components` like other components. For this, Beta APIs and the Custom Components V2 experiment had to be on, and later it joined the release officially (Source: ms-learn, `v2-overview.md`).
+
+```json
+"minecraft:block": {
+  "description": { "identifier": "content:my_block" },
+  "components": {
+    "content:turn_to_air": {},
+    "minecraft:loot": "loot_tables/blocks/my_block.json"
+  }
+}
+```
+
+If several components are attached to the same event, they are called in the order written in the JSON. One component can be reused by several blocks, and it can be registered in one BP and used by another BP.
+
+### Parameters
+
+The value written in JSON is passed as the handler's second argument `CustomComponentParameters.params`. Different values can be given per permutation.
+
+```json
+"components": { "content:turn_to": { "into": "minecraft:dirt" } },
+"permutations": [
+  {
+    "condition": "query.block_state('content:state_name') == 1",
+    "components": { "content:turn_to": { "into": "minecraft:stone" } }
+  }
+]
+```
+
+```javascript
+system.beforeEvents.startup.subscribe((init) => {
+  init.blockComponentRegistry.registerCustomComponent("content:turn_to", {
+    onStepOn(e, p) {
+      const params = p.params;                       // { into: "minecraft:dirt" } and so on
+      if (params.into !== undefined) {
+        e.block.setPermutation(BlockPermutation.resolve(params.into));
+      }
+    },
+  });
+});
+```
+
+If you change the JSON or the registration, you must leave and re-enter the world for it to apply, and the script body can be hot reloaded with `/reload`. Inside callbacks you can use the same APIs as ordinary scripts.
+
+## Community notes
+
+Below are details of component handlers and the limits and workarounds of the entity, player and item APIs gathered from the community research.
+
+
+`*confirmed*`, `*single report*` and `**conflicting**` are reliability marks for reports. The basis of this page is community reports, and they may differ from the official Mojang documentation.
+
+### Custom components (blocks and items)
+
+#### Registration and JSON connection
+
+- **Registration**: `system.beforeEvents.startup.subscribe(({ blockComponentRegistry, itemComponentRegistry }) => { blockComponentRegistry.registerCustomComponent("ns:name", {...}); itemComponentRegistry.registerCustomComponent("ns:item", {...}); })`. It is not an experimental feature. Blocks use `blockComponentRegistry` (do not confuse it with itemComponentRegistry). There is no entity custom component registry (only blocks, items and custom commands; no root function/condition registration either).
+- **JSON connection**: Add `"ns:name": {}` (or a params object) to `components` in block/item JSON. The format before 1.21.90 was `"minecraft:custom_components": ["ns:comp"]` and the v1 method was deprecated in 2.0 (a report that v2 block registration required block format_version 1.26.0; the old `minecraft:custom_components` key is invalid). Writing an unregistered component in JSON gives a schema error, and registering only and using it like a tag with `{}` is also allowed. If the script version does not match, "not registered"/"child 'x' not valid here".
+- **Item format_version**: Item custom components bind only with format_version 1.21.80~1.21.90 or higher ("Custom Component is not being used by an item" warning; it failed on 1.20.50 and so on, with a report of fixing it with 1.21.100+). After the 26.0 Preview, the latest item components require format_version 1.26.0 ("this member was found in the input, but is not present in the Schema"; blocks are unaffected, not in the changelog).
+- **Sudden "component ... not present in the Schema"**: An old pack cache may be the cause, in one case it was fixed by adding `console.log` and reloading, and after a game update it recurred with format 1.26.50 blocks and was solved by recreating the pack/block from scratch (more common with blocks). "Child ti:slabs not valid here" is a block JSON error.
+- A case where a **missing required import** (`import { world, system }`) gave an "invalid definition" error. It worked with script module 2.6.0/2.7.0 stable.
+
+#### params
+
+- **Passing**: The handler's second argument `(event, { params })` - the component value in JSON as is (an object or array; not a JSON string). If it is an array, `for (const p of params)`, and iterating an object like an array gives a "cannot iterate" TypeError. In TS, `(params as any)`. Reading it on an item: `itemStack.getComponent('ns:comp').customComponentParameters.params.<key>` (or `getComponent("ns:comp")` returns an instance with params). Item params since 2.0.0.
+- **Depth limit 2**: The nesting depth/array depth of custom component JSON is limited to 2 (for performance, cannot be bypassed). Arrays of objects fail, so use an object map (`"custom_dye": {"item_id": "#fff"}`), a range as `[min, max]` instead of `{min,max}`, or parse an `"a:b:c"` string.
+- **Structure tip**: Instead of destructuring ten fields, iterate an array of `{effect, message, duration, amplifier, delay}` objects.
+
+#### Block component handlers
+
+- **List**: `onPlayerInteract` (player is optional), `onTick`, `onRandomTick`, `onPlayerBreak` (v2; `onPlayerDestroy` is v1, and `onBreak` includes non-player breaking), `beforeOnPlayerPlace` (`permutationToPlace`, `cancel`), `onPlace`, `onStepOn`, `onStepOff`, `onEntityFallOn`, `onRedstoneUpdate({powerLevel, previousPowerLevel})`, `onEntity` (an entity reaches its home block, tied to `execute_event_on_home_block`; there is no block entity event). Handler keys are case-sensitive (not `On...`). A wrong name fails silently.
+- **Fires only if it is in the current permutation**: If you put a component only in a conditional `permutation`, it is called only in that state (for example `onPlayerBreak` in a `q.block_state('ns:growth') < 7` permutation is not called at stage 7 -> a separate component in a `== 7` permutation). A case where custom components had to be listed in every permutation. A bug where a custom component in a permutation breaks other components (MCPE-234714), and a report that overriding only one of two components makes the second undefined in the second state. A common cause of "nothing happens" is that the component is not on the block.
+- **`onTick` vs `onRandomTick`**: `onTick` fires only for ticks queued by `minecraft:tick` (`{interval_range:[20,20], looping:true}`), while `onRandomTick` follows randomTickSpeed without a tick component (leaf decay and so on are random ticks; an unneeded tick component stores delay data so remove it). A block placed by a single-block placement at world generation does not receive `onTick`, only random ticks. `onTick` keeps working across `/reload` (unlike `runInterval`) but can fail if the block is invalidated during `/reload all`. Guard access to unloaded blocks with `block.dimension.isChunkLoaded(...)`. You cannot attach onTick to a vanilla block.
+- **Redstone**: `onRedstoneUpdate` uses `e.powerLevel` (not currentPower), the block needs `minecraft:redstone_consumer` (min power 1), and `powerLevel === 0` is power loss. It fires with power 0 at world load and flips the saved state, the first update is 0, and `previousPowerLevel` can be smaller than the consumer `min_power` (a first-update-type property is planned for 26.20). For custom door use it was once Preview only. `onRedstoneUpdate` fires on placement, chunk load and own power changes. To power a circuit from a script, place a `minecraft:redstone_producer` transparent block (changing the dust state is only visual). The producer's output strength itself cannot be adjusted by script (`BlockRedstoneProducerComponent` is beta as of 2025-10). `block.getRedstonePower()`.
+- **Neighbor updates**: Until 2026-04 there was no trigger (an `onBlockUpdate` type) that reacts to neighbor block changes, so multi-block structures were polled. A report (*single report*) that around 26.60 neighbor change block updates were added so polling can be reduced.
+- **`beforeOnPlayerPlace`**: `event.cancel = true` blocks placement (for example on liquid), and `event.permutationToPlace = event.permutationToPlace.withState('ns:state', false)` changes it. It does not fire when placed with a `minecraft:block_placer` item. A game bug where the item vanishes when merging slabs. Changing `permutationToPlace` to air acts like a cancel so the item is not consumed (a bug report, intent unconfirmed). Conversely, putting the block's own permutation does not prevent item consumption either.
+- **Other behavior**: Blocks have no `runCommand` -> `block.dimension.runCommand("execute positioned x y z run function ...")` (`/setblock ... destroy` drops, `block.below().setType("minecraft:air")` does not drop). There is also no `block.spawnParticle` -> `dimension.spawnParticle(id, block.center())`. On thin blocks (collision height &lt; ~3.3 px), `onStepOn` does not fire. Custom components are preferred over world events/`runInterval` for block logic, but there is an opinion that `runInterval` is better for effects such as cactus damage.
+- **Examples**: A bounce-on-step block `registerCustomComponent('ns:launch_entity', { onStepOn: (data, {params}) => data.entity?.applyImpulse({x:0, y:params.vertical_power, z:0}) })` + `"ns:launch_entity": {"vertical_power": 1}`. A particle block: `onTick(e){ e.block.dimension.spawnParticle("ns:p", e.block.above().bottomCenter()) }`. A button: state `ns:powered`, a position-keyed `activePresses` Map, `runTimeout` release + an `onTick` fallback. Stacking like turtle eggs/candles: increment a state counter in `onPlayerInteract`, subtract from the main hand unless creative, and a loot table per state. A general "Player Interact Component" that runs JSON-defined actions (setblock, creating items, state transitions, weighted random) replaces old block events (mcpedl.com/player-interact-component). Kaioga's block templates (slabs, beds, concrete powder, glass and so on).
+
+#### Item component handlers
+
+- **List**: `onUse`, `onUseOn` (`ItemComponentUseOnEvent.block`; custom components only - the world `itemUseOn` is replaced by `playerInteractWithBlock`), `onHitEntity` (`attackingEntity`, `hitEntity`, `hadEffect`; no `cancel` - to undo damage, record health and `setCurrentValue` 1 tick later; an unresolved report that `hadEffect` is true even for hits during i-frames), `onMineBlock`, `onBeforeDurabilityDamage` (`event.durabilityDamage = 0` for unbreakable; fires only on hitting entities, not on armor), `onCompleteUse({source, itemStack})`, `onConsume` (needs `food`; preferred over the global `itemCompleteUse` for food effects). There is no `onBlockDestroy` for breaking blocks.
+- **Custom tool durability**: Custom tools do not lose durability when mining blocks, so subtract it yourself in `onMineBlock`. The problem of custom weapon durability dropping twice is fixed with `onBeforeDurabilityDamage` (several reports agree).
+- **`onUse` and `onUseOn` both fire**: To make them exclusive, record the player id in a Set in `onUseOn` and skip `onUse` for the next 1~2 ticks. For items with a large `use_duration` such as bows/spears, `onCompleteUse`/`onConsume` do not fire.
+- **Examples**: `onUse(event){ event.source.addEffect("minecraft:regeneration", 200, {amplifier:0, showParticles:true}) }`, commands in `onUse` go through `system.run`, running a random `function`, spawning a projectile + `applyImpulse`.
+- A custom component applies only to its own item, so custom enchantments that also handle vanilla and other add-ons' items need an event-based approach. Custom components in item JSON are read through the registered component, not `hasComponent`, and item tags use `hasTag`.
+
+
+### Entities and players
+
+#### Identifiers and validity
+
+- **`entity.id` / `player.id`**: Permanently unique per world (ascending, the same after reconnecting and renaming, and the host always shows with the same id; the old host id was `-4294967295`). When an entity transforms (villager -> zombie villager), the id changes. `world.getEntity(id)` takes a string id (not a type id) and only loaded entities. An offline Player object allows only `id` and `typeId`. Names change, so key on id and keep the name in a DP for display.
+- **Identifiers across worlds**: The XUID cannot be read by script (a way on BDS is reading the console with `child_process` and passing it via `scriptevent`). `Player.playfabId` (2.9/26.40 beta) is an account-level PlayFab id, renamed `persistentId` in the preview beta (~2026-08-04, hex case changed) and stable across BDS/Realms/worlds. The `persistentId` of `beforeEvents.asyncPlayerJoin` (server-admin, BDS) can be forged with a client packet. The old pfid family is gone. Check the changelog per version.
+- **`isValid` is a property**: `entity.isValid`/`block.isValid` (since 2.0, `isValid()` gives "not a function"). An entity received from an event or query can also be invalid (a case where `world.getPlayers()` returned an invalid player right after joining), and a reference carried across ticks (`system.run`, `runTimeout`, a cache) should be checked with `player?.isValid` right before use (object first). There is no need to wrap every synchronous use. When a player leaves, the native handle is destroyed and property access throws. It can also become invalid if your own script removes it right after spawning.
+- **Player cache**: Do not call `world.getAllPlayers()` (only fully loaded players; since 2026-09 it returns `Player[]` along with `getPlayers()`, an iterable before) every tick; keep a Set/Map with `playerSpawn` (initialSpawn) + `worldLoad` (players already joined) + `playerLeave` (before recommended). Keeping Player references in a Map is faster than `world.getEntity(id)`. Do not blindly trust `map.size` and reconcile periodically. Example: `https://github.com/Visual1mpact/Paradox_AntiCheat/blob/rewrite/penrose/classes/player-cache.ts` . Order is roughly join order (not guaranteed).
+- **Host/permission checks**: `player.commandPermissionLevel === CommandPermissionLevel.Host` (`world.getAllPlayers().find(...)`), and OP is `commandPermissionLevel >= 1 || playerPermissionLevel === PlayerPermissionLevel.Operator` (value 2=Operator, 3=Custom; a report that the host showed as 3). `Player.isOp` was removed in 1.21.90 and `PlayerPermissionLevel` was added in 1.21.90.21. If there is no Host, it is BDS/Realm. The Realm owner cannot be known.
+- **Platform/client information**: `player.clientSystemInfo.platformType` (only the Desktop/Mobile/Console category), `maxRenderDistance`, `memoryTier`, `locale` (fragile). There is no `deviceOS`/`deviceModel` (Endstone-type tools are needed). Client settings such as FOV, simulation distance, F1 HUD state, camera perspective, game version, pause and brightness cannot be read (`onScreenDisplay.getHiddenHudElements()` shows only what the script hid). Simulation distance is estimated by crawling `isChunkLoaded` outward. Latency: `player.getPing()` is 2.9.0-beta (Beta APIs; inaccurate behind a local proxy), and even in single player the client-server latency is ~2 ticks. The party information `Player.partyInfo` was removed from beta in 26.30.
+
+#### Components
+
+- **Names**: The `minecraft:` prefix can be omitted (`getComponent("inventory")`), and the `EntityComponentTypes` enum is recommended. A script cannot add/remove entity components (there is no `addComponent`) and changes component groups through JSON events (`triggerEvent`). A component defined only in a component group is not visible to the script before the group is added (for example `leashable`), so to always look it up, put it in `components`.
+- **Read-only ones** (because internal systems overwrite them): `minecraft:scale`, `mark_variant`, `skin_id`, `variant`, friction modifier, `can_fly`, `Entity.target`, `isGliding`, `isSprinting`, health `effectiveMax`. Workarounds: a client-synced entity property + `setProperty` + Molang `q.property()`, component groups/events, or a helper pack on an old API version.
+- **Scale workaround (compatible pack)**: In the latest API `EntityScaleComponent.value` is read-only. A small second BP using Script API 1.19.0 receives `system.sendScriptEvent("src:size", JSON.stringify({id, size}))` and sets `getComponent("minecraft:scale").value`. The entity JSON must have the scale component directly (vanilla adult mobs do not; babies have `scale_by_age`), and you must wait ~27 ticks after spawn for the value not to revert.
+- **Health**: `getComponent("health")` -> `currentValue`, `setCurrentValue(v)` (cannot exceed max health, since 1.19), `effectiveMin/effectiveMax`, `resetToDefaultValue`. Healing: `setCurrentValue(clamp(cur+x, effectiveMin, effectiveMax))`. Changing max health is impossible from script -> player.json events, `health_boost` (2 units, max 255, affects current health), or a separate custom HP stat. Half-heart trick: health_boost level trunc((n-1)/4) -> 1 tick later health 20+n -> cancel natural regeneration before. Absorption: `addEffect("absorption", ...)` (an observation that `currentValue` can exceed `effectiveMax` while absorbing). `/effect @s instant_health 2 2` overflows and kills -> heal with the health component. A tamed wolf becomes 40 HP by vanilla behavior.
+- **Hunger/saturation**: The `currentValue` (not `value`; float) of `getComponent("minecraft:player.hunger")`/`player.saturation`/`player.exhaustion`, and `setCurrentValue(4)` disables sprinting. `EntitySaturationComponent` is stable.
+- **`minecraft:equippable` - players only**: `getEquipment(EquipmentSlot.Mainhand)` (ItemStack), `getEquipmentSlot(...)` (ContainerSlot -> `getItem()`), `setEquipment(slot, item, ItemLockMode...)` (empty with undefined), `totalArmor`, `totalToughness` (read-only; the spelling `totalProtection` was also reported). `EquipmentSlot` values are case-sensitive strings (`Mainhand`, `Offhand`, `Head`, `Chest`, `Legs`, `Feet`; `mainHand`/`'minecraft:offhand'` are not allowed - there is also a report that lowercase `'mainhand'` worked but using the enum is recommended), and an empty slot is undefined so `?.typeId`. `EquipmentSlot.Body` (mobs) is beta. Read it inside events, not at module scope. It is undefined on non-players (including armor stands) - this has lasted over a year, and Mojang said it is not intended and will come back ("on our radar" 2026-05-20, 2026-08-21). A report that only `setEquipment` worked on an `enable_attachables` entity (*single report*). Setting an arbitrary item in the off hand throws (a 1:1 off-hand add-on is impossible).
+- **Mob equipment workaround**: Write `entity.runCommand("replaceitem entity @s slot.armor.head 0 diamond_helmet")` (the RP entity needs `"enable_attachables": true`; `slot.weapon.mainhand`, `slot.armor.body` (wolf armor); the space is required, test with an empty hand in `keep` mode then `successCount`), read the `successCount` of `testfor @s[hasitem={item=...,location=slot.armor.head}]` or an mcfunction that scores (`hasitem` has only id/slot/quantity/data, and data ranges are impossible), and for custom entities with an inventory component `Container.transferItem`. A mob's enchantments, durability and natural armor cannot be read. Moving main-hand items between a player and an entity loses data.
+- **Inventory**: `getComponent("inventory").container` is only for entities that have an inventory (players, custom). Player main hand: `container.getItem(player.selectedSlotIndex)` (`selectedSlot` was removed; `selectedSlotIndex` is writable). Cursor: `getComponent("minecraft:cursor_inventory")` (`PlayerCursorInventoryComponent`; read `.item`, `.clear()`, cannot set). Ender chest: `EntityEnderInventoryComponent` (26.20.20; an unresolved report that `getSlot` gave an invalid slot). The entity inventory UI cannot be opened by script.
+- **Taming**: For vanilla tamed mobs the `tameable`/`tame_mount` components are removed on taming (a wolf has the `wolf_wild` group) so `tamedToPlayer` is undefined (WAI). Workaround: store the owner id in the entity DP when taming, and `tame(player)` directly in `playerInteractWithEntity` before. Instant taming: `spawnEntity` -> `getComponent(EntityComponentTypes.Tameable)?.tame(player)` -> `triggerEvent("minecraft:on_tame")` (the entity needs `minecraft:tameable`, `behavior.follow_owner`, `owner_hurt_by_target`, `owner_hurt_target` and `minecraft:on_tame`; only entities with the component defined in JSON). `EntityTameMountComponent.tamedToPlayer` is for mounts (a report that it does not work). `minecraft:trusting` stores only one player (`TrustedPlayer0`) and cannot be set by script.
+- **Riding and leashes**: `addRider` has no seat argument and when one gets off the other seats shift. Seat positions are server-side information (the `Seat` class), and repeating `/ride` with selectors causes lag. A leash is `getComponent("leashable").leashTo(player)`. `/dialogue open` works only if the NPC is within the target player's tick range.
+- **Other components**: `rideable` (force riding with `addRider(self)`, `ejectRiders()` must have parentheses, `getRiders()`), `riding` (`entityRidingOn`), `type_family` (`EntityTypeFamilyComponent`), `EntityVariantComponent`, `EntityNpcComponent` (cannot create scenes, open remotely with `/dialogue`), `minecraft:attack`/attack power, breeding, `charged_item` and most attribute components are not exposed (measure mob attack power with a lookup table or the hurt event). Baby mobs (sheep color, horse variant/mark_variant, cat, wolf, fox, llama) have no color/variant components (suspected bug). Boat variant is not exposed. `minecraft:vibration_damper` is readable with `hasComponent` in 1.26.60.28.
+- **Targets**: A report that `Entity.target` (the current attack target) works read-only in stable and a report that even in 2026-10 it is not in stable 2.7.0 and is beta only conflict (**conflicting**). A way to find the target without beta: in a custom event called by entity JSON `minecraft:on_target_acquired`/`on_target_escape`, run `queue_command` with `"target": "target"` and the `sourceEntity` of `scriptevent` becomes the target. An `entityTarget.js` that assigns each entity a scoreboard numeric ID the same way and lets the script find the target through the scoreboard was also shared (no verification by others). Cannot be set -> entity JSON (`minecraft:on_target_acquired` -> notify through a `queue_command` scriptevent), setting the target with the facing entity argument of `teleport`, and a movement trick of spawning a transparent "blank" entity at the destination so JSON targets it. There is no pathfinding API (`pathTo`) - script A* is slow above 100 blocks, so use HPA*/chunk waypoints, a dummy entity path + teleporting the real entity, or native AI where possible.
+
+#### Movement, rotation, teleport
+
+- **Player rotation does not work with `setRotation`/`lookAt`** (the client overwrites it; a report that only x works and y does not, unfixed on 2026-03-30). `player.teleport(loc, { rotation: {x, y} })` (in degrees) or `{ facingLocation }`. For non-players, `setRotation` reverts or syncs late, so reapply every tick or use a client-synced property + animation. There is an unresolved report that an entity stops half turned, and a report that the X rotation snap-back was fixed in Preview 26.70.23 (*unverified*). 3D rotation is possible only with animation. When freezing a player with a teleport every tick, also turn off camera input permission. View-lock alternative: `camera.setCamera("minecraft:free", {location, rotation})` + `inputpermission set @s camera disabled`.
+- **Teleport**: `teleport(loc, {dimension, rotation, facingLocation, keepVelocity})` (a report that `keepVelocity` is unsupported on players and a report of a keep-velocity `tryTeleport` for rail entities coexist), `tryTeleport(loc, {checkForBlocks})` is a boolean (fails if it overlaps a block). The target position is the feet position. A script teleport is smoothly interpolated on the client (commands stutter). A report that rotation is not applied across dimensions. Teleporting into an unloaded chunk (especially a ticking area of another dimension) risks removing the entity (fixed ~2026-07-28). In BDS 1.26.31.1 `Player#teleport()` caused a kick, fixed in 1.26.44.3 (`tryTeleport` is unaffected).
+- **Input permissions**: `player.inputPermissions.setPermissionCategory(InputPermissionCategory.Jump|Movement|Camera, false)` (replaces `/inputpermission`). Setting it every tick causes movement desync (stutter) -> only on change.
+- **Look/coordinate computation**: `getHeadLocation()` (~0.1 lower than the real camera), `getViewDirection()`, and a point ahead `location + viewDir * d`. Direction -> rotation `yaw = atan2(-x, z)*180/PI`, `pitch = atan2(y, hypot(x,z))*180/PI` or `{x: -asin(v.y)*180/PI, y: atan2(-v.x, v.z)*180/PI}`. Rotation -> direction `x=-sin(yaw)cos(pitch), y=-sin(pitch), z=cos(yaw)cos(pitch)`. Local `^ ^ ^`: forward = viewDir, left = normalize(-z,0,x), up = cross(left, forward); in Minecraft's `^`, +x is *left*, so the right vector must be flipped. For non-player mobs, the horizontal `getViewDirection`/`getRotation` update only on spawn, movement and being hit (vertical is real time). Axis convention: north -Z, east +X, yaw 0 = south (+Z). `Block.north()` is -Z. The `Direction` enum description in the jaylydev documentation has north and south swapped (a documentation error).
+- **Size/hitbox**: `entity.getAABB()` (2.4.0, around 1.21.120) -> width `extent.x*2`, height `extent.y*2` (head ~0.85). Because of the survival-mode attack range check, a custom hitbox larger than ~6 blocks cannot be hit (creative can). The block collision box is not exposed. The size of slimes and magma cubes is also judged with `getAABB()`.
+
+#### Spawning, removal, properties
+
+- **Spawn**: `dimension.spawnEntity(id, loc, { spawnEvent: "ns:event", initialPersistence: true, initialRotation })` - variants/babies through `spawnEvent` (`minecraft:entity_born`), `initialPersistence` prevents despawning outside simulation distance (name tags and ticking areas did not work), and `initialRotation` is Y only. Spawn at the block center (x+0.5, z+0.5) or `block.center()`. Outside the world height there is an out-of-bounds error. Spawning many in one tick (80 projectiles) lags -> ~10 per tick. A vanilla fireball cannot be summoned (a clone entity with `is_summonable` or a structure). Tag after spawn: `const e = spawnEntity(...); e.addTag("t")` (`setProperty()` is void so no chaining).
+- **Removal**: `entity.remove()` is immediate (the client position follows late), and `kill()` is a deferred removal + fires the hurt event. `remove()` does not work on players, so `player.kill()`. A single report that `kill()` did not drop loot. You cannot run a command on a just-removed entity -> record the position and run it on the dimension. Preventing vanilla mob despawn: `nameTag = "§r"` (looks like an empty name) or redefining the vanilla entity (`minecraft:persistent`).
+- **Entity properties**: `setProperty('ns:prop', v)` (with `client_sync: true` on the BP property, render control with Molang `q.property`; `getProperty` in the same tick gives the old value -> wait 1 tick, and waiting 1 tick after spawn is also recommended), and a property's maximum can be found by setting an out-of-range value in a try/catch and reading `ArgumentOutOfBoundsError.maxValue`. If "does not exist on Entity" appears on custom/simulated players, add `client_sync`. Entity properties (not DPs) are shared between add-ons. If `variant`/`mark_variant` are not enough, use properties (`https://wiki.bedrock.dev/entities/entity-properties`). A report that there are 32 properties per entity (*single report*; work around it by packing bits into one integer), and DPs have no count limit.
+- **Per-player visuals**: `Player.setPropertyOverrideForEntity(entity, 'ns:prop', value)` (2.6.0) gives a different property value only to a specific player -> per-player outlines/team marks/hiding parts (it is temporary, so keep a Map of the entities being looked at, and try/catch on despawn). Template github.com/JuanLuci/Player-Outline (`player:can_see_outline`, `player:has_outline`). `playAnimation(id, {players:[p]})` plays an animation only for specific players (for example hiding with scale 0; the name tag is not hidden).
+- **Distant entities**: It is known to be culled beyond 64 blocks, and in measurement 73 blocks (Manhattan distance) was the render limit. For an entity that must appear large at a distance, use the `minecraft:ender_dragon` runtime id, or a method that moves a structure with the local transform of a clone entity (Invent: Aeronautics), or per-distance LOD particles. A trick: teleport a `runtime_identifier: minecraft:tnt` entity to the player every tick and offset the model to a world position with animation, with the hitbox handled by script.
+
+#### Effects, experience, HUD, name tags
+
+- **`addEffect(effectType, durationTicks, { amplifier, showParticles })`**: The third argument is an options object, the duration is in ticks (1 means "no effect"), a misspelled `amplifer` is silently ignored, amplifier and `BlockRaycastOptions.maxDistance` round non-integers down (integers needed). Maximum 20,000,000 ticks, and `Infinity`/-1 cannot be set (`getEffects()` reports infinite as -1; a 2026-07 report that Infinity may work later) -> the `effect @s x infinite` command. Effect ids are `MinecraftEffectTypes` (vanilla-data). A measurement that the `effect clear` command was faster than repeating `clearEffect()`.
+- **Experience**: `player.addLevels` (online only), `player.level`. There is no `setLevel`, so put a large negative number in `addExperience()` to make it 0 and then add the desired amount. There is no experience orb pickup event (poll the level).
+- **HUD/title**: `onScreenDisplay.setHudVisibility(HudVisibility.Hide, [HudElement.Health, HudElement.Hunger, ...])`, `setTitle(text, {stayDuration, fadeInDuration, fadeOutDuration})` - if you give options, all three values are required ("Native setter cannot be assigned null or undefined"), `setActionBar`, `updateSubtitle`. Name tag: `player.nameTag = \`$&#123;player.name&#125;\nText\`` (only above the head, not the chat name; no rawtext/translate), `nameplateRenderDistance`. There is no API to make an entity name tag always visible. A boss bar name made with `spawnEntity` + `nameTag` is "unknown" (an old bug) -> name it with `/summon`, and it cannot be updated dynamically.
+- **Chat name/rank**: Cancel in beta `chatSend` before and resend the formatting with `world.sendMessage` (duplicates if other packs have handlers). The new beta Player chat prefix/suffix properties avoid conflicts. `ChatSendBeforeEvent.targets` was once read-only and then restored (limit recipients by assigning Player[]). Whispers (`/w`, `/tell`) and slash commands cannot be caught with `chatSend` (`/me` can be disabled only through BDS `config/commands.json`).
+- **Messages**: `player.sendMessage` (that player only), `world.sendMessage` (everyone), and for tag groups iterate `world.getPlayers({tags:[...]})`/`excludeTags`. Nested RawMessage: `{rawtext:[{translate:"key", with:{rawtext:[...]}}]}` (`with` is `string[]` or a RawMessage, not `RawMessage[]`). Translation happens on the client, so a script cannot get the translated string. The player language cannot be read (except `locale`). A giant message such as `player.name.repeat(10e3)` crashes client rendering.
+- **Skins**: A player skin cannot be read/changed by script (`skin_id` is only a variant number). `getPlayerSkin` is for simulated players only and gives no texture. There is also no way to download an external skin. Morphing uses player.json + render controllers + entity properties. For NPCs/doubles use a player-skin dummy entity or SimulatedPlayer (chapter 14).
+
+### Items and containers
+
+#### ItemStack basics
+
+- **It is a copy**: Changes to an ItemStack obtained from an inventory or event (`setLore`, `nameTag`, `amount`, durability, enchant, DP) are saved only if written back with `container.setItem(slot, item)` / `equippable.setEquipment(slot, item)`. That get+set seems to work within the same function is because it is the same object. Conversely, a `ContainerSlot` (`container.getSlot(i)`, `equippable.getEquipmentSlot(...)`) always reflects the current content, and `slot.setLore()`, `slot.amount -= 1` and `slot.setItem()` apply immediately. Blocks and entities do not need to be set again. *confirmed*
+- **Preventing duplication/loss bugs**: If the player changes the slot after reading, `setItem` overwrites the wrong slot -> hold a ContainerSlot and recheck the typeId right before writing. Handle consumption in the same tick as the action (or earlier), and alternatively use the `successCount` of the `clear` command. Risk of duplication after dropping a custom item and before the script subtracts it (workaround with a content hash).
+- **Emptying and quantity**: Empty with `container.setItem(slot)`/`(slot, undefined)` (`new ItemStack("minecraft:air")` is a ghost stack). `amount` is 1~255, and at 1 or below it is removed instead of decreasing. `item.amount = n` alone is not reflected -> setItem a new stack/clone. `ItemStack.maxAmount` gives the maximum stack.
+- **Checking type**: `item.typeId` (string) vs `item.type` (ItemType). Using a custom id in `itemStack.matches(...)` logs "unknown block descriptor" -> compare `typeId`. `isStackableWith` is false for non-stackable items, and `matches` is only id/state. `BlockPermutation.resolve("minecraft:coarse_dirt").matches("minecraft:dirt")` is true. Whether it is a block: `BlockTypes.get(item.typeId) !== undefined` (including custom blocks; cache `new Set(BlockTypes.getAll().map(b => b.id))` inside `system.run`). Alias -> id: `ItemTypes.get(id)?.id`. `ItemTypes.get()` also works with custom ids. Item tags: `hasTag("minecraft:is_pickaxe")`, `is_axe`, `is_sword`, `is_hoe`, `is_food` (vanilla food, not glow berries).
+- **Lock/keep on death**: `itemStack.lockMode = ItemLockMode.inventory` (or `slot`, `lockInInventory`), `keepOnDeath = true` and then setItem; lock armor with `equippable.setEquipment(EquipmentSlot.Chest, item, ItemLockMode.lockInInventory)`. The popup when dropping a locked item cannot be hidden (`showTags false` is only the tooltip). Locking works only in player inventories, not block containers. `/give ... {"item_lock":{"mode":"lock_in_inventory"}}`.
+
+#### lore, name, durability, enchantments
+
+- **lore**: `setLore(string[] | RawMessage[])` (RawMessage since 2.2.0, stringified rawtext in all versions), `getLore()` (an empty array if none; array comparison is per element, `[] === []` is false), `getRawLore()`. Clearing: `setLore()`/`setLore(undefined)` (a report that an empty array leaves an empty line and a report that "an empty array clears it" coexist). Limit roughly 100 lines, ~1000 characters per line. A literal `%` is `%%`. The problem where a new item entering the same slot inherits the old lore -> add it on the next tick. Built-in tooltips such as "+4 Attack Damage" are hard-coded. Lore is not shown in the creative list.
+- **Name**: Edit `ItemStack.nameTag` and write it back to the same slot. To clear, undefined (unverified). The custom name of a block such as a chest is also decided by the `nameTag` of that block item's ItemStack. A single report that the 255-character limit can be avoided with rawtext.
+- **Durability**: `item.getComponent("minecraft:durability").damage = Math.min(damage + n, maxDurability)` and write back (beware of missing assignment like `damage + 60;`, `(x ?? 0) + n`). A helper that respects the Unbreaking enchantment (skip with probability `level/(level+1)`, and at 0 `setItem(slot, undefined)`). Unbreakable with `unbreakable = true` (but `unbreakable` does not block writing `damage`). `world.beforeEvents.itemDurabilityDamage` does not exist (an AI hallucination) -> the item component `onBeforeDurabilityDamage`. The armor damage sound cannot be reliably turned off with `stopSound` (empty RP sound).
+- **Enchantments**: `getComponent('enchantable').addEnchantment({type: new EnchantmentType('fire_aspect'), level: 1})`, `addEnchantments(getEnchantments())`, `getEnchantment("silk_touch")`. You cannot get a list of possible enchantments, and levels above the vanilla cap are blocked (the old trick of copying over-cap enchantments no longer works). Remove with `removeEnchantment` then `setItem`. Imitate custom enchantments with lore and reimplement the behavior in script. Removing `minecraft:enchantable` from custom armor prevents enchanting. Enchanting table offers are tied to the player's `EnchantmentSeed` and cannot be rerolled.
+- **Item conversion** (keeping data): Copy `nameTag`, lore, `getDynamicPropertyIds()` -> `setDynamicProperty`, durability `damage` and enchantments to a new `ItemStack(newId)`. Vanilla items have no `minecraft:dyeable`, so the dye color cannot be carried over (MCPE-237577).
+- **Cooldowns**: `player.startItemCooldown(category, ticks)` (an arbitrary category with no item is also possible -> a general player cooldown; calling again with 1 tick effectively resets), `player.getItemCooldown(category)` > 0 means active, `ItemCooldownComponent.startCooldown(player)`/`getCooldownTicksRemaining(player)` (no stopping, reducing or resetting). Cooldowns are per category, not per item. JSON `minecraft:cooldown` has `category`, `type` ("use"/"attack") and `duration` (seconds) - it starts when use *begins* (on completion if together with use_modifiers), and an attack cooldown with `"type": "attack"` + `minecraft:swing_duration` in 1.21.130 (give both the same value). A report that the cooldown reset on rejoining -> store `Date.now()` in a DP (drift on delay). The custom item cooldown bar display was fixed in 26.10.20.
+
+#### Special items
+
+- **Potions/arrows**: `Potions.resolve("minecraft:Healing", "Consume")` (`minecraft:` for the effect id, none for the delivery type; `Potions.getAllDeliveryTypes()`), and the old `ItemStack.createPotion` does not exist. Potion kind: `item.getComponent('potion')?.potionEffectType.id` (`minecraft:long_strength` and so on; `ItemComponentTypes.Potion` was once beta, and the amplifier is in vanilla-data). A tipped arrow ItemStack cannot be created (command/loot `loot spawn`), its kind is known only by `localizationKey` (`tipped_arrow.effect.<name>`), and identification via the potion component fails (mentioned in MCPE-236954). Thrown/lingering potion entities with a chosen effect cannot be created (structure or a `spawn_aoe_cloud` custom projectile). Cauldron potions: only `setPotion` on FluidContainer.
+- **Bundle/shulker**: `itemStack.getComponent("inventory").container` (`ItemInventoryComponent`) is only for items with the Storage Item component (bundles) - a scan of 1500 items found only bundles. After changing, setItem again into the owning container. The contents of a shulker box item are not exposed -> place it as a block and read it, place it with a dispenser (keeping empty slots), break it with fire damage and read the item entities, or use a hidden custom dimension. A shulker support line appeared in the 26.60 changelog but Mojang answered that it was a mistake, and in both the 2026-11 release and Preview `getComponent(ItemComponentTypes.Inventory)?.container` is undefined (no schedule as of 2026-11-06). A report that inventory access fails on a custom `minecraft:storage_item` (format 1.21.130). Bundle interaction itself cannot be turned off, and bundle throwing is worked around with a long swing duration and use modifiers.
+- **Other unreadable data**: Item aux/data values (vanilla `minecraft:arrow:3` and so on; see `metadata/vanilladata_modules/mojang-items.json` in bedrock-samples, `testfor @s[hasitem={item=x,data=n}]`), item texture paths (a mapping table you build - `ItemTypes.getAll()` + item_texture.json, an AI list is ~70% accurate), armor trims (only via the loot table `set_armor_trim`/`SetArmorTrimFunction` + `generateLootFromTable` or structures), vanilla item `minecraft:food` (mostly undefined, use your own list), leather armor `dyeable` (custom items only; the `color` of `ItemComponentTypes.Dyeable` is &#123;red,green,blue&#125; 0~1), compass lodestone position, dynamic glint (only JSON `minecraft:glint`), item overlay textures (swap two similar items), and almost all item NBT.
+- **Item frames/shelves**: `block.getItemStack()` returns the frame item (the frame if empty), setting is only via structures, and there is no inventory component. A shelf has no `inventory` component in 2.5.0. The book on a lectern was re-added as an inventory component.
+
+#### Containers
+
+- **`Container` methods**: `getItem`, `setItem`, `getSlot`, `addItem` (returns the remaining ItemStack -> `spawnItem` if full; an opposite report in 2026-06 of "returns void", and `player.addItem` returns the overflow - **conflicting**), `transferItem` (delay reported), `swapItems(i, j, container)` (armor/off hand excluded), `emptySlotsCount` (0 means full - partial stacks need a manual loop), `find`/`findLast`/`contains` (they take an ItemStack and must match quantity and NBT exactly; a report that `contains` ignores quantity; failed on custom brewed potions) -> usually a slot loop + typeId comparison (`while (slot--) inv.getSlot(slot)`). Removing N items across several stacks is also a manual loop. `setItem` can throw because of container rules so try/catch. An unresolved report of an undeletable item created by `setItem` of a copy with changed durability.
+- **Virtual container (2026-11 Preview)**: A Preview API for creating containers such as custom barrels. Reported limits are no hopper support, comparator behavior differing from vanilla, and the interaction button not showing on mobile. Reflection in stable is tied to "Drop 4" and the date is undecided.
+- **Block containers**: `block.getComponent('minecraft:inventory').container` (chests, barrels, furnaces - smelting speed-up possible; scanning many blocks is limited per tick). A large chest has size 54 (single 27) but you cannot know which neighbor it is -> put a unique marker in slot 0 (random DP/lore) and check the neighbor (false positive if the same marker), or a custom chest with a `sibling` direction state. Loot fills from slot 0, so distribute yourself. When copying a block, copy the chest contents and sign text separately.
+- **World-generated chest loot cannot be hooked**: For chests the player placed, `playerInteractWithBlock` + DP, or place a transparent block with `may_attach_to.bottom: [chest]` using `single_block_feature` and read it on interaction (new chunks only). Already generated content is not affected by a new add-on.
+- **Cannot force-open a container UI** (chest/furnace/entity inventory, and you also do not know which UI is open): Workarounds are an inventory entity at the player's position (removed if it holds no item; contents as JSON in a player DP), a chest minecart, a transparent entity that teleports in front of the player (the old Rubedo method lags), chest-style forms such as Herobrine Chest-UI, and fake inventories in custom server software. A design that uses a 76-slot hidden container entity as a chest UI must handle cursor, drop, spawn and hurt events to prevent duplication of button items (entity inventory size is fixed after creation). Fake buttons in an inventory: items with no texture + a name (hover) + `entityContainerOpened/Closed`, `playerInventoryItemChange`, `entityItemDrop`, and polling `cursor_inventory`.
+- **Crafting**: Stable has no crafting events or crafting grid item detection (JSON UI can see it with `#item_id_aux`), and the DP and lore of ingredient items during crafting cannot be read either. The Preview `2.13.0-beta.1.26.70-preview.21` has `RecipeCraftingContext.getInputItem`, and an idea of keeping the durability of ingredient tools with `BlockRecipeCraftingComponent` + `PlayerCraftRecipeAfterEvent` appeared (*unverified*). Inventory change diffs, a method of leaving the result as a dummy item and swapping it. There is no recipe validation/management API -> parse bedrock-samples recipes (the vanilla recipe files are not complete), "Recipe Registry"/"Bedrock Registry" add-ons, a recursive crafting tree github.com/Efficient123/recursive-crafting (object key lookup, cycle guard), and a runtime method of putting items into a Crafter with `replaceitem` and reading the result with redstone (5~10 ticks, fails for shared recipes). Recipes cannot match names/lore, only item tags (for example `minecraft:coals`). A custom crafting table uses the `crafting_table` block component + tags (3x3 only), and a custom furnace uses the entity chest workaround. There are no crafting/smelting events for the vanilla furnace/crafting table.
+
+#### Loot tables (LootTableManager)
+
+- **Usage**: `world.getLootTableManager().getLootTable("folder/name")` -> `generateLootFromTable(table, tool?)` gives an `ItemStack[]` (enchantments and data persist only if you use the returned stacks as they are, and are lost if you recreate with `new ItemStack(typeId, amount)`) -> `dimension.spawnItem` each. `generateLootFromBlock(block, tool)` reflects tool enchantments (Fortune). Tables cannot be created at runtime. It is not an experimental feature and is stable (the beta label in the documentation is an error). `LootTableFunction` also exists. Uses: armor trims (`set_armor_trim`; also works on custom armor), dyeing, ominous bottles (`set_ominous_bottle`), items with block data values, and applying vanilla mob loot (from EntityDie). The `match_tool` of the `loot spawn` command needs a tool argument. Recreating the vanilla trial vault table loses the enchantments.
+- **Bugs (2026-04)**: `LootItem.name` undefined for custom items/blocks (MCPE-238050), no `conditions` on `LootItem` (MCPE-238052), `LootPool.rolls`/`bonusRolls` do not give a usable `NumberRange` (MCPE-238055/238056); LootItemConditions work. A crash of the dyeable component on a cloned ItemStack was fixed (MCPE-237909). There is no `Dimension#spawnXP`.
+- **Vanilla block drops (sapling probability and so on)** cannot be changed with loot tables, so detect the break -> compute probability -> spawn the item. A mention that `/replaceitem block` can change what the block drops. To prevent custom block drops, an empty loot table + script drops.

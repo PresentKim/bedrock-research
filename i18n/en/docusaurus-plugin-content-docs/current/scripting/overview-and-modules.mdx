@@ -1,0 +1,313 @@
+---
+title: "Script API overview and execution model"
+description: "Script API module layout, manifest, TypeScript bundling, initialization order, restricted execution, scheduling, QuickJS runtime"
+sidebar_position: 1
+sources:
+  - private-research
+  - ms-learn
+  - bedrock-wiki
+---
+
+The Script API is exposed on a Mojang-modified QuickJS as the modules `@minecraft/server`, `@minecraft/server-ui`, `@minecraft/server-net`, `@minecraft/server-admin`, `@minecraft/server-gametest`, `@minecraft/debug-utilities`, `@minecraft/server-graphics` and `@minecraft/server-editor`. This page gathers 16 key rules, how to get started, and the execution model. The official concept documentation explains that the Script API is loaded as the `script` module of a behavior pack and that world-manipulating code runs inside the server tick (Source: ms-learn, bedrock-wiki).
+
+## Page map of this section
+
+- [Overview and execution model](./overview-and-modules.mdx): manifest, bundling, initialization, restricted execution, scheduling, QuickJS
+- [Module versions and beta](./versions-and-beta.mdx): pairing versions and changes by release
+- [Events and combat](./events.mdx)
+- [Entities, items, custom components](./entities-and-components.mdx)
+- [World, blocks, dimensions, effects](./world-and-dimensions.mdx)
+- [Custom commands](./commands.mdx)
+- [Dynamic properties and data storage](./dynamic-properties-and-storage.mdx)
+- [server-ui, server-net, server-admin, GameTest](./server-net-and-admin.mdx)
+- [Debugging, performance, tools](./debugging-and-tooling.mdx)
+- [Pattern recipes, known limits, open questions](./pitfalls.mdx)
+
+## What is the Script API
+
+The Script API is a way to control entities, blocks, items, players and the world by putting JavaScript (or JavaScript compiled from TypeScript) in a behavior pack (BP). A script is "a program that reacts at set times or to events", and the game runs one script tick every tick (1/20 second) (Source: ms-learn, `creator/Documents/scripting/introduction.md`). Features are divided into modules, and code imports classes by module name, as in `import { world, system } from "@minecraft/server";`. The most important module is `@minecraft/server`, and its key entry points are as follows.
+
+| Class | Role | Representative members |
+|---|---|---|
+| `world` | The whole world | `getDimension`, `getAllPlayers`, `sendMessage`, `getDynamicProperty`, `scoreboard`, `afterEvents`, `beforeEvents` |
+| `system` | Ticks and scheduling | `currentTick`, `run`, `runTimeout`, `runInterval`, `runJob`, `clearRun`, `clearJob`, `waitTicks`, `sendScriptEvent` |
+| `Dimension` | Looking up and changing blocks and entities in a dimension | `getEntities`, `getPlayers`, `getBlock`, `spawnEntity`, `setBlockType`, `fillBlocks` |
+| `Entity`, `Player` | Entities and players | `location`, `getComponent`, `addTag`, `teleport`, `applyDamage`, `runCommand` |
+| `ItemStack` | A stack of items | `typeId`, `amount`, `setLore`, `getComponent`, `setDynamicProperty` |
+| `Block` | One block cell in the world | `typeId`, `permutation`, `setPermutation`, `getComponent` |
+
+(Source: ms-learn, `creator/ScriptAPI/minecraft/server/System.md`, `World.md`, `ItemStack.md`)
+
+## Minimal working example
+
+For a script to run, the BP manifest needs a `script` module and a `@minecraft/server` dependency. Generate new module UUIDs and put them in.
+
+```json
+{
+  "format_version": 2,
+  "header": {
+    "name": "My Script Pack",
+    "description": "Script API example",
+    "uuid": "00000000-0000-4000-8000-000000000001",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 21, 100]
+  },
+  "modules": [
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "00000000-0000-4000-8000-000000000002",
+      "version": [1, 0, 0],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    { "module_name": "@minecraft/server", "version": "2.4.0" }
+  ]
+}
+```
+
+`scripts/main.js` sends a message once every 10 seconds (200 ticks).
+
+```javascript
+import { world, system } from "@minecraft/server";
+
+let secondsPassed = 0;
+function mainTick() {
+  if (system.currentTick % 200 === 0) {
+    secondsPassed += 10;
+    world.sendMessage("Seconds Passed: " + secondsPassed);
+  }
+  system.run(mainTick);   // schedules the same function again for the next tick
+}
+system.run(mainTick);
+```
+
+The official tutorial warns that code that depends on a specific tick such as `system.currentTick === 400` runs only once per world, so be careful. In the game, typing `/reload` reloads the script so you can check edited code right away (Source: ms-learn, `introduction.md`).
+
+## Three execution privileges
+
+A script has a different range of usable APIs (privilege) at each point in time. The official classification is as follows (Source: ms-learn, `creator/Documents/scripting/execution-privilege.md`).
+
+| Privilege | When | Allowed range |
+|---|---|---|
+| restricted execution | All `before` events, custom command callbacks, property getters | Only read-only and special-privilege APIs. Calls that change the world are errors |
+| early execution | First file load, `system.beforeEvents.startup`, custom component registration | Only event subscription, the scheduler and registry registration |
+| default execution | `after` events, coroutines, `system.run` callbacks | The whole API |
+
+For example, in a `before` event `getGameMode()` works but `setGameMode()` throws an exception. `world.sendMessage()` has a special privilege and is also callable in `before`. The old documentation's "read-only" is the same as restricted execution.
+
+```javascript
+world.beforeEvents.playerBreakBlock.subscribe((e) => {
+  e.player.getGameMode();                    // read: possible
+  system.run(() => {                         // defer writes
+    if (e.player.isValid) e.player.setGameMode("creative");
+  });
+});
+```
+
+## Tick model and the `system.run` family
+
+The order of one tick as explained by the official guide is this. First the `before` events come (no world changes), then asynchronous code, the system job queue, `system.run` callbacks and the iteration of `after` events follow, and finally the tick counter goes up. Bedrock uses an API modeled on the web's `setTimeout`/`setInterval` instead of a separate update function (Source: ms-learn, `creator/Documents/scripting/system-run-guide.md`).
+
+- `system.run(fn)`: Runs as soon as possible. If you `run` again inside a `run` callback, it runs on the next tick, so it cannot recurse infinitely within one tick. It is the standard for game loops.
+- `system.runTimeout(fn, ticks)`: `0` is as soon as possible (inside a `run` callback it is the same tick, with a risk of infinite recursion), `1` is similar to `run`, and `2` is the tick after that.
+- `system.runInterval(fn, ticks)`: Repeats at the same interval until you call `clearRun(id)`. If the value is `1`, the first run is the next tick.
+- `system.runJob(generator)`: Each time the generator `yield`s, the engine looks at the remaining tick time and decides whether to continue. It is for long jobs whose end tick does not matter.
+
+```javascript
+// game loop
+function update() { /* logic */ system.run(update); }
+system.run(update);
+
+// deferring a world change from a before event until after the tick
+world.beforeEvents.explosion.subscribe((e) => {
+  system.run(() => e.dimension.spawnEntity("minecraft:pig", { x: 1, y: 4, z: 1 }));
+});
+```
+
+Code deferred this way runs after the event has already ended, so you cannot put in cancel logic such as `cancel`.
+
+### Splitting large jobs with runJob
+
+```javascript
+import { system, world, BlockPermutation } from "@minecraft/server";
+
+function* placeCube(size, sx, sy, sz) {
+  const dim = world.getDimension("overworld");
+  const planks = BlockPermutation.resolve("minecraft:planks");
+  for (let x = sx; x < sx + size; x++)
+    for (let y = sy; y < sy + size; y++)
+      for (let z = sz; z < sz + size; z++) {
+        dim.getBlock({ x, y, z })?.setPermutation(planks);
+        yield;                       // yield after every block
+      }
+}
+system.runJob(placeCube(10, -2, -60, 1));   // pass the generator object
+```
+
+The official recommendation is to `yield` in small pieces so that one iteration does not exceed one tick of time, and to keep the amount of work between iterations similar. The job system does not starve generators and runs at least one iteration per tick for each script BP (Source: ms-learn, `system-run-guide.md`).
+
+## Startup flow of Scripting V2
+
+From 2.0.0, scripts run for the first time very early in world loading. The order written in the official overview is this (Source: ms-learn, `creator/Documents/scripting/v2-overview.md`).
+
+1. V2 scripts load and run (early execution), followed by V2 promise resolution
+2. `system.beforeEvents.startup` is received (early execution)
+3. Wait until world loading finishes, then V1 scripts load (V1 keeps the old timing)
+4. The first tick, and at the end of the tick all scripts receive `world.afterEvents.worldLoad` (`worldInitialize` for V1)
+
+The APIs usable in early execution are event `subscribe/unsubscribe` (all of world and system before/after), `system.clearJob/clearRun/run/runInterval/runJob/runTimeout/waitTicks`, and `registerCustomComponent` of `BlockComponentRegistry` and `ItemComponentRegistry`. Other `world` access is an error, so move it into `worldLoad` or `system.run`.
+
+```javascript
+import { world, system } from "@minecraft/server";
+
+system.beforeEvents.startup.subscribe((init) => {
+  // only do registry registration
+});
+
+world.afterEvents.worldLoad.subscribe(() => {
+  const overworld = world.getDimension("overworld");   // safe from here
+  world.sendMessage("World load complete");
+});
+```
+
+V2 also changed promise handling. V1 resolved promises only once at the end of the tick, but V2 resolves them each time one system task or one kind of after event ends, so `.then` runs within the same tick and `await system.waitTicks(0)` is also possible. The "module table" below tells you which modules exist at this point.
+
+## Module table (as of Bedrock Wiki 0930b39)
+
+In the manifest `dependencies`, write only one of `module_name` or `uuid`. Do not write both together (Source: bedrock-wiki).
+
+| Module | UUID | Old name | First appeared |
+|---|---|---|---|
+| `@minecraft/common` | `77ec12b4-1b2b-4c98-8d34-d1cd63f849d5` | | Engine 1.20.40 |
+| `@minecraft/debug-utilities` | `1796ea86-0daf-4409-99ee-fd6467cf1203` | | Engine 1.20.70 |
+| `@minecraft/server` | `b26a4d4c-afdf-4690-88f8-931846312678` | `Minecraft`, `mojang-minecraft` | Engine 1.16.210 |
+| `@minecraft/server-ui` | `2bd50a27-ab5f-4f40-a596-3641627c635e` | `mojang-minecraft-ui` | Engine 1.18.20 |
+| `@minecraft/server-gametest` | `6f4b6893-1bb6-42fd-b458-7fa3d0c89616` | `GameTest`, `mojang-gametest` | Engine 1.16.210 |
+| `@minecraft/server-net` | `777b1798-13a6-401c-9cba-0cf17e31a81b` | `mojang-net` | Engine 1.19.10 |
+| `@minecraft/server-admin` | `53d7f2bf-bf9c-49c4-ad1f-7c803d947920` | `mojang-minecraft-server-admin` | Engine 1.19.10 |
+| `@minecraft/server-editor-bindings` | `8518d9c7-a1f5-4bf3-acc7-78e87df595fc` | | Engine 1.19.80 |
+| `@minecraft/server-editor` | `1d565354-296d-11ed-a261-0242ac120002` | | Engine 1.19.80 |
+
+`@minecraft/common` holds only basic elements such as error classes and interfaces, and can be imported without listing it in `dependencies`. `server-editor` and `server-editor-bindings` can be used only in worlds made from an editor project, and the latter is undocumented. `server-gametest` has no stable version and is not for content creators. The old alpha 1.x family can be imported only under the names `mojang-minecraft` and `mojang-gametest` and is not used (Source: bedrock-wiki).
+
+## Community notes
+
+
+`*confirmed*`, `*single report*` and `**conflicting**` are reliability marks for reports. The basis of this page is community reports, and they may differ from the official Mojang documentation.
+
+### Key summary
+
+1. **Register only in `system.beforeEvents.startup`**: Block/item custom components (`blockComponentRegistry`, `itemComponentRegistry`), custom commands (`customCommandRegistry`) and custom dimensions (`dimensionRegistry`) are all registered in the startup event. `world.beforeEvents.worldInitialize` / `afterEvents.worldInitialize` were removed in 2.0, and world access code moves to `world.afterEvents.worldLoad`.
+2. **before events, command callbacks and startup are "restricted (early) execution"**: Calls that change the world (`runCommand`, `setItem`, `spawnParticle`, `addTag`, form `show` and so on) fail with `Native function [...] cannot be used in restricted execution` / `does not have required privileges`. Defer with `system.run(() => ...)` and recheck `isValid` inside the deferred callback. After events, intervals and custom component callbacks do not need this.
+3. **Key changes in 2.x migration**: `runCommandAsync` removed (-> `runCommand`), `isValid()` -> `isValid` property, `applyKnockback(x,z,h,v)` -> `applyKnockback({x,z}, vertical)`, `selectedSlot` -> `selectedSlotIndex`, `GameMode` uppercase strings, `world.events.beforeChat` -> `world.beforeEvents.chatSend`, `blockBreak` -> `playerBreakBlock`, `itemUseOn` -> `playerInteractWithBlock`. AI-generated code often uses these old APIs. *confirmed*
+4. **Manifest dependency `"version": "beta"`** always points to the latest beta so you need not fix the version on every update (introduced in the release around 1.21.120). In return, the Beta APIs experiment must be on in the world and it can break when beta APIs change. A pinned specific `x.y.z-beta.*` version breaks with every update. If you use a wrong version, the list of available versions is printed to the content log.
+5. **`world.beforeEvents.chatSend` is still beta only in 2026-11**: It is not in stable 2.11.0, so `cannot read property 'subscribe' of undefined` appears, and you need a `2.12.0-beta` or `"beta"` dependency and the Beta APIs experiment. The alternative is custom commands.
+6. **`world.beforeEvents.entityHurt`** (EntityHurtBeforeEvent) appeared in the 2025-12 Preview (2.6.0-beta) and was stabilized in 2.6.0 (about 1.26.10). It implements totems, fall immunity, team damage and so on with `cancel` and a writable `damage`, but it cannot stop fire infliction and some side effects, and `health.currentValue` inside the handler is a value that already has the damage applied.
+7. **Dynamic properties**: Stored on World / Entity / Player / non-stackable ItemStack as string, number, boolean and Vector3, 32,767 bytes per string, unlimited number of keys, a sandbox per pack UUID (if you change the UUID, the data is invisible). Objects use `JSON.stringify`, and deletion is `setDynamicProperty(key, undefined)`. Block DPs need `minecraft:block_entity` from 26.50 (about 1 KB).
+8. **The `minecraft:equippable` component is player only** (for over a year, Mojang "on radar"): Reading/writing mob equipment is done with the `replaceitem`/`hasitem` commands and `successCount`.
+9. **An ItemStack is a copy**: After `setLore`, `setDynamicProperty` or a durability change, it is saved only if you write it back with `container.setItem(slot, item)` or `setEquipment`. `ContainerSlot` (`container.getSlot(i)`) reflects in real time. Emptying a slot is `setItem(slot, undefined)` (a `minecraft:air` ItemStack is a ghost item).
+10. **Custom commands**: A namespace is required in the name, the callback `(origin, ...args)` returns `{status, message}` synchronously, there are no subcommands or variable string arguments, PlayerSelector arguments are arrays, and non-OPs get `insufficient permissions for selector expansion` (MCPE-230568, unresolved). `CommandPermissionLevel.Admin` does not work on Realms, so use `GameDirectors`.
+11. **Handle player join** with `playerSpawn` + `event.initialSpawn`, not `playerJoin` (which has only id/name). But there is no event that the client has fully loaded, so showing forms and so on needs a delay and `UserBusy` retries.
+12. **The `playerInteractWithBlock` before event fires repeatedly while held** -> `if (!event.isFirstEvent) return;`. The after version fires only on blocks with a real interaction, and canceling the before also cancels block placement.
+13. **Split heavy work with `system.runJob(generator())`** across ticks (pass the generator *object*), and for large areas use per-chunk `fillBlocks` + a temporary ticking area. Accessing unloaded chunks throws an exception.
+14. **The runtime is a Mojang-modified QuickJS without a JIT**: Native getter calls (`entity.location`, `player.name`) are 20~30 times slower than a JS Map lookup, so cache, write event driven code, and reduce allocation in hot loops. There is no `Intl`/`toLocaleString`, `TextEncoder` or WASM.
+15. **server-net / server-admin are BDS only** (`allowed_modules` in `config/default/permissions.json` is needed). No HTTP on Realms and local worlds, though there are many reports that `transferPlayer` also works on Realms. Communication between add-ons uses `system.sendScriptEvent` / `scriptEventReceive` (MCBE-IPC and so on).
+16. **DDUI (`CustomForm`, `Observable*`)** was stabilized in 1.26.30 with server-ui 2.1.0. From 26.30 use `new CustomForm(player, title)`, and observables are split into `ObservableString/Number/Boolean`. Elements cannot be added after showing (build in advance and toggle `visible`), and opening forms in succession needs a delay of at least 1 tick.
+
+
+### Getting started: manifest, module versions, development environment
+
+#### Manifest layout
+
+- **Required layout**: For a script to run, the BP manifest must have `{"type": "script", "language": "javascript", "entry": "scripts/main.js"}` in `modules` and `{"module_name": "@minecraft/server", "version": "2.4.0"}` (the version is a dot-separated string) in the top-level `dependencies`. Do not put `dependencies` inside `modules`. The old `"script": {"api_version"}` block is deprecated.
+- **Module kinds and dependency form**: A BP script pack has both a `data` module and a `script` module in `modules`. If you put a `resources` module, it is registered as a resource pack and the script is ignored. If you also write the pack `uuid` in the `@minecraft/server` dependency entry, the script does not run and no error appears, so write only `module_name` and `version` in this entry.
+- **format_version 2 vs 3**: In format_version 2, `version` and `min_engine_version` are arrays `[1,0,0]`, and in 3 they are strings. Mixing can give `TypeError: cannot read property 'startup' of undefined`.
+- **min_engine_version**: The "Unexpected version for loaded data" warning is fixed only when the manifest `min_engine_version` is right (`base_game_version` is for worlds only). There is also a case where, with too old a value, newer syntax such as `execute ... positioned ^^^2` in `runCommand` failed with a syntax error (*single report*).
+- **Keep the pack UUID**: Dynamic properties are bound to the pack (module) UUID, so when updating raise only `version`, not the UUID. Reinstalling a .mcaddon with the same UUID replaces it only when the version is higher.
+- **Keeping achievements**: `"metadata": {"product_type": "addon"}` in the BP manifest.
+- **`script_eval` capability**: `new Function()`/`eval` can be used only with `"capabilities": ["script_eval"]` (otherwise "Function from string is not supported"). It is a security risk with user input and not recommended.
+- If **manifest `header.name` contains `+`**, files are not visible in the debugger/diagnostics.
+- A case where an **RP/BP dependency version mismatch** (RP 1.0.1 versus BP requiring 1.0.0) appeared as a stack overflow error on world load. (*single report*)
+- **Manifest generator**: `https://jaylydev.github.io/manifest-generator/` (Jayly himself mentioned that he dropped his own generator as "over-engineered").
+
+
+#### npm types, TypeScript, bundling
+
+- **Installing types**: After installing Node.js, in the add-on folder (or its parent) `npm init -y` -> `npm i @minecraft/server @minecraft/server-ui`. Do not forget the `@beta` tag for beta types (`npm install @minecraft/server@beta @minecraft/server-ui@beta ...`). npm is types only and is not needed to run.
+- **Installing exact versions**: `npm update` moves only within a semver range, so install explicitly such as `npm i @minecraft/math@2.2.11`, update the manifest separately, and commit `package-lock.json`. If tangled, delete `node_modules` and the lock and reinstall. `@minecraft/debug-utilities` `@latest` gave an old d.ts or was empty, so install the exact version that matches the server module (`1.0.0-beta.1.21.130-stable` and so on) (a case where `--force` was needed).
+- **Duplicate `@minecraft/server`**: If server-ui pulls in its own nested copy, types go out of sync. Pin server-ui, server-net, server-admin and math to the same version with `"paths": {"@minecraft/server": ["./node_modules/@minecraft/server"]}` in `tsconfig` or `overrides` in `package.json`. Example: `https://github.com/Visual1mpact/Paradox_AntiCheat/blob/rewrite/package.json`
+- **TS must be compiled to JS**: The game runs only `.js`, and `.ts` in `scripts/` is ignored. The manifest entry must point to the compiled JS. Bundle with esbuild/vite/rolldown/tsc (vite does no type checking). TS is recommended for large codebases, and JSON-based systems are still suitable for some jobs. TS types are not enforced at runtime. Turning on `skipLibCheck` makes compilation much faster (a measurement where 6.0 seconds became about 100 ms).
+- **Type and runtime mismatch**: The `@minecraft/server@latest` types at stable 2.8.0 did not have `beforeEvents.entityHurt` but it worked at runtime. In such a case, install the npm beta types.
+- **tsconfig cautions**: `module/moduleResolution: nodenext` emits `exports` and gives `ReferenceError: 'exports' is not defined`. Use an `es2020` module/ES2021 target. A community example: target/module es2022, moduleResolution bundler, noLib, checkJs, allowJs, noEmit, types `@bedrock-apis/env-types`. A case where local imports broke with `node16` was fixed with `"module": "ES2020"` and `"moduleResolution": "Node"`. With `verbatimModuleSyntax`, `BlockStateSuperset` is an `import type`. For mixed TS/JS use `"allowJs": true`.
+- **`@bedrock-apis/env-types`**: TS declarations matching the QuickJS runtime globals (target es2021 + `print`, `InternalError`, `Object.__getClass`, `String.prototype.__quote`).
+- **No importing type-only names**: Since 26.40, importing interfaces such as `ItemCustomComponent`, `StartupEvent` and `Vector3` from `@minecraft/server` in `.js` fails with "Could not find export". `EntityQueryOptions` is also an interface so in TS use `import { type EntityQueryOptions }`.
+- **Type checking in JS**: `// @ts-check` at the top of the file + JSDoc `/** @type {import("@minecraft/server").ItemCustomComponent} */`. If VS Code falsely flags the `form.show(player)` type, use `// @ts-ignore`. ESLint can catch undefined imports and typos in advance.
+- **Custom ID type errors**: For a `VanillaEntityIdentifier` error use `spawnEntity<string>(...)` or an `as` cast, and for custom block states `getState("ns:state" as keyof BlockStateSuperset)`. const enums are inlined and disappear (regenerate the enum file with the Regolith `type_gen` filter). `getComponent` is generic in newer versions (EntityComponentReturnType).
+- **`@minecraft/vanilla-data`** (npm): Provides constants such as `MinecraftBlockTypes`, `MinecraftItemTypes`, `MinecraftEffectTypes` and `MinecraftDimensionTypes`. It is not in `@minecraft/server` so an esbuild/webpack bundler is needed. `Vector3Utils` of `@minecraft/math` also needs bundling.
+- **`@minecraft/core-build-tasks` (just-scripts)** deploys to the product folder defined in `.env` (hidden from VS Code search), so it can go to an unexpected UWP path.
+- **Paths**: The Windows Store `com.mojang` is `%localappdata%\Packages\Microsoft.MinecraftUWP_8wekyb3d8bbwe\LocalState\games\com.mojang`. For the Preview, `development_behavior_packs` on the "Minecraft Bedrock Preview" side.
+- **Bridge.**: Recommended to beginners for starting scripts, but it does not show script errors, the v2 text editor mode is not recommended for beginners, there is an mcaddon export bug (v3 in development, export manually), and there is a case where it ignored the compile output path until restart.
+- **Blockception VS Code extension**: Ignore bundler project warnings with `.mcignore` (useful for npm paths because of the 80-character file path limit).
+- **Acode (Android)** has a "Minecraft Autocomplete" plugin.
+- **Supply chain warning**: Around 2026-04-03, reports of axios and `plain-crypto-js@4.2.1` compromise were mentioned -> check dependencies. (*single report*)
+
+#### File layout and import
+
+- **Only one entry runs**: Other files are loaded with `import "./other.js"` (side effects) or named imports. Imports are resolved once at load and the cost is negligible. Importing a module runs that whole module once.
+- **Import rules**: Relative paths (`./`, `../`) and the `.js` extension are required, `.json` cannot be imported (export settings as a JS object or use a bundler), importing a folder is impossible (re-export through an index file), and scripts of other add-ons cannot be imported (each pack has an isolated runtime). `import(".")` crashes the game.
+- **Circular imports**: Running code that depends on a variable of the importer before it is initialized at import time gives an "undeclared" error. Shared mutable state is possible with `export let` + import. If "Class not initialized" appears in `extends` during a circular import, move the base class to a separate file.
+- **Adding a new file needs a restart**: Editing an existing file is fine with `/reload` (or rejoining), but creating/deleting files needs rejoining the world or restarting the game ("Import not found"). Dynamic `import()` (supported since 1.20.80) also cannot read a file newly created during the game. Track load errors with `import(...).catch(console.error)`.
+- **Global scope errors**: If an exception (syntax error, wrong import, duplicate import) occurs at module top level, main.js cannot import the remaining files and silently stops. There is a case where one wrong relative path broke the whole component registration. Debug tip: put a `console.warn` before the import statements to check whether main.js runs.
+- **Project structure**: There is no standard. Feature first or the registry pattern (`registerBlockInteraction(typeId, handler)`), keep it shallow. Example: `main.ts` imports `events/`, `cmds/`, `services/`, `utils/`. For minigames an abstract class with `onStart/onTick/onPlayerJoin/onPlayerLeave/onEnd` is recommended.
+
+
+### Execution model: initialization, restricted execution, scheduling, runtime
+
+#### Initialization order
+
+- **startup -> worldLoad**: `system.beforeEvents.startup` fires before `worldLoad`. In startup you do only registry registration, and cannot read world data (dynamic properties, scoreboards).
+- **early execution**: From 2.0, module top-level code is early execution, so `world.getDimension('overworld')`, `world.getAllPlayers()`, `world.scoreboard.getObjective()`, setting dynamic properties and so on fail (setting a DP at top level even fails custom component registration). Run them inside `world.afterEvents.worldLoad` (recommended) or `system.run`, or defer the import with `system.run(() => import('./file.js'))`. A top-level `new ActionFormData()` is also forbidden. `world.getAllPlayers()` is empty at initialization time.
+- **Event subscription can be at top level**: There is no need to wrap it in `worldLoad`. But do not nest a startup subscribe inside another event handler, and do not defer component registration with `system.run`. There is also a claim that a top-level `await system.waitTicks(1)` blocked startup component registration (*single report*).
+- **`worldLoad` characteristics**: It also fires on `/reload` (`playerSpawn` does not), and it runs on every load, so to run once per world use a world DP flag. It fires after the first tick so a state object can tick before it is initialized (lazy initialization recommended). Block work still needs the chunk to be loaded. Multiple subscriptions run in subscription order, but if order matters, merge them into one. Before 1.13 -> 2.7, scripts loaded earlier so scoreboards may not be ready.
+
+#### Restricted (read-only) execution and `system.run`
+
+- **Symptoms**: `Native function [World::sendMessage] cannot be used in early execution`, `Native function [Entity::teleport] cannot be used in restricted execution`, `Native function [Container::setItem] does not have required privileges`. After 2.0, "early execution" was renamed "restricted execution". Explanation: `https://jaylydev.github.io/scriptapi-docs/features/script-privileges.html` , `https://wiki.bedrock.dev/scripting/privileges`
+- **Applicable contexts**: All `beforeEvents` handlers, custom command callbacks, startup, module top level. Most reads are allowed (`getTags()`, `equippable.getEquipment()`, `world.sendMessage` and `setDynamicProperty` are also possible). Custom block/item component callbacks (`onTick`, `beforeOnPlayerPlace` and so on) and after events can write. There is no native function to check whether it is read-only. *confirmed* The official explanation is `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/execution-privilege?view=minecraft-bedrock-stable` , and unlike the old name "read only", almost all reads are allowed. `Entity::setProperty` inside a command callback and `Block::setPermutation` inside a before event are also privilege errors, so defer them with `system.run`.
+- **Fix pattern**: `system.run(() => { if (!player.isValid) return; ... })`. `await null`/`await Promise.resolve()` also resumes at a valid execution point. Copy needed values, such as the name of a leaving player, outside `system.run` first. `system.run` returns a run id (a number), not the callback's return value.
+- **`system.run` timing**: Both the explanation that it runs "at the end of the current tick" and the one that it is "the next tick" exist, and the official documentation states that it does not guarantee same/next tick execution under load. After event callbacks are processed before `system.run` callbacks, and processing continues until the queue is empty. The order of after events and `runInterval` is not settled. A `system.run` queued before `return` also runs. Within a tick, `system.run` callbacks keep registration order, and a report that a trick through scriptevent runs after after events (*single report*).
+- **Async order example**: In a before `playerJoin` handler, A (sync) -> C (rest of the callback) -> B (`system.run` callback). If `await Promise.resolve()` is in front, A, B, D and then C. An async function runs synchronously up to the first `await`, so it is not an optimization, and even an already resolved promise yields at least once.
+
+#### Scheduling
+
+- **API**: `system.run(fn)`, `system.runTimeout(fn, ticks)`, `system.runInterval(fn, ticks)`, `system.clearRun(id)`, `system.waitTicks(n)` (Promise), `system.runJob(gen)`/`system.clearJob(id)`. `system.runSchedule` does not exist (a common AI mistake). The minimum `runInterval` interval is 1 tick, and running faster than 20 Hz is impossible. *confirmed* There is no tick event such as `world.afterEvents.tick` and no position update event. Fractional ticks of `runTimeout` are rounded down (19.166 is 19) and it runs at least 1 tick later. Even a minimum-interval `runInterval` is not guaranteed to run every tick under load.
+- **Nested delays add up**: A `runTimeout(..., 3)` inside `runTimeout(..., 2)` is 5 ticks later. Creating `runTimeout`/`runInterval` inside a `runInterval` accumulates every tick, so it is forbidden -> use one tick counter or store the handle in the outer scope and `clearRun`. Chained actions use a recursive `runTimeout`. Store interval handles to prevent duplicate creation.
+- **Tick time vs real time**: `system.currentTick` and `runTimeout` respect pausing, and `Date.now()` keeps flowing. `world.getAbsoluteTime()` is in-game time, so it changes with `/time` and sleeping, and does not increase if `doDaylightCycle` is false (a case where it was fixed at 6000). If you need a monotonic counter, use `system.currentTick` (also readable in early execution) or a DP. Use `currentTick` for i-frame tracking and `Date.now()` for real-time cooldowns. `new Date()` may differ from the desktop device time, so UTC timestamps are recommended. Sub-tick scheduling is impossible (if you need 3.5 ticks, alternate 3 and 4).
+- **Does not survive a restart**: `runTimeout` callbacks vanish after world shutdown or a crash, so store the IDs of entities you created in a DP and clean them up on load.
+- **Measuring TPS**: There is no real TPS/MSPT API. Estimate by putting the `Date.now()` difference between `runInterval` callbacks into a ring buffer of about 100 (outlier 50 ms). The built-in profiler is recommended over a custom TPS display.
+
+#### `system.runJob` and generators
+
+- **Usage**: `system.runJob(theJob())` - pass the generator *object* (with `() => theJob()` you get "Native type conversion failed ... expected Generator&lt;void,void,void>"). Use `system.clearJob(id)` with the returned id. Put `yield` inside the loop. A generator cannot return a value, and there is a `runJobAsync` wrapper that wraps it in a Promise (`https://github.com/IMvampireXD/Script-API-Utilities/blob/main/src/utilsLib/runJob-Utils.js`).
+- **Behavior**: The engine consumes yields for as long as tick time remains (~3 on a busy tick, ~800 in an empty world). The completion time is not guaranteed and several jobs share the tick budget (not faster but safe). Minimizing the window can pile up jobs. For work that finishes in one tick (a 36-slot inventory loop and so on), synchronous code is better (a job has a 1~2 tick delay). A job cannot be given a name.
+- **runJob also spikes**: Spikes of 120~200 ms were measured in a job that breaks 100 or more blocks, and moving `new ItemStack` out of the loop reduced them. Turning it into an async function does not avoid stalls either. In a job that handles entities, an entity can vanish midway, so try/catch `InvalidEntityError`.
+- **Preventing duplicate periodic jobs**: Starting a job on every interval piles up concurrent jobs, so use a `jobRunning` flag + `yield*` inside try/finally. A recursive flood fill overflows the stack -> use a loop inside the generator.
+- **Priority job module**: creepycreepermw's Jobs.js - `Jobs.queue(function*(){...}, JobPriority.HIGH|MIDDLE|LOW|LOWEST)`. HIGH runs as fast as possible, MIDDLE/LOW share a ratio (MIDDLE more), and LOWEST only when no higher job exists. Finer priority within the same tier is imitated by queueing the same work several times. Example: an anti-x-ray chunk scanner.
+- bedrock-boost's `PlayerPulseScheduler` spreads per-player work across ticks.
+
+#### QuickJS runtime characteristics
+
+- **Engine**: Mojang-modified QuickJS (not quickjs-ng, `https://github.com/bellard/quickjs`). No JIT (consoles/Apple forbid JIT + identical behavior on all platforms is needed). Ore UI (Gameface) is V8/JSC depending on the platform. CPU-heavy code (a Game Boy emulator) was 100 times faster on SerenityJS (Node). Server-side logic runs at most once per tick, and only RP Molang/animations update every frame. *confirmed*
+- **What exists**: Proxy, Reflect, Symbol, BigInt, typed arrays/ArrayBuffer/SharedArrayBuffer/DataView, Promise, WeakMap/WeakSet, `print`, `console`, `Object.groupBy()`, generators. `WeakRef`/`FinalizationRegistry` did not exist at first (2025-11 report) but were added in the 26.0.23 Preview (2025-12).
+- **What does not exist**: `Intl`/`toLocaleString` (write your own number formatter), `TextEncoder`/`TextDecoder` (manual UTF-8 with Uint8Array), WebAssembly (`wasm2js` impossible), iterator helpers (tc39), `RegExp.escape`, `Math.sumPrecise` (polyfill `https://www.npmjs.com/package/math.sumprecise`), some new Map methods, `findLast` (may not exist, use `arr.at(-1)`), Atomics, module strict mode, a properly working `with`, async generators. Check whether a class exists at `https://github.com/bedrock-apis/env-types` . There is no native WASM, but there is a case of running Rust/WASM with a WASM engine written in JS and parsing JS/TS with oxc (*single report*, slow).
+- **Native object characteristics**: Properties of event/class objects are prototype getters and so not enumerable (`Object.keys(event)` is an empty array, spread gives `{}`; work around with `Object.defineProperties` and `enumerable: true`). Storing an API method in a variable or destructuring it breaks the instance binding and throws ("Native function ... object bound to prototype does not exist"). Some native arrays (`items` of `entityItemDrop`/`entityItemPickup`, `BlockStateType.validValues`) cannot be used with `for...of` -> `forEach`/`Array.from`. `JSON.stringify` of FormResponse is meaningless. Because of the `[object Object]` output, it is common to override `console.log` with JSON.stringify.
+- **Extending objects**: A temporary property such as `player.myProp = true` lasts only for the session (lost on `/reload` and leaving). In TS, extend the interface/`declare module "@minecraft/server" { interface Player { stamina?: number } }` (types only). The `Player` constructor is protected so it cannot be subclassed -> prototype patching (`Object.defineProperties(Player.prototype, ...)`) or a wrapper class. New properties can no longer be added to the `world` object ("object is not extensible"). Do not modify built-in prototypes such as `String.prototype` in a released pack. Bug MCPE-240513 (1.26.40): after calling `player.playSound`, temporary JS properties became undefined/read-only, fixed in 26.50.
+- **Detached `this`**: A method passed to a custom component or event handler loses `this` -> use an arrow function (`(data) => this.callback(data)`) or a closure.
+- **Collected JS pitfalls**: `` `$&#123;&#125;` `` interpolates only in backticks; `if (a === x, y, z)` is the comma operator so it is always true (-> `array.includes`); `-2 < x < 2` is `(-2<x)<2`; `new Number(x)` is an object and breaks vector arguments (`Number(x)`); `.includes({id})` is a reference comparison so always false (use `.find`); `forEach` cannot `break`; use `continue` instead of `return` in a player loop; pushing the same object repeatedly stores only one reference; `Math` is capitalized; bit operations are truncated to 32 bits (`>>> 0`); `-0` and `0`; Map iterators are live.
+
+#### Watchdog
+
+- If a tick exceeds about 10,000 ms or there is a long synchronous task (for example a large IPC serialization ~11 KB+), the watchdog ends the script/world with `InternalError: interrupted`. In `system.beforeEvents.watchdogTerminate`, `event.cancel = true` ends only the script engine instead of the world (beta, `event.terminateReason`). `disableWatchdog` in `@minecraft/debug-utilities` beta. The watchdog option in the Creator settings also has an effect. The BDS memory watchdog is turned off with `script-watchdog-memory-limit=0` in `server.properties` (not possible on Realms).
+- Telling crash causes apart: a crash with a watchdog message has a script-side cause, and if the game shuts down without a watchdog, the cause is on the engine side. A case of a crash after placing about 3024 blocks with a script was caused by one specific block, and finding it required IDA/Ghidra analysis.

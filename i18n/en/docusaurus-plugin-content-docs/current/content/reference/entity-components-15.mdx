@@ -1,0 +1,456 @@
+---
+title: Entity component reference (15/23)
+description: 10 MS Learn component pages (minecraft:pushable ~ minecraft:renders_when_invisible). Property tables and sample JSON as in the original.
+sidebar_position: 114
+sources:
+  - ms-learn
+---
+
+# Entity component reference (15/23)
+
+This page carries the component pages of MS Learn (MicrosoftDocs/minecraft-creator a9fd1c0, CC BY 4.0). IDs, property names, types, default values and JSON are as in the original. The full list is in the [index](./entity-index.mdx).
+
+## minecraft&#58;pushable
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_pushable.md`)
+
+Defines what can push an entity between other entities and pistons.
+
+> [!Note]
+> In 1.26.10 this component was split into `minecraft:pushable_by_block` (pistons and Shulker Boxes, equivalent to `is_pushable_by_piston: true`) and `minecraft:pushable_by_entity` (other entities, equivalent to `is_pushable: true`). The original `minecraft:pushable` component is no longer parsed.
+
+> [!Note]
+> This item no longer works after format versions of at least 1.26.10.
+
+### Pushable Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| is_pushable | true | Boolean true/false | Whether the entity can be pushed by other entities. | Allay: `true` |
+| is_pushable_by_piston | true | Boolean true/false | Whether the entity can be pushed by pistons safely. | Allay: `true` |
+
+### Samples
+
+##### [Allay](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/allay.json)
+
+
+```json
+"minecraft:pushable": {
+  "is_pushable": true,
+  "is_pushable_by_piston": true
+}
+```
+
+##### [Armor Stand](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/armor_stand.json)
+
+
+```json
+"minecraft:pushable": {
+  "is_pushable": false,
+  "is_pushable_by_piston": true
+}
+```
+
+## minecraft&#58;pushable_by_block
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_pushable_by_block.md`)
+
+Allows the entity to be pushed by certain blocks, like Shulker Boxes and Pistons.
+
+> [!Note]
+> Added in 1.26.10 as part of the split of `minecraft:pushable` into `minecraft:pushable_by_block` (pistons and Shulker Boxes) and `minecraft:pushable_by_entity` (other entities). The legacy `minecraft:pushable` component is no longer parsed.
+
+> [!Note]
+> This item requires a format version of at least 1.26.10.
+
+### Samples
+
+##### [Armor Stand](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/armor_stand.json)
+
+
+```json
+"minecraft:pushable_by_block": {}
+```
+
+## minecraft&#58;pushable_by_entity
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_pushable_by_entity.md`)
+
+Allows an entity to be pushed by other entities.
+
+> [!Note]
+> Added in 1.26.10 as part of the split of `minecraft:pushable` into `minecraft:pushable_by_block` (pistons and Shulker Boxes) and `minecraft:pushable_by_entity` (other entities). The legacy `minecraft:pushable` component is no longer parsed.
+
+> [!Note]
+> Released out of beta in format version 1.26.30. The `presets` field replaces the previous flat property layout; the preset field `max_distance` was renamed from `kick_distance_threshold`.
+
+> [!Note]
+> This item requires a format version of at least 1.26.10.
+
+### Entity Pushable By Entity Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| presets | [] | Array of Presets items | Defines how this entity behaves when pushed by another entity. The first preset whose "filter" conditions are met will be applied; if none match, a default configuration is used instead. | Boat: `[{"filters":{"all_of":[{"test":"is_family","subject":"other","value":"sulfur_cube"},{"test":"enum_property","subject":"other","domain":"minecraft:sulfur_cube_archetype","operator":"not","value":"none"},{"test":"is_controlling_passenger_family","subject":"self","value":"player"}]},"push_mode":"none"},{"push_mode":"legacy_boat","strength_multiplier":0.1,"min_distance":0.55,"push_scale_self":0.5,"push_scale_other":0.25}]` |
+
+#### Entity PushableByEntityPreset
+
+##### Entity PushableByEntityPreset Properties
+
+**JSON path:** `presets`
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| filters (Filters) | &#123;"AND":null,"NOT":null,"OR":null,"all":null,"all_of":null,"any":null,"any_of":null,"none_of":null&#125; | Filters item | Conditions that must be met for this preset to be applied. |
+| filters (Alternate 1) | *not set* | Object |  |
+| kick_speed_scale | 2 | Decimal number | Multiplier applied to the pushing entity's movement speed to determine kick force. Only used when push_mode is "ball". |
+| max_distance | 3.4028234663852886e+38 | Decimal number | Maximum horizontal distance between the center of the pushed entity and the collision of the pushing entity for push forces to be applied. Entities further apart than this will not push each other. |
+| max_kick_speed | 0.5 | Decimal number | Maximum speed the entity can be pushed back at, regardless of how fast the pushing entity is moving. Only used when push_mode is "ball". |
+| min_distance | 0.009999999776482582 | Decimal number | Minimum horizontal distance between the centers of the two entities for push forces to be applied. Entities closer than this will not push each other. |
+| min_kick_speed | 0 | Decimal number | Minimum speed the the entity will be pushed back at, regardless of how slowly the pushing entity is moving. Only used when push_mode is "ball". |
+| play_sound | false | Boolean true/false | If the "pushed_by_player" sound should be played when the entity is pushed by any other entity (despite the sound name). |
+| play_sound_cooldown_in_seconds | 0.20000000298023224 | Decimal number | Cooldown in seconds between sounds. A lower number results in more sounds. |
+| play_sound_impulse_threshold | 0.20000000298023224 | Decimal number | Minimum change of velocity needed to trigger the push sound. A lower value means higher sensitivity. |
+| push_mode | default | Push Mode choices | Defines the type of push vector calculation applied to the entity: - "none": The entity cannot be pushed. |
+| push_scale_other | 1 | Decimal number | Scales how much push force this entity applies to the other entity when colliding. A value of 1.0 applies full force, 0.5 applies half. |
+| push_scale_self | 1 | Decimal number | Scales how much this entity pushes itself away when colliding with another entity. A value of 1.0 applies full force, 0.5 applies half. |
+| require_collision_overlap | true | Boolean true/false | When true, entities will not push each other unless their collision boxes overlap. |
+| strength_multiplier | 0.05000000074505806 | Decimal number | Multiplier applied to the push strength. Higher values result in stronger pushes. |
+| vertical_kick_multiplier | 0.30000001192092896 | Decimal number | Multiplier for the upward force applied when the entity is pushed while on the ground. A value of 0 keeps the entity flat. Only used when push_mode is "ball". |
+
+##### push_mode
+
+Defines the type of push vector calculation applied to the entity: - "none": The entity cannot be pushed. - "default": Standard push calculations used by most entities. - "legacy_boat": Legacy push calculations historically used by boats. Includes dampened forces and sneak-based cancellation. - "legacy_minecart": Legacy push calculations historically used by minecarts. Includes alignment-based collision handling and velocity averaging.- "ball": Push calculation resulting in a behavior similar to kicking a ball. The entity is propelled in the direction of the pusher’s movement, with force scaled by their speed.
+
+
+##### Filters
+
+###### Filters Properties
+
+**JSON path:** `presets > filters`
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| domain | *not set* | Object | The domain the test should be performed in. |
+| operator | *not set* | Object | The comparison to apply with 'value'. |
+| subject | *not set* | Object | The subject of this filter test. |
+| test | *not set* | String | The name of the test to apply. |
+| value | *not set* | Object | The value being compared with the test. |
+
+#### Push Mode choices
+
+| Value | Title | Description |
+| --- | --- | --- |
+| ball | Ball |  |
+| default | Default |  |
+| legacy_boat | Legacy boat |  |
+| legacy_minecart | Legacy minecart |  |
+| none | None |  |
+
+### Samples
+
+##### [Blaze](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/blaze.json)
+
+
+```json
+"minecraft:pushable_by_entity": {}
+```
+
+##### [Boat](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/boat.json)
+
+
+```json
+"minecraft:pushable_by_entity": {
+  "presets": [
+    {
+      "filters": {
+        "all_of": [
+          {
+            "test": "is_family",
+            "subject": "other",
+            "value": "sulfur_cube"
+          },
+          {
+            "test": "enum_property",
+            "subject": "other",
+            "domain": "minecraft:sulfur_cube_archetype",
+            "operator": "not",
+            "value": "none"
+          },
+          {
+            "test": "is_controlling_passenger_family",
+            "subject": "self",
+            "value": "player"
+          }
+        ]
+      },
+      "push_mode": "none"
+    },
+    {
+      "push_mode": "legacy_boat",
+      "strength_multiplier": 0.1,
+      "min_distance": 0.55,
+      "push_scale_self": 0.5,
+      "push_scale_other": 0.25
+    }
+  ]
+}
+```
+
+## minecraft&#58;raid_trigger
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_raid_trigger.md`)
+
+Attempts to trigger a raid at the entity's location.
+
+### Raid Trigger Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| minecraft:raid_trigger | *not set* | Raid Trigger item |  | Player: `{"triggered_event":{"event":"minecraft:remove_raid_trigger","target":"self"}}` |
+| triggered_event | *not set* | Minecraft Event Trigger | Event to run when a raid is triggered on the village. |  |
+
+#### Raid Trigger
+
+### Samples
+
+##### [Player](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/player.json)
+
+
+```json
+"minecraft:raid_trigger": {
+  "minecraft:raid_trigger": {
+    "triggered_event": {
+      "event": "minecraft:remove_raid_trigger",
+      "target": "self"
+    }
+  }
+}
+```
+
+## minecraft&#58;rail_movement
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_rail_movement.md`)
+
+Defines the entity's movement on the rails. An entity with this component is only allowed to move on the rail.
+
+### Entity Rail Movement Properties
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| max_speed | 0.4000000059604645 | Decimal number | Maximum speed that this entity will move at when on the rail. |
+
+### Samples
+
+##### [Chest Minecart](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/chest_minecart.json)
+
+
+```json
+"minecraft:rail_movement": {}
+```
+
+## minecraft&#58;rail_sensor
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_rail_sensor.md`)
+
+Enables minecart-type entities to detect powered rails and respond to activation state changes. Triggers events when the entity passes over activated or deactivated rails, enabling custom minecart behaviors like launching at boosted speed, stopping at braking rails, or triggering special effects at detector rails.
+
+### Rail Sensor Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| check_block_types | false | Boolean true/false | If true, on tick this entity will trigger its on_deactivate behavior | Command Block Minecart: `true` |
+| eject_on_activate | true | Boolean true/false | If true, this entity will eject all of its riders when it passes over an activated rail | Minecart: `true` |
+| eject_on_deactivate | false | Boolean true/false | If true, this entity will eject all of its riders when it passes over a deactivated rail |  |
+| on_activate | *not set* | Minecraft Event Trigger | Event to call when the rail is activated | Command Block Minecart: `{"event":"minecraft:command_block_activate"}`, Hopper Minecart: `{"event":"minecraft:hopper_deactivate"}`, Tnt Minecart: `{"event":"minecraft:on_prime","filters":{"all_of":[{"domain":"tntexplodes","operator":"==","test":"is_game_rule","value":true}]}}` |
+| on_deactivate | *not set* | Minecraft Event Trigger | Event to call when the rail is deactivated | Command Block Minecart: `{"event":"minecraft:command_block_deactivate"}`, Hopper Minecart: `{"event":"minecraft:hopper_activate"}` |
+| tick_command_block_on_activate | true | Boolean true/false | If true, command blocks will start ticking when passing over an activated rail | Command Block Minecart: `true` |
+| tick_command_block_on_deactivate | false | Boolean true/false | If false, command blocks will stop ticking when passing over a deactivated rail |  |
+
+### Samples
+
+##### [Command Block Minecart](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/command_block_minecart.json)
+
+At /minecraft:entity/component_groups/minecraft:command_block_active/minecraft:rail_sensor/: 
+
+```json
+"minecraft:rail_sensor": {
+  "check_block_types": true,
+  "on_deactivate": {
+    "event": "minecraft:command_block_deactivate"
+  },
+  "eject_on_activate": false,
+  "eject_on_deactivate": false,
+  "tick_command_block_on_activate": true,
+  "tick_command_block_on_deactivate": false
+}
+```
+
+At /minecraft:entity/component_groups/minecraft:command_block_inactive/minecraft:rail_sensor/: 
+
+```json
+"minecraft:rail_sensor": {
+  "check_block_types": false,
+  "eject_on_activate": false,
+  "eject_on_deactivate": false,
+  "on_activate": {
+    "event": "minecraft:command_block_activate"
+  },
+  "tick_command_block_on_activate": true,
+  "tick_command_block_on_deactivate": false
+}
+```
+
+##### [Hopper Minecart](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/hopper_minecart.json)
+
+At /minecraft:entity/component_groups/minecraft:hopper_active/minecraft:rail_sensor/: 
+
+```json
+"minecraft:rail_sensor": {
+  "on_activate": {
+    "event": "minecraft:hopper_deactivate"
+  }
+}
+```
+
+At /minecraft:entity/component_groups/minecraft:hopper_inactive/minecraft:rail_sensor/: 
+
+```json
+"minecraft:rail_sensor": {
+  "on_deactivate": {
+    "event": "minecraft:hopper_activate"
+  }
+}
+```
+
+##### [Minecart](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/minecart.json)
+
+
+```json
+"minecraft:rail_sensor": {
+  "eject_on_activate": true
+}
+```
+
+##### [Tnt Minecart](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/tnt_minecart.json)
+
+At /minecraft:entity/component_groups/minecraft:inactive/minecraft:rail_sensor/: 
+
+```json
+"minecraft:rail_sensor": {
+  "on_activate": {
+    "event": "minecraft:on_prime",
+    "filters": {
+      "all_of": [
+        {
+          "domain": "tntexplodes",
+          "operator": "==",
+          "test": "is_game_rule",
+          "value": true
+        }
+      ]
+    }
+  }
+}
+```
+
+At /minecraft:entity/component_groups/minecraft:instant_explode_tnt/minecraft:rail_sensor/: 
+
+```json
+"minecraft:rail_sensor": {}
+```
+
+## minecraft&#58;ravager_blocked
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_ravager_blocked.md`)
+
+Defines the ravager's response to their melee attack being blocked.
+
+### Ravager Blocked Properties
+
+| Name | Default Value | Type | Description |
+| --- | --- | --- | --- |
+| knockback_strength | 3 | Decimal number | The strength with which blocking entities should be knocked back |
+| reaction_choices | [ ] | Array of strings | A list of weighted responses to the melee attack being blocked |
+
+### Samples
+
+## minecraft&#58;reflect_projectiles
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_reflect_projectiles.md`)
+
+[EXPERIMENTAL] Allows an entity to reflect projectiles.
+
+### Reflect Projectiles Properties
+
+| Name | Default Value | Type | Description | Example Values |
+| --- | --- | --- | --- | --- |
+| azimuth_angle | 0 | String | [EXPERIMENTAL] A Molang expression defining the angle in degrees to add to the projectile's y axis rotation. | Breeze: `"180.0 + Math.random(-20.0, 20.0)"` |
+| elevation_angle | 0 | String | [EXPERIMENTAL] A Molang expression defining the angle in degrees to add to the projectile's x axis rotation. |  |
+| reflected_projectiles | *not set* | Array of strings | [EXPERIMENTAL] An array of strings defining the types of projectiles that are reflected when they hit the entity. | Breeze: `["xp_bottle","thrown_trident","shulker_bullet","dragon_fireball","arrow","snowball","egg","fireball","splash_potion","ender_pearl","wither_skull","wither_skull_dangerous","small_fireball","lingering_potion","llama_spit","fireworks_rocket","fishing_hook"]` |
+| reflection_scale | 1 | String | [EXPERIMENTAL] A Molang expression defining the velocity scaling of the reflected projectile. Values below 1 decrease the projectile's velocity, and values above 1 increase it. | Breeze: `"0.5"` |
+| reflection_sound | reflect | String | [EXPERIMENTAL] A string defining the name of the sound event to be played when a projectile is reflected. "reflect" unless specified. |  |
+
+### Samples
+
+##### [Breeze](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/breeze.json)
+
+
+```json
+"minecraft:reflect_projectiles": {
+  "azimuth_angle": "180.0 + Math.random(-20.0, 20.0)",
+  "reflected_projectiles": [
+    "xp_bottle",
+    "thrown_trident",
+    "shulker_bullet",
+    "dragon_fireball",
+    "arrow",
+    "snowball",
+    "egg",
+    "fireball",
+    "splash_potion",
+    "ender_pearl",
+    "wither_skull",
+    "wither_skull_dangerous",
+    "small_fireball",
+    "lingering_potion",
+    "llama_spit",
+    "fireworks_rocket",
+    "fishing_hook"
+  ],
+  "reflection_scale": "0.5"
+}
+```
+
+## minecraft&#58;remove_in_peaceful
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_remove_in_peaceful.md`)
+
+Denotes entities that are not allowed to exist in "Peaceful" difficulty.
+
+> [!Note]
+> This item requires a format version of at least 1.21.90.
+
+### Samples
+
+##### [Blaze](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/blaze.json)
+
+
+```json
+"minecraft:remove_in_peaceful": {}
+```
+
+## minecraft&#58;renders_when_invisible
+
+(Source: ms-learn, `creator/Reference/Content/EntityReference/Examples/EntityComponents/minecraftComponent_renders_when_invisible.md`)
+
+When set, the entity will render even when invisible. Appropriate rendering behavior can then be specified in the corresponding "minecraft:client_entity".
+
+### Samples
+
+##### [Cave Spider](https://github.com/Mojang/bedrock-samples/tree/preview/behavior_pack/entities/cave_spider.json)
+
+
+```json
+"minecraft:renders_when_invisible": {}
+```

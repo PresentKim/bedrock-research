@@ -1,0 +1,65 @@
+---
+title: "w1zardz bedrock-json-ui-editor"
+description: "A web editor for fine-tuning HUD element offsets. A summary of its UI pixel screen preview and the layout interpretations that differ from the engine rules"
+sidebar_position: 4
+sources:
+  - bedrock-json-ui-editor
+  - bedrock-samples
+  - repo-guide
+---
+
+## What it is
+
+w1zardz's `bedrock-json-ui-editor` is a single-page app in plain HTML/CSS/JS (`app.js`, 1,528 lines). Pasting in one JSON UI file shows a control tree and a preview, and dragging a box in the preview or nudging it with the arrow keys rewrites the `offset`. Its purpose is **fine-tuning the position** of existing HUD and scoreboard elements, and it is not a tool for designing new screens. The analysis baseline is commit `9cb4896` (2026-08-29). The repository has no `LICENSE` file and the README only says "MIT" (confirmed in the clone). Because the license is unclear, no code or sentences are copied and only facts are written (Source: cs-w1zardz-editor). The app itself was not run, and this summary comes from reading the code.
+
+## Features
+
+| Feature | Content |
+| --- | --- |
+| Preview screen | Draws in **UI pixels** of desktop 427×240, phone 520×240, and tablet 320×240 and scales to the window width. A game screenshot can be laid underneath at partial transparency, and the area outside the screen is hatched |
+| HUD guides | Hotbar 182×22 (bottom center, y -2), health and hunger 81×9 (bottom center ±50, y -25), logo 27×27 (bottom right), chat 200×60 (top left +2,+2), sidebar 96×90 (right center x -1) |
+| Text width estimate | Space 4, ordinary character 6, pack glyph (U+E000~F8FF) 9, outside the BMP 10 UI pixels, line height 10 |
+| Bound text | `text` starting with `#` or `$` is drawn with an example string chosen by the user |
+| Inheritance | In `name@ns.base` it drops the namespace, finds `base` in the same file, and merges shallowly |
+| Editing | Drag, arrow keys (Shift is ×10), 0.5~20px step snapping, undo, copy to clipboard and save to file |
+
+## Where the layout interpretation differs from the engine
+
+The anchor calculation itself (position = parent position + `anchor_from` ratio × parent size - `anchor_to` ratio × own size + offset) is the same as our LAY-16. The rest differs.
+
+| Item | This editor | Guide and vanilla |
+| --- | --- | --- |
+| `anchor_to` omitted | Treated as the same as `anchor_from`. An omitted `anchor_from` is `center` | In vanilla, 99.6% write both. Each tool assumes something different (proposed LAY-45) |
+| `"100%c"` | Largest child × factor | Along the stack's main axis, the sum of the visible children (LAY-03) |
+| `"50%cm"` | Largest child × 0.5 | Factor ignored, the maximum itself (LAY-37) |
+| `"100%sm"` | Replaced by parent size × factor (its own comment calls it an approximation) | The largest sibling |
+| `"default"` | Content size for every type | 100% for panels, text size for labels (LAY-03, C-36) |
+| `"fill"` | Cannot be read as a number, so 20 pixels | The remaining space in a stack, 0 off the main axis (LAY-39) |
+| Stack children | Their own `offset` and anchor are applied as is | `offset` ignored, and anchors ignored too without `use_child_anchors` (LAY-38) |
+| Hidden stack children | They get space | Hidden children take no space (LAY-04) |
+| `"wrap_content"` | Handled like `%c` | 0 uses in 205 vanilla files. No evidence of its meaning in the engine |
+| Size expressions | Reads only one `%` term and one `px` term | Several terms, with a sign carrying on to the next sign (LAY-35) |
+
+So the preview of this tool can be trusted only for **HUD elements placed by anchor and fixed pixel offset**, and for `%c`, `fill`, and positions inside a stack panel you must compute directly with the engine rules (LAY-03, LAY-37, LAY-38) or check in game. This judgment is conflict C-51 (resolved: guide kept). The guide's evidence is vanilla usage and tests of the Cinnabar reconstruction (G06, G07, S04).
+
+The HUD guide numbers are values the author fitted to a screenshot. In vanilla `hud_screen.json`, `hotbar_panel` is `["100%c", 22]` with a `bottom_middle` anchor and no offset, the slots are 20×22, and the boss health bar is 182×20. The hotbar width 182 is roughly right, but no basis for y -2 was found in vanilla (unverified). The three screen sizes use "height 240 UI pixels" as the base and change only the aspect ratio, and JsonForge assumes 384×216. The real UI pixel size depends on the window size and GUI scale, so none of these values is fixed. A comment in vanilla `ui_common.json` gives the minimum virtual screen as 320×210 for pocket and 376×250 for desktop (proposed LAY-47).
+
+## How to use it
+
+1. Open the deployment address. No installation is needed and it works offline.
+2. Trust the preview position only when you pick a HUD control placed with an anchor and a pixel offset.
+3. Lay a game screenshot of the target device and scale underneath to reduce GUI scale and device differences.
+4. Use a schema check to confirm the exported JSON has no values missing from vanilla such as `wrap_content`, and keep in mind that the schema check gives many false errors (debugging rules).
+
+## Relation to our rules
+
+| Rule ID | Relation |
+| --- | --- |
+| LAY-03, LAY-37, LAY-38, LAY-04 | The basis for the engine rules this tool breaks (guide kept, C-51) |
+| LAY-16, LAY-17 | Anchor and offset calculation match |
+| LAY-47, LAY-45 (proposed) | Screen UI pixel sizes, the default when `anchor_to` is omitted |
+| DBG-28, DBG-29 | Use the editor preview only as an approximation |
+
+## Limits and measurement tasks
+
+To check the preview against the engine, the following must be measured in game: the screen UI pixel size per device and scale, the default font's character width (ordinary 6, space 4) and line height (10), and whether `wrap_content` leaves an error. It was also not confirmed whether the deployed page is the same version as repository `9cb4896`.

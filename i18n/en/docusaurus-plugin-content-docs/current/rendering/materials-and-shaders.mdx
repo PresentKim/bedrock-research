@@ -1,0 +1,213 @@
+---
+title: Materials and shaders
+description: .material syntax and inheritance, states, defines, blend, stencil and depth fields, recipes for emission, translucency, outlines and seeing through walls, materials under VV, material.bin shaders
+sidebar_position: 5
+sources: [private-research, bedrock-wiki, ms-learn]
+---
+
+# Materials and shaders
+
+## Concept
+
+A material decides "which shader to draw with and in what state (blend, depth, culling, stencil)". Most of the game is hard-coded to specific materials, so you cannot attach a new material, and only some things such as entities and particles can be swapped by name. A material **inherits** a previously defined material and edits it, and it has no namespace (Source: bedrock-wiki `visuals/materials`).
+
+```json
+{
+  "materials": {
+    "version": "1.0.0",
+    "<new material ID>:<base material ID>": {
+      "+defines": [], "-defines": [], "+states": [], "-states": []
+    }
+  }
+}
+```
+
+Most vanilla entity materials descend from `entity_static`. Following one villager material shows the inheritance.
+
+```json
+"villager_v2_masked:entity_multitexture_masked": { "depthFunc": "LessEqual" },
+"entity_multitexture_masked:entity_alphatest": { "+defines": ["MASKED_MULTITEXTURE"] },
+"entity_alphatest:entity_nocull": { "+defines": ["ALPHA_TEST"], "msaaSupport": "Both" },
+"entity_nocull:entity": { "+states": ["DisableCulling"] },
+"entity:entity_static": { "+defines": ["USE_OVERLAY"], "msaaSupport": "Both" }
+```
+
+`entity_static` is the root without a colon and directly holds `vertexShader`, `fragmentShader`, `vertexFields` and `variants` (skinning and so on). `+` is add and `-` is remove.
+
+### Field summary (Source: bedrock-wiki `documentation/material-config-description`)
+
+| Field | Meaning |
+| --- | --- |
+| `states` | Render states: `EnableAlphaToCoverage`, `Wireframe`, `Blending`, `DisableColorWrite`, `DisableAlphaWrite`, `DisableRGBWrite`, `DisableDepthTest`, `DisableDepthWrite`, `DisableCulling`, `InvertCulling`, `StencilWrite`, `EnableStencilTest` |
+| `defines` | Shader macros (`ALPHA_TEST`, `USE_EMISSIVE`, `USE_OVERLAY`, `USE_UV_ANIM`, `FANCY`, `ENABLE_FOG`, `ENABLE_LIGHT` and so on) |
+| `depthFunc` | Depth comparison: `Always`, `Equal`, `NotEqual`, `Less`, `Greater`, `GreaterEqual`, `LessEqual` |
+| `stencilRef`, `stencilReadMask`, `stencilWriteMask` | Stencil reference value and masks |
+| `frontFace`, `backFace` | `stencilFunc` (the same value set as the depth function), `stencilFailOp`, `stencilDepthFailOp`, `stencilPassOp` (`Keep`, `Replace` and so on) |
+| `blendSrc`, `blendDst`, `alphaSrc`, `alphaDst` | Blend factors: `DestColor`, `SourceColor`, `Zero`, `One`, `OneMinusDestColor`, `OneMinusSrcColor`, `SourceAlpha`, `DestAlpha`, `OneMinusSrcAlpha` |
+| `samplerStates` | Per-sampler `textureFilter`, `textureWrap` |
+| `msaaSupport` | Multisampling support |
+| `variants` | Variants such as skinning |
+
+The test order is the stencil test first and then the depth test. Blending is final RGB = current color x source factor + buffer color x destination factor. The engine defaults are `blendSrc` SourceAlpha, `blendDst` OneMinusSrcAlpha, `alphaSrc` One, `alphaDst` OneMinusSrcAlpha. When you declare `Blending`, you usually also set `blendSrc` and `blendDst`. This field description document partly mixes in NetEase edition features (`NETEASE_SKINNING` and so on).
+
+### Example: linking an alpha test entity material to a client entity
+
+```json
+{
+  "materials": {
+    "version": "1.0.0",
+    "invert_culling:entity": { "+states": ["InvertCulling"] }
+  }
+}
+```
+
+Save this file as `RP/materials/entity.material`, import it in the client entity as `"materials": {"default": "invert_culling"}`, and the render controller uses `Material.default`.
+
+Below are rules and recipes gathered from the community research (Source: private research).
+
+## Rules for files and inheritance
+
+- Entity materials are `RP/materials/<x>.material`. For animated entity textures and the like, the file name must be `entity.material` and must **not** have a `.json` extension. Built-in material names have no namespace. If a material does not load, an error is left in the content log. `confirmed`
+- If the key in an attachable's `materials` is not correct, you get "Material ... referenced but not defined". There is a case where this error was fixed by raising the pack version in the manifest.
+- According to the Bedrock Wiki, vanilla material inheritance has had problems since 1.16, and one user got it working only by copying the whole vanilla definition. Conversely, there is also advice not to put vanilla material entries in a custom `.material` file (trying nocull stopped the rendering). `conflicting`
+- Using a material not meant for entities on an entity gives "shaders/color_texture.fragment cannot be assigned to an entity". A solid pink is a broken material and a pink-black checker is a missing texture. Around 2026-04-23/24, vanilla horses, fish and tropical fish looked pink even without add-ons. Changes take effect only after a full game restart, and `/reload all` does not refresh materials.
+- Where the vanilla definitions are: `...\Minecraft for Windows\Content\data\resource_packs\vanilla\materials\entity.material` (on Windows GDK `C:\XboxGames\Minecraft for Windows\Content\data`) or in BDS. The wiki's list is old, and bedrock-samples also has some.
+- Microsoft has practically not documented materials (the Microsoft Learn material-files document has some). Entity materials break with VV and every release, and one developer says a full rewrite is needed.
+- Marketplace: If you attach a namespace without modifying vanilla materials, you can use custom materials in Marketplace add-ons.
+- Constraints of the current version (2026-10): only some blend pairs work, only `EnableStencilTest` is respected, and `DisableRGBWrite` is not used (the valid name is `DisableColorWrite`). ORE UI uses stencil, so entities can be drawn over the UI. The `Wireframe` state has no effect in RenderDragon. A custom material combining multitexture, emission and alpha (`+defines ALPHA_TEST, USE_EMISSIVE, USE_MULTITEXTURE` and 2 samplerStates) crashed the game.
+- Hard-coded things: The creeper material seems hard-coded. Materials like the wolf do not support alpha in vanilla. `custom_animated:entity` using `USE_UV_ANIM` and `ALPHA_TEST` showed a black background (unresolved). To do transparency and dyeing together (wolf collar), use an overlay texture (a separate layer). The enchant glint color is hard-coded in the engine and the glint texture can be replaced.
+
+## Emission (without VV)
+
+- **`entity_emissive_alpha`**: The texture alpha becomes glow, and the more transparent, the brighter. Keep the pixels that glow at a minimum of about 5% opacity, not alpha 0 (about 10~20% is commonly used), and the mesh stays opaque; if you need translucency, use `entity_beam_additive`. It is the Enderman and spider eye effect (the spelling `entity_emmisive_alpha` is a typo). It glows regardless of light level. Fully transparent pixels must be black and the material must apply to all bones. It also works on armor textures but may not work together with the enchant glint (`unverified`). To do partial translucency and emission together, split the materials. To make only part glow, like hair, make the glowing part transparent (alpha). The question that alpha about 11 is not enough is unresolved. The vanilla `spider` and `enderman` materials and `emissive_alphatest` serve the same purpose, and a player skin can also be made to glow by changing the material. `confirmed` (Source: bedrock-wiki `visuals/glowing-texture` does it the same way)
+- Enderman eyes: The texture is `textures/entity/enderman/enderman.tga`, and to glow on Fancy the alpha of the eye pixels must be 0. A VV-compatible version is harder.
+- Other emissive and unshaded materials: `entity_beam_additive` (translucent glow and gradient beams such as the charged creeper and lightning, translucent players also glow, disappears at some angles), `charged_creeper` (may disappear at some angles, alternative `lightning_bolt`), `breeze_wind_charge` (unshaded glow, a custom `+defines USE_EMISSIVE` is a case that failed), `entity_emissive_alpha_one_sided` (title and nameplate entities).
+- Animation and emission: `{"materials":{"version":"1.0.0","entity_emissive_animated:entity_emissive_alpha":{"+defines":["USE_UV_ANIM"]}}}`. Custom materials such as `"electro_rocket:entity_alphatest": {"+defines": ["USE_UV_ANIM"]}` are also used. For animated textures, `breeze_wind` or `player_animated` also work.
+- Glowing parts such as a lightsaber: Use `entity_beam_additive` on the attachable. To make it glow more strongly at night, split the geometry and render controller into an outer glow shell and an inner core, and give the inner one `entity_emissive_alpha`. Use `entity_beam_additive` also for fire and plasma models, and giving additive to a white inner cube and a yellow outer cube makes lightning. Strong glow needs VV.
+- An additive material works well.
+
+```json
+"entity_add:entity_emissive_alpha": {
+  "-defines": ["FANCY", "ENABLE_FOG", "ENABLE_LIGHT"],
+  "+states": ["Blending", "DisableDepthWrite"],
+  "blendSrc": "SourceAlpha",
+  "blendDst": "One"
+}
+```
+
+The old variant `entity_additive_old:entity_alphablend` (`+defines USE_EMISSIVE`, `DisableAlphaWrite`) needs light nearby.
+- Armor that really emits light is impossible. Fake the glow with the render controller `ignore_lighting` or `entity_emissive_alpha`, and use MER under VV. Block-side `shaded`-type options are only shortcuts that turn off `face_dimming` and `ambient_occlusion` and are not per-pixel emission. The light of the firefly bush is a separate block texture (`firefly_bush_firefly.png`) and material.
+- "flashbang": The problem of an emissive material flashing like a flashbang when seen from below in the daytime is unresolved. With a custom `entity.material`, the enchant glint hides emissive armor trims (unresolved).
+
+## Translucency, blend, culling
+
+- If the back face shows in an alpha region, use `entity_alphatest` instead of glass-like alpha blend. Transparent regions coming out black or in an odd color is also a material choice problem.
+- Translucent materials: `slime_outer` (applied per bone in the render controller), `beacon_beam_additive`, `entity_alphablend`. An attempt at unshaded alpha is `"entity_unshaded_alpha:entity_alphablend": {"+defines": ["USE_EMISSIVE"]}`. `entity_alphablend` can lose the back face on 2D entities, so use a custom "stacking translucency" material (see materials at the-bedrock-notebook.dev).
+- If there is an opaque cube inside `entity_alphablend`, blending stops, so it is all or nothing. An example custom material for stacked layers is `"glint:entity_alphablend": {"+defines":["USE_EMISSIVE"],"+states":["Blending","DisableCulling","DisableDepthWrite"]}` and add `depthFunc: lessEqual` if needed (see https://www.the-bedrock-notebook.dev/materials/topics/blending.html ). An alphablend that uses `Blending`, `DisableDepthWrite` and `DisableDepthTest` together is drawn under water and name tags (unresolved). The vanilla horse uses a hard-coded pattern material, and layered mob materials other than iron_golem turn purple when used on other mobs.
+- `entity_alphablend` draws a box in which other translucent objects are not rendered. `entity_emissive_layer_alpha_blend` (the entity becomes invisible) and `breeze_wind` (worked on a translucent projectile) were proposed.
+- Overlapping alpha planes: `"overlap:entity_alphablend"` with `"+states": ["DisableCulling","DisableDepthWrite"]` and `blendSrc: SourceAlpha`. To avoid stacked transparent pixels blending with each other inside one material, turn off blending in the material.
+- Double sided and inverted culling: Double sided is `"+states": ["DisableCulling"]`. For front-face culling, put `"invert_culling:entity": {"+states":["InvertCulling"]}` and use it in the client entity as `"materials": {"default": "invert_culling"}`. If you need translucency, change `entity` to `entity_alphablend`. The render controller itself has no culling option.
+- If a translucent bone hides an inner bone, split the geometry and give each its own render controller (one `entity_alphablend`, one `entity_alphatest`). The bone order in the Outliner also matters. The custom material used: `"entity_translucent:entity_alphatest": {"+states":["Blending"],"+defines":["USE_OVERLAY","USE_EMISSIVE"]}`.
+- If the inside faces of title and text models show, use `entity_alphatest_one_sided` (not in the wiki but works) or `entity_emissive_alpha_one_sided`, and rebuild the texture with padding to prevent bleeding. A custom variant `"title_letters:entity_alphatest": {"-states":["DisableCulling"],"-defines":["FANCY"]}`. Removing FANCY also removes VV shading.
+- Arbitrary alpha (without baking it into the texture): (a) Materials that control alpha directly (`player_spectator`, `warden`) need a runtime_identifier. (b) A 2x1 texture (one alpha 0 pixel, one opaque) with a bilinear material and a UV animation between the two pixels. (c) Manual blending with an additive pass after a multiply or alphablend pass (the order is hard, and VV compatibility only when the first step is alphablend). (d) The `USE_COLOR_MASK` material define worked on custom entities **without** a runtime id (not on creepers and pigs). (e) The Ender Dragon dissolve effect, particles for geometry fade, texture arrays with different alpha in the render controller.
+- A black and white filter is impossible. Blending is per component so there is no mixing between channels, so only red, green and blue single colors work. VV (grading saturation) or a custom shader is needed.
+- Ghost material (non-VV): `"ghost_material:entity_alphablend": {"+defines":["USE_EMISSIVE"],"+states":["Blending","DisableCulling"]}`. Portal fade: `"+defines": ["USE_UV_ANIM"], "+states": ["Blending","DisableDepthWrite"]`.
+- A translucent entity on the water surface: The depth-only pass writes depth during the opaque entity pass, so entities behind it that are drawn later disappear. A known unresolved problem.
+
+## Stencil and outlines
+
+**Concept**: Draw the base model with a material that writes a stencil value, then draw an inflated copy with a material that draws "only where it is not that value", and only the border remains.
+
+```json
+"outline_base:entity_alphatest": {
+  "+states": ["EnableStencilTest", "StencilWrite"],
+  "frontFace": { "stencilFunc": "Always", "stencilFailOp": "Replace", "stencilDepthFailOp": "Replace", "stencilPassOp": "Replace" },
+  "backFace":  { "stencilFunc": "Always", "stencilFailOp": "Replace", "stencilDepthFailOp": "Replace", "stencilPassOp": "Replace" },
+  "stencilRef": 2
+},
+"outline_main:entity_alphatest": {
+  "+states": ["EnableStencilTest", "DisableDepthWrite"],
+  "-defines": ["FANCY"],
+  "depthFunc": "Always",
+  "frontFace": { "stencilFunc": "NotEqual" },
+  "backFace":  { "stencilFunc": "NotEqual" },
+  "stencilRef": 2
+}
+```
+
+It needs inflated geometry, a separate texture, and a render controller for each (the arxance "Entity Outline" template). `confirmed`.
+
+A Mojang-style outline example:
+
+```json
+"outline:entity_static": {
+  "+states": ["InvertCulling", "EnableStencilTest", "DisableDepthWrite", "Blending"],
+  "+defines": ["USE_OVERLAY"], "-defines": ["FANCY"],
+  "depthFunc": "Always",
+  "frontFace": { "stencilFunc": "NotEqual" },
+  "backFace": { "stencilFunc": "Equal" },
+  "stencilRef": 2, "stencilReadMark": 2
+}
+```
+
+- Other variants: (1) `outline_main:outline_base` with `depthFunc Always`, `-defines [lighting, ENABLE_LIGHTING]`, `+states [DisableDepthWrite, DisableCulling]`, stencil `NotEqual`/`Keep`. Removing `-defines FANCY` reduced flicker (2026-08-18). (2) outline_base is EnableStencilTest, StencilWrite, DisableCulling, stencilRef 6, and outline_main is depthFunc Always, stencilFunc Greater. The first-person variant adds DisableDepthWrite to prevent z-fighting but fails against the VV sky. (3) The base material (`InvertCulling`, `DisableDepthWrite`, `EnableStencilTest`, `depthFunc LessEqual`, stencilFunc `NotEqual`) skips where the base entity was drawn. Blending cannot be used on the base, so make the base opaque (inheriting `entity`), the outline `entity_alphatest`, and hide the base by adding `DisableColorWrite` and `DisableAlphaWrite` to it. (4) In a global outline attempt, the problem of the outline being drawn over the model was unresolved. There is also a setup using 2 render controllers in the `entity_glow_base` and `entity_glow_outline` style.
+- If the outline shows through blocks and entities, turn off `depthFunc: Always`. An outline that goes through blocks but not entities is impossible unless you give a custom material to every entity. An example client entity setup: materials `outline_base` and `outline`, outline texture `textures/ui/White`, 2 geometries, `controller.render.default` and an outline controller.
+- Trade-off: An outline that handles several crossing entities cannot be transparent, and a transparent outline cannot handle overlap. If you want both, keep separate base and outline entities. In first person the stencil buffer is not reset on the next frame, and in third person it is cleared before transparency processing.
+- **stencilRef layers**: `stencilRef` is a layer number. High layers mix with vanilla materials (crosshair, doors, Ore UI screens), so do not exceed 32. Vanilla entity shadows use `stencilRef` 1, so use 2. To use several outlines, duplicate `outline_base` with a higher `stencilRef`, and to draw something else over an outline (name, health bar), copy the outline material and lower that entity's layer.
+- Render order: The render order of entities using stencil can depend on the entity **file name** (alphabetical load order), not the material name. Blend mode and so on still take priority. `WriteMask` cannot be trusted, and on attachables the stencil is read-only. Test on other platforms before relying on order.
+- Where stencil does not work: Stencil does not work on particles (use an entity). Outlines cannot be used on blocks (entity and attachable materials are needed). Ordinary hand items (things without an attachable such as diamonds and ingots) use inaccessible hard-coded materials and cannot be outlined, so an attachable, a custom material, and a separate outline model and texture are needed.
+
+### Outline template details
+
+- The outline model for an attachable is made by inflating the item model in Blockbench. If the outline ignores the item's rotation and animation, put the outline cubes in a sub-bone inside the same root bone (`root > outline_bone > cubes`). It must not be a separate bone with a different name, and a model with only inflated cubes plays the animation twice because of the bone name.
+- Inflating every cube by 0.5 makes inner faces and cubes show through. Inflate only the outer cubes or erase the texture of hidden faces.
+- Conditional outline (only when enchanted): Put `"part_visibility": [{ "*": "variable.is_enchanted" }]` in the outline render controller, and for armor slot items use the condition `query.is_item_name_any('slot.armor.chest', 0, 'diamond_chestplate') && query.is_enchanted` in the attachable `render_controllers` array.
+- Keeping the outline and enchant glint: Provide a glint variant of the stencil material (`outline_based:entity_alphatest_glint`, stencilRef 2) and a render controller with `"materials": [{ "*": "variable.is_enchanted ? Material.enchanted : Material.default" }]` and `"textures": ["variable.has_trim ? variable.trim_path : Texture.default", "Texture.enchanted"]` (texture `textures/misc/enchanted_item_glint`). The glint controller must be the **first** in the attachable `render_controllers`, otherwise it is drawn in the wrong place or not visible in third person.
+- Outlines fail on a custom entity declared with entity `format_version` 1.8.0, so use 1.10.0 and run the client animation controller with the RP entity's `scripts.animate`.
+- A condition example for players: `"controller.render.x.outline": "!v.is_first_person && !v.is_paperdoll && !q.is_spectator && q.is_angry"`.
+- The template is per model (one outline geometry per mesh, one render controller if the geometry differs). It cannot be applied generally to all add-on mobs and only a client mod can do it.
+- The player model geometry names are `geometry.humanoid.custom` (wide arms) and `geometry.humanoid.customSlim`. Slim detection is hard-coded and unstable (cape), so template v3 provides only a slim outline.
+- Outline only when looked at: Give the entity a property, have a script detect the look target and set the property, and let the property drive a conditional render controller.
+- Known problems: The crosshair disappears over an outlined mob (fixed in later templates). The outline layer can break the `!q.is_in_ui` situation. Server packs that change the player material can break the outline.
+- Template V3 (3.2 zip, 2026-06-18/19): Rewritten with a single material, added first-person item outlines, a cartoon edge, and an overlay color instead of the outline texture. Known problems are that Blending does not go well with VV and that first-person attachable outlines are buggy under VV. An example outline shown only to specific players by script uses `entity.playAnimation(name, { players: [...] })`.
+- There are reports that an inverted-hull outline does not render properly, and a single-sided material can give a "minus the inflated cube" feel (not a real stencil) but it is incomplete and lines appear inside the model.
+- Portals and bigger-on-the-inside effects: `EnableStencilTest` still works. An entity masking effect (like a portal) is made with about 5 custom materials per geometry region. A fake portal or room effect is a full 3D room model and a custom stencil material.
+- Skybox without fog (multipass): Draw the large skybox first, then the small one with color (the large one alone has no effect). Material `"+states":["EnableStencilTest","StencilWrite","DisableDepthWrite"]`, `"-defines":["FANCY","ENABLE_FOG","ENABLE_LIGHT"]`, `stencilRef` 3.
+
+## Depth: seeing through walls, drawing in front
+
+- Seeing through walls: The material's `"depthFunc": "Always"` shows things beyond blocks. Example: `"entity_alphatest_omniscient:entity_alphatest": {"depthFunc":"Always"}` in `materials/entity.material` (the file name matters). `DisableDepthTest` or `DisableDepthWrite` alone fails if another entity is in front. It cannot be done with particles, so use a custom material entity.
+- Drawing behind blocks but not passing through entities: `{"+states":["DisableDepthTest","DisableDepthWrite","Blending"],"depthFunc":"Always","blendSrc":"SourceAlpha","blendDst":"OneMinusSrcAlpha"}` worked (with some inside-out artifacts).
+- Drawing an entity over a first-person attachable: The depth buffer is cleared before first-person geometry, so use stencil. The entity material `depth_entity:entity_alphatest` has `+states ["EnableStencilTest","StencilWrite"]`, `depthFunc: Always`, front/backFace `stencilFunc Always`, and `stencilFailOp`, `stencilDepthFailOp` and `stencilPassOp` all `Replace`, `stencilRef: 2`. The attachable material `attachable:entity_alphatest` has `+states ["EnableStencilTest"]`, `stencilFunc: NotEqual`, `stencilRef: 2`.
+- A long glowing beam disappears: Because of fog interpolated per vertex, it disappears when you do not look at a particular point. Make the beam short or split it into 10~100 stacked cubes.
+- Debug shapes and VV: VV draws debug lines black and debug object colors differently. `TextPrimitive` shows through blocks under VV even with `depthTest` true (https://stirante.com/script/server/2.10.0/classes/TextPrimitive.html#depthtest , reporting the bug is recommended). One map creator used entities instead of debug shapes because of the VV depth problem and because they vanish when F1 and the name display toggle.
+- Hiding name tags through walls: Modify the `name_tag_text` material with `+states [Blending, DisableDepthWrite]`, `+defines [ALPHA_TEST, USE_EMISSIVE]`, `msaaSupport: Both` and remove the `depthFunc: Always` in `ui3D.material`.
+
+## Lighting and shadow removal
+
+- Ignoring lighting: Use the render controller's `"ignore_lighting": true` (does not work on attachables). It also solves the problem of a model going black inside blocks. Per-direction shading is removed with an emissive material or `"-defines": ["FANCY"]` in the material JSON. A workaround of raising `light_color_multiplier` to the maximum to render at maximum brightness in any light was also used. There is a report that `ignore_lighting` did not work when HUD-like geometry attached to the player got darkened by lighting, so try an emissive material (the paper doll is too buggy). Entities go black when inside blocks (hard-coded, not under RTX).
+- For attachable lighting, see [Attachables and item rendering](./attachables-and-items.mdx).
+- Removing armor shading: `"entity_noshade:entity": {"-defines":["FANCY"]}` removes face shading but it still gets dark at night and in the dark. Tie the noshade material to `entity_alphatest` and lower the texture opacity (the lower the alpha, the brighter).
+- Shadow removal (non-VV): There are the `minecraft:renders_when_invisible` and the infinite invisibility `spell_effects` methods (Bedrock Wiki `visuals/remove-shadows`). Blob shadows exist only in Fancy mode, and Simple and Raytraced do not use that shadow type. The size of the round shadow under an entity is decided by the collision box, not the model. Large entity shadows cause lag when many spawn, so reduce them.
+
+## Materials under VV
+
+- Simple/Fancy and VV materials are not compatible with each other, so switch materials with a graphics mode query. Custom materials do not work well under VV (material variants break, stencil was fixed). Under VV `DisableColorWrite` is broken so a mask cannot be hidden. A VV/RenderDragon custom shader outline worked on Windows and failed on mobile (an invalid material in the base engine). The Fancy `"custom_unshaded:entity": {"-defines": ["FANCY"]}` has no counterpart under VV, and custom materials with `+defines: USE_EMISSIVE` have visual problems under VV (unresolved).
+- VV stencil: Before 1.21.120, stencil was completely broken under VV, and afterwards fixed "to some extent", but the method of fixing differs from normal rendering, so old materials must be remade. Under VV, outlines are drawn **behind** the entity. Outlines for normal graphics are drawn in front or flicker under VV, and using the VV one in normal graphics makes the entity shadow cover the outline and creates shadows on doors and signs. VV stencil is unstable, so insert a transparent bone that forces a clear, or draw a full-screen opaque/alphablend pass that turns off depth and color writes and sets stencil 0. First-person item outlines need extra setup.
+- Fancy stencil outline: To draw over the sky and water, both materials need the `Blending` state. As side effects, it is not drawn through other transparent blocks and flickers depending on the angle. You can remove the shadow by removing the `FANCY` define and using the render controller `ignore_lighting: true`. Under VV, give the texture_set a very small emissive value (about 5/255) to avoid shadows. For texture transparency, the `ALPHA_TEST` define is enough. Under VV there is no proper way to ignore lighting without glowing.
+- Alpha and dithering: VV forces alpha test on transparent materials. The cause of a transparent glow material (`entity_alphablend` + `USE_EMISSIVE` + stencil states) breaking in VV first person is dithering, so turn it off in the accessibility settings or raise the minimum alpha to avoid alpha test. Custom transparent and translucent materials may not behave as expected under VV. Two alpha-blend cubes 1px apart work under VV but show a see-through bug. `entity_nocull` does not work properly under VV.
+- VV entity emission: The old trick (`entity_emissive_alpha`, lowering opacity) does not work under VV. Use the MER emissive channel (green), texture_set and the pbr capability ([VV and RTX](./vibrant-visuals-and-rtx.mdx)). Emissive models can flicker under VV. VV per-direction shading can be removed only with SSS or emission.
+- Pitch-black entities under VV: Use a maximum metalness texture set (candidates `[255,0,0,0]`, `[255,0,255,0]`, `[0,255,0,0]`, `[0,255,255,0]`) and a pitch-black color texture. In water, underwater fog (blue tint) still mixes in, and a complete "void" feel was judged impossible.
+- `charged_creeper`-type VV reflection artifacts were solved by fixing `metalness_emissive_roughness` of the texture set.
+
+## Custom shaders (material.bin)
+
+- Kinds: RD shaders (Fancy modification, the easiest), RTX shaders, VV shaders (obfuscated source, the hardest). A real shader needs a replaced `material.bin` file, and Mojang does not provide official material.bin loading. The Marketplace has no shaders, and VV/RTX packs are resource packs. Custom VV shader packs such as Mirai 2.11, Bliss and Vanilla Reforged depend on a mod loader. Shaders and materials cannot be distributed with a resource pack.
+- Installation: Use BetterRenderDragon (BRD), or copy the materials to `C:\XboxGames\Minecraft for Windows\Content\data\renderer\materials`. The repair function of the Store and Xbox app may not restore the originals, so back up yourself. The conclusion on the Bedrock OSS side is that custom RenderDragon (including RTX) shaders are possible only by modifying game files. A `materials.index.json` through a resource pack no longer works, so replace the vanilla `.material.bin`, or make a new folder in the internal `renderer/materials`, put a custom bin there, and add an entry at the **very top** of `materials.index.json` (upper entries take priority). In the 2026-05-12 Preview, a new `shaders` folder appeared with a `materials.index.json` containing only `{"materials": []}`.
+- Compilation: Mojang compiles shaders with a heavily modified bgfx fork, and materials are cross-compiled per platform. Only Windows and Android are moddable. The Lazurite compiler is multithreaded and can compile only the materials chosen with `-m` (skip actor; ActorPatternForwardPBR is the slowest). A full compile takes about 15 minutes on 4 cores. It is easiest to take the latest materials from your own game install folder (XboxGames), and the source for compiling is in the newb shader repository (as of 26.20, only the 26.10 version). MaterialBinLoader did not support the beta at the time. For VV shader source reference: veka0/mcbe-shader-codebase.
+- Per-platform shader formats: Windows and Android are plain-text GLSL/HLSL, Nintendo Switch is precompiled NVN shaders (magic 0x12345678, Maxwell SM53), and newer Switch versions are Vulkan and material.bin (veka.). NetEase (Chinese edition) uses HAL instead of RenderDragon. On the Windows GDK edition, you can use ReShade, RenderDoc and Nsight (not the UWP edition). References: veka0/mcbe-shader-codebase (preview, obfuscated branches), veka0/lazurite, ddf8196/MaterialBinTool.
+- The Chinese edition (NetEase) renders with OpenGL, supports Java-style shaders and wider engine access (camera, extra HUD buttons), and has no RTX. It was said that the Chinese edition's light distortion and distant skybox effects cannot be reproduced on the global edition (`unverified`).
+- Community projects (as of 2026-11): a RenderDragon source reconstruction for 26.60 https://github.com/PandaMine5/RenderDragon2src (no dithering, no actor), Arke https://github.com/LiteLDev/Arke which runs Java shaders (Bliss, Complementary, BSL, Photon) on Bedrock, a shader pipeline example https://github.com/bambosan/mirai , and ShaderGlass, which overlays post-processing on the PC screen.
+- The GDC talk "Modernizing the Rendering of Minecraft" covers DragonFX (a GLSL-based shading language) and shadow and reflection quantization.
+- Advice on Java shader development: Start with the Iris tutorial and study readable shaders (BSL, Glimmer). GPUs are weak at branching. I could not find guidance on how to write a real `.hlsl` shader.
+- Imitating JSON UI chromatic aberration: Shaders cannot be put in a pack, so bake it into the texture or draw 3 additive copies (R, G, B) with slightly different sizes.

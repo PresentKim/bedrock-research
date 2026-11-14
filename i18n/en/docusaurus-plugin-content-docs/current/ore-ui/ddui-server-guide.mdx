@@ -1,0 +1,318 @@
+---
+title: Server-driven DDUI guide
+description: The concept and examples of vanilla DDUI (Script API), and the packet, store, engine API and node rules of a custom renderer where the server sends only data and draws screens on top of Ore UI.
+sidebar_position: 5
+sources:
+  - repo-ore-ui-loading
+  - private-research
+  - ms-learn
+---
+
+# Server-driven DDUI guide
+
+DDUI (Data-Driven UI) is the Ore UI framework where the look of a screen is set by data. This page covers two things. First it explains the script DDUI that Mojang officially released (`CustomForm` in `@minecraft/server-ui`), and then it sorts out how a server borrows that data channel to run its own renderer. The evidence is the 2026-10-23 Windows 1.26.52 measurement (Dragonfly test server), the in-game bundle `gameplay-100751586307248a0527.js`, and the Android 1.26.52.3 analysis (rounds 11~15). (Source: repo-ore-ui-loading)
+
+## 1. Official DDUI (script) `{docs}`
+
+### Concept
+
+The forms of the existing `@minecraft/server-ui` do not change once shown until they are closed and reopened (static). With DDUI, if you wrap values in an `Observable`, the open form follows when the values change (reactive). Modal forms came first as DDUI. (Source: ms-learn, Introduction to DataDriven UI)
+
+| Existing class | Use |
+| --- | --- |
+| `ActionFormData` | Choose from a button list |
+| `MessageFormData` | A two-button confirmation window |
+| `ModalFormData` | A survey with several input controls |
+
+| DDUI class | Use |
+| --- | --- |
+| `CustomForm` | A flexible form combining the three. Dynamic content and reactive bindings |
+| `MessageBox` | A two-button dialog (with more options) |
+| `ObservableString`, `ObservableBoolean`, `ObservableNumber`, `ObservableUIRawMessage` | Values that update the UI automatically |
+
+### Example
+
+```ts
+import { CustomForm, ObservableString, ObservableNumber, ObservableBoolean } from "@minecraft/server-ui";
+
+const playerName = new ObservableString("Player", { clientWritable: true });
+const musicEnabled = new ObservableBoolean(true, { clientWritable: true });
+const volumeLevel = new ObservableNumber(75, { clientWritable: true });
+
+new CustomForm(player, "Game Settings")
+    .closeButton()
+    .label("General Settings")
+    .divider()
+    .textField("Player Name", playerName, { description: "Your display name in-game" })
+    .toggle("Music Enabled", musicEnabled)
+    .slider("Volume", volumeLevel, 0, 100, { description: "Master volume level", step: 5 })
+    .button("Reset to Defaults", () => resetSettings())
+    .show()
+    .then(() => console.log(playerName.getData()))
+    .catch(e => console.error(e));
+```
+
+```ts
+new MessageBox(player, "Confirm Action")
+    .body("Are you sure you want to delete this item?")
+    .button1("Delete")
+    .button2("Cancel", "Keep the item and close this dialog")
+    .show()
+    .then((response) => { if (response.selection === 1) deleteItem(); });
+```
+
+`response.selection` is `undefined` if closed without a selection, 1 for the first button and 2 for the second.
+
+A live update example (every 4 seconds, the entity count is reflected in a label and a button's enabled state):
+
+```ts
+const entityStatus = new ObservableString("Scanning...");
+const killButtonDisabled = new ObservableBoolean(true);
+const intervalId = system.runInterval(() => {
+    const near = player.dimension.getEntities({ location: player.location, maxDistance: 20 });
+    entityStatus.setData(`Found ${near.length} entities within 20 blocks`);
+    killButtonDisabled.setData(near.length === 0);
+}, TicksPerSecond * 4);
+
+new CustomForm(player, "Entity Monitor")
+    .label(entityStatus)
+    .button("Remove All Entities", () => { /* ... */ }, {
+        tooltip: "Removes all non-player entities within range",
+        disabled: killButtonDisabled
+    })
+    .closeButton()
+    .show()
+    .then(() => system.clearRun(intervalId));
+```
+
+### Rules
+
+- Observable values: split into read-only (the server decides the value) and `clientWritable: true` (a UI control changes the value). Change with `setData`, read with `getData`, and receive changes with `subscribe(callback)`.
+- Control options: `description`, `tooltip`, `disabled` and `visible` accept an Observable, so display and enabled state change dynamically.
+- A button callback runs the moment it is pressed and the form stays open. A form can be operated several times.
+- If another UI is open, the form does not appear. Check whether the `show()` result is `DataDrivenScreenClosedReason.UserBusy`.
+- For localization, use `RawMessage` (`translate`, `with`) in titles, labels and buttons.
+- Migration: `ActionFormData` and `ModalFormData` become `new CustomForm(player, title)`, `MessageFormData` becomes `new MessageBox(player)`, `.show(player)` becomes `.show()`, and `response.formValues[0]` becomes `observable.getData()`.
+- A script DDUI changing an open form appears to use the path update rules of chapter 5 below `{inferred}`.
+- Changing the vanilla DDUI layout (`ddui/root`) with a pack is currently blocked ([Loading paths](./loading-paths.mdx)).
+
+## 2. What a custom renderer can do
+
+This is a way for the server to send only data, draw the screen it wants on top of Ore UI, and get the player's actions back. It is a custom renderer that borrows the data channel of vanilla DDUI instead of vanilla `CustomForm`.
+
+| What you want to do | Result | Evidence |
+| --- | --- | --- |
+| Put your own HTML, JS and CSS into the in-game Ore UI screen (`gameplay.html`) | **Works.** The server sends the resource pack encrypted | `{measured, code}` |
+| Draw screens from server data, change values in real time (4Hz or more) | **Works** | `{measured}` |
+| Get buttons, toggles, sliders, text input and selections back at the server | **Works** | `{measured}` |
+| Hundreds of buttons (a 200-item grid), tab switching, partial updates | **Works** | `{measured}` |
+| Item and block icons drawn by the engine | **Works.** Custom items and blocks too, through the `bag` of `geo-item://` | `{measured, code}` |
+| Pack textures (custom item and block images) | **Works.** `pack://path.png` | `{measured}` |
+| Grid + detail screen (99 items, per-state rules) | **Works** | `{measured}` |
+| Open a real chest, furnace or inventory with Ore UI | **Does not work.** The client developer option must be on | `{measured, code}` |
+| A screen imitating a container | Draws, but has no shift click, cursor item or drag. Dropped | `{measured}` |
+| Change vanilla DDUI layouts (`ddui/root`) with a pack | Does not work. The engine reads only built-in packs | `{code}` |
+| Out-of-game menu | Not tested | none |
+
+The prerequisite is the encrypted pack (or `content.zipe`) of [Modifying Ore UI pages](./modifying-pages.mdx). A plaintext pack cannot change Ore UI files.
+
+## 3. Overall structure
+
+```text
+Server                                 Client (oui-ddui.js inside gameplay.html)
+ | ClientBoundDataStore (Change)        |
+ |   minecraft / custom_form_data_1 --->| query vanilla.ddui.string -> draws the screen structure (oui)
+ |   minecraft / oui_vars_1_n       --->| query vanilla.ddui.string -> applies value patches
+ | ClientBoundDataDrivenUIShowScreen -->| query vanilla.ddui.screenId -> if "minecraft:custom_form", shows the custom screen
+ |                                      |
+ |<-- ServerBoundDataStore -------------| setDataStorePathString(oui_event) <- buttons, input
+ |<-- ServerBoundDataDrivenScreenClosed | Esc, close
+ | ClientBoundDataDrivenUICloseScreen ->|
+```
+
+The vanilla server form root `minecraft:custom_form` is opened as an **empty frame**. The vanilla form is hidden with CSS (`body.oui-active #root {visibility: hidden}`), and the custom renderer draws the screen on top of it. The vanilla root reads `$.minecraft.custom_form_data_{instanceId}`, so setting both the form ID and the data ID to 1 worked. Each connection uses one form at a time. The vanilla fields (`title`, `closeButton`, `layout`) are filled in too.
+
+## 4. Packets `{measured, code}`
+
+These are the packet names of gophertunnel v1.62.0. Dragonfly does not handle DDUI packets, so the listener is wrapped and the client packets (`ServerBoundDataStore`, `ServerBoundDataDrivenScreenClosed`) are intercepted in the connection's `ReadPacket`.
+
+| Direction | Packet | How to write it |
+| --- | --- | --- |
+| S to C | `ClientBoundDataDrivenUIShowScreen` | `ScreenID: "minecraft:custom_form"`, `FormID: 1`, `DataInstanceID: Option(1)` |
+| S to C | `ClientBoundDataStore` | Data store write. Chapter 5 |
+| S to C | `ClientBoundDataDrivenUICloseScreen` | `FormID: Option(1)`. If empty, closes all |
+| C to S | `ServerBoundDataStore` | A value JS wrote. `Update{DataStoreName, Property, Path, ControlType, StringValue...}` |
+| C to S | `ServerBoundDataDrivenScreenClosed` | `FormID`, `CloseReason` (`programmaticclose`, `clientcanceled`, etc.) |
+
+Names on the binary side (NB-21): `OreUI::DataStoreQueryString`, `OreUI::DataStoreSetCommandGroup`, `Bedrock::DDUI::DataStoreSyncClient`/`DataStoreSyncServer`. The packet `ClientboundDataStorePacket` is a cereal schema (`variant<DataStoreUpdate, DataStoreChange, DataStoreRemoval>`) (Source: private research).
+
+Closing: when the server sends `ClientBoundDataDrivenUICloseScreen`, the client replies with `ServerBoundDataDrivenScreenClosed` (`programmaticclose`). Esc is `clientcanceled`.
+
+## 5. Data store write rules `{measured}`
+
+### Concept
+
+The data store is a server-client shared tree where values are found by `store name / property / path`. When the server writes, the client's query subscribers receive the new value. `ClientBoundDataStore` has three entry kinds.
+
+| Kind | Contents | Use |
+| --- | --- | --- |
+| `Change` | Replaces a whole property. The value is a tree of map, list, string, int64, double and bool | Initial fill, big replacement |
+| `Update` | Changes only one path inside a property. The value is string, double or bool | Small updates |
+| `Removal` | Deletes the store | none |
+
+### Update numbers (most important)
+
+- `Change.UpdateCount` is the edition number of that property. It only needs to keep growing (the test server uses a global counter). The client accepts only editions larger than the property's last edition.
+- `Update.PropertyUpdateCount` **must equal the edition number of the last `Change`.** `Update.PathUpdateCount` only needs to keep growing per path.
+
+This is the `/ddupdate` experiment that filled a property with a `Change` (UpdateCount 100) and then changed the path `v` every second.
+
+| PropertyUpdateCount | PathUpdateCount | Result |
+| --- | --- | --- |
+| 100 (same as the last Change) | 1, 2, 3... | Applied |
+| 100 | 101, 102... | Applied |
+| 101, 102... (raised every update) | 101, 102... | **Ignored** |
+
+The initial observation that "path updates don't work" came from raising the property edition on every update too. Whether the `ClientDisconnection-90` at that time was caused by this was not sorted out. The renderer currently uses only whole-property replacement. Switching to path updates makes the packets smaller.
+
+### Changing the same property twice in one frame loses the earlier value
+
+The client gives subscribers only the newest value of a property. On the research screen, when a notification and a screen update were sent back to back, the notification was not seen. The test server sends like this.
+
+- It merges `SetVars` calls within 10ms into one.
+- It carries patches round-robin over 8 properties (`oui_vars_1_0` to `_7`). The value is a JSON string `{"f": form ID, "s": sequence, "p": {changed key: value}}`.
+- The renderer subscribes to all eight and applies the patches of the current form (`f`) once per sequence number. Late patches of a previous form are discarded.
+
+## 6. Engine APIs used by client JS `{measured, code}`
+
+### Reading (query)
+
+```js
+var id = 0x7e000000; // A number that does not collide with vanilla
+engine.on("query:subscribed/" + id, cb);
+engine.on("query:updated/" + id, cb);
+engine.trigger("query:subscribe/vanilla.ddui.string", id, "minecraft", "custom_form_data_1", "oui", false);
+// cb receives a value or an object with a value field
+```
+
+| query | Arguments | Result |
+| --- | --- | --- |
+| `vanilla.ddui.screenId` | none | The name of the currently open DDUI screen (an object with a `screenId` field, or a string) |
+| `vanilla.ddui.string` | store, property, path, false | string |
+| `vanilla.ddui.number`, `.bool` | store, property, path | number, boolean |
+| `vanilla.ddui.object`, `.objectArray` | store, property, path | object, object array |
+
+### Writing (commands)
+
+These are entries of `window.__commands__.vanillaDduiDataStoreSetCommandGroup`. Bind the `callable` of each entry to that entry and call it.
+
+```js
+var g = window.__commands__.vanillaDduiDataStoreSetCommandGroup;
+var c = g.setDataStorePathString;
+c.callable.apply(c, ["minecraft", "custom_form_data_1", "oui_event",
+  JSON.stringify({ seq: 1, id: "btn1", kind: "click", value: null })]);
+```
+
+| Command | Arguments | What arrives at the server |
+| --- | --- | --- |
+| `setDataStorePathString` | store, property, path, string | `ServerBoundDataStore` (string) |
+| `setDataStorePathNumber`, `setDataStorePathBool` | same | double, bool |
+| `dataStoreButtonPress`, `dataStoreCloseButtonPress` | store, property, path | Not tested |
+
+The renderer writes `{"seq","id","kind","value"}` JSON to `oui_event` of `custom_form_data_1`.
+
+### What got caught in Gameface
+
+- **`click` does not arrive on a plain `div`.** `:hover` works. Handle presses with `mousedown` (left button).
+- Input of `<input type="text">` and `keydown` work. The renderer batches text input for 400ms and sends immediately on Enter.
+- Hiding the vanilla form stops Esc from working. The renderer sends Esc as a `close` event and the server closes the form.
+- `overflow-y: auto` scrolling, flex, `border-radius`, `rgba`, `@keyframes` and `transform: rotate` worked.
+- When you edit the pack JS you must raise the pack version for the client to receive it anew. The debug line (`oui-ddui screen=... sent=...`) shows only when the value `__debug` is true.
+
+## 7. Renderer screen structure `{measured}`
+
+The screen structure is a node tree JSON. Every node has `t` (kind) and can have the optional properties `id`, `text`, `bind`, `class`, `style` (a CSS property object), `tip` (tooltip) and `children`.
+
+```json
+{
+  "t": "col",
+  "children": [
+    { "t": "text", "text": "§lTitle" },
+    { "t": "bar", "bind": "progress" },
+    { "t": "button", "id": "go", "text": "Start" },
+    { "t": "toggle", "id": "sound", "value": true }
+  ]
+}
+```
+
+| `t` | Properties | Behavior |
+| --- | --- | --- |
+| `col`, `row` | `scroll` | Vertical and horizontal flex. With `scroll: true`, vertical scrolling |
+| `grid` | `cols` | A wrapping grid |
+| `text` | `text`, `bind` | Text. Supports `§` colors, `§l`, `§o`, `§r` and `\n` |
+| `button` | `active`, `activeBind`, `disabled` | When pressed, `{id, kind: "click"}` |
+| `bar` | `bind` (0~1) | Progress bar |
+| `toggle` | `value`, `disabled` | `{id, kind: "change", value: bool}`. The look is the switch of the vanilla settings screen |
+| `slider` | `min`, `max`, `step`, `value` | Value on release |
+| `input` | `value`, `placeholder` | Text |
+| `select` | `options`, `value` | The chosen item string |
+| `item` | `icon`, `size`, `count`, `text`, `clickable`, `activeBind` | Icon |
+| `slot` | `bind` (value `{id, n}`), `size` | Item slot. Only changed slots can be sent as values |
+| `region` | `name` | Redraws only that part with the value `@name` (a node) |
+| `watch` | `property`, `path` | Subscribes directly to a store value and shows it (for testing) |
+| `space` | none | Fills the remaining space |
+
+- `toggle` is a React component ported from the vanilla switch on the settings screen (`BaseSwitch` in the menu bundle `index-*.js`), and the renderer calls `OuiReact.mountSwitch` in the build output `oui-react.js`.
+- Values (variables): `bind` is a value name. When a value arrives, text, bar width, icon and slot content change. `activeBind` adds the `on` class when true. An `@name` value is the new content of a region (`region`) node, and the bindings inside it are rebuilt. When `__debug` is true, a debug line (screen, structure size, update count, sent count, errors) shows at the bottom left.
+
+### Server-side API (test server Go)
+
+```go
+f, err := OpenForm(playerName, layout, vars, func(ev Event) { /* ev.ID, ev.Kind, ev.Value */ }, onClose)
+f.SetLayout(layout)          // Whole screen structure (tab switching, etc.)
+f.SetVars(map[string]any{})  // Only changed values. Calls within 10ms are merged
+f.Close()
+```
+
+## 8. Results and performance `{measured, Windows 1.26.52, 2026-10-23}`
+
+| Test | Result |
+| --- | --- |
+| Delivering and drawing a screen structure of 742B and 13KB (200 buttons) | Works. The vanilla form was covered by hiding `#root` |
+| Real-time values (time, position, health and tick bars) at 4Hz | Works. 46 updates in 11.5 seconds, no stutter |
+| Toggling 200 buttons (a 20-column grid) | Works. Only the press, the server, and that button's value and totals come back |
+| Tab switching (the server swaps the screen structure) | Works |
+| Toggle, slider (pressed position), text input, selection | Works. The server shows the received value back |
+| Server closes | Works |
+
+Performance rules
+
+- The screen structure is sent only once. After that, only changed values are sent.
+- Split large lists with `region` and redraw only the parts needed. `SetLayout`, which redraws everything, is used rarely, as in tab switching.
+- Grid + detail screen: changing the selection sends the detail region and two selection indicator values, and a change in item state sends only the grid region and the tab counts.
+
+## 9. Test server commands
+
+Open it from `samples/ouitest` with `go run . <pack folder> <32-byte key> [extra packs to send as plaintext...]`.
+
+| Command | Contents |
+| --- | --- |
+| `/ddui` | Real-time values, 200 buttons, input elements, item icon candidates, the media tab |
+| `/research` | The grid + detail screen example (chapter 3 of [Icons and containers](./geo-item-and-containers.mdx)) |
+| `/ddupdate a`~`e` | Path update edition number experiments (chapter 5) |
+| `/ddscreen root` | Opens a vanilla DDUI root without data |
+| `/ddchest` | Fills the vanilla Ore UI chest root with server data and opens it (not drawn) |
+| `/die` | Death screen (Ore UI) |
+
+Grid + detail screen example: send the pack for custom textures along as plaintext.
+
+```bash
+go run . ../ddui-pack OreUiProbeContentKey0123456789AB <custom texture pack folder>
+```
+
+## 10. What remains
+
+- Switch value patches to path updates (`Update`) to shrink packets (following the chapter 5 rules).
+- Whether the out-of-game menu (`index.html`) also changes with a server pack, and when it returns to the original after leaving the server.
+- A way to match the vanilla bundle names in `gameplay.html` automatically on game updates (the server cannot see the install, so it is manual per version).
+- If Mojang changes the trust decision for encrypted packs, everything is blocked. Check every version.

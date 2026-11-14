@@ -1,0 +1,164 @@
+---
+title: Animations and animation controllers
+description: The concept of client animations and controllers (state machines), entity linking, transition conditions, keyframe pitfalls, Molang expression animation
+sidebar_position: 3
+sources: [private-research, bedrock-wiki, ms-learn]
+---
+
+# Animations and animation controllers
+
+## Concept
+
+An **animation** is a keyframe file that changes the rotation, position and scale of bones over time (`animations/*.json`). An **animation controller** (AC) is a state machine. Each state decides "what to play now" and "under what condition to move to another state". Controllers exist in both the resource pack (RP) and the behavior pack (BP). RP controllers play bone animations, sounds and particles, and BP controllers run commands, events and Molang expressions (Source: bedrock-wiki `animation-controllers/animation-controllers-intro`).
+
+A state machine is in only one state at a time. Every tick the controller (1) plays the current state's animations and runs `on_entry` commands (if it just entered), and (2) checks `transitions` from top to bottom, moves to the first one that is true, and runs `on_exit`. So it changes state at most once per tick. If there is no `initial_state`, it uses a state named `default`, and if that is missing too, it is a content log error. When the entity is reloaded (player join and leave, chunk reload), the controller returns to the default state, so put logic in the default state that restarts the key animations.
+
+## Example: two states, ground and flying
+
+<Excerpt src="bedrock-wiki" title="Intro to Animation Controllers" path="docs/animation-controllers/animation-controllers-intro.md">
+
+```json
+{
+    "format_version": "1.10.0",
+    "animation_controllers": {
+        "controller.animation.helicopter.blade": {
+            "initial_state": "ground",
+            "states": {
+                "ground": {
+                    "transitions": [ { "flying": "!q.is_on_ground" } ]
+                },
+                "flying": {
+                    "animations": ["flying"],
+                    "transitions": [ { "ground": "q.is_on_ground" } ]
+                }
+            }
+        }
+    }
+}
+```
+
+</Excerpt>
+
+A controller does nothing just by being defined in a file. You must give it a short name in the client entity's `animations` and run it in `scripts.animate`. If you attach a condition, it runs only when that expression is true.
+
+```json
+"description": {
+  "identifier": "wiki:helicopter",
+  "animations": {
+    "blade_controller": "controller.animation.helicopter.blade",
+    "flying": "animation.helicopter.flying"
+  },
+  "scripts": {
+    "animate": [ { "blade_controller": "q.has_rider" } ]
+  }
+}
+```
+
+A state of an RP controller also plays sounds and particles. First define `sound_effects` and `particle_effects` short names in the client entity and call them from the state with `effect` (you can also give a `locator`). Not every particle works here, so if there is a problem, try another particle (for example one that the blaze controller uses) (Source: bedrock-wiki).
+
+```json
+"explode_state": {
+  "sound_effects": [ { "effect": "explosion" } ],
+  "particle_effects": [ { "effect": "fuse_lit" } ],
+  "transitions": [ { "default": "q.mark_variant == 0" } ]
+}
+```
+
+A BP controller puts slash commands (`/say hi`), entity events (`@s wiki:transform_into_plane`) and Molang expressions (`v.tickets += 1;`) in `on_entry` and `on_exit`. The rules below are community research results (Source: private research).
+
+## Client entity linking
+
+- In client entities of 1.10.0 and above, put animations and controllers in `animations` with short names and reference them in `scripts.animate`. If not in the list, they do not run. `confirmed`
+- The `animation_controllers` array is for 1.8.0 only, so mixing them makes the entity disappear and gives "client_entity child 'animation controllers' not valid there".
+- `"animate": {"controller": {}}` or `" controller "` (with spaces) gives "unknown child schema option type. Allowed types: 'molang'".
+- If mobs and spawn eggs are not visible right after adding an animation, it is usually broken client entity JSON. Check the content log (Settings, Creator, Content Log GUI), and if you edited by hand, export again from Blockbench. Update a 1.8 client entity to 1.10.0, including its controllers.
+
+## Naming rules
+
+- The animation id inside a file must be in the `animation.name` format ("child pose_1 not valid here" was fixed by changing it to `animation.pose_1`).
+- Write animation, model and bone names in lowercase without spaces. `animation.unwfoxyfm.showtime` works, while `animation.UnwFoxy FM.Showtime` and the bone group `Right Eyelid` broke in the game.
+- If two controllers or files use the same identifier, you get "detected loop in animation controller creation... controller already exists".
+- Blockbench export is the Animation tab, file, export, and goes in RP `animations/`. Bridge cannot preview animations, so set up controllers by hand.
+
+## Idle and walk transitions
+
+- In a controller with `default` and `moving` states, transition with `query.ground_speed > 0.1` (or `query.is_moving`) and list the animations inside the state. One controller with several states is better than one controller per animation.
+- `q.is_moving && !q.is_swimming && !q.is_sprinting && q.is_on_ground` can be simplified to `query.ground_speed > 0.1 && query.is_on_ground`. `query.ground_speed` is speed, not direction, so use `query.movement_direction` for forward and backward.
+
+## Attacking and walking at the same time
+
+- Put walking in `scripts.animate` (`{"walk":"q.ground_speed"}`) or run two controllers in parallel (`"animate": ["controller1","controller2"]`). `override_previous_animation` affects blending.
+- Attack detection is `variable.attack_time > 0` (anywhere: animations, controllers, attachables, client entities) and `variable.has_target`. `query.is_delayed_attacking` stays true during the `delayed_attack` preparation, so use it for long attack animations (`v.attack_time` is about 0.2 seconds), and for random attacks give each animation a number, as in `math.random_integer(1, 5) == 1 && query.is_delayed_attacking`. Bow draw is `query.main_hand_item_use_duration`.
+
+## Transition after playing once
+
+- Use `q.all_animations_finished` and put an idle loop state third so it does not repeat immediately.
+- A toggle such as a lever uses the states `up`, `down`, `pull_up` and `pull_down` and `q.property(...)` transitions. `q.all_animations_finished` caused a one-frame flicker, and `q.anim_time > N` worked better.
+
+## Holding the last frame and flicker
+
+- hold-on-last-frame is unstable. There is a report that making the last keyframe of every bone linear works, and `loop: "hold_on_last_frame"` keeps the last pose.
+- If a loop animation pops to the default pose at the end, make the first and last keyframes equal (the bone must return to the starting pose) and make the last keyframe linear, not smooth.
+- If there is a gap between states, the same flicker occurs in controller transitions, so check that the idle end pose and the attack end pose are the same.
+- With no keyframe at the last timestamp, the entity vanished during a lying-down loop. Add the same keyframe at `animation_length`.
+- Smooth keyframes must be wrapped before and after by linear keyframes to avoid glitches in the game (at least a linear frame at 0 0 0).
+
+## Molang expression animation
+
+An example that gives a random size per spawn. `??` is null coalescing and `;` separates statements.
+
+```json
+"scale": "v.size = v.size ?? math.random_integer(1,10); v.anim_time = v.anim_time ?? 0; v.scale = v.size*math.sin(math.min(v.anim_time,3)*30); v.anim_time = v.anim_time + q.delta_time; return v.scale;"
+```
+
+- If the timer does not advance, use `q.delta_time` instead of `q.anim_time`. `/playanimation` is hardly usable for random sizes, so define it in the client entity's `animations` and `scripts.animate`.
+- Breathing idle: Put `math.cos(query.life_time * 120) * 10` (speed 120, amplitude 10) in a separate loop animation and separate it from the limb animations.
+- Animation speed: `anim_time_update: "query.anim_time + query.delta_time * 1.05"` (`query.ground_speed` is possible instead of a constant).
+- Molang has no `%` ("unrecognized token %"). Use `math.mod(a, b)`.
+- Seamless rotation: Use `math.mod(query.anim_time * 360, 360)` on one Y rotation keyframe (720 to make it faster). A keyframe loop going from 0 to 360 jumps because the end and start angles differ.
+- Property-based smooth bone rotation: In pre-animation get `t.old_rotation` with `q.bone_orientation_trs(bone)` (needs `queryable_geometry`, a special coordinate system) and use `v.rotation = math.lerprotate(t.old_rotation, q.property('pack:rotation_y'), q.delta_time)`. The property range is 0~360. `q.bone_orientation_trs().r.y` is limited to -90~90 (Euler), so a full 360-degree rotation also needs z changed.
+- Random `loop_delay`: A `loop_delay` using a random variable becomes random only once after an update. Alternatives are `override_previous_animation` with a longer `animation_length`, or causing a flicker with a random loop timer in the behavior.
+- Easing and snapping: Per-axis easing within one bone channel is not supported. If Blockbench keyframes snap to 0.833 and so on, change the animation snap setting (double-click the animation). In humanoid animations, position keyframes on the head and arms break the pose, so delete position keys.
+
+## Spawn animation and commands
+
+- There is no "just spawned" query, so run `/playanimation` from the BP entity's `on_spawn` event (or the script `entitySpawn` after event).
+- Event and command timelines inside a controller may not run, so put the command in a BP animation timeline: `"timeline": {"0.0": ["/playanimation @s animation.x"]}`.
+- RP controllers cannot run `/scriptevent` or commands, while BP animations and controllers can.
+- Play delayed repeating sounds inside a looping BP animation and turn them on and off with a controller. The problem where events of a 0.59-second looping attack animation did not run was fixed with `loop: true`.
+- Careless use of `/playanimation` keeps creating new animation controllers on the player and leaks memory.
+
+## Variables that read a property
+
+- Use `v.x = query.property('ns:prop')` in `scripts.pre_animation`; the property needs `client_sync: true` and the id uses `:`, not `.`.
+- The `variable.melee_spear_equipped` "unknown variable" is fixed with `"scripts": {"initialize": ["variable.melee_spear_equipped = 0.0;"]}`. Example fix for the error of a player with no spear: `"v.melee_spear_equipped = query.equipped_item_any_tag('slot.weapon.mainhand', 'minecraft:is_spear');"`.
+- If the modified vanilla player controller and entity do not match the version of others, you get missing-item errors for `first_person_melee_spear_controller` and `swimming.no_right_arm`. Use the latest vanilla `player.json` from bedrock-samples.
+- `q.above_top_solid` works only in a world generation context ("Failed to resolve query"), and `query.scoreboard` cannot be used in a resource pack.
+- `t.` temporary variables leak between the player and attachable animations and reset on lag. Pin them like `v.x = (v.x == 1) ? 1 : (t.x ?? 0)` and use the leak only to send data (MCPE-240457).
+
+## Rotation
+
+- Facing the target (projectile pitch, yaw): Use `"rotation": ["query.target_x_rotation","query.target_y_rotation",0]` on the bone (copy `arrow.animation.json` for arrows). There is a report that `target_y_rotation` did not work in some cases, and rotating by animation to match the player rotation is wrong, so set the entity rotation in the BP.
+- `q.target_y_rotation` is roughly `q.head_y_rotation(0) - q.body_y_rotation`. In player first person, `query.camera_rotation`, `target_x_rotation` and `target_y_rotation` are 0 (MCPE-219473). `variable.player_x_rotation` works only for pitch. A workaround is to read the pause menu paper doll camera query and pass it via a temp variable leak. `query.vertical_speed*-12` is also an alternative for projectile tilt.
+- Fixing the visual rotation of a mount: after an `-q.body_y_rotation` animation, compute directly with `query.movement_direction`, `q.position` and trigonometry (a problem if the seat is not the rotation origin). Rotating part of the body independently with `rotation.y = -q.body_y_rotation` was unstable.
+- If the head does not turn in a cutscene, apply the same rotation as the root to the head bone as well. A scale given to the body root by `playanimation` does not affect the head, so set it on the head separately.
+- The dolphin-style swim direction is an animation expression, not a component (`dolphin.animation.json` in bedrock-samples).
+
+## Expression techniques
+
+- Bedrock entity animation has no camera animation.
+- Stretching a wing membrane: Make a curved mesh, put the origin at the end point, and stretch with bone scale.
+- Facial expressions are made with texture swaps or with expression models hidden by scale 0.
+- Long Molang keyframes and flipbook animations slow down the Blockbench editor. For Blockbench animation tips, see [Modeling and texture tools](../tools/modeling.mdx).
+
+## First-person animation
+
+- Vanilla flat items do not react to animation in first person (only 3D geometry attachables such as the spear, trident and shield). Third person works.
+- An animation played by an attachable affects only the attachable, so animate the player with `player.entity.json`. A first-person-only animation needs its own first-person controller entry.
+- There is a case where paper doll rendering (`v.is_paperdoll`) caused a crash when opening the pause screen.
+
+## Armor stand and other queries
+
+- Copy `armor_stand.animation.json` from bedrock-samples for the armor stand and reference it from the entity's `animations` and `scripts.animate`. Poses are hard-coded in runtime identifier variables (12~13), so to add poses use your own entity with a `pose_index` property.
+- Name-dependent animation is `q.is_name_any('steve','alex')`. In a case where `query.is_name_any('Alex')` in a controller transition did not run, the transition expression ended with `;`.
+- Showing a bone by whether it is equipped: a `1*(query.is_item_equipped(0)||query.is_item_equipped(1))` scale.

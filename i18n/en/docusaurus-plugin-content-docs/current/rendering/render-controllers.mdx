@@ -1,0 +1,132 @@
+---
+title: Render controllers
+description: The format of render controllers that combine the short names of a client entity, texture arrays and layers, part_visibility, tint, conditional geometry, performance
+sidebar_position: 4
+sources: [private-research, bedrock-wiki, ms-learn]
+---
+
+# Render controllers
+
+## Concept
+
+A render controller is a bundle of logic that takes the short names (shortnames) defined by a client entity and decides "what to draw layered and how". If the entity file is the step that *imports* assets, the render controller is the step that *uses* what was imported. A controller does not know what the default texture is and only applies the name `Texture.default`. So several entities can reuse the same controller, and a simple entity with only one geometry, texture and material each does not need a custom controller (Source: bedrock-wiki, `entities/render-controllers`).
+
+```json
+{
+  "format_version": "1.8.0",
+  "render_controllers": {
+    "controller.render.cow": {
+      "geometry": "Geometry.default",
+      "materials": [ { "*": "Material.default" } ],
+      "textures": [ "Texture.default" ]
+    }
+  }
+}
+```
+
+The entity file defines `default` short names for `materials`, `textures` and `geometry` and references the controller with `"render_controllers": ["controller.render.cow"]`. To use this controller, you must provide the `default` geometry, texture and material. `"*"` in an item of `materials` means it applies to all bones, and you can give per-bone materials with bone names or wildcards.
+
+### Texture layers and variants
+
+The `textures` array overlays from top to bottom. If an upper layer has alpha pixels, the layers below show through. Layers are used with a mask material such as `villager_v2_masked`. Variants are made with `arrays`.
+
+```json
+{
+  "format_version": "1.10.0",
+  "render_controllers": {
+    "controller.render.wool_only": {
+      "arrays": {
+        "textures": { "Array.top": ["Texture.top_1", "Texture.top_2", "Texture.top_3"] }
+      },
+      "geometry": "Geometry.default",
+      "materials": [ { "*": "Material.default" } ],
+      "textures": [ "Texture.bottom_layer", "Array.top[query.variant]" ]
+    }
+  }
+}
+```
+
+(Source: bedrock-wiki. The vanilla horse, bee, cat and wolf render controllers and `horse_v3.entity.json` in bedrock-samples are reference material.) Below are rules gathered from the community research (Source: private research).
+
+## Basic form and errors
+
+- Put `geometry`, `textures` and `materials` in the render controller file and use `Geometry.default`, `Texture.default` and `Material.default`. `textures` must be an array and `geometry` a string. If the shape is wrong, it becomes a transparent entity with only a collision hitbox. Match the variant array to the order of variant ids. Example: `"textures": ["query.is_baby ? Array.baby[query.variant] : Array.shade[query.variant]"]`. `confirmed`
+- Mixing the old 1.8.0-style format with the new format gives "Error parsing render Controllers". The render controller name must exactly match the texture short name of the client entity. The render controller file needs the `format_version` and `render_controllers` wrapper.
+- In the client entity you define keys such as `"materials": {"default": "invert_culling"}` and the render controller uses those keys. If you use several materials in `materials`, those names must be defined in the client entity, otherwise "Mesh Material doesn't exist" appears. On mobile, clear the cached packs and also check that the pack is in the development folder.
+
+## Texture arrays and variants
+
+- Use `"arrays":{"textures":{"Array.skins":["Texture.default","Texture.blue",...]}}` and `"textures":["Array.skins[query.property('your_skins_property')]"]` (int property, `client_sync: true`). `minecraft:variant` and `q.variant`, and `query.skin_id` also work. Set the value with a component group, and the same approach works for materials and geometry.
+- Different textures per viewing player: Overriding the property with script `setPropertyOverrideForEntity` immediately applies a different texture only to that player (entities only; attachables use a temp variable approach). Example: https://github.com/abrightmoore/calm-add-on/blob/main/source/resource_packs/twf_calm/render_controllers/twf_calm_poster.render_controllers.json
+- Per-variant models are chosen with a geometry array like `array.geos[v.x]`. Molang has no `query.has_tag`, so you cannot choose by entity tag.
+- Events have no "set_variant", so set a property or add a `minecraft:variant` component group.
+- `math.random` and `math.random_integer` in a render controller are rerolled every frame (tick) and flicker. Decide once in `scripts.initialize` or `pre_animation` (for example, wrap `"variable.Xvar = query.anim_time>0 ? variable.Xvar : Math.random(0,999);"` as an index). It resets on client reload, so it changes when you reconnect. For persistent variants, use a BP property (`query.property`).
+- Layer textures (horse style): Use `v.base = q.variant; v.overlay = q.mark_variant` for `Array.base` and `Array.overlay` and put two entries in `textures`. An undefined `v.index` made a pink head float around. Dynamic arrays such as horse armor use `Array.armor[variable.armor_texture_slot]`. There was also a report that only the first texture was read and they did not stack, and the saddle layer `query.is_saddled ? Texture.saddle : Texture.empty` was unresolved in the thread.
+- **Crash with more than 3 texture arrays**: Using more than 3 texture arrays of the form `Array.layerN[query.property(...)]` in one render controller crashed the game. Split them into several render controllers and list them in `render_controllers`.
+
+## Conditional geometry and textures
+
+- `"geometry": "query.is_item_name_any(...) ? Geometry.tridentdrowned : Geometry.default"` (`get_equipped_item_name` is deprecated; use `q.is_item_name_any`), `query.variant==2 ? Geometry.captain : Geometry.default`. You cannot build a geometry name by concatenating strings.
+- Show only when a property equals a value: `"geometry":"q.property('ns:prop')==2?Geometry.default:Geometry.empty"` (an empty geometry).
+- Name based: `query.is_name_any('alex','Alex') ? Geometry.x : Geometry.default`, `query.get_name == 'Jade' ? Texture.jade : (...)` (see the vanilla rabbit RP file). To avoid partial matches, use `query.is_name_any('NAME1')`.
+- Death texture hack: `"textures": ["Array.Textures[!q.is_alive]"]`. A client entity renders based on entity data, not the local player.
+- Frame-animated textures: `"textures":["Array.frames[query.life_time*24]"]`, `array.frames[Math.mod(math.floor(query.anim_time * 5), 9)]`. A nested ternary on `query.variant` was used for frog texture selection. For multiple stages of an animated bow: `"geometry": "array.bow_geo_frames[query.get_animation_frame]"` with `arrays.geometries` and `arrays.textures`. An example that merges the idle flipbook and pull frames in `textures` with a `temp` expression failed.
+
+## uv_anim
+
+```json
+"uv_anim": {
+  "offset": [0.0, "math.mod(math.floor(query.life_time * 2), 10) / 10"],
+  "scale": [1.0, "1/10"]
+}
+```
+
+- Several UV animation textures on one entity are done with several render controllers (layers). A merged texture froze on one frame until the material was fixed. Textures of different sizes need `uv_anim.scale`. In one tester's pack, `Math.mod(Math.floor(query.life_time*10),4)/4` failed.
+- Behavior on attachables is reported inconsistently ([Attachables and item rendering](./attachables-and-items.mdx)). The model texture size of an animated entity texture must be the size of one frame (64x64, not 64x256) and the material file must be `entity.material`. Speed is set with `query.life_time * N` (180 is about 1 second) ([Textures and atlases](./textures-and-atlases.mdx)).
+
+## part_visibility
+
+```json
+"part_visibility": [
+  { "*": false },
+  { "giant_*": true },
+  { "*saddle*": "query.is_saddled" }
+]
+```
+
+- It accepts wildcard bone names and Molang (`{"Bag*": "query.is_chested"}`, `"*spear*": false`). An unknown query gives "unrecognized token".
+- Per-bone textures and materials are done with several render controllers and `part_visibility`, with the first rule as `"*": false` and prefixes turning bones back on. If you put a per-model prefix on bones, wildcard hiding is easy.
+- If part_visibility seems to have no effect, check whether another render controller on the same entity is still active (hide the original by condition). There is a case where `query.property('x')>0` worked in a second render controller and `==4` did not (unresolved). Using `query.distance_from_camera` in part_visibility did not work.
+- `part_visibility: false` (a non-Molang value) really culls geometry, but a bone hidden by Molang still submits draw calls (only the rasterizer culls).
+
+## Several render controllers
+
+- Both entities and attachables can list several in `render_controllers`, and one entity can draw two geometries at once. Render controllers can be stacked many times. Render controllers behave like layers, and the top of the list is drawn first. Using 2 controllers on one geometry also works, but there is a counterargument that shared bones exist twice and it is slightly slower.
+- To hide the vanilla geometry, put a copy of the render controller with a part_visibility that hides all bones in front.
+- To change the player model to something else (for example a T-Rex), edit the player render controller to use only one geometry (an extra controller that still draws the player does not work). To change the player geometry by property, turn on a new render controller with a query and attach `&& !query...` to the vanilla one.
+- Cosmetics: Make a per-slot enum property (for example head is none, hat1, hat2) in the BP player definition with `client_sync`, and list extra render controllers under conditions such as `{ "controller.render.cosmetic_1": "v.cosmetic_1" }`.
+
+## First person and third person
+
+The first-person render controller is separate from the third-person one, so define both if needed. If the player's head is visible in first person, set the head and hat parts to false in the first-person render controller.
+
+## Color and tint
+
+- `overlay_color` (rgba) blends on top and does not affect alpha. `color` is a multiplication including alpha and works only on entities with certain runtime-ids (warden, player and so on) or with materials that support it (dyed parts use the `entity_alpha_color_change` material).
+- Per-entity tint: Drive `overlay_color` with `q.property('ct:r')` and so on (r, g, b, a), define the property in the entity JSON, and set it with script `entity.setProperty("ct:r", 0.5)` (it also works on players by editing `player.json`). A property array also works, as in `"overlay_color": {"r": "array.red[query.property('x')]", ...}`. An overlay expression using `Math.sin` gives a flickering alpha (`a` is a Molang string).
+- In the 1.21.130 showcase, color was changed by swapping textures, not by overlay. The creeper flash is also a render controller overlay color. The problem of the dyed collar tint bleeding onto a low-opacity base texture is unresolved.
+- Removing the hurt color: `"is_hurt_color": {"r":"1.0","g":"1.0","b":"1.0","a":"0.0"}`. The tilt on death cannot be removed this way. The burning overlay tint is removed or changed with `"on_fire_color": {"r": ..., "g": ..., "b": ..., "a": ...}` (the fire texture itself is separate).
+- A temp variable that fades `overlay_color` is set in `pre_animation`.
+- Reference documentation: the Microsoft Learn animation render controller documentation.
+
+## Queries without an actor
+
+To avoid "has_property doesn't have an actor" in the paper doll and UI, set `v.class = q.is_on_screen ? q.property('prefix:class') : v.fallback;` in the client entity `pre_animation`, put `v.fallback = 0` in `initialize`, and use `v.class` in the render controller. In `player.entity.json` variables as well, `query.property` where there is no actor gives "does not have an actor". For render controller conditions use `context.is_first_person`, not `query.`.
+
+## Per-team player visibility
+
+In `player.json` and the client animation, use `variable.invisible = temp.self_team != query.property('visible:team') && query.property('visible:invisible')==1;` and a client_sync property, and switch to a transparent material in the render controller. `temp` is per player. This method cannot be used for mobs, so use script `playAnimation` limited to specific players. There is also `setPropertyOverrideForEntity` (the server module 2.6.0 `Player` class), which plays an entity client animation by per-player visibility.
+
+## Performance
+
+Using many render controllers (75 models x 5 RCs) crashes or slows down. The question about the RAM impact of 1200 versus 40 had no answer.

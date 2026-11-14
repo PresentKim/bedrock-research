@@ -1,0 +1,153 @@
+---
+title: "File formats: lang, JSON comments, mcfunction and more"
+description: ".lang localization files, JSON and comment rules, .mcfunction, splashes and glyphs, where texture and sound definitions live, .mcstructure, JSON number format"
+sidebar_position: 9
+sources:
+  - private-research
+  - bedrock-wiki
+  - repo-guide
+---
+
+## JSON and comments
+
+### Concept
+
+Most add-on files are JSON. Keys are strings, and values are numbers, strings, booleans, arrays and objects. The game's JSON parser is of the jsoncpp family, not strict standard JSON, so it **allows `//` and `/* */` comments**. Editors (VS Code and others) may warn on comments, but they mostly work in the game. (Source: repo-guide, FILE-03; private-research)
+
+```jsonc
+{
+  // one-line comment
+  "format_version": "1.21.0", /* block comment */
+  "minecraft:item": { "description": { "identifier": "wiki:ruby" } }
+}
+```
+
+### Rules
+
+- `{vanilla, working pack}` UI files are JSON that allows `//` and `/* */` comments (FILE-03).
+- `{code}` UI files are read with jsoncpp rules. Comments and leading zeros are fine, but **trailing commas and unquoted keys are errors**. When an error occurs, only the definitions read before it load and the rest are silently dropped. If the first file at the same path fails, overrides from later packs are not applied either (FILE-30).
+- A block comment can appear anywhere: after a key colon, after a value, between array elements, at the end of the file. Obfuscators use this.
+- A registered file loads even if its extension is not `.json` (FILE-02, for example `ui/adv/_screen.r4ui`).
+- A trailing comma, too many closing brackets or curly quotation marks break the whole file. Block JSON has allowed trailing commas since 26.20.
+- When stripping comments in a tool, use a real parser instead of a regex (Python `jsonc-parser`, Node `decomment`).
+- Add-on files made by chatbots are often wrong. Use the MS docs, bedrock.dev and wiki.bedrock.dev as the standard.
+
+### JSON number types
+
+Sometimes the game must tell `1.0` and `1` apart, but JS `JSON.stringify` drops the `.0`. Use a serializer that keeps the original number type and key order (for example jsonte) or Python `json.dumps` (keeps the distinction).
+
+## .lang localization files
+
+### Concept
+
+Minecraft localizes by attaching per-language values to internal **translation keys**. The game creates the translation keys for custom entities, items and blocks, and we fill in the values in the resource pack. Put `.lang` in the `texts/` folder. It can also go in a BP, but the only things you can change there are the name and description in the manifest. (Source: bedrock-wiki, text/text-intro)
+
+<Excerpt src="bedrock-wiki" title="Intro to Text & Localization" path="docs/text/text-intro.md">
+
+```lang
+wiki.example_translation.line_1=The first line!
+wiki.example_translation.line_2=Some more information following the first line.
+```
+
+</Excerpt>
+
+### Syntax
+
+- One `key=value` per line. A line break inside a value is written as `\n` or `~LINEBREAK~`.
+- A comment is `##`. Both line comments and end-of-line comments work. The space before an end-of-line comment is not trimmed, so use a tab for indentation.
+- Substitution: ordered `%1`, `%2` or unordered `%s`. In vanilla the game fills them, and players fill them with rawtext commands such as `/tellraw`.
+
+```lang
+## Translator note: I thought this would be funny to put here.
+item.flint_and_steel.name=Flint and Steve	##[sic]
+commands.op.success=Opped: %s
+immersive_reader.book_page_header=Page %1 of %2
+wiki.example_translation.multiline=The first line!\nThe second line!
+```
+
+### Language registration and where it is used
+
+Put the array of languages to change in `texts/languages.json`. For major languages it is best to make all of them, such as `en_US` and `en_GB`.
+
+```json
+["en_US", "en_GB", "fr_FR"]
+```
+
+A global resource pack can add custom languages. Put `["xx_XX", "yy_YY"]` in `languages.json` and the display names in `language_names.json`. If you do not switch to another language before turning the pack off, the game crashes.
+
+```json
+[
+  ["xx_XX", "New Language (Custom Language #1)"],
+  ["yy_YY", "Wiki-Speak (Custom Language #2)"]
+]
+```
+
+Localization can be used for pack name and description, entity, item and block names, book pages, signs, `/tellraw` and `/titleraw`, and dialogue text. Names changed with an anvil cannot be translated. A `.lang` that Microsoft translates needs a tab before comments, CR+LF line endings, no duplicate keys and a comment for every string (LangUtil tool).
+
+The 29 languages vanilla supports: id_ID, da_DK, de_DE, en_GB, en_US, es_ES, es_MX, fr_CA, fr_FR, it_IT, hu_HU, nl_NL, nb_NO, pl_PL, pt_BR, pt_PT, sk_SK, fi_FI, sv_SE, tr_TR, cs_CZ, el_GR, bg_BG, ru_RU, uk_UA, ja_JP, zh_CN, zh_TW, ko_KR.
+
+### Rules and reports
+
+- **Item/entity names go in the RP `texts/en_US.lang`** (BP translations are only for the BP manifest). Keys: entity `entity.<id>.name`, block `tile.<ns:id>.name` (`minecraft:display_name` also works for blocks), spawn egg `item.spawn_egg.entity.<id>.name`, vanilla item `item.wooden_pickaxe.name`. Without a name the container title shows "Unknown" (*low confidence per caveats*, can be changed with a name tag + lang). The boss bar name also comes from the entity lang. Generate every language file the client uses.
+- **Comment symbol** *(conflicting)*: one report says `#` comments are also accepted, and another says a `#` line without `=` gives "New line character found while parsing key", so use `##`. `##` is safe.
+- **File name case** matters (`en_US.lang`). If the game shows a key such as `item:bg...` as it is, the lang entry is missing. Hardcoded UI text can also be changed with a lang key, but changing an enchantment name failed in one case.
+- **Scripts cannot read lang files.** Generate translation JS with a build script, or keep the translations in the script.
+- **Pack name/description translation**: put `pack.name` and `pack.description` in the manifest name/description and define them in the lang of both the BP and the RP.
+- **Static tooltip (26.50)**: `tile.<namespace:id>.tooltip=text`. Vanilla stat lore/tooltip lines are hardcoded, and the spacing of attribute tooltips (attribute.modifier.*) is hardcoded too.
+- **`%` is a format character**: use `%%` for a literal in lang, and the full-width `％` (U+FF05) as a workaround in display names. Line breaks now work in lang, but cannot be matched with a `name=` selector. If a line break is mixed into a key, "Invalid lang file format. New line character was found while parsing key" appears.
+- **`%key` references**: work for custom keys, and for vanilla items use `%item.<name>.name` (without a namespace). Custom items are unresolved.
+- **In scripts**: the `{translate: "key", with: [...]}` rawtext or plain `%key`. The lang is in the RP and is resolved by each client's language. An existing key such as `pauseNotification.title.onePlayer=%s joined your game!` can be reused with `translate` + `with` for string substitution. There is no enchantment translation key API. Random villager names cannot be translated from scripts.
+- **Join/leave messages** can be blanked by overriding the lang key (`multiplayer.player.joined=%s joined the game`) in the RP. An empty string leaves an empty line (hiding chat messages is done with the JSON UI `messages_text/text` binding).
+- **Language packs**: add `texts/languages.json`, `language_names.json` and `.lang`. Achievement localization is unresolved, and Arabic is not an official language. Store tab key example: `store.editorial.tab.about`.
+- **Splash text**: `splashes.json` at the pack root `{"canMerge":true,"splashes":["text"]}`, `canMerge:false` replaces vanilla, and an empty list + false disables it. https://wiki.bedrock.dev/text/splashes#editing-splashes . `loading_messages.json` also exists.
+- **Custom glyphs/emoji**: `font/glyph_E1.png` (page E1, position example E100), 256x256 per page (at 512/1024 the icons look bigger), a power-of-two size grid. Add pages by renaming E2 to E3. Noto Sans breaks emoji, so use Mojangles. Docs: https://wiki.bedrock.dev/text/custom-emojis , for HUD https://wiki.bedrock.dev/text/emojis#hud . A free CC0 scoreboard icon set V2 was shared. There is no per-glyph size setting. Text emoji are written as names in the form `:crafting_table:` (https://wiki.bedrock.dev/text/emojis). In the 2026-11 Preview (26.70), glyphs also show on some Ore UI screens.
+
+## .mcfunction and tick.json
+
+`.mcfunction` is a text file with one command per line. Put it in the `functions/` folder. (Source: private research)
+
+- **Line endings are LF** (not CRLF), and commands do not start with `/`. If you break this, the function silently does not appear. Making it with bridge. or copying an existing function avoids this. *(confirmed)*
+- **If the BP manifest/format is above 1.17.0, `#` comments do not work**, and a function that failed to load does not appear in the list.
+- **"Unexpected @a / @e" errors or `execute` parse failures** happen because the manifest is parsed with the syntax from before 1.19.50. Fix it with `"format_version": 2` + `"min_engine_version": [1,19,50]` or higher (latest recommended), or use the old syntax `execute @a[...] ~ ~ ~ tp ...`. Old -> new conversion: `execute @a ~ ~ ~ <cmd>` = `execute as @a at @s positioned ~ ~ ~ run <cmd>`, `detect ~ ~ ~ air` = `if block ~ ~ ~ air`. Old wiki tutorials used the syntax from before 1.19.50. https://wiki.bedrock.dev/commands/new-execute
+- **`tick.json`** goes in `functions/` and lists the functions to run every tick. The tick.json functions of several add-ons run at the same time. Docs: "tickjsonintroduction" on learn.microsoft.com.
+- **No conditional chains**: use `execute if/unless` or scoreboards instead.
+- **`/schedule` can be used inside functions** (unknown syntax depends on the pack version). `/schedule on_area_loaded` waits for chunk loading. However, in one case `/schedule delay add <function> 60` inside an mcfunction called from a tick function did not run while it worked in a command block (cause unresolved).
+- **Calling functions from scripts**: `player.runCommand('function name')`. Polling with tick.json is slower than event-based scripts. A function containing a command that scripts do not allow (`/place`) does not run even when started from a script. `/op` and `/connect` fail in the script engine.
+- **Command strings in NPC/dialogue JSON** escape inner quotes: `"on_open_commands": ["/tellraw @a {\"rawtext\":[{\"text\":\"hi\"}]}"]`. In 2026-01 there was a report that `{"selector":"@initiator"}`/`score` rawtext in NPC dialogue text does not work.
+- **The cause of an item-use trigger function failing silently** was wrong `execute` syntax.
+
+## Where texture and sound definition files live
+
+- **RP file locations**: `textures/terrain_texture.json` (blocks, `atlas.terrain`, mipmaps + padding), `textures/item_texture.json` (`atlas.items`), `blocks.json` at the RP root, `textures/flipbook_textures.json`, `*.texture_set.json` (`_mer.png`). Banner/shield atlases cannot be modified.
+- **shortname**: refers to a shortname defined in `terrain_texture.json`, and "Missing referenced asset ns:x" means the shortname is not defined. `blocks.json` does not use namespaces for textures. A shortname with a colon such as `wiki:name` mostly works, but there was a report of persistent Content Log errors in item_texture, so use the `namespace.texture_name` alternative. The `minecraft:icon` error "Missing referenced asset wiki:ectoplasm" is a key/path mismatch in item_texture.json.
+- **`variations`** (terrain_texture.json) always give the first texture if the entries have no `weight`. A `cross_texture` block such as cobweb also needs a `blockshape` entry in `blocks.json` (it worked on Android, and there is an unresolved case where only the first variation appeared on PC). https://learn.microsoft.com/en-us/minecraft/creator/documents/variationsblocktexture?view=minecraft-bedrock-stable
+- **`blocks.json` `blockshape`** is a deprecated system, "tree"/"terracotta" and similar are undocumented, `rows`/`seagrass` do not tint well, and blocks entries affect only break particles and held textures. Vanilla block models are not supported (custom blocks only). https://wiki.bedrock.dev/blocks/block-shapes
+- **The block culling error** `rules[0] -> condition ... not present in the Schema` (block_culling/glass.json) is a key not supported in that version.
+- **Held textures** (waxed copper and so on): adding an item definition makes the inventory texture differ from the placed texture.
+- **Removing an item** requires deleting both the BP item JSON and the RP definition so that no null item remains.
+- **The `entity.material`** file has no .json extension and the name matters.
+- **Legacy names**: the sugar cane texture is "reeds", and brown dye is `dye_powder_brown`/`dye_powder_brown_new`. The painting texture is `textures/painting` (`kz.png` atlas), and the arrow model is `models/entity/arrow.geo.json`. To find a texture from a block name, look at `blocks.json` (name) and `terrain_texture.json` (path) together.
+
+## Sound file structure
+
+- **`RP/sounds.json`** (entity events, block sounds and so on) + **`RP/sounds/sound_definitions.json`** + .ogg files. `sound_definitions.json` must be inside the `sounds/` folder (not `sound/`), and several users fixed a silent `/playsound` by moving or rewriting the file there. The format_version is `"1.14.0"` (not "1.14.00"). Paths in `sounds` entries have no extension (`sounds/track1`). Using `max_dist` needs format 1.20.20 (MCPE-154378). `[Sound][error] no valid version passed by the caller or found in the input` means check the format_version (unresolved). *(confirmed)*
+- **Definition example**: `{"format_version":"1.14.0","sound_definitions":{"x.music.a_familiar_room":{"category":"music","sounds":[{"name":"sounds/music/game/a_familiar_room","volume":1.0,"stream":true}]}}}`. Weighted random over several sounds: `name`, `volume`, `weight`, `is3D`, `min_distance`/`max_distance`. Using integers for `min_distance`/`max_distance` breaks, so use floats (for example `900.0`). The default audible distance is about 65 blocks, and raising volume extends the range. Streaming can be marked in `sounds.json`.
+- **Roles of the two files**: `sound_definitions.json` connects sound names to files and categories, and `sounds.json` connects events to sound names. For custom names avoid uppercase letters, special characters and the `mob.` prefix. wav, ogg and FSB are accepted, and a corrupted .ogg becomes silent with no error. There is a mention of a limit of 32 sounds per pack, but the context is unclear. *(single report)*
+- **Replacing vanilla sounds**: `{"game.player.die": {"category": "neutral", "sounds": ["sounds/custom/death"]}}` and `RP/sounds/custom/death.ogg`. To mute, use `"game.player.attack.critical": {"sounds": []}`. Using a vanilla name such as a custom `blaze.death` also applies to vanilla mobs. Vanilla music (including creative music) is in `sounds/music_definitions.json`.
+- **`sounds.json` details**: `variants` accepts a Molang expression that returns a string and a `map`. For non-directional ambient sound use `"is3D": false`, and the lower the `weight`, the rarer it plays. Animation sound effects have no pitch randomization.
+- **Block sounds**: there is a report that in 26.50 the `minecraft:sound` block component left experimental and `blocks.json` is no longer needed for sound assignment.
+- **Music discs**: in the 2026-07 stable release a custom `minecraft:record` did not play in a jukebox or ended early, so people worked around it by replacing vanilla disc sounds or using a dummy block jukebox. Disc Press and Online Audio tracks are downloaded from Mojang servers. Example: https://github.com/abrightmoore/fly-spy
+- **Unresolved**: `/playsound` random pitch, lang inside subpacks, biome ambient sounds, death sounds by damage cause.
+
+## Other data files
+
+- **Item groups**: BP `item_catalog/crafting_item_catalog.json` (format 1.21.60, `group_identifier.name` in the form `itemGroup.name.x`). The warning "created with the group set to 'minecraft:myee:..'" (automatic namespace prefix) is unresolved. A bug was observed where a custom group does not open with one click. In 26.10 every notation in the catalog gave errors. From 26.50.27 a namespace is required in custom group identifiers. `crafting_item_catalog` defines creative custom groups, and `menu_category` handles the placement of vanilla groups. A custom group must list every item, and it is not needed for block crafting. `minecraft:itemGroup...` identifiers need format 1.21.60 or later. Docs: https://learn.microsoft.com/en-us/minecraft/creator/documents/craftingitemcatalogdocumentation?view=minecraft-bedrock-stable , https://wiki.bedrock.dev/items/item-catalog
+- **The starter seed file of a global resource pack** does not apply unless quick world creation is canceled, so it is of little use in custom packs.
+- **Custom camera splines**: the 1.26.0 changelog mentions loading of the BP `camera/splines` directory, and the storage format is unknown.
+- **Spawn rules**: the `rarity` field is undocumented (docs issue 976), to turn off vanilla mob spawning override spawn_rules, and spawn rules cannot read world properties. Adjusting Trial Spawner mobs uses a spawn_rules deny filter. Tag formats: block `"tag:ns:x": {}` (before 1.26.20), item/biome `minecraft:tags`. List of vanilla tags: https://wiki.bedrock.dev/items/item-tags#list-of-vanilla-tags , https://wiki.bedrock.dev/blocks/block-tags#list-of-vanilla-tags
+- **Feature rule processor identifiers**: two identifiers in the docs were wrong, and the correct ones are `minecraft:blockstate_match` and `minecraft:random_blockstate_match` (Mojang fixed the docs on 2025-12-07). The Content Log truncates this error. The scatter feature `iterations` accepts Molang. A block permutation `condition` can combine several `q.block_state(...)` with `&&`/`||`.
+- **Spawn rule `weight`** is relative (with 100 and 10 it is 100/110 and 10/110). `density_limit` is the cap on the number of mobs per area *(details unverified)*.
+- **Item tag quirks**: axes use the "hatchet" family, tridents use "spears", and spears use the "melee_spears" tag. There is no generic invulnerable block tag. Numeric item IDs: https://wiki.bedrock.dev/items/numerical-item-ids
+- **`.mcstructure` format version 2** (smaller than v1) was introduced in 26.50.24. A v2 file exported from the 2026-10 Preview does not load in the stable release. mcstructure is an NBT file, so it can be viewed with NBT Studio or the Misode viewer.
+- **Structure identifiers**: `structures/example/houses/big.mcstructure` is `example:houses/big`, and a file directly under `BP/structures/` is `mystructure:name`.
+- **JSON number types**: sometimes the game must tell `1.0` and `1` apart, but JS `JSON.stringify` drops the `.0`. Use a serializer that keeps the original number type and key order such as jsonte, or Python `json.dumps` (keeps the distinction).

@@ -1,0 +1,230 @@
+---
+title: Paper doll and NetEase skeletal models
+description: Properties and constraints of the international paper_doll_renderer, the Chinese-edition (NetEase) skeletal model resources and netease_paper_doll_renderer, and the evidence that the international edition lacks them
+sidebar_position: 13
+sources: [netease-mcdocs, private-research, bedrock-samples, repo-guide, private-research]
+---
+
+# Paper doll and NetEase skeletal models
+
+This page compares the skeletal model and UI paper doll features of the NetEase (Chinese edition) documentation with the international edition (vanilla 1.26.50.4 and the Android 1.26.52.3 binary). The NetEase documentation has no license notice, so sentences and code were not carried over and only the facts were rewritten in this wiki's own words. The JSON and Python examples below were newly written for this wiki (Source: netease-docs).
+
+Notation: `{china}` means Chinese edition only (not in the international engine), `{vanilla}` means confirmed in international vanilla, and `{code}` means confirmed from binary strings.
+
+## Summary
+
+- NetEase's **skeletal model** is a `{china}`-only feature: bone, mesh and animation JSON converted from FBX are registered by name in `mod_resource/models/netease_models.json`, and the Python `model` component changes entity models or draws them in a UI paper doll. It is a separate system from the international `geometry`, `animation` and `render_controllers` (resource pack entity definitions).
+- There are two renderers that draw 3D models in the UI. One is the `paper_doll_renderer` that also exists in vanilla, with the `modelname`, `modelsize` and `animation` properties that NetEase added, and the other is the NetEase-only `netease_paper_doll_renderer` (entities, players, skeletal models, block geometry).
+- **The international edition has neither.** The 328MB international client binary has 0 `netease` strings, and 0 of `skeleton_model_name`, `netease_paper_doll`, `modelname`, `modelsize`, `screen_scale`, `init_rot_y` and `render_depth` too (NB-12 `{code}`). Vanilla also never uses these properties.
+- The international `paper_doll_renderer` draws **only player skins (personas)**. International packs that want to show a custom entity or model in the UI cannot do it with this renderer (guide ANI-35, ANI-36).
+
+## International paper_doll_renderer `{vanilla}`
+
+**Concept**: A control with `"type": "custom"` and `"renderer": "paper_doll_renderer"` draws the player skin the engine holds in 3D. The skin to draw is received through bindings the engine gives to the screen (`#paper_doll_skin` (pause screen), `#skin_index` (skin pack), `#classic_skin_index` (store collection), `$button_model_type` (persona popup)), and it is not a way for a pack to choose another model.
+
+In vanilla 1.26.50.4, this renderer is used in 13 places: `day_one_experience_screen.json`, `expanded_skin_pack_screen.json` (2 places), `pause_screen.json`, `persona_SDL.json` (3 places), `persona_cast_character_screen.json`, `persona_popups.json`, `skin_pack_pdp.json`, `start_screen.json`, `store_promo_timeline_screen.json` (2 places).
+
+| Property | Count | Value | Meaning (judged from usage) |
+| --- | --- | --- | --- |
+| `use_selected_skin` | 12 | All `false` | If `false`, it draws the skin received through the binding, not the selected skin (inferred) |
+| `rotation` | 8 | `gesture_x` 6, `auto` 1, variable 1 | `gesture_x` is rotation by dragging, `auto` spins by itself |
+| `camera_tilt_degrees` | 8 | All `-10` | Tilts the camera down by 10 degrees |
+| `starting_rotation` | 8 | All `30` | Initial body direction (degrees) |
+| `enable_scissor_test` | 4 | All `true` | Clips outside the control area |
+| `property_bag.#skin_rotation` | 2 | `true` | `day_one_experience_screen.json` uses it together with `rotation: auto` |
+| `animation_reset_name`, `anims` | 10 | Screen transition size animations | General control properties |
+
+Rotation by dragging is wired on the pause screen (`pause_screen.json`) like this. (1) Give the `input_panel` (`skin_viewer_panel`, instance name `viewer_panel`) `"gesture_tracking_button": "button.turn_doll"`, and link `button.menu_select` to `button.turn_doll` with `button_mappings`. (2) Give the paper doll `"rotation": "gesture_x"`, and receive `#gesture_delta_source` and `#gesture_mouse_delta_x` of `viewer_panel` under the same names with two view bindings. So `gesture_x` must be used together with an `input_panel` for dragging to work.
+
+```json
+{
+  "skin_viewer": {
+    "type": "input_panel",
+    "gesture_tracking_button": "button.turn_doll",
+    "button_mappings": [ { "from_button_id": "button.menu_select", "to_button_id": "button.turn_doll", "mapping_type": "pressed" } ]
+  },
+  "doll": {
+    "type": "custom",
+    "renderer": "paper_doll_renderer",
+    "rotation": "gesture_x",
+    "starting_rotation": 30,
+    "camera_tilt_degrees": -10,
+    "use_selected_skin": false
+  }
+}
+```
+
+The example above is an example not verified in the game. It was newly written for this wiki by gathering property usages, and the actual binding names and `button_mappings` details must be checked against vanilla `pause_screen.json` `{needs measuring}`.
+
+Summary for international pack authors:
+
+- There is no way in international JSON UI to show a custom 3D model or entity in the UI. Do not use `netease_paper_doll_renderer`, `modelname` or `skeleton_model_name`. If you do, the renderer is missing or the property is ignored (how this appears in the content log was not measured).
+- With the international paper doll, you can draw only the player skin the engine decides. The rotation mode and angles (`rotation`, `camera_tilt_degrees`, `starting_rotation`) can be adjusted with vanilla values.
+- If you really need a 3D presentation, use an entity in the world (custom geometry) or particles (ALT-01).
+- When moving UI JSON made by the NetEase editor to the international edition, delete the paper doll control or replace it with a texture image (the same handling as the guide DBG-23 candidate).
+- For how entity queries, particles and render controllers behave in a paper doll (`has_property doesn't have an actor` and so on), see [Render controllers](./render-controllers.mdx) and [Particles](./particles.mdx).
+
+## Skeletal model resources `{china}`
+
+### Order of creation
+
+1. Make the skeleton and animations in 3ds Max or Blender and export as FBX.
+2. Convert the FBX into Minecraft model JSON with "Import resource" in the MC Studio level editor. Now the editor automatically handles path registration, folder placement and texture assignment. Refer to the following only when editing by hand.
+3. Placement of the output:
+
+| File | Location |
+| --- | --- |
+| Model registration table | `mod_resource/models/netease_models.json` |
+| Skeleton | `mod_resource/models/skeleton/<name>_skeleton.json` |
+| Mesh | `mod_resource/models/mesh/<name>_mesh....json` |
+| Animation | `mod_resource/models/animation/...` |
+| Texture | `mod_resource/textures/models/<material name>.png` |
+
+The mesh file has a material name, and that name is the texture file name under `textures/models/`. Animation names use only English words, pinyin, digits and underscores.
+
+### `netease_models.json` entries
+
+The **key of the top-level object is the model name** (there is no `name` key). Python `SetModel("name")` and the UI's `skeleton_model_name` point to this key.
+
+```json
+{
+  "my_fox": {
+    "skeleton": "skeleton/my_fox_skeleton.json",
+    "mesh": "mesh/my_fox_mesh.json",
+    "animation": { "idle": "animation/my_fox_idle.json", "walk": "animation/my_fox_walk.json" },
+    "arm_model": "my_fox_fp",
+    "material": "entity_for_skeleton",
+    "material_cpu": "entity_for_skeleton_cpu",
+    "texture": { "tex1": "my_fox_glow" },
+    "frame_anim": { "row": 8, "col": 4, "frames": 32, "time": 5 }
+  }
+}
+```
+
+| Key | Meaning |
+| --- | --- |
+| `skeleton`, `mesh` | Paths of the skeleton and mesh JSON (relative to `models/`) |
+| `animation` | A dictionary from animation name to file path. The name is the value for `PlayAnim` and the UI `animation` |
+| `arm_model` | First-person arm model name |
+| `frame_anim` | Texture frame animation |
+| `material` | GPU skinning material name. Almost all devices use this. Since 2.8 it also accepts an **array** and draws in several passes in order (the base material, then an outline material and so on) |
+| `material_cpu` | CPU skinning material. Used only by some Android devices that do not support large vertex shader uniforms. A material without `USE_SKINNING` and `BoneId0` |
+| `texture` | Extra texture slots `tex0` to `tex3` (the value is a name under `textures/models/` without extension). `tex0` overrides the mesh material texture, so use it only when the mesh has no texture. Received in the fragment shader as `TEXTURE_0` to `TEXTURE_3` |
+| `useSplitMeshes` | Default `false`. If `true`, each bone is drawn as its own mesh so per-bone materials and hiding work. It increases draw counts, so turn it on only when needed (2.8+) |
+| `splitBonesGroup` | A dictionary from bone name to `{ material, material_cpu, texture }`. Bone names must match the skeleton JSON including case (for example `Bip001 Head`) |
+| `dy_load` | Appears only in an example with no explanation (looks like dynamic loading, inferred) |
+
+- Materials are defined in `resource_pack/materials/entity.material`. The priority is the bone's `material`, then the whole-body `material`, and for textures the bone's `texture`, then the material texture of that bone's mesh, then the whole-body texture.
+- Translucency: A model is opaque by default, so `gl_FragColor.a` has no effect. The material must declare Blend (`blendSrc: SourceAlpha`, `blendDst: OneMinusSrcAlpha`) for alpha to work. For the material syntax itself, see [Materials and shaders](./materials-and-shaders.mdx).
+
+### Python calls
+
+```python
+# newly written example. "my_fox" is a key in netease_models.json
+model = self.CreateComponent(playerId, "Minecraft", "model")
+model.SetModel("my_fox")
+model.PlayAnim("walk", True)   # if the second argument is True, it loops
+```
+
+Hiding one bone is `SetModelPartVisible(modelId, "Bip001 Head", False)` of the component obtained with `clientApi.GetEngineCompFactory().CreateModel(entityId)`, and it needs `useSplitMeshes: true`.
+
+### First-person model
+
+Make the first-person arm as a separate skeleton and animation set (for example `steve_fp`) and write that name in the third-person model's `arm_model`. Name the animations the same as the third person. The first-person model shows when the hand is empty or the held item is hidden in first person. When an animation plays on the third-person model, the first-person model plays the same name. Without `arm_model`, no model shows in first person under the same conditions.
+
+### Texture frame animation
+
+This is a method that moves only by swapping the texture with no bone animation and needs no extra code. Lay the frames out as a grid on one texture, and the playback order is from the top left across, then the next row, to the bottom right. `frame_anim` takes `row` (rows), `col` (columns), `frames` (total frame count, may be less than `row x col`) and `time` (seconds for one loop, repeating when finished). In memory, the width and height of the texture are rounded up to the **next power of two** (200 becomes 256). Laying 30 frames of 256x256 as 6 rows x 5 columns makes 1280x1536 into 2048x2048, but laying them as 8 rows x 4 columns (1024x2048) holds 32 cells with half the memory. Fit the grid shape to powers of two.
+
+## UI paper doll renderer `{china}`
+
+### NetEase properties attached to `paper_doll`
+
+The "paper doll" control of the NetEase UI editor uses the following properties with `"type": "custom", "renderer": "paper_doll_renderer"`. In the editor you choose between "vanilla model" (default `steve`) and "FBX model" (skeletal model).
+
+| Property | Default | Meaning |
+| --- | --- | --- |
+| `modelname` | `""` | Name of the skeletal model to draw. It is written that it can be changed with Python `SetUiModel` |
+| `animation` | `""` | Animation to play |
+| `animation_looped` | `true` | Whether to loop |
+| `modelsize` | `1.0` | Size multiplier. In the editor it is an integer 0~100 |
+| `enable_scissor_test` | `false` | Clips outside the control area |
+
+Comparison with the international edition: the renderer name and `enable_scissor_test` exist in vanilla too. `modelname`, `modelsize`, `animation` and `animation_looped` appear 0 times in the 13 vanilla `paper_doll_renderer` places, and `modelname` and `modelsize` are not in the binary either (NB-12). I also could not find `SetUiModel` in the ModAPI 「UI控件」 table of contents (an inconsistency within the documentation).
+
+### `netease_paper_doll_renderer`
+
+It draws entities, players, skeletal models and block geometry. JSON decides only the renderer and the initial pose, and **what to draw is decided by Python**.
+
+```json
+{
+  "my_doll": {
+    "type": "custom",
+    "renderer": "netease_paper_doll_renderer",
+    "size": [100, 100],
+    "layer": 22,
+    "rotation": "gesture_x",
+    "init_rot_y": 60.0,
+    "screen_scale": 1.0,
+    "enable_scissor_test": false
+  }
+}
+```
+
+| Property | Default | Meaning | Python argument |
+| --- | --- | --- | --- |
+| `rotation` | `none` | `none` fixed, `auto` spins by itself, `gesture_x` rotation about the vertical axis (Y) by dragging, `freedom_gesture` free rotation about three axes | None |
+| `init_rot_x`, `init_rot_y`, `init_rot_z` | None | Initial angle per axis (degrees) | Same name |
+| `screen_scale` | `1` | Multiplier relative to the control `size` | `scale` |
+| `skeleton_model_name` | `""` | Skeletal model name | Same name |
+| `animation` | `idle` | Skeletal animation name | Same name |
+| `animation_looped` | `true` | Loop | Same name |
+| `entity_identifier` | `""` | Entity identifier (for example `minecraft:cat`) | Same name |
+
+`gesture_x` and `freedom_gesture` must be with an `input_panel` for dragging to work. Handling by problem: if the position is off, fix the UI position; if it is too big or small, fix the UI size or `scale`; if it is clipped, fix `render_depth` or `layer`. If it breaks because of a Molang expression, fix the expression.
+
+### `NeteasePaperDollUIControl` (ModAPI)
+
+Obtained with `ScreenNode.GetBaseUIControl(path).asNeteasePaperDoll()`. All methods are client-side, take one argument dictionary and return success (`bool`).
+
+| Method | What it draws | Arguments |
+| --- | --- | --- |
+| `RenderEntity` | Entity or player | `entity_id` (string, takes priority if present) or `entity_identifier`, `scale` (1.0), `render_depth` (player -50, ordinary creatures -15), `init_rot_x/y/z`, `molang_dict` (string to real number), `rotation_axis` |
+| `RenderSkeletonModel` | Skeletal model without an entity | `skeleton_model_name`, `animation` (`idle`), `animation_looped` (True), `scale`, `render_depth`, `init_rot_x/y/z`, `molang_dict`, `rotation_axis`, `light_direction` |
+| `RenderBlockGeometryModel` | Geometry built from a block palette | `block_geometry_model_name` (the return value of `CombineBlockPaletteToGeometry`), `scale`, `init_rot_x/y/z`, `molang_dict`, `rotation_axis` |
+| `GetModelId` | ID of the skeletal model being drawn (`int`) | None. -1 on failure |
+
+- `rotation_axis` (for example `(0, 1, 0)`) is used only when the control's `rotation` is `freedom_gesture`.
+- `light_direction` sets the light direction (left-right, up-down, front-back) with `(x, y, z)` each -1, 0 or 1. If omitted, it lights from below. It has no effect on custom material models and is not supported on some low-end Android devices.
+- Do not call `GetModelId` right after `Render...` (the model may not exist yet). With the obtained ID, you attach another skeletal model to a bone (`BindModelToModel`), or attach a frame animation (`CreateFrameAniSkeletonBind`) and particles (`CreateParticleSkeletonBind`).
+- `RenderBlockGeometryModel` must be called again each time you enter the game. To save a palette, keep it with `SerializeBlockPalette` and `DeserializeBlockPalette` and rebuild the geometry.
+- Full examples are said to be in the NetEase samples `UIDemoMod` and `NeteasePaperDollDemoMod`.
+
+```python
+# newly written example
+doll = self.GetBaseUIControl("/panel/my_doll").asNeteasePaperDoll()
+doll.RenderSkeletonModel({
+    "skeleton_model_name": "my_fox",
+    "animation": "idle",
+    "scale": 0.5,
+    "init_rot_y": 60,
+})
+```
+
+## Evidence that this feature is absent from the international edition
+
+| Evidence | Contents |
+| --- | --- |
+| Binary strings (NB-12) | 0 occurrences of `netease` and `NetEase` in the whole Android 1.26.52.3 native client library. 0 of `netease_paper_doll`, `skeleton_model_name`, `netease_models`, `modelname`, `modelsize`, `screen_scale`, `init_rot_y`, `render_depth`, `freedom_gesture` |
+| Vanilla (VN) | 0 uses of `netease_paper_doll_renderer`. 0 uses of `modelname`, `modelsize`, `animation`, `animation_looped` in the 13 `paper_doll_renderer` places |
+| Resource paths | The international resource pack has no `mod_resource/` folder scheme, and models are `models/entity/*.geo.json` and animations are `animations/*.json` (general Bedrock convention) |
+| Python | The international edition has no Python ModAPI. There is nowhere to make calls like `CreateComponent` or `asNeteasePaperDoll` |
+
+Limit: the short names (`paper_doll_renderer`, `gesture_x`) were used by vanilla yet had 0 hits in the string search. So I do not conclude that each short property is absent. The conclusion relies on 0 `netease` and the long names.
+
+## What could not be confirmed
+
+- The defaults of the international `use_selected_skin`, `camera_tilt_degrees` and `starting_rotation`. I did not read the binary's `PaperDollPropertyBagSource` and `PaperDollResolvedUIDefSource` functions (NB-12).
+- Whether a control using `netease_paper_doll_renderer` on the international edition is left as an empty area or leaves a content log warning.
+- The last part (about 1,600 characters) after section 10 of the old path of NetEase 「骨骼模型的使用」, and the meaning of `dy_load`.
+- The actual location of `SetUiModel` that the NetEase documentation mentions (not in the ModAPI 「UI控件」 table of contents).

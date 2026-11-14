@@ -1,0 +1,363 @@
+---
+title: Ore UI Customizer analysis
+description: The structure of the 8Crafter tool that patches the Ore UI bundle in the install folder as strings, the theme and plugin formats, the 162 facet names, and what it means for resource pack authors.
+sidebar_position: 8
+sources:
+  - repo-ore-ui-customizer
+  - ore-ui-customizer-app
+---
+
+# 8Crafter Ore UI Customizer analysis
+
+This tool is not a resource pack. It backs up `data/gui/dist/hbui/` (the HTML, JS and CSS bundle of Ore UI) in the Minecraft install folder and then **edits it directly with strings and regular expressions and writes it back** `{verified}`. The code was cloned and read on 2026-10-21 (HEAD `69f6ebb`, 2026-09-21, app `1.0.0-beta.33`, built-in Customizer API `1.17.0+BUILD.18`), and the type definitions were checked with npm `ore-ui-customizer-types@1.5.0`. The app was not run or installed into the game. Notation: `{verified}` confirmed directly in the code, `{inferred}`, `{unverified}`. (Source: repo-ore-ui-customizer)
+
+## 1. Basic information `{verified}`
+
+| Item | Value |
+| --- | --- |
+| Repository | `8Crafter-Studios/Ore-UI-Customizer-App` (the desktop app of the web version 8crafter.com/utilities/ore-ui-customizer) |
+| Form | Electron + Vite + React (TSX). Windows, Linux, macOS |
+| Size | 660 files, 281 MB. The core logic is in `src/utils/ore-ui-customizer-api.ts` (150 KB), `ore-ui-customizer-assets.ts` (173 KB) and `InstallationManager.ts` (131 KB) |
+| Target installs | Official GDK (`C:\XboxGames\Minecraft for Windows`, including Preview), old UWP, Bedrock Launcher, LeviLauncher, Linux/macOS MCPELauncher (Android APK based) |
+| License | **MIT** (Copyright (c) 2025-2026 8Crafter Studios). Exceptions are in chapter 6 |
+
+## 2. Installation pipeline `{verified}`
+
+```text
+Scan version folders (default path list in config.ts)
+  data/gui (GDK, UWP, LeviLauncher) or assets/assets/gui, assets/gui (APK-based launchers)
+    1. Copy the original gui folder to the app data folder backups/foldername_version.channel.dev/data/gui_vanilla_backup
+    2. Zip the backup and load it into memory
+    3. applyMods(zip, settings): all the modifications in chapters 3~4 below
+    4. Unpack the resulting zip back into data/gui
+       + marker files: hbui/oreUICustomizer8CrafterConfig.js, OUIC_INSTALLATION_TARGETED_MC_VERSION,
+         INSTALLING_/UNINSTALLING_ORE_UI_CUSTOMIZER (in-progress marker), failed_plugins.json
+```
+
+- State decision (`InstallationManager.ts:133~360`): if marker files exist but `OUIC_INSTALLATION_TARGETED_MC_VERSION` differs from the current game version, it is **"Corrupted (By Minecraft Update)"**. GDK auto-updates have actually reverted hbui to vanilla or changed only part of it, and the app detects this and offers a "repair" button.
+- If some modifications fail, it shows "Partially Failed Installation" and applies everything except the failed items. This happens when a regular expression does not match the minified code of a new version.
+- From a resource pack point of view: it must be installed on each user's PC, it cannot be distributed through a server, marketplace or world pack, and it must be reinstalled after every game update `{inferred}`.
+
+## 3. Ore UI file structure `{verified}`
+
+| Path (relative to `gui/dist/`) | What it is |
+| --- | --- |
+| `hbui/index.html`, `hbui/gameplay.html`, `hbui/editor*.html` | Entry HTML. Menu, in-game screens, editor |
+| `hbui/index-<5~20 digit hex>.js` | The whole menu screen bundle (minified). The target of most patches |
+| `hbui/gameplay-<hex>.js`, `hbui/editor(-menu, -project)-<hex>.js` | In-game and editor bundles |
+| `hbui/menus-theme(-hash).css` | Menu color variables (`--colorsPrimary` etc. in the `.menus` block) |
+| `hbui/gameplay-theme(-hash).css` | In-game screen theme (the app does not support it yet, TODO) |
+| `hbui/routes.json` | Route table. `fileName`, `scope` (`in-game`, `out-of-game`), `defaultRoute`, `supportedRoutes[]` (route, regexp, params, transition) |
+| `hbui/assets/*` | Bundle images. The `@` in file names is stored as `%40` inside the zip and the app reverts it |
+| `hbui-tests/`, `hbui-docs/`, `hbui-perf/` | Development bundles are handled by the same rules |
+
+The shape of adding one route to `routes.json` (the value injected by the built-in plugin `lite-play-screen-routes`):
+
+```json
+{
+  "route": "/ouic/:menu/:tab?",
+  "modes": [],
+  "regexp": "^\\/ouic\\/([^\\/]+?)(?:\\/([^\\/]+?))?(?:\\/)?$",
+  "params": [
+    { "name": "menu", "prefix": "/", "delimiter": "/", "optional": false, "repeat": false, "pattern": "[^\\/]+?" },
+    { "name": "tab", "prefix": "/", "delimiter": "/", "optional": true, "repeat": false, "pattern": "[^\\/]+?" }
+  ],
+  "transition": "RouteSlideTransition"
+}
+```
+
+Runtime: it runs on Coherent Gameface (the types include `CoherentArrayProxy`). The communication methods (facet, query, router events) are in the [overview](./overview.mdx). In the query responses the app simulates for testing, item images take the form `"pack://textures/items/stick.png"`.
+
+## 4. Customization techniques `{verified}`
+
+`applyMods()` (`ore-ui-customizer-api.ts:530~2420`) walks the files in the zip and does the following in order.
+
+### 4.1 Color replacement
+
+- **Simple substitution** `colorReplacements`: `{ "#3c8527": "#2763a5" }`. One regular expression that joins all keys with `|` replaces **places where the string is exactly equal** across all `.js/.css/.html` in hbui. The 79 default palette keys (green family `#a0e081`~`#0f2b0a`, gray `#f4f6f9`~`#1e1e1f`, red, orange, yellow, blue, pink, purple, `rgba(0, 0, 0, 0.1~1)`, `rgba(255, 255, 255, 0.1~0.9)`, etc.) are in effect **the Ore UI default palette table**.
+- **CSS variable replacement** `advancedColorReplacements.menusTheme`: changes the values of `--colorsPrimary`, `--colorsSecondary`, `--colorsDestructive`, `--colorsText`, `--colorsMuted0/1`, `--colorsDisabled`, `--baseTextField*`, `--inputLegend*`, `--buttonIconKeyboardTextColor` and so on inside the `.menus`, `.menus.realms` and `.menus.neutral90` blocks of `menus-theme*.css`. It works by **finding a value exactly equal to the default and replacing it**, so it fails silently if Mojang changes the default.
+- `advancedColorReplacements.custom`: appends `:root selector{property:value;}` to the end of `menus-theme*.css` (for example the `.vanilla-neutral-text` text color).
+- `menus-theme*.css` accepts only advanced and the function returns immediately, so simple substitution does not apply.
+
+### 4.2 Minified JS patches (adding features)
+
+- Function and variable names change with every build, so `getExtractedSymbolNames()` first extracts the current build's short names (`translationStringResolver`, `facetHolder`, `contextHolder`, etc.) from the minified code **using stable strings (translation keys, `data-testid`, export names such as `useFacetMap`) as anchors**.
+- Using a regular expression with those names inserted, it finds a whole component function and swaps in a **hand-written replacement function**. Examples: hardcore toggle `disabled: false`, allowing the experimental toggle to be turned off, adding Default and Spectator to the game mode dropdown, a generator type (Legacy, Infinite, Flat, Void) dropdown, seed change, a debug tab, and a bulk change of text box `maxLength`.
+- Each patch tries several regular expression candidates in turn, and if none match in the target file (`index-*.js`) it leaves the name in `failedReplaces`.
+- Lesson: JSON UI packs also break less on version changes if they follow the same principles (rely only on stable names, localize failures).
+
+### 4.3 Script and style injection
+
+- Into every hbui HTML it inserts its own 5 scripts (`oreUICustomizer8CrafterConfig.js`, `class_path.js`, `css.js`, `JSONB.js`, `customOverlays.js`) **before** the vanilla `script defer src="/hbui/(index, gameplay, editor)-*.js"`, and inserts `customOverlays.css` after the `gameplay-theme*.css` link. If it cannot find them, it inserts before `</head>`.
+- `customOverlays.js` (670 KB) shows in the game an `EngineInterceptor` that intercepts `engine.on/trigger`, forced facet loading (`forceLoadFacet`), router V1/V2 polyfills, a console, a CSS editor and a debug overlay.
+
+### 4.4 Themes (`.mcouictheme` zip)
+
+| Path in the theme | Handling |
+| --- | --- |
+| `manifest.json` (json5) | `format_version: 1`, `header{name, uuid(v4), version(semver), format_version, min_engine_version?}`, `metadata{product_type: "theme", authors?, license?, url?}`, `dependencies?` |
+| `color_replacements.json` (json5) | `format_version: 1`, `colorReplacements`, `advancedColorReplacements`. Deep-merged with user settings |
+| `styles/**/*.css` | Copied to `gui/dist/hbui/ouic-theme-custom-styles/uuid_version/...` and a **`link` is injected before `</head>` of every HTML in hbui** |
+| `textures/**` | Copied to `gui/dist/...` with the relative path as is (overwrites if the name is the same). Images `.gif .svg .tga .png .jpg .jpeg`, video `.webm`, fonts `.otf .ttf` |
+
+A minimal theme example:
+
+```json
+{
+  "format_version": 1,
+  "header": {
+    "name": "Minimal Example Theme",
+    "uuid": "4f6c2a1e-8b3d-4c7a-9e21-5d0b7f3a6c11",
+    "version": "1.0.0",
+    "format_version": "1.0.0",
+    "min_engine_version": "1.17.0"
+  },
+  "metadata": { "authors": ["example"], "product_type": "theme", "license": "MIT" }
+}
+```
+
+```json
+{
+  "format_version": 1,
+  "colorReplacements": { "#3c8527": "#2763a5", "#313233": "#1f2433" },
+  "advancedColorReplacements": {
+    "menusTheme": {
+      ".menus": { "colorsPrimary": "#2763a5" },
+      ".menus.realms": { "colorsPrimary": "#7345e5" }
+    },
+    "custom": {
+      ".vanilla-neutral-text,.vanilla-neutral-text-interactive": { "color": "#e8f0ff" }
+    }
+  }
+}
+```
+
+```css
+/* styles/example.css: injected as a link at the end of the head of every html in hbui. Use only CSS that Gameface supports. */
+:root .menus { --colorsPrimary: #2763a5; }
+```
+
+`textures/hbui/assets/foo.png` is copied to `gui/dist/hbui/assets/foo.png` and overwrites the vanilla asset with the same name. Vanilla asset file names can carry a hash that differs by version, so check the target version's `gui/dist/hbui/assets` first.
+
+### 4.5 Plugins (`.ouicplugin` zip)
+
+- `manifest.json` + a JS module. The module exports a `plugin` object and chooses a `context` for each of `actions[]`.
+  - `global_before(zipFs)`: once before walking the files
+  - `per_text_file(text, entry, zipFs)` returns the text: for each of `.txt .md .js .jsx .html .css .json .jsonc .jsonl` (but `.js/.css/.html` directly under `hbui/` are handled separately by the built-in patch path)
+  - `per_binary_file(blob, entry, zipFs)` returns a blob
+  - `global(zipFs)`: once at the end
+- 5 built-in plugins: showing exact ping and max players on the server tab, `facet-spy`, showing the world export button on non-Windows, and adding the Lite Play Screen route (`/ouic/:menu/:tab?`).
+- There is an example plugin by the original author, `replace-play-with-lol` (MIT).
+
+### 4.6 Preview and debugging
+
+- `OreUIPreviewManager.ts` serves the installed `gui/dist` locally with Express (ports 8927~9000) and simulates facets with xKingDark/OreUI-Viewer to **run Ore UI in a window without the game**. A `/rp/path` request is looked up in `data/resource_packs/*` (folders whose names start with `vanilla` go last, and `vanilla` at the very end), and if there is no extension it tries appending `.tga .svg .gif .png .jpg ...` in that order. It appears to imitate the game's `pack://` resolution `{inferred}`.
+- It passes `data/resource_packs` with `--texts-path` to use translation strings. Ore UI strings also appear to come from the resource pack's `texts/*.lang`, but whether a user resource pack's `.lang` overrides Ore UI strings has not been confirmed `{unverified}`.
+
+## 5. What it means for resource pack authors
+
+| What you want to change | With a resource pack | Evidence level |
+| --- | --- | --- |
+| Layout, color and behavior of Ore UI screens | Not possible with a plaintext pack (the reason this tool edits game files directly). Possible with an encrypted pack ([Loading paths](./loading-paths.mdx)) | confirmed + this repository's measurement |
+| Item and block icons shown in Ore UI | Works. The engine passes `pack://textures/...` and it resolves through the pack stack | confirmed by this repository's measurement |
+| Ore UI bundle images (`hbui/assets/*`) | Not possible with a plaintext pack. It is the relative path `/hbui/assets/`, not a pack path | confirmed |
+| Ore UI strings | May work by overriding `.lang` | unverified |
+| Screens where JSON UI and Ore UI coexist | Pack modifications show only when the JSON UI side is chosen | inferred (`vanilla.screenTechStack`) |
+
+- The tool's initial judgment that "there is no route to replace Ore UI files with a pack" is correct for plaintext packs. Follow-up measurement confirmed the encrypted pack route.
+- Checking whether a screen has moved: which screens went to Ore UI is more certain if you look at whether files remain in vanilla `resource_pack/ui/*.json`, together with `supportedRoutes` in the install folder's `gui/dist/hbui/routes.json` and the facet use in `gameplay-*.js`. The 13 `vanilla.gameplay.*` facets (furnace, container, death and respawn, bed, coordinate HUD, etc.) signal that some in-game screens already have an Ore UI code path `{inferred}`.
+- **Version fragility is much greater for Ore UI patches than for JSON UI**: a JSON UI pack breaks when an element name changes, but an Ore UI patch fails its regular expression if the shape of the minified code changes even slightly. The app treating "partial failure" as a normal state is the evidence.
+- When a user asks "please change Ore UI with a resource pack too": it is not possible with a plaintext pack. The options are to have each person install a client-side tool (like this app) or for the server to send an encrypted pack.
+
+## 6. Defects of this version and the license
+
+Defects `{verified}`
+
+- `getAssetsDataForThemes()` looks for all three kinds, textures, videos and fonts, only in the `textures/` folder. Videos and fonts also have to be placed under `textures/` to apply.
+- `validateThemeColorReplacementsObject()` raises a "must not be null" error when `colorReplacements`/`advancedColorReplacements` **exist** (the condition is inverted). But nothing calls `validateThemeFile()`, so real imports are not affected.
+- The `entry` of the example plugin manifest (`scripts/index.js`) differs from the actual file name (`scripts/replacePlayWithLol.plugin.js`).
+- The `menusTheme` replacement finds only values exactly equal to the default, so if the game changes the default colors it silently does nothing.
+
+License `{verified}`
+
+- The repository `LICENSE` and `package.json` are **MIT** (Copyright (c) 2025-2026 8Crafter Studios). The type package `ore-ui-customizer-types` is also MIT. It can be reused with attribution.
+- Bundled items that are not MIT: `resources/assets/oreui/fonts/consola*.ttf` (Microsoft Consolas, no redistribution), the Minecraft and Mojangles family fonts in `resources/fonts/` (Mojang assets), `resources/assets/oreui/class_path.ts` (based on Apple and Google WebKit, BSD-style notices must be kept), `resources/ore-ui-viewer/` (an empty folder. The OreUI-Viewer license was not checked).
+- How editing the game install files interacts with the Minecraft EULA is outside the scope of this analysis.
+
+## 7. The list of 162 facet names
+
+These are the names of the data channels the game subscribes to with `engine.trigger("facet:request", name)`. They were taken from the built-in plugin `facet-spy`. They can grow or shrink by version, and `// Found in dev build file.` is the original author's comment that the name was seen only in a development build.
+
+<Excerpt src="ore-ui-customizer-app" title="src/utils/ore-ui-customizer-assets.ts built-in plugin facet-spy (name list)" path="src/utils/ore-ui-customizer-assets.ts">
+
+```text
+core.animation
+core.customScaling
+core.deviceInformation
+core.featureFlags
+core.input
+core.locale
+core.performanceFacet
+core.router
+core.safeZone
+core.screenReader
+core.splitScreen
+core.social
+core.sound
+core.user
+core.vrMode // Found in dev build file.
+vanilla.achievements
+vanilla.achievementsReward
+vanilla.buildSettings
+vanilla.clipboard
+vanilla.createNewWorld
+vanilla.createPreviewRealmFacet
+vanilla.debugSettings
+vanilla.editor
+vanilla.editorInput
+vanilla.editorScripting
+vanilla.editorSelectionFacet
+vanilla.editorSettings
+vanilla.externalServerWorldList
+vanilla.followersList
+vanilla.friendsListFacet
+vanilla.friendsManagerFacet
+vanilla.gameplay.activeLevelHardcoreMode
+vanilla.gameplay.bedtime
+vanilla.gameplay.closeContainerCommand
+vanilla.gameplay.containerBlockActorType
+vanilla.gameplay.containerItemQuery
+vanilla.gameplay.containerSizeQuery
+vanilla.gameplay.furnace
+vanilla.gameplay.immediateRespawn
+vanilla.gameplay.leaveGame
+vanilla.gameplay.playerDeathInfo
+vanilla.gameplay.playerPositionHudElement
+vanilla.gameplay.playerRespawn
+vanilla.gamertagSearch
+vanilla.inbox
+vanilla.lanWorldList
+vanilla.localWorldList
+vanilla.marketplaceSuggestions
+vanilla.marketplacePassWorldTemplateList
+vanilla.networkWorldDetails
+vanilla.networkWorldJoiner
+vanilla.notificationOptions
+vanilla.notifications
+vanilla.options
+vanilla.party // Found in dev build file.
+vanilla.playerAchievements
+vanilla.playerBanned
+vanilla.playerFollowingList
+vanilla.playerLinkedPlatformProfile // Found in dev build file.
+vanilla.playermessagingservice
+vanilla.playerPermissions
+vanilla.playerProfile
+vanilla.playerReport
+vanilla.playerSocialManager
+vanilla.playerStatistics
+vanilla.privacyAndOnlineSafetyFacet
+vanilla.profanityFilter
+vanilla.realmsListFacet
+vanilla.realmSlots
+vanilla.realmsMembership
+vanilla.realmsStories.actions
+vanilla.realmsStories.localScreenshots
+vanilla.realmsStories.persistentData
+vanilla.realmsStories.players
+vanilla.realmsStories.realmData
+vanilla.realmsStories.settings
+vanilla.realmsStories.stories
+vanilla.RealmsPDPFacet
+vanilla.RealmWorldUploaderFacet
+vanilla.recentlyPlayedWithList
+vanilla.recommendedFriendsList
+vanilla.resourcePackOverrides
+vanilla.resourcePacks
+vanilla.screenshotGalleryList
+vanilla.screenSpecificOptions
+vanilla.screenTechStack
+vanilla.seedTemplates
+vanilla.share
+vanilla.simulationDistanceOptions
+vanilla.telemetry
+vanilla.thirdPartyWorldList
+vanilla.unpairedRealmsListFacet
+vanilla.userAccount
+vanilla.webBrowserFacet
+vanilla.worldCloudSyncFacet
+vanilla.worldEditor
+vanilla.worldOperations
+vanilla.worldPackages
+vanilla.worldPlayersList
+vanilla.worldStartup
+vanilla.worldTemplateList
+vanilla.worldTransfer
+vanilla.friendworldlist
+vanilla.offerRepository
+vanilla.realmsSettingsFacet
+vanilla.achievementCategories
+vanilla.blockInformation
+debug.worldTransfer
+vanilla.flatWorldPresets
+vanilla.inGame
+vanilla.playerPrivacy
+vanilla.realmsPurchase
+vanilla.realmsSubscriptionsData
+vanilla.realmsSubscriptionsMethods
+vanilla.realmsWorldContextCommands
+vanilla.realmsWorldContextQueries
+vanilla.realmsStories.sessions
+vanilla.realmsListActionsFacet
+vanilla.developerOptionsFacet
+vanilla.realmsStories.comments
+vanilla.screenshotGallery
+vanilla.playerShowcasedGallery
+vanilla.trialMode
+vanilla.featuredWorldTemplateList
+vanilla.ownedWorldTemplateList
+vanilla.worldTemplateOperations
+test.vector
+vanilla.gameplay.localPlayerWeatherLightningFacet
+vanilla.levelInfo
+vanilla.currentParty
+vanilla.partyCommands
+vanilla.worldRealmEditor // Found in dev build file.
+vanilla.worldRealmEditorCommands
+vanilla.worldRealmEditorQueries
+vanilla.realmBackupsCommands
+vanilla.realmBackupsQueries
+vanilla.realmsPurchaseCommands
+vanilla.realmsPurchaseReconcilerQueries
+vanilla.progressTracker
+vanilla.realmsWorldEditorGameRulesCommands
+vanilla.realmsWorldEditorGameRulesQueries
+vanilla.realmsWorldEditorWorldDetailsQueries
+vanilla.realmsCommitCommandsFacet
+vanilla.realmsCommitQueriesFacet
+vanilla.realmsPurchaseQueries
+vanilla.connectionErrorInfoFacet
+vanilla.partyReceivedInviteList
+vanilla.joinablePartyList
+vanilla.realmsFeatureFlags
+vanilla.realmsStories.reports
+vanilla.realmsStories.reportCommands
+vanilla.openAndCloseRealmCommandsFacet
+dev.realmsCommitCommandsFacet
+dev.realmsCommitQueriesFacet
+vanilla.newPlayerChoices
+vanilla.realmsRolesAndPermissionsQueries
+vanilla.realmsRolesAndPermissionsCommands
+vanilla.realmsPlayerListQueries
+vanilla.realmsPlayerListCommands
+vanilla.realmsWorldEditorWorldDetailsCommands
+vanilla.realmsWorldPackEditorQueries
+vanilla.realmsWorldPackEditorCommands
+```
+
+</Excerpt>
+
+## 8. What to verify in game `{unverified}`
+
+1. Whether overriding an Ore UI string key in a user resource pack's `texts/ko_KR.lang` changes the menu strings.
+2. The install's `data/gui/dist/hbui/routes.json` and file list (the actual list of which screens are Ore UI). It is enough to only read the GDK install folder `C:\XboxGames\Minecraft for Windows\Content\data\gui`.

@@ -1,0 +1,104 @@
+---
+title: "NetEase (China edition) developer documentation, UI chapter"
+description: "The result of rechecking the China-edition JSON UI documentation against international vanilla. Separating facts that also hold internationally, China-only elements, and wrong claims"
+sidebar_position: 13
+sources:
+  - netease-docs
+  - bedrock-samples
+  - repo-guide
+---
+
+## What it is
+
+The UI-related chapters of the NetEase (网易) developer documentation are for China-edition developers, so they assume the Python ModAPI (`ScreenNode`, `ViewBinder`) and their own UI editor (MC Studio "界面编辑器", `.mcgui`). The official site (`mc.163.com/dev/mcmanual/mc-dev/`) and the mirror (`mcwiki.easecation.net`) render on the client so the body cannot be fetched directly, so the mirror's source repository `EaseCation/netease-modsdk-wiki` (HEAD `6dd1233`, 2026-06-04, 8,892 files) was shallow-cloned and the Markdown original was read. The repository has no `LICENSE` and the original is NetEase's work, so **no sentences or code were copied and only facts** were rechecked against vanilla 1.26.50.4 and rewritten (Source: cs-netease-docs). It is the same Bedrock engine, so the JSON syntax has a fair number of facts that also hold internationally, and some are missing from the existing guide. Its value is medium-high. The documents have no per-page dates, and the China-edition client `3.2.0.877635` appears in example paths.
+
+## Documents read
+
+The property reference (`30-UI说明文档`, 133 KB, high value) is the center, and the tutorial `1-了解和创建JSON UI`, bindings (`70-UI数据绑定`), animation (`19`), resolution adaptation (`20`), image scaling and 9-slice (`11`), and inheritance and variables (`13`, `15`) were read. The tutorial and the reference differ in places, so reliability is on the high side but not consistent.
+
+## International versus China edition
+
+| Category | Content | In an international resource pack |
+| --- | --- | --- |
+| Same engine syntax | namespace, `@` inheritance, `$` variables and `\|default`, `variables`/`requires`, `bindings` (5 types, 6 conditions), view bindings, `button_mappings`, 11 `modifications`, `anims` | Use as is |
+| Properties vanilla also has | About 20 screen properties, `modal`, `contained`, `draggable`, `follows_cursor`, `texture_file_system`, `tiled_scale`, `selection_wheel` properties, `color1`/`color2` of `gradient_renderer`, `property_bag_for_children` | Use |
+| China-only types | `combox`, `layout`, `joystick`, `stack_grid`, `rich_text`, `mul_lines`, `sixteen_nine_layout`, `anim_porecess_bar` (original spelling) | Do not use (0 uses in vanilla) |
+| China-only properties | `rotate_pivot`, `rotate_angle`, `is_new_nine_slice` and `nine_slice_top/left/right/bottom` (including the original spelling `nine_slice_buttom`), `is_handle_button_move_event`, `is_swallow`, `gradient_direction`, `vertical_scroll_delta`, `auto_expand`, and others | Do not use. Remove from editor output |
+| China-only templates and renderers | `common_selection_wheels.base_selection_wheel`, `combo_box.comboBoxPanel`, `mini_map.mini_map_wrapper`, `netease_paper_doll_renderer`, textures `textures/netease/...` | Do not use |
+| China-only binding syntax | `%pythonmodule.method` (a Python function call) | Do not use. It is just an ID the engine does not know |
+| China-only tools | 界面编辑器, UI 调试工具, the "Main Scene Stack / Router History" display on F3 | Not in the international edition. Check paths with the Content Log and test screens (DBG-01~04) |
+
+If JSON made by the China-edition editor is moved to the international edition, the China-only properties mix in and can leave `Unknown property` logs, so remove them.
+
+## Facts that also hold internationally (rechecked against vanilla)
+
+### 1. A `@name` without a namespace is found in different places depending on context
+
+NE claims that inside the `controls` of an instance that inherits another namespace in a control array (`"minimize@common.close_button"`), a short `@label0` resolves to the base namespace (`common.label0`). The 207 vanilla files were parsed and a count was taken of where short references resolve.
+
+| Nearest enclosing inheritance of another namespace | Count | Where the name exists | Example |
+| --- | --- | --- | --- |
+| An instance inside a control array | 3 | Only in the base namespace (`common`) | `default@close_button_panel` under `command_block_screen.json:1010` |
+| A top-level definition | 43 | Only in the file namespace | `bg@background_image` at `trade_screen_pocket.json:346-349` |
+| Same-namespace inheritance | 330 | The same place on both sides | n/a |
+
+Both shapes exist in vanilla, so the engine finds both. The NE claim is only half right (under an inline instance the base is the default), and "an error if not written" does not match the 43 top-level inheritance cases. Which side comes first cannot be decided. Cinnabar always looks only in the file namespace. So **inside a control that inherits another namespace, always write `ns.name`** (proposed FILE-42, conflict C-55).
+
+### 2. The claim about the `source_control_name` search range is rejected
+
+NE writes that when `resolve_sibling_scope` is false, it searches only itself and its children. Comparing the 128 view bindings in vanilla that use `source_control_name` without `resolve_sibling_scope`, many read a control that is not a descendant (for example `how_to_play_screen.json:142-146`). The default is the first breadth-first match from the root (BND-25, C-56).
+
+### 3. Binding keys and defaults
+
+The `binding_type` default `global` and `binding_condition` default `none` are the same as BND-02 and BND-22. But the tutorial says "if `binding_type` is not specified the default is collection", which contradicts the reference on the same site (a tutorial typo, C-59). The statement that `ignored` can also be put on a binding object has the same nature as FILE-18. A single `variables` object appears 4 times in vanilla, but a single `bindings` object appears 0 times in vanilla (NE only).
+
+### 4. The screen (`screen`) property table
+
+This is the table where NE wrote the defaults and meanings. Vanilla almost always uses the opposite of the NE default, so it is indirect evidence for the default table.
+
+| Property | NE default | Meaning | Vanilla usage |
+| --- | --- | --- | --- |
+| `render_only_when_topmost` | true | If false, it draws even when covered by another screen | false ×3 |
+| `always_accepts_input` | false | If true, it receives input even when not on top | true ×2 |
+| `render_game_behind` | true | If false, the game screen stays frozen | true ×3 |
+| `absorbs_input` | true | If false, input goes below (to the game) | false ×2 (HUD, crosshair) |
+| `is_showing_menu` | true | If false, treated as resident UI | false ×4 |
+| `should_steal_mouse` | false | If true, hides the mouse cursor | `hud_screen.json` true |
+| `low_frequency_rendering` | false | Low-frequency rendering | true ×3 |
+| `screen_draws_last` | false | Draws last | true ×2 |
+| `force_render_below` | false | If true, also draws the screen below | true ×27 |
+| `send_telemetry` | true | Sends telemetry | false ×8 |
+| `cache_screen` | false | Caches controls so reopening is faster | true ×4 |
+| `load_screen_immediately` | false | Loads immediately without delaying a few frames | `death_screen.json` true |
+| `close_on_player_hurt` | false | Closes the screen when damaged | 41 times as a variable |
+
+The merge record relaxed "vanilla uses only the opposite" to "mostly". `should_steal_mouse` (false 3 / true 1) and `low_frequency_rendering` (true 3 / false 1) show both values. NE adds that some properties work properly only on China-edition `PushScreen` screens, but that is about the China-edition creation method and does not apply to international redeclarations.
+
+### 5. Other facts
+
+- **F1 hiding of the HUD layer**: attaching the three global bindings used by the vanilla `hud_screen.json` `root_panel` (`#hud_visible` to `#visible`, `#hud_alpha` to `#alpha`, `#hud_propagate_alpha` to `#propagateAlpha`) to your own layer root hides and fades it together with the HUD (proposed HOST-37).
+- **`common.scrolling_panel` creates only one of `scroll_touch`/`scroll_mouse` through `$touch`** (`ui_common.json:4718-4750`). The content control path changes with the input mode, and overriding `$touch` in an instance fixes it (proposed LAY-48).
+- **GUI pixel coordinate system**: fixed px are drawn multiplied by an integer scale, and the scale is decided from the quotient of dividing the screen by the minimum areas of pocket 320×210 and desktop 376×250 (a vanilla comment writes the same two sizes). There is an official notice that the scale system changed in 1.26.0, so it needs rechecking (proposed LAY-47).
+- **Image fitting**: `keep_ratio` defaults to true (inscribed with the ratio kept), `fill: true` covers (cropped), and `keep_ratio: false` stretches. There is also a list of `texture_file_system` values (`InUserPackage`, `RawPath`, and others) (proposed ANI-23, ANI-24).
+- **`modal: true` on `input_panel`** (traps input to this control and its children, 10 vanilla popups) and `contained` + `draggable` (limits the drag range to the parent) (proposed INP-26).
+- **`selection_wheel` properties** (`slice_count`, `inner_radius`, `outer_radius`, `state_controls`, `initial_button_slice`) and `color1` and `color2` of `gradient_renderer` (proposed INP-27, ANI-25).
+- **`flip_book` repeats by itself** (`next` is not read). Of the 34 in vanilla, 0 use `next`, and only 3 use `looping: false` to stop (proposed ANI-26).
+
+## Claims that are wrong or differ from the international edition
+
+The tutorial's "collection when `binding_type` is omitted", the flipbook start frame key `initial_frame` (vanilla and Cinnabar use `initial_uv`, C-58), "if `resolve_sibling_scope` is false it finds only itself and children", the statement that a copy of a vanilla path must be registered in `_ui_defs.json` (unnecessary, C-57), and the China-only elements.
+
+## Relation to our rules
+
+| Rule ID | Relation |
+| --- | --- |
+| FILE-06, FILE-42 (proposed), C-55 | Interpretation of a `@name` without a namespace |
+| BND-02, BND-22, BND-25, C-56, C-59 | Binding defaults and search range |
+| HOST-25, HOST-36 (proposed) | Meanings and defaults of screen properties |
+| LAY-44~48 (proposed), LAY-10 | GUI scale, `$touch` in `scrolling_panel` |
+| ANI-23~26 (proposed), INP-26~27 (proposed) | Image fitting, modal, selection wheel, flipbook |
+| DBG-27 (proposed) | Telling China-only names and properties apart |
+
+## Limits
+
+The target version and the matching international version are not stated. The Python ModAPI, the China-edition editor features, and grid cell size conditions were judged unrelated to the international edition and not covered. China-only extensions are not used in international resource packs.

@@ -1,0 +1,162 @@
+---
+title: Page environment
+description: The resources an in-game Ore UI page can load, the input it receives, routes to the server, engine features, Gameface limits and per-device problems.
+sidebar_position: 4
+sources:
+  - repo-ore-ui-loading
+  - private-research
+  - gameface-docs
+  - gameface-guide
+  - venice-unleashed-docs
+  - bedrock-protocol-docs
+  - gophertunnel
+  - bedrock-wiki
+---
+
+# Page environment
+
+These are things seen on a real client while building the server-driven test screens and the renderer. The environment is Windows 1.26.52 (2026-10-27) and the engine features are Windows 1.26.60.5 (2026-10-28). iOS and iPad are written separately. In the notation, `{record}` marks something written as fact in the private research documents whose measurement conditions were not kept. (Source: repo-ore-ui-loading, private-research)
+
+## 0. Concept: a Gameface page is not a browser
+
+Ore UI pages run inside Coherent Gameface. It looks similar to a Chromium-based web UI, but it is an engine trimmed for games and lacks many features. The general facts known from the experience of Venice Unleashed (a Frostbite mod) moving to the same engine (Source: venice-unleashed-docs) and from the Gameface documentation (Source: gameface-guide) are as follows.
+
+- CSS: grid and table layouts are not supported. `display: inline` and `inline-block` are not supported either. Advanced selectors such as `:nth-last-child` do not work.
+- CSS variables: usable, but not inside shorthand properties such as `border: solid var(--w) var(--c)`. Write out `border-style`, `border-width` and `border-color`.
+- HTML: `<audio>` is not supported (put sound into `<video>` as webm). `<input>` works only for text, button and password. `<canvas>` supports only the 2D context and there is no WebGL. Unsupported elements are not visible on screen.
+- Fonts: only TrueType and OpenType families (`.ttf`, `.ttc`, `.otf`, `.otc`) work.
+- GIF: animates only in `<img>`. GIFs in `background-image`, `border-image` and `mask-image` do not animate. A GIF loads every frame into memory in advance, so 128x128 or smaller and 30 frames or fewer is recommended.
+- Video: `<video>` works only with a WebM container, VP8 or VP9 video, and a single Vorbis audio track. The attributes are `src`, `autoplay`, `loop`, `muted` and `preload="auto"`. Audio is passed to the engine as PCM and follows the engine's volume settings.
+
+An example of converting wav to webm for `<video>` (Source: venice-unleashed-docs):
+
+```bash
+ffmpeg -i input.wav -c:a libvorbis -b:a 128k -f webm output.webm
+```
+
+The results matched against this repository's measurements are in chapter 10, Media, of this page. Font files are read from the install folder `data/gui/dist/hbui/fonts/`, and Ore UI uses `Minecraft-Seven.ttf` and `Minecraft-Seven-v4.ttf` (Source: bedrock-wiki, fonts). The Unicode glyph table of JSON UI does not apply to Ore UI.
+
+## 1. Resources a page can load `{measured}`
+
+The page address is `ui://./hbui/gameplay.html` and the `origin` is `ui://.`. There is no `fetch` (`undefined`), while `XMLHttpRequest`, `Blob` and `URL.createObjectURL` exist. The test screen tries one method per route in turn (4 seconds per method) and sends whether it passed to the server. A script passes if it calls `window.__ouiRes(tag)`, a stylesheet passes if the width of `.oui-res-probe` becomes 13px, and HTML passes if it contains `oui-res-html`.
+
+| Route | Method | Result |
+| --- | --- | --- |
+| Text sent through the data store | `eval` (global) | Works |
+| | `new Function` | Works |
+| | Inline `<script>` (text set via `textContent`) | Works (`onload` also arrives) |
+| | `data:` script | Does not work (`onerror`) |
+| | `blob:` script | `new Blob([text], {type})` throws `TypeError` (no constructor takes two arguments). One argument is not verified |
+| | `<style>` | Not verified (Gameface lays out on the next frame, so measuring right after attaching is wrong. Measure after 0.3 seconds) |
+| | `data:` stylesheet | Does not work (`onerror`) |
+| | `innerHTML` | Works |
+| `hbui/` files of an encrypted pack | `<script src="/hbui/...">` | Works |
+| | `<link href="/hbui/...">` | `onload` arrives. Whether the style took effect is not verified |
+| | `XMLHttpRequest` `/hbui/...` | Works (200) |
+| | `XMLHttpRequest` `pack://hbui/...` | Works (200) |
+| HTTP (the game port of the connected host, the next port) | `<script src>`, `<link>`, `<img>` | Does not work (`onerror`) |
+| | `XMLHttpRequest` | Does not work (status 404, 0 bytes) |
+
+- For HTTP, not a single request reached the server on either port. The test server runs an HTTP server only while the screen is open (responding with `Access-Control-Allow-Origin: *`) and records the port, path, `Origin`, `Referer` and `User-Agent` of received requests. The XHR 404 came from the game's resource handler, not from the server. The client does not send network requests to http addresses from a page. If a request reached the server but failed on the page, the page side (origin rules) blocked it, and if no request arrived, the client did not send it.
+- The statement "Ore UI allows resources from the same origin as the connected server" does not match this result and no source for it was found. The page's origin (`ui://.`) differs from the server host. `<img>` and `<video>` with internet addresses also failed. `https` and WebSocket were not tested (the server has no certificate). If a port cannot be opened (the game port is UDP, so the TCP port with the same number is usually free), the reason is shown on screen.
+- The Gameface documentation also says `XMLHttpRequest` goes to the game's resource handler, and `fetch` is not in the Window API list (Source: gameface-docs).
+- Summary: there are two ways for a server to put code in. (1) Load the `hbui/` files of an encrypted pack with `<script src>` or XHR. (2) Write the text sent through the data store with `eval`, `new Function`, an inline `<script>` or `innerHTML`. (2) sends code during the connection without changing the pack.
+- The pack was placed in the same encrypted pack as the renderer, like `hbui/oui-probe.*`. Even when encrypted the same way as a market pack, `manifest.json` and `pack_icon.png` stay as plaintext. The key is given to the client, so a connecting client can decrypt it. Encryption is only a condition for opening Ore UI, not protection.
+
+## 2. Input events (mouse and keyboard) `{measured}`
+
+The test screen receives, in the `document` capture phase, mouse (`mousedown`, `mouseup`, `click`, `dblclick`, `contextmenu`), wheel, keys (`keydown`, `keyup`, `keypress`), touch, pointer (`pointerdown`, etc.), focus, text input (`input`, `change`, `composition*`), `visibilitychange`, and the window's `resize` and `gamepadconnected`, and sends them to the server as lines. Move events are only counted. The gamepad is read with `navigator.getGamepads()` every 0.1 seconds. Repeated identical lines are counted as `xN`. Results (Windows, mouse and keyboard):
+
+- `mousemove` arrives (2371 times). `pointermove` was 0 times, so pointer events appear not to arrive. `scroll` arrives.
+- `click` arrived once on a scroll handle (`button=0 buttons=0 detail=undefined`). It does not arrive on a plain `div`, so presses are received with `mousedown`. Which elements receive `click` is not verified.
+- The right button arrives as `button=2` on `mousedown` and `mouseup` (2026-11-04). There was no `contextmenu` line.
+- While Alt is held, `keydown key= code=Alt keyCode=18 repeat=true` keeps arriving. `key` is empty.
+- Wheel, focus, text input and IME composition, and gamepad were pushed out by the Alt repeat lines and left no results (not verified).
+- A touch device sends `mousedown` on a tap but does not send `mousemove` while the finger moves. Scrollbar dragging and screen dragging also receive `touchstart` and `touchmove` and read coordinates from `touches[0]` `{record}`.
+- While the screen was open, the client kept sending `ServerBoundDiagnostics` (157). No `ScriptMessage` arrived.
+- The phone back button did not arrive on the page as a key. Android `KEYCODE_BACK` 4, browser back 166, `GoBack` and `BrowserBack` are all set to be received as close.
+
+## 3. Routes from the page to the server
+
+- Calling a data store write (`vanillaDduiDataStoreSetCommandGroup.setDataStorePathString`, etc.) makes the client send it as a `ServerBoundDataStore` packet. Even sending 700 lines, one per event, all reached the server `{measured}`.
+- At runtime `window.__commands__` has 40 command groups. Besides those the bundle uses, there are realms, storage, settings (`vanilla_menus_update_settings`, `coreOptionsCommandGroup`), party chat (`vanilla_partyChatCommandGroup`: `setIsOpen`, `setComposedMessage`, `sendComposedMessage`), `editorTelemetryCommandGroup` (`fireScriptAction`), and others. There is no name that sends game chat, slash commands or `ScriptMessage`. The arguments and the effect of `fireScriptAction` are not verified `{measured}`.
+- The command groups the in-game bundle uses are `coreTranslate`, `coreScreenReader`, `sound`, `coreApplication`, `coreHaptics`, `coreOptions`, `vanillaGameplayContainerAPICommands`, `vanillaGameplayLocalPlayerRespawnCommand`, `vanillaGameplayLeaveGameCommandGroup`, `vanillaGameplayLocalPlayerWakeUpCommand`, `vanillaDduiDataStoreSetCommandGroup` (`setDataStorePathString`, `Number`, `Bool`, `dataStoreButtonPress`, `dataStoreCloseButtonPress`) and `vanillaCoreDduiContentLogCommandGroup`. The menu bundle also has no group that sends script events, chat or slash commands `{code}`. 8Crafter's Ore UI type definitions don't have one either (only party chat) `{docs}`.
+- **`ScriptMessage`** (ID 177, formerly named `ScriptCustomEvent`) is a packet that carries an identifier (string) and data. The Mojang documentation says only "a user message between client and server" (Source: bedrock-protocol-docs), and gophertunnel treats it as a bidirectional packet and guesses it is for GameTest (Source: gophertunnel). The server can receive it (Dragonfly does not handle it, but you can wrap the listener to intercept it). No route to send it from the page was found. Whether the vanilla client ever sends this packet, and whether it connects to `/scriptevent`, is not verified. A `/scriptevent` typed by the client goes as a `CommandRequest` like other commands.
+- Summary: the routes from the page to the server are the data store (`ServerBoundDataStore`) and closing the DDUI screen (`ServerBoundDataDrivenScreenClosed`).
+- When a screen is swapped and reopened, the client reports the previous form's close after the new form opens. Use a new `FormID` per form and treat a close packet as a close only when its `FormID` equals the current form. The data instance (`custom_form_data_1`) can be shared by all forms `{record}`.
+
+## 4. Engine features the page can use `{measured, Windows 1.26.60.5}`
+
+These are results of calling them from server-sent JS. All examples below are in the form called from the page's global scope.
+
+```js
+// Sound effect
+window.__commands__.soundCommandGroup.play("random.click", 1, 1);
+// Translation (client language)
+window.__commands__.coreTranslateCommandGroup.translate("item.diamond.name");
+```
+
+(The actual call binds the `callable` of an entry to that entry, as in the [DDUI guide](./ddui-server-guide.mdx).)
+
+- **Settings**: reads (`vanilla.menus.settings{Boolean,Option,Number,String}Query(id)`) and writes (`updateBoolean`, `updateOption`, `updateNumber` and `updateString` (id, value) of `vanilla_menus_update_settings`) the settings of the settings screen. An id is a name in the tree under `vanilla.menus.settingsGroupQuery("settings-tabs-groups")`, and there are 664. A written value is a game option stored on the device, so it remains after leaving the server. Examples: UI profile `video.ui_profile` (0 classic), content logs `creator.contentLog.gui.enable`, `creator.contentLog.gui.showErrors`, `creator.contentLog.file.enable`, and `creator.scriptDiagnostic.enableClient`.
+- **Sound effects**: `soundCommandGroup.play(name, volume, pitch)` makes a sound (`random.click`, `note.bass`, `ui.drawer_open`). Pack sound names are not verified.
+- **Translation**: `coreTranslateCommandGroup.translate(key)` returns the text in the client language (both vanilla keys and pack `texts/*.lang` keys). A call passing an array as the second argument gave `undefined`. `formatDate(seconds)` returns `10/28/26` and `getHowLongAgoAsString(seconds)` returns `1h ago`.
+- **Clipboard**: `copyToClipboard(text)` of the facet `vanilla.clipboard` copies (Windows). Other devices are not verified.
+- **Large UI**: `vanillaExtraLargeUICommandGroup.setExtraLargeUIEnabled(bool)` switches it immediately.
+- **What can be read**: `core.device.platform` is `{type, inputMethods}`, `vanilla.inGame` is `isInGame` and `isInMultiplayerSession`, and `vanilla.buildSettings` is the game version and build kind. `core.staticFeatureFlag(id)` returns `{enabled}`.
+- **What does not work**: screen reader `coreScreenReaderCommandGroup.read` (TTS is off) and canvas (no `getContext`). The queries `core.input`, `core.device.display`, `core.locale` and `core.deviceInformation` and the facets `vanilla.userAccount`, `vanilla.editor` (`navigateUri`), `vanilla.share` and `vanilla.webBrowserFacet` gave no answer. `core.safeZone` is received as a facet, not a query (send `facet:request` and receive `facet:updated:core.safeZone`. `query:subscribe/core.safeZone` gets no answer) `{code}`.
+- **Page**: SVG elements are created. `requestAnimationFrame` and `performance.now` exist. `localStorage` persists across leaving and rejoining a server but disappears when the game is restarted. `engine` has `on`, `off`, `trigger`, `call`, `translate`, `createJSModel`, `updateWholeModel`, `synchronizeModels`, `createVirtualList`, `registerBindingAttribute` and so on (Gameface data binding).
+- **Caution**: `window.__commands__` also has commands that harm the player (`vanillaWorldStorageCommandGroup.deleteWorld`, `vanillaRealmsDeleteCommandGroup.deleteRealm`, `vanilla_menus_xal_environment.clearUserCredentials`, `personaCommands.equipDefaultSkin`, `coreApplicationCommandGroup.exit`). It means a server that changes the page with an encrypted pack can call them `{inferred}`.
+
+## 5. How a server fixes settings `{record}`
+
+A server can fix some settings for the duration of the connection. For example, it can set a consenting player's UI profile to classic (`video.ui_profile` 0), or turn off content logs for players who are not operators. The setting values are sent in the root of the next DDUI screen that opens, the page writes only when the value differs, and after writing it keeps watching the value and reverts it if the player changes it. The setting keys are in [Server-driven Ore UI screen operations notes](./server-case.mdx).
+
+## 6. Vanilla container screens `{code}`
+
+The game bundle and the vanilla pack have 18 container DDUI screens (`minecraft:inventory_screen`, `workbench_screen`, `furnace_screen`, chests, `base_layout`). Of these, 11 layouts read the data store `container` ([Icons and containers](./geo-item-and-containers.mdx)).
+
+- A layout reads `slots.<group>[i]` (`armorContainer`, `offhandContainer`, `craftingInputContainer`, etc.) of the data store `minecraft` / `container`.
+- A vanilla slot (`Container.Slot`) reads items with the engine query `vanillaGameplayContainerItemQuery(group number, slot)`. The group numbers are hotbar 28, inventory 29, armor 6, offhand 34 and cursor 59.
+- Presses are sent with the engine command `vanillaGameplayContainerAPICommands` (`handleSlotMousePress(button, group, slot, ...)`, `takeAllItems`, `placeOneItem`, `splitMultipleItems`, etc.).
+
+## 7. Things tied to devices and versions `{record}`
+
+- **Bundle names and font names**: when the game updates, match the vanilla bundle file names (hashes) in `gameplay.html` to the install. If they are wrong, the whole in-game Ore UI does not appear. If the pack CSS points to a game font file with `@font-face`, match that name too.
+- **iPad**: Gameface resolves the percentages of an absolutely positioned box against the parent (`body`) size. On iPad the `body` height is 0, so a window sized in percent collapsed into a strip at the top. Set the screen-size box with `vw` and `vh`.
+- **iOS**: the pack's `hbui` folder replaces the game's wholesale, so the vanilla CSS that `gameplay.html` links is not loaded. The `@font-face`, the `body` height and the `--localeSpecificNotoSansFonts` that the bundle sets are all missing. So the pack CSS declares fonts directly with `ui://hbui/fonts` (which opens on iOS too) and names them in the font list. Put Noto Sans KR first for Korean lines. Screens do not depend on the vanilla CSS and JS.
+- **Lines with mixed fonts**: Gameface lays out color spans (`span`) aligned to the top, not the baseline. So the Minecraft font span floats higher than the Noto font span. A line with even one non-ASCII character is drawn entirely in the Noto font.
+- **Pack UUID**: if `header.uuid` or a module `uuid` collides with another server's pack, the client cache gets mixed up.
+
+## 8. GUI scale and safe zone
+
+- The vanilla game page sets the `html` font size to 5 x GUI scale (px) (the `guiScale` provider in the bundle `gameplay-*.js`). So sizes written in `rem` follow along without reading the video settings GUI scale separately. 1 GUI pixel is `0.2rem`.
+- The safe zone (horizontal and vertical 0.9~1) and the screen position (horizontal and vertical -0.1~0.1) come through the facet `core.safeZone`. The margins (px) of the four sides are computed the same way as vanilla and placed in `--oui-safe-top`, `right`, `bottom` and `left` on the body, and recomputed when the window size changes `{code, record}`.
+
+## 9. Strings and translation
+
+- Client markers in text (item names, dates) are converted to the client language by the page and drawn. The `§` colors in server text are based on a dark background, so text on a window is changed to the dark variant color ([UI style](./style.mdx)).
+
+## 10. Media `{measured, Windows 1.26.52, 2026-10-24}`
+
+The "Media" tab of the DDUI test screen loads `<img>`, `<video>` and `<audio>` from the internet (https, http) and from the pack (`/hbui/media/`) and shows element events per cell.
+
+- All internet addresses failed. `<img>` gave `error` and `<video>` gave `error=2` (network). The pack GIF (`/hbui/media/spin.gif`) was drawn.
+- Gameface's `<img>` has no `naturalWidth` (`undefined`).
+- To match the earlier documents saying video supports only WebM (VP8 and VP9, one Vorbis audio track) and `<audio>` is not supported, the MDN example `flower.webm` (CC0, VP8 + Vorbis) was put in the pack, with two cells: muted autoplay and a play-with-sound button. These two cells have not yet been run in game.
+
+## 11. Community notes
+
+These are reports from community conversations (2025-10 ~ 2026-11-13). They were not tested in this repository. The trust markers are the same as in [Community reports and cross-checks](../json-ui/community-reports.mdx). (Source: private-research)
+
+- **CSS**: there is a report that `display` works only with flex, inline and block and `inline-block` does not. `inline` conflicts with the Gameface document in chapter 0. **conflicting** `<br>` is turned off, so mixing formatted `span`s with text containing line breaks is hard.
+- **Pressing a DDUI button from page JS**: hbui has no Script API, so the script and the HTML are connected through a DDUI form (script, DDUI form, HTML in that order). The following form was reported as a call that presses a DDUI button from page JS. It uses `dataStoreButtonPress` from chapter 3 and was not tested in this repository.
+
+  ```js
+  window.__commands__.vanillaDduiDataStoreSetCommandGroup.dataStoreButtonPress.callable("minecraft", "custom_form_data_{instanceId}", "layout[" + index + "[.onClick")
+  ```
+
+- **Drag and drop overlay**: show a custom DDUI form, cover it with Ore UI HTML, intercept input in JS, and send only the result (for example `{type:'move',from,to}`) to the server as a JSON command. Sending directly inside `mouseup` dropped the connection, so it is sent about 120 ms later. Duplicate click prevention is 400 ms, and click versus drag is distinguished at 3 px (6 px for touch). Shift is read from `keydown` keyCode 16 or `event.shiftKey`, and on touch a long press is used as Shift.
+- **Imitating the HUD with DDUI input**: an approach of receiving mouse movement through DDUI to move the screen was tried. DDUI detects Shift and Space. There is a case where the HUD version was removed because of heavy lag.
+- **External content**: the engine blocks external network access from the UI (same as the chapter 1 measurement), so external content must be relayed by the server. There is a case where an external web page was shown through a server proxy.
+- **Per-device speed and version**: there is an opinion that iOS and consoles do not allow JIT so JS is slow while the Google Play version allows it. *unverified* The Switch 2 received a separately built version from 26.60. On Switch 1, if a page intercepts input you cannot leave the screen, so provide a close handler.

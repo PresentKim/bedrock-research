@@ -1,0 +1,171 @@
+---
+title: Conflict table
+description: Verdicts for places where sources disagree (C-01~C-66) and the list of items that need measurement.
+sidebar_position: 15
+sources:
+  - repo-guide
+  - repo-bedrock-core
+  - private-research
+  - advancementpack
+  - mcbejsonuimasterai
+  - repo-testpack
+  - bedrock-samples
+  - cinnabar
+  - repo-ore-ui-loading
+  - private-research
+  - repo-multiselect
+  - netease-mcdocs
+  - bedrock-wiki
+  - ms-learn
+  - repo-survey
+
+---
+
+## Concept: how to read the verdict table
+
+JSON UI material has many contradictory claims (wiki typos, game version changes, experiment errors by authors). This table gives each contradiction an ID (C-nn) and writes the two claims, the basis of the verdict, the verdict and the related rules in one line. Verdict priority puts game measurement and the vanilla exhaustive search first, and if the reconstructed engine (`CN`) differs from measurement, measurement is followed. In the **Verdict** column, `resolved` means one side is confirmed right, `partly resolved` means the scope is split and both are right, and `open` means measurement is needed. Example: C-06 was resolved as "do not use" when a community example using the `%` operator ran into the measured `Invalid expression` assert. A.3 below is a list of 28 experiments whose verdicts can be settled if confirmed in game.
+
+
+
+All the places where sources disagree are collected. The bases of the verdicts are the exhaustive vanilla 1.26.50.4 search (`VN`), the original text of the bedrock-core measurements (`BC-S*`, `BC-facts`), the recheck of the BedrockAdvancements original (`BA-original`), the Bedrock Wiki documents and their edit history (`BW`), and the Cinnabar code that reconstructs the native client and its run results (`CN`, `CN-run`). If `CN` differs from measurement, follow measurement.
+**Verdict** column: `resolved` = one side confirmed right, `partly resolved` = scope split and both right, `open` = measurement needed.
+
+## A.1 Verdict list
+
+| ID | Topic | Claim 1 | Claim 2 | Basis of verdict | Verdict | Rule |
+| --- | --- | --- | --- | --- | --- | --- |
+| C-01 | Types allowed for `collection_name` | Only `stack_panel` and `grid` (BC 6.1-1) | `collection_panel` is also used (MJ chapter 9) | `collection_panel` uses `collection_name` at VN store_common.json:750, 5434 and 9387. In BC-S9 and S11, `collection_panel` declares `collection_name` (custom_form, form_buttons) and works | Resolved: all three allowed, `panel` and `image` rejected | COL-01 |
+| C-02 | The `<` operator | `<` is `Invalid expression` (BC-S9, 2026-09-14) | `=`, `<` and `>` work (BC-facts, BC-S14 `962 < #c < 964`, 2026-09-18) | The same author's later measurement used `<` directly and got true. AP uses `>` in a variable expression. Vanilla uses no comparison operators. 2026-10-21: the S14 expression is a chained comparison and always true (C-41), so it is not evidence of a range check, and only evidence that `<` parsed without an error remains. The CN evaluator implements `<` and `>` (CN-run) | Resolved: `<` and `>` can be used (basis: CN, AP, successful parsing in S14) | EXP-04, EXP-28 |
+| C-03 | `child@$variable` mount | Mounting with a `$gate` passed by the reference point draws nothing, vanilla does it only with the screen's own variables (BC-facts) | AP works with `content@$hover_content` | `@$` appears 413 times in VN, mostly a reference-point variable such as `content@$button_content`. BC's failure came from one setup of the chest router (referencing a child host that declares `$gate\|default` twice) and the cause was not isolated | Partly resolved: works in general. If it fails in that setup, write the name directly | FILE-15 |
+| C-04 | String to number `* 1` | `(#str * 1)` works (BC-facts, BC-S9). BA progress `(#ba_pct_digits * 1)`, AP item ID `(… * 1)` | `(#value * 1)` and `(1 * #value)` are 0, only `(#value - 0)` works (BC-S12, 2026-09-17) | Not used in vanilla. On 2026-10-05, BW-type added a note that "from some version, the conversions `#str * 1` and `#str * #float` do not work". Date order: BA and AP release -> S9 2026-09-14 works -> vanilla 1.26.50.4 sample 2026-09-16 -> S12 2026-09-17 gives 0 -> wiki note. Explained as a version change, not a dispute between sources. 2026-10-21: in the CN reconstructed evaluator, string `*` number is an empty string (CN-28, CN-run `(#s * 1)` gives `''`, `(0 + #s)` gives 35). The `* 1` in working packs was most likely used on a value already reinterpreted as a number, like the result of cutting with `'%.Ns'` (CN-29) | Resolved (cause replaced, code): string `*` number is an empty string, so `* 1` is not a conversion. The version change stays as a secondary hypothesis. Use `(#v - 0)`. `(0 + #v)` also works in the CN model but has no measurement | EXP-16, EXP-31 |
+| C-05 | Unit of `'%.Ns'` | Characters, padding formats such as `%5.3s` (material MJ cited) | UTF-8 bytes (BA encoder `utf8Length`) | The BA original encoder pads in bytes and works. MJ's internal documents also contradict each other (MJ 4.2-9). It also matches the C format meaning. BW-intro is also in bytes (corrected "characters" to "bytes" on 2025-09-18), and lists `%N.Ms`, `%-N.Ms`, `%Ns`, `%-Ns` and `%0Ns` with result examples (the `%0Ns` explanation differs from the 0 fill of `printf` and is suspicious). 2026-10-21: the CN evaluator recognizes only `%.Ns`, and `('%5.3s' * 'abcdef')` is `'abcdef'` (CN-run) | Resolved (unit): bytes, 2 sources. **The padding formats conflict**: BW-intro documents them and the CN evaluator does not cut. No measurement | EXP-09, EXP-25 |
+| C-06 | The `%` operator | Community examples such as Chest-UI use `x % 65536` (MJ 4.2-7) | `Invalid expression` assert (BC-facts, BC-S14) | 2 measurements. Not used in vanilla | Resolved: do not use | EXP-02 |
+| C-07 | `resolve_ancestor_scope` | "To be checked further" in vanilla 1.26.50 (the repository MJ analyzed) | - | VN 0 uses. `resolve_sibling_scope` 53 uses. The engine reads `resolve_ancestor_scope` (NB-09) | Resolved: not used. It exists in the engine but vanilla has 0 uses so it is not recommended | BND-01, BND-25 |
+| C-08 | `scroll_box` | A control type (MJ repository spec) | - | The VN types are `scroll_view`, `scrollbar_box` and `scroll_track`. `scroll_box` is a control name in `ui_common.json` | Resolved: not a type | LAY-02 |
+| C-09 | `grid_fill_direction` values | 4 values such as `left_to_right` (MJ repository spec) | - | VN uses only `vertical` (2 uses). Of the 3 values of BW-doc (`vertical`, `horizontal`, `none`), `horizontal` and `none` have 0 vanilla uses | Resolved: no basis for the 4 values, and 2 of the wiki's 3 values also have no basis | LAY-26 |
+| C-10 | `modifications` targets | The `button_mappings` array, the `target_control` key (MJ repository spec) | Only `controls` and `bindings`, `variables` ignored (BC-facts) | 1 measurement. The engine actually reads `target_control` (NB-02) and does not filter `array_name` by a fixed list (NB-03) | Partly resolved: claim 1 is right about the `target_control` key. The array scope is passed to C-64 | MOD-03 |
+| C-11 | `visible` inside a factory cell | Ignored (BC-S9) | Immediate with `always`, late with the default condition (BC-S11) | The later measurement (S11) explains the cause as binding timing | Resolved: `binding_condition: "always"` | BND-07 |
+| C-12 | Reading durability bindings | Progress-bar-renderer-only, not readable as a general property (BC-S6) | Read with a `collection_details` + `collection` pair and compared and divided (BC-S14) | The later measurement succeeded by changing the binding method | Resolved: readable if the binding pair is matched | COL-07 |
+| C-13 | Empty string literal | An expression containing `('' + #count)` crashes (BC-facts) | Vanilla `(not (#texture = ''))`, BA original `(not (#ba_owner = ''))` and AP `(#text = '')` also use it | The crash experiment put `/` and `''` in together so the cause was not isolated. Comparison is safe in vanilla | Partly resolved: comparison is safe, avoid concatenating empty strings and string division | EXP-21 |
+| C-14 | `#size_binding` unit | A 0~1 ratio of the declared size, draws nothing out of range (BC-S6) | A multiple of the parent size, pixels inside a `[1,1]` frame (BC-S12) | The S6 body itself says the S6 failure was due to the `[0,0]` declaration. S12 is later, round 9. 2026-10-21: CN turns the value v of `#size_binding_x` into `v x 100%` (parent-based) and `_absolute` suffix bindings into pixels (CN-39). The observation (LAY-11) that if you bind only one axis with a `[0,0]` declaration the other axis stays 0 is also explained as "the other axis keeps its declared value" | Partly resolved: it is a multiplier. It leans toward claim 2 (a ratio of the parent size) (code). The upper limit is unconfirmed | LAY-10, LAY-11 |
+| C-15 | The `#propagateAlpha` binding | A usage seen only in AP, engine behavior inferred (AP 4.5) | - | VN hud_screen.json:3567 binds the global `#hud_propagate_alpha` as `#propagateAlpha` | Resolved: vanilla also binds it | BND-15 |
+| C-16 | Integer to decimal `clip_ratio` | BA: `(#ba_pct / 100)` -> `(1 - #ba_frac)` -> `#clip_ratio` (BA original) | Arithmetic is integer, `* 0.3` is 0 (BC-S12). Only the `/` of a float binding was confirmed to give a decimal (BC-S14) | Whether the value obtained with `* 1` is an integer or a float is unconfirmed. 2026-10-21: in the CN reconstruction, decimal literals with a leading digit (`0.3`, `100.0`) are integers and integer division is an integer (CN commit `60adb6048` "The shipping client behaves this way", CN-run). It matches `* 0.3` -> 0 of BC-S12. The true result of `0.9 < (#c / 1000) < 1` in S14 is a chained comparison, so it is not evidence for decimal division (C-41) | Resolved (code, matches 1 measurement): `(#v / 100)` and `(#v / 100.0)` are integers. Make decimals with `(#v * .01)` | EXP-18, EXP-27 |
+| C-17 | When `ignored` is evaluated | At load time, can branch only per pack (BC-S8) | Branches on runtime data with `$title_text` given by the factory (AP 4.1) | Both are explained as "evaluated as a `$variable` at creation time". The difference is whether there is a route for runtime data to enter as a variable | Partly resolved: evaluated at creation time | FILE-17 |
+| C-18 | namespace of a merged file | An error if absent (MJ repository checker) | Works without it (AP release) | Working pack. The checker's own reference pack also has no namespace (MJ chapter 5) | Resolved: can be omitted | FILE-05 |
+| C-19 | `_global_variables.json` registration | A not-registered-in-`_ui_defs` warning (MJ repository checker) | Loaded automatically (AP) | VN `_ui_defs.json` does not register this file either | Resolved: no registration needed | FILE-04 |
+| C-20 | `binding_type` values | A table missing `none` (MJ repository) | `none` in the official enum | VN `none` 1 use | Resolved: `none` exists | BND-03 |
+| C-21 | `grid_rescaling_type: none` | Confirmed in vanilla (MJ repository) | - | VN has `horizontal` 21 and `vertical` 1. `none` is only in the official enum | Resolved: not used by vanilla | LAY-26 |
+| C-22 | Title detection description | "If it starts with `customUI_`" (MJ repository docs) | The actual expression is a containment check | The same repository's expression was checked (MJ 4.2-10) | Resolved: prefix and containment are different methods | HOST-03 |
+| C-23 | Sibling order and drawing | A nuance that sibling order decides the layer (MJ repository docs) | On the same layer sibling order cannot be trusted (BC-rules) | 1 measurement | Resolved: decided by layers | LAY-19 |
+| C-24 | Number conversion `(1 * #v)` etc. | facts: "all arithmetic except addition" (BC-facts) | S12: only `- 0` (BC-S12) | The same problem as C-04. The BW-type note says `* #float` is also broken. 2026-10-21: cause replaced together with C-04 (CN-28) | Resolved (cause replaced, code): the same as C-04 | EXP-16, EXP-31 |
+| C-25 | `font_size` values | Official enum `small/normal/large/extra_large` (BC-facts) | - | VN also uses `medium` 4 times | Resolved: vanilla also uses `medium` | TXT-05 |
+| C-26 | `input_mode_condition` values | Official enum `not_gaze`, `gamepad_and_not_gaze` (BC-facts) | - | VN has `gamepad` 7, `gamepad_and_not_gaze` 4 and `not_gamepad` 1. `not_gaze` is unused | Resolved: use the vanilla values | INP-02 |
+| C-27 | Chat toast `destroy_at_end` | Doubt whether it is destroyed because the value `chat_grid_item` differs from the factory control name (AP 4.5) | - | Vanilla chat in VN also has the same form, instance `chat_item` and value `chat_grid_item`. 2026-10-21: in the CN model `destroy_at_end` erases the nearest ancestor whose instance name matches, and the chat controller gives the lines it creates the instance name `chat_grid_item` (CN-56). Then even if it differs from `chat_item@…` of vanilla `control_ids`, it matches the value | Partly resolved: the same form as vanilla and the name matches in the CN model. No game measurement | ANI-14, ANI-21 |
+| C-28 | `$title_text` of the title factory | No engine documentation evidence, pack behavior is the evidence (AP 4.1) | - | The VN actionbar label uses `"text": "$actionbar_text"` and the title animation uses `$title_fade_in_time`. The same family where the factory injects data as variables | Partly resolved: reinforced by similar vanilla cases | COL-17, HOST-28 |
+| C-29 | A single `variables` object | An array is standard | AP writes an object | VN has 4 objects (realms_settings_screen.json:2557, etc.) | Resolved: both work | FILE-13 |
+| C-30 | Mixing `label()` into an action form | The index and `selection` shift (BC 4.1-(3)) | - | The VN 1.26.50 `form_buttons` factory has `label`, `header` and `divider` rows | Resolved: they enter the same collection, so the shift is structurally correct | COL-19 |
+| C-31 | `collection_index` on a `label` reference | Silently ignored on `label` (BC-facts) | The text carrier in BC compile output gives `collection_index` to a `label` reference (BC 4.1-(4), BC samples home.document.json) | Cannot be judged from vanilla. The text carrier also has a `collection_details` binding, so the cause of working may differ | Open: wrap the label in a panel and give the index to the panel | COL-02 |
+| C-32 | Default of `localize` | Default `false` (BW-doc Text table) | Labels are localized by default (TXT-01, BC-facts measurement) | VN `localize: false` 31 times, `true` once. If the default were `false` there would be no reason to state it 31 times | Resolved: localized by default, the wiki table is a typo | TXT-01 |
+| C-33 | Stable range of numeric item IDs | Above 256 shift when custom items are registered (BC-facts) | As of 1.26.50, -1246~851 are stable, only the 32 of 852~883 shift by the number of custom items and it saturates at 1,569 (BW-ids, updated "26.50" on 2026-09-15) | The wiki updates the table per version. Since the boundary changes per version, the two claims may be observations at different times | Open: the boundary differs per version (1.26.50: 852). Check that version's table or the game before use | ANI-06, HOST-17 |
+| C-34 | Control type `scrollbar_track` | It is a type (BW-doc type table) | - | VN `"type": "scrollbar_track"` 0 uses, `"type": "scroll_track"` 1 use | Resolved: `scroll_track`, the wiki typo | LAY-01, LAY-02 |
+| C-35 | Emoji byte count | Everything above U+07FF is 3 bytes, including emoji (BW-intro) | UTF-8 spec: U+0800~U+FFFF is 3 bytes, U+10000 and above is 4 bytes | Most emoji (U+1F300~) are 4 bytes. Private-use-area glyphs (U+E000~) are 3 bytes | Resolved: emoji are 4 bytes. The wiki is right that `§` is 2 bytes | EXP-09, EXP-24, TXT-13 |
+| C-36 | `size: "default"` | The default and equal to `"100%"` (BW-doc Layout) | The default size of the content, the text size for a label (LAY-03) | Many of the 963 VN `"default"` uses are on a label axis. The omitted value of a panel works as 100%. 2026-10-21: in CN an omitted size is `100%c` if it is the main axis of a stack panel, the texture ratio for a ratio image, and the parent size otherwise (CN-48). The CN author also leaves "omitted = 100%" as needing measurement | Partly resolved (inferred, code): differs by type and axis | LAY-03, LAY-38 |
+| C-37 | The condition of `#size_binding_x/y` | The `use_anchored_offset` property is needed (BW-doc property_bag table) | Works on a static control (BC-S12) | Vanilla's only size binding (hud_screen.json:319 `resizing_xp_bar_with_hotbar`) is used with `use_anchored_offset: true`. 2026-10-21: CN does not require `use_anchored_offset` for size bindings (CN-39). It may be a lenient implementation so it is insufficient for a vanilla verdict | Open: the setup of the S12 experiment screen needs checking. Until then using them together is safer (note the LAY-14 crash combination) | LAY-10, LAY-12, LAY-14 |
+| C-38 | Animation type `clip` | It exists (BW-intro, BW-doc) | - | VN `anim_type` has 8 kinds and `clip` 0 uses. 2026-10-21: the 1.26.50 engine enum `ui::AnimationType` that CN cites has `clip` (CN-55) | Partly resolved: it is in the engine enum. What it clips is unconfirmed | ANI-08, ANI-20 |
+| C-39 | `modifications` operations | Only `insert_back`, `insert_front` and `remove` confirmed (MOD-01) | 11 kinds + the `control_name` and `target` keys (BW-intro) | Use by this project's sources: `insert_back` 11, `insert_front` 4, `remove` 3. Vanilla does not use `modifications`. The engine's operation name table has the same 11 kinds (NB-01), and the second criterion is `target_control` then `target` (NB-02) | Names confirmed (NB). The in-game behavior of the other 8 is unverified | MOD-01, MOD-14, MOD-17, MOD-18 |
+| C-40 | Contradiction inside the wiki | The BW-best performance example uses `((#hud_title_text_string * 1) > 0)` | BW-type: `* 1` no longer works | The same as the C-04 verdict | Resolved: read the BW-best example as changed to `- 0`. The cause is C-04 (string `*` number is an empty string) | EXP-16, EXP-31 |
+| C-41 | Chained comparison | `962 < #c < 964` and `0.9 < (#c / 1000) < 1` worked as range checks (EXP-04, BC-S14) | It binds from the left into `boolean < number`, so the result is unrelated to `#c`. `0.9` is also the integer 0 (CN-run) | The CN precedence table (CN-27). The S14 result is indistinguishable from an always-true expression | Resolved (code): no chained comparison, split with `and` | EXP-04, EXP-28 |
+| C-42 | Cutting a literal string | `'%.Ns' * 'literal'` does not cut (EXP-10, BC-facts) | The evaluator also cuts literals (`('%.3s' * 'abcdef')` gives `'abc'`, CN tests E19~E23) | If the measured expression had no `#`, the binding itself would not hold (BND-05, CN-33) | Partly resolved (inferred): quite possibly caused by the rule for binding expressions without `#`, not by the operator. In creation-time constant expressions (variable values, etc.) it is thought to cut. Measurement needed | EXP-10, BND-05 |
+| C-43 | A binding expression without `#` | The whole `bindings` array of the control is discarded (BND-05, BC-S12 `Must define a source property name`) | Only that one binding is discarded (CN-33) | 1 measurement versus reconstructed code. CN may be a lenient implementation (CN 2.2) | Measurement first: BND-05 kept | BND-05 |
+| C-44 | A static `offset` binding | The position of a static control cannot be bound (LAY-05, BC-S12) | Writing `[x, y]` to `#offset` changes it (CN-39) | It may be a difference by creation site (static, factory) (LAY-12) | Measurement first: LAY-05 kept | LAY-05, LAY-12 |
+| C-45 | A bound `alpha` | Only 0 and 1 apply (LAY-13, BC-S12) | Accepts the number as is (CN-39) | If S12 computed a literal like `0.5` in the expression it became the integer 0 and may have looked like "only 0 and 1" (CN-26, EXP-27) | Open: measure again with `.5` | LAY-13 |
+| C-46 | Scope of redeclaration and `modifications` | Redeclaration in a file at a different path is ignored, `modifications` is per path (FILE-22, MOD-02, BC-facts) | If namespace and name are equal, any file is merged (CN) | The CN document records this simplification as a difference from vanilla (CN 2.2) | Measurement first: existing rules kept | FILE-22, MOD-02 |
+| C-47 | `remove` of an inherited child | All modifications of the file silently become invalid (MOD-05, BC-facts) | Leaves only a diagnostic and applies the rest (CN) | CN 2.2 records it as a difference from vanilla | Measurement first: MOD-05 kept | MOD-05 |
+| C-64 | The arrays `modifications` reaches | Only `controls` and `bindings`, and `variables` is ignored (MOD-03, BC-facts) | `array_name` looks up the same-named member of the definition, so any array is resolved (NB-03) | It is resolved but may have no effect because variables are fixed earlier than that. Reading the binary could not tell the effect | Unresolved: do not use anything outside `controls` and `bindings` before measuring | MOD-03, MOD-25 |
+| C-65 | Action form data inside a layout our factory created | It reaches only grid cells, and fixed `collection_index` cells and inner factories are empty even with `always` (COL-40, DF) | Fixed cells, radio toggle cells and a stack factory all receive it. Bindings must be `always` to be filled from the start (COL-47, FFR) | DF is Windows, FFR is mobile. FFR's router is at the very top of `$screen_content`. The position of DF's router was not checked in this table | Partly resolved: a router at the top of the screen + `always` works (FFR). For other positions follow COL-40 | COL-40, COL-47 |
+| C-66 | Radio toggles with different parents | They are one group only among siblings, so they are not exclusive in a grid where each cell has a different parent (INP-32, DF) | With the same `toggle_name`, only one is selected even when split into row stacks with different parents (INP-35, FFR) | FFR's toggles are placed statically in the definition. How DF's cells were created was not checked | Unresolved: static toggles are bound regardless of parent (FFR). Do not expect toggles in grid and factory cells to be exclusive before measuring | INP-32, INP-35 |
+
+## A.2 Existing analysis sentences corrected in this comparison
+
+The source documents were not changed. Below are the places where this guide wrote differently from the sources.
+
+| Source | Gist of the original | This guide |
+| --- | --- | --- |
+| BC 6.1-1 | `collection_name` only on `stack_panel` and `grid` | Includes `collection_panel` (C-01) |
+| BC 6.4-1 | `#size_binding` is a 0~1 ratio, draws nothing out of range | A multiplier on the declared size (C-14) |
+| BC 6.3-3 | `gate@$gate` is not drawn, vanilla only with screen variables | Works in ordinary definitions (C-03) |
+| BC 6.2-7 | An empty string literal expression crashes | Comparison is safe (C-13) |
+| AP 4.5 | The `#propagateAlpha` binding is a usage seen only in this pack | The vanilla HUD also uses it (C-15) |
+| AP 4.5 | Doubt about the `destroy_at_end` name mismatch | The same form as vanilla (C-27) |
+| BC 4.1 | Explanation of form button entries | Reflects the addition of `header` and `divider` rows in 1.26.50 (C-30) |
+| BW-doc | `localize` default `false`, type `scrollbar_track` | Localized by default (C-32), `scroll_track` (C-34) |
+| BW-intro | Emoji 3 bytes | 4 bytes (C-35) |
+| BW-best | The `* 1` performance example | `- 0` (C-40) |
+| BC-S14 | Confirmed `<` works from the true result of `962 < #c < 964` | A chained comparison and always true. Basis replaced (C-02, C-41) |
+| BC-S14 | Confirmed the decimal result of float division with `0.9 < (#c / 1000) < 1` | A chained comparison so not evidence. `0.9` is also the integer 0 (EXP-18, C-16) |
+| BW-intro | Padding formats such as `%N.Ms` | The CN evaluator does not cut, conflict (C-05) |
+| This guide FILE-19 | An example that put `ignored` on a top-level definition | Fixed to the AP original form that puts it on a child (FILE-34) |
+
+## A.3 Items that need measurement
+
+These are items whose verdicts above can be settled if confirmed in game. Measure them one at a time, drawing the expression and its negation together (DBG-03).
+
+1. Compare whether `(#s * 1)` is empty text side by side with `(#s - 0)`, and whether `(('%.3s' * #s) * 1)` is a number (C-04, C-24, EXP-31). Since the cause was replaced by the CN reconstruction, this is a check on the current version
+2. Compare `(#v * .3)` and `(#v * 0.3)` side by side, and whether `(#v * .01)` gives an intermediate `#clip_ratio` (EXP-27, C-16). The impact is greatest
+3. Which of `('' + #x)` alone and `(#str / 2)` alone causes the crash (C-13)
+4. The cause of the chest router setup where the `child@$variable` mount failed (C-03)
+5. The upper limit of size bindings and relayout on an open screen (C-14, LAY-15)
+6. ~~The `property_bag` dictionary lookup router (HOST-06)~~ -> resolved: it works (DF, COL-39). But inside controls that factory created, action form data reached only the grid (COL-40). With a router at the very top of the screen and bindings set to `always`, fixed cells and inner factories also received it (COL-47, C-65)
+7. Whether variables can be passed to cells with `factory_variables` (COL-15, BND-14)
+8. What name `destroy_at_end` must match to destroy (C-27)
+9. Touch and controller hover with HUD `always_accepts_input` (INP-16)
+10. The modal form dropdown page-switch pattern (HOST-13)
+11. The NPC dialogue button count limit and NBT extension (HOST-24)
+12. ~~Whether a second actionbar factory can be placed (HOST-30)~~ -> resolved: it can (TP, 1.26.52)
+13. Whether the value is read when `collection_index` is given directly to a `label` reference (C-31)
+14. The `(0 + #v)` conversion the wiki lists as an alternative (C-04, EXP-16)
+15. Whether `#size_binding` needs `use_anchored_offset` (C-37, LAY-10)
+16. The remaining `modifications` operations such as `insert_after` and `replace` (C-39, MOD-14)
+17. The `visibility_changed` latch pattern (BND-18)
+18. Whether a grid gives space to hidden items (LAY-31)
+19. Playing an animation by button ID (INP-20)
+20. The `'%N.Ms'` padding formats, especially whether `('%5.3s' * #s)` cuts (C-05, EXP-25)
+21. Whether `(962 < #c < 964)` is true even when `#c` is put outside the range (C-41, EXP-28)
+22. Whether `"$hide": true` at the reference point turns on `"ignored": "$hide"` of the definition (FILE-34)
+23. Whether `"100c%"` is parent-based and whether `"50%cm"` is the largest child as is (LAY-36, LAY-37)
+24. Whether giving the binding `#alpha` `.5` makes it translucent (C-45, LAY-13)
+25. ~~Whether `%` disappears from `"50%"` label text (TXT-17)~~ -> resolved: it disappears (DF, TXT-23)
+26. Whether `#size_binding_x` 0.5 is half the parent or half the declared size (C-14, LAY-10)
+27. Whether `('%.3s' * 'abcdef')` is cut in a creation-time constant expression such as a variable value (C-42, EXP-10)
+28. Whether the icons of Ore UI screens change when a resource pack with changed item textures is turned on (ALT-12) -> partly resolved: a server pack's button textures were used in Ore UI through `pack://` (OL, ALT-15). The item icons themselves are not yet
+
+**2026-10-20 in-game measurement record (TP).** An attempt was made to measure the items above with a test pack on Windows 1.26.52. Only item 12 was confirmed. When an action form was opened with the server form probe screen attached, the client froze (twice) or exited (once), so the remaining items could not be measured (DBG-19). The test pack generator is `_testpack/gen.py`, and the reduced setup made with `SAFE=2` (only expression text and YES/no gates) has not been run yet.
+
+**2026-10-22 research server measurement (DF).** Items 6 and 25 were confirmed. The dictionary lookup router gate worked without freezing or exiting (unlike the DBG-19 setup of TP, `stack_panel` + `control_ids`). The reinterpretation of EXP-30 was the same in game (EXP-44).
+
+## Proposals (not applied)
+
+Below are rule proposals from the additional material survey. They are numbered in the merge report but have not yet been reflected in the rulebook in the body above. The numbers are the final IDs in the merge report, and the strength of evidence follows the verification level of the original proposal. Check before using them.
+
+The conflict numbers C-48~C-63 are renumbered by the merge report from the temporary numbers of several survey documents. They are not yet in the verdicts up to C-64 in the table in the body. The verdicts are those of the merge report.
+
+| ID | Topic | Verdict (proposal) |
+| --- | --- | --- |
+| C-48 | The axis order of `grid_position`. Guide LAY-29 wrote `[row, column]`, but in 20 vanilla grids `grid_dimensions` is `[column count, row count]` and the first value of a child `grid_position` is the column (in the 3x3 crafting cells of `inventory_screen.json:1200`, `crafting_input_item_top_mid` = `[1, 0]`, the children of the `[4, 1]` grid at `trade_screen.json:327` are `[0, 0]`~`[3, 0]`, the children of the armor `[1, 4]` grid at `inventory_screen.json:1054` are `[0, 0]`~`[0, 3]`) | Resolved: `[column, row]`. Fix LAY-29 |
+| C-49 | The offset sign of right and bottom anchors. One editor comment said the x axis is flipped on a right anchor so positive is inward. The distribution over 206 vanilla files has right-anchor x negative 104 to positive 37 and bottom-anchor y negative 190 to positive 45, and `common.close_button` gives `top_right` `[-2, 2]` (`ui_common.json:3239-3246`) | Resolved (vanilla): not flipped |
+| C-50 | Is a pack file at the same path as vanilla a merge or a replacement. One tool saw it as wholesale replacement, but another comment in the same tool observed that a `long_form` redeclaration still inherits the vanilla-based 260x210 | Resolved: merge (FILE-21) |
+| C-51 | Content-based size and stack layout (editor preview) | Resolved: guide kept |
+| C-52 | Can a remainder be made with an expression. The generator (AsaJS) lowers it to `(a - (a / b * b))`, and CN's `divide` is `i32::wrapping_div`, so it is integer division. `((#t - 0) / 65536)` from Chest-UI run in CN is 306. Measurement only tested the `%` operator | Partly resolved (code): there is no operator and the division expression works according to the code. Measurement needed |
+| C-53 | Is a JSON real-number variable (`"$max": 20.0`) a real number inside an expression. Code evidence that at the resolution stage it is inserted as the text `20.0` and decimal literals with a leading digit are integers, so `((20.0 - 15) / 20.0)` becomes 0 | Open. Multiply by a dot-leading literal like `((20 - #hp) * .05)` |
+| C-54 | The `#item_id_aux` numbering system. The constants of vanilla `beacon_screen.json:155-219` are legacy ID x 65536 (diamond 264, emerald 388, netherite ingot 742), and working packs use runtime IDs (in 26.40 diamond is 306 and 264 is cod) | Open. See C-33 in the body (the boundary is 256 through 26.30, 850 in 26.40, 852 in 26.50) |
+| C-55 | Resolution of `@name` without a namespace. Vanilla has both a case where a short name under inline inheritance is looked up in the base namespace (`command_block_screen.json:1010-1038`) and a case where top-level inheritance uses the file namespace (`trade_screen_pocket.json:346`) | Open (differs by context). Always write `ns.name` |
+| C-56 | The `source_control_name` search scope without `resolve_sibling_scope`. NetEase said only itself and its children, but vanilla `how_to_play_screen.json:142-146` reads a non-descendant toggle without the flag | Resolved: the CN and vanilla side (breadth-first from the screen root, BND-25) |
+| C-57 | Must a vanilla-path copy be registered in `_ui_defs.json` | Resolved: not needed (registering is presumed harmless) |
+| C-58 | The flipbook start frame key. `initial_frame` of the NetEase docs has 0 vanilla uses and `initial_uv` 33 | Resolved: `initial_uv` |
+| C-59 | The default when `binding_type` is omitted. A tutorial said collection, but the reference, vanilla and CN say global | Resolved: `global` |
+| C-60 | Errors in the property types and list of the MS Learn reference (`font_scale_factor` Boolean, `grid_item_template` Integer, `factory` String, China-edition-only properties mixed in) | Resolved: adopt vanilla |
+| C-61 | The `#anchored_offset_value` binding on a static control | Open (center anchor hypothesis) |
+| C-62 | A grid that left `grid_dimension_binding` | Open. Removing the property is recommended |
+| C-63 | How does a lang key whose value is a single space (all 29 files have a single space, 28 with a BOM) behave. It disagrees with TXT-10 | Open (path difference hypothesis) |
+
+Update proposals for existing rows: add the Chest-UI record to C-04 (the `* 1` on the original string worked until around 1.21.130), add to C-06 why Chest-UI HEAD seems to work even though it uses a `%` expression, and EXP-38, and change C-33 to "resolved (version change)" with the boundary (256 through 26.30, 850 in 26.40, 852 in 26.50). Whether `red_shrub` 850 and `shelf_mushroom` 851 in 26.40 really shift is left as item 31 of the measurement list.

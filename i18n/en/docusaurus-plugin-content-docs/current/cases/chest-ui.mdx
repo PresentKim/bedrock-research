@@ -1,0 +1,130 @@
+---
+title: "Chest-UI (reskinning server forms as chest GUIs)"
+description: "A pack that makes ActionFormData look like Java-server-style chest and furnace GUIs. Numeric item IDs and the item_id_aux expression, an invisible title flag, and turning off layouts at the creation stage"
+sidebar_position: 8
+sources:
+  - chest-ui
+  - bedrock-wiki
+  - repo-guide
+---
+
+## What it is
+
+Chest-UI is a behavior pack plus resource pack that reskins the Script API's `ActionFormData` to look like a **Java-server-style chest GUI** (1 to 54 slots, furnace, player inventory mirror). It started in 2023-07 and has updated its numeric item ID table with each Minecraft version, and the last update is 26.40 (2026-08-14, commit `115d95c` "26.40 Update", 112 commits). The license, confirmed by opening the clone's `License` file, is **CC BY 4.0**, so it can be excerpted with attribution (Source: cs-chest-ui). The fork `Aex66/Chest-UI` is a copy that stopped at the original `7dbfd13` (2026-01-06), has no commits of its own, and is 8 commits behind the original, so only the original is used as evidence.
+
+The value of this repository is that it shows, commit by commit, **how the numeric item IDs and the `#item_id_aux` expression changed with each version**. The manifest's `min_engine_version` is 1.21.0, but the ID table differs per version, so the real target version is the version in the commit message (26.40).
+
+## How it works
+
+1. The script builds an `ActionFormData`. At the very start of the title rawtext it puts the size flag `§c§h§e§s§t§2§7§r`, and for each button it puts `stack#NNdur#NN§r name §r\n description` text and an icon string. The icon is a texture path or the numeric string `(ID + correction) * 65536 + (enchanted ? 32768 : 0)`. When the inventory is on, the player's 36 inventory slots are appended after it as buttons of the same form.
+2. `RP/ui/server_form.json` redeclares `long_form` without `@` at the same path as vanilla and changes `type: panel` and `controls`. The vanilla look, the chest panel, and the furnace panel each show up through a title contains check.
+3. `chest_panel` has templates for 1, 5, 9, 18, 27, 36, 45, and 54 slots, and sizes that are not used are made `ignored` with `$disable_N_slots_layout: true` in `_global_variables.json`, so they are not created.
+4. The chest slots are built by a `grid` (`grid_dimensions`, `collection_name: form_buttons`), and the inventory and hotbar are built from 36 children with a fixed `collection_index`.
+5. One slot receives `#form_button_texture` and draws an image if the first 8 bytes are `textures`, otherwise it puts `#item_id_aux` into `inventory_item_renderer` and draws that. A `hover_text_renderer` tooltip is attached to the hover state.
+
+## Key techniques
+
+### 1. Turning off layouts by size at the creation stage
+
+The same template is referenced 8 times, each with `"ignored": "$disable_N_slots_layout"`. Creating even the templates that will not be used would produce 54 slots × 3 states × several renderers, so creation itself is blocked (a practical case of the COL-10 principle). It is a global variable and visible in any scope, so it does not conflict with FILE-34.
+
+<Excerpt src="chest-ui" title="Chest-UI, _global_variables.json" path="RP/ui/_global_variables.json">
+
+```jsonc
+{
+	"$show_inventory": true, // Set to false if don't want to show inventory. Not recommended for low end devices.
+	/*
+		*It is important to only enable the layouts that you're going to use and disable others to decrease lag*
+	*/
+	"$disable_furnace_ui": false,
+	"$disable_1_slots_layout": true,
+	"$disable_54_slots_layout": false
+}
+```
+
+</Excerpt>
+
+### 2. The invisible title flag
+
+If you put a `§` before every character, as in `§c§h§e§s§t§5§4§r`, every character is consumed as a format code, so the flag is not revealed in the title even without the resource pack or on a vanilla screen. The UI finds it with the contains check `(#title_text - '§c§h§e§s§t')`. The trailing `§r` resets the formatting of the title that follows (proposed HOST-34). upgrader uses the same method.
+
+### 3. The `%` expression in `#item_id_aux` and what it really is
+
+The chest slot binding at the current HEAD is as follows.
+
+<Excerpt src="chest-ui" title="Chest-UI, chest_server_form.json" path="RP/ui/chest_server_form.json">
+
+```json
+{
+    "binding_type": "view",
+    "source_property_name": "((#form_button_texture - (#form_button_texture % 65536)) / 65536)",
+    "target_property_name": "#item_id_aux"
+}
+```
+
+</Excerpt>
+
+`%` is not an operator (EXP-02). Running it in the Cinnabar evaluator makes `(#t % 65536)` null, and `(#t - null)` is the original value turned into a number, 20054016. The `/ 65536` just outside the parenthesis where the `%` group failed is also not applied, so the result stays `ID × 65536 (+ 32768)`. This matches the vanilla `#item_id_aux` convention (ID × 65536 + data) exactly, which is why the pack worked up to 26.40. If it had been a real remainder operation the result would be 306, which does not match the convention and would also erase the enchant bit. However, as BC measured, a development build can hit an `Invalid expression` assert each time the screen opens, and **the proper expression that gives the same result is `(#form_button_texture - 0)`** (EXP-16, proposed EXP-38).
+
+### 4. When `* 1` broke
+
+| Date | Commit | Expression |
+| --- | --- | --- |
+| 2023-08-09 | `022ccf2` | `(#form_button_texture * 1)` |
+| 2024-12 ~ 2025-11 | Several ID update commits | `* 1` unchanged |
+| 2026-01-06 | `7dbfd13` "1.21.131 Update ... UI will now display items properly" | Chest slots replaced with the `%` expression |
+| 2026-02-01 | `deddb15` "fix inventory issues" | Inventory slots replaced too |
+
+The operand of `* 1` was the original collection string, and it drew icons for over two years. Then it broke in the 1.21.130 line. So the "version change" that was the secondary hypothesis of C-04 is confirmed by a real working pack record. It also matches the wiki's 2026-10-05 note.
+
+### 5. Changes in the numeric item ID table (the basis for C-33)
+
+| Commit | Target | Shift boundary | Apple | Diamond |
+| --- | --- | --- | --- | --- |
+| `8683ef1` 2025-03-28 | 1.21.70 | `ID < 256` | 278 | 328 |
+| `7dbfd13` 2026-01-06 | 1.21.131 | `ID < 256` | 285 | 335 |
+| `b5397cd` 2026-06-20 | 26.30 | `ID < 256` | 285 | 335 |
+| `115d95c` 2026-08-14 | 26.40 | `ID < 850` | 880 | 306 |
+
+Up to 26.30, the 17 bundles, the wind charge, and others sit right after 256, so every ID from 256 up shifted by the number of custom items. In 26.40 the 32 items that shift (7 spears 852~858, 17 bundles 859~875, wind charge, 2 trial keys, mace, apple, glow berries) were moved to the end of the table (850~881). Combined with the wiki's 26.50 table (852~883), C-33 is "resolved as a version change". The clone's `forms.js` writes this boundary as `ID < 850`.
+
+<Excerpt src="chest-ui" title="Chest-UI, forms.js" path="BP/scripts/extensions/forms.js">
+
+```js
+ID === undefined ? targetTexture : ((ID + (ID < 850 ? 0 : number_of_custom_items)) * 65536) + (enchanted ? 32768 : 0)
+```
+
+</Excerpt>
+
+The lower 16 bits are the data value, and adding 32768 turns on the enchant glint (proposed ANI-23). Blocks (negative IDs) do not shift for custom blocks.
+
+### 6. Other techniques
+
+- **A creation-time expression in `collection_index`**: `"$start_index": "(($size - '§c§h§e§s§t' - '§') * 1)"`, `"collection_index": "($start_index + 9)"`. One template builds fixed slots whose start index differs per size (proposed COL-32). Here `* 1` is applied to the result of a subtraction, so it is harmless.
+- **A fixed header in the button text**: in `stack#64dur#10§r...`, the quantity is taken as `(('%.8s' * T) - ('%.6s' * T))` and the durability as the difference of `%.14s` and `%.12s` (EXP-11).
+- **The `'§z'` prefix**: an unknown format code is not visible on screen, so it is used as an invisible prefix that keeps a result that would be reinterpreted as a number as a string (proposed TXT-20).
+- **A tooltip that follows the cursor**: inside a hover control put `type: custom`, `renderer: hover_text_renderer`, `allow_clipping: false`, and `layer: 30`, and bind `#hover_text`. Vanilla uses the same renderer.
+- **A word without quotes** (`(%.14s * #form_button_text)`) gives the same result as the quoted expression. It still breaks at spaces and operators, so use quotes (proposed EXP-41).
+
+## Problems
+
+| Item | Content |
+| --- | --- |
+| `%` expression | The result is right but by accident. It can cause an assert in development builds and a Marketplace certification failure |
+| Durability bar | `"$one": 1.0` and `(($clip_max - #ratio) / $clip_max)` become integer 0 in the Cinnabar model and the bar fills completely. `((99 - #ratio) * .0101)` is safe (EXP-27, C-53) |
+| Custom item count | The custom items of other add-ons must be written by hand for the ID correction to be right. The README also recommends texture paths |
+| `long_form` redeclaration | It cannot coexist with other server form UI packs (upgrader and others). Only the `controls` of the later pack remain (proposed MOD-21) |
+
+## Relation to our rules
+
+| Rule ID | Relation |
+| --- | --- |
+| EXP-02, EXP-16, C-04, C-06 | Why the `%` expression seems to work, and the basis for the `* 1` change |
+| ANI-06, HOST-17, C-33 | The version change of the numeric ID boundary |
+| COL-06, COL-10 | Fixed index slots, turning off at the creation stage |
+| FILE-21, MOD-09, MOD-13 | The competition over redeclared `controls` and the wrapping alternative |
+| HOST-03, EXP-07, EXP-11 | Title flags and the contains check, fixed-width headers |
+
+## Items that need measurement
+
+Whether `(#v - 0)` and the `%` expression give the same icon, and the `Invalid expression` in the Content Log; whether a `"$max": 20.0` variable works as a real number (C-53); whether IDs 850 and 851 shift in 26.40 and 26.50; whether adding 32768 to `#item_id_aux` makes the glint appear; and whether `§z` is invisible on every font and platform.

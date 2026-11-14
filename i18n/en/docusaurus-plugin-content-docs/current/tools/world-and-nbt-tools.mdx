@@ -1,0 +1,174 @@
+---
+title: "World, structure and NBT tools"
+description: "NBT editors and libraries, structure export, world conversion, Editor mode"
+sidebar_position: 7
+sources:
+  - private-research
+---
+
+This page covers tools that read and edit world files, structures and NBT, and Editor mode. One key fact first. All Bedrock data (including `.mcstructure`) is **little-endian NBT**, and the header of `level.dat` is two 4-byte numbers (the storage version, and the NBT size without the 8-byte header) (Source: private research).
+
+## NBT editors and libraries
+
+| Tool | Use | Notes |
+|---|---|---|
+| NBTExplorer | Checking a world's dynamic properties | Universal Minecraft Editor did not show dynamic properties |
+| NBT Studio | Desktop NBT editing | |
+| Bedrock-World-Editor (8Crafter) | Entity NBT, LevelDB, dynamic properties | Supports Linux |
+| MCBE Essentials structure editor | trial spawner, vault, suspicious sand NBT and loot tables | Web |
+| VS Code NBT viewer (`Misodee.vscode-nbt`) | Deepslate-based. 3D preview only for Java `.nbt` | `.mcstructure` shows only the NBT tree |
+| NBTify (JS), nbtx (Python), Dragonfly LevelDB (Go), Amulet API (Python) | Libraries | nbtx has no dependencies and has a CLI |
+
+A simple read goes like this. When reading a `.mcstructure` with NBTify in JS, turn on the little-endian option (the library's `read` option). The exact call form differs by library version, so check its documentation.
+
+## Structures and worlds
+
+One structure block goes up to 64x64x64. On Android, structure block export is blocked (`Export operation not supported on this platform`), and iOS never supported it. Marketplace and template worlds are protected, so import/export does not work, and editing the NBT breaks the world. World conversion and generation and `.brarchive` are in the notes below.
+
+## Editor mode
+
+Editor mode is Mojang's world editing environment, and tools are extended with the `@minecraft/server-editor` module. It works only in editor project worlds, and its use on BDS has limits. Per-version features and per-tool pitfalls are in the notes below.
+
+## Community notes
+
+The following is information on the NBT format, structure export, world conversion, MCB binaries and Editor mode gathered in the community survey.
+
+Terms such as `(confirmed)`, `(single report)` and `(conflicting)` are reliability markers of the reports.
+
+### World, structure and NBT tools
+
+#### NBT format and editors
+- **Format**: all Bedrock data (including mcstructure) is little-endian NBT. The `level.dat` header is two 4-byte numbers. The first is the storage version (8. 10 in 1.26.50.27, that is `0A 00 00 00`), and the second is the NBT size without the 8-byte header.
+- **Desktop and web editors**
+  - NBTExplorer (`https://github.com/jaquadro/NBTExplorer`, checking dynamic properties. Universal Minecraft Editor did not show them)
+  - NBT Studio (`https://github.com/tryashtar/nbt-studio/releases`)
+  - Bedrock-World-Editor (8Crafter, `https://github.com/8Crafter-Studios/Bedrock-World-Editor`, including Linux, entity NBT and LevelDB, dynamic properties)
+  - Bedrock Tool Chest (bedrocktoolchest.com)
+  - KaisNBTEditor (`https://kaim-ru.github.io/kaisnbteditor/`, enchantments beyond the limit)
+  - MCBE Essentials structure editor (`https://mcbe-essentials.github.io/structure-editor/`, trial spawner/vault/suspicious sand NBT, loot tables)
+  - The .andexter NBT editor (beta). Universal Minecraft Tool is subscription-based. Amulet became paid.
+  - The mobile Toolbox and MCC Tool Chest PE are outdated.
+  - The VS Code NBT viewer opens mcstructure and world settings tabs. NBT Studio fails on a trial spawner. The level.dat display of bedrocktoolchest.com is limited. Dovetail is also mentioned.
+  - Bedrock-World-Editor is extending support to PE v0.1.0 Alpha worlds. Wiki: `https://wiki.8crafter.com/bwe/`
+- **format_version 2 `.mcstructure`**: it is a compressed format, so it shows as a byte array in NBT Studio. The latest Bedrock-World-Editor opens it (2026-11).
+  - Guide: `https://rentry.co/mcbenbteditingtutorial`
+- **Libraries**
+  - JS: NBTify (`https://github.com/Offroaders123/NBTify`, SNBT), a readonly fork. prismarine-nbt gives a direct-eval warning in rolldown. A Rust napi binding was slower than pure JS because of the cost of passing objects.
+  - Python: PyNBT, nbtx (`https://github.com/phoenixr-codes/nbtx`, no dependencies, includes a CLI, may not support the server protocol NBT variant)
+  - Go: Dragonfly's LevelDB library
+  - Amulet API (Python, offline world editing)
+
+#### LevelDB and old world formats
+- **Structure**: a world's `db` is a key-value store split into `.ldb` files and has keys such as `~local_player` and `player_<id>`. `level.dat` is separate. The write-ahead log (WAL) uses CRC32, SSTs are replaced by atomic rename, and MANIFEST is appended to. Corruption mostly arises during compaction, and there is a case where deleting one `.ldb` saved a 70GB world. `.mcworld` is a zip. The claim that closing the window corrupts the world was not settled. (single report)
+- **It cannot be opened with vanilla LevelDB**: Bedrock uses a different compression, so it cannot be opened with the vanilla LevelDB library. The game's `.ldb` blocks start with `0x78 0x9C 0xED`. JS libraries: `@8crafter/leveldb-zlib`, npm `mcbe-leveldb`. Bedrock does not leave crash logs.
+- **Structure storage**: structures saved in a world go in as LevelDB keys.
+- **Old world formats**: the village data keys are `villages` in v0.12.0.1, `mVillages` in v0.15.0, and now `VILLAGE_<dimension>_<uuid>_<type>` (`_PLAYERS` is reputation). v0.12.0.1 crashes if `SizeOnDisk` is missing. From PE 0.9.0 alpha to beta 1.2.0.11 there was a "fragile LevelDB" bug. Map data cannot be erased without third-party tools.
+
+#### Structure export (especially on mobile)
+- **Size and content limits**: one structure block goes up to 64x64x64. Amulet cannot export structures that contain entities. Marketplace and template worlds are protected, so structure import/export does not work, and editing the NBT breaks the world.
+- **Removal of mobile export**: on Android there is no structure block export ("Export operation not supported on this platform"). iOS never supported it. The RP trick that revived the export button was blocked in 1.21.130 (beta) (there is also the phrasing "after 1.21.124"). The Export Structures pack (`https://mcpedl.com/export-structures-add-on-1-21/`) works only up to 1.21.120. (confirmed)
+- **Workarounds**
+  - HoloPrint (`https://holoprint-mc.github.io/`): upload a world and it extracts structures from LevelDB. The result may lack `format_version`, which gave "format_version field is missing" in LeviLauncher.
+  - The world export re-enabling RP (`https://mcpedl.com/vitallis-word-exporter`, JSON UI based) or the Android export button of Ore UI Customizer
+  - The LeviLauncher menu
+  - extract-mcstructure (`https://github.com/destruc7i0n/extract-mcstructure`, needs amulet-nbt 2.x and leveldb-mcpe)
+  - Bloxelizer (`https://bloxelizer.com/converter`, one report of broken results)
+  - ModelExtractor (`https://structuralab.com/ModelExtractor.html`, needs a login and uploaded files are deleted after 24 hours. It uses a copy of amulet core. No whole-world export option)
+  - PC tools: `.mcstructure` export of Amulet Editor (Amulet became paid in 2026-01. You can build it from source but commercial use needs a license), VS Code `jeanmajid.mcstructure-editor`, mcstructure-converter.vercel.app, Amulet-Core
+  - Keep an old version installed, or use a PC or Realms
+  - On some devices you can copy worlds directly from `android/data/com.mojang.minecraftpe/files/games/com.mojang/minecraftWorlds`.
+- **Conversion**
+  - Java .nbt -> mcstructure Python tool (`python .`, `--namespace`, `MC_VERSION` constant), JaylyDev nbt-to-mcstructure, Bloxelizer (no bulk processing)
+  - A zip of all 1.21.131 vanilla structures converted to mcstructure (no jigsaw files)
+  - Vanilla feature samples: `https://github.com/llgava/mcbedrock-features`
+- **Large structures**: beyond 64, split into jigsaw pieces. Turn air into structure void with `/fill ~~~ ~~~ structure_void replace air`. To load while keeping the void you must edit the NBT. A large `.mcstructure` is loaded with a structure block made outside the game. If you fix the structure size in NBT and import in 1.21.120, it reverts to the original size.
+- **structure-to-function** (`https://jeanmajid.github.io/commands/structure-to-function/`): turns command block builds into `.mcfunction`. Conditional and impulse blocks are ported by hand (tick.json, `/execute`).
+- **Block geometry databases**: Structura, HoloPrint, Bedrock ASI and Scaffold each keep block shapes by hand. There was a proposal for a shared DB (BedrockBlockBuster) and a test of `glb2bedrock.py`, which breaks a GLB export into cubes. Structura is outdated and Structura Lab gets about 200 thousand views a month.
+- **mcstructure preview**
+  - Structures Studio (`https://olivaresstudios.eu/studio`, `.mcstructure`/`.schem`/`.litematic` 3D, Java/Bedrock collision check, hologram .mcpack, support above 64, local only)
+  - mcstructure-preview (`https://github.com/tomocraft/mcstructure-preview`)
+  - Format notes: `https://github.com/UohMyGod/mcstructureFileFormat`
+  - The MCBE Essentials viewer shows entities inside an mcstructure.
+
+#### World conversion and generation
+- **World conversion**: Chunker (`https://github.com/HiveGamesOSS/Chunker`, Chunker.app) converts between Java and Bedrock and puts a pre-made world into leveldb. There are reports of crashes and Editor brush corruption, and pending ticks are lost during conversion. New features, jigsaw and biomes are not applied to existing chunks. To regenerate, use Editor Chunk Management or a script.
+  - The web version is `https://www.chunker.app/` and it also converts the new dimension format. Entities, villages and inventories may not be converted.
+  - With the Chunker CLI you can build a `java -> chunker cli -> bedrock -> deploy` pipeline.
+  - WorldPainter has no Bedrock export, so build in Java and convert with Chunker.
+- **Biome modification**: there is no Script API that changes biomes, so WorldEdit-BE and Bedrock World Editor work together (2026-04).
+- **featurelab (stirante)**: an engine that reproduces Bedrock feature generation (the goal is byte-for-byte equality).
+  - Repository `https://github.com/stirante/featurelab` , docs `https://stirante.github.io/featurelab/` , playground `https://stirante.github.io/featurelab/playground` (2026-09-26)
+  - Node editor: "node" or `Open Feature Graph` in the command palette.
+  - v0.3.0 allowed A -> B -> A recursion.
+  - 2026-10-10: renames the file when you change the identifier (Minecraft requires the identifier and file name to match), and reads the new mcstructure version. Compatible with the Regolith structure.
+  - There are also stirante's Go feature simulator VS Code extension (Molang, profiler, failure reasons) and kiteob's Python feature-rule evaluator (UML output).
+- **Worldgen reference**: Mojang does not put features/feature_rules in bedrock-samples. Worldgen files are in the BDS experimental folder.
+- **structure manager**: bigcitrusfruit is building it with Dragonfly's Go LevelDB library.
+- **Marketplace catalog collection**: tryashtar/marketplace-catalog (`https://github.com/tryashtar/marketplace-catalog`) fetches through PlayFab. Search results are capped at 10,000, so split queries by creator filter or creation date range. Reference script: `https://github.com/TwistedAsylumMC/Bedrock-Emotes/blob/main/update.sh#L32-L65`
+
+#### MCB binaries and `.brarchive`
+- **MCB migration**: Mojang is converting data-driven formats (particles, cameras, the crafting item catalog, etc.) into a cereal-based binary "MCB" and putting them in `.brarchive`. Entities switch when format_version drops "dynamic value". Mojang's internal serialization library is also named cereal (EnTT-based, `Bedrock::*` types), but it is unrelated to the public cereal library.
+- **Tools**
+  - Format gist: `https://gist.github.com/theaddonn/e98f5e10a6f9e1c43b14b586fb670b5f` , brarchive format `https://gist.github.com/tryashtar/4e62280c1611d744b6aa5d752ab69c15`
+  - Decoder `https://github.com/LPaicen/brarchive-extractor` (since 1.26.50.22 the only file it cannot unpack is `minecraft:camera_entity`, which needs the `server/camera/1.21.100` schema)
+  - Client schema exporter (a LeviLamina mod, restored all 501 mcb files of the 1.26.20.04 client): `https://github.com/LPaicen/ll-client-schema-exporter`
+  - Rust library `https://github.com/bedrock-crustaceans/brarchive-rs` , compiler `https://github.com/iamorimm/brarchive-compiler`
+  - JSONTE also supports `brarchive`.
+  - `.brarchive`, `.brpak` and `MCB` specification: `https://github.com/bedrock-crustaceans/brarchive/blob/main/FORMAT.md` . The same group plans a Rust parser that diagnoses brpak, MCB and whole add-ons. The purpose and performance benefit of `.brpak` have no answer.
+- **Vanilla packs in the BDS zip**: the BDS zip contains vanilla BP/RP including loot tables, and `.brarchive`.
+- **BDS pack optimization mode (Preview 26.40.27)**: CLI flags minify JSON and create `.brarchive`. Flag summary: `https://gist.github.com/xKingDark/2c53dc924111428bfe854dc4e66a04e4`
+  - Works only on Windows BDS (wine on Linux).
+  - Only valid UTF-8 text files go into a brarchive (scripts do not work). Not everything works from a brarchive, so keep the original JSON.
+  - Helps with load time and compression.
+  - The string `ExperimentalPacksUpgraderConfigPath` was seen.
+- **Schema dump**: put `test_config.json` next to BDS and run it, or use the activation arguments `./bedrock_server.exe Document=true` or `GenerateAPIMetadata=true` (the Chinese wiki `https://zh.minecraft.wiki/w/%E6%BF%80%E6%B4%BB%E5%8F%82%E6%95%B0`). The schemas are also at `https://github.com/bedrock-apis/bds-docs/tree/preview` . Some authors get schemas that are not in samples from BDS.
+
+---
+
+### Editor mode
+
+#### Launching and general
+- **Basics**: PC only and free. If the old shortcut does not work on a GDK build, change the Preview shortcut to `minecraft-preview://creator/?Editor=true`. Crosshair mode is a vanilla building mode, so Editor tools cannot be used. The changelog and feedback are at `https://github.com/Mojang/minecraft-editor/discussions` .
+- **projectbackups and the landing page**: the `projectbackups` folder appears only after the first export. It is hard to tell which worlds are Editor-only. The landing page is being rebuilt with Ore UI (2026-02).
+- **Removing Editor-only**: change `editorWorldType` in `level.dat` to 0.
+
+#### Features by version
+- **v1.1.7 (2025-10-22)**: modal dialog API, "quick move" selection moving (holding CTRL+ALT smears, leaving the original blocks).
+- **v1.1.9 (2025-11-04)**: prefab. A structure bundled with rotation and offset; instances are placed like holograms and baked when exporting or testing. A BP containing jigsaw is imported automatically.
+- **v1.2.0 (2025-11-11)**: Selection Block Manifest, longer cursor reach, jigsaw editing in the Block Inspector, the terrain tool Elevation, search in the structure panel.
+- **v1.2.2**: water rendering fix.
+- **v1.2.3**: three-point selection (a volume in the air).
+- **v1.2.4 (2026-01-13)**: Chunk Management, Cinematics, Flood.
+- **v1.2.5 (2026-01-27)**: preserves player data on export (before that, export erased player data).
+- **v1.2.8**: Tag Container control.
+- **v1.3.9 (2026-05-19)**: mesh tool, Custom Dimensions, Biome Data Assignment (reassignment log, biome replacement of the selected area).
+- **26.40.20 (2026-06-02)**: Biome Data Assignment shows chunk information without a restart, and the VV tool generates a Vibrant Visuals RP.
+- **After 26.60**: Editor 26.60 shipped to retail and Preview is at 26.70.23 (2026-11-04) and 26.70.24 (2026-11-10). The changelogs are in discussions #353, #354 and #355. There is a report of getting stuck (softlock) in a DDUI menu in Editor mode.
+
+#### Per-tool behavior and pitfalls
+- **Flood**: it searches downward from the widget block, so put the widget one block above the ground. The BFS limit is 120 thousand blocks. "apply flood" is needed and a liquid source is not.
+- **Chunk Management**: erases all data of a chunk and runs worldgen again. It scans leveldb to find the minimal chunk set. Placing "exclude this area" around the region to keep and compacting turns a multi-GB world into a few MB. Refresh the client cache with `/reload all`. You must enter coordinates again for each dimension. Blocks placed by players cannot be told apart from old worldgen blocks, so they cannot be merged on regeneration. On 26.30.28, exporting to the main menu after regeneration wiped the inventory (ticket filed).
+- **Vibrant Visuals tool**
+  - Off by default, and once turned on the setting persists.
+  - The `+`/`-` of the graph control worked only on the numpad (bug).
+  - You must switch to the Color Grading tab first for per-biome grading to apply.
+  - Flags can override per-biome VV.
+  - Output goes only to a new RP or the clipboard (an existing pack cannot be edited in place).
+  - There is a report that it keeps exporting the previous pack.
+  - There are no point lights.
+  - It has the advantage of live preview without `/reload all`, but the keyframe graph UI is clumsy.
+- **Jigsaw**: sets read from a pack cannot be modified. Importing makes a local copy inside the world and only that copy is edited, so you have to copy it back to the BP by hand. If an add-on crashes during initialization, later add-ons are not loaded and the jigsaw menu can disappear.
+- **Selection and editing constraints**: there are marquee selection and complex selection, switched with Trim. The Block Inspector edits one block at a time. Support for custom block components is on hold waiting for a new API. Entity fields are read-only. Clicking an Ore UI text field selects everything but input is appended at the end (MCPE-237219).
+- **Crash cases**: the Ellipsoid brush on an area corrupted by Chunker, a pack whose manifest has the `raytraced` capability. A custom entity placed inside a block disappears on export or playtest.
+- **Features not yet available**: Y-axis mirror, manual waterlogging, multi-selection of block manifests, copy/paste between worlds. The terrain smoothing tool is said to be weak (2026-01), and is useful for large structure work. Copying structure void may also be broken. The guide plane has only an API and no UI. Cinematics exports script code, not a camera spline. Test worlds are singleplayer only. Editor avoids leveldb writes because they are dangerous.
+- **Dimensions**: stored in the world file and cannot be copied to another world. One way is to turn a world into an Editor project, add the dimension and export again. Portals need a script. Biome data assignment for custom dimensions is done in Editor mode (preview).
+- **Editor UI pane**: the `direction` property is the flex direction of its children, and "horizontal" places them side by side.
+- **Related tools**: Nudge (`https://github.com/ForestOfLight/Nudge`).
+
+#### Editor on BDS
+- **How to start**: starting with `Editor=true` without a world creates an Editor project world. Existing Editor worlds are detected automatically, and server.properties has a setting that converts a vanilla world. Linux is supported from the download that includes the BP. Start a big existing world with `Editor=true` and, if needed, turn on the editor property in `level.dat`. Connected clients enter Editor mode.
+- **Multiplayer constraints**: there is no setting to mix vanilla players and Editor players. `server-net` can be used on an Editor mode BDS (there is no plan for an Editor websocket API for security reasons). Multiplayer test worlds need world transfer technology.
+- **`generate_documentation`**: `{"generate_documentation": true}` in `test_config.json` writes the documentation but turns the world into Editor mode.
+
+---
+

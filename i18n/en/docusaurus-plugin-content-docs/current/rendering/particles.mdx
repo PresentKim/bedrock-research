@@ -1,0 +1,193 @@
+---
+title: Particles
+description: The structure of particle JSON (emitter and particle components), entity linking, Molang and script spawning, clocks, coordinates and UV computation, rendering characteristics, Particle Jester
+sidebar_position: 6
+sources: [private-research, bedrock-wiki, ms-learn, particle-jester, bedrock-samples]
+---
+
+# Particles
+
+## Concept
+
+A particle system makes effects like smoke, fire and snow by showing many small sprites. A **particle** is a single sprite placed in 3D space and has its own movement and shape rules. An **emitter** is a device that creates particles all at once (an explosion) or over time (steady). A particle file is JSON in the resource pack's `particles/` folder, and wherever it is placed in subfolders, it is referenced by the identifier inside the file (for example `sample:colored_smoke`; the `minecraft:` namespace is for vanilla only). All units are blocks (meters) and seconds, and angles are in degrees. Trigonometric functions are also in degrees (Source: ms-learn, Particles Introduction; bedrock-wiki `particles/particles`).
+
+## Example: torch flame particle
+
+<Excerpt src="ms-learn" title="Introduction to Particles (flame example)" path="creator/Reference/Content/ParticlesReference/ParticlesIntroduction.md">
+
+```json
+{
+  "format_version": "1.10.0",
+  "particle_effect": {
+    "description": {
+      "identifier": "minecraft:basic_flame_particle",
+      "basic_render_parameters": {
+        "material": "particles_alpha",
+        "texture": "textures/particle/particles"
+      }
+    },
+    "components": {
+      "minecraft:emitter_rate_instant": { "num_particles": 1 },
+      "minecraft:emitter_lifetime_expression": { "activation_expression": 1, "expiration_expression": 0 },
+      "minecraft:emitter_shape_sphere": { "radius": 0.025, "direction": [0, 0, 0] },
+      "minecraft:particle_lifetime_expression": { "max_lifetime": "Math.random(0.6, 2.0)" },
+      "minecraft:particle_appearance_billboard": {
+        "size": [
+          "(0.1 + variable.ParticleRandom1*0.1) - (0.1 * variable.ParticleAge)",
+          "(0.1 + variable.ParticleRandom1*0.1) - (0.1 * variable.ParticleAge)"
+        ],
+        "facing_camera_mode": "lookat_xyz",
+        "uv": { "texture_width": 128, "texture_height": 128, "uv": [0, 24], "uv_size": [8, 8] }
+      }
+    }
+  }
+}
+```
+
+</Excerpt>
+
+`basic_render_parameters` sets the material and texture, and components can be placed in any order. Components are divided into emitter ones and particle ones.
+
+| Kind | Components (all with the `minecraft:` prefix) |
+| --- | --- |
+| Emitter initial state | `emitter_local_space`, `emitter_initialization` |
+| Emission rate | `emitter_rate_instant`, `emitter_rate_steady`, `emitter_rate_manual` |
+| Emitter lifetime | `emitter_lifetime_looping`, `emitter_lifetime_once`, `emitter_lifetime_expression`, `emitter_lifetime_events` |
+| Emitter shape | `emitter_shape_point`, `emitter_shape_sphere`, `emitter_shape_box`, `emitter_shape_custom`, `emitter_shape_entity_aabb`, `emitter_shape_disc` |
+| Particle initial state | `particle_initialization`, `particle_initial_speed`, `particle_initial_spin` |
+| Particle motion | `particle_motion_dynamic`, `particle_motion_parametric`, `particle_motion_collision` |
+| Particle appearance | `particle_appearance_billboard`, `particle_appearance_tinting`, `particle_appearance_lighting` |
+| Particle lifetime | `particle_lifetime_expression`, `particle_lifetime_events`, `particle_expire_if_in_blocks`, `particle_expire_if_not_in_blocks`, `particle_kill_plane` |
+
+## Events
+
+Events are called from elsewhere in the JSON to emit new particles or sounds. The kinds are `emitter` (creates an emitter fire-and-forget at the event position), `emitter_bound` (if the emitter that was created is bound to an actor or locator, binds it to the same place), `particle` (manually emits particles into the `effect` emitter at the event position. If there is no emitter, it creates one. The target must be `emitter_rate_manual`), and `particle_with_velocity` (inherits the velocity of the generated particle). Sounds specify a "level sound event" name. Events can nest `sequence` (runs the array in order, all executed when fired) and `randomize` (picks one by weight `weight`) (Source: ms-learn, Particle Effect Events).
+
+```json
+"event_name": {
+  "sequence": [
+    { },
+    { "randomize": [ { "weight": 1.0 }, { "weight": 3.0 } ] }
+  ]
+}
+```
+
+The above is an example not verified in the game. It is a skeleton that shortens the structure of the MS Learn documentation (nesting `sequence` and `randomize` arbitrarily inside a node tree), and the effect and sound keys in each node must be checked against the reference for the target version `{needs measuring}`.
+
+## There are four clocks (Particle Jester summary)
+
+(Source: particle-jester, MIT. The repository did not measure in the game.)
+
+- Emitter emission rate, emitter lifetime, particle lifetime and animation lifetime are different clocks. With `emitter_lifetime_once.active_time: 2` and a particle `max_lifetime: 3`, the last particle remains until about 5 seconds after creation. The unit of `active_time` is seconds.
+- Use only one emission rate component. `rate_instant` for scattering at once, `rate_steady` for scattering continuously, and `rate_manual` for the target that events request particles from. The event kinds `particle` and `particle_with_velocity` target a manual emitter.
+- Listing event nodes in order does not create a delay and they run all at once. Time between stages is made with timeline entries or a script or animation clock.
+- A child effect does not inherit the parent emitter's variables. Give the child defaults, or pass them from the side that initializes both effects.
+
+## Size, coordinates, UV computation
+
+- Billboard `size` is a **half size**. `[0.5, 0.5]` is one block. You must also account for the transparent margin inside the texture for the visible size to be right. The size of `emitter_shape_box` is also a half size, so `[12,7,12]` is 24x14x24 blocks.
+- Model locators are in model units (16 is 1 block), particles are in blocks and seconds, and Molang trigonometric functions are in degrees.
+- For uniform distribution on a disc, use `R * math.sqrt(random)` for the radius, and for uniform directions on a sphere surface, transform random values like `y=2u-1, rho=sqrt(1-y*y)`. Calling `math.random` every time in an update expression makes it jitter, so use `variable.particle_random_1` to `4`, which are fixed per particle.
+- The UV `texture_width` and `texture_height` are only a coordinate system and need not equal the PNG pixel count. When converting to pixels, multiply the horizontal by `PNG width / declared width` and the vertical by `PNG height / declared height`.
+- A straight `step_UV` does not wrap to the next row. For a grid atlas, choose cells with an expression or use several strips. For cell number `i`, `u = (i % columns) * cell width` and `v = floor(i / columns) * cell height`.
+- Tint is multiplied onto the texture RGB. A blue tint on a red picture turns almost black. Draw textures whose color you will change in white.
+- Materials: `particles_alpha` cuts out transparency (cutout), `particles_blend` is for soft translucency, and the additive material (`particles_add`) is for glowing overlap. For distortion effects there is the blend mode "exclusion". Particle materials are very limited and there is no flat (unlit) particle material. If needed, use an entity, or make a particle sphere instead of a cube so fog applies evenly. `particles_add` is the particle version of `entity_beam_additive`. Glow comes from the additive material and does not light the surroundings, and with a translucent texture it glows only inside the sprite. Custom particle materials take only blend mode and culling partially.
+- Two-sided particles: The material file name must be exactly `particles.material` (otherwise "material invalid"), and define it like `"particles_twoface_alpha:particles_alpha": {"+states":["DisableCulling"]}` and reference it in `basic_render_parameters.material`. `particles_blend` works the same way. The cause of an `emitter_transform_xz` particle not being visible from below was also back-face culling.
+- In the example shockwave, the ring was drawn at the 0.85 point of the texture radius, so the size expression was divided by `0.85`. Without dividing, a ring that should have been 8 blocks looked like 6.8 blocks.
+
+## Where documents disagree (Particle Jester comparison)
+
+| Topic | Disagreement | Side the repository followed |
+| --- | --- | --- |
+| `max_frame` | The billboard reference says the first frame is 1 and `max_frame` is the maximum frame number. The tutorial counts from 0 and writes 7 for 8 cells. Vanilla `basic_smoke.json` writes 8 for 8 cells. Wintersky 1.3.3 returns to the start when the internal frame, counted from 0, reaches `max_frame` | `max_frame: 8` for an 8-cell flame. Do not "correct" the value of an existing pack just because of the old tutorial wording |
+| Direction mode name | The reference body uses `custom_direction` as the mode value. The pinned Mojang metadata and the actual definition put `mode: "custom"` with the vector in `custom_direction` | `mode: "custom"` |
+| Camera mode key | `face_camera_mode` in a documentation comment is a typo and the actual key is `facing_camera_mode` | `facing_camera_mode` |
+| Particle `format_version` | The vanilla example has `"1.10.0"` as is. Do not change it to the game version | `"1.10.0"` |
+
+This table is the result of the repository comparing the documentation with vanilla (bedrock-samples 46ba6ea) `{repo claim}`.
+
+## Format and texture rules (community research)
+
+(Source: private research)
+
+- For glowing VFX use `particles_alpha` or `particles_add`, high-quality PNG textures, and size and fade curves. `particles_alpha` is an alpha test, so use `particles_blend` for translucency. Darkness when the origin is inside a block is probably due to fog. The particle effect `format_version: 1.26.0` is allowed.
+- Particle textures must be powers of two (4~16 px), otherwise they break in the game even if they are fine in Snowstorm and Blockbench. A pink-black square is a wrong texture name or `uv`. The `uv` of `particle_appearance_billboard` uses `texture_width`, `texture_height`, `uv` and `uv_size`, and the missing-texture marker recently changed to pink and black. A duplicate particle file in a folder dropped the texture with no log warning, and the error that it requires something even though there is an offset is probably a duplicate particle identifier. Particles cannot repeat a texture, so use a 1024x1 dotted-line texture. A community report that `texture_width` and `texture_height` must equal the actual sheet size disagrees with the explanation (it is only a coordinate system) in the section "Size, coordinates, UV computation" above (`conflicting`). If `uv_size` does not match, it stretches. You cannot sample outside the texture or switch textures by condition, so use a UV offset. The vanilla sheet `textures/particle/particles` is referenced by path and cells are chosen by UV. `particle_appearance_tinting` can also take a solid `[r,g,b,a]` color.
+- Direction: The valid mode of billboard `direction` is `"custom"` (`custom_direction: [x,y,z]`). Using `"custom_direction"` as the mode gives "The 'direction' sub section is not using a valid mode!". `direction` must be inside `particle_appearance_billboard`. `direction_z` of `custom_direction` snaps to the horizontal plane if the absolute value of the normalized y is greater than 0.999 (about 2.5625 degrees). To keep a particle from rotating with player movement, change `facing_camera_mode` from `lookat_*` to `direction_x`, `direction_y` or `direction_z`. The example where a `facing_camera_mode: direction_x` single beam was not visible (JSON 1.10.0, `particles_alpha`) is unresolved.
+- Lifetime and units: A particle that disappears on collision uses `expire_on_contact` of `particle_motion_collision`, or `expire_if_not_in_blocks` with air specified. Local space is `"minecraft:emitter_local_space": {"position": true}` (the Snowstorm toggle). There is a case where a leftover 16x16 plane in the locator geometry broke the particle.
+- Orbits and spheres: Orbit with `particle_motion_parametric` (a Molang offset relative to the emitter), and use `emitter_shape_sphere` for a sphere emitter. Vanilla particles are in bedrock-samples `resource_pack/particles` (TNT: `large_explosion_level`, `huge_explosion_level`). There is also a report that the TNT and explosion particle definitions are not in samples (may be hard-coded, can be spawned via the Script API). The lingering potion cloud is `minecraft:mobspell_lingering`.
+- Vanilla particle ids need a namespace (`minecraft:basic_smoke_particle`). Examples: `minecraft:water_splash_particle_manual`, `water_evaporation_manual`, `magical_critical_hit_emitter`, `heart_particle` (cannot be distinguished from breeding hearts). Vanilla particles can be overridden and turned off with `num_particles` 0 (explosions, totem). To change behavior like bubbles, make a custom particle of the same shape.
+- Block break particle template: `Math.random(15,30)` in `emitter_rate_instant`, `emitter_lifetime_once`, `particle_motion_dynamic` (acceleration -9.8 and drag), `particle_motion_collision`, a random UV within 16x16, `particle_appearance_lighting`.
+- Event timing: `creation_event` of `minecraft:emitter_lifetime_events` was unstable and it was solved with `"timeline": {"0.0": "ring"}` of `minecraft:particle_lifetime_events`. A pack setting toggle is made with `"num_particles": "(1) * q.is_pack_setting_enabled('hooked:ding')"` and manifest `settings`. `sound_effect.event_name` must be a name in individual_event_sounds.
+
+## Linking entities and particles
+
+**Concept**: A particle attached to an entity is linked in this order: (1) a locator in the geometry, (2) a particle keyframe in an animation or controller, (3) a short name in the client entity `particle_effects`, (4) the real particle identifier. Keyframes use the alias, while `/particle` and scripts use the identifier. The file name is not the identifier.
+
+```json
+"particle_effects": { "tank_particle": "particle:tank_firing" }
+```
+
+```json
+"particle_effects": { "0.0": { "effect": "tank_particle", "locator": "muzzle" } }
+```
+
+The first block is the client entity and the second is a keyframe in the animation file (Source: bedrock-wiki `visuals/animation-effects` and private-research). The loop flag makes it keep emitting. To follow the entity without being duplicated, give the particle `position` and `rotation` of `emitter_local_space` as true. The emitter must be created from the entity's animation. Let a controller state handle continuously running effects, and attaching an infinite-loop emitter to a repeating animation piles up emitters `{repo claim}`. The whole chain is BP trigger, client animation alias or controller, state or animation, particle keyframe, `particle_effects` alias, identifier, texture.
+
+- First-person and paper doll duplicates: Give animations and controllers the condition `!q.is_in_ui && !v.is_paperdoll` (or `!(v.is_paper_doll || q.is_in_ui)`). Under VV, particles may also play from the player shadow. There is a report that hiding particles in first person with `q.is_first_person` and `v.is_first_person` does not work (1.0 in all cameras), and turning on the paper doll creates both first-person and third-person particles. An emitter creation expression also made duplicate emitters. An alternative is to read in the resource pack a BP property set by script.
+- Passing variables: Particles cannot read user variables of players and entities. Passing Molang variables from an entity to a particle is no longer possible, and `q.self` and `q.get_nearby_entities` were removed. Particles mostly read server-side queries (`q.property`, `q.position`, `q.variant`) but not client-only ones. Look up a custom entity property from the particle (BP `player.json` is needed). A particle attached to a player can look up actor properties (32 per entity, each one float), and if you turn off local position and use parametric motion in world coordinates it moves freely and also renders in first person.
+- Position and locator queries: A particle cannot know its own position (`q.position` is 0). `query.bone_orientation_trs` needs `queryable_geometry` on the client entity, and `query.get_locator_offset` and `get_root_locator_offset` exist but the locator side is unstable. In a particle `pre_effect_script`, `query.bone_orientation_trs('leftarm')` gives "called without an animation component set" on first appearance. `query.bone_orientation_trs('x').rotation.z` gives "found multiple operations without a combining operation", so store it in a variable and read `.r.z`. A line between two entity locators needs a world-space expression. Particles cannot use stencil, TRS queries or camera queries.
+- parametric on an entity: `particle_motion_parametric` of an emitter attached to an entity uses world coordinates and appears at the origin, so turn on relative position or use `q.position`. Particles render one frame later than the world (evaluated in one frame, rendered in the next), so they follow fast entities and cameras late.
+- Cannot connect two entities: Like the lead and guardian beam, you cannot attach to two entities, and scripting only approximates it. A particle attached to a passenger entity is not rendered in first person. A custom entity that rides a player is possible with the `parrot_tame` family (taking the parrot's spot).
+
+## Spawning particles from the Script API
+
+- `Dimension.spawnParticle(id, location, MolangVariableMap)` creates an emitter at a **fixed world position**. It returns no handle and does not attach to an entity. Effects that follow an entity are made with an animation locator or controller state of the client entity (Source: particle-jester).
+- Expansion rules of `MolangVariableMap`: `setVector3` gives `.x/.y/.z`, `setColorRGBA` gives `.r/.g/.b/.a`, and `setSpeedAndDirection` gives `.speed/.direction_x/.direction_y/.direction_z`. A variable set with `new MolangVariableMap().setFloat("name", v)` is used in the particle JSON as `v.name` or `variable.name`. Reassigning in `emitter_initialization.creation_expression` resets it to 0, so do not. Particle initialization runs after Molang initialization, so a MolangVariableMap variable cannot be defined inside the particle.
+- The example BP takes one of `portal`, `blizzard`, `explosion` and `boss` after `/scriptevent pm:vfx`, copies the start position, sets `system.runTimeout` per stage, and rechecks entity validity, dimension and `isChunkLoaded` right before running. If the player leaves or the entity dies, it clears the remaining schedules. Particles already scattered disappear by their own lifetime.
+- Pass the quality input `variable.quality` (0.4~1.5) with `setFloat`, and the particle JSON receives it as `rate * (variable.quality ?? 1)`. If shown with `/particle`, there is no value so it becomes 1. Whether the engine accepts the `??` operator is something the repository only says to check on the target version `{needs measuring}`.
+- Passing variables through events ("temp leaking"): `event: { sequence: [ {expression: "t.a=v.some_var;"}, {particle_effect: {..., pre_effect_script: "v.some_var=t.a;"}} ] }`. This is an unintended bug so it may break. On the other hand, controlling particles after emission with a particle count query is a stable and intended feature (veka). A particle count query can be used as a data side channel.
+- Passing variables to a sub-emitter: Put `variable` into `temp` with the parent's expression event, and move `t.x` to `v.x` in the child's `pre_effect_expression`. Dotted names such as `t.vec1.x` give a "temp variables only on their own" error, so use `t.vec1x`. Initialize child variables inside the child too, and variables are local per emitter.
+- Molang JIT: Heavy particles hitch when first created. Since you cannot make structs with temp variables, there is a case that imitated an array with 256 temp variables of 16 entries and a ternary binary search. `single report`
+- `t.` and `v.`: Do not use `t.` for data that must persist across frames. Changing `t.last_offset_index` to `v.` fixed a multi-particle block outline drawn with `spawnParticle` and `MolangVariableMap`.
+- Per-particle values: For values that differ per particle (size) from one emitter, encode the data in the particle lifetime (veka's suggestion). Offset trick: `emitter_initialization.creation_expression "v.i = 0;"` and an `emitter_shape_point.offset` expression that increments `v.i`. Giving `emitter_shape_point.offset` per particle with a `creation_expression` counter or `particle_initialization.per_render_expression` did not work as expected (unresolved).
+- Forced expiry: Compare counts in `particle_lifetime_expression.expiration_expression`. Example: if you create it with `variable.particle_count = 2` given by `MolangVariableMap`, `q.effect_emitter_count < q.effect_particle_count` becomes true. You must also add `emitter_lifetime_expression.expiration_expression` with the same condition for the emitter to end together with the particles. With per-player particles (`player.spawnParticle`) expiry is simple. `query.any_tag` looks up item and block tags, not entity `/tag`, so it cannot be used as an expiry trigger.
+- Camera and LOD queries: In particles `q.distance_to_camera` works but `q.rotation_to_camera(...)` does not. As an expiry expression `q.lod_index(10,20) == 1` worked but `q.lod_index(10) >= 1` did not, and `q.distance_from_camera > 50` expired immediately. A particle's `query.position` updates at 40 Hz regardless of FPS, and `query.log` is for development builds only. There is also a report that `q.camera_rotation` is 0 in first person (no conclusion).
+- **Memory leak**: Without `max_particles` on `emitter_rate_manual`, it leaks heavily and FPS does not recover, so always specify it (up to 1000). A case where custom trail particles seemed to leak RAM (emitters suspected of not being deleted) is unresolved.
+- Sound: Particle events can use only vanilla sound events, and playing a new (custom) sound from a particle is not supported (MCPE-101714). If you need a custom sound, play it with script. The questions about the client-side per-tick spawn probability and particle lifetime set by a variable had no answer.
+
+## Rendering characteristics and techniques
+
+- Depth: With `particles_blend` particles, later particles can be drawn on top of earlier ones. Depth works only inside one emitter (or the emitters it created) and not between separate emitters. alpha_test particles have no such problem but have no blending. For voxel and 3D cube particles, alpha test is single-sided, so use a blend material. Flicker between blend (fog) and add (firefly) particles is unresolved. The draw order of particles overlapping at the same position cannot be specified, so shift the positions slightly with Molang.
+- Limits: Particles cannot be seen through walls, are not rendered outside the simulation distance, and cannot hold text (use a named entity or floating text). Floating text and billboards that do not face the camera are unresolved. Removing fog with `"-defines": ["ENABLE_FOG"]` in a particle material did not work, and fog also tints particles. The particle render distance is about twice the entity one. Particles cannot affect the world, so entities handle logic. If it must be visible through walls, use an entity (Mojang maps do the same).
+- 3D shape particles: There were answers (2026-03, 2026-06) that particles cannot use 3D geometry so one particle per face is needed, and in 2026-10 a demonstration appeared that draws a cube whose rotation and size change through Molang variables with a single particle and uses it for distant 3D models. There is also an example drawing block-textured particles (1 entity, one face) with only Molang, and performance depends on the emitter count. It is also possible to make an entity follow with local position and expressions without a locator.
+- Rain and weather: Rain is particles, the vanilla rain particle is not in samples, and cannot be detected. Custom rain can splash at ground height with collision (excluding above entities). Split streaks and splashes into two particles or make ripples with a vanilla splash event. The rain lag in Wildlifecraft was due to 650 particles every 8 ticks and a double ground check (client). Fake weather uses script to show large per-biome particles near the player.
+- VV: For deferred rendering cost see the performance section of [VV settings files](./vv-settings.mdx). Under VV, particles cannot ignore lighting, and removing the lighting component or using an emissive PBR texture partly solves it. The "light enhancing" particle material works the opposite way under VV. Giving a MER file to a particle texture makes it glow under VV (2026-03). The glow of vanilla particles under VV (flames and so on) is hard-coded and it was said there is no documented method for custom particles. Emissive particles do not emit light under VV and only produce bloom. Using `query.spellcolor` in `particle_appearance_tinting` shifts the hue (red becomes magenta, no answer). There are reports that a custom particle material under VV was visible only up close, and that particles spawned from a locator appear at a different position under VV than on Fancy (unresolved, `single report`).
+- Beams: Use a single very long 2D particle with a long texture, two crossed particles rotated +45/-45 degrees and stretched, or a model. A directional beam particle gives the `emitter_shape_point` offset with `v.dir_x/y/z` and uses `facing_camera_mode: direction_z` and `custom_direction [v.dir_z, 0, -v.dir_x]`. `emitter_local_space` rotation true twists the beam, and you can also spawn from script and pass the rotation with MolangVariableMap. Using the same random value for x and z removed the triple beam artifact. For a single-particle line renderer such as block outlines there is `gfx:line`.
+- Trails: Fill gaps by making more particles per second and shrinking them more slowly (a performance cost), or spawn every frame in an animation loop.
+- Fake shadow: A client shadow stuck to the ground is imitated with a particle that moves down very fast with collision on (the edges look awkward).
+- Particle sky and astronomy (with a resource pack alone): Attach to the player entity a geometry (with only locators, no cubes) that emits about 6 particles, and rotate the bones like a solar system model with its own render controller and animation controller. The geometry is a child of a root that cancels the body rotation and works only under VV (under VV the geometry can be fixed to the body and cancel its rotation, but in non-VV it attaches only to the head). There is a demonstration (2026-11) that drew comets, planets and an eclipse with only a resource pack, and work on porting Better Clouds with only particles. Client particles load only near their spawn point, so a workaround of emitting celestial particles from the server side is also used. Use `query.time_of_day` and `query.day`, and if the day cycle is cut off on Realms, use `query.delta_time` and lerp. Offsets in a particle file are in blocks, not geometry locator offsets. When drawing sky objects with particles, an offset of 256 is drawn in front of blocks depending on render distance, 1024 is always drawn behind but opacity and color break, and 512 has bad color. Biome precipitation can be changed but only with Nether-style particles and the first-person shadow becomes odd.
+- Open-source example: breath particle (Apache 2.0, whynotoss/cold-breath).
+- Snowstorm: The standard particle editor (snowstorm.app). The preview accepts things the game rejects, cannot interpret variables defined by script, and loading may fail if the JSON has comments. In 3.3 (2026-11-04), the draw order of blend and additive and the evaluation order of update expressions were fixed. In some Blockbench versions Snowstorm particles broke and locator directions were flipped. Blockbench only previews particles and is not a particle editor. For a list of editors see [Modeling and texture tools](../tools/modeling.mdx).
+- Block particles: Blocks cannot emit particles beyond what vanilla already emits with a resource pack alone. To make barriers visible in survival mode, imitate it with a particle visible only inside barrier blocks.
+
+## The Particle Jester repository (tools and validation)
+
+(Source: particle-jester, commit b91df84, MIT, 2 commits made in one day on 2026-10-09. This wiki did not run the repository's tools.)
+
+Particle Jester consists of one skill that lets an AI (OpenAI Codex) create, fix and preview Bedrock particles, a bundle of Node tools, and 18 hand-made example particles. It is not JSON UI material. The structure was taken from mcbejsonuimasterAI, separating a knowledge layer (skills and documents) from a deterministic tool layer, and reporting verification levels separately. The runtime is Node.js 22 or higher, the example pack has `min_engine_version [1,26,50]`, and scripts use `@minecraft/server` 2.9.0 (stable). It did not measure in the game.
+
+**Five verification levels**: `structurallyValid` (passes a hand-written schema), `referencesResolved` (particle, texture and trigger links resolve), `staticChecksPassed` (passes supported Molang syntax, constant UV ranges, variable producers and performance input ranges), `previewVerified` (an actual capture and a human review record tied to the current file hash), `minecraftRuntimeVerified` (measured on the target client, false for all examples).
+
+| Command | What it does | Limit |
+| --- | --- | --- |
+| `scan` | Full listing, PNG decoding, paths, dependency graph, variable and UV diagnostics | Scripts are only parsed with Acorn and not run. Limits of 50,000 files and 512 MiB |
+| `validate file.json --texture png` | Schema and semantic checks | No guarantee it matches the engine parser |
+| `texture png` | Size, alpha histogram, visible area, hash | Does not guess atlas cells |
+| `molang "expression"` | Checks supported syntax and math function names | Loops, arrays, `->` and `this` are unsupported |
+| `repair`, `optimize` | Swapping to a specified PNG, copies with the emission count and cap reduced by a ratio | Does not claim the picture is the same |
+| `preview`, `studio` | Browser rendering with Wintersky 1.3.3 and Three.js r134 | Cannot reproduce block collision, locators, entity queries, graphics modes or multiplayer |
+| `mcp` | 5 stdio MCP tools | Paths outside the specified folder are forbidden |
+
+The components the schema accepts are the 29 in the table above. The example pack has the namespace `pm:`, 18 particles (`shockwave`, `portal_ring`, `portal_core`, `portal_motes`, `blizzard_snow`, `blizzard_gust`, `explosion_sparks`, `explosion_smoke`, `debris`, `cinematic`, `vortex`, `beam`, `lightning`, `trail`, `slash`, `flame`, `water`, `dust`) and 8 textures (`arc`, `flame`, `ring`, `rune`, `slash`, `snow`, `soft`, `streak`). Particle textures need no registration in the item or terrain atlas. The 4 sequences are portal (3 layers at once), blizzard (2 layers), explosion (4 layers in 0~0.15 seconds) and boss (7 stages in 0~1.85 seconds). `pm:cinematic` makes stages with timeline events of a root emitter that does not scatter particles itself. The beam, lightning and slash are only flat-picture examples and not arbitrary endpoint aiming or sword-attached effects. The analysis catalog of the user particle collection (856 definitions) was left out of the public version because its origin and license are unclear.
+
+Limit: Since the repository did not measure in the game, the particle facts and examples above are not verified in the game and are `{needs measuring}`. The preview is a browser reimplementation so there is no guarantee it matches the Bedrock renderer. Whether it was updated since is unknown.

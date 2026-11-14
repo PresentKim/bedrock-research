@@ -1,0 +1,121 @@
+---
+title: "Cinnabar (a JSON UI engine reconstructed from the native client)"
+description: "The json-ui crate of a Bedrock-compatible client rebuilt in Rust. Evidence material that records the expression evaluator, variable scope, ignored, bindings, and layout rules as code"
+sidebar_position: 10
+sources:
+  - cinnabar
+  - repo-guide
+  - private-research
+---
+
+## What it is
+
+Cinnabar is an unofficial Bedrock Edition compatible client (a Rust Bevy/wgpu client + a Go core). It has to draw the resource pack UI a server sends just like vanilla, so it **reimplements the vanilla JSON UI interpreter 1:1**, and according to the commit history the expression evaluator, variable scope, `ignored`, and binding rules are a port reconstructed from the 26.30 native client (commit messages "26.30 reconstruction", "Port `UIEval`/`ExprToken`/`UiExpression::evaluate`"). The analysis target is `crates/json-ui` (about 47,000 lines) at `cinnabar-mc/cinnabar` `dev` commit `ceb0fb6` (2026-10-21), and the clone HEAD is the later `df826f5`. The license, confirmed by opening the clone's `LICENSE`, is **PolyForm Noncommercial 1.0.0**. Noncommercial use, modification, and distribution are allowed, but there is no right to use this software (including the web editor) for commercial purposes such as making packs for sale on the Marketplace (Source: cs-cinnabar). This page rewrites the behavior rules in its own words and the license is shown in the header of each excerpt.
+
+In the level notation this material is `code` and is called `CN`. It is reconstruction code and not a game measurement, so when it differs from a measurement, follow the measurement (conflicts C-41~C-47). The result of this project building the evaluator itself and running expressions is `CN-run`.
+
+## What matches vanilla and what differs
+
+| Area | What was made the same | Confidence |
+| --- | --- | --- |
+| Expression evaluation | Token splitting, literal types (int32, float32, string, boolean), precedence, per-type operations, result reinterpretation | High (native reconstruction, regression tests on real-server packs) |
+| Variables, `ignored` | Frame scope, `\|default` lookup, whole-value substitution only, outer scope evaluation | High |
+| Bindings | Kind and condition enums, fallback for unknown values, `view` search range | High |
+| Inheritance, JSON reading, pack merging | Whole-property replacement, jsoncpp rules, 11 `modifications` operations | Medium-high |
+| Layout | Size expressions, `%c`/`%cm`/`%sm`, stack, grid, scroll | Medium (the authors left "omitted size" and "anchor_to default" as needing measurement) |
+
+Differences (do not use as evidence): the default game HUD is implemented in its own Java style, OreUI screens are its own code, the font is its own open font so character widths differ, its own extensions (`cinnabar_transform`, `cinnabar_filter`, and others) are on only in its own screens, it is lenient (an `ignored` that cannot be decided is kept, and long expressions and deep inheritance are dropped after a diagnostic) and does not reproduce vanilla asserts and crashes (crash expressions of the EXP-21 kind cannot be decided), the draw order within the same layer is fixed to document order (vanilla does not guarantee it, LAY-19), it finds a definition by `namespace` + name only so it does not distinguish "ignore a redeclaration from a file at another path" (FILE-22) from "`modifications` work per path" (MOD-02), and when a `modifications` target is missing it leaves only a diagnostic and applies the rest (vanilla voids the whole file, MOD-05).
+
+## Processing order
+
+The stages are split the same way as in vanilla. Knowing what is decided at which stage explains "why can't this value be changed with a binding".
+
+1. **JSON reading**: only the files listed in `_ui_defs.json`, with paths sorted and deduplicated, each read once.
+2. **Pack merging**: in pack order, properties are merged into same-name definitions and `modifications` are applied.
+3. **Inheritance flattening**: the `@base` chain is expanded.
+4. **Resolve**: for each control, `ignored` is judged in the outer scope, a scope frame is built from its own `$` declarations and the selected `variables`, `$variable` and constant expressions in properties are substituted, and factory declarations are recorded. **Everything up to here is creation time and does not know `#bindings`.**
+5. **Bind**: the property bag (`property_bag`) is built, `view` bindings are run until they converge, and results are reflected in components. Factories and grids create instances.
+6. **Layout**: sizes are decided from the bottom up and positions from the top down.
+7. **Draw commands**: expanded in layer order.
+
+## Key rules (related to FILE, MOD, BND, LAY)
+
+### JSON reading and pack merging
+
+- It follows jsoncpp rules. Comments and leading zeros are accepted, but **trailing commas and unquoted keys are errors**. On an error only the members read before it are loaded, and if the first file at the same path fails, overwrites from later packs are not accepted either (FILE-30). Paths are read in sorted order and the last one wins (FILE-31). If a key has no `@` and has a dot, the part before the dot is the namespace (FILE-32).
+- A redeclaration with the same name is merged per property, and object values are merged deeply per member. In `@` inheritance, a property the derived definition writes is replaced as a whole even when it is an object (FILE-37). Writing a different `@base` discards the existing definition (MOD-19). A top-level `null` erases the base value, but a `null` in an inline reference inside a control array leaves the base value as is (FILE-38).
+- `modifications` are applied after ordinary property merging and know all 11 operations. A `where` object matches if even one member is equal, `where: {}` selects nothing, and with no condition the first element is selected. Within one `modifications`, a later operation can select only original elements (MOD-17, MOD-18).
+
+### Variables and `ignored`
+
+- Lookup uses a fixed value first and only otherwise the nearest `name|default` (FILE-33). A property value is a variable only when the whole string is `$name` (FILE-10).
+- **`ignored` does not look at that control's own `$` declarations and is evaluated first in the outer scope** (FILE-34). A boolean result is used as is, an integer means not created when nonzero, and a string means created (FILE-35). Vanilla comparison: of 146 places that reference the 103 top-level definitions whose `ignored` reads a `$variable`, only 2 pass that variable (both with `|default`). Things a factory supplies, such as `$title_text`, enter the outer scope and the `ignored` of the created controls can read them (FILE-17).
+- A child key can also be a variable (FILE-36). `variables` can be an array or a single object, and the selection rule for `requires` is a boolean as is, a number if nonzero, and a string if not empty.
+
+### Expression evaluator
+
+| Rule | Content | Rule ID |
+| --- | --- | --- |
+| Literals | `0.3`, `1.0`, and `100.0` are **integers** (0, 1, 100). Only something that starts with a dot, like `.3`, is a real number | EXP-27 |
+| Precedence | Unary, then `* /`, then `+ -`, then `= < >`, then `and or` (same rank, left to right) | EXP-01, EXP-29 |
+| Chained comparison | `962 < #c < 964` is always true (grouped from the left, so boolean < number) | EXP-28, C-41 |
+| Missing operators | `<=`, `>=`, `!=`, and `%` make the whole expression null | EXP-02, EXP-03 |
+| String `*` | If the left is `%.Ns`, the first N **bytes** of the right string, otherwise the whole right string (an empty string if it is a number) | EXP-09, EXP-16 |
+| String `-` | Erases **every occurrence** of the right string | EXP-12 |
+| Division | For strings it is the occurrence count, and between integers it is **integer division** (`i32::wrapping_div`) | EXP-18 |
+| Result reinterpretation | A string made by `+ - *` that looks like a number becomes an integer, real number, or boolean again | EXP-15, EXP-30 |
+| `#name` result | If an expression result is a `#name` string, the value is read from the same control's bag (dictionary lookup) | COL-23 |
+
+The division implementation is as follows. That division between integers is an integer is the basis for the claim (AsaJS) that the remainder can be built as `(a - (a / b * b))`.
+
+<Excerpt src="cinnabar" title="Cinnabar, divide" path="crates/json-ui/src/predicate/ops.rs">
+
+```rust
+/// `/`: text counts non-overlapping matches (1 for no needle); a zero divisor
+/// keeps the left side; else numeric division, integer when neither is float.
+fn divide(lhs: Operand, rhs: Operand) -> Operand {
+    if lhs.is_string() {
+        let needle = rhs.text();
+        if needle.is_empty() {
+            return Operand::Int(1);
+        }
+        return Operand::Int(lhs.text().matches(needle).count() as i32);
+    }
+    if rhs.is_string() || rhs.float() == 0.0 {
+        return lhs;
+    }
+    numeric(&lhs, &rhs, i32::wrapping_div, |a, b| a / b)
+}
+```
+
+</Excerpt>
+
+Conclusions you can use right away: to a number from a string binding use `(#v - 0)`, for decimal multiplication `(#v * .01)`, for a range check `((a < #v) and (#v < b))`, for greater-or-equal `(not (#v < a))`, for not-equal `(not (#a = #b))`, and for the first N bytes `('%.Ns' * #s)` (other formats such as `'%5.3s'` do not cut, which conflicts with C-05).
+
+### Bindings
+
+- An unknown `binding_type` is logged and becomes `global`, and an unknown `binding_condition` is logged and becomes `none` (BND-22). Meanings: `none` on every data update, `once` only the first time, `always` on every update, `always_when_visible` and `visible` while visible, `visibility_changed` only when visibility changes (BND-23).
+- Without `source_control_name` it reads its own bag, and a missing property is read from the global scope. A view with a name does not fall back to global (BND-24). Search range: by default the first match breadth-first from the screen root, `resolve_sibling_scope` from the parent (including the parent itself), and `resolve_ancestor_scope` the nearest ancestor with the same name (BND-25, BND-20).
+- Boolean targets (`#visible`, `#enabled`, `#toggle_state`, and others) accept only JSON booleans. Binding a `'false'` string as is does not hide. An expression binding gives the controller's original answer to the bag and the expression result to the component (BND-26). `property_bag_for_children` in the bag does not overwrite descendant values (BND-28). A `text` starting with `##` is a literal (BND-29).
+- Size bindings: `#size_binding_x/y` is a **ratio of the parent** (`v × 100%`), the `_absolute` suffix is pixels, and an unbound axis keeps its declared value. This is the basis for the partial resolution of C-14.
+
+### Layout
+
+- `"fill"` and `"default"` are keywords only in lowercase as written. A numeric string without a unit is 0 (LAY-34). A sign carries on to the next sign (LAY-35). `%c/%cm/%sm` are written after the `%`. The `"100c%"` in vanilla `progress_screen.json` is a `%` of the parent (LAY-36). `%cm` and `%sm` ignore the factor and are the maximum itself (LAY-37).
+- A stack panel gives hidden children no space, ignores a child's `offset`, and also ignores anchors without `use_child_anchors`. An omitted main-axis size is `100%c` (LAY-04, LAY-38). `use_priority` keeps children from the lowest `priority` and hides the overflowing ones (LAY-40).
+- A grid cell ignores its own `anchor` and `offset` (LAY-41). A scroll view searches its role controls by name breadth-first, and if any one of the four is missing it does not scroll (LAY-42). An anchor is judged by whether the name contains `left/right/top/bottom`, and the default is `center` (LAY-43).
+
+## Position in the conflicts
+
+| Conflict | Cinnabar's claim | Judgment |
+| --- | --- | --- |
+| C-41 chained comparison | Always true, so not evidence for a range check | Resolved (code): split with `and` |
+| C-42 cutting literals | The evaluator also cuts literals | Partly resolved: possibly due to the rule for expressions without `#` |
+| C-43 expression without `#` | Drops only that one binding | The measurement (whole discard) takes priority |
+| C-44 static `offset` binding | `#offset` accepts `[x, y]` | The measurement (not possible) takes priority |
+| C-45 binding `alpha` | Accepts the number as is | Unresolved: remeasure with `.5` |
+| C-46, C-47 redeclaration scope, child `remove` | Merges by namespace + name, leaves only a diagnostic | The measurement takes priority |
+
+## How to use it and limits
+
+When an engine rule is in doubt, you can run the evaluator directly and use it as a tool to check the result of an expression (noncommercial purposes only, DBG-21). But it is a lenient implementation, so it does not reproduce vanilla asserts or crashes, and its own font means it cannot be used for text width comparison. Items confirmed in the [engine behavior analysis](../json-ui/index.mdx) (NB-01~03, NB-09, NB-10) are real compile results and more direct than CN. For expression and variable rules that `NB` could not read, this project uses CN as the most direct evidence.

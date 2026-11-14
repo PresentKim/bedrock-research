@@ -1,0 +1,70 @@
+---
+title: Findings index
+description: The list of engine behavior analysis findings NB-01~22, the guide rules each affects, what was re-confirmed and what remains.
+sidebar_position: 4
+sources:
+  - private-research
+  - repo-guide
+---
+
+This page is an index for looking up the 22 findings (`NB-01` to `NB-22`) of the engine behavior analysis at a glance. Explanations by topic are on the JSON UI engine findings and Ore UI engine findings pages. The analysis method is on the engine behavior analysis method page.
+
+## 1. Findings index
+
+| NB | One-line summary | Topic | Page | Affected rules |
+| --- | --- | --- | --- | --- |
+| NB-01 | There are 11 `modifications` operation names | modifications | [JSON UI engine findings](./json-ui-engine-findings.mdx) | MOD-01, MOD-14, MOD-23 |
+| NB-02 | `target_control` is read before `target`. There are 7 item keys | modifications | same | MOD-03, MOD-24, C-10 |
+| NB-03 | `array_name` looks up the same-named member of the definition | modifications | same | MOD-25, C-64 |
+| NB-04 | `factory_variables` is read only when it is an array | factory | same | COL-15, COL-41 |
+| NB-05 | Factory name resolution rule | factory | same | COL-25, COL-42 |
+| NB-06 | `control_name` first, then `max_children_size`, `insert_location` | factory | same | COL-28, COL-43 |
+| NB-07 | A collection item is determined by its parent. `ignoreCollectionItem` | collection | same | COL-02, COL-38, COL-44 |
+| NB-08 | 116 allowed `#hyperlink` URLs | input | same | INP-24, INP-34 |
+| NB-09 | Binding resolution, 6 `binding_condition` values | binding | same | BND-22~25, BND-35 |
+| NB-10 | `ignored` comes before `variables` | variable | same | FILE-34, FILE-43 |
+| NB-11 | The `§` color table is 29 global variables | text | same | TXT-24 |
+| NB-12 | The paper doll and the NetEase skeleton model | renderer | same | ANI-35, ANI-36 |
+| NB-13 | The factory resolution function | factory | same | COL-45 |
+| NB-14 | `_first_hidden_child_index` is shop-only | factory | same | COL-46, COL-27 |
+| NB-15 | 5 equipment slots (outside JSON UI) | rendering | same | (server chapter) |
+| NB-16 | 9 server form schema row types | server form | same | HOST-46 |
+| NB-17 | Ore UI file requests go to trusted packs first | Ore UI, pack | [Ore UI engine findings](./ore-ui-engine-findings.mdx) | ALT-11 |
+| NB-18 | The `resourcePackOverrides` button bridge | Ore UI, pack | same | ALT-15 |
+| NB-19 | The DDUI layout comes only from the built-in pack | Ore UI, pack | same | ALT-16 |
+| NB-20 | The encrypted access strategy is always trusted | pack | same | ALT-11, ALT-12 |
+| NB-21 | The DDUI data channel, option 593 | Ore UI | same | ALT-16 |
+| NB-22 | `geo-item://` icon resolution | Ore UI | same | ANI-06 |
+
+`NB chapter 4` is a list confirmed by string search (31 `button.menu_*` entries, error messages, `grid_rescaling_type` values) and is in "Confirmed by strings" on the JSON UI engine findings page.
+
+## 2. Re-confirmed things already known
+
+This is not new information, but the evidence changed from reconstructed code (`CN`) to the actual binary.
+
+
+This is not new information, but the evidence changed from reconstructed code (`CN`) to the actual binary. The guide records the source as `NB`.
+
+- A factory reads `control_name` first and reads `control_ids` only when it is empty (NB-06, COL-28 and COL-43).
+- `insert_location` defaults to `back` and puts the item in front only when the value is `front` (NB-06, CN-43).
+- When `array_name` is empty and `control_name` is present, `controls` is the target (NB-03, CN-10).
+- A view binding reads its own control when `source_control_name` is absent, and turning on both scopes together makes it act on the sibling range (NB-09, BND-24 and BND-25). The only new fact is the error message in that case (`resolve_ancestor_scope and resolve_sibling_scope cannot both be set!`).
+- Of the 31 `button.menu_*` entries, 27 are also used by vanilla (excluding the 4 in R-09).
+- The candidate values `horizontal`, `vertical` and `none` for `grid_rescaling_type` match the official enum (NB chapter 4).
+
+
+## 3. What reverse engineering could not yet obtain
+
+
+Each page of the engine internals chapter lists these under "What remains" at the end. In summary: the binding expression evaluator (operators, `'%.Ns'`), string resolution and defaults for `binding_type`, the stage where `$x|default` is applied, the condition function for the `#hyperlink` prefix list, and the functions that read `grid_rescaling_type`, `propagate_alpha` and `clip_direction`. The expression rules (guide chapter 5) still rest on measurement and `CN`.
+
+
+## 4. Evidence levels and usage
+
+| Level | Meaning in this chapter |
+| --- | --- |
+| `code` | The compiled output was read. It means the engine reads it that way, and does not guarantee the result on the game screen |
+| `inferred` | Judged from only part of a function or from type names |
+| `measured` | The same topic was verified in game on Windows 1.26.52 (`OL`, `MS`, `DF`) |
+
+When a rule is at the `code` level, verify it in game before using it. When the binary result and the in-game measurement differ, follow the measurement.

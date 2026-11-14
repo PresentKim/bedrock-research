@@ -1,0 +1,72 @@
+---
+title: "mcbejsonuimasterAI (JSON UI skills and checking tools for AI)"
+description: "A repository of 28 skills, 87 documents, and 63 CLIs that let AI handle JSON UI. The pinned vanilla version and change table are valuable, while some engine rules are wrong"
+sidebar_position: 12
+sources:
+  - mcbejsonuimasterai
+  - bedrock-samples
+  - repo-guide
+---
+
+## What it is
+
+mcbejsonuimasterAI is a repository made by a single GitHub user, `boredape874`, from 2026-04-25 to 2026-10-04 (HEAD `527276c`, 87 commits, 1,231 files, 87 documents of about 70,000 words, 28 skills, 63 Node CLIs, an MCP server, and the browser editor Studio). **It is "a working environment that lets AI handle JSON UI" and not "a JSON UI engine rulebook".** It is mainly for OpenAI Codex. Its strengths are static evidence management such as pinning the vanilla version (`v1.26.50.4` / `46ba6ea`, only 15 files committed), name comparison, and tracking 1.26.50 changes. The clone root has no `LICENSE`, and `NOTICE.md` only says that some code came from the MIT-licensed gamezaSRC/JSON-UI-Web-Editor, so it is treated as copyrighted by default and no sentences or code were copied. The facts were rechecked against vanilla (Source: cs-mcbejsonuimasterai).
+
+## Structure
+
+It splits into two layers. The **knowledge layer** (28 skills, 87 documents, the property dictionary `data/jsonui-spec.json`, reference material) is where you look up "which name is right and which patterns exist", and in the **tool layer** (63 CLIs) you write the layout as a YAML IR, a solver resolves the coordinates, a compiler emits the JSON UI, and a checker and preview confirm it. Bindings and animations are meant to be added by hand on top of the output. Every skill has an "Evidence first, skill second" block: target pack and Content Log, then pinned vanilla (`vanilla-name-check`), then registered external sources, and only if still not found the skill's own content (marked "inferred" in that case). This principle points in the same direction as the level notation of our guide.
+
+## What is valuable
+
+- The vanilla 1.26.10.4 to 1.26.50.4 change document (`docs/83`) is the most valuable. Every sample check was right: `multiselect` added to the `custom_form` factory in `server_form.json`, the HUD subtitle changed to `subtitle_container_factory`, `curor_rend@cursor_renderer` removed from the HUD root, the inventory close button id changed to `button.menu_inventory_exit`, the tab factory moved to the `#*_tab_visible` global bindings, and the chat label width `100% - 3px`. In particular the `multiselect` control exists in the RP but the public Script API (`@minecraft/server-ui` 2.2.0~2.4.0-beta) has no method that sends to it.
+- It has a server form contract tracking checklist (title, factory, collection, index, response) and a pattern for switching pages with a dropdown in a single `ModalForm` (unverified). A hidden dropdown is placed in field 0, the view key is read with `('%.4s' * #dropdown_option_text)`, and a resident gate panel turns the content on and off.
+- The name comparison tool `vanilla-name-check` finds real names (`common.close_button`, `#title_text`) and rejects invented names and typos (`common.close_buton`). But it indexes only 15 files, so even real names such as `start_screen` come out as NOT FOUND.
+
+## What is wrong or unsupported
+
+This is the result of comparing against a full search of the 207 vanilla files.
+
+| Claim | Reality |
+| --- | --- |
+| `resolve_ancestor_scope` was "additionally confirmed" in vanilla 1.26.50 | 0 uses in vanilla. `resolve_sibling_scope` has 53 (C-07) |
+| `scroll_box` is a control type | The vanilla types are `scroll_view`, `scrollbar_box`, and `scroll_track`. `scroll_box` is a control name in `ui_common.json` (LAY-02) |
+| `grid_fill_direction` has four values such as `left_to_right` | Vanilla has only `vertical` (LAY-26) |
+| `grid_rescaling_type: none` was confirmed in vanilla | Vanilla has only `horizontal` 21 times and `vertical` once |
+| `modifications` entry key `target_control`, array `button_mappings` | It said there is no basis, but the engine does read `target_control` (NB-02). The array scope is C-64 |
+| Introduces `(x - x % 65536) / 65536` | `%` is not an operator (EXP-02). It is Chest-UI's accidental behavior (EXP-38) |
+| `(#form_text * 1)` turns a leading number into a number | `* 1` gives 0 and only `(#v - 0)` works (S12, C-04) |
+| Padding formats such as `%5.3s`, cutting by character | No source or test. Other documents in the same repository say "byte width", which contradicts it |
+| The `binding_type` table | Missing `none` (once in vanilla) |
+
+`data/jsonui-spec.json` also has properties with 0 uses in vanilla (`z_order`, `clip_offset`, `alignment`, `pixel_perfect`, `gradient_direction`, `use_uuid`, `animation_looped`, `precached_grid_item_count`, `toggle_on_hover`, `slider_timeout`, and others). The cause is that the test only checks "are all the names vanilla uses in the spec" and does not check the opposite direction ("are the spec's names in vanilla"). So the spec is useful for catching typos but wrong as a "list of valid names" (DBG-07, two-way comparison).
+
+Overall there is almost no original measurement knowledge. Only 3 files mention in-game measurement, and most runtime claims are honestly marked "not verified", but the engine semantics are empty. Missing are: there is no `%` or `>=`, `#size_binding`, that `#visible` does not block creation, and that a form button without `collection_details` gives `canceled`.
+
+## Results of running the tools
+
+- `npm run check` passes 64 of 68 tests (2 need PowerShell and 2 exceed the image comparison tolerance because of Linux fonts). The Studio tests are 27/27.
+- IR, solve, compile, and validate succeed, but the generated `ui.json` is flat top-level definitions with absolute px for every element, has no `$variable`, bindings, templates, or modifications, and is not connected to any vanilla screen, so it does not show up in the game as is.
+- `validate-pack` gave AdvancementPack "no namespace" errors for 8 files, but they are false positives on files meant to merge into vanilla files (FILE-05). The unregistered `_global_variables.json` warning is also a false positive (loaded automatically, FILE-04). For `.r4ui` it only checks existence and does not inspect the content. The warning that layers 119~201 are high is noise (LAY-21).
+- The preview and `final-rp:render` are wireframes or gray images and are not for judging "does it look like Bedrock".
+
+In summary, **the name comparison tool is useful, but the pack checker and renderer give many false positives for real community packs as they are** (DBG-23, DBG-24).
+
+## Comparison with other cases
+
+| | bedrock-core | BedrockAdvancements | AdvancementPack | This repository |
+| --- | --- | --- | --- | --- |
+| Basis for engine rules | In-game measurement | A working pack | A working pack | Static comparison, almost no measurement |
+| Version tracking | Code baseline | n/a | n/a | v1.26.50.4 pin and change table (the only one) |
+
+Regarding the NPC dialog host, this repository's NewUI example says it avoids the dialog file's limit of 6 scene buttons by using the NBT `Actions` of an NPC `.mcstructure` to supply 9 buttons (unverified, D-19).
+
+## Relation to our rules and what to take
+
+| Rule ID | Relation |
+| --- | --- |
+| DBG-07, DBG-24, DBG-26 | Two-way comparison, passing a tool does not mean valid, the trust range of AI-generated documents |
+| LAY-02, LAY-26, BND-01, C-07 | Rules that refute this repository's wrong claims |
+| EXP-02, EXP-16, EXP-25 | The claims about `%`, `* 1`, and padding formats |
+| FILE-04, FILE-05 | Checker false positive cases |
+
+What to take as rules (rechecked against vanilla): the list of 1.26.50 change cautions, the fact that vanilla builds binding names with variable expressions (`"$toggle_state_binding_name": "('#' + $dropdown_name)"`), two-way comparison of the spec dictionary, and showing evidence stages (target pack, pinned vanilla, external sources, inference). What not to take: using the spec as a valid property list, the `scroll_box` type, the four `grid_fill_direction` values, `resolve_ancestor_scope`, the `%` example, the `* 1` conversion, padding formats, and presenting IR/solver output as finished examples.

@@ -1,0 +1,241 @@
+---
+title: "Bindings"
+description: "Binding kinds and conditions, view bindings, reading other controls, engine property rules (BND-01~BND-36) and proposals"
+sidebar_position: 5
+sources:
+  - repo-guide
+  - repo-survey
+  - private-research
+  - bedrock-wiki
+  - ms-learn
+  - bedrock-samples
+  - private-research
+  - cinnabar
+  - bedrock-core
+  - advancementpack
+  - private-research
+  - asajs
+  - netease-docs
+---
+
+## Concept: a binding is the line that connects engine data to a control property
+
+A control's properties are set in two ways: a static value (`"text": "Hello"`), and a **binding** that pulls in data the engine computes (`#property`). A binding is written as an item of the `bindings` array, and one item is one line. There are five kinds.
+
+| `binding_type` | What it reads | Use |
+| --- | --- | --- |
+| `global` (default when omitted) | Global properties the screen receives from the engine | When taking a value as is |
+| `view` | A property of another control (or itself), or an expression | When computing or copying |
+| `collection` | An item property of a collection | Factory and grid items |
+| `collection_details` | Collection item details (press counting, etc.) | Server form buttons |
+| `none` | Reads nothing | Once in vanilla |
+
+### Step-by-step examples
+
+1. The simplest form: put the engine property `#hardtext` as is into a label's `text`.
+
+   ```json
+   { "label": { "type": "label", "text": "#hardtext",
+       "bindings": [ { "binding_name": "#hardtext" } ] } }
+   ```
+
+2. `binding_name_override`: put the received value into a property name you choose. It is often used for `#visible` and `#enabled`.
+
+   ```json
+   { "send_button": { "bindings": [
+       { "binding_name": "#using_touch", "binding_name_override": "#visible" } ] } }
+   ```
+
+3. A `view` binding: read a property of another control and write it to your own property. Make a panel visible only when a toggle is on.
+
+   ```json
+   { "panel": { "bindings": [ {
+       "binding_type": "view",
+       "source_control_name": "my_toggle",
+       "source_property_name": "#toggle_state",
+       "target_property_name": "#visible" } ] },
+     "my_toggle": { } }
+   ```
+
+4. An expression: if you write a parenthesized expression in `source_property_name`, the computed result goes into `target_property_name`. At least one `#property` must be in it (BND-05).
+
+   ```json
+   { "binding_type": "view", "source_control_name": "image", "resolve_sibling_scope": true,
+     "source_property_name": "(not (#texture = ''))", "target_property_name": "#visible" }
+   ```
+
+(Steps 1~3 rewrite the explanation of the Bedrock Wiki Intro, and 4 has the same form as `dynamic_button` in vanilla `server_form.json`.)
+
+### The binding key table of the Bedrock Wiki
+
+<Excerpt src="bedrock-wiki" title="JSON UI Documentation, Data Binding" path="docs/json-ui/json-ui-documentation.md">
+
+| Property | Type | Description |
+| --- | --- | --- |
+| ignored | boolean | If binding should be ignored (default `false`) |
+| binding_type | enum | `global`, `view`, `collection`, `collection_details`, `none` |
+| binding_name | string | Stores the value of the data binding name or condition with it |
+| binding_name_override | string | Name of the UI element property that will apply the stored value in `binding_name` |
+| binding_collection_name | string | Name of the collection of items to be used |
+| binding_condition | enum | Condition for the data binding to happen: `always`, `always_when_visible`, `visible`, `once`, `none`, `visibility_changed` |
+
+</Excerpt>
+
+### Binding keys in Microsoft Learn
+
+The `bindings` entry of the MS Learn `minecraft:ui_element` document lists `binding_collection_name` (the collection name of a collection binding), `binding_condition` (when to evaluate), `binding_name` (the data source to bind, for example `#player_name`), `binding_name_override` (the property of the element to put the value into), `binding_type`, `source_control_name` (the source control of a view binding), `source_property_name` and `target_property_name` (Source: ms-learn). This document omits `binding_collection_prefix`, `resolve_sibling_scope` and others, and its enum values are empty, so use the tables below (4.1, 4.2) as the reference.
+
+## Rules
+
+A binding moves engine data (`#property`) into a control property, or computes a new property with an expression. One item of the `bindings` array is one binding.
+
+### 4.1 Keys of a binding item
+
+| Key | Meaning |
+| --- | --- |
+| `binding_type` | `global`, `collection`, `collection_details`, `view`, `none` |
+| `binding_name` | The property name the engine gives (`#title_text`, `#form_button_text` …) |
+| `binding_name_override` | The name of your own property to put the received value into (`#text`, `#visible`, `#collection_length` …) |
+| `binding_collection_name` | The collection name (`form_buttons`, `custom_form`, `container_items` …) |
+| `binding_collection_prefix` | The prefix of a collection that has a prefix (`student_buttons`, etc.) |
+| `binding_condition` | When to re-evaluate |
+| `source_control_name` | The name of the other control to read the value from in a view binding |
+| `resolve_sibling_scope` | If `true`, looks up `source_control_name` in the sibling scope |
+| `source_property_name` | The expression or property to read in a view binding |
+| `target_property_name` | The property to write the view binding result to |
+
+- **[BND-01]** Use the binding keys in the table above. `resolve_ancestor_scope` never appears in vanilla, so do not use it (`resolve_sibling_scope` has 53 uses). The engine reads this key (ancestor scope, BND-25 and BND-36). Since vanilla does not use it, the conclusion not to recommend it is the same. `{vanilla, code}` (Source: VN, MJ 4.2-1, conflict C-07, NB-09)
+- **[BND-02]** An item that omits `binding_type` reads a global property (for example `{ "binding_name": "#title_text" }`). `{vanilla, code, inferred}` (Source: VN server_form.json:138, BC 4.1, BA chapter 2, BW-intro, BW-dyn)
+- **[BND-03]** Counts of `binding_type` that vanilla uses: `collection` 787, `collection_details` 287, `global` 265, `view` 240, `none` 1. Templates often receive this value as a variable (`$store_factory_binding_type`, etc.). `{vanilla}` (Source: VN, value dictionary)
+
+### 4.2 `binding_condition`
+
+| Value | Vanilla | Meaning |
+| --- | ---: | --- |
+| (omitted) | many | Engine default |
+| `visible` | 135 | When visible |
+| `once` | 106 | Only the first time |
+| `always` | 97 | Continuously |
+| `always_when_visible` | 66 | Continuously while visible |
+| `visibility_changed` | 7 | When visibility changes |
+| `none` | 6 | Every time the data updates (BND-23). Not in the official schema enum |
+
+- **[BND-04]** **A bound property belongs to the control that has the binding.** If you put a collection binding on a button and use `#form_button_text` in a label two levels down, it comes out blank. The value is bound directly by the control that draws it, or copied with a view binding (BND-08). `{measured}` (Source: BC-S7)
+- **[BND-05]** If a view binding expression has no `#property` at all, the error `Must define a source property name in the binding!` occurs, and the **whole bindings array** of that control is discarded. To use a constant, put in any property like `((#v = #v) * 40)`. The Cinnabar reconstruction discards only that one binding, but measurement is followed (conflict C-43). `{measured}` (Source: BC-S12, conflict C-43)
+- **[BND-06]** For a value that only needs to be decided once (for example whether a toast icon shows), `"binding_condition": "once"` reduces cost. It is re-evaluated when a factory recreates the control. `{working pack}` (Source: BA collections and factories chapter, AP 4.5)
+- **[BND-07]** A binding inside a cell created by a factory can run too early and stay empty (it shows only after losing and regaining focus). Give it `binding_condition: "always"`, or read it outside the factory and copy it in with `source_control_name`. If the `visible` inside a cell is also `always`, it applies immediately. A cell can read outside controls but the outside cannot read the cell (BND-19). `{measured}` (Source: BC-S11, conflict C-11, BW-dyn)
+
+### 4.3 View bindings and reading other controls
+
+```jsonc
+// Take and use a value computed by a sibling
+{ "binding_type": "view",
+  "source_control_name": "image",          // The control to read
+  "resolve_sibling_scope": true,            // Look it up in the sibling scope
+  "source_property_name": "(not (#texture = ''))",
+  "target_property_name": "#visible" }
+```
+(The same form as `dynamic_button` in vanilla `server_form.json`)
+
+- **[BND-08]** Read another control's property with `source_control_name`. When reading a sibling, also give `resolve_sibling_scope: true`. `{vanilla, working pack}` (Source: VN 236 and 53 uses, example server_form.json:156, BA collections and factories chapter, BW-intro, BW-form)
+- **[BND-09]** The default of `#visible` is `true`. If an expression fails (an unsupported operator, etc.), the property stays at its default, so it becomes "always visible". If a hide condition does not take effect, suspect the expression first. `{measured}` (Source: BC-facts, BC 6.2-1)
+- **[BND-10]** Do heavy calculations such as string parsing **once in one place, the parent (or a data source)**, and have children take only the result with `source_control_name`. `{working pack}` (Source: BA collections and factories chapter)
+- **[BND-11]** If several places must read the same value, put a size-0 "data source" control at the screen root and have each gate read that value with a view binding. It is also a way to read only the data without putting a native input (a radio, etc.) inside a collection item. `{code, measured}` (Source: BC 4.1-(5), BC-rules)
+
+### 4.4 Bindings and variables
+
+- **[BND-12]** In definitions the pack owns directly (definitions of a new namespace, redeclared definitions), a `$variable` can be used in `source_property_name`. Example: `"source_property_name": "$visible_binding"`. `{working pack, measured}` (Source: AP 4.2, BC-facts)
+- **[BND-13]** Inside a subtree **inserted** into a vanilla tree with `modifications`, a `$variable` cannot be used in a binding's `source_property_name` (all 6 variants gave `Must define a source property name`). Ordinary property substitution such as `$caption` in `text` works in the same place. So for inserted trees, make a separate definition with the binding names hardcoded as literals. `{measured}` (Source: BC-facts)
+- **[BND-14]** There is a record that passing a value such as a factory row index to a derived definition as a `$variable` and using it in the base's binding broke the binding and discarded the whole array. Whether vanilla's `factory_variables` (COL-15 in the collections and factories chapter) solves this problem was not measured. `{measured, inferred}` (Source: BC-S9, VN)
+
+### 4.5 Engine properties: commonly used binding targets
+
+| Property | Meaning | Evidence |
+| --- | --- | --- |
+| `#visible` | Visibility (default true) | VN, all sources |
+| `#text` | Label text (`"text": "#text"`) | VN |
+| `#texture`, `#texture_file_system` | Image texture path | VN server_form.json:173 |
+| `#clip_ratio` | Image clip ratio (0~1) | VN 33 uses, BA |
+| `#collection_length` | Number of cells a factory or collection creates | VN 89 uses, BC-S11 |
+| `#size_binding_x/y`, `#anchored_offset_value_x/y` | Size and position (table in chapter 3) | VN, BC-S12 |
+| `#item_id_aux` | Item renderer input (`id x 65536 + aux`) | VN, AP, BC-facts |
+| `#toggle_state` | Toggle state | BC 4.2 |
+| `#propagateAlpha` | Whether to propagate the parent's alpha to children | VN hud_screen.json:3568, AP |
+
+- **[BND-15]** `propagate_alpha` can also be changed with the binding `#propagateAlpha`. The vanilla HUD root receives the global `#hud_propagate_alpha` as `#propagateAlpha`. With parent `alpha: 0` + conditional propagation you can make "only a particular message transparent". `alpha` itself is not propagated to children by default (LAY-33). `{vanilla, working pack}` (Source: VN hud_screen.json:3567, AP 4.5, conflict C-15, BW-doc)
+- **[BND-16]** `binding_name_override` moves an engine name into your own property. Examples: `#hud_title_text_string` -> `#text`, `#form_button_contents` -> `#collection_length`. `{vanilla}` (Source: VN hud_screen.json, server_form.json:138, BW-intro)
+- **[BND-17]** Vanilla builds the binding name itself as a variable expression: `"$toggle_state_binding_name": "('#' + $dropdown_name)"`. It is a way to read various data with one template. `{vanilla}` (Source: VN ui_common.json:1126, storage_management.json:1325)
+
+### 4.6 Rules added from the Bedrock Wiki comparison
+
+These are rules added by comparing the wiki (BW) documents with vanilla 1.26.50.4. Those with only wiki sentences are marked `unverified`, and those with in-game screenshots in the wiki are marked `measured` (third-party record).
+
+- **[BND-18]** **Value preservation (latch).** Put `"#saved": ""` in the `property_bag` of a size-0 panel, and copy the source **only at the moment visibility changes** with `{ "binding_name": "#src", "binding_name_override": "#saved", "binding_condition": "visibility_changed" }`. If you set the `#visible` of this panel to "when the new value contains the keyword (EXP-07) and differs from the saved value", it shows for one frame at the moment the condition matches and hides again because the condition turns false right after saving. An outside label reads `#saved` with `source_control_name`. `property_bag` is separate per instance, so several of the same component do not mix. It is used to keep "the last title containing my keyword" in the HUD title channel (HOST-14) even when other titles arrive. `{unverified}` (Source: BW-title, VN `visibility_changed` 7 uses)
+- **[BND-19]** A control created by a factory or grid can read properties of an **outside** control with `source_control_name`, but outside controls cannot read the properties of created controls. Put values to share in a data source outside the factory (BND-11). `{unverified}` (Source: BW-dyn "Useful Information")
+- **[BND-20]** `resolve_sibling_scope: true` limits the `source_control_name` search to the sibling scope, but if the parent and a sibling have the same name, the parent takes priority. Name the control to read so that it does not collide with ancestors. Cause: the sibling search starts breadth-first from the parent itself (BND-25). `{code}` (Source: BW-doc Data Binding table, CN)
+- **[BND-21]** Inside a button state control, state variables can decide creation itself: `"ignored": "$default_state"` on a child that should show only on hover. Vanilla also uses `"ignored": "$hover_state"` (2), `"visible": "$default_state"` (3) and `"visible": "($hover_state or $pressed_state)"` (5). It means the variable expression of INP-09 works for `ignored` too. `{vanilla, unverified}` (Source: BW-btn, VN)
+
+### 4.7 Rules added from the Cinnabar engine reconstruction
+
+Cinnabar (`CN`) is Rust code that reconstructs the JSON UI parser of the 26.30 native client. The level is `code`, and `CN-run` is the result of this project running that evaluator directly. If it differs from game measurement, follow measurement (conflicts C-41~C-47).
+
+- **[BND-22]** An unknown `binding_type` is logged and acts as `global`, and an unknown `binding_condition` is logged and acts as `none`. A typo becomes "silently different behavior", so copy values from the table. `{code}` (Source: NB-09 (`binding_condition`), CN tests B07 and B13 (`binding_type`))
+- **[BND-23]** Meaning of `binding_condition`: `none` on every data update, `once` the first time, `always` every update, `always_when_visible` and `visible` only when visible, `visibility_changed` only when visibility changes. The six values match the engine's name table (BND-35). `{code}` (Source: NB-09 (value list), CN (meaning))
+- **[BND-24]** A view binding without `source_control_name` reads **its own bag**, and a property not there is read from the screen controller (global). A named view does not fall through to global. `{vanilla, code}` (Source: VN 27 uses, NB-09 (own control), CN tests B26 and B27 (global fallback), CN Zeqa regression)
+- **[BND-25]** `source_control_name` lookup: by default **breadth-first first match** from the screen root, `resolve_sibling_scope` breadth-first from the parent (including the parent itself, the cause of BND-20), and `resolve_ancestor_scope` the nearest ancestor of the same name. Hidden subtrees are searched too. If names collide, the one closer to the root wins. `{code}` (Source: NB-09 (the three scopes), CN tests B20 and B25 (search order))
+- **[BND-26]** An expression binding `{"binding_name": "(expression)", "binding_name_override": "#t"}` gives the controller's original answer to `#t` in the bag and the expression result to the component. If another view reads `#t`, it sees the original answer, not the expression result. To share the result, compute it with a view binding and put it in a new property. `{code}` (Source: CN test B08)
+- **[BND-27]** Boolean targets (`#visible`, `#enabled`, `#toggle_state`, etc.) accept only JSON booleans. Binding the global string `'false'` as is to `#visible` does not hide it. Going through an expression (`(#flag = 'false')`) makes it a boolean. `{code}` (Source: CN)
+- **[BND-28]** Constant expressions in a `property_bag` literal are computed (`"#n": "(1 + 2)"` -> 3). A parent's `property_bag_for_children` is merged into descendants' bags but does not overwrite values the descendants have. `{code}` (Source: CN tests B32 and B33)
+- **[BND-29]** Text that starts with `##`, like `"text": "##text"`, is a literal, not a binding. An unbound `"text": "#name"` is drawn as empty text. `{code}` (Source: CN test L08)
+
+### 4.8 Rules added from the research server measurement
+
+These were measured on Windows 1.26.52 while building the research server (`DF`). They came from a structure that draws several screens with one server form.
+
+- **[BND-31]** Keep the `#visible` of a layout chosen by title at `binding_condition: "always"`. With `once`, a layout that briefly matched while the form switched to the next form stayed on over the next form. `{measured}` (Source: DF)
+- **[BND-32]** If you put `binding_condition: "visible"` on the length binding (`#form_button_contents` -> `#collection_length`) of a factory inside a layout that started with `visible: false`, a layout hidden because its title did not match did not create button cells (the "creation is not stopped" of COL-10 is about the layout control itself). When used on a layout that is visible from the start, even the hidden layout created cells on the first frame. Using `always_when_visible` or omitting in the same place left the bindings of cells created on the first frame unupdated, so text and markers were empty. `{measured}` (Source: DF)
+- **[BND-33]** Even in our own definitions, a `$variable` put in as **part** of a `source_property_name` expression was not substituted (tab and back buttons did not show, and the pack checker could not catch it). Unlike BND-12, where the whole expression is received as a variable, values put inside an expression like markers are written as literal text in each expression. `{measured}` (Source: DF)
+- **[BND-34]** Comparing a subtraction result directly in the same expression like `(not ((A - B) = 'z'))` flipped true and false. Putting it first in a `#variable` with a view binding and comparing with `(not (#variable = 'z'))` was correct. Split the steps as in EXP-06. `{measured}` (Source: DF)
+
+### 4.9 Rules added from the engine behavior analysis
+
+These were read by analyzing the native library of the Android 1.26.52.3 client (`NB`). The level is `code`.
+
+- **[BND-35]** `binding_condition` must be a string (otherwise the error `- expected a string.`), and its values are six: `none`, `once`, `always`, `always_when_visible`, `visible` and `visibility_changed`. **If omitted or an unknown value, it acts as `none`** (the same as BND-22 and BND-23). `{code}` (Source: NB-09)
+- **[BND-36]** A view binding reads **its own control** when `source_control_name` is **empty** (BND-24), and otherwise looks up in one of the default, sibling (`resolve_sibling_scope`) and ancestor (`resolve_ancestor_scope`) scopes (BND-25). Turning both scopes on leaves an error and acts as the **sibling scope**. If `source_property_name` or `target_property_name` is missing, each gives a `Must define a … property name in the binding!` error. A collection binding without `binding_collection_name` gives the error `Must define a collection name for the binding!`. `{code}` (Source: NB-09)
+
+## Facts added by community reports (community)
+
+(Source: private research) All are at the report level.
+
+- Principle: `global` to take as is, `view` to compute.
+- If you attach several bindings to the same target, they are not merged and the last one wins. Merge them into one expression. A binding that reads and writes the same name (`#len` -> `#len`) becomes a loop, the string keeps growing and memory increases.
+- `resolve_ancestor_scope` appeared in 1.21.130, but reports that it does not work or raises errors in the stable release conflict with reports that it works, so using `resolve_sibling_scope` continuously is recommended (D-12, BND-01).
+- Putting `once` on the factory and grid length bindings of a big form reduces lag and ghost buttons. But keep the `#visible` of a layout chosen by title at `always` (BND-31). There is a report that `binding_condition` cannot be put on a view binding (D-11), but the measurement that `always` and `visible` were effective on a layout `#visible` (BND-31, BND-32) is followed.
+- **The preserved title (latch) pattern works.** Value preservation of BND-18 is the standard of the HUD title channel, and several people confirmed it works through 2026-07 (D-13, a candidate to raise the guide level from `unverified`). The majority say to put the `data_control` at the root (D-20).
+- `property_bag_for_children` entered the stable release around 2026-05 (BND-28).
+- A nonexistent binding name (`#item_aux_id`, the correct one is `#item_id_aux`) returns the `property_bag` default without an error. Copy binding names from vanilla files or the JSON UI Dumper.
+- A mobile crash report: writing `and` inline inside `binding_name` killed mobile. Do calculations in a view binding.
+
+## Proposals (not applied)
+
+- **[BND-30]** (proposal) There is a generator that does repeated calculation (counting string length, a Newton square root) by attaching two view bindings to the same target, "initialize" and "itself + increment". It needs the premise that a view binding rewrites only when its source changes and the chain loops until it converges (the Cinnabar finding CN-36). The iteration limit and per-frame processing were not confirmed, so it is not used as a recipe. `{code, unverified}` (Source: jua-asajs, jua-cinnabar) Measurement task: whether this setup reaches the final length and how many frames it takes. It ties in with the community report that "reading and writing itself becomes a loop".
+- **Reinforcement proposal (not applied)**: add to BND-02 the verdict that the default when `binding_type` is omitted is `global` (C-59 resolved) and the China edition documentation's description. A corresponding description from the China edition documentation was also proposed for BND-26 (the value an expression binding gives the bag). The BND-22 reinforcement was omitted because the BND-02 reinforcement and C-59 suffice. How editors approximate binding names (the limit of previews) moves to the debugging chapter.
+- **DF measurement reflection note**: BND-31~BND-34 from the research server measurement are already in the body (above). The numbers do not overlap with the proposals.
+
+## Conflict verdicts (related to this chapter's rules)
+
+| ID | Topic | Claim and evidence | Verdict |
+| --- | --- | --- | --- |
+| C-07 | `resolve_ancestor_scope` | The MJ analysis repository said "to be checked further" for vanilla 1.26.50. Vanilla 0, `resolve_sibling_scope` 53. The engine reads it (NB-09) | Resolved: it exists in the engine but vanilla has 0 uses, so it is not recommended |
+| C-11 | `visible` inside a factory cell | S9 says ignored, S11 says immediate with `always` and late with the default condition. The later measurement explains the cause as binding timing | Resolved: `binding_condition: "always"` |
+| C-15 | The `#propagateAlpha` binding | The usage was seen only in AP, but vanilla `hud_screen.json:3567` binds the global `#hud_propagate_alpha` as `#propagateAlpha` | Resolved: vanilla binds it too |
+| C-43 | A binding expression without `#` | Measurement discards the whole `bindings` array, Cinnabar only that one binding. Cinnabar may be a lenient implementation | Measurement first: BND-05 kept |
+| C-59 | Default of `binding_type` | `global` when omitted | Resolved |
+| C-56 | Search scope | Breadth-first from the screen root when there is no `resolve_sibling_scope` | Resolved: the Cinnabar and vanilla side |
+
+## Items that need measurement
+
+- Whether variables can be passed to cells with `factory_variables` (COL-15, BND-14).
+- Standalone behavior of the `visibility_changed` latch pattern (BND-18).
+- How many frames the initialize and self-increment bindings take to count string length (BND-30).

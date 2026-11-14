@@ -1,0 +1,197 @@
+---
+title: Vibrant Visuals and RTX
+description: The concepts of VV and ray tracing, the pbr capability, the texture set schema and the MER and MERS channels, normal and height maps, RTX and BetterRTX
+sidebar_position: 9
+sources: [private-research, ms-learn, bedrock-wiki, bedrock-samples]
+---
+
+# Vibrant Visuals and RTX
+
+## Concept
+
+**Vibrant Visuals** (VV) is Bedrock's deferred rendering graphics mode. It provides directional lighting, volumetric fog and atmospheric effects, and it runs on a physically based rendering (PBR) pipeline. It runs purely locally and does not change gameplay, so it is backward compatible. Turn it on in the settings under Video, Graphics mode. All new lighting features are optional and use defaults if the pack gives no values. **Ray tracing (RTX)** is a separate graphics mode and shares part of the same PBR scheme (texture sets) (Source: ms-learn, the Vibrant Visuals introduction and PBR overview).
+
+On top of the color texture, PBR gives maps with per-pixel metalness, emission, roughness, and normal or height (and additionally SSS under VV) values. These maps decide how the surface reacts to light. For a pack to use PBR, it declares the `pbr` capability in the manifest. Other settings (tone mapping, atmosphere, lighting, fog, water) are JSON settings files, and values that change by time of day are written as keyframe JSON ([VV settings files](./vv-settings.mdx)).
+
+```json
+{
+  "format_version": 2,
+  "header": { "name": "My VV Pack", "uuid": "...", "version": [1, 0, 0], "min_engine_version": [1, 21, 90] },
+  "modules": [ { "type": "resources", "uuid": "...", "version": [1, 0, 0] } ],
+  "capabilities": ["pbr"]
+}
+```
+
+`capabilities` must be at the top level, alongside `format_version`, `header` and `modules`, not inside `header`. MS Learn (Vibrant Visuals Resource Packs) says to set `min_engine_version` to `[1, 21, 120]` or higher, and since RTX assets are a subset of VV assets, a pack with the `"raytraced"` capability also activates VV, but it recommends using `"pbr"` for VV packs (VV is cross-platform). The new capability is not backward compatible with the RTX pipeline. The example manifest in that document writes `format_version` as 1 and community reports say it works with 2 (`conflicting`; both seem to work `{needs measuring}`).
+
+## Activation and pack compatibility
+
+(Source: private research)
+
+- **The pbr capability is required**: It must be a top-level key as in the example above. If placed inside `header`, VV stays inactive. To use RTX too, add the RTX capability, and if RTX is not needed, `pbr` alone is enough. It works with manifest `format_version` 2 and `min_engine_version` is also needed. This is the typical cause of "VV suddenly turned off" or "nothing changes", and raising only `min_engine_version` does not fix it. `confirmed`
+- **min_engine_version and old packs**: There were two reports that a VV resource pack needs `min_engine_version` 1.21.120 or higher together with the pbr capability, and old manifest packs and pre-VV Marketplace content may not be shown as compatible. The report that format version 3 fails and 2 works is unclear on whether it concerns the manifest or the texture set. `single report`
+- **Old world templates**: When a pbr pack was added to an old world template while raising the manifest game version, the world got dark. Before adding the pack, raise the base game version in the level data (NBT) first. `single report`
+- **Settings reset bug**: The bug where VV settings and macros reset is MCPE-235907 (https://mojira.dev/MCPE-235907 ), and there is a report that making the settings file read-only prevents it.
+- **One add-on turns off VV**: One add-on whose resource pack lacks the pbr capability turns off VV for the whole world. Adding it to that pack's manifest fixes it (related to MCPE-240476). A case where the graphics mode silently changed to Fancy after adding an add-on has the same cause.
+- **When it does not turn on even with pbr**: If the pack has some other problem, VV may not turn on even with pbr (cause unresolved). There was no answer on how to enable VV with an encrypted pack, and there is no way for a pack to force VV off (allowing only Simple/Fancy).
+- **VV detection**: VV's original name is "deferred" rendering, and there are Molang queries that tell the graphics mode and whether it is deferred, so materials can be changed per mode. raytraced is a separate setting. There is also an RTX detection query.
+- **Marketplace**: Marketplace worlds have VV off by default, so the PBR of PBR/RTX Marketplace packs is not loaded. Turning on "Allow switching graphics mode" in the video settings lets you turn on VV without a mod even in a Marketplace RTX map.
+- **Using an RTX pack under VV**: The two modes use almost the same PBR scheme (color/normal/heightmap/MER texture sets) and are mostly compatible. Using an RTX pack under VV gives a VV for that pack without ray tracing, and since RT hardware is not needed, it also works on phones. But artifacts (education block replacement, a strange sky) can appear, and the MER emissive values for RTX are too bright under VV.
+- **Stacking several packs**: "Defined PBR" family packs do not add PBR; they override the settings of earlier packs such as PBR and fog. So stacking several fog/PBR packs is meaningless.
+- **Mode switching glitches**: Changing from Fancy to VV inside a world breaks water into a milky gray. Turn on VV first at the main menu. Switching modes inside a world leaves VV glitches or RTX black skins. Turning off reflections or reloading the world in the Nether/End breaks reflections, so do it in the Overworld. The education toggle also breaks VV.
+- **"Adjust Brightness" fix**: If the world got darker overall after an update, turn on VV, apply Adjust Brightness (for example 100%), and then turn VV off.
+- **Hardware**: A PC needs a DirectX 12 class GPU. Mali-G76 (Exynos S10+), Pixel 10 (PowerVR) and Snapdragon 695 class were reported unsupported, and Mali-G68/G77 and above are said to be supported. The iPhone XR (3 GB RAM) runs it. On unsupported devices the VV option is grayed out. Other single reports: an integrated GPU showed VV broken even at minimum settings, and a Snapdragon 8s Gen 4 phone gave about 30 fps. On PS5, a VV-incompatible pack hid textures (fixed by turning VV off), and in split screen some models vanished even with VV off. The key to switch graphics mode is `;`. `single report`
+- **VV packs are not shaders**: A VV "graphics pack" only changes settings files (tone mapping, atmosphere, color grading) and cannot add effects. Existing packs that change the sky (custom End/Overworld sky subpacks) break under VV, so they must be rebuilt with VV atmosphere and fog settings.
+- **Editor mode**: Editor mode is the only place you can edit VV settings in real time (tone mapper switching and per-biome VV settings since the 2026-01-14 Preview). "toggle biomes by location" shows only the current biome. The Editor does not preview fog or water. An in-game settings UI can be made with DDUI and scripting, but DDUI is server-side so it needs a behavior pack and cannot change manifest pack settings or subpacks.
+- **Pack settings**: Pack settings such as subpacks and Molang cannot control VV settings. One subpack is needed per combination of tone mapper and shadow type.
+
+## PBR texture sets
+
+### Schema (Source: ms-learn, Texture Sets Introduction)
+
+`<color texture>.texture_set.json` places layers under `minecraft:texture_set`.
+
+| Layer | Description |
+| --- | --- |
+| `color` | The only required layer. RGB 3 channels (alpha 1.0), RGBA 4 channels, or a 4-value array (uniform color). The only layer the classic pipeline uses. Usually has lighting baked in |
+| `normal` | A 3-channel normal map (the fourth is ignored if 4 channels). Do not define it together with `heightmap` in one set |
+| `heightmap` | 1 channel or a uniform single value. Under VV, heightmaps are not applied to texture-based objects such as items, so use normals |
+| `metalness_emissive_roughness` | MER. R metalness, G emissive, B roughness. 3 channels (the fourth is ignored if 4 channels) or a 3-value array. Do not define it together with MERS |
+| `metalness_emissive_roughness_subsurface` | MERS. R metalness, G emissive, B roughness, A SSS (subsurface). VV only, and the value is ignored under RTX |
+
+Metalness and SSS cannot be used at the same time in one set (mutually exclusive). The larger of the two dominates. Example: `[64.0, 0.0, 0.0, 128.0]` is a non-metal with SSS 128. It is recommended to use metalness as binary (metal or not), but partial metal is also possible (not physically accurate, for style). You can use uniform values instead of images (a 0~255 number or a vector of numbers, or an RGB/ARGB hex, with two hex digits for a single channel). Making texture variants with MERS uniform values is not supported, so in that case an image-based MERS file is needed.
+
+```json
+{
+  "format_version": "1.21.30",
+  "minecraft:texture_set": {
+    "color": "cactus_side",
+    "metalness_emissive_roughness_subsurface": "cactus_side_mers",
+    "normal": "cactus_side_normal"
+  }
+}
+```
+
+```json
+{
+  "format_version": "1.16.100",
+  "minecraft:texture_set": {
+    "color": [180, 140, 190, 255],
+    "metalness_emissive_roughness": "#FBA34C",
+    "normal": "grass_carried_normal"
+  }
+}
+```
+
+### Meaning of each map (Source: ms-learn, PBR overview)
+
+- **Metalness**: Grayscale. 0 (pure black) is a perfect non-metal (grass, dirt, bark) and 1.0 (pure white) is a perfect metal (iron, gold, copper).
+- **Emissive**: 0 is no emission and 1.0 glows brightest.
+- **Roughness**: 0 is smoothest (marble, glass, smooth plastic) and 1.0 is roughest (brick, bark, stone).
+- **Normal map**: An RGB texture (not grayscale). R, G and B correspond to X, Y and Z of the surface normal and decide depth and light response. If you lack experience, do not make them by hand; use a tool.
+- **Heightmap**: 0 is the maximum inward, 1.0 is the maximum outward, and 0.5 (127) is no change. It is an alternative to normal maps but less efficient and can express fewer textures.
+- In ray tracing mode, PBR textures are supported only on blocks, and under VV they also apply to mobs, items and particles.
+
+### Example: making a mirror (Source: ms-learn)
+
+Create `textures/blocks/iron_block.texture_set.json` and set metalness high and roughness 0 in the MER.
+
+```json
+{
+  "format_version": "1.16.100",
+  "minecraft:texture_set": {
+    "color": "iron_block",
+    "metalness_emissive_roughness": "iron_block_mer"
+  }
+}
+```
+
+Below are rules and pitfalls from the community research (Source: private research).
+
+### File format
+
+- **File name and location**: Exactly `<color texture>.texture_set.json` (not "textureset") and placed in the same folder as the texture it references (for example `textures/entity/`, `textures/blocks/`). Values are a path or a file name without extension (`"metalness_emissive_roughness": "mer_8"`). `color` is the name of a file next to it, not a `terrain_texture` path, and bridge.'s autocomplete suggested it wrongly. MER maps do not need to be registered in `terrain_texture.json`. `confirmed`
+- Example:
+
+```json
+{"format_version":"1.21.30","minecraft:texture_set":{"color":"acacia_trapdoor","metalness_emissive_roughness":"acacia_trapdoor_mer","heightmap":"acacia_trapdoor_h"}}
+```
+
+MERS uses the key `"metalness_emissive_roughness_subsurface"` (for example format 1.26.10). If you use only MER, leave out the subsurface key. Values can also be given as an inline array (`[255,0,0,0]`). The heightmap key is `"heightmap"` (not `height_map`).
+- **Folder typo**: There is a case where the reason a block texture set did not work was a `/block` folder (the correct name is `blocks`).
+- **File format**: MER/PBR files are PNG or TGA. TGA makes alpha editing easy and values exact, and PNG is easy to view. GIMP can open MER TGAs but Paint.NET shows an empty image. One report used `.png` for the heightmap and `.tga` for MERS. You can preview and edit PBR in Blockbench (right-click the texture, "Add material"). Editing MERS is also a basic Blockbench feature.
+- **Why vanilla uses TGA**: Because PNG compression changes the empty alpha channel and breaks the SSS channel. Low-alpha pixels appearing hidden in Paint.NET is also because the alpha holds SSS data.
+- **Animated entity textures**: An animated entity texture made of several PNGs needs a `<name>.texture_set.json` and a MER for each PNG. Blockbench "create material" makes them.
+- **Fallback values**: `global_metalness_emissive_roughness_subsurface: [0,0,255,0]` of `minecraft:pbr_fallback_settings` (format 1.21.40) (blocks, actors, particles, items) is used only for targets without a PBR texture. You can also give uniform values instead of a texture with a `pbr.json`-style value entry.
+- **Flipbooks and MER**: MER is referenced in `texture_set.json`, not `flipbook_textures.json`, and file names must exactly match the texture set entries.
+
+### Channel meanings and values
+
+- **MER channels**: The blue channel is "inverted", so 0 is smooth and reflective and 255 is fully rough. Give variation such as 40~120 rather than 0 or a solid color. Roughness 0 with high metal is excessively shiny. A MER `[0,0,0]` dielectric looks like glossy white and a `#000000` MER looks like glass. Metalness darkens the material and tints reflections with the surface color.
+- **Only per-channel values matter**: A "blue" image also has green components, so check per channel. Giving leaves `[0,0,0,128]` made them look metallic, and raising roughness (the 3rd) to 200 fixed it.
+- **Emissive range**: There is a report that the emissive (G) of VV MER is clamped to 0~15, not 0~255, so use low values for weak emission. `single report`
+- **Transparent pixels**: If the transparent pixels of a MER are saved as white, that part glows (use "Export as" and avoid quick export). If a lossless image optimization tool erases the color of alpha 0 pixels, the SSS of MERS breaks (the TesserPack case).
+- **Reflective grass example**: Paint bright red (metalness) on the 16x `grass_top_mer` and export under that name. Mixing deep blue and red gives reflection without looking like glass. If the MER reflection is too strong, the albedo fades like glass.
+- **When reflections show**: MER metal reflections show only with sun and moon light and when reflection quality is high. VV block materials (heightmap/PBR) react only to sun and moon light and are not revealed by block light, so they do not show in the Nether.
+- **SSS gradient (grass)**: Turn on SSS with a texture set or Blockbench and paint a gradient from maximum at the top to 0 at the bottom over the MER mask. VV SSS is affected by skylight, so with low skylight and strong sunlight it can look excessive on 2D plants and mobs. Leaf SSS/MER generators sometimes make a metal map instead of SSS.
+- **VV channels**: metalness, emissive, roughness, SSS. The folder structure is Height or Normal, MER, Albedo, `texture_set.json`. The MER of the vanilla VV pack uses only roughness. The MER sets for vanilla blocks, mobs and items can be copied from the vanilla pack.
+
+### Normal maps and height maps
+
+- **Heightmap behavior**: Values are normalized and actual height = value x height scale. White 255 is high, a gray of about 128 is flat, and black 0 is low. It changes only lighting and there is no POM. The heightmap of VV is used like a normal map, so real parallax needs a custom shader. If the height looks inverted, using a proper normal map is better.
+- **From heightmap to normals**: The slope between pixels is 1/8 pixel (VV shader `RenderChunkPrepass.ESSL_310.Fragment.glsl`). A 16x16 heightmap equals at least a 128x128 normal, and with half-pixel alignment 256x256. The figures 192/196 are approximations. Normals are computed in real time so extra memory is 0. A 192x192 high-resolution normal map (with the albedo also at 192x192) is also used to imitate rough reflections.
+- **Exclusivity**: A heightmap (RTX) and a normal map cannot be used together on one texture. A high-resolution normal can imitate a heightmap. Bedrock normal maps are DirectX style. The RTX flat normal is `#8080FF` and `#7F7FFF` is slightly tilted (rounded because there is no exact center 127.5).
+- **Scope of support**: Items support normals and MER but not heightmaps (including 2D item sprites). Entities and attachables support heightmaps, but "texture meshes" are an exception. A texture mesh silently does not appear on a block model (undocumented, may be a bug). PBR is not applied to the top face of the decorated pot ("decorated pot base") even with uniform values.
+- **Authoring tips**: Make a heightmap by desaturating the color texture by luminance and inverting if needed. Textures with baked shadows (the enchanting table top) are painted by hand or corrected with curves. You must leave some original shading and AO in the color texture so it does not look flat. Slightly blurring the height input reduces normal noise, and normals Blockbench makes are noisy. Paint protruding parts such as door handles white (`#ffffff`), and heightmaps do not work well at high resolution. The consensus was that at 16x it is worth painting normals by hand (generated 16x is mediocre) and at high resolution generation is enough. Normal maps are useless where there is no lighting.
+- **Auto-generated PBR**: It can be made quickly with a script but needs hand correction (metal/stone pixels of ores and furnaces, wool and concrete variants, blocks where only part glows). Vanilla-based VV packs mostly change heightmaps and normals and hardly touch the vanilla MER. Normal maps also receive lighting from side angles, so the problem of wool and calcite looking flat and bright from all sides was fixed by deleting the pack's PBR/normal textures.
+- **Change in how atlas heightmaps are stored**: With the atlas rework (VV first, RTX in the 2026-05-06 Preview), the atlas stores in each RGBA channel the slope to the 4 neighboring pixels instead of grayscale height. There is no spare PBR channel, so adding a new PBR layer needs one more atlas texture, and restoring height for custom POM became much harder. The visible result is the same.
+
+### Targets where PBR is not applied
+
+- **Player**: Player entity PBR/MER does not work under VV (hard-coded). In a 2026-03 test blocks and entities worked and the player did not, and in 2026-10 too the answer was that the player entity does not support MER so move the glowing parts to an attachable. Only one 2025-11 report that the steve texture receives PBR says the opposite.
+- **Blocks held in hand**: PBR/MER is not applied to block geometry held in the hand (defaults metal 0, emissive 0, roughness 255). You must use an item override with an icon (MCPE-237517), and blocks defined with `blocks.json` are fine. `light_emission` also glows in the inventory.
+- **Translucent emissive entities**: Not supported under VV. Entities worked only when a texture_set was set separately for each entity texture.
+
+## RTX and BetterRTX
+
+(Source: private research)
+
+### Basic facts
+
+- **Policy**: Mojang (imnotmadd) said on 2025-10-23 that there is no plan to remove RTX (the opposite wording on the support page is a mistake).
+- **Platforms**: RTX is not on mobile, on consoles it runs only on the Xbox Series X (about 25 fps), and PlayStation lacks DX12 so it does not work. Phone RTX screenshots are fake or streamed (streaming from a PC with Sunshine/Moonlight is possible). It does not work on Linux (an Arch/Bazzite GDK-Proton attempt failed). The hardware floor is RTX 2050, Radeon RX 6600 and all Intel Arc, and some AMD integrated GPUs are slow. "Porting" to mobile by editing `material.bin` is unrealistic because the RT pipeline is in game code. RTX is HLSL/DirectX only, only the tone mapping and bloom materials use BGFX, and `RTXStub.material.bin` bypasses BGFX. Shaders can be converted with dxil-spirv but need a rewrite, and mobile software RT is also unrealistic.
+- **Rendering method**: Minecraft RTX is path tracing and full ray tracing (excluding only particles, sign text and the like; no raster + RT hybrid). Seen without the primary denoiser, much more distant shadow and normal detail shows. Default RTX uses an irradiance cache (accumulation and denoising, cheap) and EscheridiaRT uses multi-ray bounces (brute force, discarded every frame, heavy). Real-time path traced GI with 1~3 samples requires temporal accumulation, ghosting is controlled with temporal alpha, and ReSTIR reuses samples. Reflections are a single bounce (for cost), moving creates dark smudges, and the denoiser and irradiance cache blur detail. It is strongest on transparent objects and stained glass. Pre-baked lighting is unrealistic because of flipbooks, the sun, entities and chunk loading.
+- **Weaknesses of default RTX**: Tone mapping is practically a clamp, and the sky is excluded from auto exposure so looking up is dazzling (said to be a one-line fix). There is no SSS, no entity or particle PBR, render distance 24 cannot be used on non-vanilla terrain because of chunk buffers, name tags are not shown, and block changes flicker. First-person geometry is deliberately ignored in shadows and reflections (to avoid a floating arm), and entity materials are also turned off in first person. Fixing this requires editing the internal client camera file of the vanilla pack, so it is impossible with a custom pack. The RTX hand is a 3D object, so it does not follow a high FOV. RTX does not support single-sided rendering, so cross models like grass look odd. The SSS channel is read but not used (it slipped in when SSS was added to VV).
+- **Entity PBR**: Vanilla RTX has no entity PBR, accepts only values and not maps, and it is not even loaded by default (a shader change is needed). It cannot be controlled with a resource pack. Block item PBR and uniform entity PBR "happened to work" when rejoining the world 10~15 times, so support looks possible, and the community can add block item PBR with shader modifications such as veka's RTX renderer shader pack. Block item PBR loading (hand and inventory items) broke from a Mojang change (2026-05-26). Even a custom RT shader cannot do entity PBR.
+- **Overlay textures unsupported**: Villager clothes and banner patterns go missing. Fix it with a small settings change in an RTX pack, or make a separate model and render controller that uses a different layer texture. Full blocks (cross textures) render correctly again if you change the block shape back to `cross_texture` in `blocks.json`. A cat using an alpha channel material lets light pass through its body (no shadow).
+- **Sky, fog, water**: The RTX sky color cannot be changed by a resource pack, and distance fog follows the sky color. Custom skyboxes and cubemaps do not work in RTX, and the client biome's sky color does not work except for the End. The default RTX sky is an editable PNG texture, and the pale RTX sky is due to this texture, so a pack can correct it with fog settings. The RTX fog keys are `"max_density"` (use cases of 2 and 4) and `"scattering": [r,g,b]` (for example `[0.36, 0.46, 0.76]`). RTX water is a non-standard material that does not support color/MER/height/normal maps, so a texture set is meaningless, and custom normal maps for water and sky cannot be set from a pack (the files are in the game's `ray_tracing` folder). Clouds are volumetric and subject to the render distance limit, so they are hard to see beyond about 24 chunks, and custom shapes need a noise texture precomputed in the pack. The sides and undersides of clouds are buggy. The End flash looks like a sun-like object that emits no light, changes the sky brightness, and can use a custom End flash texture.
+- **Emission**: In RTX, anything can emit light with MER emission and the color comes from the texture color (a blue emissive area gives blue light; candles are pure ray-traced emission, not point lights). Torches, lanterns and end rods use point lights and glow regardless of the emissive value. VV emission depends on point lights, but in RTX only torches, lanterns, candles and end rods have point lights. Item emission gives no light, only glow. There are opinions that the torch color is hard-coded in 1.21.120 and that it follows settings and texture color (`conflicting`). RT point lights broke from 1.21.120 and were half fixed in 1.21.130 (copper torches, candles and sea pickles not rendered).
+- **Fake emissive entities**: Use the vanilla `charged_creeper` material and put `"light_color_multiplier": <number>` (about 100.0 for bloom) in the render controller. It is not a real light source; only glow appears, it vanishes in water and glows very weakly (more visible on white textures). The reason (veka): the charged creeper is drawn over the HDR result after ray tracing and before bloom so it receives bloom, while ordinary raster objects (particles and so on) are rendered to a single texture before RT. `"rtx_emissive:charged_creeper": {"-states": ["Blending"]}` was proposed to make it light its surroundings, but the result was not confirmed. Add-on entities can emit light with point lights but vanish when out of view or far away (including in reflections) and work only on ground mobs. Particles are not ray traced so they have no RT shadows, they render over bloom and tone mapping, and they do not affect the RTX pipeline.
+- **Imitating reflective entities**: Refraction (transparent parts and model/texture tricks, for example the iron golem) can imitate them in RTX. Under VV they look only transparent and some flicker. Turn it on only in RTX with the RTX detection Molang query. A reflective iron golem and entity materials work in an RTX RP but not in Better RTX. Some TGA images make RTX treat part of the texture as translucent, and there is no proper SSS.
+- **Sun angle**: Default RTX has no sun angle control (it leaked once and was patched, and when RT is on the game does not send the sun angle). A custom RT shader can do it. The VV sun angle setting used to affect RTX (the sun texture, and in part the lighting), and deleting the fully transparent sun texture in an RTX pack revealed the "deferred sun angle". Many RTX parameters are controllable but not exposed to packs. The sun angle and held block PBR bugs were blocked by patches, and the only feature added to RTX over several years is fog keyframes.
+- **Display bugs**: Falling blocks are shown in RTX in the 2026-05-18 Preview. Mooshroom mushrooms, name tags and falling blocks were invisible from the same problem and were fixed in a recent build (2026-05-19). A pink glitch texture after reloading the world is fixed by restarting. Listed RTX bugs: cloud flicker, chunk flicker on update, block break overlay emission, black end portal, particles, names.
+- **Open Mojang bugs (2026-02-09)**: MCPE-194207 block break and place flicker, MCPE-218920 no name tags in RT (these two are "the most serious"), MCPE-227510 block break overlay glitch, MCPE-227624 point light removal in RT, MCPE-191513 cannot turn on RT in the main menu, MCPE-152158 PBR textures not loaded if RT is turned on after a fresh launch, MCPE-121850 RT performance drop with VSync.
+- **The RTX toggle is grayed out or broken**: Change the graphics mode in `settings.txt`, enter a Marketplace RTX world, or turn on the pack directly in the world and try again.
+- **Impact of the atlas change**: When Mojang changed the terrain UV encoding and removed atlas tile padding (75% of atlas pixels were padding), the RTX shaders were not updated, causing the "atlas tracing" bug (falling back to the block atlas instead of a single texture) and heightmap seams. It was fixed in the next Preview (2026-05-01), and veka. reflected the new UV change in BetterRTX on 2026-05-06. Around 26.0.23 there was atlas corruption where half textures showed MER data in new worlds, and adding more textures was the workaround. The fix for the terrain atlas bug that shows odd lines on water in RTX was reverted in the Preview and reapplied (2026-06-09), and turning off mipmaps in the pack may fix it. Mojang fixed an RTX texture bug that mostly showed on animated textures and then unintentionally reverted it (2026-06-02). The latest Preview reapplied the RTX code fix, so without the `Support for 26.30.32` commit change in the shader template, FPS is bad (2026-06-10).
+
+### RTX tone mapping and DLSS
+
+- **Tone mapper**: The default RTX "tone mapper" is a dynamic luminance curve based on scene luminance plus a color transform, and is not AgX. An RTX resource pack cannot change the tone mapper and only a BetterRTX preset can. The RTX/BetterRTX choices are Vanilla, ACES, Uncharted 2, Reinhard, Uchimura, AgX, Lottes, and BetterRTX's "ACES" is actually Unreal Engine 4 filmic (real ACES is impossible because of licensing). The AgX presets are Gilded Graphics, Interstellar and Infectious, and the rest are ACES and default. BetterRTX 1.4 uses the default RTX tone map. The RTX tone mapper material is `RTX.TonemappingPostFX.material.bin`.
+- **DLSS**: The game ships DLSS 2.1.16 (poor quality and problems on RTX 50). Swap the DLL yourself (get it from techpowerup; the DLSS 310.4 dll automatically uses preset K) or use the DLSS Swapper GUI. The 2026-04-30 Preview uses DLSS 310.5.3. The new version uses the transformer model, and DLSS Swapper can change it to convolutional 3.8.10. DLAA cannot be forced on Bedrock RTX (black bands at the screen corners, the same even if the DLSS render scale is forced higher). One developer got MetalFX working on RTX with custom work.
+- **FPS drop on the RTX 50 series**: 60 FPS on a 5090 (170 for VV). Updating the DLSS dll (BetterRTX's "update DLSS" option), reinstalling the driver with DDU, and checking RAM XMP and dual channel were suggested.
+
+### BetterRTX and community RT
+
+- **BetterRTX**: RTX for ordinary gameplay (generate presets on the website). It was possible because Mojang's RTX materials were once distributed without encryption, and BetterRTX provides template shaders that contain no NVIDIA or Mojang code. Custom shaders based on vanilla are nearly impossible. Limits: reading external textures (noise) and changing the BVH need DLL injection, and there are about 99 buffers. Features: using pack normals, forcing mipmaps on or off, a rainbow (code not officially implemented), custom water normals, reflection denoising adjustment, a Rayleigh sky (turn off Rayleigh to use a custom sky texture), a PBR sky, animated texture noise stabilization, and fixing clouds by recomputing normals from geometry normals. "Iridescence" included a custom sky, Lottes tone mapping, two HG lobes for air fog, new water, reflection reprojection adjustment (less ghosting, slightly more noise), and cloud density that affects cloud shadows.
+- **Version compatibility**: 26.0 broke BetterRTX and RTX PBR (RTX PBR turned off when VV could not be used). It was fixed with `material.bin` files updated by veka and worked again on 2026-02-14 together with DLSS 3.8. The BetterRTX preset builder (bedrock.graphics/creator) was broken in 2026-02 and not compatible with 26.0 (2026-02-15). A preset blacklist is planned for the next BetterRTX. A BSOD during installation was an installer problem and was fixed around 26.0. If the data is under the `com.mojang\minecraftpe` path, BetterRTX cannot find `options.txt`. In 26.20.x the material format changed and presets crashed until the BetterRTX team updated.
+- **BetterRTX light leaks in caves**: A side effect of MC's culling rules and BetterRTX's light leak fix. Vanilla decides culling priority with a newer visible object marking feature that BetterRTX does not use. GI ghosting from dynamic shadows and effects cannot be reduced without rewriting RTX.
+- **BetterRTX flipbooks**: The cause of the RGB sea lantern (an emissive flipbook) animating only up close was that BetterRTX turns mipmaps off while the pack kept mipmaps on, and re-importing without mipmaps fixed it. Cat RTX also effectively removed mipmaps and fixed the "animation bug".
+- **EscheridiaRT** (QuirkyPlague/EscheridiaRT): An offline path tracer that uses RTX features. Copy the files to `C:/XboxGames/Minecraft for Windows/Content/data/renderer/materials` (back up the originals), and it needs an RTX GPU and an RTX resource pack and is not real time.
+- **Path traced clouds**: Generating 3D noise on the GPU was judged too slow, and path tracing based on particles with a script was also judged impossible. A demo that did path tracing with a custom shader under VV broke in later versions.
+
+### VV and RTX compared
+
+- VV cannot catch up with RTX with JSON alone. It lacks true rough reflections (only SSR, always a mirror), light tinted as it passes through transparent objects, cloud transparency, refraction, the RTX sky, and GI and color bleeding, and it has shadow map problems. In the daytime when GI is weak they can look similar, and color grading and sky, sun and moon colors can approximate it, but the real RTX feel needs a custom shader.
+- VV and RTX share texture_set files, so vanilla VV PBR (since 1.21.90) also applies to RTX. The fog settings are not compatible with each other.
+- An ordinary normal map changes only lighting without POM, and the surface is flat. POM imitates depth by occluding detail depending on the viewing angle, and Bedrock has no POM (only with custom shaders). pawslight imitates depth in a high-resolution pack by mixing normal maps with high metalness/roughness.
+- **GI alternatives**: SSGI is screen-space ray tracing, and sunlight GI without RT is possible with reflective shadow mapping or LPV (light propagation volumes). A custom flood-fill technique of Java shaders pushes the voxel sample position along the normal before reading the flood-fill buffer (`samplePos += 2.5 * normal`; use the texture normal if you want normal maps, and geometry normals cause offset problems) to imitate directionality, NdotL and a GI feel, but corners look odd.
