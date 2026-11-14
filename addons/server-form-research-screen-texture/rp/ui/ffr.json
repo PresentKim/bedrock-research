@@ -1,0 +1,407 @@
+{
+  "namespace": "ffr",
+
+  "root": {
+    "type": "panel",
+    "size": [ "100%", "100%" ],
+    "controls": [
+      {
+        "vanilla": {
+          "type": "panel",
+          "size": [ "100%", "100%" ],
+          "bindings": [
+            { "binding_name": "#title_text" },
+            {
+              "binding_type": "view",
+              "source_property_name": "(not (('%.4s' * #title_text) = 'ffr:'))",
+              "target_property_name": "#visible"
+            }
+          ],
+          "controls": [ { "content@server_form.main_screen_content": {} } ]
+        }
+      },
+      { "screen_router@ffr.screen_router": {} }
+    ]
+  },
+
+  "icon_image": {
+    "type": "image",
+    "layer": 2,
+    "$icon_size|default": [ 16, 16 ],
+    "size": "$icon_size",
+    "bindings": [ { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_texture", "binding_name_override": "#texture", "binding_condition": "always" } ]
+  },
+
+  "text_label": {
+    "type": "label",
+    "layer": 3,
+    "localize": false,
+    "$text_color|default": [ 0.2, 0.2, 0.2 ],
+    "color": "$text_color",
+    "font_scale_factor": 0.8,
+    "text": "#form_button_text",
+    "bindings": [ { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text", "binding_condition": "always" } ]
+  },
+
+  "slot_face": {
+    "type": "panel",
+    "size": [ "100%", "100%" ],
+    "$slot_bg|default": "textures/ui/cell_image",
+    "controls": [
+      { "bg": { "type": "image", "texture": "$slot_bg", "size": [ "100%", "100%" ] } },
+      { "icon@ffr.icon_image": {} },
+      { "count@ffr.text_label": { "anchor_from": "bottom_right", "anchor_to": "bottom_right", "offset": [ 0, 1 ], "$text_color": [ 1, 1, 1 ], "shadow": true } }
+    ]
+  },
+
+  "slot_view": {
+    "type": "panel",
+    "size": [ 18, 18 ],
+    "controls": [ { "face@ffr.slot_face": {} } ]
+  },
+
+  "detail_icon": {
+    "type": "panel",
+    "size": [ 28, 28 ],
+    "controls": [
+      { "bg": { "type": "image", "texture": "textures/ui/cell_image", "size": [ "100%", "100%" ] } },
+      { "icon@ffr.icon_image": { "$icon_size": [ 22, 22 ] } }
+    ]
+  },
+
+  "text_item": {
+    "type": "panel",
+    "size": [ "100%", 10 ],
+    "controls": [ { "label@ffr.text_label": { "size": [ "100%", "default" ], "anchor_from": "left_middle", "anchor_to": "left_middle" } } ]
+  },
+
+  "arrow_face": {
+    "type": "panel",
+    "size": [ "100%", "100%" ],
+    "$slot_bg|default": "textures/ui/ffr/button",
+    "controls": [
+      { "bg": { "type": "image", "texture": "$slot_bg", "size": [ "100%", "100%" ] } },
+      { "arrow": { "type": "image", "layer": 2, "texture": "$arrow_tex", "size": [ 10, 10 ] } }
+    ]
+  },
+
+  "pager@common.button": {
+    "size": [ 18, 18 ],
+    "$focus_enabled": false,
+    "$pressed_button_name": "button.form_button_click",
+    "bindings": [ { "binding_type": "collection_details", "binding_collection_name": "form_buttons", "binding_condition": "always" } ],
+    "controls": [
+      { "default@ffr.arrow_face": {} },
+      { "hover@ffr.arrow_face": { "$slot_bg": "textures/ui/ffr/button_hover" } },
+      { "pressed@ffr.arrow_face": { "$slot_bg": "textures/ui/ffr/button_pressed" } }
+    ]
+  },
+
+  "pager_row": {
+    "type": "stack_panel",
+    "orientation": "horizontal",
+    "size": [ 144, 18 ],
+    "collection_name": "form_buttons",
+    "controls": [
+      { "prev@ffr.pager": { "collection_index": "$i_prev", "$arrow_tex": "textures/ui/arrowLeft" } },
+      { "gap": { "type": "panel", "size": [ "fill", 18 ] } },
+      { "next@ffr.pager": { "collection_index": "$i_next", "$arrow_tex": "textures/ui/arrowRight" } }
+    ]
+  },
+
+  "tab_face": {
+    "type": "panel",
+    "size": [ "100%", "100%" ],
+    "$tab_texture|default": "textures/ui/TabTopBack",
+    "$tab_text_color|default": [ 0.95, 0.95, 0.95 ],
+    "controls": [
+      { "bg": { "type": "image", "texture": "$tab_texture", "size": [ "100%", "100% + 6px" ], "anchor_from": "top_left", "anchor_to": "top_left" } },
+      { "icon@ffr.icon_image": { "$icon_size": [ 12, 12 ], "offset": [ 4, 0 ], "anchor_from": "left_middle", "anchor_to": "left_middle" } },
+      { "text@ffr.text_label": { "$text_color": "$tab_text_color", "size": [ "100% - 20px", "default" ], "offset": [ 19, 0 ], "anchor_from": "left_middle", "anchor_to": "left_middle" } }
+    ]
+  },
+
+  "tab_face_on@ffr.tab_face": { "$tab_texture": "textures/ui/TabTopFront", "$tab_text_color": [ 0.2, 0.2, 0.2 ] },
+  "tab_face_hover@ffr.tab_face": { "$tab_texture": "textures/ui/TabTopBackHover" },
+
+  "tab_toggle": {
+    "type": "toggle",
+    "size": [ 96, 22 ],
+    "layer": 1,
+    "focus_enabled": false,
+    "sound_name": "random.click",
+    "sound_volume": 1.0,
+    "sound_pitch": 1.0,
+    "toggle_name": "ffr_tabs",
+    "radio_toggle_group": true,
+    "toggle_group_forced_index": "$tab_index",
+    "toggle_group_default_selected": "$tab",
+    "toggle_on_button": "toggle.toggle_on",
+    "toggle_off_button": "toggle.toggle_off",
+    "button_mappings": [
+      { "from_button_id": "button.menu_select", "to_button_id": "button.menu_select", "mapping_type": "pressed" },
+      { "from_button_id": "button.menu_ok", "to_button_id": "button.menu_ok", "mapping_type": "focused" }
+    ],
+    "checked_control": "on",
+    "checked_hover_control": "on",
+    "checked_locked_control": "on",
+    "checked_locked_hover_control": "on",
+    "unchecked_control": "off",
+    "unchecked_hover_control": "off_hover",
+    "unchecked_locked_control": "off",
+    "unchecked_locked_hover_control": "off",
+    "$tab|default": 0,
+    "controls": [
+      { "on@ffr.tab_face_on": {} },
+      { "off@ffr.tab_face": {} },
+      { "off_hover@ffr.tab_face_hover": {} }
+    ]
+  },
+
+  "tabs_toggle": {
+    "type": "stack_panel", "orientation": "horizontal", "size": [ 192, 22 ], "collection_name": "form_buttons",
+    "$tab_i0|default": 96,
+    "$tab_i1|default": 97,
+    "controls": [
+      { "ffr_t0@ffr.tab_toggle": { "collection_index": "$tab_i0", "$tab_index": 0 } },
+      { "ffr_t1@ffr.tab_toggle": { "collection_index": "$tab_i1", "$tab_index": 1 } }
+    ]
+  },
+
+  "page_face": {
+    "type": "panel",
+    "size": [ "100%", "100%" ],
+    "controls": [
+      { "bg": { "type": "image", "texture": "textures/ui/ffr/button", "size": [ "100%", "100%" ] } },
+      { "text@ffr.text_label": { "$text_color": [ 0.95, 0.95, 0.95 ], "size": [ "default", "default" ] } }
+    ]
+  },
+
+  "page_face_on": {
+    "type": "panel",
+    "size": [ "100%", "100%" ],
+    "controls": [
+      { "bg": { "type": "image", "texture": "textures/ui/ffr/slot_chosen", "size": [ "100%", "100%" ] } },
+      { "sel": { "type": "image", "layer": 4, "texture": "textures/ui/focus_border_white", "size": [ "100%", "100%" ], "color": [ 1, 0.85, 0.1 ] } },
+      { "text@ffr.text_label": { "$text_color": [ 0.2, 0.2, 0.2 ], "size": [ "default", "default" ] } }
+    ]
+  },
+
+  "page_slot": {
+    "type": "panel",
+    "size": [ 18, 18 ],
+    "bindings": [
+      { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text", "binding_condition": "always" },
+      { "binding_type": "view", "binding_condition": "always", "source_property_name": "((#form_button_text - '§0§e§r') = #form_button_text)", "target_property_name": "#visible" }
+    ]
+  },
+
+  "page_toggle": {
+    "type": "toggle",
+    "size": [ 18, 18 ],
+    "layer": 1,
+    "focus_enabled": false,
+    "sound_name": "random.click",
+    "sound_volume": 1.0,
+    "sound_pitch": 1.0,
+    "toggle_name": "$page_group",
+    "radio_toggle_group": true,
+    "toggle_group_forced_index": "$page_index",
+    "toggle_group_default_selected": 0,
+    "toggle_on_button": "toggle.toggle_on",
+    "toggle_off_button": "toggle.toggle_off",
+    "button_mappings": [
+      { "from_button_id": "button.menu_select", "to_button_id": "button.menu_select", "mapping_type": "pressed" },
+      { "from_button_id": "button.menu_ok", "to_button_id": "button.menu_ok", "mapping_type": "focused" }
+    ],
+    "checked_control": "on",
+    "checked_hover_control": "on",
+    "checked_locked_control": "on",
+    "checked_locked_hover_control": "on",
+    "unchecked_control": "off",
+    "unchecked_hover_control": "off",
+    "unchecked_locked_control": "off",
+    "unchecked_locked_hover_control": "off",
+    "controls": [
+      { "on@ffr.page_face_on": {} },
+      { "off@ffr.page_face": {} }
+    ]
+  },
+
+  "header_label": {
+    "type": "label", "layer": 3, "localize": false, "color": [ 0.35, 0.35, 0.35 ], "font_scale_factor": 0.8,
+    "size": [ "100%", 10 ]
+  },
+
+  "window": {
+    "type": "image",
+    "texture": "textures/ui/dialog_background_opaque",
+    "size": [ 326, 166 ],
+    "max_size": [ "100% - 8px", "100% - 8px" ],
+    "offset": [ 0, 8 ],
+    "layer": 60,
+    "$panes_def|default": "ffri.items_f",
+    "controls": [
+      { "dim": { "type": "image", "texture": "textures/ui/Black", "alpha": 0.5, "keep_ratio": false, "size": [ 4000, 4000 ], "layer": -8 } },
+      { "bevel": { "type": "image", "texture": "textures/ui/ffr/panel_bevel", "size": [ "100%", "100%" ] } },
+      { "tabs@ffr.tabs_toggle": { "anchor_from": "top_left", "anchor_to": "top_left", "offset": [ 8, -22 ], "layer": 3 } },
+      { "title": { "type": "label", "layer": 3, "localize": false, "color": [ 0.25, 0.25, 0.25 ], "text": "Research", "anchor_from": "top_middle", "anchor_to": "top_middle", "offset": [ 0, 6 ] } },
+      { "close@common.close_button": {} },
+      {
+        "left": {
+          "type": "image", "texture": "textures/ui/ffr/panel", "size": [ 152, 136 ], "offset": [ 6, 22 ], "anchor_from": "top_left", "anchor_to": "top_left", "layer": 1,
+          "controls": [ { "panes@$panes_def": { "anchor_from": "top_left", "anchor_to": "top_left", "offset": [ 4, 4 ] } } ]
+        }
+      },
+      {
+        "right": {
+          "type": "image", "texture": "textures/ui/ffr/panel", "size": [ 158, 136 ], "offset": [ 162, 22 ], "anchor_from": "top_left", "anchor_to": "top_left", "layer": 1,
+          "controls": [ { "detail@ffr.placeholder": { "anchor_from": "top_left", "anchor_to": "top_left", "offset": [ 4, 4 ] } } ]
+        }
+      }
+    ]
+  },
+
+  "research_a@ffr.window": { "$tab": 0 },
+  "research_b@ffr.window": { "$tab": 1 },
+  "research_ga@ffr.window": { "$tab": 0, "$panes_def": "ffrg.items", "$tab_i0": 288, "$tab_i1": 289 },
+  "research_gb@ffr.window": { "$tab": 1, "$panes_def": "ffrg.items", "$tab_i0": 288, "$tab_i1": 289 },
+
+  "placeholder": {
+    "type": "label", "layer": 3, "localize": false, "color": [ 0.4, 0.4, 0.4 ], "font_scale_factor": 0.8,
+    "size": [ 150, "default" ], "text": "Pick a research."
+  },
+
+  "item_face": {
+    "type": "panel",
+    "size": [ "100%", "100%" ],
+    "$slot_bg|default": "textures/ui/cell_image",
+    "controls": [
+      { "bg": { "type": "image", "texture": "$slot_bg", "size": [ "100%", "100%" ] } },
+      { "icon@ffr.icon_image": {} }
+    ]
+  },
+
+  "item_chosen": {
+    "type": "panel",
+    "size": [ "100%", "100%" ],
+    "controls": [
+      { "face@ffr.item_face": { "$slot_bg": "textures/ui/ffr/slot_chosen" } },
+      { "sel": { "type": "image", "layer": 4, "texture": "textures/ui/focus_border_white", "size": [ "100%", "100%" ], "color": [ 1, 0.85, 0.1 ] } },
+      { "detail@$detail_def": { "layer": 20, "anchor_from": "top_left", "anchor_to": "top_left", "offset": "$detail_offset" } }
+    ]
+  },
+
+  "item_toggle": {
+    "type": "toggle",
+    "size": [ 18, 18 ],
+    "layer": 1,
+    "anchor_from": "top_left",
+    "anchor_to": "top_left",
+    "focus_enabled": false,
+    "sound_name": "random.click",
+    "sound_volume": 1.0,
+    "sound_pitch": 1.0,
+    "toggle_name": "ffr_items",
+    "radio_toggle_group": true,
+    "toggle_group_forced_index": "$k",
+    "toggle_group_default_selected": -1,
+    "toggle_on_button": "toggle.toggle_on",
+    "toggle_off_button": "toggle.toggle_off",
+    "button_mappings": [
+      { "from_button_id": "button.menu_select", "to_button_id": "button.menu_select", "mapping_type": "pressed" },
+      { "from_button_id": "button.menu_ok", "to_button_id": "button.menu_ok", "mapping_type": "focused" }
+    ],
+    "checked_control": "on",
+    "checked_hover_control": "on",
+    "checked_locked_control": "on",
+    "checked_locked_hover_control": "on",
+    "unchecked_control": "off",
+    "unchecked_hover_control": "off",
+    "unchecked_locked_control": "off",
+    "unchecked_locked_hover_control": "off",
+    "controls": [
+      { "on@ffr.item_chosen": {} },
+      { "off@ffr.item_face": {} }
+    ]
+  },
+
+  "list_slot@ffr.slot_view": {
+    "bindings": [
+      { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text", "binding_condition": "always" },
+      { "binding_type": "view", "binding_condition": "always", "source_property_name": "((#form_button_text - '§0§e§r') = #form_button_text)", "target_property_name": "#visible" }
+    ]
+  },
+
+  "desc_item": {
+    "type": "panel",
+    "size": [ "100%", "100%c" ],
+    "controls": [ { "label@ffr.text_label": { "size": [ "100%", "default" ] } } ]
+  },
+
+  "progress_face": {
+    "type": "panel",
+    "size": [ "100%", "100%" ],
+    "$slot_bg|default": "textures/ui/ffr/button",
+    "controls": [
+      { "bg": { "type": "image", "texture": "$slot_bg", "size": [ "100%", "100%" ] } },
+      { "text@ffr.text_label": { "$text_color": [ 0.95, 0.95, 0.95 ] } }
+    ]
+  },
+
+  "progress_button@common.button": {
+    "size": [ 150, 18 ],
+    "$focus_enabled": false,
+    "$pressed_button_name": "button.form_button_click",
+    "bindings": [ { "binding_type": "collection_details", "binding_collection_name": "form_buttons", "binding_condition": "always" } ],
+    "controls": [
+      { "default@ffr.progress_face": {} },
+      { "hover@ffr.progress_face": { "$slot_bg": "textures/ui/ffr/button_hover" } },
+      { "pressed@ffr.progress_face": { "$slot_bg": "textures/ui/ffr/button_pressed" } }
+    ]
+  },
+
+  "detail_scroll@common.scrolling_panel": {
+    "anchor_to": "top_left",
+    "anchor_from": "top_left",
+    "$show_background": false,
+    "size": [ "100%", "100% - 22px" ],
+    "$scroll_size": [ 4, "100% - 4px" ],
+    "$scrolling_pane_size": [ "100% - 2px", "100%" ],
+    "$scrolling_pane_offset": [ 0, 0 ],
+    "$scroll_bar_right_padding_size": [ 0, 0 ]
+  },
+
+  "lazy_detail": {
+    "type": "stack_panel",
+    "size": [ 158, 136 ],
+    "visible": true,
+    "bindings": [
+      { "binding_name": "#form_button_length", "binding_condition": "visible" },
+      { "binding_type": "view", "binding_condition": "visible", "source_property_name": "((#form_button_length > 0) * 1)", "target_property_name": "#collection_length" }
+    ]
+  },
+
+  "pagers_tabs": {
+    "type": "panel",
+    "size": [ 144, 18 ],
+    "controls": [
+      { "p0@ffr.pager_row": { "$i_prev": 98, "$i_next": 99, "bindings": [ { "binding_type": "view", "binding_condition": "always", "source_control_name": "ffr_t0", "source_property_name": "#toggle_state", "target_property_name": "#visible" } ] } },
+      { "p1@ffr.pager_row": { "$i_prev": 100, "$i_next": 101, "bindings": [ { "binding_type": "view", "binding_condition": "always", "source_control_name": "ffr_t1", "source_property_name": "#toggle_state", "target_property_name": "#visible" } ] } }
+    ]
+  },
+
+  "screen_router": {
+    "type": "collection_panel",
+    "size": [ "100%", "100%" ],
+    "factory": {
+      "name": "ffr_screen",
+      "control_ids": { "a": "@ffr.research_a", "b": "@ffr.research_b", "ga": "@ffr.research_ga", "gb": "@ffr.research_gb" }
+    },
+    "property_bag": { "#ffr:Fa": [ "a" ], "#ffr:Fb": [ "b" ], "#ffr:Ga": [ "ga" ], "#ffr:Gb": [ "gb" ] },
+    "bindings": [
+      { "binding_name": "#title_text" },
+      { "binding_type": "view", "source_property_name": "('#' + ('%.6s' * #title_text))", "target_property_name": "#collection_length" }
+    ]
+  }
+}

@@ -299,16 +299,26 @@ A mode that draws only a button list was placed in the same pack to see behavior
 - The open time and tab switching time of methods A to F were not measured.
 - Whether the radio toggles inside cells made by a grid or a factory are exclusive was not examined in this test (C-66).
 - The configuration that also changes pages on the client ("Client pages" in section 8) was checked on mobile, but its opening time and page switching time were not measured.
+- There is no numeric item ID table for 1.26.63. The apple of the item renderer version (section 8.1) shows as another item, so the numbers of the range from ID 852 need to be checked again in the game.
 
 ## 8. Example add-on
 
+Two add-ons are provided that differ only in how icons are drawn. The rest of the screen and its behavior are the same.
+
+| Add-on | Icons | Test item, script event |
+| --- | --- | --- |
+| Research Screen Test v1.4.0 | The item renderer draws them from numeric item IDs (section 8.1). Blocks in 3D, enchanted items with glint. The ID table must match each game version | `bwiki:research_screen_test`, `bwiki:research_screen` |
+| Research Screen Texture Test v1.3.3 | Images from texture paths (`textures/items/diamond` and so on). Blocks are flat pictures and there is no glint, but it keeps working when the game version changes | `bwiki:research_screen_texture_test`, `bwiki:research_screen_texture` |
+
 <AddonDownload id="server-form-research-screen" />
 
-An add-on with only the final configuration of this page. Tabs and item selection are handled on the client, and each detail is built when its cell is first picked (F in section 4). The other modes of the FFR final test pack used for the measurements are removed.
+<AddonDownload id="server-form-research-screen-texture" />
 
-1. Open the file to import it (on mobile, tap the file and open it with Minecraft). In a new world, turn on the behavior pack "Bedrock Wiki Research Screen Test BP". The resource pack turns on with it as a dependency, and no experimental toggle is needed.
-2. Take "Research Screen Test" from the end of the Items category of the creative inventory. You can also type the name in the search box or run `/give @s bwiki:research_screen_test`.
-3. Use the item to open a menu that picks how pages change. `/scriptevent bwiki:research_screen` opens it too. Both choices open the research screen with 200 items (several pages per tab).
+These add-ons hold only the final configuration of this page. Tabs and item selection are handled on the client, and each detail is built when its cell is first picked (F in section 4). The other modes of the FFR final test pack used for the measurements are removed.
+
+1. Open the file to import it (on mobile, tap the file and open it with Minecraft). In a new world, turn on the behavior pack "Bedrock Wiki Research Screen Test BP" (for the texture version, "Bedrock Wiki Research Screen Texture Test BP"). The resource pack turns on with it as a dependency, and no experimental toggle is needed.
+2. Take "Research Screen Test" (for the texture version, "Research Screen Texture Test") from the end of the Items category of the creative inventory. You can also type the name in the search box or run `/give @s` with the item ID from the table above.
+3. Use the item to open a menu that picks how pages change. The script event in the table above (`/scriptevent bwiki:research_screen`) opens it too. Both choices open the research screen with 200 items (several pages per tab).
 4. Pressing tabs and item cells does not close the form. Pressing "Start research" makes the server send the form again, and the research request appears in chat.
 
 | Menu | Configuration |
@@ -318,13 +328,13 @@ An add-on with only the final configuration of this page. Tabs and item selectio
 
 <video controls preload="metadata" width="100%" src={require('@site/static/video/server-form-research-screen-addon.mp4').default} />
 
-Video of Client pages (mobile, 2026-11-14, v1.3.3).
+Test video (mobile, 1.26.63, 2026-11-14, v1.4.0). It opens Server pages, then Client pages.
 
-![Client pages on first open, with yellow borders on page number 1 and the picked item 42](/img/design/research-screen-client-pages-first-open.png)
+![Server pages. The item renderer draws the icons of cells, details and materials, and the chest and crafting table show in 3D](/img/design/research-screen-item-aux-server-pages.png)
 
-![Page 2 of the Done tab, with only numbers 1 and 2 and a yellow border on 2](/img/design/research-screen-client-pages-done-page2.png)
+![Page 2 of the Done tab in Client pages. Diamond, gold ingot, coal, redstone and grass block. Only numbers 1 and 2, with a yellow border on 2](/img/design/research-screen-item-aux-done-page2.png)
 
-Client pages results (mobile, v1.3.3):
+Client pages results (mobile, v1.3.3, the same in v1.4.0):
 
 - Page number 1 has a yellow border from the first open, and pressing a number moves the border to it. The picked item cell uses the same yellow border.
 - The To do tab (133 items) shows numbers 1~3 and the Done tab (67 items) only 1~2. No empty third cell appears on the Done tab after a number is pressed.
@@ -335,13 +345,20 @@ Each page needs its own cell and detail definitions (`collection_index` is a sta
 
 ### 8.1 Item icons (v1.4.0)
 
-From v1.4.0 the icons of cells, details and tabs are drawn by the item renderer instead of texture paths. Blocks show in 3D, and enchanted items show with glint.
+v1.4.0 draws the icons of cells, details and tabs with the item renderer instead of texture paths. This is the only difference from v1.3.3.
 
 - The script sends `aux:` + `numeric item ID * 65536` (+32768 when enchanted) in the button texture field (ANI-06, ANI-23). Diamond is `aux:20054016`.
 - The icon control is an `inventory_item_renderer` and puts `((#form_button_texture - 'aux:') - 0)` into `#item_id_aux` (EXP-16). It is hidden on buttons whose texture does not start with the 4 bytes `aux:` (empty cells).
-- Numeric IDs change with each game version. The add-on uses the 26.50 table from the Bedrock Wiki. No table for 26.60 or later exists yet, so whether the icons are right on 1.26.63 is what this test checks.
-- In 26.50, IDs 852 to 883 (32 items such as apple, spears and bundles) shift by the number of custom items. The script counts the items in `ItemTypes.getAll()` that are not `minecraft:` and are not custom blocks, and adds that count. If the apple cell shows an apple, the count is right. The count is shown in the body of the first menu.
-- There is a community report that the item renderer does not draw inside scroll areas or factories. The cells and details of this screen are both inside factories, and the details are inside a scroll area.
+- Numeric IDs change with each game version. The add-on uses the 26.50 table from the Bedrock Wiki (no table for 26.60 or later exists yet).
+- In 26.50, IDs 852 to 883 (32 items such as apple, spears and bundles) shift by the number of custom items. The script counts the items in `ItemTypes.getAll()` that are not `minecraft:` and are not custom blocks, adds that count, and shows it in the body of the first menu.
+
+Results (mobile, 1.26.63, v1.4.0):
+
+- The item renderer drew in the cells and details built by factories and in the scroll area inside the details (materials, rewards), in both Server pages and Client pages. The community report that it does not draw inside scroll areas or factories ([screen reports](../json-ui/community-reports-screens.mdx)) did not hold for this configuration.
+- The chest, crafting table and grass block showed in 3D, and the rest as item pictures. All items below ID 852 in the 26.50 table (diamond, iron ingot, gold ingot, emerald, bread, redstone, book and quill, book, hopper, coal, chest, crafting table, grass block, golden apple, diamond sword) were right on 1.26.63.
+- The apple cells showed a wind charge instead of an apple. The menu showed 1 custom item, so the ID sent was 882 + 1 = 883, while the 26.50 table has the wind charge at 881 (882 with 1 custom item). On 1.26.63 the numbers of the shifting range differ from the 26.50 table. Where and by how much they changed is not known yet.
+- The tab icons (book and quill, emerald) were drawn by the item renderer too.
+- The golden apple with +32768 showed a purple glint on its edges. The glint of the diamond sword could not be told apart at the video quality.
 
 - Turn on only one test add-on that changes the server form screen at a time. This add-on and the add-on of [JSON UI optimization](./json-ui-performance.mdx) both replace `$screen_content` of `third_party_server_screen` with their own root, so with both on, only the screen of the pack placed higher works. Test items and script event names differ per add-on and do not collide.
 - The add-on version is in the pack names, the descriptions and the file name. When a fixed version comes out, the link above points to the new file; remove the old version and import the new one.
