@@ -1,10 +1,10 @@
 import { ItemLockMode, ItemStack, system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 
-const PACK_VERSION = "v1.6.0";
+const PACK_VERSION = "v1.7.0";
 const LAUNCHER = "bwiki:entity_menu_lab";
 const BOX = "bwiki:entity_menu_lab_box";
-const MARKER = "bwiki:entity_menu_lab_marker";
+const SCREEN_TITLE = "§b§w§m§l";
 const BOX_TAG = "bwiki_entity_menu_lab";
 const BUTTON_MARK = "§r§e§m§l§b§r";
 const BUTTON_SLOT = 26;
@@ -77,7 +77,6 @@ function buttonItem() {
 }
 
 function fillMenu(storage) {
-  storage.setItem(0, new ItemStack(MARKER));
   CELL_ITEMS.forEach((id, k) => storage.setItem(k + 1, named(id, `Item ${k + 1}`, [`Line for item ${k + 1}`])));
   storage.setItem(12, data("Pressed 0"));
   storage.setItem(13, data("Tick label", ["Seconds 0"]));
@@ -125,6 +124,7 @@ function startSession(player) {
   const s = settingsOf(player);
   const box = player.dimension.spawnEntity(BOX, spotInFront(player));
   box.addTag(BOX_TAG);
+  if (s.screen === "menu") box.nameTag = SCREEN_TITLE;
   const storage = inventory(box);
   if (s.screen === "menu") fillMenu(storage);
   else fillLock(storage);

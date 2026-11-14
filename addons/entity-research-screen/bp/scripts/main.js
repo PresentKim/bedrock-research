@@ -1,9 +1,8 @@
 import { ItemStack, system, world } from "@minecraft/server";
 
-const PACK_VERSION = "v1.0.0";
+const PACK_VERSION = "v1.1.0";
 const LAUNCHER = "bwiki:entity_research";
 const BOX = "bwiki:entity_research_box";
-const MARKER = "bwiki:entity_research_marker";
 const BOX_TAG = "bwiki_entity_research";
 const DONE_PROPERTY = "bwiki:entity_research_done";
 const SCREEN_MARK = "§8Research screen";
@@ -238,8 +237,8 @@ function startSession(player) {
     if (![...sessions.values()].some((s) => s.box.id === box.id)) box.remove();
   }
   const box = player.dimension.spawnEntity(BOX, spotInFront(player));
+  box.nameTag = "§b§w§r§s";
   box.addTag(BOX_TAG);
-  inventory(box)?.setItem(0, new ItemStack(MARKER));
   const session = { box, pages: [0, 0], sel: [undefined, undefined], message: ["", ""], expected: new Map() };
   sessions.set(player.id, session);
   render(player, session);
