@@ -17,7 +17,7 @@ The JSON UI `inventory_item_renderer` draws an item from `#item_id_aux` = `numer
 
 The problem is that a script has no way to know this number. This page researches how a behavior pack script can compute the numeric ID from an item name (`minecraft:diamond`, `bwiki:ruby`). It covers vanilla items and blocks, custom items and custom blocks.
 
-Status: the first experiment confirmed the layout of vanilla and custom items (section 5). Custom blocks are tested again with probe v1.0.1.
+Status: with one pack, the layout of vanilla items, custom items and custom blocks is confirmed (section 5). The `getAll()` order cannot give custom numbers, so a pack needs a table built from its own file paths. The order with several packs is not known yet.
 
 ## 1. The Script API has no numeric ID
 
@@ -99,10 +99,10 @@ Values to settle:
 | Value | Candidates | After the first experiment |
 | --- | --- | --- |
 | P (custom item start) | 852 in 26.50 | 853 on 1.26.63 (section 5.1) |
-| Order O | Identifier order, file name order (subfolders first), path order, `ItemTypes.getAll()` order | Inside one pack, path string order. `getAll()` returns the exact reverse (one sample) |
-| Whether C includes block items of custom blocks | Chest-UI leaves them out | Open (the blocks did not register) |
-| B (custom block start) | Just below the lowest vanilla number, -9745 | Open |
-| Order O' | Identifier order, file name order, its reverse, `BlockTypes.getAll()` order | Open |
+| Order O | Identifier order, file name order (subfolders first), path order, `ItemTypes.getAll()` order | Inside one pack, path string order. The `getAll()` order differed between runs |
+| Whether C includes block items of custom blocks | Chest-UI leaves them out | It does not (section 5.3) |
+| B (custom block start) | Just below the lowest vanilla number, -9745 | -9745 |
+| Order O' | Identifier order, file name order, its reverse, `BlockTypes.getAll()` order | Reverse of path string order (section 5.3) |
 | Vanilla table | Registry capture | Dragonfly's 1.26.60 `vanilla_items.nbt` matches the 1.26.63 results (section 5.2) |
 
 A script cannot read the game version, so the vanilla table matches the one version the add-on targets.
@@ -176,7 +176,7 @@ On PC, ProxyPass can capture the item registry of the same world to check the nu
 | -9776 to -9713 | Empty |
 
 - The 5 custom items were placed from 853 in path string order (`a_last.json`, `aux_probe_test.json`, `m_mid.json`, `sub/k_sub.json`, `z_first.json`). That is neither identifier order nor file name order with subfolders first.
-- `ItemTypes.getAll()` returned the custom items as a, d, c, test, b. That is the exact reverse of the registry order (b, test, c, d, a). This is one sample.
+- `ItemTypes.getAll()` returned the custom items as a, d, c, test, b. That was the exact reverse of the registry order (b, test, c, d, a), but the second experiment gave a different order (section 5.3).
 - There were 0 custom blocks. The block definitions lacked `minecraft:geometry`, so the game did not register them (local BDS content log: "Block needs both a geometry and material instances component"). So the empty block ranges are not a result. Probe v1.0.1 fixes this.
 
 ### 5.2 The 1.26.60 vanilla table
@@ -191,9 +191,42 @@ So on 1.26.6x the rules up to custom items are:
 
 1. Vanilla numbers are the runtime IDs in that version's server data (Dragonfly `vanilla_items.nbt`).
 2. P is 853 (red shrub), the first number of the shifting block. Vanilla numbers at P or above add the custom item count C.
-3. Custom items are placed from P in the string order of their file paths inside the behavior pack. From a script, `ItemTypes.getAll()` seems to return the exact reverse of that order.
+3. Custom items are placed from P in the string order of their file paths inside the behavior pack.
 
-What remains is custom blocks, the order with several packs, and whether the `getAll()` order is always the exact reverse.
+### 5.3 Second experiment (mobile, 1.26.63, probe v1.0.1, 2026-11-14)
+
+A world where the 3 custom blocks registered, after adding `minecraft:geometry` to the block definitions.
+
+![First menu of probe v1.0.1. 5 custom items, 3 custom blocks, 3 block items in getAll()](/img/design/item-aux-probe-menu-v101.png)
+
+![Numbers -9776 to -9713. Diamond block at -9747, emerald block at -9746, gold block at -9745](/img/design/item-aux-probe-blocks.png)
+
+| Range | Result |
+| --- | --- |
+| 840 to 903 | Same as the first experiment. Custom items at 853 to 857, apple at 888 |
+| -1278 to -1215 | Same as the first experiment. -1247 and below were empty |
+| -9776 to -9713 | Gold block at -9745 (`z_first.json`), emerald block at -9746 (`m_mid.json`), diamond block at -9747 (`a_last.json`). All drawn in 3D |
+
+- Custom blocks are placed downward from -9745 (= -10000 + 255). This matches the Discord claim of 2026-02-14. The old wiki revisions' "just below the lowest vanilla number" and "they do not draw from their ID" did not hold on 1.26.63.
+- The order is the reverse of the file path string order. `z_first.json`, last in path order, gets -9745, and each earlier one goes one lower. Put differently, with n blocks in path order, the j-th (from 0) is `-9745 - (n - 1 - j)`. This differs from identifier order (a, b, c).
+- The 3 block items of the custom blocks were in `ItemTypes.getAll()`, but they did not shift the item range. C counts custom items only.
+- `ItemTypes.getAll()` returned c, a, d, test, b this time. The registry order is b, test, c, d, a, the same as in the first experiment. The `getAll()` order can change between runs, so it cannot be used to compute numbers. `BlockTypes.getAll()` returned b, c, a, which matched path order this time.
+
+### 5.4 Rules so far (1.26.63, one behavior pack)
+
+| Target | Numeric ID |
+| --- | --- |
+| Vanilla items and blocks | The runtime ID in that version's server data. Items at 853 or above add the custom item count C |
+| Custom items | `853 + k`, where k (from 0) is the place in the item files sorted by path string |
+| Custom blocks | `-9745 - (n - 1 - j)`, where j (from 0) is the place in the block files sorted by path string and n is the custom block count |
+
+A script cannot read file paths, and the `getAll()` order cannot be trusted. So the numbers of a pack's own custom items and blocks must be put into the script as a table built from the file paths at build time. The only thing a script can do at runtime is count C with `ItemTypes.getAll()` (it was right, 5, in this world).
+
+What remains:
+
+- The order between packs when there are several behavior packs (pack stack order, or all packs' paths sorted together).
+- Whether the path sort is byte order (when uppercase, digits, `_` and `-` mix).
+- Whether other platforms (Windows, iOS) give the same result. Discord has a report that it is wrong on iOS.
 
 ## 6. Example add-on
 
