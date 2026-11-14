@@ -66,29 +66,7 @@ Cinnabar는 배드락 에디션 호환 비공식 클라이언트다(Rust Bevy/wg
 | 결과 재해석 | `+ - *`가 만든 문자열이 숫자처럼 보이면 다시 정수·실수·불리언이 됨 | EXP-15, EXP-30 |
 | `#이름` 결과 | 식 결과가 `#이름` 문자열이면 같은 컨트롤 주머니에서 그 값을 읽음(사전 조회) | COL-23 |
 
-나눗셈 구현은 다음과 같다. 정수끼리의 나눗셈이 정수라는 점이 나머지를 `(a - (a / b * b))`로 만들 수 있다는 주장(AsaJS)의 근거다.
-
-<Excerpt src="cinnabar" title="Cinnabar, divide" path="crates/json-ui/src/predicate/ops.rs">
-
-```rust
-/// `/`: text counts non-overlapping matches (1 for no needle); a zero divisor
-/// keeps the left side; else numeric division, integer when neither is float.
-fn divide(lhs: Operand, rhs: Operand) -> Operand {
-    if lhs.is_string() {
-        let needle = rhs.text();
-        if needle.is_empty() {
-            return Operand::Int(1);
-        }
-        return Operand::Int(lhs.text().matches(needle).count() as i32);
-    }
-    if rhs.is_string() || rhs.float() == 0.0 {
-        return lhs;
-    }
-    numeric(&lhs, &rhs, i32::wrapping_div, |a, b| a / b)
-}
-```
-
-</Excerpt>
+정수끼리의 나눗셈이 정수라는 점이 나머지를 `(a - (a / b * b))`로 만들 수 있다는 주장(AsaJS)의 근거다.
 
 바로 쓰는 결론: 문자열 바인딩을 숫자로는 `(#v - 0)`, 소수 곱하기는 `(#v * .01)`, 범위 검사는 `((a < #v) and (#v < b))`, 크거나 같음은 `(not (#v < a))`, 같지 않음은 `(not (#a = #b))`, 앞 N바이트는 `('%.Ns' * #s)`(`'%5.3s'` 등 다른 서식은 자르지 않음, C-05와 충돌)다.
 

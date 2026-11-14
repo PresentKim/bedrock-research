@@ -44,11 +44,8 @@ GitHub Pages 배포(`.github/workflows/pages.yml`)는 저장소가 공개일 때
 | CC BY 4.0 (Bedrock Wiki, MS Learn 문서, Chest-UI) | 출처와 변경 여부를 적고 발췌 |
 | MIT, BSD, Apache | 저작권 고지를 유지하고 발췌 |
 | GPL-3.0 (AsaJS, StarLibV2) | 기본은 기법 설명. 발췌 블록은 GPL-3.0 그대로 |
-| PolyForm Noncommercial 1.0.0 (Cinnabar) | 발췌 블록은 비상업 목적에만 이용 |
-| 라이선스 없음, All rights reserved, Mojang, NetEase 등 | 원문을 옮기지 않고 사실만 다시 씀 |
+| 라이선스 없음, All rights reserved, 비상업 라이선스(Cinnabar), Mojang, NetEase 등 | 원문을 옮기지 않고 사실만 다시 씀 |
 
 제3자 고지 전문은 [NOTICE.md](./NOTICE.md), 적용 방법은 [docs/reference/license.mdx](./docs/reference/license.mdx), 전체 출처 목록은 위키의 "출처 목록" 페이지에 있다.
 
-## 비상업 발췌 안내
-
-Cinnabar(PolyForm Noncommercial 1.0.0)의 발췌 블록은 **비상업 목적으로만 이용한다.** 이 블록을 뺀 나머지 중 이 프로젝트가 쓴 부분은 MIT로 상업적으로도 쓸 수 있다. 복사본을 배포할 때는 [LICENSE](./LICENSE), [NOTICE.md](./NOTICE.md)와 각 발췌 상자의 출처·라이선스 표시를 함께 전한다. 이 위키는 Mojang, Microsoft와 관계가 없는 비공식 자료이다.
+복사본을 배포할 때는 [LICENSE](./LICENSE), [NOTICE.md](./NOTICE.md)와 각 발췌 상자의 출처·라이선스 표시를 함께 전한다. 이 위키는 Mojang, Microsoft와 관계가 없는 비공식 자료이다.

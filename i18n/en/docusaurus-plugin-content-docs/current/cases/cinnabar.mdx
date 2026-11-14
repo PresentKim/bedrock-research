@@ -66,29 +66,7 @@ The stages are split the same way as in vanilla. Knowing what is decided at whic
 | Result reinterpretation | A string made by `+ - *` that looks like a number becomes an integer, real number, or boolean again | EXP-15, EXP-30 |
 | `#name` result | If an expression result is a `#name` string, the value is read from the same control's bag (dictionary lookup) | COL-23 |
 
-The division implementation is as follows. That division between integers is an integer is the basis for the claim (AsaJS) that the remainder can be built as `(a - (a / b * b))`.
-
-<Excerpt src="cinnabar" title="Cinnabar, divide" path="crates/json-ui/src/predicate/ops.rs">
-
-```rust
-/// `/`: text counts non-overlapping matches (1 for no needle); a zero divisor
-/// keeps the left side; else numeric division, integer when neither is float.
-fn divide(lhs: Operand, rhs: Operand) -> Operand {
-    if lhs.is_string() {
-        let needle = rhs.text();
-        if needle.is_empty() {
-            return Operand::Int(1);
-        }
-        return Operand::Int(lhs.text().matches(needle).count() as i32);
-    }
-    if rhs.is_string() || rhs.float() == 0.0 {
-        return lhs;
-    }
-    numeric(&lhs, &rhs, i32::wrapping_div, |a, b| a / b)
-}
-```
-
-</Excerpt>
+That division between integers is an integer is the basis for the claim (AsaJS) that the remainder can be built as `(a - (a / b * b))`.
 
 Conclusions you can use right away: to a number from a string binding use `(#v - 0)`, for decimal multiplication `(#v * .01)`, for a range check `((a < #v) and (#v < b))`, for greater-or-equal `(not (#v < a))`, for not-equal `(not (#a = #b))`, and for the first N bytes `('%.Ns' * #s)` (other formats such as `'%5.3s'` do not cut, which conflicts with C-05).
 
