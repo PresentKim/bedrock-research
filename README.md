@@ -22,6 +22,12 @@ GitHub Pages 배포(`.github/workflows/pages.yml`)는 저장소가 공개일 때
 
 본문에 적은 규칙 ID(`COL-04`, `C-31`, `D-13`, `NB-02` 등)는 빌드할 때 `src/plugins/remark-rule-refs.mjs`가 자동으로 링크로 바꾼다. 데스크탑에서는 마우스를 올리면, 모바일에서는 한 번 누르면 규칙 내용이 담긴 창이 뜬다. 규칙을 정의하는 표는 `scripts/rules.mjs`의 `CANONICAL` 페이지들이고, 표의 첫 칸이 ID, 둘째 칸이 창에 보일 내용이다. 코드, 링크, 제목 안의 ID는 바꾸지 않는다.
 
+## 예제 애드온
+
+페이지에서 내려받는 시험 애드온의 소스는 `addons/<id>/bp`, `addons/<id>/rp`에 있다. `npm run build-addons`(시작과 빌드 전에 자동으로 실행)가 `static/downloads/<id>-v<버전>.mcaddon`을 만들고, 페이지에서는 `<AddonDownload id="<id>" />`로 내려받기 링크를 단다.
+
+버전은 BP와 RP manifest의 `version`, 팩 이름 끝의 `v<버전>`, 설명 앞의 `v<버전> - `, BP가 의존하는 RP 버전, 스크립트의 `PACK_VERSION`이 모두 같아야 한다. 하나라도 다르면 빌드가 실패하므로 고칠 때 함께 올린다. 애드온마다 크리에이티브 아이템 분류에 전용 테스트 아이템(`bwiki:<이름>_test`, 태그 `bwiki:test_launcher`)을 두고, 스크립트는 그 아이템을 쓸 때만 메뉴를 연다. 아이템 식별자나 UUID가 애드온끼리 겹쳐도 빌드가 실패한다.
+
 ## 영어판
 
 한국어가 원문이고 영어판은 `/en/` 경로에 나온다. 상단 메뉴의 언어 선택으로 오간다. 영어 페이지는 `i18n/en/docusaurus-plugin-content-docs/current/`에 `docs/`와 같은 경로로 두고, 분류 이름은 같은 폴더의 `current.json`, 화면 문자열은 `i18n/en/code.json`과 `i18n/en/docusaurus-theme-classic/`에 있다. 출처의 영어 이름은 `sources/*.json` 항목의 `title_en`, `license_en`, `author_en`이고, 영어 출처 목록 페이지도 `npm run gen-sources`가 만든다.
