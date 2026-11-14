@@ -343,7 +343,7 @@ These results were tested on 1.26.63 mobile (2026-11-14).
 
 | Method | Screen | Slots used | Result |
 | --- | --- | --- | --- |
-| Back up slots, then fill them | HUD | As many as shown, for as long as shown | The method public add-ons use ([HUD item icons section 2.1](./hud-item-icons.mdx#21-inventory-mirror-the-public-waila-add-on)). It moves player items, so a backup and restore mismatch can lose them. Not tested on this page |
+| Back up slots, then fill them | HUD | As many as shown, for as long as shown | It moves player items, so a backup and restore mismatch can lose them. Being measured with the test add-on (section 6.4) |
 | Several empty slots + lock-checked freeze (section 6.1) | HUD | As many as shown, for 1 tick | All 6 were right even when restored after 1 tick. The most reliable |
 | One slot + count-checked freeze (section 6.2) | HUD | 1 slot, 3 ticks per icon | All 12 were right at 3 ticks apart. At 1 tick apart, cells came out empty (no wrong icons). Stackable items only |
 | Entity inventory screen | Container screen | 0 player slots | The engine draws the entity slots, so there is no timing issue. The screen setup and the ways to open it are in the [entity inventory UI plan](./entity-inventory-ui.mdx) |
@@ -411,7 +411,32 @@ Items go into one slot in turn, and the icons freeze one at a time. The k-th ite
 - The borrowed slots must be empty at the start. The test add-on does not start when they are full, and it clears display items (told apart by name tag) on join.
 - Both methods are HUD only, and a player who opens the inventory screen while slots are borrowed sees the display items.
 
-## 7. Example add-on
+### 6.4 Test add-on
+
+The attempts in the tables above are collected in one add-on (Item Icon Slots v1.0.0). The icons are diamond, chest, golden apple, netherite sword and the add-on's 2 custom items (red and blue wool pictures). The one-slot tests use 12 stackable items.
+
+| Menu | What it does | What to look at |
+| --- | --- | --- |
+| HUD: back up slots 9-14 and fill them | Backs up the items in slots 9 to 14, puts display items in, shows them live for 5 seconds and restores | The 6 icons, and whether the original items (name, lore, durability, enchantments) come back unchanged |
+| HUD: 6 empty slots, lock check, clear after 1 tick / 10 ticks | Section 6.1. Fills 6 empty slots and clears them after 1 or 10 ticks | Whether the top row (Frozen) keeps the right 6 and the bottom row (Live) goes empty |
+| HUD: 1 slot, count check, 3 ticks apart / 1 tick apart | Section 6.2. Puts 12 items into slot 17 in turn | At 3 ticks, whether all 12 cells are right; at 1 tick, whether only empty cells appear and no wrong icons |
+| HUD: 1 slot, no check, 1 tick apart | Section 6.2 without the count check | Whether cells shift and freeze a different icon |
+| HUD: bundle contents | Puts a bundle holding a diamond and a red item into the 9th hotbar slot | Whether the contents cell and the stored amount text next to the bundle icon are empty |
+| Form: read inventory slot 17 | Puts a diamond in slot 17 and reads four inventory collection rows in a server form | Whether all four rows are empty |
+| Form: entities holding items | An item entity, an armor stand, an invisible armor stand and an entity with only a hand bone float overhead with a diamond, a chest and a red item. The server form draws them with `live_horse_renderer`. The last row is the player | Whether the item entity row is empty, and whether the held pose differs per item in the other rows |
+
+<AddonDownload id="item-icon-slots" />
+
+1. In a new world, turn on the behavior pack "Bedrock Wiki Item Icon Slots BP". The resource pack turns on with it as a dependency.
+2. Take "Item Icon Slots" (bundle picture) from the end of the Items category of the creative inventory. `/give @s bwiki:item_icon_slots_test` works too.
+3. Use the item to open the menu. `/scriptevent bwiki:item_icon_slots` opens it too. HUD tests show at the top middle of the screen after the menu closes.
+
+- Tests that need empty slots say so in chat and do not start when the slots are full. The 6-slot tests use slots 9 to 14 (the left 6 of the first main inventory row), the one-slot and form tests use slot 17, and the bundle test uses the 9th hotbar slot.
+- Only the backup test uses full slots as they are. The backup is kept in script memory and in a player dynamic property. If the player leaves the world before the restore, the next join restores from the dynamic property, which keeps only the type, amount, name, lore, durability and enchantments.
+- This add-on replaces `$screen_content` of `third_party_server_screen` and the HUD title, so do not turn it on together with other test add-ons.
+- The text on screen is English.
+
+## 7. Probe add-on
 
 <AddonDownload id="item-aux-probe" />
 

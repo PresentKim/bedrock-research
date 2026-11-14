@@ -1,0 +1,147 @@
+{
+  "namespace": "ixs_form",
+
+  "root": {
+    "type": "panel",
+    "size": [ "100%", "100%" ],
+    "controls": [
+      {
+        "vanilla": {
+          "type": "panel",
+          "size": [ "100%", "100%" ],
+          "bindings": [
+            { "binding_name": "#title_text" },
+            {
+              "binding_type": "view",
+              "source_property_name": "(not (('%.4s' * #title_text) = 'ixf:'))",
+              "target_property_name": "#visible"
+            }
+          ],
+          "controls": [ { "content@server_form.main_screen_content": {} } ]
+        }
+      },
+      { "screen_router@ixs_form.screen_router": {} }
+    ]
+  },
+
+  "caption": {
+    "type": "label", "layer": 3, "localize": false, "color": [ 0.25, 0.25, 0.25 ], "font_scale_factor": 0.7,
+    "size": [ "$caption_width", 10 ], "text": "$caption"
+  },
+
+  "cell_bg": { "type": "image", "texture": "textures/ui/cell_image", "size": [ "100%", "100%" ] },
+
+  "slot_cell": {
+    "type": "panel",
+    "size": [ 20, 20 ],
+    "controls": [
+      { "bg@ixs_form.cell_bg": {} },
+      {
+        "renderer": {
+          "type": "custom", "renderer": "inventory_item_renderer", "layer": 2, "size": [ 16, 16 ],
+          "property_bag": { "#item_id_aux": 0 },
+          "bindings": [ { "binding_type": "collection", "binding_collection_name": "$coll", "binding_name": "#item_id_aux", "binding_condition": "always" } ]
+        }
+      }
+    ]
+  },
+
+  "slot_row": {
+    "type": "stack_panel", "orientation": "horizontal", "size": [ 200, 22 ], "collection_name": "$coll",
+    "controls": [
+      { "label@ixs_form.caption": { "$caption_width": 170 } },
+      { "cell@ixs_form.slot_cell": { "collection_index": "$index" } }
+    ]
+  },
+
+  "slot_window": {
+    "type": "image",
+    "texture": "textures/ui/dialog_background_opaque",
+    "size": [ 216, 112 ],
+    "layer": 60,
+    "controls": [
+      { "close@common.close_button": {} },
+      {
+        "rows": {
+          "type": "stack_panel", "orientation": "vertical", "size": [ 200, 88 ], "offset": [ 8, 16 ], "anchor_from": "top_left", "anchor_to": "top_left", "layer": 1,
+          "controls": [
+            { "r1@ixs_form.slot_row": { "$coll": "hotbar_items", "$index": 17, "$caption": "hotbar_items 17" } },
+            { "r2@ixs_form.slot_row": { "$coll": "combined_hotbar_and_inventory_items", "$index": 17, "$caption": "combined_hotbar_and_inventory_items 17" } },
+            { "r3@ixs_form.slot_row": { "$coll": "inventory_items", "$index": 8, "$caption": "inventory_items 8" } },
+            { "r4@ixs_form.slot_row": { "$coll": "inventory_items", "$index": 17, "$caption": "inventory_items 17" } }
+          ]
+        }
+      }
+    ]
+  },
+
+  "entity_cell": {
+    "type": "panel",
+    "size": [ 34, 34 ],
+    "controls": [
+      { "bg": { "type": "image", "texture": "textures/ui/cell_image", "size": [ 32, 32 ] } },
+      {
+        "renderer": {
+          "type": "custom", "renderer": "live_horse_renderer", "layer": 2, "size": [ 32, 32 ],
+          "bindings": [
+            { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text", "binding_name_override": "#entity_id", "binding_condition": "always" }
+          ]
+        }
+      }
+    ]
+  },
+
+  "entity_row": {
+    "type": "stack_panel", "orientation": "horizontal", "size": [ 160, 34 ], "collection_name": "form_buttons",
+    "controls": [
+      { "label@ixs_form.caption": { "$caption_width": 50 } },
+      { "c0@ixs_form.entity_cell": { "collection_index": "$i0" } },
+      { "c1@ixs_form.entity_cell": { "collection_index": "$i1" } },
+      { "c2@ixs_form.entity_cell": { "collection_index": "$i2" } }
+    ]
+  },
+
+  "player_row": {
+    "type": "stack_panel", "orientation": "horizontal", "size": [ 160, 34 ], "collection_name": "form_buttons",
+    "controls": [
+      { "label@ixs_form.caption": { "$caption_width": 50, "$caption": "player" } },
+      { "c0@ixs_form.entity_cell": { "collection_index": 12 } }
+    ]
+  },
+
+  "entity_window": {
+    "type": "image",
+    "texture": "textures/ui/dialog_background_opaque",
+    "size": [ 176, 194 ],
+    "layer": 60,
+    "controls": [
+      { "close@common.close_button": {} },
+      {
+        "rows": {
+          "type": "stack_panel", "orientation": "vertical", "size": [ 160, 170 ], "offset": [ 8, 16 ], "anchor_from": "top_left", "anchor_to": "top_left", "layer": 1,
+          "controls": [
+            { "item@ixs_form.entity_row": { "$caption": "item entity", "$i0": 0, "$i1": 1, "$i2": 2 } },
+            { "stand@ixs_form.entity_row": { "$caption": "armor stand", "$i0": 3, "$i1": 4, "$i2": 5 } },
+            { "invisible@ixs_form.entity_row": { "$caption": "invisible", "$i0": 6, "$i1": 7, "$i2": 8 } },
+            { "holder@ixs_form.entity_row": { "$caption": "hand bone", "$i0": 9, "$i1": 10, "$i2": 11 } },
+            { "player@ixs_form.player_row": {} }
+          ]
+        }
+      }
+    ]
+  },
+
+  "screen_router": {
+    "type": "collection_panel",
+    "size": [ "100%", "100%" ],
+    "factory": {
+      "name": "ixs_screen",
+      "control_ids": { "s": "@ixs_form.slot_window", "e": "@ixs_form.entity_window" }
+    },
+    "property_bag": { "#ixf:slot": [ "s" ], "#ixf:ent": [ "e" ] },
+    "bindings": [
+      { "binding_name": "#title_text" },
+      { "binding_type": "view", "source_property_name": "('#' + ('%.8s' * #title_text))", "target_property_name": "#collection_length" }
+    ]
+  }
+}
