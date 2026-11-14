@@ -16,8 +16,13 @@ export default function AddonDownload({ id }: { id: string }): React.ReactElemen
         <Translate id="addon.download">다운로드</Translate>: {a.file}
       </a>
       <div className="addon-download__meta">
-        {a.name} v{a.version} · {(a.size / 1024).toFixed(1)} KB ·{' '}
-        <Translate id="addon.item">테스트 아이템</Translate> {a.items.map((it) => <code key={it}>{it}</code>)}
+        {a.name} v{a.version} · {(a.size / 1024).toFixed(1)} KB
+        {a.items.length > 0 && (
+          <>
+            {' · '}
+            <Translate id="addon.item">테스트 아이템</Translate> {a.items.map((it) => <code key={it}>{it}</code>)}
+          </>
+        )}
       </div>
     </div>
   );
