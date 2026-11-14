@@ -111,7 +111,7 @@ third_party_server_screen@common.base_screen   ($screen_content = server_form.ma
 ## 10.5 Chest screen (`chest_screen.json`)
 
 - **[HOST-16]** Of entity inventories, only `container_type: "container"` goes to `chest_screen.json`, and it opens only if `private: false`. `inventory_size: 54` also goes to `small_chest_screen`, not a large chest, and draws only 27 cells, but cells that are not drawn are still read by bindings and updated in real time. Even 200 cells worked. `{measured}` (Source: BC-facts)
-- **[HOST-17]** Slots expose **only numbers** (`#hover_text` is the value of the whole screen, and the group name is empty). The screen is identified by the custom item's `max_durability` (signed 16 bits, 1..32767). Vanilla `#item_id_aux` has a range that shifts with the number of custom items (the BC record says 256 and above, the wiki 1.26.50 table 852~883), and an empty slot or an item with no durability fails every durability gate. `{measured, conflict}` (Source: BC-facts, BC-S14, BC 4.3-(1), BW-ids, Appendix A C-33)
+- **[HOST-17]** Slots expose numbers and tooltip text. `#hover_text` is read per slot and updates at once in the open screen, and it holds the name, vanilla description lines, lore and the lock notice line in tooltip format. The group name is empty. The screen is identified by the custom item's `max_durability` (signed 16 bits, 1..32767), read through `#item_durability_total_amount` (`#item_durability_current_amount` has the same value while unworn). `#item_durability_max` is not a slot binding. Vanilla `#item_id_aux` has a range that shifts with the number of custom items (the BC record says 256 and above, the wiki 1.26.50 table 852~883, measured 853 and above on 1.26.63, [item numeric ID plan](../design/item-aux-id.mdx)), and an empty slot or an item with no durability fails every durability gate. `{measured, conflict}` (Source: BC-facts, BC-S14, BC 4.3-(1), BW-ids, Appendix A C-33, EML)
 - **[HOST-18]** The chest screen content redeclares `small_chest_screen` in `chest_screen.json` to change `$screen_content` (MOD-11), and the vanilla label and grid are hidden with a slot 0 identifier binding (COL-05). For `small_chest_panel_top_half`, where controls are declared directly, `insert_back` is safe. Touch screens also go to `pocket_containers.small_chest_panel` in the same file. `{measured, code}` (Source: BC 4.3-(2), BC-facts)
 - **[HOST-19]** `$container_title` is the entity nameTag and can be used in text but not in binding expressions. Do routing with slot values. `{measured}` (Source: BC-facts)
 - **[HOST-20]** A script-side caution: there is no lock mode that makes slots read-only (poll and restore is the only way). If you refill a slot while the player holds the original, it is duplicated. The cursor can be read and cleared with `PlayerCursorInventoryComponent` but is not filled on touch. `setDynamicProperty` throws on stackable items, so mark them with lore. `{measured}` (Source: BC-facts)
@@ -211,13 +211,13 @@ new ModalFormData().title("mymodal:settings").toggle("Sound effects", { defaultV
         "controls": [ { "hello": { "type": "label", "text": "My menu", "localize": false } } ],
         "bindings": [
           { "binding_type": "collection_details", "binding_collection_name": "container_items" },
-          { "binding_name": "#item_durability_max", "binding_type": "collection", "binding_collection_name": "container_items" },
-          { "binding_type": "view", "source_property_name": "((#item_durability_max - 0) = 777)", "target_property_name": "#visible" } ] } } ] } ] }
+          { "binding_name": "#item_durability_total_amount", "binding_type": "collection", "binding_collection_name": "container_items" },
+          { "binding_type": "view", "source_property_name": "(#item_durability_total_amount = 777)", "target_property_name": "#visible" } ] } } ] } ] }
 }
 ```
 
 1. The chest screen comes to `chest_screen.json` when the entity inventory is `container_type: "container"` and `private: false` (HOST-16).
-2. Slots expose only numbers, so use the custom item's `max_durability` (1~32767) as the screen identifier (HOST-17). The binding name above (`#item_durability_max`) and the collection name are examples taken from the BC measurement records, so check them in your own version's vanilla `chest_screen.json`.
+2. Use the custom item's `max_durability` (1~32767) as the screen identifier and read it through `#item_durability_total_amount` (HOST-17). `#item_durability_max` is not a slot binding, so a condition on that name is not evaluated.
 3. Hide the vanilla label and grid with a slot 0 identifier binding (HOST-18, COL-05). For `small_chest_panel_top_half`, where controls are declared directly, `insert_back` is safe.
 4. Slot values update immediately if they change while open. There is no lock mode that locks slots read-only (HOST-20).
 

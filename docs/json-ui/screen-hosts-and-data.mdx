@@ -111,7 +111,7 @@ third_party_server_screen@common.base_screen   ($screen_content = server_form.ma
 ## 10.5 상자 화면 (`chest_screen.json`)
 
 - **[HOST-16]** 엔티티 인벤토리는 `container_type: "container"`만 `chest_screen.json`으로 가고, `private: false`여야 열린다. `inventory_size: 54`도 큰 상자가 아니라 `small_chest_screen`으로 가서 27칸만 그리지만, 그려지지 않는 칸도 바인딩으로 읽히고 실시간 갱신된다. 200칸도 동작했다. `{실측}` (출처: BC-facts)
-- **[HOST-17]** 슬롯은 **숫자만** 공개한다(`#hover_text`는 화면 전체 값, 그룹 이름은 비어 있음). 화면 식별은 커스텀 아이템의 `max_durability`(부호 있는 16비트, 1..32767)로 한다. 바닐라 `#item_id_aux`는 커스텀 아이템 수에 따라 밀리는 범위가 있고(BC 기록은 256 이상, 위키 1.26.50 표는 852~883), 빈 슬롯이나 내구도 없는 아이템은 모든 내구도 게이트에서 실패한다. `{실측, 충돌}` (출처: BC-facts, BC-S14, BC 4.3-(1), BW-ids, 부록A C-33)
+- **[HOST-17]** 슬롯은 숫자와 툴팁 글을 공개한다. `#hover_text`는 칸마다 따로 읽히고 열린 화면에서 바로 갱신되며, 이름, 바닐라 설명 줄, lore, 잠금 안내 줄이 툴팁 서식 그대로 들어 있다. 그룹 이름은 비어 있다. 화면 식별은 커스텀 아이템의 `max_durability`(부호 있는 16비트, 1..32767)로 하고 `#item_durability_total_amount`로 읽는다(닳지 않았으면 `#item_durability_current_amount`도 같은 값). `#item_durability_max`는 칸 바인딩에 없다. 바닐라 `#item_id_aux`는 커스텀 아이템 수에 따라 밀리는 범위가 있고(BC 기록은 256 이상, 위키 1.26.50 표는 852~883, 1.26.63 실측은 853 이상, [아이템 숫자 ID 기획](../design/item-aux-id.mdx)), 빈 슬롯이나 내구도 없는 아이템은 모든 내구도 게이트에서 실패한다. `{실측, 충돌}` (출처: BC-facts, BC-S14, BC 4.3-(1), BW-ids, 부록A C-33, EML)
 - **[HOST-18]** 상자 화면 내용은 `chest_screen.json`에서 `small_chest_screen`을 재선언해 `$screen_content`를 바꾸고(MOD-11), 바닐라 라벨·그리드는 0번 슬롯 식별값 바인딩으로 숨긴다(COL-05). 컨트롤을 직접 선언한 `small_chest_panel_top_half`에는 `insert_back`이 안전하다. 터치 화면도 같은 파일의 `pocket_containers.small_chest_panel`로 간다. `{실측, 코드}` (출처: BC 4.3-(2), BC-facts)
 - **[HOST-19]** `$container_title`은 엔티티 nameTag이고 텍스트에는 쓸 수 있지만 바인딩 식에는 못 쓴다. 라우팅은 슬롯 값으로 한다. `{실측}` (출처: BC-facts)
 - **[HOST-20]** 스크립트 쪽 주의: 슬롯을 읽기 전용으로 만드는 lock mode는 없다(폴링 후 복구가 유일). 원본을 플레이어가 든 채로 슬롯을 다시 채우면 복제된다. 커서는 `PlayerCursorInventoryComponent`로 읽고 지울 수 있지만 터치에서는 채워지지 않는다. 쌓이는 아이템에는 `setDynamicProperty`가 던지므로 lore로 표시한다. `{실측}` (출처: BC-facts)
@@ -211,13 +211,13 @@ new ModalFormData().title("mymodal:settings").toggle("효과음", { defaultValue
         "controls": [ { "hello": { "type": "label", "text": "내 메뉴", "localize": false } } ],
         "bindings": [
           { "binding_type": "collection_details", "binding_collection_name": "container_items" },
-          { "binding_name": "#item_durability_max", "binding_type": "collection", "binding_collection_name": "container_items" },
-          { "binding_type": "view", "source_property_name": "((#item_durability_max - 0) = 777)", "target_property_name": "#visible" } ] } } ] } ] }
+          { "binding_name": "#item_durability_total_amount", "binding_type": "collection", "binding_collection_name": "container_items" },
+          { "binding_type": "view", "source_property_name": "(#item_durability_total_amount = 777)", "target_property_name": "#visible" } ] } } ] } ] }
 }
 ```
 
 1. 상자 화면은 엔티티 인벤토리가 `container_type: "container"`, `private: false`일 때 `chest_screen.json`으로 온다(HOST-16).
-2. 슬롯은 숫자만 공개하므로 커스텀 아이템의 `max_durability`(1~32767)를 화면 식별값으로 쓴다(HOST-17). 위 바인딩 이름(`#item_durability_max`)과 컬렉션 이름은 BC 실측 기록에서 가져온 예시이므로 자기 버전의 바닐라 `chest_screen.json`에서 확인한다.
+2. 커스텀 아이템의 `max_durability`(1~32767)를 화면 식별값으로 쓰고 `#item_durability_total_amount`로 읽는다(HOST-17). `#item_durability_max`는 칸 바인딩에 없어서 이 이름으로 건 조건은 계산되지 않는다.
 3. 바닐라 라벨·그리드는 0번 슬롯 식별값 바인딩으로 숨긴다(HOST-18, COL-05). 컨트롤을 직접 선언한 `small_chest_panel_top_half`에는 `insert_back`이 안전하다.
 4. 슬롯 값은 열려 있는 동안 바뀌면 즉시 갱신된다. 슬롯을 읽기 전용으로 잠그는 lock mode는 없다(HOST-20).
 
