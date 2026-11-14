@@ -17,7 +17,7 @@ The JSON UI `inventory_item_renderer` draws an item from `#item_id_aux` = `numer
 
 The problem is that a script has no way to know this number. This page researches how a behavior pack script can compute the numeric ID from an item name (`minecraft:diamond`, `bwiki:ruby`). It covers vanilla items and blocks, custom items and custom blocks.
 
-Status: the layout rules of vanilla items, custom items and custom blocks are confirmed on 1.26.63 mobile (section 5). Vanilla numbers can be computed from a script. Custom items and blocks shift with the pack stack order, so a script cannot settle them (section 5.7).
+Status: the layout rules of vanilla items, custom items and custom blocks are confirmed on 1.26.63 mobile (section 5). Vanilla numbers can be computed from a script. Custom items and blocks shift with the pack stack order, so a script cannot settle them (section 5.7). Script computation fits private servers and is not recommended for distributed add-ons (section 5.8). Ways to draw items without computing numbers, by placing the real item in an inventory slot and letting the engine draw it, are collected in section 6.
 
 ## 1. The Script API has no numeric ID
 
@@ -329,7 +329,89 @@ A practical setup:
 2. Draw the pack's own custom items and blocks from texture paths in its own resource pack. Textures do not depend on the pack order.
 3. Use a custom number table only where the pack can be fixed to come first (for example a world whose server sets the pack order).
 
-## 6. Example add-on
+### 5.8 Where to use it
+
+Computing numbers in a behavior pack script and sending them to the UI is **not recommended for distributed add-ons.** An add-on cannot know which game version or which other packs it runs with. The vanilla table goes stale with every game update, and custom numbers shift when another pack comes first. A wrong number draws a different item, not an empty cell.
+
+On a **private server it is the best method.** The operator fixes the game version, the pack list and the stack order, so a table that matches once keeps matching. It does not touch the player inventory, works in server forms and the HUD alike, and has no limit on the icon count. Rebuild the vanilla table when the server updates, and the custom number table when the pack setup changes. A custom server that sends the item list itself (Dragonfly and others) assigns the numbers, so it needs no inference at all ([HUD item icons section 3](./hud-item-icons.mdx#3-how-to-carry-a-numeric-id-in-the-title)).
+
+## 6. Drawing from inventory slots without numbers
+
+When a real item sits in a player or entity inventory slot, the client fills `#item_id_aux` of that slot itself (section 2.5). No number is computed, so vanilla items, custom items and other packs' items all draw correctly, with 3D and glint. The cost is borrowing player slots for a moment, or using a container screen.
+
+These results were tested on 1.26.63 mobile (2026-11-14).
+
+| Method | Screen | Slots used | Result |
+| --- | --- | --- | --- |
+| Back up slots, then fill them | HUD | As many as shown, for as long as shown | The method public add-ons use ([HUD item icons section 2.1](./hud-item-icons.mdx#21-inventory-mirror-the-public-waila-add-on)). It moves player items, so a backup and restore mismatch can lose them. Not tested on this page |
+| Several empty slots + lock-checked freeze (section 6.1) | HUD | As many as shown, for 1 tick | All 6 were right even when restored after 1 tick. The most reliable |
+| One slot + count-checked freeze (section 6.2) | HUD | 1 slot, 3 ticks per icon | All 12 were right at 3 ticks apart. At 1 tick apart, cells came out empty (no wrong icons). Stackable items only |
+| Entity inventory screen | Container screen | 0 player slots | The engine draws the entity slots, so there is no timing issue. The screen setup and the ways to open it are in the [entity inventory UI plan](./entity-inventory-ui.mdx) |
+
+What did not work:
+
+| Attempt | Result |
+| --- | --- |
+| Reading inventory collections in a server form screen | All four tested rows (`hotbar_items`, `inventory_items` and others) were empty. Borrowing slots works only in the HUD |
+| Reading bundle contents in the HUD | Only the bundle icon showed. The contents and fill amount were empty |
+| Drawing an item entity with `live_horse_renderer` | Empty. Players and armor stands drew the same way (`#entity_id` set to the raw button text) |
+| Using an entity holding the item as the icon | An invisible armor stand showed only the held item, but the held pose differs per item (flat items show as a side-on line, custom held poses), so it cannot stand in for an icon |
+
+### 6.1 Several empty slots + lock-checked freeze
+
+1. The script puts display items into empty main inventory slots (9 to 14 in the test) all at once. Display items get `lockMode = slot`, `keepOnDeath = true` and a recognizable `nameTag`.
+2. On the next tick it sends one title. The HUD panel becomes visible with that title.
+3. The HUD reads `hotbar_items` at `collection_index` 9 to 35. A hidden data panel per cell freezes `#item_id_aux` and `#item_lock_in_slot` at the moment it becomes visible, with `binding_condition: "visibility_changed"`.
+4. The icon reads the data panel's values through `source_control_name` and `resolve_sibling_scope: true`, and shows only when the frozen `#item_lock_in_slot` is true.
+5. The script clears the slots. The frozen icons stay while the title is up.
+
+```json
+"locked": {
+  "type": "panel", "size": [ 18, 18 ], "collection_index": "$slot",
+  "controls": [
+    {
+      "data": {
+        "type": "panel", "size": [ 0, 0 ],
+        "bindings": [
+          { "binding_type": "collection", "binding_collection_name": "hotbar_items", "binding_name": "#item_id_aux", "binding_condition": "visibility_changed" },
+          { "binding_type": "collection", "binding_collection_name": "hotbar_items", "binding_name": "#item_lock_in_slot", "binding_condition": "visibility_changed" }
+        ]
+      }
+    },
+    {
+      "icon": {
+        "type": "custom", "renderer": "inventory_item_renderer", "size": [ 16, 16 ], "layer": 2,
+        "property_bag": { "#item_id_aux": 0 },
+        "bindings": [
+          { "binding_type": "view", "source_control_name": "data", "resolve_sibling_scope": true, "source_property_name": "#item_id_aux", "target_property_name": "#item_id_aux" },
+          { "binding_type": "view", "source_control_name": "data", "resolve_sibling_scope": true, "source_property_name": "#item_lock_in_slot", "target_property_name": "#visible" }
+        ]
+      }
+    }
+  ]
+}
+```
+
+Put this panel inside a stack panel with `collection_name: "hotbar_items"`. The player's own items are not locked, so if the title arrives late and the slot is already empty or holds another item, the icon just stays hidden and no wrong icon is frozen.
+
+### 6.2 One slot + count-checked freeze
+
+Items go into one slot in turn, and the icons freeze one at a time. The k-th item (from 0) goes in as `k + 2` items, and the k-th frozen cell shows only when the count at that moment is `k + 2`.
+
+- `#inventory_stack_count` is the count label text, not a number. Strip the format codes before comparing, as in `(((#inventory_stack_count - '§r') - '§f') = 3)`.
+- A count of 1 did not match even against an empty string, so counts start at 2.
+- The frozen cells take their step from the length of the title text (`LAC:a`, `LAC:aa`, ...). The title is sent on the tick after the item goes in.
+- Without the count check, 1 tick apart shifted by one cell and froze a **different icon**. With the count check, 1 tick apart filled only the last cell and left the rest empty.
+- Items that stack to 1, such as swords and tools, cannot change their count, so they cannot be used.
+
+### 6.3 Device speed and risks
+
+- With both methods, a late freeze gives an empty cell and never a wrong icon. Only the empty icons need a retry.
+- In section 6.1, ticks only decide when the slots may be cleared. Section 6.2 needs a gap per icon, so failures grow on slow devices.
+- The borrowed slots must be empty at the start. The test add-on does not start when they are full, and it clears display items (told apart by name tag) on join.
+- Both methods are HUD only, and a player who opens the inventory screen while slots are borrowed sees the display items.
+
+## 7. Example add-on
 
 <AddonDownload id="item-aux-probe" />
 

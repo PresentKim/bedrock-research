@@ -1,0 +1,164 @@
+---
+title: Building menu screens from an entity inventory
+description: A plan to restyle the chest screen of an invisible container entity with a resource pack and use it as a menu instead of a server form. The engine draws the entity slots, so no numeric ID is needed. Screen routing, client-side selection, a button that reaches the script, three ways to open the screen, and test results.
+sidebar_position: 5
+sources:
+  - repo-guide
+  - private-research
+---
+
+# Building menu screens from an entity inventory
+
+Server form buttons draw item icons only from a texture path or a numeric ID, and a script often cannot settle the numeric ID ([item numeric ID plan section 5.7](./item-aux-id.mdx#57-conclusion-what-a-script-can-do)). An entity inventory screen has the engine draw the real items in the entity slots, so vanilla items, custom items and other packs' items all come out right.
+
+This page covers restyling the chest screen of a container entity with a resource pack and using it as a menu like the research screen.
+
+Status: screen routing, the icon grid, client-side selection, a button that reaches the script, and three ways to open the screen were tested on 1.26.63 mobile (2026-11-14). There is no example add-on yet.
+
+## 1. Compared with a server form
+
+| Topic | Server form | Entity inventory screen |
+| --- | --- | --- |
+| Opening | The script opens it directly | A script cannot force it open. One player action is needed (section 3) |
+| Icons | Texture path, or numeric ID | The engine draws the entity slots. Every item, 3D, glint |
+| Icon count | As many as buttons | As many as entity inventory slots (more slots are readable even on the 27-slot screen, HOST-16) |
+| Changing content | Close and reopen the form | Slot changes by the script show at once in the open screen |
+| Input that reaches the script | Button index | Slot actions only. Buttons go through a slot quick move (section 2.4) |
+| In-screen actions | Client-side with radio toggles | The same |
+
+## 2. Setup
+
+### 2.1 Entity
+
+```json
+"minecraft:inventory": {
+  "container_type": "container",
+  "inventory_size": 27,
+  "private": false,
+  "can_be_siphoned_from": false
+}
+```
+
+- It opens through `chest_screen.json` only with `container_type: "container"` and `private: false` (HOST-16).
+- A menu entity gets `minecraft:physics` (no gravity, no collision), `minecraft:pushable` (not pushable) and `minecraft:damage_sensor` (no damage).
+- The resource pack entity uses an empty geometry with no bones so it is invisible.
+
+### 2.2 Screen routing
+
+Redeclare `small_chest_screen` in `chest_screen.json` to replace `$screen_content` (HOST-18). Put a marker item (a hidden custom item with `max_durability` 4242) in slot 0, and draw the menu window only when that value matches. Other chests and entities keep the vanilla screen.
+
+```json
+"small_chest_screen@common.inventory_screen_common": {
+  "variables": [
+    { "requires": "$desktop_screen", "$screen_content": "menu_box.root_desktop" },
+    { "requires": "$pocket_screen", "$use_custom_pocket_toast": true, "$screen_content": "menu_box.root_pocket" }
+  ]
+}
+```
+
+```json
+"gate": {
+  "type": "panel", "size": [ "100%", "100%" ],
+  "bindings": [
+    { "binding_type": "collection_details", "binding_collection_name": "container_items" },
+    { "binding_type": "collection", "binding_collection_name": "container_items", "binding_name": "#item_durability_total_amount", "binding_name_override": "#identity" },
+    { "binding_type": "view", "source_property_name": "$gate_rule", "target_property_name": "#visible" }
+  ]
+},
+"root_pocket": {
+  "type": "panel", "size": [ "100%", "100%" ],
+  "controls": [
+    { "vanilla@menu_box.host": { "$gate_rule": "(not (#identity = 4242))", "$content": "pocket_containers.small_chest_panel" } },
+    { "menu@menu_box.host": { "$gate_rule": "(#identity = 4242)", "$content": "menu_box.window" } }
+  ]
+}
+```
+
+`host` holds a `gate` with `collection_index: 0` inside a panel with `collection_name: "container_items"`, and puts `$content` inside the gate. On desktop the vanilla side is `chest.small_chest_panel`. The menu window does not draw the player inventory area.
+
+### 2.3 Icon grid and selection
+
+- Each cell's `inventory_item_renderer` reads `#item_id_aux` of `container_items` at its `collection_index`.
+- Cells are radio toggles as in the research screen (`radio_toggle_group`, `toggle_group_forced_index`). Selecting one shows a border and a large detail icon. Selection is handled only on the client and does not reach the server.
+- The toggle takes the cell press, so the item did not move.
+- The displayed items had `lockMode = slot`. The red lock corner showed on screen.
+
+### 2.4 A button that reaches the script
+
+In JSON UI, the only direct path to a script is a server form button. What reaches the server from a container screen is a slot action, so the visible button is mapped to a quick move of a hidden slot.
+
+```json
+"start_button": {
+  "type": "button", "size": [ 144, 20 ], "layer": 2,
+  "default_control": "default", "hover_control": "hover", "pressed_control": "pressed",
+  "bindings": [ { "binding_type": "collection_details", "binding_collection_name": "container_items" } ],
+  "button_mappings": [
+    { "from_button_id": "button.menu_select", "to_button_id": "button.container_auto_place", "mapping_type": "pressed", "consume_event": false },
+    { "from_button_id": "button.menu_ok", "to_button_id": "button.container_auto_place", "mapping_type": "focused", "consume_event": false }
+  ]
+}
+```
+
+1. The button sits at `collection_index: 26` inside a stack panel with `collection_name: "container_items"`.
+2. The script keeps a button item with a marker name in slot 26.
+3. A press quick-moves that item into the player inventory.
+4. Every 2 ticks the script checks slot 26. When the marker item is gone, it counts a press and refills the slot.
+5. `world.afterEvents.playerInventoryItemChange` deletes the marker item that entered the player inventory.
+
+Pressing the slot itself stopped being detected after 2 presses on a touch screen. The item seems to go onto the cursor and only swap with the item in the slot (related to "the cursor is not filled on touch" in HOST-20). A quick move does not pass through the cursor.
+
+## 3. Ways to open the screen
+
+The Script API has no function that opens a container screen. On Discord the answer "it cannot be forced open" came up again and again (2025-10-23, 2026-03-09, 2026-09-10). So one player action is always needed.
+
+| Method | How | Result on 1.26.63 mobile |
+| --- | --- | --- |
+| C: tap a visible entity | Spawn the entity in front of the player, who taps it | Opens. The entity has to be visible to be found, which is awkward for a menu |
+| C2: entity in the line of sight | While the menu item is held, an invisible 1.2x1.2 entity moves every tick to 1.2 blocks along the view direction from the eyes, 0.6 blocks down. Tapping the middle of the screen taps that entity | Opens with one tap. Switching to another item removes the entity. The best usability |
+| C3: ride + inventory button | The script seats the player on an invisible entity with `Rideable.addRider`. When the player presses the inventory button, the entity's screen opens instead of the player inventory | Opens. Sneaking gets off. Getting off removes the entity |
+
+C2 position in the line of sight:
+
+```js
+function spotInFront(player, distance, drop) {
+  const view = player.getViewDirection();
+  const eye = player.getHeadLocation();
+  return { x: eye.x + view.x * distance, y: eye.y + view.y * distance - drop, z: eye.z + view.z * distance };
+}
+```
+
+The C3 entity has `minecraft:rideable` with `family_types: ["player"]` and seat `position: [0, 0, 0]`. While riding, the hint `action.hint.exit.<entity identifier>` showed untranslated. Add this key to the resource pack language file.
+
+Other workarounds mentioned on Discord were not tested.
+
+- Put an entity inside a furniture block with a hit box a little larger than the block, so tapping the block taps the entity (2025-10-22, 2026-03-09).
+- A 26.50 preview mention that interacting with a custom block that has a container opens the inventory screen (2026-08-21). Whether it reached a stable release was not checked.
+- A report that a seat far from the entity center opens the screen and closes it at once (2026-05-05). C3 put the seat at the center.
+
+## 4. Test summary (1.26.63 mobile, 2026-11-14)
+
+| Checked | Result |
+| --- | --- |
+| Replacing only the menu window via the slot 0 marker | Works. The vanilla chest screen is unchanged |
+| Icon grid | Vanilla items, 3D blocks and custom items all drew |
+| Toggle selection and detail icon | Works. Items do not move |
+| Button by pressing the slot | Stopped being detected after 2 presses on touch |
+| Quick move button | Worked well once open (C, C2 and C3) |
+| Opening with C, C2, C3 | All open. C2 was the easiest to use |
+
+## 5. What remains
+
+- Whether the press count rises every time past 10 presses of the quick move button, and whether no button item stays in the player inventory after closing, were not recorded separately.
+- Whether items with `lockMode = slot` cannot be taken out of the entity screen was not checked. HOST-20 says "there is no read-only lock".
+- C2: the effect of teleporting every tick while open (whether the screen closes or flickers), and whether the entity blocks breaking or attacking while the menu item is held, were not checked.
+- Several players: whether one player can tap another player's menu entity, and cleanup when each player has an entity.
+- Behavior on Windows, iOS and controller input (the `button.menu_ok` mapping).
+- Marker binding: this setup read the marker through `#item_durability_total_amount`. Whether it is the same value as `#item_durability_max` in the HOST-17 records was not checked.
+- An example add-on.
+
+## Related rules
+
+| ID | Page | Content |
+| --- | --- | --- |
+| HOST-16 to HOST-20 | [Screen hosts and data](../json-ui/screen-hosts-and-data.mdx) | Entity inventory screen, slot identity, screen redeclaration, script-side cautions |
+| ANI-06 | [Images and animation](../json-ui/images-and-animation.mdx) | The item renderer and `#item_id_aux` |
