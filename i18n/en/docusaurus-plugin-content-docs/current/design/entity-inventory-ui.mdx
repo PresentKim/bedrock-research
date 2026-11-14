@@ -1,6 +1,6 @@
 ---
 title: Building menu screens from an entity inventory
-description: A plan to restyle the chest screen of an invisible container entity with a resource pack and use it as a menu instead of a server form. The engine draws the entity slots, so no numeric ID is needed. Screen routing, client-side selection, labels and bars drawn from slot names and durability, a button that reaches the script, ways to open the screen, and test results.
+description: A plan to restyle the chest screen of an invisible container entity with a resource pack and use it as a menu instead of a server form. The engine draws the entity slots, so no numeric ID is needed. Screen routing, client-side selection, labels and bars drawn from slot names and durability, a button that reaches the script, ways to open the screen, test results, and a research screen example.
 sidebar_position: 5
 sources:
   - repo-guide
@@ -211,7 +211,6 @@ Other workarounds mentioned on Discord were not tested.
 
 - Several players: whether one player can tap another player's menu entity, and cleanup when each player has an entity.
 - Behavior on Windows, iOS and controller input (the `button.menu_ok` mapping).
-- An example add-on (only the test add-on in section 6 exists now).
 
 ## 6. Test add-on
 
@@ -239,6 +238,58 @@ Entity Menu Lab puts the setup of sections 2.2 to 2.5 on one screen. The menu en
 <video controls preload="metadata" width="100%" src={require('@site/static/video/entity-menu-lab-addon.mp4').default} />
 
 Test add-on measurement video (mobile 1.26.63, 2026-11-14, v1.6.0).
+
+## 7. Example: research screen
+
+This example draws the same window as the [server form research screen](./server-form-research-screen.mdx) (two tabs on top, an 8x6 grid with page arrows on the left, details and a start button on the right) as an entity inventory screen. Every third of the 120 research entries starts out done, and a research really runs when the materials are there.
+
+![Research screen example. To do 110 and Done 10 tabs on top, the 8x6 grid with page arrows on the left, the Pick a research. hint on the right, and the Researched Item 117. message below](/img/design/entity-research-screen.png)
+
+### 7.1 Slot layout
+
+The entity has 243 slots (HOST-16).
+
+| Slot | Content |
+| --- | --- |
+| 0 | Marker (durability 4244) |
+| 1 to 48 | The 48 cells of the current page of the To do tab |
+| 49 to 96 | The 48 cells of the current page of the Done tab |
+| 97, 98 | Tab heads (icon, `To do N`, `Done N`) |
+| 99 to 102 | Previous and next page buttons per tab |
+| 103 to 124 | To do tab details: icon and name, status, description, 8 materials, 8 rewards, start button, done note, message |
+| 125 to 146 | Done tab details (same layout) |
+| 147 to 242 | One pick button slot per cell |
+
+### 7.2 Compared with the server form version
+
+| Topic | Server form research screen | Entity research screen |
+| --- | --- | --- |
+| Icons | Numeric IDs | The engine draws the slot items |
+| Picking a cell | Cell toggles. The server sends 20 detail buttons for every cell up front | A press quick-moves the cell's pick slot, and the script fills the 22 detail slots with that research |
+| Switching tabs | Radio toggles | The same |
+| Pages and starting | Form buttons. The form closes and opens again | Quick move buttons. The screen stays open and only slots change |
+| Material and reward counts | Button text | The slot item amount, drawn with `#inventory_stack_count` |
+
+Picking goes through the server, but the delay before the details changed was barely noticeable. The selection mark (yellow border) checks the cell item's lore for `SELECTED`.
+
+### 7.3 Decisions
+
+- **Keep pick buttons in slots apart from the icon slots.** Quick-moving the icon slot item emptied the slot for a moment, the empty-cell rule hid it, and the row shrank and grew back. Each cell gets its own hidden pick slot, and the cell keeps its size even when empty.
+- **Pass the start button state through the button slot item.** Every half second the script counts the materials and adds or removes `READY` in the button item's lore. With `READY` the button draws a green `Start research`, without it a grey `Not enough materials`.
+- **Show the first tab's content when the screen opens.** The first tab's content is visible while the second tab toggle is off (`(not #toggle_state)`), and the first tab toggle has `toggle_default_state: true`.
+
+### 7.4 Example add-on
+
+<AddonDownload id="entity-research-screen" />
+
+1. Turn on the behavior pack "Bedrock Wiki Entity Research Screen BP" in a new world. The resource pack turns on with it as a dependency. It replaces the chest screen file, so do not turn it on in the same world as Entity Menu Lab.
+2. Take "Research" (enchanted book) from the end of the items category of the creative inventory, or use `/give @s bwiki:entity_research`.
+3. Hold the item and tap the middle of the screen to open the research screen.
+4. Sneak and use the item to reset the research and get 64 of each of the 10 materials.
+
+<video controls preload="metadata" width="100%" src={require('@site/static/video/entity-research-screen-addon.mp4').default} />
+
+Example add-on measurement video (mobile 1.26.63, 2026-11-15).
 
 ## Related rules
 
