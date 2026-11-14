@@ -1,7 +1,7 @@
 import { BlockTypes, ItemTypes, system, world } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 
-const PACK_VERSION = "v1.0.0";
+const PACK_VERSION = "v1.0.1";
 const TEST_ITEM = "bwiki:aux_probe_test";
 const CELLS = 64;
 const RANGES = [840, -1278, -9776];
