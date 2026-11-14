@@ -1,10 +1,12 @@
 # 제3자 라이선스 고지
 
+이 프로젝트가 쓴 글, 코드, 시험 애드온은 MIT 라이선스(`LICENSE`)다. 아래 자료의 발췌는 MIT가 아니라 각 자료의 라이선스를 따른다.
+
 이 저장소의 위키 본문은 아래 자료를 조사하고 한국어로 다시 쓴 것이다. 일부 페이지는 원문을 `발췌` 상자로 옮겼고, 발췌 상자 머리에 출처, 원문 경로, 라이선스를 적었다. 이 표는 `sources/*.json`의 출처 레지스트리에서 재배포가 가능한 항목만 모은 것이다. 전체 목록(재배포 불가와 사실만 다시 쓴 자료 포함)은 위키의 "출처 목록" 페이지에 있다.
 
 ## 비상업 조건 (PolyForm Noncommercial 1.0.0)
 
-Cinnabar(`cinnabar`)의 발췌가 위키에 들어 있다. PolyForm Noncommercial 1.0.0은 비상업 목적에만 쓸 수 있게 한다. 따라서 **이 저장소와 위키 전체를 비상업 목적으로만 이용한다.** 복사본을 배포할 때는 약관 전문 또는 약관 URL(https://polyformproject.org/licenses/noncommercial/1.0.0)과 Cinnabar의 `Required Notice:` 줄을 함께 전해야 한다.
+Cinnabar(`cinnabar`)의 발췌가 위키에 들어 있다. PolyForm Noncommercial 1.0.0은 비상업 목적에만 쓸 수 있게 한다. 따라서 **Cinnabar 발췌 블록은 비상업 목적으로만 이용한다.** 복사본을 배포할 때는 약관 전문 또는 약관 URL(https://polyformproject.org/licenses/noncommercial/1.0.0)과 Cinnabar의 `Required Notice:` 줄을 함께 전해야 한다.
 
 | 자료 | 저작자 | 라이선스 | 위키에 발췌 |
 | --- | --- | --- | --- |

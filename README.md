@@ -36,18 +36,19 @@ GitHub Pages 배포(`.github/workflows/pages.yml`)는 저장소가 공개일 때
 
 ## 라이선스 요약
 
-위키는 여러 출처를 조사해 한국어로 다시 쓴 것이고, 일부 페이지는 원문을 `발췌` 상자로 옮겼다. 출처마다 라이선스가 다르다.
+이 프로젝트가 쓴 글, 코드, 시험 애드온은 [MIT 라이선스](./LICENSE)다. 위키는 여러 출처를 조사해 한국어로 다시 쓴 것이고, 일부 페이지는 원문을 `발췌` 상자로 옮겼다. 발췌는 MIT가 아니라 그 출처의 라이선스를 따른다.
 
 | 라이선스 | 처리 |
 | --- | --- |
+| MIT (이 프로젝트) | 이 프로젝트가 쓴 글, 코드, 시험 애드온 |
 | CC BY 4.0 (Bedrock Wiki, MS Learn 문서, Chest-UI) | 출처와 변경 여부를 적고 발췌 |
 | MIT, BSD, Apache | 저작권 고지를 유지하고 발췌 |
 | GPL-3.0 (AsaJS, StarLibV2) | 기본은 기법 설명. 발췌 블록은 GPL-3.0 그대로 |
-| PolyForm Noncommercial 1.0.0 (Cinnabar) | 비상업 목적에만 이용 |
+| PolyForm Noncommercial 1.0.0 (Cinnabar) | 발췌 블록은 비상업 목적에만 이용 |
 | 라이선스 없음, All rights reserved, Mojang, NetEase 등 | 원문을 옮기지 않고 사실만 다시 씀 |
 
 제3자 고지 전문은 [NOTICE.md](./NOTICE.md), 적용 방법은 [docs/reference/license.mdx](./docs/reference/license.mdx), 전체 출처 목록은 위키의 "출처 목록" 페이지에 있다.
 
-## 비상업 이용 안내
+## 비상업 발췌 안내
 
-PolyForm Noncommercial 자료의 발췌가 들어 있으므로 **이 저장소와 위키 전체를 비상업 목적으로만 이용한다.** 학습, 개인 연구, 취미 프로젝트, 교육·공공 기관의 이용은 허용 범위이다. 복사본을 배포할 때는 [NOTICE.md](./NOTICE.md)와 각 발췌 상자의 출처·라이선스 표시를 함께 전한다. 이 위키는 Mojang, Microsoft와 관계가 없는 비공식 자료이다.
+Cinnabar(PolyForm Noncommercial 1.0.0)의 발췌 블록은 **비상업 목적으로만 이용한다.** 이 블록을 뺀 나머지 중 이 프로젝트가 쓴 부분은 MIT로 상업적으로도 쓸 수 있다. 복사본을 배포할 때는 [LICENSE](./LICENSE), [NOTICE.md](./NOTICE.md)와 각 발췌 상자의 출처·라이선스 표시를 함께 전한다. 이 위키는 Mojang, Microsoft와 관계가 없는 비공식 자료이다.
