@@ -46,97 +46,133 @@ Status: tested on 1.26.63 mobile (2026-11-14). The tests covered screen routing,
 
 ### 2.2 Screen routing
 
-There are two ways to put the menu window into the chest screen.
+The example add-ons insert their own window into the vanilla chest panels (`chest.small_chest_panel`, `pocket_containers.panel`) with `modifications` and pick it by the entity name (`$container_title`). They do not redeclare the screen definition `small_chest_screen`.
 
-| Method | Where it goes | Value that picks it | Used by |
-| --- | --- | --- | --- |
-| A. `modifications` | The vanilla chest panels `chest.small_chest_panel` and `pocket_containers.panel` | The entity name (`$container_title`) | The 2048 test (section 8) |
-| B. Screen redeclaration | `$screen_content` of `small_chest_screen` (HOST-18) | The slot 0 marker | Entity Menu Lab, the research screen example |
+With two add-ons that redeclare the same screen, only one was used, by pack order: another test add-on's `chest_screen.json` was above, and the vanilla screen came out instead of the redeclaring one (measured, HOST-49). So the examples use neither the redeclaration of `small_chest_screen` that replaces `$screen_content` (HOST-18) nor a slot 0 marker item. Slot 0 of the examples is empty. The rule for identifying a screen by a slot item's durability is HOST-17.
 
-Use A when other chest screen add-ons may be turned on together. With two add-ons that redeclare the same screen, only one was used, by pack order: another test add-on's `chest_screen.json` was above ours, and the vanilla screen came out instead of our redeclaration (measured, HOST-49). A does not redeclare the screen definition, so even when another add-on that redeclares the screen is above it, the menu window is drawn inside the chest panel that add-on keeps on its vanilla side. This was checked only in the [JSON UI tester](../tools/jsonui-tester.mdx) (jsonui-tester) static simulation (*unverified*).
+A window that uses only `modifications` is drawn inside the chest panel that another add-on keeps on its vanilla side, even when that add-on redeclares the screen and is above it. This was checked only in the [JSON UI tester](../tools/jsonui-tester.mdx) (jsonui-tester) static simulation (*unverified*).
 
-#### 2.2.1 A: `modifications` and the entity name
+#### 2.2.1 Naming convention
+
+The script names the menu entity's `nameTag` with the shared prefix `§b§w`, made only of format codes, plus a suffix that differs per example. `$container_title` of an entity chest screen is this nameTag (HOST-19).
+
+| Example | Entity name |
+| --- | --- |
+| 2048 (section 8) | `§b§w§2§0` |
+| Entity Menu Lab (section 6) | `§b§w§m§l`. Only the menu mode gets the name; the lock experiment entity has no name, so the vanilla chest screen opens |
+| Research screen (section 7) | `§b§w§r§s` |
+| Matchmaking (`entity-matchmaking`) | `§b§w§m§m` |
+
+The menu entity's name tag was not visible in first person (measured). Whether it shows in third person or to other players was not tested (*unverified*, section 8.4).
+
+#### 2.2.2 Hiding vanilla (shared by the four examples)
+
+`chest_screen.json`:
+
+```json
+"small_chest_panel/root_panel": {
+  "$bwiki_title": "$container_title",
+  "visible": "(not (('%.6s' * $bwiki_title) = '§b§w'))"
+}
+```
+
+`pocket_containers.json` (the 2048 example file; only the `modifications` value on `panel` differs per example):
+
+```json
+"panel": {
+  "$bwiki_title": "$container_title",
+  "modifications": [
+    {
+      "array_name": "controls",
+      "operation": "insert_back",
+      "value": [ { "e2048_overlay@e2048.overlay": {} } ]
+    }
+  ]
+},
+
+"header_area": {
+  "ignored": "(('%.6s' * $bwiki_title) = '§b§w')"
+},
+
+"background_panel": {
+  "ignored": "(('%.6s' * $bwiki_title) = '§b§w')"
+},
+
+"half_screen": {
+  "ignored": "(('%.6s' * $bwiki_title) = '§b§w')"
+}
+```
+
+- `$container_title` cannot be used in binding expressions, but it can be compared in `ignored` and `visible` property expressions. Declare the copy variable `$bwiki_title` and compare the copy (measured, HOST-48).
+- `('%.6s' * $bwiki_title)` cuts the first 6 bytes of the name. `§` is 2 bytes in UTF-8, so `§b§w` is 6 bytes. That this prefix comparison works in a property fixed at creation time was checked only in jsonui-tester, and there is a community report that prefix comparisons on `$container_title` work. It was not checked in game (*unverified*).
+- On mobile the copy variable goes on `panel`, and `header_area`, `background_panel` and `half_screen` are left out with `ignored`. The grey background disappeared and the window floated over the world like the classic UI (measured, with the 2048 test pack comparing the full name).
+- On desktop the path key `small_chest_panel/root_panel` is hidden with `visible`.
+- These properties override vanilla definitions, so they compete with other packs that write the same properties (MOD-13). The four examples write this part byte for byte the same, so the values are the same whichever example is on top. Competition remains with packs that write other values (*inferred*).
+
+#### 2.2.3 Inserting the window
+
+Each example inserts only its own `overlay` into the same two panels with `modifications` (`small_chest_panel` in `chest_screen.json`, `panel` in `pocket_containers.json`). The `overlay`s of several examples stack in the same panel.
 
 ```json
 "small_chest_panel": {
   "modifications": [
-    { "array_name": "controls", "operation": "insert_back", "value": [ { "g2048_overlay@g2048.overlay": {} } ] }
+    {
+      "array_name": "controls",
+      "operation": "insert_back",
+      "value": [ { "e2048_overlay@e2048.overlay": {} } ]
+    }
   ]
 }
 ```
 
-On mobile the same `modifications` goes on `panel` in `pocket_containers.json`. The inserted control picks itself by the entity name.
+The `overlay` is built only when the full name matches. This is the definition in the 2048 example (`rp/ui/e2048.json`).
 
 ```json
 "overlay": {
-  "type": "panel", "size": [ "100%", "100%" ], "layer": 50,
-  "$g2048_title": "$container_title",
+  "type": "panel",
+  "size": [ "100%", "100%" ],
+  "layer": 50,
+  "$bwiki_title": "$container_title",
   "controls": [
-    { "host": {
-        "type": "panel", "size": [ "100%", "100%" ],
-        "ignored": "(not ($g2048_title = '§2§0§4§8'))",
-        "controls": [ { "cover@g2048.cover": {} } ]
-    } }
+    {
+      "host": {
+        "type": "panel",
+        "size": [ "100%", "100%" ],
+        "ignored": "(not ($bwiki_title = '§b§w§2§0'))",
+        "controls": [
+          {
+            "cover": {
+              "type": "input_panel",
+              "modal": true,
+              "size": [ "100%", "100%" ],
+              "layer": 100,
+              "controls": [
+                {
+                  "sync_grid": {
+                    "type": "grid",
+                    "size": [ 162, 54 ],
+                    "layer": 1,
+                    "grid_rescaling_type": "horizontal",
+                    "maximum_grid_items": 27,
+                    "collection_name": "container_items",
+                    "grid_item_template": "e2048.empty_cell"
+                  }
+                },
+                { "window@e2048.factory_window": { "layer": 2 } }
+              ]
+            }
+          }
+        ]
+      }
+    }
   ]
 }
 ```
 
-- The script sets the menu entity's `nameTag` to `§2§0§4§8`, which is made only of format codes. `$container_title` of an entity chest screen is this nameTag (HOST-19).
-- `$container_title` cannot be used in binding expressions, but it can be compared in `ignored` and `visible` property expressions. Declare a copy variable (`"$g2048_title": "$container_title"`) and compare the copy (measured, HOST-48).
 - `ignored` does not see the control's own `$` declarations and is evaluated in the parent scope (FILE-34). So the copy variable goes on the parent `overlay` and the child `host` compares it. In game only the setup with the copy on the parent was tested (measured).
-- When `ignored` is true the control is not built, so a chest with another name has none of our controls. In jsonui-tester the control count of a mobile ordinary chest went from 3,569 when hidden only with `visible` to 2,207 (*unverified*, static simulation).
-- The menu entity's name tag was not visible in first person (measured). Whether it shows in third person or to other players was not tested (*unverified*, section 8.4).
-
-The vanilla chest screen is hidden with the same comparison.
-
-```json
-"panel": {
-  "$g2048_title": "$container_title",
-  "modifications": [ "..." ]
-},
-"header_area": { "ignored": "($g2048_title = '§2§0§4§8')" },
-"background_panel": { "ignored": "($g2048_title = '§2§0§4§8')" },
-"half_screen": { "ignored": "($g2048_title = '§2§0§4§8')" }
-```
-
-- On mobile the copy variable goes on `pocket_containers.panel`, and `header_area`, `background_panel` and `half_screen` are left out with `ignored`. The grey background of the mobile screen disappeared and the window floated over the world like the classic UI (measured).
-- On desktop the path key `small_chest_panel/root_panel` gets the same copy variable and `"visible": "(not ($g2048_title = '§2§0§4§8'))"`.
-- These definitions override properties of vanilla definitions, so they compete with other packs that write the same properties (MOD-13). The `modifications` that inserts the window does not compete.
-
-#### 2.2.2 B: screen redeclaration and the slot 0 marker
-
-Redeclare `small_chest_screen` in `chest_screen.json` to replace `$screen_content` (HOST-18). Put a marker item (a hidden custom item with `max_durability` 4242) in slot 0, and draw the menu window only when that value matches. Other chests and entities keep the vanilla screen.
-
-```json
-"small_chest_screen@common.inventory_screen_common": {
-  "variables": [
-    { "requires": "$desktop_screen", "$screen_content": "menu_box.root_desktop" },
-    { "requires": "$pocket_screen", "$use_custom_pocket_toast": true, "$screen_content": "menu_box.root_pocket" }
-  ]
-}
-```
-
-```json
-"gate": {
-  "type": "panel", "size": [ "100%", "100%" ],
-  "bindings": [
-    { "binding_type": "collection_details", "binding_collection_name": "container_items" },
-    { "binding_type": "collection", "binding_collection_name": "container_items", "binding_name": "#item_durability_total_amount", "binding_name_override": "#identity" },
-    { "binding_type": "view", "source_property_name": "$gate_rule", "target_property_name": "#visible" }
-  ]
-},
-"root_pocket": {
-  "type": "panel", "size": [ "100%", "100%" ],
-  "controls": [
-    { "vanilla@menu_box.host": { "$gate_rule": "(not (#identity = 4242))", "$content": "pocket_containers.small_chest_panel" } },
-    { "menu@menu_box.host": { "$gate_rule": "(#identity = 4242)", "$content": "menu_box.window" } }
-  ]
-}
-```
-
-`host` holds a `gate` with `collection_index: 0` inside a panel with `collection_name: "container_items"`, and puts `$content` inside the gate. On desktop the vanilla side is `chest.small_chest_panel`. The menu window does not draw the player inventory area.
-
-Read the marker through `#item_durability_total_amount` (the maximum durability). For an unworn marker `#item_durability_current_amount` has the same value. `#item_durability_max` is not a slot binding. In the test, an element shown on `(#item_durability_max = 4242)` and one shown on its negation were both visible, which means the expression was not evaluated (HOST-17).
+- When `ignored` is true the control is not built, so a chest with another name has none of that example's controls. In jsonui-tester the control count of a mobile ordinary chest went from 3,569 when hidden only with `visible` to 2,207 (*unverified*, static simulation).
+- `sync_grid` is the empty grid that stops flicker when slots change (section 8.3).
+- In a jsonui-tester check with the resource packs of all four examples loaded, each name showed only its own window with vanilla hidden, and a plain unnamed chest showed only vanilla. They were not turned on together in game (*unverified*, static check only).
 
 ### 2.3 Icon grid and selection
 
@@ -249,8 +285,8 @@ Other workarounds mentioned on Discord were not tested.
 
 | Checked | Result |
 | --- | --- |
-| Replacing only the menu window via the slot 0 marker | Works. The vanilla chest screen is unchanged |
-| Marker bindings | `#item_durability_total_amount` and `#item_durability_current_amount` are 4242. `#item_durability_max` does not exist |
+| Picking the window by the durability of the slot 0 item | Works. The vanilla chest screen is unchanged. The examples pick by entity name instead (section 2.2) |
+| Slot durability bindings | `#item_durability_total_amount` and `#item_durability_current_amount` hold the maximum durability (4242 for the tested item). `#item_durability_max` does not exist |
 | Icon grid | Vanilla items, 3D blocks and custom items all drew |
 | Toggle selection with detail icon, name and lore | Works. Items do not move |
 | Locked items | Taken out of entity slots regardless of the lock |
@@ -274,14 +310,15 @@ Other workarounds mentioned on Discord were not tested.
 
 ## 6. Test add-on
 
-Entity Menu Lab puts the setup of section 2.2 B and sections 2.3 to 2.5 on one screen. The menu entity opens with C2.
+Entity Menu Lab puts the setup of sections 2.2 to 2.5 on one screen. The menu entity opens with C2.
 
 <AddonDownload id="entity-menu-lab" />
 
 1. Turn on the behavior pack "Bedrock Wiki Entity Menu Lab BP" in a new world. The resource pack turns on with it as a dependency.
 2. Take "Entity Menu Lab" (book and quill) from the end of the items category of the creative inventory, or use `/give @s bwiki:entity_menu_lab`.
 3. Hold the item and tap the middle of the screen to open the menu.
-4. Sneak and use the item to open the settings. Choose between the menu screen and the lock test (diamonds with none, inventory and slot locks in a vanilla chest screen). The lock test reports in chat whenever a count changes.
+4. Sneak and use the item to open the settings. Choose between the menu screen and the lock test (diamonds with none, inventory and slot locks in a vanilla chest screen). The lock test reports in chat whenever a count changes. The menu entity is named `§b§w§m§l`, and the lock test entity gets no name, so the vanilla chest screen opens (section 2.2.1).
+5. It can be turned on in the same world as the other entity inventory examples (section 2.2.3, *unverified*, static jsonui-tester check only).
 
 | Row | Slot read | Content |
 | --- | --- | --- |
@@ -311,7 +348,7 @@ The entity has 243 slots (HOST-16).
 
 | Slot | Content |
 | --- | --- |
-| 0 | Marker (durability 4244) |
+| 0 | Unused (empty) |
 | 1 to 48 | The 48 cells of the current page of the To do tab |
 | 49 to 96 | The 48 cells of the current page of the Done tab |
 | 97, 98 | Tab heads (icon, `To do N`, `Done N`) |
@@ -342,7 +379,7 @@ Picking goes through the server, but the delay before the details changed was ba
 
 <AddonDownload id="entity-research-screen" />
 
-1. Turn on the behavior pack "Bedrock Wiki Entity Research Screen BP" in a new world. The resource pack turns on with it as a dependency. It replaces the chest screen file, so do not turn it on in the same world as Entity Menu Lab.
+1. Turn on the behavior pack "Bedrock Wiki Entity Research Screen BP" in a new world. The resource pack turns on with it as a dependency. It can be turned on in the same world as Entity Menu Lab and the other entity inventory examples (section 2.2.3, *unverified*, static jsonui-tester check only).
 2. Take "Research" (enchanted book) from the end of the items category of the creative inventory, or use `/give @s bwiki:entity_research`.
 3. Hold the item and tap the middle of the screen to open the research screen.
 4. Sneak and use the item to reset the research and get 64 of each of the 10 materials.
@@ -353,7 +390,7 @@ Example add-on measurement video (mobile 1.26.63, 2026-11-15).
 
 ## 8. 2048 test: animation replay and flicker
 
-This test draws 2048 with entity slots to check whether the tile slide animations can replay on every move in an open chest screen (mobile 1.26.63, 2026-11-15). The screen opens with C2 and is inserted with method A of section 2.2. There is no example add-on to download.
+This test draws 2048 with entity slots to check whether the tile slide animations can replay on every move in an open chest screen (mobile 1.26.63, 2026-11-15). The screen opens with C2 and is inserted the way section 2.2 describes. The example add-on Entity 2048 (section 8.5) is that test pack tidied up, and the code below is copied from its files. The example add-on differs from the test pack in names, identifiers and the prefix convention of section 2.2. The example add-on itself was not opened in game (*unverified*).
 
 ### 8.1 Slot layout
 
@@ -372,14 +409,37 @@ Mover codes are `S0` (stays) or a direction `U`, `D`, `L`, `R` followed by a dis
 
 To replay an animation from the start in an open screen, make the factory build its control again (measured, ANI-37).
 
+This is `factory_mover_cell` from `rp/ui/e2048.json` with only two keys kept. The real file lists every key.
+
 ```json
-"mover_cell": {
-  "type": "stack_panel", "size": [ 30, 30 ],
-  "factory": { "name": "g2048_mover", "control_ids": { "L2at5": "@g2048.ft_L2_5", "L2bt5": "@g2048.ft_L2_5" } },
-  "property_bag": { "#k": [], "#kL2at5": [ "L2at5" ], "#kL2bt5": [ "L2bt5" ] },
+"factory_mover_cell": {
+  "type": "stack_panel",
+  "size": [ 30, 30 ],
+  "factory": {
+    "name": "e2048_mover",
+    "control_ids": {
+      "S0at1": "@e2048.ft_S0_1",
+      "S0bt1": "@e2048.ft_S0_1"
+    }
+  },
+  "property_bag": {
+    "#k": [],
+    "#kS0at1": [ "S0at1" ],
+    "#kS0bt1": [ "S0bt1" ]
+  },
   "bindings": [
-    { "binding_type": "collection", "binding_collection_name": "container_items", "binding_name": "#hover_text", "binding_condition": "always" },
-    { "binding_type": "view", "binding_condition": "always", "source_property_name": "('#k' + (#hover_text - '§o' - '§f' - '§r'))", "target_property_name": "#collection_length" }
+    {
+      "binding_type": "collection",
+      "binding_collection_name": "container_items",
+      "binding_name": "#hover_text",
+      "binding_condition": "always"
+    },
+    {
+      "binding_type": "view",
+      "binding_condition": "always",
+      "source_property_name": "('#k' + (#hover_text - '§o' - '§f' - '§r'))",
+      "target_property_name": "#collection_length"
+    }
   ]
 }
 ```
@@ -408,24 +468,16 @@ At the moment a slot item changed, the cells of a `container_items` grid were dr
 | Vanilla hidden, `container_items` grid of 27 empty panel cells | No flicker |
 | Vanilla not hidden, whole screen covered with an opaque backdrop | No flicker, but with the whole screen covered it no longer looked like a form |
 
-All of these are measured. Forcing a layout pass with a label whose width changed on every move did not remove the flicker (measured). So a grid of empty panel cells goes behind the window.
+All of these are measured. Forcing a layout pass with a label whose width changed on every move did not remove the flicker (measured). So a grid of empty panel cells goes behind the window. That grid is `sync_grid` inside `cover` of the `overlay` in section 2.2.3, and its cell template is:
 
 ```json
-"cover": {
-  "type": "input_panel", "modal": true, "size": [ "100%", "100%" ], "layer": 100,
-  "controls": [
-    { "sync_grid": {
-        "type": "grid", "size": [ 162, 54 ], "layer": 1,
-        "grid_rescaling_type": "horizontal", "maximum_grid_items": 27,
-        "collection_name": "container_items", "grid_item_template": "g2048.empty_cell"
-    } },
-    { "window@g2048.factory_window": { "layer": 2 } }
-  ]
-},
-"empty_cell": { "type": "panel", "size": [ 18, 18 ] }
+"empty_cell": {
+  "type": "panel",
+  "size": [ 18, 18 ]
+}
 ```
 
-- The tests in the table hid vanilla with `visible: false`. How the flicker behaves with the setup that leaves the mobile vanilla out with `ignored` (section 2.2.1) was not checked (*unverified*).
+- The tests in the table hid vanilla with `visible: false`. How the flicker behaves with the setup that leaves the mobile vanilla out with `ignored` (section 2.2.2) was not checked (*unverified*).
 - Whether the grey drawn without a grid is the hidden vanilla cells, and why an empty grid makes the flicker go away, is not known.
 - With vanilla cells visible, the flicker may have gone unnoticed because the vanilla cells or background covered it (*inferred*).
 
@@ -436,6 +488,16 @@ All of these are measured. Forcing a layout pass with a label whose width change
 - A custom block can give a title with `container.title` (a language key or text) of `minecraft:block_entity`, and opens on tap with `show_ui_on_interaction` (on by default). A user reports it as an experimental feature in 26.50 and 26.60 (*single report*).
 - `minecraft:nameable` has no field that hides the name tag (`allow_name_tag_renaming`, `always_show`, `default_trigger`, `name_actions`). There is a report that a behavior-pack-only entity with no client entity file draws no name tag (*single report*).
 - A candidate for hiding the name tag is `Entity.nameplateRenderDistance` (writable from `@minecraft/server` 2.8.0). Whether 0 hides it was not tested (*unverified*).
+
+### 8.5 Example add-on
+
+<AddonDownload id="entity-2048" />
+
+1. Turn on the behavior pack "Bedrock Wiki Entity 2048 BP" in a new world. The resource pack turns on with it as a dependency.
+2. Take "2048" from the end of the items category of the creative inventory, or use `/give @s bwiki:entity_2048`.
+3. Hold the item and tap the middle of the screen to open the 2048 screen. The direction buttons on both sides slide the tiles, and New starts a new board.
+
+It can be turned on in the same world as the other entity inventory examples (Entity Menu Lab, the research screen) (section 2.2.3, *unverified*, static jsonui-tester check only).
 
 ## Related rules
 
