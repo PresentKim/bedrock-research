@@ -1,9 +1,17 @@
 import { themes as prismThemes } from 'prism-react-renderer';
 import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import path from 'node:path';
 import remarkDoubleTildeOnly from './src/plugins/remark-double-tilde-only.mjs';
+import remarkRuleRefs from './src/plugins/remark-rule-refs.mjs';
+import { loadRules } from './scripts/rules.mjs';
 
 const isEn = process.env.DOCUSAURUS_CURRENT_LOCALE === 'en';
+
+const ruleLocales = [
+  path.resolve(__dirname, 'docs'),
+  path.resolve(__dirname, 'i18n/en/docusaurus-plugin-content-docs/current'),
+].map((root) => ({ root, rules: loadRules(root) }));
 
 const config: Config = {
   title: isEn ? 'Bedrock Development Wiki' : 'Bedrock 개발 위키',
@@ -29,7 +37,7 @@ const config: Config = {
           path: 'docs',
           routeBasePath: '/',
           sidebarPath: './sidebars.ts',
-          remarkPlugins: [remarkDoubleTildeOnly],
+          remarkPlugins: [remarkDoubleTildeOnly, [remarkRuleRefs, { locales: ruleLocales }]],
         },
         blog: false,
         pages: false,
