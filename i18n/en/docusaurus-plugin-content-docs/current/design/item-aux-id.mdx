@@ -17,7 +17,7 @@ The JSON UI `inventory_item_renderer` draws an item from `#item_id_aux` = `numer
 
 The problem is that a script has no way to know this number. This page researches how a behavior pack script can compute the numeric ID from an item name (`minecraft:diamond`, `bwiki:ruby`). It covers vanilla items and blocks, custom items and custom blocks.
 
-Status: with one pack, the layout of vanilla items, custom items and custom blocks is confirmed (section 5). The `getAll()` order cannot give custom numbers, so a pack needs a table built from its own file paths. The order with several packs is not known yet.
+Status: the layout rules of vanilla items, custom items and custom blocks are confirmed on 1.26.63 mobile (section 5). Vanilla numbers can be computed from a script. Custom items and blocks shift with the pack stack order, so a script cannot settle them (section 5.7).
 
 ## 1. The Script API has no numeric ID
 
@@ -292,7 +292,42 @@ A world with both packs on. 11 custom items and 4 custom blocks registered.
 
 - The sort is case-insensitive. `B_upper` comes after `aux_probe_test`, and `n10` comes before `n9` (digits are not read as numbers), which is the "case-insensitive" prediction of section 4.4. `m_mid` comes before `m-dash`, so `_` sorts before `-`. In lowercased byte order `-` (0x2D) would come before `_` (0x5F), so this is not a plain byte comparison but a locale sort (the same result as JavaScript `localeCompare`). Only one pair separates `_` and `-`.
 - Paths are not sorted together across packs. The 2 extra pack items came as one block before the probe pack items. For blocks too, the extra pack block got -9745 and the probe pack blocks continued below it.
-- The extra pack was added later to a world that already had the probe on. Whether it sat above or below in the active list was not recorded. A run with the stack order swapped remains.
+- The extra pack was added later to a world that already had the probe on. Whether it sat above or below in the active list was not recorded.
+
+### 5.6 Third experiment, after swapping the stack order
+
+The order of the two packs in the active list was swapped in the same world.
+
+![Numbers 840 to 903. The 9 probe pack items at 853 to 861, pink at 862, light blue at 863, red shrub at 864](/img/design/item-aux-probe-840-swapped.png)
+
+![Numbers -9776 to -9713. Gold at -9745, emerald at -9746, diamond at -9747, lapis at -9748](/img/design/item-aux-probe-blocks-swapped.png)
+
+| Number | Section 5.5 | After the swap |
+| --- | --- | --- |
+| 853 on | 2 extra pack items, 9 probe pack items | 9 probe pack items (same order), 2 extra pack items |
+| 864 | Red shrub | Red shrub |
+| -9745 on | Lapis, gold, emerald, diamond | Gold, emerald, diamond, lapis |
+
+- The order between packs follows the stack order of the active list. Items and blocks use the same pack order. The items of the earlier pack go first from 853, and the blocks of the earlier pack go first from -9745.
+- The order inside each pack did not change (items in path sort order, blocks in reverse path sort order).
+- The vanilla shift is C = 11 whatever the pack order.
+- Whether the top or the bottom of the active list is the "earlier pack" was not recorded.
+
+### 5.7 Conclusion: what a script can do
+
+| Target | From a script | How |
+| --- | --- | --- |
+| Vanilla items and blocks | Possible | The target version's vanilla table + C counted with `ItemTypes.getAll()` (only for 853 and up) |
+| The pack's own custom items and blocks | Only when the pack is first | A table built from file paths at build time. When other packs come first, it shifts by their item and block counts |
+| Other packs' custom items and blocks | Not possible | A script cannot know which pack an item belongs to, the pack order, or the file paths |
+
+`getAll()` gives the right custom item count C but not the order. The pack order cannot be read through the API either. So the numbers of custom items and blocks cannot be settled when other packs are in use.
+
+A practical setup:
+
+1. Draw vanilla items and blocks from aux numbers (3D, glint).
+2. Draw the pack's own custom items and blocks from texture paths in its own resource pack. Textures do not depend on the pack order.
+3. Use a custom number table only where the pack can be fixed to come first (for example a world whose server sets the pack order).
 
 ## 6. Example add-on
 
