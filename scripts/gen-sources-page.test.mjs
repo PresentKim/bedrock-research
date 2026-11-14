@@ -53,8 +53,19 @@ test('test_cli_writes_page_that_passes_check', () => {
   const src = path.join(d, 'sources.json');
   fs.writeFileSync(src, JSON.stringify({ ...S, 'repo-guide': S.mine }));
   const out = path.join(d, 'docs', 'reference', 'sources.mdx');
+  const outEn = path.join(d, 'i18n', 'en', 'current', 'reference', 'sources.mdx');
   const script = path.join(path.dirname(fileURLToPath(import.meta.url)), 'gen-sources-page.mjs');
-  execFileSync(process.execPath, [script, src, out]);
-  fs.writeFileSync(path.join(path.dirname(out), 'license.mdx'), 'x\n'); // link target of the generated page
-  assert.deepEqual(checkPage(out, { ...S, 'repo-guide': S.mine }), []);
+  execFileSync(process.execPath, [script, src, out, outEn]);
+  for (const f of [out, outEn]) {
+    fs.writeFileSync(path.join(path.dirname(f), 'license.mdx'), 'x\n'); // link target of the generated page
+    assert.deepEqual(checkPage(f, { ...S, 'repo-guide': S.mine }), []);
+  }
+});
+
+test('test_english_page_uses_english_fields', () => {
+  const md = renderSourcesPage({ ...S, mine: { ...S.mine, title_en: 'Mine EN', license_en: 'This project' } }, 'en');
+  assert.match(md, /^title: Source list$/m);
+  assert.match(md, /## Material from this repository \(1\)/);
+  assert.match(md, /\| `mine` \| Mine EN .*\| This project \|/);
+  assert.match(md, /\| `closed` \|.*\| No \|/);
 });

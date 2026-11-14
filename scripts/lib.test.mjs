@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadRegistry, checkPage } from './lib.mjs';
+import { loadRegistry, checkPage, missingTranslations } from './lib.mjs';
 
 const good = { title: 'T', url: 'https://x', license: 'MIT', redistribute: true, accessed: '2026-11-13' };
 const noRe = { ...good, redistribute: false };
@@ -110,6 +110,21 @@ test('test_mdx_brace', () => {
   const errs = checkPage(f, S);
   assert.equal(errs.length, 1);
   assert.match(errs[0], /^mdx: /);
+});
+
+test('lists pages without a translation', () => {
+  const d = tmp();
+  wr(d, 'docs/a.mdx', page());
+  wr(d, 'docs/sec/b.mdx', page());
+  wr(d, 'i18n/current/a.mdx', page());
+  assert.deepEqual(missingTranslations(path.join(d, 'docs'), path.join(d, 'i18n/current')), [path.join('sec', 'b.mdx')]);
+});
+
+test('links in translated pages resolve inside current', () => {
+  const d = tmp();
+  wr(d, 'i18n/en/current/sec/b.mdx', page());
+  const f = wr(d, 'i18n/en/current/sec/a.mdx', page({}, '[b](./b.mdx) [x](../../outside.mdx)\n'));
+  assert.deepEqual(checkPage(f, S), ['link leaves wiki/docs']);
 });
 
 test('braces in code are fine', () => {

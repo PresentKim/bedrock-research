@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadRegistry, checkPage, walk } from './lib.mjs';
+import { loadRegistry, checkPage, walk, missingTranslations } from './lib.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+const docs = path.resolve(here, '../docs');
+const enDocs = path.resolve(here, '../i18n/en/docusaurus-plugin-content-docs/current');
 const { sources, errors } = loadRegistry(path.resolve(here, '../sources'));
 const lines = errors.map((e) => `ERR sources: ${e}`);
 const args = process.argv.slice(2);
-if (args.length === 0) args.push(path.resolve(here, '../docs'));
+if (args.length === 0) {
+  args.push(docs, enDocs);
+  for (const rel of missingTranslations(docs, enDocs)) lines.push(`ERR ${rel}: missing English translation`);
+}
 let n = 0;
 for (const a of args) {
   for (const f of walk(a)) {

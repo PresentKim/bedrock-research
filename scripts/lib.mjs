@@ -46,7 +46,7 @@ function stripCode(text) {
 function docsRoot(file) {
   const abs = path.resolve(file);
   const parts = abs.split(path.sep);
-  const i = parts.lastIndexOf('docs');
+  const i = Math.max(parts.lastIndexOf('docs'), parts.lastIndexOf('current'));
   return i < 0 ? null : parts.slice(0, i + 1).join(path.sep);
 }
 
@@ -106,6 +106,12 @@ export function checkPage(file, sources) {
     errs.push(`mdx: ${String(e.reason || e.message).split('\n')[0]}${e.line ? ` (line ${e.line})` : ''}`);
   }
   return [...new Set(errs)];
+}
+
+export function missingTranslations(docsDir, translatedDir) {
+  return walk(docsDir)
+    .map((f) => path.relative(docsDir, f))
+    .filter((rel) => !fs.existsSync(path.join(translatedDir, rel)));
 }
 
 export function walk(p) {

@@ -20,6 +20,12 @@ npm test             # 검사·생성 스크립트 단위 시험
 
 GitHub Pages 배포(`.github/workflows/pages.yml`)는 저장소가 공개일 때만 실행된다. 비공개 상태에서는 빌드와 검사까지만 돈다.
 
+## 영어판
+
+한국어가 원문이고 영어판은 `/en/` 경로에 나온다. 상단 메뉴의 언어 선택으로 오간다. 영어 페이지는 `i18n/en/docusaurus-plugin-content-docs/current/`에 `docs/`와 같은 경로로 두고, 분류 이름은 같은 폴더의 `current.json`, 화면 문자열은 `i18n/en/code.json`과 `i18n/en/docusaurus-theme-classic/`에 있다. 출처의 영어 이름은 `sources/*.json` 항목의 `title_en`, `license_en`, `author_en`이고, 영어 출처 목록 페이지도 `npm run gen-sources`가 만든다.
+
+한국어 페이지를 추가하거나 고치면 영어 페이지도 같이 고친다. `npm run check`는 영어 페이지가 없는 한국어 페이지를 오류로 보고한다. 개발 서버는 한 번에 한 언어만 띄우므로 영어판은 `npm start -- --locale en`으로 본다.
+
 ## 라이선스 요약
 
 위키는 여러 출처를 조사해 한국어로 다시 쓴 것이고, 일부 페이지는 원문을 `발췌` 상자로 옮겼다. 출처마다 라이선스가 다르다.
