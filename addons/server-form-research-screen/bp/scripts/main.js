@@ -1,7 +1,7 @@
-import { system, world } from "@minecraft/server";
+import { BlockTypes, ItemTypes, system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 
-const PACK_VERSION = "v1.3.3";
+const PACK_VERSION = "v1.4.0";
 const TEST_ITEM = "bwiki:research_screen_test";
 const ITEM_COUNT = 200;
 const PAGE_SIZE = 48;
@@ -12,18 +12,66 @@ const MAX_MATS = 8;
 const MAX_REWARDS = 8;
 const EMPTY = "§0§e§r";
 
-const ICONS = [
-  "textures/items/diamond",
-  "textures/items/apple",
-  "textures/items/iron_ingot",
-  "textures/items/gold_ingot",
-  "textures/items/emerald",
-  "textures/items/bread",
-  "textures/items/redstone_dust",
-  "textures/items/book_normal",
-  "textures/items/hopper",
-  "textures/items/coal",
+const ITEM_IDS_VERSION = "26.50";
+const SHIFTED_ID_START = 852;
+const ENCHANTED = 32768;
+
+const ITEM_IDS = {
+  diamond: 306,
+  apple: 882,
+  iron_ingot: 307,
+  gold_ingot: 308,
+  emerald: 523,
+  bread: 261,
+  redstone: 376,
+  book: 390,
+  hopper: 537,
+  coal: 304,
+  chest: 54,
+  crafting_table: 58,
+  grass_block: 2,
+  golden_apple: 258,
+  diamond_sword: 318,
+  writable_book: 521,
+};
+
+const ICON_ITEMS = [
+  ["diamond"],
+  ["apple"],
+  ["iron_ingot"],
+  ["gold_ingot"],
+  ["emerald"],
+  ["bread"],
+  ["redstone"],
+  ["book"],
+  ["hopper"],
+  ["coal"],
+  ["chest"],
+  ["crafting_table"],
+  ["grass_block"],
+  ["golden_apple", true],
+  ["diamond_sword", true],
 ];
+
+let customItemCount;
+let icons;
+
+function countCustomItems() {
+  const customBlocks = new Set(BlockTypes.getAll().map((t) => t.id).filter((id) => !id.startsWith("minecraft:")));
+  return ItemTypes.getAll().filter((t) => !t.id.startsWith("minecraft:") && !customBlocks.has(t.id)).length;
+}
+
+function aux(name, enchanted = false) {
+  customItemCount ??= countCustomItems();
+  const id = ITEM_IDS[name];
+  const shifted = id >= SHIFTED_ID_START ? id + customItemCount : id;
+  return `aux:${shifted * 65536 + (enchanted ? ENCHANTED : 0)}`;
+}
+
+function icon(k) {
+  icons ??= ICON_ITEMS.map(([name, enchanted]) => aux(name, enchanted));
+  return icons[k % icons.length];
+}
 
 const SENTENCES = [
   "Filters the items fed by a hopper and sends them to the chest next to it.",
@@ -39,11 +87,11 @@ function item(i) {
   const sentences = (i % SENTENCES.length) + 1;
   return {
     name: `Item ${i + 1}`,
-    icon: ICONS[i % ICONS.length],
+    icon: icon(i),
     done: i % 3 === 0,
     desc: [`Description of item ${i + 1}.`, ...SENTENCES.slice(0, sentences)].join(" "),
-    mats: Array.from({ length: matCount }, (_, j) => [ICONS[(i + j + 2) % ICONS.length], ((i + j) % 16) + 1]),
-    rewards: Array.from({ length: rewardCount }, (_, j) => ICONS[(i + j * 3) % ICONS.length]),
+    mats: Array.from({ length: matCount }, (_, j) => [icon(i + j + 2), ((i + j) % 16) + 1]),
+    rewards: Array.from({ length: rewardCount }, (_, j) => icon(i + j * 3)),
   };
 }
 
@@ -87,8 +135,8 @@ function openResearch(player, state) {
       else form.button("§r", item(i).icon);
     }
   }
-  form.button(`To do ${tabs[0].length}`, "textures/items/book_normal");
-  form.button(`Done ${tabs[1].length}`, "textures/items/emerald");
+  form.button(`To do ${tabs[0].length}`, aux("writable_book"));
+  form.button(`Done ${tabs[1].length}`, aux("emerald"));
   for (let k = 0; k < 4; k++) form.button("§r");
   for (const list of pageItems) for (let k = 0; k < PAGE_SIZE; k++) addDetailBlock(form, list[k]);
 
@@ -127,8 +175,8 @@ function openClientPages(player, tab) {
     if (i === undefined) form.button("§r");
     else form.button("§r", item(i).icon);
   }
-  form.button(`To do ${tabs[0].length}`, "textures/items/book_normal");
-  form.button(`Done ${tabs[1].length}`, "textures/items/emerald");
+  form.button(`To do ${tabs[0].length}`, aux("writable_book"));
+  form.button(`Done ${tabs[1].length}`, aux("emerald"));
   for (let t = 0; t < 2; t++) {
     const pages = Math.ceil(tabs[t].length / PAGE_SIZE);
     for (let p = 0; p < CLIENT_PAGES_PER_TAB; p++) form.button(p < pages ? `§f${p + 1}` : EMPTY);
@@ -152,7 +200,7 @@ function openClientPages(player, tab) {
 function open(player) {
   const form = new ActionFormData()
     .title(`Research Screen ${PACK_VERSION}`)
-    .body("Pick how pages change.")
+    .body(`Pick how pages change.\nItem icons use numeric item IDs from ${ITEM_IDS_VERSION}. Custom items found: ${(customItemCount ??= countCustomItems())}.`)
     .button("Server pages")
     .button("Client pages");
   form.show(player).then((res) => {
