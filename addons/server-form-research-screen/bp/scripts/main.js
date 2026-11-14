@@ -1,7 +1,7 @@
 import { system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 
-const PACK_VERSION = "v1.3.2";
+const PACK_VERSION = "v1.3.3";
 const TEST_ITEM = "bwiki:research_screen_test";
 const ITEM_COUNT = 200;
 const PAGE_SIZE = 48;

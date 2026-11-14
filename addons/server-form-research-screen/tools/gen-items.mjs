@@ -209,7 +209,10 @@ function clientPagesUi() {
       size: [144, 18],
       collection_name: "form_buttons",
       controls: Array.from({ length: pagesPerTab }, (_, p) => ({
-        [`ffrg_p${t}_${p}@ffr.page_toggle`]: { collection_index: pageLabelBase + t * pagesPerTab + p, $page_index: p, $page_group: `ffrg_pages_${t}` },
+        [`s${p}@ffr.page_slot`]: {
+          collection_index: pageLabelBase + t * pagesPerTab + p,
+          controls: [{ [`ffrg_p${t}_${p}@ffr.page_toggle`]: { $page_index: p, $page_group: `ffrg_pages_${t}` } }],
+        },
       })),
     };
     controls.push({ [`pages@ffrg.page_row_${t}`]: { anchor_from: "top_left", anchor_to: "top_left", offset: [0, 110] } });
