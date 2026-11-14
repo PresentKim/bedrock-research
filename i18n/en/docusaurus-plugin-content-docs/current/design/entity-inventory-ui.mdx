@@ -1,6 +1,6 @@
 ---
 title: Building menu screens from an entity inventory
-description: A plan to restyle the chest screen of an invisible container entity with a resource pack and use it as a menu instead of a server form. The engine draws the entity slots, so no numeric ID is needed. Screen routing, client-side selection, a button that reaches the script, three ways to open the screen, and test results.
+description: A plan to restyle the chest screen of an invisible container entity with a resource pack and use it as a menu instead of a server form. The engine draws the entity slots, so no numeric ID is needed. Screen routing, client-side selection, labels and bars drawn from slot names and durability, a button that reaches the script, ways to open the screen, and test results.
 sidebar_position: 5
 sources:
   - repo-guide
@@ -13,7 +13,7 @@ Server form buttons draw item icons only from a texture path or a numeric ID, an
 
 This page covers restyling the chest screen of a container entity with a resource pack and using it as a menu like the research screen.
 
-Status: screen routing, the icon grid, client-side selection, a button that reaches the script, and three ways to open the screen were tested on 1.26.63 mobile (2026-11-14). There is no example add-on yet.
+Status: tested on 1.26.63 mobile (2026-11-14). The tests covered screen routing, the icon grid, client-side selection, elements drawn from slot names and durability, a button that reaches the script, and ways to open the screen. Several players and other devices remain (section 5).
 
 ## 1. Compared with a server form
 
@@ -23,7 +23,8 @@ Status: screen routing, the icon grid, client-side selection, a button that reac
 | Icons | Texture path, or numeric ID | The engine draws the entity slots. Every item, 3D, glint |
 | Icon count | As many as buttons | As many as entity inventory slots (more slots are readable even on the 27-slot screen, HOST-16) |
 | Changing content | Close and reopen the form | Slot changes by the script show at once in the open screen |
-| Input that reaches the script | Button index | Slot actions only. Buttons go through a slot quick move (section 2.4) |
+| Text, conditions, textures, bars | Passed as form text | Passed as slot item names, lore and durability (section 2.4) |
+| Input that reaches the script | Button index | Slot actions only. Buttons go through a slot quick move (section 2.5) |
 | In-screen actions | Client-side with radio toggles | The same |
 
 ## 2. Setup
@@ -76,14 +77,58 @@ Redeclare `small_chest_screen` in `chest_screen.json` to replace `$screen_conten
 
 `host` holds a `gate` with `collection_index: 0` inside a panel with `collection_name: "container_items"`, and puts `$content` inside the gate. On desktop the vanilla side is `chest.small_chest_panel`. The menu window does not draw the player inventory area.
 
+Read the marker through `#item_durability_total_amount` (the maximum durability). For an unworn marker `#item_durability_current_amount` has the same value. `#item_durability_max` is not a slot binding. In the test, an element shown on `(#item_durability_max = 4242)` and one shown on its negation were both visible, which means the expression was not evaluated. The example binding in HOST-17 uses this name.
+
 ### 2.3 Icon grid and selection
 
 - Each cell's `inventory_item_renderer` reads `#item_id_aux` of `container_items` at its `collection_index`.
 - Cells are radio toggles as in the research screen (`radio_toggle_group`, `toggle_group_forced_index`). Selecting one shows a border and a large detail icon. Selection is handled only on the client and does not reach the server.
-- The toggle takes the cell press, so the item did not move.
-- The displayed items had `lockMode = slot`. The red lock corner showed on screen.
+- The toggles keep items in their slots. The toggle takes the cell press, so the item did not move.
+- `lockMode` does not protect items in entity slots. In the test, items with none, inventory and slot locks in a vanilla chest screen could all be taken out at once. The lock only worked in the player inventory: an inventory lock let the item move within the inventory, and a slot lock did not let it move.
+- A locked item's tooltip gets a "cannot be moved" line. That line also goes into the `#hover_text` of section 2.4.
 
-### 2.4 A button that reaches the script
+### 2.4 Drawing from slot names, lore and durability
+
+`#hover_text` of `container_items` is read per slot. Different slots on one screen gave different values. When the script changed a slot item, the value in the open screen changed at once (lore updated every second, the name updated on every button press). HOST-17 describes it as one value for the whole screen, which does not match this result.
+
+`#hover_text` holds every line the tooltip shows:
+
+- The name. A renamed item is white italic, and an item with a rarity has that color (the totem of undying is yellow).
+- Vanilla description lines (a storage line on a chest, the attack damage line on a sword).
+- The lore (purple italic).
+- The lock notice line.
+
+So a data item that carries a value is an item with no vanilla description lines (paper) with only a name, and it is not locked. Then `(#hover_text - '§o' - '§f' - '§r')` leaves just the name. With locked items the lock line was attached, and both the texture path and the number conversion failed.
+
+| Drawn | Expression | Result |
+| --- | --- | --- |
+| Label | `#hover_text` to `#text` | Name, lore and description lines in tooltip format |
+| Name and lore of the selected slot | The same label inside the cell toggle's checked control | The selected slot's value |
+| Visibility | `(not ((#hover_text - 'STATE_ON') = #hover_text))` to `#visible` | Switched every second with the name |
+| Texture | `('textures/blocks/wool_colored_' + (#hover_text - '§o' - '§f' - '§r'))` to `#texture` | The wool color followed the name |
+| Bar (name) | `(1 - ((#hover_text - '§o' - '§f' - '§r') * .1))` to `#clip_ratio` | Filled by the name 0 to 10 |
+| Bar (durability) | `(1 - (#item_durability_current_amount * .004))` to `#clip_ratio` | Shrank with the iron sword's remaining durability |
+
+![Entity Menu Lab screen. The bow is selected, so the large icon, name, lore and lock line show on the right. The wool texture follows the name blue and the name bar is 70 percent full for 7. The six bars given constant values are empty](/img/design/entity-menu-lab.png)
+
+Bars have two conditions.
+
+- Real literals start with a dot. `0.1` evaluates to 0 (EXP-27) and the bar stayed empty. With `.1` it filled.
+- Put `#clip_ratio` in through a binding that reads a slot value. In the test, a fill with `clip_direction` stayed empty whenever its ratio came from any of these:
+  - `property_bag` values 0 and 0.5
+  - expressions that use no slot value, `(1 - 1)` and `(5 * .1)`
+  - a changed size, `clip_pixelperfect` or direction
+  - a bar placed outside the rows that read slots
+
+  A fill with no `clip_direction` showed.
+
+![v1.5.0 screen. Only the fill with no clipping shows green. The clipped bars are empty both with property_bag 0.5 and with constant expressions](/img/design/entity-menu-lab-clip.png)
+
+No way to turn a number into text was found. `('v' + #item_durability_total_amount)` drew only `v`, and a number binding put straight into `#text` drew nothing. Put numbers meant for the screen into the name or lore as text.
+
+A variable inside a size array such as `[160, "$line_h"]` gave a height of 0 and the rows overlapped. Pass a whole-array variable such as `"size": "$line_size"`.
+
+### 2.5 A button that reaches the script
 
 In JSON UI, the only direct path to a script is a server form button. What reaches the server from a container screen is a slot action, so the visible button is mapped to a quick move of a hidden slot.
 
@@ -105,6 +150,8 @@ In JSON UI, the only direct path to a script is a server form button. What reach
 4. Every 2 ticks the script checks slot 26. When the marker item is gone, it counts a press and refills the slot.
 5. `world.afterEvents.playerInventoryItemChange` deletes the marker item that entered the player inventory.
 
+Writing the result of a press into a data item name makes the open screen react at once. In the test, every press changed the slot 12 name `Pressed N` and the label showed it.
+
 Pressing the slot itself stopped being detected after 2 presses on a touch screen. The item seems to go onto the cursor and only swap with the item in the slot (related to "the cursor is not filled on touch" in HOST-20). A quick move does not pass through the cursor.
 
 ## 3. Ways to open the screen
@@ -116,6 +163,10 @@ The Script API has no function that opens a container screen. On Discord the ans
 | C: tap a visible entity | Spawn the entity in front of the player, who taps it | Opens. The entity has to be visible to be found, which is awkward for a menu |
 | C2: entity in the line of sight | While the menu item is held, an invisible 1.2x1.2 entity moves every tick to 1.2 blocks along the view direction from the eyes, 0.6 blocks down. Tapping the middle of the screen taps that entity | Opens with one tap. Switching to another item removes the entity. The best usability |
 | C3: ride + inventory button | The script seats the player on an invisible entity with `Rideable.addRider`. When the player presses the inventory button, the entity's screen opens instead of the player inventory | Opens. Sneaking gets off. Getting off removes the entity |
+
+The menu entity opens with C2.
+
+Seating the menu entity on the player is not used. An entity with the `parrot_tame` family can ride the shoulder seats of the vanilla player.json, but in the test a tap never hit the riding entity.
 
 C2 position in the line of sight:
 
@@ -140,25 +191,56 @@ Other workarounds mentioned on Discord were not tested.
 | Checked | Result |
 | --- | --- |
 | Replacing only the menu window via the slot 0 marker | Works. The vanilla chest screen is unchanged |
+| Marker bindings | `#item_durability_total_amount` and `#item_durability_current_amount` are 4242. `#item_durability_max` does not exist |
 | Icon grid | Vanilla items, 3D blocks and custom items all drew |
-| Toggle selection and detail icon | Works. Items do not move |
+| Toggle selection with detail icon, name and lore | Works. Items do not move |
+| Locked items | Taken out of entity slots regardless of the lock |
+| Per-slot `#hover_text` | Differs per slot and updates in the open screen |
+| Condition, texture and bar from the name | Works. The data item is unlocked paper |
+| Bar from durability | Works |
+| Constant `#clip_ratio` | The bar stayed empty |
+| Number to text | Drew nothing |
 | Button by pressing the slot | Stopped being detected after 2 presses on touch |
 | Quick move button | The count rose every time, past 10 presses. No button item stayed in the player inventory after closing (C, C2 and C3) |
 | Opening with C, C2, C3 | All open. C2 was the easiest to use |
 | C2 | One tap opened it while walking or turning. Moving the entity every tick while open did not close or flicker the screen. Other actions while holding the menu item were not hindered |
 | C3 | The inventory button opened the menu instead of the player inventory. Sneaking got off |
+| Entity riding the player | Could not be tapped |
 
 ## 5. What remains
 
-- Whether items with `lockMode = slot` cannot be taken out of the entity screen was not checked. HOST-20 says "there is no read-only lock".
 - Several players: whether one player can tap another player's menu entity, and cleanup when each player has an entity.
 - Behavior on Windows, iOS and controller input (the `button.menu_ok` mapping).
-- Marker binding: this setup read the marker through `#item_durability_total_amount`. Whether it is the same value as `#item_durability_max` in the HOST-17 records was not checked.
-- An example add-on.
+- An example add-on (only the test add-on in section 6 exists now).
+
+## 6. Test add-on
+
+Entity Menu Lab puts the setup of sections 2.2 to 2.5 on one screen. The menu entity opens with C2.
+
+<AddonDownload id="entity-menu-lab" />
+
+1. Turn on the behavior pack "Bedrock Wiki Entity Menu Lab BP" in a new world. The resource pack turns on with it as a dependency.
+2. Take "Entity Menu Lab" (book and quill) from the end of the items category of the creative inventory, or use `/give @s bwiki:entity_menu_lab`.
+3. Hold the item and tap the middle of the screen to open the menu.
+4. Sneak and use the item to open the settings. Choose between the menu screen and the lock test (diamonds with none, inventory and slot locks in a vanilla chest screen). The lock test reports in chat whenever a count changes.
+
+| Row | Slot read | Content |
+| --- | --- | --- |
+| Top eight cells | 1 to 8 | Icon grid. Selecting one shows a large icon, name and lore on the right |
+| Slot 12 raw | 12 | `Pressed N` on every button press |
+| Slot 14 gate | 14 | The name switches between `STATE_ON` and `STATE_OFF` every second |
+| Slot 15 texture | 15 | Wool texture from the color in the name |
+| Bag and View bars | 16 | Constant `#clip_ratio`. Empty bars follow the rule in section 2.4 |
+| Slot 16 name | 16 | Bar from the name 0 to 10 |
+| Slot 17 dur | 17 | Bar from the iron sword's remaining durability |
+| 15 raw, 16 raw, 15 path | 15, 16 | Raw values and the built path |
+| Press: rename slot 12 | 26 | Quick move button |
 
 ## Related rules
 
 | ID | Page | Content |
 | --- | --- | --- |
 | HOST-16 to HOST-20 | [Screen hosts and data](../json-ui/screen-hosts-and-data.mdx) | Entity inventory screen, slot identity, screen redeclaration, script-side cautions |
+| ANI-03 | [Images and animation](../json-ui/images-and-animation.mdx) | Progress bars drawn with `#clip_ratio` |
 | ANI-06 | [Images and animation](../json-ui/images-and-animation.mdx) | The item renderer and `#item_id_aux` |
+| EXP-27 | [Expressions](../json-ui/expressions.mdx) | Real literals that start with a dot |
