@@ -57,7 +57,10 @@ const config: Config = {
     ],
   ],
   themeConfig: {
-    navbar: { title: 'Bedrock 개발 위키', items: [{ type: 'localeDropdown', position: 'right', className: 'navbar-locale' }] },
+    navbar: { title: 'Bedrock 개발 위키', items: [
+        { type: 'localeDropdown', position: 'right', className: 'navbar-locale' },
+        { href: 'https://github.com/PresentKim/bedrock-research', position: 'right', className: 'navbar-github', 'aria-label': 'GitHub' },
+      ] },
     footer: { style: 'dark', copyright: '출처와 라이선스는 각 페이지 하단 표에 적는다.' },
     prism: {
       theme: prismThemes.github,
