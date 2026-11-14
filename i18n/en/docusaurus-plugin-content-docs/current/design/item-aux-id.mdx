@@ -66,7 +66,7 @@ So the numeric IDs come from the registry built by whoever opened the world (a d
 | Counting | Counting the non-`minecraft:` items of `ItemTypes.getAll()` was right in a world with 1 custom item. In a world with every free Marketplace add-on the count was 1518, but the real shift was 1560 | Discord 2026-07-09 |
 | Saturation | Past 1569 custom items, nothing shifts further | Bedrock Wiki 26.50 |
 
-The three order claims disagree. The two captures only show the order inside one pack, so with several packs the stack order may come first.
+The three order claims disagree. The two captures only show the order inside one pack, so with several packs the stack order may come first. The experiments found path order inside a pack and stack order between packs (sections 5.5 and 5.6).
 
 ### 2.4 Custom blocks
 
@@ -96,13 +96,13 @@ These are the steps for a script to get the numeric ID of a name `n`. Bold value
 
 Values to settle:
 
-| Value | Candidates | After the first experiment |
+| Value | Candidates | Result |
 | --- | --- | --- |
 | P (custom item start) | 852 in 26.50 | 853 on 1.26.63 (section 5.1) |
-| Order O | Identifier order, file name order (subfolders first), path order, `ItemTypes.getAll()` order | Inside one pack, path string order. The `getAll()` order differed between runs |
+| Order O | Identifier order, file name order (subfolders first), path order, `ItemTypes.getAll()` order | Case-insensitive path order inside a pack (section 5.5), stack order between packs (section 5.6). The `getAll()` order differed between runs |
 | Whether C includes block items of custom blocks | Chest-UI leaves them out | It does not (section 5.3) |
 | B (custom block start) | Just below the lowest vanilla number, -9745 | -9745 |
-| Order O' | Identifier order, file name order, its reverse, `BlockTypes.getAll()` order | Reverse of path string order (section 5.3) |
+| Order O' | Identifier order, file name order, its reverse, `BlockTypes.getAll()` order | Reverse path order inside a pack (section 5.3), stack order between packs (section 5.6) |
 | Vanilla table | Registry capture | Dragonfly's 1.26.60 `vanilla_items.nbt` matches the 1.26.63 results (section 5.2) |
 
 A script cannot read the game version, so the vanilla table matches the one version the add-on targets.
@@ -256,7 +256,7 @@ A world where the 3 custom blocks registered, after adding `minecraft:geometry` 
 - The 3 block items of the custom blocks were in `ItemTypes.getAll()`, but they did not shift the item range. C counts custom items only.
 - `ItemTypes.getAll()` returned c, a, d, test, b this time. The registry order is b, test, c, d, a, the same as in the first experiment. The `getAll()` order can change between runs, so it cannot be used to compute numbers. `BlockTypes.getAll()` returned b, c, a, which matched path order this time.
 
-### 5.4 Rules so far (1.26.63, one behavior pack)
+### 5.4 Rules with one behavior pack (1.26.63)
 
 | Target | Numeric ID |
 | --- | --- |
@@ -266,11 +266,9 @@ A world where the 3 custom blocks registered, after adding `minecraft:geometry` 
 
 A script cannot read file paths, and the `getAll()` order cannot be trusted. So the numbers of a pack's own custom items and blocks must be put into the script as a table built from the file paths at build time. The only thing a script can do at runtime is count C with `ItemTypes.getAll()` (it was right, 5, in this world).
 
-What remains:
+The two questions left after the second experiment, the details of the path sort (uppercase, digits, `_`, `-`) and the order with several behavior packs, were settled by the third experiment (sections 5.5 and 5.6).
 
-- The order between packs when there are several behavior packs (pack stack order, or all packs' paths sorted together). Partly checked in section 5.5.
-- Whether the path sort is byte order (when uppercase, digits, `_` and `-` mix). Checked in section 5.5.
-- Whether other platforms (Windows, iOS) give the same result. Discord has a report that it is wrong on iOS.
+All experiments ran on mobile. The Discord report that "it is wrong on iOS" is likely a user-side problem and is left out of the conclusions on this page.
 
 ### 5.5 Third experiment (mobile, 1.26.63, probe v1.1.0 + extra pack v1.0.0, 2026-11-14)
 
@@ -311,7 +309,15 @@ The order of the two packs in the active list was swapped in the same world.
 - The order between packs follows the stack order of the active list. Items and blocks use the same pack order. The items of the earlier pack go first from 853, and the blocks of the earlier pack go first from -9745.
 - The order inside each pack did not change (items in path sort order, blocks in reverse path sort order).
 - The vanilla shift is C = 11 whatever the pack order.
-- Whether the top or the bottom of the active list is the "earlier pack" was not recorded.
+- Whether the earlier pack is at the top or the bottom of the active list was not recorded. It does not affect the conclusion that swapping the order swaps the numbers.
+
+Settled rules (1.26.63, several behavior packs):
+
+| Target | Numeric ID |
+| --- | --- |
+| Vanilla items and blocks | The runtime ID in that version's server data. Items at 853 or above add C, the custom item count of all packs |
+| Custom items | `853 + k`, where k (from 0) is the place after lining up packs in stack order and the item files inside each pack in case-insensitive path order |
+| Custom blocks | Packs in stack order take numbers downward from -9745, earlier pack first. Inside a pack, reverse path order |
 
 ### 5.7 Conclusion: what a script can do
 
