@@ -57,7 +57,7 @@ const config: Config = {
     ],
   ],
   themeConfig: {
-    navbar: { title: 'Bedrock 개발 위키', items: [{ type: 'localeDropdown', position: 'right' }] },
+    navbar: { title: 'Bedrock 개발 위키', items: [{ type: 'localeDropdown', position: 'right', className: 'navbar-locale' }] },
     footer: { style: 'dark', copyright: '출처와 라이선스는 각 페이지 하단 표에 적는다.' },
     prism: {
       theme: prismThemes.github,
