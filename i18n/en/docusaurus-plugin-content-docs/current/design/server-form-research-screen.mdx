@@ -268,6 +268,7 @@ The proceed button is a button that has `$pressed_button_name: "button.form_butt
 | The buttons and the close button of menu forms cannot be pressed and only scroll | A whole-screen scroll area is always present in every form | Create the scroll area only in that form | LAY-57 |
 | The first opened tab was empty | That tab was made with a `#toggle_state` length factory | Create the first tab in advance | Section 3 D |
 | The research name and description were empty | A `'*'` inside an expression, a string converted to a number, a `collection_index` given directly to a label | A plain label, a character marker, an index in a reference definition | EXP-36, EXP-15, COL-02 |
+| All page number cells disappeared | Page numbers were sent as digits only (`"1"`), which broke the hiding expression that subtracts the empty marker | Start page numbers with a format code too, like `§f1` | EXP-15 |
 | All item cells show the same icon | The cell parent is a `panel` | Row stacks | COL-38, COL-50 |
 | The research screen layout was drawn in other forms too | The title gate used an `or` expression or `always` | The router uses a `property_bag` dictionary lookup, and the top gate of the screen uses the default condition | COL-39 |
 
@@ -296,7 +297,7 @@ A mode that draws only a button list was placed in the same pack to see behavior
 - A way to show the item list with scrolling instead of pages while keeping selection on the client was not built. Details placed inside a cell get clipped by the scroll area, a grid always draws from button 0 so two per-tab lists cannot be put in one form, and details with a fixed index per item cannot be placed.
 - The open time and tab switching time of methods A to F were not measured.
 - Whether the radio toggles inside cells made by a grid or a factory are exclusive was not examined in this test (C-66).
-- A configuration that also changes pages on the client ("Client pages" in section 8) is in the example add-on but has not been measured yet. *unverified*
+- For the configuration that also changes pages on the client ("Client pages" in section 8), only its behavior was checked on mobile. Opening time and page switching time were not measured, and the cause of page 1's number showing no selection mark on first open was not examined.
 
 ## 8. Example add-on
 
@@ -311,10 +312,21 @@ An add-on with only the final configuration of this page. Tabs and item selectio
 
 | Menu | Configuration |
 | --- | --- |
-| Server pages (tested) | The final configuration of this page. Page arrows are form buttons, so pressing one makes the server send the form again with the next page. 2022 buttons |
-| Client pages (not yet tested) | Pages change on the client like tabs. The cells and details of up to 3 pages per tab are all sent in one form (6056 buttons), and page number radio toggles under the cells switch pages. The first page is built up front, and the other pages are built by a factory when their number is first pressed (the same method as D in section 3). Numbers of pages that do not exist are hidden with the empty marker. After "Start research", the form opens again on the first page of the same tab |
+| Server pages | The final configuration of this page. Page arrows are form buttons, so pressing one makes the server send the form again with the next page. 2022 buttons |
+| Client pages | Pages change on the client like tabs. The cells and details of up to 3 pages per tab are all sent in one form (6056 buttons), and page number radio toggles under the cells switch pages. The first page is built up front, and the other pages are built by a factory when their number is first pressed (the same method as D in section 3). Numbers of pages that do not exist are hidden with the empty marker. After "Start research", the form opens again on the first page of the same tab |
 
-Client pages are not measured yet. Each page needs its own cell and detail definitions (`collection_index` is a static value), so the maximum page count is fixed in the UI, and more items than that must go to server pages. The cost of receiving and opening a form with many more buttons has not been measured either.
+<video controls preload="metadata" width="100%" src={require('@site/static/video/server-form-research-screen-addon.mp4').default} />
+
+Video of the example add-on (mobile, 2026-11-14, v1.3.1). The first part is Server pages, and Client pages start at about 10 seconds.
+
+Client pages results (mobile, v1.3.1):
+
+- Page numbers appear under the cells: 1~3 on the To do tab (133 items) and 1~2 on the Done tab (67 items), where the missing page 3 number is hidden.
+- Pressing a number changes the page without closing the form. Pages opened for the first time (page 2 of Done with 19 cells, page 3 of To do with 37 cells) filled with the right icons at once.
+- Picking a cell on another page shows its detail (name, status, description, materials, progress button) correctly.
+- On first open the page 1 content is visible, but page 1's number has no selection mark. After a number is pressed once, the picked number gets a yellow border.
+
+Each page needs its own cell and detail definitions (`collection_index` is a static value), so the maximum page count is fixed in the UI, and more items than that must go to server pages. Opening time with 6056 buttons was not measured.
 
 - Turn on only one test add-on that changes the server form screen at a time. This add-on and the add-on of [JSON UI optimization](./json-ui-performance.mdx) both replace `$screen_content` of `third_party_server_screen` with their own root, so with both on, only the screen of the pack placed higher works. Test items and script event names differ per add-on and do not collide.
 - The add-on version is in the pack names, the descriptions and the file name. When a fixed version comes out, the link above points to the new file; remove the old version and import the new one.

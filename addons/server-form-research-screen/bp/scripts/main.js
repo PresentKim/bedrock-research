@@ -1,7 +1,7 @@
 import { system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 
-const PACK_VERSION = "v1.3.1";
+const PACK_VERSION = "v1.3.2";
 const TEST_ITEM = "bwiki:research_screen_test";
 const ITEM_COUNT = 200;
 const PAGE_SIZE = 48;
@@ -153,8 +153,8 @@ function open(player) {
   const form = new ActionFormData()
     .title(`Research Screen ${PACK_VERSION}`)
     .body("Pick how pages change.")
-    .button("Server pages (tested)")
-    .button("Client pages (not yet tested)");
+    .button("Server pages")
+    .button("Client pages");
   form.show(player).then((res) => {
     if (res.canceled || res.selection === undefined) return;
     if (res.selection === 0) openResearch(player, { tab: 0, pages: [0, 0] });
