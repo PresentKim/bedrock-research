@@ -25,6 +25,7 @@ const config: Config = {
   favicon: 'img/favicon.ico',
   url: process.env.SITE_URL ?? 'https://example.invalid',
   baseUrl: process.env.BASE_URL ?? '/',
+  future: { v4: { removeLegacyPostBuildHeadAttribute: true }, faster: true },
   onBrokenLinks: 'throw',
   onBrokenAnchors: 'warn',
   markdown: { hooks: { onBrokenMarkdownLinks: 'throw' } },
