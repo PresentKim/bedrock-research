@@ -26,74 +26,58 @@ sources:
 
 결론:
 
-1. 화면은 `third_party_server_screen`의 `$screen_content`에 둔 라우터 하나가 폼 제목으로 골라 만든다(HOST-06, COL-47). 바닐라 폼 내용은 같은 화면에 두고 `#visible`로만 끈다.
+1. 화면은 라우터 하나가 폼 제목으로 골라 만든다(HOST-06, COL-47). 실측한 시험 팩은 라우터를 `third_party_server_screen`의 `$screen_content`에 두었고, 예제 애드온은 `main_screen_content`에 `modifications`로 넣는다(1절). 바닐라 폼 내용은 같은 화면에 두고 `#visible`로만 끈다.
 2. 탭과 아이템 칸은 모두 라디오 토글이다. 칸 토글의 `checked` 상태 컨트롤 안에 그 아이템의 상세를 넣으면, 칸을 누를 때 상세가 바뀌고 폼은 닫히지 않는다(INP-36).
 3. 상세에 필요한 글자와 아이콘은 서버가 폼 버튼으로 미리 다 보낸다. 칸은 고정 `collection_index`로 버튼 하나씩 읽는다. 이 칸들의 바인딩은 모두 `binding_condition: "always"`다.
 4. 서버로 보낼 동작(진행 버튼, 페이지 화살표)만 폼 버튼(`button.form_button_click`)이다. 누르면 폼이 닫히고 서버가 다음 폼을 보낸다.
 
 ## 1. 화면 구성
 
-리소스 팩 파일은 셋이다.
+리소스 팩 파일은 넷이다(예제 애드온 `server-form-research-screen` 기준).
 
 | 파일 | 내용 |
 | --- | --- |
-| `ui/server_form.json` | `third_party_server_screen`의 `$screen_content`를 우리 루트로 바꾸고, 우리 폼에서는 바닐라 버튼 목록을 만들지 않게 한다 |
-| `ui/ffr.json` | 루트, 화면 라우터, 창, 탭, 칸, 상세의 공통 정의 |
-| `ui/ffr_items.json` | 아이템 칸 96개의 상세 정의. `collection_index`는 정적 값이라 칸마다 정의가 따로 필요해서 스크립트로 만든다 |
+| `ui/server_form.json` | `main_screen_content`를 화면 크기로 넓히고 라우터를 `modifications`로 넣는다. 제목이 공통 접두사 `§b§w`로 시작하면 바닐라 `long_form`을 숨기고 바닐라 버튼 목록을 만들지 않는다 |
+| `ui/frs.json` | 화면 라우터, 창, 탭, 칸, 상세의 공통 정의 |
+| `ui/frs_items.json` | 서버 페이지의 아이템 칸 96개 상세 정의. `collection_index`는 정적 값이라 칸마다 정의가 따로 필요해서 스크립트로 만든다 |
+| `ui/frs_pages.json` | 클라이언트 페이지(8절)의 칸과 상세 정의 |
 
-```json title="ui/server_form.json"
-{
-  "namespace": "server_form",
-  "third_party_server_screen": { "$screen_content": "ffr.root" },
-  "long_form_dynamic_buttons_panel": {
-    "bindings": [
-      { "binding_name": "#form_button_contents", "binding_name_override": "#collection_length", "binding_condition": "visible" }
-    ]
-  }
-}
-```
+`ui/server_form.json`은 다른 서버 폼 예제와 바이트까지 같고 라우터 한 줄(`frs_router@frs.screen_router`)만 다르다. 파일 전체와 각 줄의 이유는 [JSON UI 최적화 8.1절](./json-ui-performance.mdx#81-서버-폼-예제의-공통-server_formjson)에 있다.
 
-바닐라 버튼 목록의 길이 바인딩을 `visible` 조건으로 바꾸면, 목록이 숨은 우리 폼에서는 버튼 칸을 만들지 않는다(BND-32). 바닐라 `long_form_scrolling_content/wrapping_panel`도 같은 조건식의 `#visible`로 숨긴다.
+- 바닐라 `main_screen_content`는 `size: [0, 0]`이라 `["100%", "100%"]`로 넓혀 넣은 라우터가 크기를 얻게 한다.
+- 바닐라 버튼 목록의 길이 바인딩을 `visible` 조건으로 바꾸면, 목록이 숨은 우리 폼에서는 버튼 칸을 만들지 않는다(BND-32). 바닐라 `long_form`과 `long_form_scrolling_content/wrapping_panel`은 `(not (('%.6s' * #title_text) = '§b§w'))`의 `#visible`로 숨긴다.
+- 실측한 시험 팩(`FFR`)은 라우터를 `third_party_server_screen`의 `$screen_content`에 두었다. 예제 애드온처럼 `main_screen_content` 안 `server_form_factory` 옆에 둔 라우터에서도 5절의 바인딩 결과(COL-47)가 같은지는 게임에서 확인하지 않았다(*미검증*).
 
-### 1.1 루트와 화면 라우터
+### 1.1 화면 라우터
 
-루트는 바닐라 폼 내용과 라우터를 나란히 둔다. 바닐라 내용은 제목이 우리 접두어(`ffr:`)가 아닐 때만 보인다.
+라우터는 `collection_panel` 하나다. 제목 앞 11바이트(`§b§wrs:Fa` 같은 꼴, `§b§w`가 6바이트)를 `property_bag` 키로 조회해 만들 화면의 종류 이름 배열을 `#collection_length`에 넣는다(HOST-06, COL-22, COL-27). 키가 없으면 아무것도 만들지 않는다. `F`는 서버 페이지, `G`는 클라이언트 페이지(8절)이고 끝 글자는 처음 열 탭이다.
 
-```json title="ffr.root"
-{
-  "type": "panel",
-  "size": ["100%", "100%"],
-  "controls": [
-    { "vanilla": {
-        "type": "panel", "size": ["100%", "100%"],
-        "bindings": [
-          { "binding_name": "#title_text" },
-          { "binding_type": "view",
-            "source_property_name": "(not (('%.4s' * #title_text) = 'ffr:'))",
-            "target_property_name": "#visible" }
-        ],
-        "controls": [ { "content@server_form.main_screen_content": {} } ] } },
-    { "screen_router@ffr.screen_router": {} }
-  ]
-}
-```
-
-라우터는 `collection_panel` 하나다. 제목 앞 6바이트(`ffr:Ea` 같은 꼴)를 `property_bag` 키로 조회해 만들 화면의 종류 이름 배열을 `#collection_length`에 넣는다(HOST-06, COL-22, COL-27). 키가 없으면 아무것도 만들지 않는다.
-
-```json title="ffr.screen_router"
+```json title="frs.screen_router"
 {
   "type": "collection_panel",
-  "size": ["100%", "100%"],
+  "size": [ "100%", "100%" ],
   "factory": {
-    "name": "ffr_screen",
-    "control_ids": { "ea": "@ffr.research_ea", "eb": "@ffr.research_eb" }
+    "name": "frs_screen",
+    "control_ids": {
+      "a": "@frs.research_a",
+      "b": "@frs.research_b",
+      "ga": "@frs.research_ga",
+      "gb": "@frs.research_gb"
+    }
   },
-  "property_bag": { "#ffr:Ea": ["ea"], "#ffr:Eb": ["eb"] },
+  "property_bag": {
+    "#§b§wrs:Fa": [ "a" ],
+    "#§b§wrs:Fb": [ "b" ],
+    "#§b§wrs:Ga": [ "ga" ],
+    "#§b§wrs:Gb": [ "gb" ]
+  },
   "bindings": [
     { "binding_name": "#title_text" },
-    { "binding_type": "view",
-      "source_property_name": "('#' + ('%.6s' * #title_text))",
-      "target_property_name": "#collection_length" }
+    {
+      "binding_type": "view",
+      "source_property_name": "('#' + ('%.11s' * #title_text))",
+      "target_property_name": "#collection_length"
+    }
   ]
 }
 ```
@@ -150,11 +134,11 @@ form.show(player).then((res) => {
 
 탭 토글은 바닐라 템플릿 대신 원시 `toggle`로 정의했다. 8개 상태 컨트롤을 모두 채우고(INP-10), `toggle_on_button`과 `button_mappings`를 준다(INP-11).
 
-```json title="ffr.tab_toggle (일부)"
+```json title="frs.tab_toggle (일부)"
 {
   "type": "toggle",
   "size": [96, 22],
-  "toggle_name": "ffr_tabs",
+  "toggle_name": "frs_tabs",
   "radio_toggle_group": true,
   "toggle_group_forced_index": "$tab_index",
   "toggle_group_default_selected": "$tab",
@@ -168,7 +152,7 @@ form.show(player).then((res) => {
   "checked_locked_control": "on", "checked_locked_hover_control": "on",
   "unchecked_control": "off", "unchecked_hover_control": "off_hover",
   "unchecked_locked_control": "off", "unchecked_locked_hover_control": "off",
-  "controls": [ { "on@ffr.tab_face_on": {} }, { "off@ffr.tab_face": {} }, { "off_hover@ffr.tab_face_hover": {} } ]
+  "controls": [ { "on@frs.tab_face_on": {} }, { "off@frs.tab_face": {} }, { "off_hover@frs.tab_face_hover": {} } ]
 }
 ```
 
@@ -176,14 +160,14 @@ form.show(player).then((res) => {
 
 ## 4. 아이템 선택까지 클라이언트에서
 
-아이템 칸 96개도 라디오 토글이다(그룹 `ffr_items`, `toggle_group_default_selected: -1`로 처음엔 아무것도 고르지 않음). 칸 토글의 `on` 상태 컨트롤에 선택 테두리와 그 아이템의 상세 패널이 함께 들어 있다. 상세 패널은 칸 위치에서 오른쪽 판 자리로 `offset`을 계산해 옮기고, 높은 `layer`로 다른 칸 위에 그린다. 아무것도 고르지 않았을 때 오른쪽 판에는 "연구를 고르세요." 글만 있다.
+아이템 칸 96개도 라디오 토글이다(그룹 `frs_items`, `toggle_group_default_selected: -1`로 처음엔 아무것도 고르지 않음). 칸 토글의 `on` 상태 컨트롤에 선택 테두리와 그 아이템의 상세 패널이 함께 들어 있다. 상세 패널은 칸 위치에서 오른쪽 판 자리로 `offset`을 계산해 옮기고, 높은 `layer`로 다른 칸 위에 그린다. 아무것도 고르지 않았을 때 오른쪽 판에는 "연구를 고르세요." 글만 있다.
 
-```json title="ffr.item_chosen (칸 토글의 on 상태)"
+```json title="frs.item_chosen (칸 토글의 on 상태)"
 {
   "type": "panel",
   "size": ["100%", "100%"],
   "controls": [
-    { "face@ffr.item_face": { "$slot_bg": "textures/ui/ffr/slot_chosen" } },
+    { "face@frs.item_face": { "$slot_bg": "textures/ui/ffr/slot_chosen" } },
     { "sel": { "type": "image", "layer": 4, "texture": "textures/ui/focus_border_white",
                "size": ["100%", "100%"], "color": [1, 0.85, 0.1] } },
     { "detail@$detail_def": { "layer": 20, "anchor_from": "top_left", "anchor_to": "top_left",
@@ -202,7 +186,7 @@ form.show(player).then((res) => {
     "type": "stack_panel", "orientation": "vertical", "size": [144, 108],
     "bindings": [
       { "binding_type": "view", "binding_condition": "always",
-        "source_control_name": "ffr_t0", "source_property_name": "#toggle_state",
+        "source_control_name": "frs_t0", "source_property_name": "#toggle_state",
         "target_property_name": "#visible" }
     ],
     "controls": [
@@ -210,10 +194,10 @@ form.show(player).then((res) => {
           "type": "stack_panel", "orientation": "horizontal", "size": [144, 18],
           "collection_name": "form_buttons",
           "controls": [
-            { "i0@ffr.item_toggle": { "collection_index": 0, "$k": 0,
-                "$detail_offset": [152, -4], "$detail_def": "ffri.detail_0" } },
-            { "i1@ffr.item_toggle": { "collection_index": 1, "$k": 1,
-                "$detail_offset": [134, -4], "$detail_def": "ffri.detail_1" } }
+            { "i0@frs.item_toggle": { "collection_index": 0, "$k": 0,
+                "$detail_offset": [152, -4], "$detail_def": "frsi.detail_0" } },
+            { "i1@frs.item_toggle": { "collection_index": 1, "$k": 1,
+                "$detail_offset": [134, -4], "$detail_def": "frsi.detail_1" } }
           ] } }
     ]
   }
@@ -238,7 +222,7 @@ form.show(player).then((res) => {
 
 F의 팩토리는 길이를 `#form_button_length > 0`으로 정하고 바인딩 조건을 `visible`로 둔다. `on` 상태 컨트롤은 칸이 선택될 때만 보이므로, 그때 처음으로 길이가 1이 되어 상세를 만든다(BND-32).
 
-```json title="ffr.lazy_detail"
+```json title="frs.lazy_detail"
 {
   "type": "stack_panel",
   "size": [158, 136],
@@ -251,11 +235,11 @@ F의 팩토리는 길이를 `#form_button_length > 0`으로 정하고 바인딩 
 }
 ```
 
-아이템마다 `factory: { "name": "ffr_lazy_<k>", "control_name": "ffri.detail_<k>" }`를 붙여 쓴다. 두 방식의 여는 시간 차이는 재지 않았다.
+아이템마다 `factory: { "name": "frs_lazy_<k>", "control_name": "frsi.detail_<k>" }`를 붙여 쓴다. 두 방식의 여는 시간 차이는 재지 않았다.
 
 ### 4.3 상세 패널
 
-상세는 고정 칸 20개를 `collection_index`로 읽는다. 설명은 길이가 다르므로 상세 안의 작은 스크롤 영역에 넣고, 진행 버튼은 판 아래쪽에 고정한다. 글자 라벨은 버튼 글을 식 없이 그대로 그리고(`text: "#form_button_text"`), 라벨은 반드시 `collection_index`를 받는 참조 정의(`name@ffr.text_item`)에 둔다. 라벨에 직접 준 인덱스는 무시된다(COL-02).
+상세는 고정 칸 20개를 `collection_index`로 읽는다. 설명은 길이가 다르므로 상세 안의 작은 스크롤 영역에 넣고, 진행 버튼은 판 아래쪽에 고정한다. 글자 라벨은 버튼 글을 식 없이 그대로 그리고(`text: "#form_button_text"`), 라벨은 반드시 `collection_index`를 받는 참조 정의(`name@frs.text_item`)에 둔다. 라벨에 직접 준 인덱스는 무시된다(COL-02).
 
 진행 버튼은 바닐라 버튼처럼 `$pressed_button_name: "button.form_button_click"`과 `collection_details` 바인딩(`always`)을 가진 버튼이다. 누르면 그 칸의 버튼 번호가 서버로 간다.
 
@@ -307,8 +291,8 @@ F의 팩토리는 길이를 `#form_button_length > 0`으로 정하고 바인딩 
 
 | 애드온 | 아이콘 | 테스트 아이템, 스크립트 이벤트 |
 | --- | --- | --- |
-| Research Screen Test v1.4.0 | 숫자 아이템 ID로 아이템 렌더러가 그린다(8.1절). 블록은 3D, 인챈트한 아이템은 반짝임. 게임 버전마다 ID 표를 맞춰야 한다 | `bwiki:research_screen_test`, `bwiki:research_screen` |
-| Research Screen Texture Test v1.3.3 | 텍스처 경로(`textures/items/diamond` 등)를 이미지로 그린다. 블록도 평면 그림이고 반짝임은 없지만, 게임 버전이 바뀌어도 그대로 동작한다 | `bwiki:research_screen_texture_test`, `bwiki:research_screen_texture` |
+| Research Screen Test v1.5.0 | 숫자 아이템 ID로 아이템 렌더러가 그린다(8.1절). 블록은 3D, 인챈트한 아이템은 반짝임. 게임 버전마다 ID 표를 맞춰야 한다 | `bwiki:research_screen_test`, `bwiki:research_screen` |
+| Research Screen Texture Test v1.4.0 | 텍스처 경로(`textures/items/diamond` 등)를 이미지로 그린다. 블록도 평면 그림이고 반짝임은 없지만, 게임 버전이 바뀌어도 그대로 동작한다 | `bwiki:research_screen_texture_test`, `bwiki:research_screen_texture` |
 
 <AddonDownload id="server-form-research-screen" />
 
@@ -343,9 +327,9 @@ Client pages 실측 결과(모바일, v1.3.3, v1.4.0에서도 같음):
 
 페이지마다 칸과 상세 정의가 따로 필요해(`collection_index`가 정적 값) 최대 페이지 수가 UI에 고정되고, 그보다 많은 아이템은 서버 페이지로 넘겨야 한다. 버튼 수(6056개)에 따른 여는 시간은 재지 않았다.
 
-### 8.1 아이템 아이콘 (v1.4.0)
+### 8.1 아이템 아이콘 (아이템 렌더러 판)
 
-v1.4.0은 칸, 상세, 탭의 아이콘을 텍스처 경로 대신 아이템 렌더러로 그린다. v1.3.3과 다른 점은 이것뿐이다.
+Research Screen Test는 칸, 상세, 탭의 아이콘을 텍스처 경로 대신 아이템 렌더러로 그린다. 텍스처 판과 화면에서 다른 점은 이것뿐이다. 두 판은 이름공간(`frs`, `frsi`, `frsg`와 `frt`, `frti`, `frtg`), 파일, 텍스처 폴더가 달라 함께 켜도 정의가 섞이지 않는다.
 
 - 스크립트는 버튼 텍스처 자리에 `aux:` + `숫자 아이템 ID * 65536`(인챈트면 +32768)을 보낸다(ANI-06, ANI-23). 다이아몬드는 `aux:20054016`이다.
 - 아이콘 컨트롤은 `inventory_item_renderer`이고, `((#form_button_texture - 'aux:') - 0)`을 `#item_id_aux`에 넣는다(EXP-16). 텍스처 앞 4바이트가 `aux:`가 아닌 버튼(빈 칸)에서는 숨긴다.
@@ -360,9 +344,9 @@ v1.4.0은 칸, 상세, 탭의 아이콘을 텍스처 경로 대신 아이템 렌
 - 탭 아이콘(책과 깃펜, 에메랄드)도 아이템 렌더러로 그려졌다.
 - +32768을 더한 황금 사과는 테두리에 보라빛 반짝임이 보였다. 다이아몬드 검의 반짝임은 영상 화질로는 가리지 못했다.
 
-- 서버 폼 화면을 바꾸는 시험 애드온은 한 번에 하나만 켠다. 이 애드온과 [JSON UI 최적화](./json-ui-performance.mdx)의 애드온은 둘 다 `third_party_server_screen`의 `$screen_content`를 자기 루트로 바꾸므로, 함께 켜면 위에 놓인 팩의 화면만 동작한다. 테스트 아이템과 스크립트 이벤트 이름은 애드온마다 달라 겹치지 않는다.
+- 두 판과 다른 서버 폼 예제([JSON UI 최적화](./json-ui-performance.mdx), [아이템 숫자 ID](./item-aux-id.mdx)의 애드온)는 같은 월드에 켜도 된다. 제목이 모두 공통 접두사 `§b§w`와 애드온 코드로 시작하고 `server_form.json`은 라우터 한 줄만 다르다([JSON UI 최적화 8.1절](./json-ui-performance.mdx#81-서버-폼-예제의-공통-server_formjson), *미검증*, jsonui-tester 정적 확인만). 텍스처 판의 제목은 `§b§wrt:Fa`처럼 `rt:`로 시작한다. 테스트 아이템과 스크립트 이벤트 이름은 애드온마다 달라 겹치지 않는다.
 - 애드온의 버전은 팩 이름, 설명, 파일 이름에 붙는다. 고친 판이 나오면 위 링크가 새 파일로 바뀌므로 이전 판은 지우고 새 판을 가져온다.
-- 화면의 글은 영어다. 게임 언어나 글꼴과 상관없이 같은 화면이 나오게 하려는 것이다. 연구 화면 레이아웃을 만드는 `ui/ffr_items.json`(서버 페이지)과 `ui/ffr_pages.json`(클라이언트 페이지)은 위키 저장소의 `addons/server-form-research-screen/tools/gen-items.mjs`로 만든다.
+- 화면의 글은 영어다. 게임 언어나 글꼴과 상관없이 같은 화면이 나오게 하려는 것이다. 연구 화면 레이아웃을 만드는 `ui/frs_items.json`(서버 페이지)과 `ui/frs_pages.json`(클라이언트 페이지)은 위키 저장소의 `addons/server-form-research-screen/tools/gen-items.mjs`로, 텍스처 판의 `ui/frt_items.json`과 `ui/frt_pages.json`은 `addons/server-form-research-screen-texture/tools/gen-items.mjs`로 만든다.
 
 ## 관련 규칙
 
@@ -372,5 +356,6 @@ v1.4.0은 칸, 상세, 탭의 아이콘을 텍스처 경로 대신 아이템 렌
 | LAY-52, LAY-53, LAY-55 ~ LAY-57 | [컨트롤과 레이아웃](../json-ui/controls-and-layout.mdx) | 창 크기, 글자 레이어, 스택 안 `offset`, 스크롤 영역의 터치 |
 | INP-10, INP-11, INP-13, INP-35, INP-36 | [입력, 버튼, 토글](../json-ui/input-buttons-toggles.mdx) | 토글 상태, 라디오 그룹, 클라이언트 탭과 선택 |
 | BND-32 | [바인딩](../json-ui/bindings.mdx) | 보일 때 만드는 팩토리 |
+| HOST-06, HOST-51 | [화면 호스트와 데이터 채널](../json-ui/screen-hosts-and-data.mdx) | 화면 라우팅, 서버 폼 예제의 공통 규약 |
 | EXP-07, EXP-15, EXP-36 | [식과 연산자](../json-ui/expressions.mdx) | 포함 검사, 숫자 변환, 식을 깨는 글자 |
 | HOST-06 | [화면 호스트와 데이터 채널](../json-ui/screen-hosts-and-data.mdx) | 사전 조회 라우팅 |

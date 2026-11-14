@@ -47,7 +47,7 @@ When there are several screens or tabs, switching from "create everything and hi
 
 ### Pitfalls of gates
 
-- **Inside** a layout created by a gate factory, action form button data reached only the cells of `grid` + `collection_name`. Fixed `collection_index` cells and inner factories were empty (COL-40). Build the button list inside a gate with a grid. But in a window created by a router placed in `$screen_content` of `third_party_server_screen`, when all the cell bindings were set to `binding_condition: "always"`, fixed cells, toggle cells and inner factories were filled as soon as it opened (COL-47, C-65). With the default condition they were empty at first and filled only after switching a tab once.
+- **Inside** a layout created by a gate factory, action form button data reached only the cells of `grid` + `collection_name`. Fixed `collection_index` cells and inner factories were empty (COL-40). Build the button list inside a gate with a grid. But in a window created by a router placed in `$screen_content` of `third_party_server_screen`, when all the cell bindings were set to `binding_condition: "always"`, fixed cells, toggle cells and inner factories were filled as soon as it opened (COL-47, C-65). With the default condition they were empty at first and filled only after switching a tab once. The wiki examples put the router next to `server_form_factory` inside `main_screen_content` instead of `$screen_content` (section 8.1). Whether cells fill at once in that place too was not checked in game (*unverified*).
 - A factory inside a cell created by a factory was not created at first if `#title_text` and the length binding had the default condition. Give both bindings `always` (COL-48).
 - If you always keep a scroll area covering the whole screen outside the router, it took over touches of other forms' buttons and the close button even when empty (LAY-57). Put the scroll area inside the window the router creates.
 - The expressions of every control that can be created must be safe even for wrong input (an empty string, another form's body). A setup in which an expression that puts a string into a numeric property is created in every form froze or killed the client (DBG-19). Make an expression that goes into a numeric property get created only inside a gate that checks the input format.
@@ -103,7 +103,7 @@ When there are several screens or tabs, switching from "create everything and hi
 
 <AddonDownload id="json-ui-performance" />
 
-An add-on that draws a server form button list with the configuration this page recommends. A screen-level router looks up the form title (`ffr:J`) in a `property_bag` and builds the window, scroll area and 2-column grid only for this form (section 2, COL-47, LAY-57). Other forms build nothing. The cell bindings use `always`, and labels sit on a higher layer than the background (LAY-55).
+An add-on that draws a server form button list with the configuration this page recommends. A router looks up the form title (`§b§wjp:J`) in a `property_bag` and builds the window, scroll area and 2-column grid only for this form (section 2, COL-47, LAY-57). Other forms build nothing. The cell bindings use `always`, and labels sit on a higher layer than the background (LAY-55).
 
 1. Open the file to import it (on mobile, tap the file and open it with Minecraft). In a new world, turn on the behavior pack whose name starts with `[bedrock-research]json-ui-performance-bp`. The resource pack turns on with it as a dependency, and no experimental toggle is needed.
 2. Take "JSON UI Optimization Test" from the end of the Items category of the creative inventory. You can also type the name in the search box or run `/give @s bwiki:json_ui_performance_test`.
@@ -117,9 +117,88 @@ Video of the example add-on (mobile, 2026-11-14, v1.2.0). It picks a button coun
 
 The 2000-button list opens, and scrolled to the end, the last cells still draw their icon, name, description and progress bar. A pressed cell turns green. Opening time was not measured.
 
-- Turn on only one test add-on that changes the server form screen at a time. This add-on and the add-on of [Server form research screen](./server-form-research-screen.mdx) both replace `$screen_content` of `third_party_server_screen` with their own root, so with both on, only the screen of the pack placed higher works. Test items and script event names differ per add-on and do not collide.
+- It can be turned on in the same world as the other server form examples (section 8.1, *unverified*, static jsonui-tester check only). Test items and script event names differ per add-on and do not collide.
 - The add-on version is in the pack names, the descriptions and the file name. When a fixed version comes out, the link above points to the new file; remove the old version and import the new one.
 - The menu and screen text is in English, so the screen looks the same whatever the game language or font.
+
+### 8.1 The shared `server_form.json` of the server form examples
+
+The five server form examples of this wiki (this add-on, the two versions of the [server form research screen](./server-form-research-screen.mdx), and Item Icon Slots and Item Aux Probe of [item numeric IDs](./item-aux-id.mdx)) do not redeclare `third_party_server_screen`. Their `server_form.json` is byte-identical across the five packs except for the one router line inserted into `main_screen_content`. This is the file of this add-on.
+
+```json title="rp/ui/server_form.json"
+{
+  "namespace": "server_form",
+
+  "main_screen_content": {
+    "size": [ "100%", "100%" ],
+    "modifications": [
+      {
+        "array_name": "controls",
+        "operation": "insert_back",
+        "value": [ { "jup_router@jup.screen_router": {} } ]
+      }
+    ]
+  },
+
+  "long_form": {
+    "modifications": [
+      {
+        "array_name": "bindings",
+        "operation": "insert_back",
+        "value": [
+          { "binding_name": "#title_text", "binding_condition": "always" },
+          {
+            "binding_type": "view",
+            "binding_condition": "always",
+            "source_property_name": "(not (('%.6s' * #title_text) = '§b§w'))",
+            "target_property_name": "#visible"
+          }
+        ]
+      }
+    ]
+  },
+
+  "long_form_scrolling_content/wrapping_panel": {
+    "visible": false,
+    "bindings": [
+      { "binding_name": "#title_text", "binding_condition": "always" },
+      {
+        "binding_type": "view",
+        "binding_condition": "always",
+        "source_property_name": "(not (('%.6s' * #title_text) = '§b§w'))",
+        "target_property_name": "#visible"
+      }
+    ]
+  },
+
+  "long_form_dynamic_buttons_panel": {
+    "bindings": [
+      {
+        "binding_name": "#form_button_contents",
+        "binding_name_override": "#collection_length",
+        "binding_condition": "visible"
+      }
+    ]
+  }
+}
+```
+
+- Vanilla `main_screen_content` has `size: [0, 0]` (VN server_form.json:22). Left as is, a router inserted into it gets no size either, so it is widened to `["100%", "100%"]` (*inferred*).
+- The router goes in next to `server_form_factory` through `modifications`. The routers of several packs stack in the same place.
+- When the title starts with the shared prefix `§b§w`, vanilla `long_form` and its body text are hidden. `§` is 2 bytes in UTF-8, so `('%.6s' * #title_text)` cuts out `§b§w`. The length binding of the vanilla button list has the `visible` condition, so a hidden form builds no button cells (BND-32).
+- `size` and the hiding bindings override vanilla definitions, so they compete with other packs that write the same definitions (MOD-13). The five examples write the same values, so the result is the same whatever the pack order (HOST-51).
+
+| Example | Title | Length the router cuts |
+| --- | --- | --- |
+| JSON UI optimization | `§b§wjp:J` | `('%.10s' * #title_text)` |
+| Server form research screen | `§b§wrs:Fa`, `§b§wrs:Fb`, `§b§wrs:Ga`, `§b§wrs:Gb` | `'%.11s'` |
+| Server form research screen (texture version) | `§b§wrt:Fa`, `§b§wrt:Fb`, `§b§wrt:Ga`, `§b§wrt:Gb` | `'%.11s'` |
+| Item Aux Probe | `§b§wap:scan` | `'%.13s'` |
+| Item Icon Slots | `§b§wis:slot`, `§b§wis:ent` | `'%.13s'` (`is:slot`) |
+
+A title is `§b§w` + a two-letter add-on code + `:` + a key. The router cuts the start of the title by byte count, as in `('#' + ('%.10s' * #title_text))`, and looks it up as a `property_bag` key (HOST-06, COL-22, COL-23).
+
+In a jsonui-tester check with all five resource packs loaded, each title showed only its own window with 0 diagnostics. A plain title showed the vanilla form, and an unknown `§b§w` title showed nothing. They were not turned on together in game (*unverified*, static check only).
 
 ## Related rules
 
@@ -130,7 +209,8 @@ The 2000-button list opens, and scrolled to the end, the last cells still draw t
 | COL-10 ~ COL-13, COL-16, COL-18, COL-22, COL-23, COL-37, COL-39, COL-40, COL-47 ~ COL-50 | [Collections and factories](../json-ui/collections-and-factory.mdx) | Creation gates, factory and grid cost, dictionary lookup, data inside a router window, grid limits |
 | LAY-55 ~ LAY-57 | [Controls and layout](../json-ui/controls-and-layout.mdx) | Text layers, `offset` inside stacks, touch of scroll areas |
 | INP-36 | [Input, buttons and toggles](../json-ui/input-buttons-toggles.mdx) | Client tabs and selection |
-| HOST-06, HOST-43 | [Screen hosts and data channels](../json-ui/screen-hosts-and-data.mdx) | Screen routing, open animation |
+| HOST-06, HOST-43, HOST-51 | [Screen hosts and data channels](../json-ui/screen-hosts-and-data.mdx) | Screen routing, open animation, the shared convention of the server form examples |
+| MOD-13 | [Modifying vanilla screens](../json-ui/modifying-vanilla.mdx) | Using only `modifications` that define nothing |
 | DBG-19 | [Debugging, verification and version management](../json-ui/debugging-and-versions.mdx) | Safety of expressions created in every form |
 | PAT-04 | [Pattern recipes](../json-ui/recipes.mdx) | A computed length factory example |
 

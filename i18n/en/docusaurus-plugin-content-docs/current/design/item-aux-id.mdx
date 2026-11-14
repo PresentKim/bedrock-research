@@ -13,7 +13,7 @@ sources:
 
 # Inferring numeric item IDs (aux) from the Script API
 
-The JSON UI `inventory_item_renderer` draws an item from `#item_id_aux` = `numeric item ID * 65536 + data value` (ANI-06). Enchant glint adds 32768. Unlike drawing from a texture path, blocks show in 3D and glint shows ([research screen section 8.1](./server-form-research-screen.mdx#81-item-icons-v140)).
+The JSON UI `inventory_item_renderer` draws an item from `#item_id_aux` = `numeric item ID * 65536 + data value` (ANI-06). Enchant glint adds 32768. Unlike drawing from a texture path, blocks show in 3D and glint shows ([research screen section 8.1](./server-form-research-screen.mdx#81-item-icons-item-renderer-version)).
 
 The problem is that a script has no way to know this number. This page covers how the numeric IDs are laid out (section 2), what a behavior pack script can compute from that (section 3), and ways to draw items without computing numbers, by placing the real item in an inventory slot and letting the engine draw it (section 4).
 
@@ -213,7 +213,8 @@ The methods of section 4 and the attempts that do not work are collected in one 
 
 - Menus that need empty slots say so in chat and do not start when the slots are full. The 6-slot menus use slots 9 to 14 (the left 6 of the first main inventory row), the one-slot and form menus use slot 17, and the bundle menu uses the 9th hotbar slot.
 - Only the backup menu uses full slots as they are. The backup is kept in script memory and in a player dynamic property. If the player leaves the world before the restore, the next join restores from the dynamic property, which keeps only the type, amount, name, lore, durability and enchantments.
-- This add-on replaces `$screen_content` of `third_party_server_screen` and the HUD title, so do not turn it on together with other test add-ons.
+- The server form part can be turned on in the same world as the other server form examples. Its form titles are `§b§wis:slot` and `§b§wis:ent`, and its `server_form.json` differs only in the router line ([JSON UI optimization section 8.1](./json-ui-performance.mdx#81-the-shared-server_formjson-of-the-server-form-examples), *unverified*, static jsonui-tester check only).
+- The HUD part hides every HUD title that starts with `ix`, whichever pack sent it (`hud_screen.json`). Do not turn it on together with other packs that use HUD titles starting with `ix`.
 - The text on screen is English.
 
 ## 5. Probe add-on
@@ -247,7 +248,7 @@ File names and identifiers (`aux_probe_a` to `aux_probe_h` and so on) are delibe
 
 - Turn on the extra pack (the one whose name starts with `[bedrock-research]item-aux-probe-extra-bp`) together with the probe to see the order with several packs. On its own it has no screen to open. Swapping the two packs in the active list shows the difference in section 2.3.
 - Custom items of other test add-ons also enter the registry, so turn them off.
-- This add-on also replaces `$screen_content` of `third_party_server_screen`, so do not turn it on together with other server form test add-ons.
+- It can be turned on in the same world as the other server form examples. Its form title is `§b§wap:scan`, and its `server_form.json` differs only in the router line ([JSON UI optimization section 8.1](./json-ui-performance.mdx#81-the-shared-server_formjson-of-the-server-form-examples), *unverified*, static jsonui-tester check only). Because of the registry issue above, turn other add-ons off when measuring numeric IDs.
 - The text on screen is English.
 
 ## Related rules

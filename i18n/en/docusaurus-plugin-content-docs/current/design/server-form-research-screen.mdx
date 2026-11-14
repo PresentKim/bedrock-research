@@ -26,74 +26,58 @@ These are two screens from the same form with the tab and item changed. Tab swit
 
 Conclusions:
 
-1. The screen is chosen by form title and created by one router placed in `$screen_content` of `third_party_server_screen` (HOST-06, COL-47). The vanilla form content stays on the same screen and is turned off only with `#visible`.
+1. The screen is chosen by form title and created by one router (HOST-06, COL-47). The measured test pack placed the router in `$screen_content` of `third_party_server_screen`; the example add-on inserts it into `main_screen_content` with `modifications` (section 1). The vanilla form content stays on the same screen and is turned off only with `#visible`.
 2. Tabs and item cells are all radio toggles. If you put that item's details inside the `checked` state control of a cell toggle, the details change when the cell is pressed and the form does not close (INP-36).
 3. The server sends in advance, as form buttons, all the text and icons the details need. A cell reads one button at a time with a fixed `collection_index`. All bindings of these cells are `binding_condition: "always"`.
 4. Only the actions that must go to the server (the proceed button, page arrows) are form buttons (`button.form_button_click`). Pressing one closes the form and the server sends the next form.
 
 ## 1. Screen structure
 
-There are three resource pack files.
+There are four resource pack files (as in the example add-on `server-form-research-screen`).
 
 | File | Contents |
 | --- | --- |
-| `ui/server_form.json` | Changes `$screen_content` of `third_party_server_screen` to our root, and stops our form from creating the vanilla button list |
-| `ui/ffr.json` | Common definitions of the root, screen router, window, tabs, cells and details |
-| `ui/ffr_items.json` | The detail definitions of the 96 item cells. `collection_index` is a static value, so each cell needs a separate definition, and they are made with a script |
+| `ui/server_form.json` | Widens `main_screen_content` to the screen size and inserts the router with `modifications`. When the title starts with the shared prefix `§b§w`, it hides vanilla `long_form` and builds no vanilla button list |
+| `ui/frs.json` | Common definitions of the screen router, window, tabs, cells and details |
+| `ui/frs_items.json` | The detail definitions of the 96 item cells of the server pages. `collection_index` is a static value, so each cell needs a separate definition, and they are made with a script |
+| `ui/frs_pages.json` | The cell and detail definitions of the client pages (section 8) |
 
-```json title="ui/server_form.json"
-{
-  "namespace": "server_form",
-  "third_party_server_screen": { "$screen_content": "ffr.root" },
-  "long_form_dynamic_buttons_panel": {
-    "bindings": [
-      { "binding_name": "#form_button_contents", "binding_name_override": "#collection_length", "binding_condition": "visible" }
-    ]
-  }
-}
-```
+`ui/server_form.json` is byte-identical to the other server form examples apart from the one router line (`frs_router@frs.screen_router`). The full file and the reason for each part are in [JSON UI optimization section 8.1](./json-ui-performance.mdx#81-the-shared-server_formjson-of-the-server-form-examples).
 
-If you change the length binding of the vanilla button list to the `visible` condition, button cells are not created in our form where the list is hidden (BND-32). Vanilla `long_form_scrolling_content/wrapping_panel` is also hidden with `#visible` using the same condition expression.
+- Vanilla `main_screen_content` has `size: [0, 0]`, so it is widened to `["100%", "100%"]` to give the inserted router a size.
+- If you change the length binding of the vanilla button list to the `visible` condition, button cells are not created in our form where the list is hidden (BND-32). Vanilla `long_form` and `long_form_scrolling_content/wrapping_panel` are hidden with `#visible` from `(not (('%.6s' * #title_text) = '§b§w'))`.
+- The measured test pack (`FFR`) placed the router in `$screen_content` of `third_party_server_screen`. Whether the binding results of section 5 (COL-47) are the same for a router next to `server_form_factory` inside `main_screen_content`, as in the example add-on, was not checked in game (*unverified*).
 
-### 1.1 Root and screen router
+### 1.1 Screen router
 
-The root places the vanilla form content and the router side by side. The vanilla content shows only when the title does not start with our prefix (`ffr:`).
+The router is a single `collection_panel`. It looks up the first 11 bytes of the title (a form like `§b§wrs:Fa`; `§b§w` is 6 bytes) as a `property_bag` key and puts the array of kind names of the screen to create into `#collection_length` (HOST-06, COL-22, COL-27). If the key is absent, nothing is created. `F` is the server pages and `G` the client pages (section 8), and the last letter is the tab to open first.
 
-```json title="ffr.root"
-{
-  "type": "panel",
-  "size": ["100%", "100%"],
-  "controls": [
-    { "vanilla": {
-        "type": "panel", "size": ["100%", "100%"],
-        "bindings": [
-          { "binding_name": "#title_text" },
-          { "binding_type": "view",
-            "source_property_name": "(not (('%.4s' * #title_text) = 'ffr:'))",
-            "target_property_name": "#visible" }
-        ],
-        "controls": [ { "content@server_form.main_screen_content": {} } ] } },
-    { "screen_router@ffr.screen_router": {} }
-  ]
-}
-```
-
-The router is a single `collection_panel`. It looks up the first 6 bytes of the title (a form like `ffr:Ea`) as a `property_bag` key and puts the array of kind names of the screen to create into `#collection_length` (HOST-06, COL-22, COL-27). If the key is absent, nothing is created.
-
-```json title="ffr.screen_router"
+```json title="frs.screen_router"
 {
   "type": "collection_panel",
-  "size": ["100%", "100%"],
+  "size": [ "100%", "100%" ],
   "factory": {
-    "name": "ffr_screen",
-    "control_ids": { "ea": "@ffr.research_ea", "eb": "@ffr.research_eb" }
+    "name": "frs_screen",
+    "control_ids": {
+      "a": "@frs.research_a",
+      "b": "@frs.research_b",
+      "ga": "@frs.research_ga",
+      "gb": "@frs.research_gb"
+    }
   },
-  "property_bag": { "#ffr:Ea": ["ea"], "#ffr:Eb": ["eb"] },
+  "property_bag": {
+    "#§b§wrs:Fa": [ "a" ],
+    "#§b§wrs:Fb": [ "b" ],
+    "#§b§wrs:Ga": [ "ga" ],
+    "#§b§wrs:Gb": [ "gb" ]
+  },
   "bindings": [
     { "binding_name": "#title_text" },
-    { "binding_type": "view",
-      "source_property_name": "('#' + ('%.6s' * #title_text))",
-      "target_property_name": "#collection_length" }
+    {
+      "binding_type": "view",
+      "source_property_name": "('#' + ('%.11s' * #title_text))",
+      "target_property_name": "#collection_length"
+    }
   ]
 }
 ```
@@ -150,11 +134,11 @@ Tab switching was built four ways and compared. In all of them the cells, tabs a
 
 The tab toggles are defined as a raw `toggle` instead of the vanilla template. All 8 state controls are filled in (INP-10), and `toggle_on_button` and `button_mappings` are given (INP-11).
 
-```json title="ffr.tab_toggle (excerpt)"
+```json title="frs.tab_toggle (excerpt)"
 {
   "type": "toggle",
   "size": [96, 22],
-  "toggle_name": "ffr_tabs",
+  "toggle_name": "frs_tabs",
   "radio_toggle_group": true,
   "toggle_group_forced_index": "$tab_index",
   "toggle_group_default_selected": "$tab",
@@ -168,7 +152,7 @@ The tab toggles are defined as a raw `toggle` instead of the vanilla template. A
   "checked_locked_control": "on", "checked_locked_hover_control": "on",
   "unchecked_control": "off", "unchecked_hover_control": "off_hover",
   "unchecked_locked_control": "off", "unchecked_locked_hover_control": "off",
-  "controls": [ { "on@ffr.tab_face_on": {} }, { "off@ffr.tab_face": {} }, { "off_hover@ffr.tab_face_hover": {} } ]
+  "controls": [ { "on@frs.tab_face_on": {} }, { "off@frs.tab_face": {} }, { "off_hover@frs.tab_face_hover": {} } ]
 }
 ```
 
@@ -176,14 +160,14 @@ The two tab toggles are placed as direct children of a horizontal `stack_panel` 
 
 ## 4. Item selection on the client too
 
-The 96 item cells are also radio toggles (group `ffr_items`, `toggle_group_default_selected: -1` so that nothing is chosen at first). The `on` state control of a cell toggle holds both the selection border and that item's detail panel. The detail panel is moved from the cell position to the right panel position by computing `offset`, and is drawn above the other cells with a high `layer`. When nothing is chosen, the right panel has only the text "Choose a research."
+The 96 item cells are also radio toggles (group `frs_items`, `toggle_group_default_selected: -1` so that nothing is chosen at first). The `on` state control of a cell toggle holds both the selection border and that item's detail panel. The detail panel is moved from the cell position to the right panel position by computing `offset`, and is drawn above the other cells with a high `layer`. When nothing is chosen, the right panel has only the text "Choose a research."
 
-```json title="ffr.item_chosen (the on state of a cell toggle)"
+```json title="frs.item_chosen (the on state of a cell toggle)"
 {
   "type": "panel",
   "size": ["100%", "100%"],
   "controls": [
-    { "face@ffr.item_face": { "$slot_bg": "textures/ui/ffr/slot_chosen" } },
+    { "face@frs.item_face": { "$slot_bg": "textures/ui/ffr/slot_chosen" } },
     { "sel": { "type": "image", "layer": 4, "texture": "textures/ui/focus_border_white",
                "size": ["100%", "100%"], "color": [1, 0.85, 0.1] } },
     { "detail@$detail_def": { "layer": 20, "anchor_from": "top_left", "anchor_to": "top_left",
@@ -202,7 +186,7 @@ For a cell to read its own button, it must be a direct child of a `stack_panel` 
     "type": "stack_panel", "orientation": "vertical", "size": [144, 108],
     "bindings": [
       { "binding_type": "view", "binding_condition": "always",
-        "source_control_name": "ffr_t0", "source_property_name": "#toggle_state",
+        "source_control_name": "frs_t0", "source_property_name": "#toggle_state",
         "target_property_name": "#visible" }
     ],
     "controls": [
@@ -210,10 +194,10 @@ For a cell to read its own button, it must be a direct child of a `stack_panel` 
           "type": "stack_panel", "orientation": "horizontal", "size": [144, 18],
           "collection_name": "form_buttons",
           "controls": [
-            { "i0@ffr.item_toggle": { "collection_index": 0, "$k": 0,
-                "$detail_offset": [152, -4], "$detail_def": "ffri.detail_0" } },
-            { "i1@ffr.item_toggle": { "collection_index": 1, "$k": 1,
-                "$detail_offset": [134, -4], "$detail_def": "ffri.detail_1" } }
+            { "i0@frs.item_toggle": { "collection_index": 0, "$k": 0,
+                "$detail_offset": [152, -4], "$detail_def": "frsi.detail_0" } },
+            { "i1@frs.item_toggle": { "collection_index": 1, "$k": 1,
+                "$detail_offset": [134, -4], "$detail_def": "frsi.detail_1" } }
           ] } }
     ]
   }
@@ -238,7 +222,7 @@ What got stuck before finding this layout:
 
 The factory in F sets the length with `#form_button_length > 0` and the binding condition to `visible`. The `on` state control is visible only when the cell is selected, so the length becomes 1 for the first time then and the details are created (BND-32).
 
-```json title="ffr.lazy_detail"
+```json title="frs.lazy_detail"
 {
   "type": "stack_panel",
   "size": [158, 136],
@@ -251,11 +235,11 @@ The factory in F sets the length with `#form_button_length > 0` and the binding 
 }
 ```
 
-It is used by attaching `factory: { "name": "ffr_lazy_<k>", "control_name": "ffri.detail_<k>" }` to each item. The difference in open time between the two methods was not measured.
+It is used by attaching `factory: { "name": "frs_lazy_<k>", "control_name": "frsi.detail_<k>" }` to each item. The difference in open time between the two methods was not measured.
 
 ### 4.3 Detail panel
 
-The details read 20 fixed cells with `collection_index`. The description length differs, so it goes in a small scroll area inside the details, and the proceed button is fixed at the bottom of the panel. Text labels draw the button text as is without an expression (`text: "#form_button_text"`), and a label must be placed in a reference definition that receives `collection_index` (`name@ffr.text_item`). An index given directly to a label is ignored (COL-02).
+The details read 20 fixed cells with `collection_index`. The description length differs, so it goes in a small scroll area inside the details, and the proceed button is fixed at the bottom of the panel. Text labels draw the button text as is without an expression (`text: "#form_button_text"`), and a label must be placed in a reference definition that receives `collection_index` (`name@frs.text_item`). An index given directly to a label is ignored (COL-02).
 
 The proceed button is a button that has `$pressed_button_name: "button.form_button_click"` and a `collection_details` binding (`always`) like a vanilla button. When pressed, that cell's button number goes to the server.
 
@@ -307,8 +291,8 @@ Two add-ons are provided that differ only in how icons are drawn. The rest of th
 
 | Add-on | Icons | Test item, script event |
 | --- | --- | --- |
-| Research Screen Test v1.4.0 | The item renderer draws them from numeric item IDs (section 8.1). Blocks in 3D, enchanted items with glint. The ID table must match each game version | `bwiki:research_screen_test`, `bwiki:research_screen` |
-| Research Screen Texture Test v1.3.3 | Images from texture paths (`textures/items/diamond` and so on). Blocks are flat pictures and there is no glint, but it keeps working when the game version changes | `bwiki:research_screen_texture_test`, `bwiki:research_screen_texture` |
+| Research Screen Test v1.5.0 | The item renderer draws them from numeric item IDs (section 8.1). Blocks in 3D, enchanted items with glint. The ID table must match each game version | `bwiki:research_screen_test`, `bwiki:research_screen` |
+| Research Screen Texture Test v1.4.0 | Images from texture paths (`textures/items/diamond` and so on). Blocks are flat pictures and there is no glint, but it keeps working when the game version changes | `bwiki:research_screen_texture_test`, `bwiki:research_screen_texture` |
 
 <AddonDownload id="server-form-research-screen" />
 
@@ -343,9 +327,9 @@ Client pages results (mobile, v1.3.3, the same in v1.4.0):
 
 Each page needs its own cell and detail definitions (`collection_index` is a static value), so the maximum page count is fixed in the UI, and more items than that must go to server pages. Opening time with 6056 buttons was not measured.
 
-### 8.1 Item icons (v1.4.0)
+### 8.1 Item icons (item renderer version)
 
-v1.4.0 draws the icons of cells, details and tabs with the item renderer instead of texture paths. This is the only difference from v1.3.3.
+Research Screen Test draws the icons of cells, details and tabs with the item renderer instead of texture paths. This is the only on-screen difference from the texture version. The two versions have different namespaces (`frs`, `frsi`, `frsg` and `frt`, `frti`, `frtg`), files and texture folders, so their definitions do not mix when both are on.
 
 - The script sends `aux:` + `numeric item ID * 65536` (+32768 when enchanted) in the button texture field (ANI-06, ANI-23). Diamond is `aux:20054016`.
 - The icon control is an `inventory_item_renderer` and puts `((#form_button_texture - 'aux:') - 0)` into `#item_id_aux` (EXP-16). It is hidden on buttons whose texture does not start with the 4 bytes `aux:` (empty cells).
@@ -360,9 +344,9 @@ Results (mobile, 1.26.63, v1.4.0):
 - The tab icons (book and quill, emerald) were drawn by the item renderer too.
 - The golden apple with +32768 showed a purple glint on its edges. The glint of the diamond sword could not be told apart at the video quality.
 
-- Turn on only one test add-on that changes the server form screen at a time. This add-on and the add-on of [JSON UI optimization](./json-ui-performance.mdx) both replace `$screen_content` of `third_party_server_screen` with their own root, so with both on, only the screen of the pack placed higher works. Test items and script event names differ per add-on and do not collide.
+- The two versions and the other server form examples (the add-ons of [JSON UI optimization](./json-ui-performance.mdx) and [item numeric IDs](./item-aux-id.mdx)) can be turned on in the same world. Every title starts with the shared prefix `§b§w` and an add-on code, and `server_form.json` differs only in the router line ([JSON UI optimization section 8.1](./json-ui-performance.mdx#81-the-shared-server_formjson-of-the-server-form-examples), *unverified*, static jsonui-tester check only). Titles of the texture version start with `rt:`, as in `§b§wrt:Fa`. Test items and script event names differ per add-on and do not collide.
 - The add-on version is in the pack names, the descriptions and the file name. When a fixed version comes out, the link above points to the new file; remove the old version and import the new one.
-- The screen text is in English, so the screen looks the same whatever the game language or font. `ui/ffr_items.json` (server pages) and `ui/ffr_pages.json` (client pages), which build the research screen layouts, are generated by `addons/server-form-research-screen/tools/gen-items.mjs` in the wiki repository.
+- The screen text is in English, so the screen looks the same whatever the game language or font. `ui/frs_items.json` (server pages) and `ui/frs_pages.json` (client pages), which build the research screen layouts, are generated by `addons/server-form-research-screen/tools/gen-items.mjs` in the wiki repository, and `ui/frt_items.json` and `ui/frt_pages.json` of the texture version by `addons/server-form-research-screen-texture/tools/gen-items.mjs`.
 
 ## Related rules
 
@@ -372,5 +356,6 @@ Results (mobile, 1.26.63, v1.4.0):
 | LAY-52, LAY-53, LAY-55 ~ LAY-57 | [Controls and layout](../json-ui/controls-and-layout.mdx) | Window size, text layers, `offset` inside stacks, touch of scroll areas |
 | INP-10, INP-11, INP-13, INP-35, INP-36 | [Input, buttons and toggles](../json-ui/input-buttons-toggles.mdx) | Toggle states, radio groups, client tabs and selection |
 | BND-32 | [Bindings](../json-ui/bindings.mdx) | A factory that creates when visible |
+| HOST-06, HOST-51 | [Screen hosts and data channels](../json-ui/screen-hosts-and-data.mdx) | Screen routing, the shared convention of the server form examples |
 | EXP-07, EXP-15, EXP-36 | [Expressions and operators](../json-ui/expressions.mdx) | Containment check, number conversion, characters that break expressions |
 | HOST-06 | [Screen hosts and data channels](../json-ui/screen-hosts-and-data.mdx) | Dictionary lookup routing |
