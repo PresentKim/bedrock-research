@@ -1,4 +1,4 @@
-// Packs each addons/<id>/{bp,rp} into static/downloads/<id>-v<version>.mcaddon and lists them in src/data/addons.json.
+// Packs each addons/<id>/{bp,rp} into static/downloads/[bedrock-research]<id>_v<version>.mcaddon and lists them in src/data/addons.json.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -49,7 +49,8 @@ export function validate(addons) {
     const v = versionOf(a.packs.bp);
     for (const [kind, m] of Object.entries(a.packs)) {
       if (versionOf(m) !== v) errors.push(`${a.id}: ${kind} version ${versionOf(m)} differs from bp ${v}`);
-      if (!m.header.name.endsWith(` v${v}`)) errors.push(`${a.id}: ${kind} name must end with v${v}`);
+      const expectedName = `[bedrock-research]${a.id}-${kind}_v${v}`;
+      if (m.header.name !== expectedName) errors.push(`${a.id}: ${kind} name ${m.header.name}, expected ${expectedName}`);
       if (!m.header.description.startsWith(`v${v} - `)) errors.push(`${a.id}: ${kind} description must start with "v${v} - "`);
       for (const u of [m.header.uuid, ...m.modules.map((x) => x.uuid)]) {
         if (uuids.has(u)) errors.push(`${a.id}: uuid ${u} also used by ${uuids.get(u)}`);
@@ -89,10 +90,10 @@ export function build(addonsDir, outDir, dataFile) {
   const data = {};
   for (const a of addons) {
     const version = versionOf(a.packs.bp);
-    const file = `${a.id}-v${version}.mcaddon`;
+    const file = `[bedrock-research]${a.id}_v${version}.mcaddon`;
     const bytes = pack(a);
     fs.writeFileSync(path.join(outDir, file), bytes);
-    data[a.id] = { version, file, size: bytes.length, name: a.packs.bp.header.name.replace(/ BP v[\d.]+$/, ''), items: a.launchers };
+    data[a.id] = { version, file, size: bytes.length, name: `[bedrock-research]${a.id}`, items: a.launchers };
   }
   fs.mkdirSync(path.dirname(dataFile), { recursive: true });
   fs.writeFileSync(dataFile, JSON.stringify(data, null, 1));

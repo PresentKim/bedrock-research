@@ -9,7 +9,7 @@ const registry = addons as Record<string, Addon>;
 export default function AddonDownload({ id }: { id: string }): React.ReactElement {
   const a = registry[id];
   if (!a) throw new Error(`AddonDownload: unknown add-on ${id}`);
-  const href = useBaseUrl(`/downloads/${a.file}`);
+  const href = useBaseUrl(`/downloads/${encodeURIComponent(a.file)}`);
   return (
     <div className="addon-download">
       <a className="button button--primary" href={href} download={a.file}>
