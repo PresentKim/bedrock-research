@@ -268,9 +268,31 @@ A script cannot read file paths, and the `getAll()` order cannot be trusted. So 
 
 What remains:
 
-- The order between packs when there are several behavior packs (pack stack order, or all packs' paths sorted together).
-- Whether the path sort is byte order (when uppercase, digits, `_` and `-` mix).
+- The order between packs when there are several behavior packs (pack stack order, or all packs' paths sorted together). Partly checked in section 5.5.
+- Whether the path sort is byte order (when uppercase, digits, `_` and `-` mix). Checked in section 5.5.
 - Whether other platforms (Windows, iOS) give the same result. Discord has a report that it is wrong on iOS.
+
+### 5.5 Third experiment (mobile, 1.26.63, probe v1.1.0 + extra pack v1.0.0, 2026-11-14)
+
+A world with both packs on. 11 custom items and 4 custom blocks registered.
+
+![First menu of probe v1.1.0. 11 custom items](/img/design/item-aux-probe-menu-v110.png)
+
+![Numbers 840 to 903. After pink at 853 and light blue at 854 come the 9 probe pack items, and the red shrub from 864](/img/design/item-aux-probe-840-v110.png)
+
+![Numbers -9776 to -9713. Lapis at -9745, gold at -9746, emerald at -9747, diamond at -9748](/img/design/item-aux-probe-blocks-v110.png)
+
+| Number | What was drawn |
+| --- | --- |
+| 853, 854 | Pink (`c_extra`), light blue (`y_extra`). Extra pack |
+| 855 to 863 | Blue (`a_last`), spyglass (`aux_probe_test`), orange (`B_upper`), lime (`m_mid`), purple (`m-dash`), magenta (`n10`), cyan (`n9`), yellow (`sub/k_sub`), red (`z_first`). Probe pack |
+| 864 on | Shifted vanilla from the red shrub (853 + 11) |
+| -9745 | Lapis block (extra pack `c_block`) |
+| -9746, -9747, -9748 | Gold (`z_first`), emerald (`m_mid`), diamond (`a_last`). Probe pack |
+
+- The sort is case-insensitive. `B_upper` comes after `aux_probe_test`, and `n10` comes before `n9` (digits are not read as numbers), which is the "case-insensitive" prediction of section 4.4. `m_mid` comes before `m-dash`, so `_` sorts before `-`. In lowercased byte order `-` (0x2D) would come before `_` (0x5F), so this is not a plain byte comparison but a locale sort (the same result as JavaScript `localeCompare`). Only one pair separates `_` and `-`.
+- Paths are not sorted together across packs. The 2 extra pack items came as one block before the probe pack items. For blocks too, the extra pack block got -9745 and the probe pack blocks continued below it.
+- Whether the extra pack was above or below in the stack is not in this record. A run with the stack order swapped remains.
 
 ## 6. Example add-on
 
