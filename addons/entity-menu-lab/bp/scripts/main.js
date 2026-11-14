@@ -1,7 +1,7 @@
 import { ItemLockMode, ItemStack, system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 
-const PACK_VERSION = "v1.0.0";
+const PACK_VERSION = "v1.1.0";
 const LAUNCHER = "bwiki:entity_menu_lab";
 const BOX = "bwiki:entity_menu_lab_box";
 const MARKER = "bwiki:entity_menu_lab_marker";
@@ -20,12 +20,6 @@ const CELL_ITEMS = [
   "minecraft:totem_of_undying",
 ];
 const COLORS = ["red", "blue", "lime", "yellow"];
-const HITBOXES = [
-  ["0.6 block box", "bwiki:size_s"],
-  ["1.2 block box", "bwiki:size_m"],
-  ["2.4 block box", "bwiki:size_l"],
-  ["0.6 block box with a 3 block hit test", "bwiki:size_hit"],
-];
 const SCREENS = [
   ["menu", "Menu screen (item name and lore checks)"],
   ["lock", "Vanilla chest with lock mode items"],
@@ -40,7 +34,7 @@ const settings = new Map();
 const sessions = new Map();
 
 function settingsOf(player) {
-  if (!settings.has(player.id)) settings.set(player.id, { hitbox: 1, screen: "menu" });
+  if (!settings.has(player.id)) settings.set(player.id, { screen: "menu" });
   return settings.get(player.id);
 }
 
@@ -101,18 +95,13 @@ function lockedInPlayer(player) {
   return count;
 }
 
-function ridingPlayer(box, player) {
-  return box.getComponent("riding")?.entityRidingOn?.id === player.id;
-}
-
-function mount(player, box) {
-  return player.getComponent("rideable")?.addRider(box) ?? false;
+function spotInFront(player) {
+  const view = player.getViewDirection();
+  const eye = player.getHeadLocation();
+  return { x: eye.x + view.x * 1.2, y: eye.y + view.y * 1.2 - 0.6, z: eye.z + view.z * 1.2 };
 }
 
 function removeStrayBoxes(player) {
-  for (const rider of player.getComponent("rideable")?.getRiders() ?? []) {
-    if (rider.typeId === BOX) rider.remove();
-  }
   for (const box of player.dimension.getEntities({ tags: [BOX_TAG] })) {
     if (![...sessions.values()].some((s) => s.box.id === box.id)) box.remove();
   }
@@ -121,13 +110,12 @@ function removeStrayBoxes(player) {
 function startSession(player) {
   removeStrayBoxes(player);
   const s = settingsOf(player);
-  const box = player.dimension.spawnEntity(BOX, player.getHeadLocation());
+  const box = player.dimension.spawnEntity(BOX, spotInFront(player));
   box.addTag(BOX_TAG);
-  box.triggerEvent(HITBOXES[s.hitbox][1]);
   const storage = inventory(box);
   if (s.screen === "menu") fillMenu(storage);
   else fillLock(storage);
-  const session = { box, screen: s.screen, presses: 0, seconds: 0, dismounts: 0, mounted: false, failed: false, lock: lockSnapshot(storage), held: 0 };
+  const session = { box, screen: s.screen, presses: 0, seconds: 0, lock: lockSnapshot(storage), held: 0 };
   sessions.set(player.id, session);
   return session;
 }
@@ -136,26 +124,6 @@ function stopSession(player) {
   const session = sessions.get(player.id);
   if (session?.box.isValid) session.box.remove();
   sessions.delete(player.id);
-}
-
-function keepMounted(player, session) {
-  if (ridingPlayer(session.box, player)) {
-    session.mounted = true;
-    session.failed = false;
-    return;
-  }
-  if (session.mounted) {
-    session.dismounts += 1;
-    say(player, `The menu entity got off you (${session.dismounts}). Mounting it again.`);
-    session.mounted = false;
-  }
-  if (mount(player, session.box)) {
-    session.mounted = true;
-    session.failed = false;
-  } else if (!session.failed) {
-    session.failed = true;
-    say(player, "Could not mount the menu entity on you. Both shoulder seats may be taken.");
-  }
 }
 
 function watchButton(player, session) {
@@ -195,11 +163,12 @@ system.runInterval(() => {
       continue;
     }
     if (!session || !session.box.isValid) session = startSession(player);
-    keepMounted(player, session);
+    session.box.teleport(spotInFront(player));
+    if (system.currentTick % 2 !== 0) continue;
     if (session.screen === "menu") watchButton(player, session);
     else watchLock(player, session);
   }
-}, 2);
+}, 1);
 
 system.runInterval(() => {
   for (const session of sessions.values()) {
@@ -211,18 +180,14 @@ function openSettings(player) {
   const s = settingsOf(player);
   const session = sessions.get(player.id);
   const lines = [
-    `Hitbox: ${HITBOXES[s.hitbox][0]}`,
     `Screen: ${SCREENS.find(([id]) => id === s.screen)[1]}`,
-    `Dismounts this session: ${session?.dismounts ?? 0}`,
     `Button presses this session: ${session?.presses ?? 0}`,
   ];
   const form = new ActionFormData().title(`Entity Menu Lab ${PACK_VERSION}`).body(lines.join("\n"));
-  for (const [label] of HITBOXES) form.button(`Hitbox: ${label}`);
   for (const [, label] of SCREENS) form.button(`Screen: ${label}`);
   form.show(player).then((res) => {
     if (res.canceled || res.selection === undefined) return;
-    if (res.selection < HITBOXES.length) s.hitbox = res.selection;
-    else s.screen = SCREENS[res.selection - HITBOXES.length][0];
+    s.screen = SCREENS[res.selection][0];
     stopSession(player);
     say(player, "Settings saved. The menu entity is spawned again while you hold the item.");
   });
@@ -235,7 +200,6 @@ world.afterEvents.itemUse.subscribe((event) => {
     system.run(() => openSettings(player));
     return;
   }
-  say(player, `Item use fired. Pitch ${Math.round(player.getRotation().x)}.`);
 });
 
 world.afterEvents.playerInventoryItemChange.subscribe((event) => {
