@@ -1,7 +1,7 @@
 import { system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 
-const PACK_VERSION = "v1.1.0";
+const PACK_VERSION = "v1.2.0";
 const TEST_ITEM = "bwiki:json_ui_performance_test";
 const COUNTS = [100, 500, 1000, 2000];
 
@@ -23,21 +23,21 @@ function pad(text, width) {
 }
 
 function openList(player, count) {
-  const form = new ActionFormData().title("ffr:J").body(`버튼 ${count}개`);
+  const form = new ActionFormData().title("ffr:J").body(`${count} buttons`);
   for (let i = 0; i < count; i++) {
     const text = pad(`Item ${i + 1}`, 12) + pad(`desc line ${i + 1}`, 20) + String((i * 7) % 101);
     form.button(text, ICONS[i % ICONS.length]);
   }
   form.show(player).then((res) => {
     if (res.canceled || res.selection === undefined) return;
-    player.sendMessage(`[${PACK_VERSION}] ${count}개 중 ${res.selection + 1}번 버튼을 눌렀습니다.`);
+    player.sendMessage(`[${PACK_VERSION}] Pressed button ${res.selection + 1} of ${count}.`);
     openMenu(player);
   });
 }
 
 function openMenu(player) {
-  const form = new ActionFormData().title(`JSON UI 최적화 ${PACK_VERSION}`).body("버튼 수를 고르세요.");
-  for (const count of COUNTS) form.button(`${count}개`);
+  const form = new ActionFormData().title(`JSON UI Optimization ${PACK_VERSION}`).body("Pick the number of buttons.");
+  for (const count of COUNTS) form.button(`${count} buttons`);
   form.show(player).then((res) => {
     if (res.canceled || res.selection === undefined) return;
     openList(player, COUNTS[res.selection]);

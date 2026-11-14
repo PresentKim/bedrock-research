@@ -1,7 +1,7 @@
 import { system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 
-const PACK_VERSION = "v1.1.0";
+const PACK_VERSION = "v1.2.0";
 const TEST_ITEM = "bwiki:research_screen_test";
 const ITEM_COUNT = 200;
 const PAGE_SIZE = 48;
@@ -26,11 +26,11 @@ const ICONS = [
 ];
 
 const SENTENCES = [
-  "호퍼로 넣은 재료를 걸러 옆 상자에 보냅니다.",
-  "전력이 부족하면 작업 속도가 절반으로 줄어듭니다.",
-  "같은 블록을 여러 개 이어 붙이면 범위가 넓어집니다.",
-  "레드스톤 신호를 받으면 잠시 멈춥니다.",
-  "업그레이드 슬롯에 넣은 부품 수만큼 빨라집니다.",
+  "Filters the items fed by a hopper and sends them to the chest next to it.",
+  "Works at half speed when power runs low.",
+  "Placing several of the same block side by side widens the range.",
+  "Pauses for a moment when it receives a redstone signal.",
+  "Gets faster for each part placed in the upgrade slots.",
 ];
 
 function item(i) {
@@ -38,10 +38,10 @@ function item(i) {
   const rewardCount = ((i * 3) % 4) + 1;
   const sentences = (i % SENTENCES.length) + 1;
   return {
-    name: `아이템 ${i + 1}`,
+    name: `Item ${i + 1}`,
     icon: ICONS[i % ICONS.length],
     done: i % 3 === 0,
-    desc: [`아이템 ${i + 1}의 설명입니다.`, ...SENTENCES.slice(0, sentences)].join(" "),
+    desc: [`Description of item ${i + 1}.`, ...SENTENCES.slice(0, sentences)].join(" "),
     mats: Array.from({ length: matCount }, (_, j) => [ICONS[(i + j + 2) % ICONS.length], ((i + j) % 16) + 1]),
     rewards: Array.from({ length: rewardCount }, (_, j) => ICONS[(i + j * 3) % ICONS.length]),
   };
@@ -60,7 +60,7 @@ function addDetailBlock(form, i) {
   }
   const it = item(i);
   form.button(`§c${it.name}`, it.icon);
-  form.button(it.done ? "§a연구 완료" : "§c연구 필요");
+  form.button(it.done ? "§aResearched" : "§cNot researched");
   form.button(it.desc);
   for (let j = 0; j < MAX_MATS; j++) {
     const m = it.mats[j];
@@ -72,13 +72,13 @@ function addDetailBlock(form, i) {
     if (r) form.button("§f+1", r);
     else form.button(EMPTY);
   }
-  form.button(it.done ? "연구 완료됨" : "연구 진행");
+  form.button(it.done ? "Researched" : "Start research");
 }
 
 function openResearch(player, state) {
   const tabs = tabItems(ITEM_COUNT);
   const pageItems = [0, 1].map((t) => tabs[t].slice(state.pages[t] * PAGE_SIZE, (state.pages[t] + 1) * PAGE_SIZE));
-  const form = new ActionFormData().title(`ffr:F${"ab"[state.tab]}`).body("연구");
+  const form = new ActionFormData().title(`ffr:F${"ab"[state.tab]}`).body("Research");
 
   for (const list of pageItems) {
     for (let k = 0; k < PAGE_SIZE; k++) {
@@ -87,8 +87,8 @@ function openResearch(player, state) {
       else form.button("§r", item(i).icon);
     }
   }
-  form.button(`연구 필요 ${tabs[0].length}`, "textures/items/book_normal");
-  form.button(`연구 완료 ${tabs[1].length}`, "textures/items/emerald");
+  form.button(`To do ${tabs[0].length}`, "textures/items/book_normal");
+  form.button(`Done ${tabs[1].length}`, "textures/items/emerald");
   for (let k = 0; k < 4; k++) form.button("§r");
   for (const list of pageItems) for (let k = 0; k < PAGE_SIZE; k++) addDetailBlock(form, list[k]);
 
@@ -106,7 +106,7 @@ function openResearch(player, state) {
       const tab = slot < PAGE_SIZE ? 0 : 1;
       const i = pageItems[tab][slot % PAGE_SIZE];
       state.tab = tab;
-      if (i !== undefined) player.sendMessage(`[${PACK_VERSION}] 연구 진행 요청: ${item(i).name}`);
+      if (i !== undefined) player.sendMessage(`[${PACK_VERSION}] Research requested: ${item(i).name}`);
     }
     openResearch(player, state);
   });

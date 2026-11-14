@@ -73,10 +73,10 @@ function detailBody(b) {
       gap("gap1", 3),
       { desc: { type: "stack_panel", orientation: "vertical", size: ["100%", "100%c"], collection_name: "form_buttons", controls: [{ "d@ffr.desc_item": { collection_index: b.desc } }] } },
       gap("gap2", 4),
-      { "mat_head@ffr.header_label": { text: "필요한 재료" } },
+      { "mat_head@ffr.header_label": { text: "Materials" } },
       row("mats", b.mats),
       gap("gap3", 4),
-      { "reward_head@ffr.header_label": { text: "보상 레시피" } },
+      { "reward_head@ffr.header_label": { text: "Rewards" } },
       row("rewards", b.rewards),
     ],
   };
