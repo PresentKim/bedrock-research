@@ -1,7 +1,7 @@
 import { system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 
-const PACK_VERSION = "v1.3.0";
+const PACK_VERSION = "v1.3.1";
 const TEST_ITEM = "bwiki:research_screen_test";
 const ITEM_COUNT = 200;
 const PAGE_SIZE = 48;
@@ -131,7 +131,7 @@ function openClientPages(player, tab) {
   form.button(`Done ${tabs[1].length}`, "textures/items/emerald");
   for (let t = 0; t < 2; t++) {
     const pages = Math.ceil(tabs[t].length / PAGE_SIZE);
-    for (let p = 0; p < CLIENT_PAGES_PER_TAB; p++) form.button(p < pages ? `${p + 1}` : EMPTY);
+    for (let p = 0; p < CLIENT_PAGES_PER_TAB; p++) form.button(p < pages ? `§f${p + 1}` : EMPTY);
   }
   for (const i of slotItems) addDetailBlock(form, i);
 
