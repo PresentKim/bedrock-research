@@ -166,7 +166,6 @@ for (let k = 0; k < ITEMS; k++) {
   ui[`detail_${k}`] = detail(k, b);
   ui[`lazy_${k}@ffr.lazy_detail`] = { factory: { name: `ffr_lazy_${k}`, control_name: `ffri.detail_${k}` } };
 }
-ui.items_e = items("detail");
 ui.items_f = items("lazy");
 
 writeFileSync(out, JSON.stringify(ui) + "\n");

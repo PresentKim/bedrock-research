@@ -13,170 +13,14 @@
             { "binding_name": "#title_text" },
             {
               "binding_type": "view",
-              "source_property_name": "(not ((('%.4s' * #title_text) = 'ffr:') and not (#title_text = 'ffr:S')))",
+              "source_property_name": "(not (('%.4s' * #title_text) = 'ffr:'))",
               "target_property_name": "#visible"
             }
           ],
           "controls": [ { "content@server_form.main_screen_content": {} } ]
         }
       },
-      { "list_gate@ffr.list_gate": {} },
       { "screen_router@ffr.screen_router": {} }
-    ]
-  },
-
-  "list_face": {
-    "type": "panel",
-    "size": [ "100%", "100%" ],
-    "$bg_texture|default": "textures/ui/button_borderless_light",
-    "controls": [
-      { "bg": { "type": "image", "texture": "$bg_texture", "size": [ "100% - 2px", "100% - 2px" ] } },
-      {
-        "icon": {
-          "type": "image", "layer": 2, "size": [ 16, 16 ], "offset": [ 3, 3 ], "anchor_from": "top_left", "anchor_to": "top_left",
-          "bindings": [ { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_texture", "binding_name_override": "#texture" } ]
-        }
-      },
-      {
-        "name": {
-          "type": "label", "layer": 3, "size": [ 76, 10 ], "offset": [ 22, 3 ], "anchor_from": "top_left", "anchor_to": "top_left",
-          "color": [ 0.1, 0.1, 0.1 ], "localize": false, "text": "#text",
-          "bindings": [
-            { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text", "binding_condition": "always" },
-            { "binding_type": "view", "binding_condition": "always", "source_property_name": "('%.12s' * #form_button_text)", "target_property_name": "#text" }
-          ]
-        }
-      },
-      {
-        "desc": {
-          "type": "label", "layer": 3, "size": [ 76, 8 ], "offset": [ 22, 13 ], "anchor_from": "top_left", "anchor_to": "top_left",
-          "font_scale_factor": 0.7, "color": [ 0.3, 0.3, 0.3 ], "localize": false, "text": "#text",
-          "bindings": [
-            { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text", "binding_condition": "always" },
-            { "binding_type": "view", "binding_condition": "always", "source_property_name": "(('%.32s' * #form_button_text) - ('%.12s' * #form_button_text))", "target_property_name": "#text" }
-          ]
-        }
-      },
-      { "bar_bg": { "type": "image", "layer": 2, "texture": "textures/ui/empty_progress_bar", "size": [ 76, 3 ], "offset": [ 22, 24 ], "anchor_from": "top_left", "anchor_to": "top_left" } },
-      {
-        "bar": {
-          "type": "image", "layer": 3, "texture": "textures/ui/filled_progress_bar", "size": [ 76, 3 ], "offset": [ 22, 24 ], "anchor_from": "top_left", "anchor_to": "top_left",
-          "clip_direction": "left",
-          "bindings": [
-            { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text" },
-            { "binding_type": "view", "source_property_name": "(1 - (((#form_button_text - ('%.32s' * #form_button_text)) * 1) / 100))", "target_property_name": "#clip_ratio" }
-          ]
-        }
-      }
-    ]
-  },
-
-  "list_cell@common.button": {
-    "size": [ 100, 30 ],
-    "$focus_enabled": false,
-    "$pressed_button_name": "button.form_button_click",
-    "bindings": [ { "binding_type": "collection_details", "binding_collection_name": "form_buttons", "binding_condition": "always" } ],
-    "controls": [
-      { "default@ffr.list_face": {} },
-      { "hover@ffr.list_face": { "$bg_texture": "textures/ui/button_borderless_lighthover" } },
-      { "pressed@ffr.list_face": { "$bg_texture": "textures/ui/button_borderless_lightpressed" } }
-    ]
-  },
-
-  "list_grid": {
-    "type": "grid",
-    "size": [ 200, "100%c" ],
-    "grid_rescaling_type": "horizontal",
-    "grid_item_template": "ffr.list_cell",
-    "collection_name": "form_buttons",
-    "bindings": [
-      { "binding_name": "#form_button_length", "binding_name_override": "#maximum_grid_items", "binding_condition": "always" }
-    ]
-  },
-
-  "list_content": {
-    "type": "collection_panel",
-    "size": [ "100% - 4px", "100%c" ],
-    "anchor_from": "top_left",
-    "anchor_to": "top_left",
-    "factory": { "name": "ffr_list", "control_ids": { "k": "@ffr.list_grid" } },
-    "property_bag": { "#ffr:K": [ "k" ] },
-    "bindings": [
-      { "binding_name": "#title_text", "binding_condition": "always" },
-      { "binding_type": "view", "binding_condition": "always", "source_property_name": "('#' + ('%.5s' * #title_text))", "target_property_name": "#collection_length" }
-    ]
-  },
-
-  "list_scroll": {
-    "type": "panel",
-    "size": [ 216, "100% - 24px" ],
-    "offset": [ 0, 18 ],
-    "anchor_from": "top_middle",
-    "anchor_to": "top_middle",
-    "controls": [
-      {
-        "scrolling_panel@common.scrolling_panel": {
-          "anchor_to": "top_left",
-          "anchor_from": "top_left",
-          "$show_background": false,
-          "size": [ "100%", "100%" ],
-          "$scrolling_content": "$list_content",
-          "$scroll_size": [ 5, "100% - 4px" ],
-          "$scrolling_pane_size": [ "100% - 4px", "100% - 2px" ],
-          "$scrolling_pane_offset": [ 2, 0 ],
-          "$scroll_bar_right_padding_size": [ 0, 0 ]
-        }
-      }
-    ]
-  },
-
-  "list_window": {
-    "type": "image",
-    "texture": "textures/ui/dialog_background_opaque",
-    "size": [ 224, "85%" ],
-    "layer": 60,
-    "$list_title|default": "J: 최적화 목록 (팩토리가 스크롤째로 만듦)",
-    "$list_content|default": "ffr.list_body",
-    "controls": [
-      { "head": { "type": "label", "layer": 3, "anchor_from": "top_left", "anchor_to": "top_left", "offset": [ 6, 6 ], "text": "$list_title", "localize": false, "color": [ 0.25, 0.25, 0.25 ], "font_scale_factor": 0.8 } },
-      { "close@common.close_button": {} },
-      { "scroll@ffr.list_scroll": {} }
-    ]
-  },
-
-  "list_body": {
-    "type": "panel",
-    "size": [ "100% - 4px", "100%c" ],
-    "anchor_from": "top_left",
-    "anchor_to": "top_left",
-    "controls": [ { "grid@ffr.list_grid": { "anchor_from": "top_left", "anchor_to": "top_left" } } ]
-  },
-
-  "list_window_stack@ffr.list_window": { "$list_title": "L: 최적화 목록 (1열 스택 팩토리)", "$list_content": "ffr.list_stack_body" },
-
-  "list_stack_body": {
-    "type": "stack_panel",
-    "orientation": "vertical",
-    "size": [ 200, "100%c" ],
-    "anchor_from": "top_left",
-    "anchor_to": "top_left",
-    "collection_name": "form_buttons",
-    "factory": { "name": "ffr_list_stack", "control_ids": { "button": "@ffr.list_cell" } },
-    "bindings": [
-      { "binding_name": "#form_button_contents", "binding_name_override": "#collection_length", "binding_condition": "always" }
-    ]
-  },
-
-  "list_gate": {
-    "type": "panel",
-    "size": [ "100%", "100%" ],
-    "visible": false,
-    "bindings": [
-      { "binding_name": "#title_text" },
-      { "binding_type": "view", "source_property_name": "(#title_text = 'ffr:K')", "target_property_name": "#visible" }
-    ],
-    "controls": [
-      { "window@ffr.list_window": { "$list_title": "K: 최적화 목록 (숨긴 화면 라우터)", "$list_content": "ffr.list_content" } }
     ]
   },
 
@@ -206,28 +50,7 @@
     "controls": [
       { "bg": { "type": "image", "texture": "$slot_bg", "size": [ "100%", "100%" ] } },
       { "icon@ffr.icon_image": {} },
-      { "count@ffr.text_label": { "anchor_from": "bottom_right", "anchor_to": "bottom_right", "offset": [ 0, 1 ], "$text_color": [ 1, 1, 1 ], "shadow": true } },
-      {
-        "sel": {
-          "type": "image", "layer": 4, "texture": "textures/ui/focus_border_white", "size": [ "100%", "100%" ], "color": [ 1, 0.85, 0.1 ],
-          "bindings": [
-            { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text", "binding_condition": "always" },
-            { "binding_type": "view", "binding_condition": "always", "source_property_name": "(not ((#form_button_text - '§0§s§r') = #form_button_text))", "target_property_name": "#visible" }
-          ]
-        }
-      }
-    ]
-  },
-
-  "slot@common.button": {
-    "size": [ 18, 18 ],
-    "$focus_enabled": false,
-    "$pressed_button_name": "button.form_button_click",
-    "bindings": [ { "binding_type": "collection_details", "binding_collection_name": "form_buttons", "binding_condition": "always" } ],
-    "controls": [
-      { "default@ffr.slot_face": {} },
-      { "hover@ffr.slot_face": { "$slot_bg": "textures/ui/ffr/button_hover" } },
-      { "pressed@ffr.slot_face": { "$slot_bg": "textures/ui/ffr/button_pressed" } }
+      { "count@ffr.text_label": { "anchor_from": "bottom_right", "anchor_to": "bottom_right", "offset": [ 0, 1 ], "$text_color": [ 1, 1, 1 ], "shadow": true } }
     ]
   },
 
@@ -286,38 +109,6 @@
     ]
   },
 
-  "pane_t0": {
-    "type": "stack_panel",
-    "orientation": "vertical",
-    "size": [ 144, 128 ],
-    "controls": [
-      { "r0": { "type": "stack_panel", "orientation": "horizontal", "size": [ 144, 18 ], "collection_name": "form_buttons", "controls": [ { "s0@ffr.slot": { "collection_index": 0 } }, { "s1@ffr.slot": { "collection_index": 1 } }, { "s2@ffr.slot": { "collection_index": 2 } }, { "s3@ffr.slot": { "collection_index": 3 } }, { "s4@ffr.slot": { "collection_index": 4 } }, { "s5@ffr.slot": { "collection_index": 5 } }, { "s6@ffr.slot": { "collection_index": 6 } }, { "s7@ffr.slot": { "collection_index": 7 } } ] } },
-      { "r1": { "type": "stack_panel", "orientation": "horizontal", "size": [ 144, 18 ], "collection_name": "form_buttons", "controls": [ { "s0@ffr.slot": { "collection_index": 8 } }, { "s1@ffr.slot": { "collection_index": 9 } }, { "s2@ffr.slot": { "collection_index": 10 } }, { "s3@ffr.slot": { "collection_index": 11 } }, { "s4@ffr.slot": { "collection_index": 12 } }, { "s5@ffr.slot": { "collection_index": 13 } }, { "s6@ffr.slot": { "collection_index": 14 } }, { "s7@ffr.slot": { "collection_index": 15 } } ] } },
-      { "r2": { "type": "stack_panel", "orientation": "horizontal", "size": [ 144, 18 ], "collection_name": "form_buttons", "controls": [ { "s0@ffr.slot": { "collection_index": 16 } }, { "s1@ffr.slot": { "collection_index": 17 } }, { "s2@ffr.slot": { "collection_index": 18 } }, { "s3@ffr.slot": { "collection_index": 19 } }, { "s4@ffr.slot": { "collection_index": 20 } }, { "s5@ffr.slot": { "collection_index": 21 } }, { "s6@ffr.slot": { "collection_index": 22 } }, { "s7@ffr.slot": { "collection_index": 23 } } ] } },
-      { "r3": { "type": "stack_panel", "orientation": "horizontal", "size": [ 144, 18 ], "collection_name": "form_buttons", "controls": [ { "s0@ffr.slot": { "collection_index": 24 } }, { "s1@ffr.slot": { "collection_index": 25 } }, { "s2@ffr.slot": { "collection_index": 26 } }, { "s3@ffr.slot": { "collection_index": 27 } }, { "s4@ffr.slot": { "collection_index": 28 } }, { "s5@ffr.slot": { "collection_index": 29 } }, { "s6@ffr.slot": { "collection_index": 30 } }, { "s7@ffr.slot": { "collection_index": 31 } } ] } },
-      { "r4": { "type": "stack_panel", "orientation": "horizontal", "size": [ 144, 18 ], "collection_name": "form_buttons", "controls": [ { "s0@ffr.slot": { "collection_index": 32 } }, { "s1@ffr.slot": { "collection_index": 33 } }, { "s2@ffr.slot": { "collection_index": 34 } }, { "s3@ffr.slot": { "collection_index": 35 } }, { "s4@ffr.slot": { "collection_index": 36 } }, { "s5@ffr.slot": { "collection_index": 37 } }, { "s6@ffr.slot": { "collection_index": 38 } }, { "s7@ffr.slot": { "collection_index": 39 } } ] } },
-      { "r5": { "type": "stack_panel", "orientation": "horizontal", "size": [ 144, 18 ], "collection_name": "form_buttons", "controls": [ { "s0@ffr.slot": { "collection_index": 40 } }, { "s1@ffr.slot": { "collection_index": 41 } }, { "s2@ffr.slot": { "collection_index": 42 } }, { "s3@ffr.slot": { "collection_index": 43 } }, { "s4@ffr.slot": { "collection_index": 44 } }, { "s5@ffr.slot": { "collection_index": 45 } }, { "s6@ffr.slot": { "collection_index": 46 } }, { "s7@ffr.slot": { "collection_index": 47 } } ] } },
-      { "gap": { "type": "panel", "size": [ 144, 2 ] } },
-      { "pager@ffr.pager_row": { "$i_prev": 98, "$i_next": 99 } }
-    ]
-  },
-
-  "pane_t1": {
-    "type": "stack_panel",
-    "orientation": "vertical",
-    "size": [ 144, 128 ],
-    "controls": [
-      { "r0": { "type": "stack_panel", "orientation": "horizontal", "size": [ 144, 18 ], "collection_name": "form_buttons", "controls": [ { "s0@ffr.slot": { "collection_index": 48 } }, { "s1@ffr.slot": { "collection_index": 49 } }, { "s2@ffr.slot": { "collection_index": 50 } }, { "s3@ffr.slot": { "collection_index": 51 } }, { "s4@ffr.slot": { "collection_index": 52 } }, { "s5@ffr.slot": { "collection_index": 53 } }, { "s6@ffr.slot": { "collection_index": 54 } }, { "s7@ffr.slot": { "collection_index": 55 } } ] } },
-      { "r1": { "type": "stack_panel", "orientation": "horizontal", "size": [ 144, 18 ], "collection_name": "form_buttons", "controls": [ { "s0@ffr.slot": { "collection_index": 56 } }, { "s1@ffr.slot": { "collection_index": 57 } }, { "s2@ffr.slot": { "collection_index": 58 } }, { "s3@ffr.slot": { "collection_index": 59 } }, { "s4@ffr.slot": { "collection_index": 60 } }, { "s5@ffr.slot": { "collection_index": 61 } }, { "s6@ffr.slot": { "collection_index": 62 } }, { "s7@ffr.slot": { "collection_index": 63 } } ] } },
-      { "r2": { "type": "stack_panel", "orientation": "horizontal", "size": [ 144, 18 ], "collection_name": "form_buttons", "controls": [ { "s0@ffr.slot": { "collection_index": 64 } }, { "s1@ffr.slot": { "collection_index": 65 } }, { "s2@ffr.slot": { "collection_index": 66 } }, { "s3@ffr.slot": { "collection_index": 67 } }, { "s4@ffr.slot": { "collection_index": 68 } }, { "s5@ffr.slot": { "collection_index": 69 } }, { "s6@ffr.slot": { "collection_index": 70 } }, { "s7@ffr.slot": { "collection_index": 71 } } ] } },
-      { "r3": { "type": "stack_panel", "orientation": "horizontal", "size": [ 144, 18 ], "collection_name": "form_buttons", "controls": [ { "s0@ffr.slot": { "collection_index": 72 } }, { "s1@ffr.slot": { "collection_index": 73 } }, { "s2@ffr.slot": { "collection_index": 74 } }, { "s3@ffr.slot": { "collection_index": 75 } }, { "s4@ffr.slot": { "collection_index": 76 } }, { "s5@ffr.slot": { "collection_index": 77 } }, { "s6@ffr.slot": { "collection_index": 78 } }, { "s7@ffr.slot": { "collection_index": 79 } } ] } },
-      { "r4": { "type": "stack_panel", "orientation": "horizontal", "size": [ 144, 18 ], "collection_name": "form_buttons", "controls": [ { "s0@ffr.slot": { "collection_index": 80 } }, { "s1@ffr.slot": { "collection_index": 81 } }, { "s2@ffr.slot": { "collection_index": 82 } }, { "s3@ffr.slot": { "collection_index": 83 } }, { "s4@ffr.slot": { "collection_index": 84 } }, { "s5@ffr.slot": { "collection_index": 85 } }, { "s6@ffr.slot": { "collection_index": 86 } }, { "s7@ffr.slot": { "collection_index": 87 } } ] } },
-      { "r5": { "type": "stack_panel", "orientation": "horizontal", "size": [ 144, 18 ], "collection_name": "form_buttons", "controls": [ { "s0@ffr.slot": { "collection_index": 88 } }, { "s1@ffr.slot": { "collection_index": 89 } }, { "s2@ffr.slot": { "collection_index": 90 } }, { "s3@ffr.slot": { "collection_index": 91 } }, { "s4@ffr.slot": { "collection_index": 92 } }, { "s5@ffr.slot": { "collection_index": 93 } }, { "s6@ffr.slot": { "collection_index": 94 } }, { "s7@ffr.slot": { "collection_index": 95 } } ] } },
-      { "gap": { "type": "panel", "size": [ 144, 2 ] } },
-      { "pager@ffr.pager_row": { "$i_prev": 100, "$i_next": 101 } }
-    ]
-  },
-
   "tab_face": {
     "type": "panel",
     "size": [ "100%", "100%" ],
@@ -332,24 +123,6 @@
 
   "tab_face_on@ffr.tab_face": { "$tab_texture": "textures/ui/TabTopFront", "$tab_text_color": [ 0.2, 0.2, 0.2 ] },
   "tab_face_hover@ffr.tab_face": { "$tab_texture": "textures/ui/TabTopBackHover" },
-
-  "tab_button@common.button": {
-    "size": [ 96, 22 ],
-    "$focus_enabled": false,
-    "$pressed_button_name": "button.form_button_click",
-    "bindings": [ { "binding_type": "collection_details", "binding_collection_name": "form_buttons", "binding_condition": "always" } ],
-    "controls": [
-      { "default@ffr.tab_face": {} },
-      { "hover@ffr.tab_face_hover": {} },
-      { "pressed@ffr.tab_face_hover": {} }
-    ]
-  },
-
-  "tab_button_on": {
-    "type": "panel",
-    "size": [ 96, 22 ],
-    "controls": [ { "face@ffr.tab_face_on": {} } ]
-  },
 
   "tab_toggle": {
     "type": "toggle",
@@ -377,48 +150,14 @@
     "unchecked_hover_control": "off_hover",
     "unchecked_locked_control": "off",
     "unchecked_locked_hover_control": "off",
-    "$on_def|default": "ffr.tab_face_on",
     "$tab|default": 0,
     "controls": [
-      { "on@$on_def": {} },
+      { "on@ffr.tab_face_on": {} },
       { "off@ffr.tab_face": {} },
       { "off_hover@ffr.tab_face_hover": {} }
     ]
   },
 
-  "tab_on_with_pane_0": {
-    "type": "panel",
-    "size": [ "100%", "100%" ],
-    "controls": [
-      { "face@ffr.tab_face_on": {} },
-      { "pane@ffr.pane_t0": { "anchor_from": "top_left", "anchor_to": "top_left", "offset": [ 2, 48 ] } }
-    ]
-  },
-
-  "tab_on_with_pane_1": {
-    "type": "panel",
-    "size": [ "100%", "100%" ],
-    "controls": [
-      { "face@ffr.tab_face_on": {} },
-      { "pane@ffr.pane_t1": { "anchor_from": "top_left", "anchor_to": "top_left", "offset": [ -94, 48 ] } }
-    ]
-  },
-
-  "tabs_a0": {
-    "type": "stack_panel", "orientation": "horizontal", "size": [ 192, 22 ], "collection_name": "form_buttons",
-    "controls": [ { "t0@ffr.tab_button_on": { "collection_index": 96 } }, { "t1@ffr.tab_button": { "collection_index": 97 } } ]
-  },
-  "tabs_a1": {
-    "type": "stack_panel", "orientation": "horizontal", "size": [ 192, 22 ], "collection_name": "form_buttons",
-    "controls": [ { "t0@ffr.tab_button": { "collection_index": 96 } }, { "t1@ffr.tab_button_on": { "collection_index": 97 } } ]
-  },
-  "tabs_b": {
-    "type": "stack_panel", "orientation": "horizontal", "size": [ 192, 22 ], "collection_name": "form_buttons",
-    "controls": [
-      { "ffr_t0@ffr.tab_toggle": { "collection_index": 96, "$tab_index": 0, "$on_def": "ffr.tab_on_with_pane_0" } },
-      { "ffr_t1@ffr.tab_toggle": { "collection_index": 97, "$tab_index": 1, "$on_def": "ffr.tab_on_with_pane_1" } }
-    ]
-  },
   "tabs_toggle": {
     "type": "stack_panel", "orientation": "horizontal", "size": [ 192, 22 ], "collection_name": "form_buttons",
     "controls": [
@@ -427,101 +166,9 @@
     ]
   },
 
-  "panes_none": { "type": "panel", "size": [ 144, 128 ] },
-  "panes_a0": { "type": "panel", "size": [ 144, 128 ], "controls": [ { "p@ffr.pane_t0": {} } ] },
-  "panes_a1": { "type": "panel", "size": [ 144, 128 ], "controls": [ { "p@ffr.pane_t1": {} } ] },
-  "panes_c": {
-    "type": "panel",
-    "size": [ 144, 128 ],
-    "controls": [
-      { "p0@ffr.pane_t0": { "bindings": [ { "binding_type": "view", "binding_condition": "always", "source_control_name": "ffr_t0", "source_property_name": "#toggle_state", "target_property_name": "#visible" } ] } },
-      { "p1@ffr.pane_t1": { "bindings": [ { "binding_type": "view", "binding_condition": "always", "source_control_name": "ffr_t1", "source_property_name": "#toggle_state", "target_property_name": "#visible" } ] } }
-    ]
-  },
-  "pane_c0@ffr.pane_t0": { "bindings": [ { "binding_type": "view", "binding_condition": "always", "source_control_name": "ffr_t0", "source_property_name": "#toggle_state", "target_property_name": "#visible" } ] },
-  "pane_c1@ffr.pane_t1": { "bindings": [ { "binding_type": "view", "binding_condition": "always", "source_control_name": "ffr_t1", "source_property_name": "#toggle_state", "target_property_name": "#visible" } ] },
-
-  "lazy_pane_0": {
-    "type": "stack_panel", "size": [ 144, 128 ],
-    "factory": { "name": "ffr_d0", "control_name": "ffr.pane_c0" },
-    "bindings": [ { "binding_type": "view", "binding_condition": "always", "source_control_name": "ffr_t0", "source_property_name": "(#toggle_state * 1)", "target_property_name": "#collection_length" } ]
-  },
-  "lazy_pane_1": {
-    "type": "stack_panel", "size": [ 144, 128 ],
-    "factory": { "name": "ffr_d1", "control_name": "ffr.pane_c1" },
-    "bindings": [ { "binding_type": "view", "binding_condition": "always", "source_control_name": "ffr_t1", "source_property_name": "(#toggle_state * 1)", "target_property_name": "#collection_length" } ]
-  },
-
-  "panes_d0": {
-    "type": "panel",
-    "size": [ 144, 128 ],
-    "controls": [ { "p0@ffr.pane_c0": {} }, { "g1@ffr.lazy_pane_1": {} } ]
-  },
-  "panes_d1": {
-    "type": "panel",
-    "size": [ 144, 128 ],
-    "controls": [ { "g0@ffr.lazy_pane_0": {} }, { "p1@ffr.pane_c1": {} } ]
-  },
-
   "header_label": {
     "type": "label", "layer": 3, "localize": false, "color": [ 0.35, 0.35, 0.35 ], "font_scale_factor": 0.8,
     "size": [ "100%", 10 ]
-  },
-
-  "detail": {
-    "type": "stack_panel",
-    "orientation": "vertical",
-    "size": [ 150, "100%c" ],
-    "controls": [
-      {
-        "card": {
-          "type": "stack_panel", "orientation": "horizontal", "size": [ "100%", 28 ],
-          "controls": [
-            { "icon_row": { "type": "stack_panel", "orientation": "horizontal", "size": [ 28, 28 ], "collection_name": "form_buttons", "controls": [ { "icon@ffr.detail_icon": { "collection_index": 102 } } ] } },
-            { "gap": { "type": "panel", "size": [ 4, 28 ] } },
-            {
-              "info": {
-                "type": "stack_panel", "orientation": "vertical", "size": [ "fill", 28 ], "collection_name": "form_buttons",
-                "controls": [
-                  { "pad": { "type": "panel", "size": [ "100%", 3 ] } },
-                  { "name@ffr.text_item": { "collection_index": 102 } },
-                  { "pad2": { "type": "panel", "size": [ "100%", 2 ] } },
-                  { "status@ffr.text_item": { "collection_index": 103 } }
-                ]
-              }
-            }
-          ]
-        }
-      },
-      { "gap1": { "type": "panel", "size": [ "100%", 3 ] } },
-      {
-        "desc": {
-          "type": "label", "layer": 3, "localize": false, "color": [ 0.2, 0.2, 0.2 ], "font_scale_factor": 0.8,
-          "size": [ "100%", "default" ], "text": "#form_text",
-          "bindings": [ { "binding_name": "#form_text", "binding_condition": "always" } ]
-        }
-      },
-      { "gap2": { "type": "panel", "size": [ "100%", 4 ] } },
-      { "mat_head@ffr.header_label": { "text": "필요한 재료" } },
-      {
-        "mats": {
-          "type": "stack_panel", "orientation": "horizontal", "size": [ "100%", 18 ], "collection_name": "form_buttons",
-          "controls": [
-            { "m0@ffr.slot_view": { "collection_index": 104 } },
-            { "m1@ffr.slot_view": { "collection_index": 105 } },
-            { "m2@ffr.slot_view": { "collection_index": 106 } }
-          ]
-        }
-      },
-      { "gap3": { "type": "panel", "size": [ "100%", 4 ] } },
-      { "reward_head@ffr.header_label": { "text": "보상 레시피" } },
-      {
-        "reward": {
-          "type": "stack_panel", "orientation": "horizontal", "size": [ "100%", 18 ], "collection_name": "form_buttons",
-          "controls": [ { "r0@ffr.slot_view": { "collection_index": 107 } } ]
-        }
-      }
-    ]
   },
 
   "window": {
@@ -531,40 +178,29 @@
     "max_size": [ "100% - 8px", "100% - 8px" ],
     "offset": [ 0, 8 ],
     "layer": 60,
-    "$right_def|default": "ffr.detail",
     "controls": [
       { "dim": { "type": "image", "texture": "textures/ui/Black", "alpha": 0.5, "keep_ratio": false, "size": [ 4000, 4000 ], "layer": -8 } },
       { "bevel": { "type": "image", "texture": "textures/ui/ffr/panel_bevel", "size": [ "100%", "100%" ] } },
-      { "tabs@$tabs_def": { "anchor_from": "top_left", "anchor_to": "top_left", "offset": [ 8, -22 ], "layer": 3 } },
-      { "title": { "type": "label", "layer": 3, "localize": false, "color": [ 0.25, 0.25, 0.25 ], "text": "$mode_title", "anchor_from": "top_middle", "anchor_to": "top_middle", "offset": [ 0, 6 ] } },
+      { "tabs@ffr.tabs_toggle": { "anchor_from": "top_left", "anchor_to": "top_left", "offset": [ 8, -22 ], "layer": 3 } },
+      { "title": { "type": "label", "layer": 3, "localize": false, "color": [ 0.25, 0.25, 0.25 ], "text": "연구", "anchor_from": "top_middle", "anchor_to": "top_middle", "offset": [ 0, 6 ] } },
       { "close@common.close_button": {} },
       {
         "left": {
           "type": "image", "texture": "textures/ui/ffr/panel", "size": [ 152, 136 ], "offset": [ 6, 22 ], "anchor_from": "top_left", "anchor_to": "top_left", "layer": 1,
-          "controls": [ { "panes@$panes_def": { "anchor_from": "top_left", "anchor_to": "top_left", "offset": [ 4, 4 ] } } ]
+          "controls": [ { "panes@ffri.items_f": { "anchor_from": "top_left", "anchor_to": "top_left", "offset": [ 4, 4 ] } } ]
         }
       },
       {
         "right": {
           "type": "image", "texture": "textures/ui/ffr/panel", "size": [ 158, 136 ], "offset": [ 162, 22 ], "anchor_from": "top_left", "anchor_to": "top_left", "layer": 1,
-          "controls": [ { "detail@$right_def": { "anchor_from": "top_left", "anchor_to": "top_left", "offset": [ 4, 4 ] } } ]
+          "controls": [ { "detail@ffr.placeholder": { "anchor_from": "top_left", "anchor_to": "top_left", "offset": [ 4, 4 ] } } ]
         }
       }
     ]
   },
 
-  "research_aa@ffr.window": { "$mode_title": "A: 서버 탭", "$tabs_def": "ffr.tabs_a0", "$panes_def": "ffr.panes_a0" },
-  "research_ab@ffr.window": { "$mode_title": "A: 서버 탭", "$tabs_def": "ffr.tabs_a1", "$panes_def": "ffr.panes_a1" },
-  "research_ba@ffr.window": { "$mode_title": "B: 토글 안 내용", "$tabs_def": "ffr.tabs_b", "$panes_def": "ffr.panes_none", "$tab": 0 },
-  "research_bb@ffr.window": { "$mode_title": "B: 토글 안 내용", "$tabs_def": "ffr.tabs_b", "$panes_def": "ffr.panes_none", "$tab": 1 },
-  "research_ca@ffr.window": { "$mode_title": "C: 토글 + 표시 바인딩", "$tabs_def": "ffr.tabs_toggle", "$panes_def": "ffr.panes_c", "$tab": 0 },
-  "research_cb@ffr.window": { "$mode_title": "C: 토글 + 표시 바인딩", "$tabs_def": "ffr.tabs_toggle", "$panes_def": "ffr.panes_c", "$tab": 1 },
-  "research_da@ffr.window": { "$mode_title": "D: 연 탭만 미리, 다른 탭은 팩토리", "$tabs_def": "ffr.tabs_toggle", "$panes_def": "ffr.panes_d0", "$tab": 0 },
-  "research_db@ffr.window": { "$mode_title": "D: 연 탭만 미리, 다른 탭은 팩토리", "$tabs_def": "ffr.tabs_toggle", "$panes_def": "ffr.panes_d1", "$tab": 1 },
-  "research_ea@ffr.window": { "$mode_title": "E: 선택도 토글, 상세 96개 미리", "$tabs_def": "ffr.tabs_toggle", "$panes_def": "ffri.items_e", "$right_def": "ffr.placeholder", "$tab": 0 },
-  "research_eb@ffr.window": { "$mode_title": "E: 선택도 토글, 상세 96개 미리", "$tabs_def": "ffr.tabs_toggle", "$panes_def": "ffri.items_e", "$right_def": "ffr.placeholder", "$tab": 1 },
-  "research_fa@ffr.window": { "$mode_title": "F: 선택도 토글, 상세는 고를 때", "$tabs_def": "ffr.tabs_toggle", "$panes_def": "ffri.items_f", "$right_def": "ffr.placeholder", "$tab": 0 },
-  "research_fb@ffr.window": { "$mode_title": "F: 선택도 토글, 상세는 고를 때", "$tabs_def": "ffr.tabs_toggle", "$panes_def": "ffri.items_f", "$right_def": "ffr.placeholder", "$tab": 1 },
+  "research_a@ffr.window": { "$tab": 0 },
+  "research_b@ffr.window": { "$tab": 1 },
 
   "placeholder": {
     "type": "label", "layer": 3, "localize": false, "color": [ 0.4, 0.4, 0.4 ], "font_scale_factor": 0.8,
@@ -696,27 +332,9 @@
     "size": [ "100%", "100%" ],
     "factory": {
       "name": "ffr_screen",
-      "control_ids": {
-        "j": "@ffr.list_window",
-        "l": "@ffr.list_window_stack",
-        "aa": "@ffr.research_aa", "ab": "@ffr.research_ab",
-        "ba": "@ffr.research_ba", "bb": "@ffr.research_bb",
-        "ca": "@ffr.research_ca", "cb": "@ffr.research_cb",
-        "da": "@ffr.research_da", "db": "@ffr.research_db",
-        "ea": "@ffr.research_ea", "eb": "@ffr.research_eb",
-        "fa": "@ffr.research_fa", "fb": "@ffr.research_fb"
-      }
+      "control_ids": { "a": "@ffr.research_a", "b": "@ffr.research_b" }
     },
-    "property_bag": {
-      "#ffr:J": [ "j" ],
-      "#ffr:L": [ "l" ],
-      "#ffr:Aa": [ "aa" ], "#ffr:Ab": [ "ab" ],
-      "#ffr:Ba": [ "ba" ], "#ffr:Bb": [ "bb" ],
-      "#ffr:Ca": [ "ca" ], "#ffr:Cb": [ "cb" ],
-      "#ffr:Da": [ "da" ], "#ffr:Db": [ "db" ],
-      "#ffr:Ea": [ "ea" ], "#ffr:Eb": [ "eb" ],
-      "#ffr:Fa": [ "fa" ], "#ffr:Fb": [ "fb" ]
-    },
+    "property_bag": { "#ffr:Fa": [ "a" ], "#ffr:Fb": [ "b" ] },
     "bindings": [
       { "binding_name": "#title_text" },
       { "binding_type": "view", "source_property_name": "('#' + ('%.6s' * #title_text))", "target_property_name": "#collection_length" }

@@ -1,0 +1,152 @@
+{
+  "namespace": "ffr",
+
+  "root": {
+    "type": "panel",
+    "size": [ "100%", "100%" ],
+    "controls": [
+      {
+        "vanilla": {
+          "type": "panel",
+          "size": [ "100%", "100%" ],
+          "bindings": [
+            { "binding_name": "#title_text" },
+            {
+              "binding_type": "view",
+              "source_property_name": "(not (('%.4s' * #title_text) = 'ffr:'))",
+              "target_property_name": "#visible"
+            }
+          ],
+          "controls": [ { "content@server_form.main_screen_content": {} } ]
+        }
+      },
+      { "screen_router@ffr.screen_router": {} }
+    ]
+  },
+
+  "list_face": {
+    "type": "panel",
+    "size": [ "100%", "100%" ],
+    "$bg_texture|default": "textures/ui/button_borderless_light",
+    "controls": [
+      { "bg": { "type": "image", "texture": "$bg_texture", "size": [ "100% - 2px", "100% - 2px" ] } },
+      {
+        "icon": {
+          "type": "image", "layer": 2, "size": [ 16, 16 ], "offset": [ 3, 3 ], "anchor_from": "top_left", "anchor_to": "top_left",
+          "bindings": [ { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_texture", "binding_name_override": "#texture" } ]
+        }
+      },
+      {
+        "name": {
+          "type": "label", "layer": 3, "size": [ 76, 10 ], "offset": [ 22, 3 ], "anchor_from": "top_left", "anchor_to": "top_left",
+          "color": [ 0.1, 0.1, 0.1 ], "localize": false, "text": "#text",
+          "bindings": [
+            { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text", "binding_condition": "always" },
+            { "binding_type": "view", "binding_condition": "always", "source_property_name": "('%.12s' * #form_button_text)", "target_property_name": "#text" }
+          ]
+        }
+      },
+      {
+        "desc": {
+          "type": "label", "layer": 3, "size": [ 76, 8 ], "offset": [ 22, 13 ], "anchor_from": "top_left", "anchor_to": "top_left",
+          "font_scale_factor": 0.7, "color": [ 0.3, 0.3, 0.3 ], "localize": false, "text": "#text",
+          "bindings": [
+            { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text", "binding_condition": "always" },
+            { "binding_type": "view", "binding_condition": "always", "source_property_name": "(('%.32s' * #form_button_text) - ('%.12s' * #form_button_text))", "target_property_name": "#text" }
+          ]
+        }
+      },
+      { "bar_bg": { "type": "image", "layer": 2, "texture": "textures/ui/empty_progress_bar", "size": [ 76, 3 ], "offset": [ 22, 24 ], "anchor_from": "top_left", "anchor_to": "top_left" } },
+      {
+        "bar": {
+          "type": "image", "layer": 3, "texture": "textures/ui/filled_progress_bar", "size": [ 76, 3 ], "offset": [ 22, 24 ], "anchor_from": "top_left", "anchor_to": "top_left",
+          "clip_direction": "left",
+          "bindings": [
+            { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text" },
+            { "binding_type": "view", "source_property_name": "(1 - (((#form_button_text - ('%.32s' * #form_button_text)) * 1) / 100))", "target_property_name": "#clip_ratio" }
+          ]
+        }
+      }
+    ]
+  },
+
+  "list_cell@common.button": {
+    "size": [ 100, 30 ],
+    "$focus_enabled": false,
+    "$pressed_button_name": "button.form_button_click",
+    "bindings": [ { "binding_type": "collection_details", "binding_collection_name": "form_buttons", "binding_condition": "always" } ],
+    "controls": [
+      { "default@ffr.list_face": {} },
+      { "hover@ffr.list_face": { "$bg_texture": "textures/ui/button_borderless_lighthover" } },
+      { "pressed@ffr.list_face": { "$bg_texture": "textures/ui/button_borderless_lightpressed" } }
+    ]
+  },
+
+  "list_grid": {
+    "type": "grid",
+    "size": [ 200, "100%c" ],
+    "grid_rescaling_type": "horizontal",
+    "grid_item_template": "ffr.list_cell",
+    "collection_name": "form_buttons",
+    "bindings": [
+      { "binding_name": "#form_button_length", "binding_name_override": "#maximum_grid_items", "binding_condition": "always" }
+    ]
+  },
+
+  "list_body": {
+    "type": "panel",
+    "size": [ "100% - 4px", "100%c" ],
+    "anchor_from": "top_left",
+    "anchor_to": "top_left",
+    "controls": [ { "grid@ffr.list_grid": { "anchor_from": "top_left", "anchor_to": "top_left" } } ]
+  },
+
+  "list_scroll": {
+    "type": "panel",
+    "size": [ 216, "100% - 24px" ],
+    "offset": [ 0, 18 ],
+    "anchor_from": "top_middle",
+    "anchor_to": "top_middle",
+    "controls": [
+      {
+        "scrolling_panel@common.scrolling_panel": {
+          "anchor_to": "top_left",
+          "anchor_from": "top_left",
+          "$show_background": false,
+          "size": [ "100%", "100%" ],
+          "$scrolling_content": "ffr.list_body",
+          "$scroll_size": [ 5, "100% - 4px" ],
+          "$scrolling_pane_size": [ "100% - 4px", "100% - 2px" ],
+          "$scrolling_pane_offset": [ 2, 0 ],
+          "$scroll_bar_right_padding_size": [ 0, 0 ]
+        }
+      }
+    ]
+  },
+
+  "list_window": {
+    "type": "image",
+    "texture": "textures/ui/dialog_background_opaque",
+    "size": [ 224, "85%" ],
+    "layer": 60,
+    "controls": [
+      { "head": { "type": "label", "layer": 3, "anchor_from": "top_left", "anchor_to": "top_left", "offset": [ 6, 6 ], "text": "최적화 목록 (화면 라우터 + 2열 grid)", "localize": false, "color": [ 0.25, 0.25, 0.25 ], "font_scale_factor": 0.8 } },
+      { "close@common.close_button": {} },
+      { "scroll@ffr.list_scroll": {} }
+    ]
+  },
+
+  "screen_router": {
+    "type": "collection_panel",
+    "size": [ "100%", "100%" ],
+    "factory": {
+      "name": "ffr_screen",
+      "control_ids": { "j": "@ffr.list_window" }
+    },
+    "property_bag": { "#ffr:J": [ "j" ] },
+    "bindings": [
+      { "binding_name": "#title_text" },
+      { "binding_type": "view", "source_property_name": "('#' + ('%.6s' * #title_text))", "target_property_name": "#collection_length" }
+    ]
+  }
+}
