@@ -1,7 +1,7 @@
 import { ItemLockMode, ItemStack, system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 
-const PACK_VERSION = "v1.1.0";
+const PACK_VERSION = "v1.2.0";
 const LAUNCHER = "bwiki:entity_menu_lab";
 const BOX = "bwiki:entity_menu_lab_box";
 const MARKER = "bwiki:entity_menu_lab_marker";
