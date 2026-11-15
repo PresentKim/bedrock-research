@@ -183,6 +183,7 @@ The `overlay` is built only when the full name matches. This is the definition i
 - Cells are radio toggles as in the research screen (`radio_toggle_group`, `toggle_group_forced_index`). Selecting one shows a border and a large detail icon. Selection is handled only on the client and does not reach the server.
 - The toggles keep items in their slots. The toggle takes the cell press, so the item did not move.
 - `lockMode` does not protect items in entity slots. In the test, items with none, inventory and slot locks in a vanilla chest screen could all be taken out at once. The lock only worked in the player inventory: an inventory lock let the item move within the inventory, and a slot lock did not let it move.
+- The other direction is blocked. Items with inventory and slot locks could not be moved from the inventory into an entity chest slot. Inventory and slot locked items in entity slots could be taken out but could not be dropped (measured, mobile, 2026-11-16).
 - A locked item's tooltip gets a "cannot be moved" line. That line also goes into the `#hover_text` of section 2.4.
 
 ### 2.4 Drawing from slot names, lore and durability
@@ -262,7 +263,7 @@ In JSON UI, the only direct path to a script is a server form button. What reach
 
 Writing the result of a press into a data item name makes the open screen react at once. In the test, every press changed the slot 12 name `Pressed N` and the label showed it.
 
-Pressing the slot itself stopped being detected after 2 presses on a touch screen. The item seems to go onto the cursor and only swap with the item in the slot (related to "the cursor is not filled on touch" in HOST-20). A quick move does not pass through the cursor.
+Pressing the slot itself stopped being detected after 2 presses on a touch screen. On touch, the first tap on a slot press (`button.container_take_all_place_all`) button left the slot as it was, and a second tap on the same button did too. A tap on another slot press button then swapped the items of the two slots. No item went to the inventory or the cursor (measured, mobile, 2026-11-16). A slot press on touch picks the slot with the first tap and swaps it with the slot tapped next (this matches "the cursor is not filled on touch" in HOST-20). A quick move does not go through this picking.
 
 ## 3. Ways to open the screen
 
@@ -304,13 +305,13 @@ Other workarounds mentioned on Discord were not tested.
 | Slot durability bindings | `#item_durability_total_amount` and `#item_durability_current_amount` hold the maximum durability (4242 for the tested item). `#item_durability_max` does not exist |
 | Icon grid | Vanilla items, 3D blocks and custom items all drew |
 | Toggle selection with detail icon, name and lore | Works. Items do not move |
-| Locked items | Taken out of entity slots regardless of the lock |
+| Locked items | Taken out of entity slots regardless of the lock. Locked items in the inventory could not be put into entity slots, and locked items in entity slots could not be dropped |
 | Per-slot `#hover_text` | Differs per slot and updates in the open screen |
 | Condition, texture and bar from the name | Works. The data item is unlocked paper |
 | Bar from durability | Works |
 | Constant `#clip_ratio` | The bar stayed empty |
 | Number to text | Drew nothing |
-| Button by pressing the slot | Stopped being detected after 2 presses on touch |
+| Button by pressing the slot | Stopped being detected after 2 presses on touch. The first tap only picks the slot, and a tap on another slot button swapped the two slots |
 | Quick move button | The count rose every time, past 10 presses. No button item stayed in the player inventory after closing (C, C2 and C3) |
 | Opening with C, C2, C3 | All open. C2 was the easiest to use |
 | C2 | One tap opened it while walking or turning. Moving the entity every tick while open did not close or flicker the screen. Other actions while holding the menu item were not hindered |
@@ -613,9 +614,11 @@ For every viewer, each simulated player gets its own entity `bwiki:entity_matchm
 | --- | --- |
 | `{ "*": "q.is_in_ui" }` in the render controller `part_visibility` | Hidden in the world and drawn in the figure cell. The example uses this |
 | An animation that sets the root bone `scale` to `q.is_in_ui ? 1.0 : 0.0` | Same |
-| `!q.property('…') \|\| q.is_in_ui` in `part_visibility` (with a bool property) | Still visible in the world |
+| `!q.property('…') \|\| q.is_in_ui` in `part_visibility` (with a bool property) | Recorded as visible in the world in the first test. Hidden in two other tests (below) |
 
-The same expression worked in another test. On dummies standing still, `!q.property('…') \|\| q.is_in_ui` (bool) and `q.property('…') == 0 \|\| q.is_in_ui` (int) hid them from the start when the property was set right after spawning. A bool dummy whose property was set 2 seconds later disappeared at that moment (measured, mobile, 2026-11-16). Two things differ from the test in the table: the entity in the table was moved in front of the player every tick and had a single render controller, while the entities in this test did not move and used a conditional render controller list picked by `q.variant`. Which of these made the difference was not checked (*unverified*).
+The same expression worked in another test. On dummies standing still, `!q.property('…') \|\| q.is_in_ui` (bool) and `q.property('…') == 0 \|\| q.is_in_ui` (int) hid them from the start when the property was set right after spawning. A bool dummy whose property was set 2 seconds later disappeared at that moment (measured, mobile, 2026-11-16). Two things differ from the test in the table: the entity in the table was moved in front of the player every tick and had a single render controller, while the entities in this test did not move and used a conditional render controller list picked by `q.variant`.
+
+The two differences were then tested apart. Three dummies had a bool property set right after spawning: one with a single render controller moved every tick, one with a single render controller standing still, and one with the conditional list moved every tick. All three were hidden in the world. Only the conditional list dummy showed for a moment right after spawning and then disappeared (measured, mobile, 2026-11-16). That dummy changes its variant through an event after spawning, so before the event a controller without the property condition was likely picked (*inference*). Moving every tick and the render controller setup are not the cause of the first failure. The first test also had a control dummy with the property off at the same distance, so the dummy seen in the world may have been the control (*inference*).
 
 ### 10.3 Emotes and looking around
 
