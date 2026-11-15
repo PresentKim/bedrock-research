@@ -1,6 +1,6 @@
 ---
 title: Building menu screens from an entity inventory
-description: A plan to restyle the chest screen of an invisible container entity with a resource pack and use it as a menu instead of a server form. The engine draws the entity slots, so no numeric ID is needed. Screen routing, client-side selection, labels and bars drawn from slot names and durability, a button that reaches the script, ways to open the screen, test results, a research screen example, and a 2048 test covering routing by entity name, animation replay and flicker.
+description: A plan to restyle the chest screen of an invisible container entity with a resource pack and use it as a menu instead of a server form. The engine draws the entity slots, so no numeric ID is needed. Screen routing, client-side selection, labels and bars drawn from slot names and durability, a button that reaches the script, ways to open the screen, test results, a research screen example, a 2048 test covering routing by entity name, animation replay and flicker, and a matchmaking queue example filled by simulated players.
 sidebar_position: 5
 sources:
   - repo-guide
@@ -61,7 +61,7 @@ The script names the menu entity's `nameTag` with the shared prefix `§b§w`, ma
 | 2048 (section 8) | `§b§w§2§0` |
 | Entity Menu Lab (section 6) | `§b§w§m§l`. Only the menu mode gets the name; the lock experiment entity has no name, so the vanilla chest screen opens |
 | Research screen (section 7) | `§b§w§r§s` |
-| Matchmaking (`entity-matchmaking`) | `§b§w§m§m` |
+| Matchmaking (section 9) | `§b§w§m§m` |
 
 The menu entity's name tag was not visible in first person (measured). Whether it shows in third person or to other players was not tested (*unverified*, section 8.4).
 
@@ -499,6 +499,74 @@ All of these are measured. Forcing a layout pass with a label whose width change
 3. Hold the item and tap the middle of the screen to open the 2048 screen. The direction buttons on both sides slide the tiles, and New starts a new board.
 
 It can be turned on in the same world as the other entity inventory examples (Entity Menu Lab, the research screen) (section 2.2.3, measured).
+
+## 9. Example: matchmaking queue
+
+A matchmaking mockup for a server with several minigames. Each game has its own queue. Pressing Play joins the queue and the player slots fill up. The queue can be cancelled while waiting, and when the match is full a 10 second ready check appears. The other players are simulated players that the behavior pack adds and removes with random timing, and real players in the same world who join the same game's queue are put in one lobby. The open screen changes as soon as the script changes slot items (section 1).
+
+![The queue screen. Four games on the left, with the queued Hide and Seek row in a green frame. On the right: Finding match., queue time 0:12, Estimated 0:21, ten player slots with one yellow slot for the player and seven blue ones for others, 8 / 10 players, Nightowl joined the queue, and a Cancel button](/img/design/entity-matchmaking-queue.png)
+
+![The ready check screen. Match found!, 6 seconds left, four accepted slots with green checks and the rest blue, 4 / 10 accepted, Nightowl accepted, and a green bar about half drained](/img/design/entity-matchmaking-ready.png)
+
+### 9.1 States
+
+| State | Screen | Buttons |
+| --- | --- | --- |
+| Not queued | Name and description of the chosen game, "Not in queue", usual wait, players per match | Play |
+| Queued | "Finding match...", time in queue, estimate, player slots (you, others, empty), `5 / 8 players`, the last join or leave | Cancel |
+| Match found | "Match found!", seconds left, a bar that drains over 10 seconds, green checks on the slots of players who accepted | Accept, Decline |
+| Starting | "Match starting", a 4 second count | None |
+
+- The list on the left is Sky Duels (2 players), Bed Rush (8), Parkour Race (6) and Hide and Seek (10). Tapping a row chooses it. The game cannot be switched while queued. The chosen row has a blue frame, and the queued row has a green frame and a blinking dot. The "N playing" numbers drift a little every 3 seconds.
+- The queue continues after the screen is closed, and the action bar shows the game, the time in queue and the player count. When a match is found, a sound plays and the action bar says how to accept.
+- If anyone declines, the ready check fails at once. Whoever declined leaves the queue, and the others go back to the queue with their queue time kept. Anyone who does not answer within 10 seconds is removed. When everyone accepts, the screen goes back to the start after 4 seconds. No game is played.
+
+### 9.2 Slot layout
+
+The entity has `inventory_size: 243` and the name `§b§w§m§m` (section 2.2.1).
+
+| Slots | Content |
+| --- | --- |
+| 1-20 | 4 game rows x 5 slots: button, name, subtitle (mode or "In queue 0:12"), player count, row state key (`S` chosen, `Q` queued) |
+| 21-28 | Game name, description, header, clock, estimate, player count text, last event, footer (notice or version) |
+| 29, 30 | Main button (Play, Cancel, Accept), second button (Decline) |
+| 31 | Ready check bar key (`Ta`, `Tb`) |
+| 32-41 | 10 player slot keys (`E` empty, `F` other player, `Y` you, `A` accepted, `X` declined). Games with fewer than 10 players use the middle slots |
+| 42, 43 | Main and second button labels |
+
+### 9.3 Screen
+
+- Text reads the slot name with `(#hover_text - '§o' - '§f' - '§r')` (section 2.4). Font size and alignment come from the variables `$emm_scale` and `$emm_align`.
+- Player slots, row frames and the ready bar are built like the 2048 tiles: a `stack_panel` factory looks up `property_bag` with the slot name as the key and builds one control (COL-22). When the key changes the control is built again, so the grow animation plays each time a slot fills (ANI-37).
+- The ready bar drains over 10 seconds with a single `size` animation. The script does not send the time left; it switches the key between `Ta` and `Tb` for each ready check so the bar is built again.
+- Buttons reach the script through quick move of a slot (section 2.5). The main and second buttons hide when their own slot is empty, through `#visible`. Button labels are read from other slots and drawn over the buttons.
+- Text that starts with a digit gets a color code in front (`§1` for the clock, `§8` for the player count). Otherwise the expression reads it as a number and `0 / 8 accepted` becomes `0` (EXP-30, EXP-44, jsonui-tester).
+
+### 9.4 Random values
+
+| Value | Range |
+| --- | --- |
+| Simulated players already in a new lobby | 0 to min(size - 2, half the size) |
+| Time to the next join | Sky Duels 3-12 s, Bed Rush 1.5-6 s, Parkour Race 3-10 s, Hide and Seek 1-5 s |
+| Party joins | 15%, 2-3 players (when there is room) |
+| A simulated player leaves | 2.5% per second |
+| A simulated player accepts | after 0.6 to 7.5 s |
+| Ready check fails | 10% chance that one simulated player declines at 2-9 s, 5% chance that one does not answer |
+| A simulated player stays after a failed check | 85% |
+
+In a Node run with a stand-in for `@minecraft/server`, accepting automatically for 40 matches per game, the median time to the first match found was 9 to 23 seconds and about 9 to 15% of ready checks failed.
+
+### 9.5 Example add-on
+
+<AddonDownload id="entity-matchmaking" />
+
+1. Turn on the behavior pack whose name starts with `[bedrock-research]entity-matchmaking-bp` in a new world. The resource pack turns on with it as a dependency. It can be turned on in the same world as the other entity inventory examples (section 2.2.2).
+2. Take "Matchmaking" (compass) from the end of the items category of the creative inventory, or use `/give @s bwiki:entity_matchmaking`.
+3. Hold the item and tap the middle of the screen to open the matchmaking screen.
+
+<video controls preload="metadata" width="100%" src={require('@site/static/video/entity-matchmaking-addon.mp4').default} />
+
+Measurement video (mobile, 2026-11-15). The video and the screenshots above come from the test pack v1.0.0 that this example was built from. The screen and the script behavior are the same as the example add-on; only the names, identifiers, vanilla hiding (section 2.2.2) and layers (section 2.2.3) differ. No problems were seen with the test pack (measured).
 
 ## Related rules
 
