@@ -1,0 +1,151 @@
+---
+title: "Optimizing: binding expression caching"
+description: Instead of stamping a fixed expression per cell number, keep one expression in the definition and pass only values such as the cell position as variables. The rules for variables inside expressions, and the measured cost of HUDs with 64 to 512 cells.
+sidebar_position: 1.5
+sources:
+  - repo-guide
+  - private-research
+  - bedrock-wiki
+  - bedrock-samples
+---
+
+# Optimizing: binding expression caching
+
+Screens with many cells use almost the same expression in every cell. For example, the expression that takes cell n out of the HUD subtitle differs only in where it cuts. Until now a generator stamped a fixed expression per cell number and `requires` picked one ([HUD item icons](./hud-item-icons.mdx) section 3.3). This page covers a setup that keeps the expression in the definition **once** and passes only values such as the position to each cell instance. Every cell reuses the one expression, so this page calls it "expression caching".
+
+In short: at 64 cells no difference between the two methods could be seen, but at 256 cells the frame rate was about 22 against 4 to 5, and at 512 cells about 14 against 1 to 2 (section 6, measured). Both methods drew the same result (section 4).
+
+## 1. The cost of fixed expressions
+
+A cell definition with fixed expressions looks like this.
+
+```json
+"slot": {
+  "$index|default": 0,
+  "variables": [
+    { "requires": "($index = 0)", "$aux": "(... '%.1s' ...)" },
+    { "requires": "($index = 1)", "$aux": "(... '%.20s' ...)" }
+  ]
+}
+```
+
+- One cell definition holds as many `requires` blocks as there are cells. With N cells that is N blocks per cell and N x N for the screen, twice that with separate item and count expressions.
+- That is 8192 for 64 cells, 131,072 for 256 cells and 524,288 for 512 cells.
+- Controls made by the title factory are made again whenever the title changes (COL-17), so the HUD goes through these blocks again for every new title.
+
+## 2. Rules for variables inside expressions
+
+| Where | Example | Result (measured, mobile, 2026-11-16) |
+| --- | --- | --- |
+| String variable inside a variable block expression | `($skip_item * $subtitle_text)`, `"$skip_item": "%.20s"` | Substituted and cut the cell |
+| Building the format from a number inside a variable block expression | `(('%.' + $skip_item + 's') * $subtitle_text)`, `"$skip_item": 20` | Substituted and cut the cell |
+| Variable inside a binding expression (`source_property_name`) | `('%.11s' * (#hud_subtitle_text_string - ($skip_item * #hud_subtitle_text_string)))` | Substituted and drew the icon and count |
+| Building a binding name from a variable | `('#' + $v)`, `"$v": "hover_text"` | Read `#hover_text` (chest screen) |
+| Binding expression with no `#` property at all | `('§r' + $v)` | "Must define a source property name in the binding!" in the content log, and none of that control's bindings worked |
+
+- The variable's value goes in as **one string**. It is not parsed again as an expression. This matches the record that joining a variable holding an expression in a label `text` with `('§r' + $variable)` attached the expression as plain text instead of computing it ([HUD item icons](./hud-item-icons.mdx) section 4).
+- So put values without quotes in variables. In a server form, `(#form_button_text - $df_marker)` with a quoted value like `"$df_marker": "'§0§3§r'"` left the marker buttons hidden (BND-33). The quotes most likely went in as characters and did not match the button text (*inference*). Quoted and unquoted values were not tested side by side.
+- Variables inside binding expressions are also the long-used form of the community preserved title pattern (`(#preserved_text - $update_string)` with the value `"overlay:"`) (BW-title, community reports).
+
+## 3. Setup
+
+The cell definition holds a single expression. Its `requires` is a condition that is always true.
+
+```json
+"slot_shared": {
+  "type": "panel",
+  "size": [ 18, 18 ],
+  "$aux|default": "0",
+  "variables": [
+    { "requires": "($cost_on)", "$aux": "((((('%.11s' * ($subtitle_text - ($skip_item * $subtitle_text))) - 'xxxxxxxx') - 'xxxx') - 'xx') - 'x')" }
+  ],
+  "controls": [
+    {
+      "icon": {
+        "type": "custom",
+        "renderer": "inventory_item_renderer",
+        "size": [ 16, 16 ],
+        "property_bag": { "#item_id_aux": "$aux" }
+      }
+    }
+  ]
+}
+```
+
+Cell instances pass only the position. `$cost_on` is set to `true` on the parent panel.
+
+```json
+{ "slot0@ns.slot_shared": { "$skip_item": "%.1s" } },
+{ "slot1@ns.slot_shared": { "$skip_item": "%.20s" } },
+{ "slot2@ns.slot_shared": { "$skip_item": "%.39s" } }
+```
+
+- The cell definition has one block regardless of the cell count. With N cells the screen has N.
+- A generator is still handy for the instance list. It now only writes cell position numbers, and the expression lives in one readable place.
+- The count label keeps `$count` the same way in the label's own `variables` (HUD item icons section 4: "keep the count expression in the label's own variable block").
+- Cells read through bindings shrink the same way. With `#item_id_aux: 0` in the icon's `property_bag` and `binding_condition: "always"`, a view binding to `#item_id_aux` using the expression above with `$subtitle_text` replaced by the global binding `#hud_subtitle_text_string` drew the icon (measured). Only the variable block form was timed.
+
+## 4. Checking the result is the same
+
+A 6-cell subtitle was drawn on one screen through four cell definitions. All four rows drew both sets the same (grass 2, dirt 3, cobblestone 16, oak planks 32, sapling 64, and the next 6 numbers) (measured, mobile, 2026-11-16).
+
+| Row | Cell definition | Passed per cell |
+| --- | --- | --- |
+| F | Fixed expression per cell (section 1) | `$index` |
+| V | One variable block expression | `"$skip_item": "%.20s"` |
+| N | One variable block expression, format built from a number | `"$skip_item": 20` |
+| B | One binding expression | `"$skip_item": "%.20s"` |
+
+## 5. How the cost was compared
+
+- The subtitle carries 64 cells. In the 256 and 512 cell panels, cell n reads cell n % 64 and is drawn over the same place. The subtitle length (1217 bytes) stays the same and only the number of expressions changes.
+- The script sends a new title every tick, so the panel is made again up to 20 times a second.
+- The yellow dot below the panel moves left and right once a second. It is outside the title factory, so it does not restart when the panel is made again. The dot moves only when the screen is drawn again, so counting the recording frames (60 fps) in which the dot moved gives the screen frame rate for that stretch.
+- The same recording was also counted for frames in which the title text and panel area changed. That is how often the panel was actually drawn again.
+
+## 6. Measurements
+
+<video controls preload="metadata" width="100%" src={require('@site/static/video/hud-expression-cost.mp4').default} />
+
+Test pack recording (mobile, 2026-11-16). Fixed expressions at 64, 256 and 512 cells, then one expression at 64, 256 and 512 cells. The items and action bar in the video are from the test pack; the example add-on below picks the same six modes with one item.
+
+| Cells | Blocks on screen (fixed / one expression) | Screen frames per second (fixed / one expression) | Panel updates per second (fixed / one expression) |
+| --- | --- | --- | --- |
+| 64 | 8,192 / 128 | about 40 / about 44 | about 22 / about 22 |
+| 256 | 131,072 / 512 | about 4 to 5 / about 22 | about 4 / about 19 |
+| 512 | 524,288 / 1,024 | about 1 to 2 / about 14 | about 1 / about 10 |
+
+- At 64 cells both methods kept up with a title every tick and no stutter could be seen. A separate recording showed the same.
+- From 256 cells the whole screen with fixed expressions fell to a few frames a second. With one expression the screen frame rate was about 5 times higher at the same cell count.
+- One expression also slows down as cells grow: about 14 frames at 512 cells. Creating and laying out the cells and drawing the icons still cost ([JSON UI optimization](./json-ui-performance.mdx) section 1).
+- The figures were counted from recordings, on one device in one run. They differ between devices.
+
+## 7. Guidelines
+
+- Keep one expression in the definition for expressions that have the same shape in every cell and differ only in values, and pass only values such as the position to each cell instance.
+- Put plain strings or numbers without quotes in variables. Do not put an expression in a variable and splice it into another expression.
+- A binding expression with variables still needs at least one `#` property.
+- With few cells (64 or fewer) no difference between the two methods could be seen. There is no rush to rewrite screens already built with fixed expressions.
+- Changing the title every tick is an extreme condition for this measurement. A real HUD sends only when the content changes (HUD item icons section 3.5).
+
+## 8. Example add-on
+
+<AddonDownload id="hud-expression-cost" />
+
+1. Open the file to import it (on mobile, tap the file and open it with Minecraft). In a new world, turn on the behavior pack starting with `[bedrock-research]hud-expression-cost-bp`. The resource pack comes along as a dependency and no experiment toggles are needed.
+2. Take "HUD Expression Cost" (clock) from the end of the items category in the creative inventory, or use `/give @s bwiki:hud_expression_cost_test`.
+3. Each use of the item switches the mode: one expression at 64, 256 and 512 cells, fixed expressions at 64, 256 and 512 cells, then off. The action bar shows the current mode. While the item is held a new title goes every tick, and the title is cleared when it is put away.
+
+- Fixed expressions at 512 cells bring the screen down to 1 or 2 frames a second. Switching mode or putting the item away brings it back.
+- The large title and long subtitle text in the middle are the vanilla title. They are not hidden, so other HUD examples can be turned on together. The titles start with `hx`.
+- The text on screen is in English.
+
+## Related rules
+
+| ID | Page | Content |
+| --- | --- | --- |
+| BND-12, BND-33 | [Bindings](../json-ui/bindings.mdx) | Whole expression from a variable, variables inside expressions |
+| COL-14, COL-17 | [Collections and factories](../json-ui/collections-and-factory.mdx) | Redeclaring engine factories, factory variables |
+| ANI-06 | [Images and animation](../json-ui/images-and-animation.mdx) | Item renderer and `#item_id_aux` |
+
+Items marked "community reports" come from private research (community conversations). Measurements were made with this wiki's test packs and example add-on.
