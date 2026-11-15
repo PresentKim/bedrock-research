@@ -1,6 +1,6 @@
 import { ItemStack, system, world } from "@minecraft/server";
 
-const PACK_VERSION = "v1.0.1";
+const PACK_VERSION = "v1.1.0";
 const LAUNCHER = "bwiki:entity_2048";
 const BOX = "bwiki:entity_2048_box";
 const BOX_TAG = "bwiki_entity_2048";

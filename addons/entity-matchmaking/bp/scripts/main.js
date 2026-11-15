@@ -1,6 +1,6 @@
 import { ItemStack, system, world } from "@minecraft/server";
 
-const PACK_VERSION = "v1.1.1";
+const PACK_VERSION = "v1.2.0";
 const LAUNCHER = "bwiki:entity_matchmaking";
 const BOX = "bwiki:entity_matchmaking_box";
 const SCREEN_TITLE = "§b§w§m§m";
