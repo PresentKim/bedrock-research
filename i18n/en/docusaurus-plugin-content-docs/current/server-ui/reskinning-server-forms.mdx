@@ -90,7 +90,7 @@ One server pack has 13 layouts under `long_form` in `server_form.json`, and only
 
 - **Gate condition**: Each layout starts with `"visible": false` and puts a `#title_text` (global) containment check into `#visible` with `"binding_condition": "always"`. With `once`, a layout that briefly matched while the form changed to the next form stayed on top of the next form.
 - **Conditions for factory and grid length**: If the factory length inside a layout (`#form_button_contents` -> `#collection_length`) was given `"binding_condition": "visible"`, a hidden layout did not build button slots. Using `visible` on a layout that is visible from the start made hidden layouts also build slots on the first frame, causing lag. With `always_when_visible` or omitted (default), the bindings of slots built on the first frame were not updated, so markers and text were empty (it became normal after changing or pressing the window).
-- **Variables inside expressions**: Taking the marker as a `$variable` and inserting it into a `source_property_name` expression did not substitute (tab and back buttons did not show, and the checker could not catch it). Split markers into `vis_*` templates that write the marker as literal text in each expression.
+- **Variables inside expressions**: A `$variable` inside a `source_property_name` expression is substituted. The value goes in as one string and is not parsed again as an expression (BND-33). This pack took a marker with quote characters (`"'§0§3§r'"`) as a variable, and the tab and back buttons did not show; the checker could not catch it either. The likely reason is that the quotes went in as text and did not match (*inference*). Put unquoted values in variables. This pack splits markers into `vis_*` templates that write the marker as literal text in each expression.
 - **Text comparison**: Comparing directly in the expression like `(not ((A - B) = 'z'))` flipped true and false. Putting it into a `#variable` first and comparing with `(not (#variable = 'z'))` gave the right result.
 
 ### 3.1 Dictionary lookup routing (factory gate)
@@ -214,7 +214,7 @@ This rewrites the techniques of Chest-UI (`115d95c`, CC BY 4.0) (Source: chest-u
 1. Reskin server forms by **wrapping + adding a factory**, not by editing (MOD-09).
 2. Make title markers long and unique, find them with a containment check, and hide them by attaching `§` to every letter (HOST-34).
 3. Gate layouts with `visible` and identify them with `binding_condition: always`. Put a `visible` condition on factory length.
-4. Write markers as literal text in expressions (variables are not substituted inside expressions).
+4. A variable inside an expression is substituted as one string, so pass a marker through a variable only as an unquoted value (BND-33).
 5. Keep numeric values as strings with a letter prefix, and convert with `(#v - 0)` when a number is needed.
 6. With many slots, use fixed `collection_index` and fixed pixel sizes. The control count is the opening time.
 7. Avoid structures that compete with other packs over `controls` (MOD-20).

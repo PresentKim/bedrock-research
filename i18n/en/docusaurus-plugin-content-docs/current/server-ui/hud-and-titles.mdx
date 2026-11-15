@@ -197,7 +197,7 @@ This is a HUD panel that shows the name, icon and information of the block you l
 
 ### 5.2 What to avoid in JSON UI
 
-- If you take the slot out with a **binding** expression (`#hud_subtitle_text_string`), the icon is empty in every format (cutting, fixed width, adding and subtracting, filling and erasing with `x`). Use the variable `$var_subtitle_text`. If you send the subtitle as digits only, the block state slot check breaks and an "expected a string" warning appears.
+- To take the slot out with a **binding** expression (`#hud_subtitle_text_string`), put `#item_id_aux: 0` in the icon's `property_bag` and bind that expression to `#item_id_aux` with a view binding and `binding_condition: "always"`. This drew the icon (measured, section 3.4 of [HUD item icons](../design/hud-item-icons.mdx)). The earlier binding setup left the icon empty in every format (cutting, fixed width, adding and subtracting, filling and erasing with `x`), and the difference from that setup was not checked (*unverified*). Taking the slot from the variable `$var_subtitle_text` also works. If you send the subtitle as digits only, the block state slot check breaks and an "expected a string" warning appears.
 - Values turned into numbers do not show in text (`" 219"`, `"1,532/4,096"`). Send quantity and line text in byte slots that start with `§f`, and make them a string with `'§r' + value` inside a variable expression. Put the count expression in the label's own variables block (an expression in the parent panel or `('§r' + $variable)` inside `text` is not evaluated).
 - A one-digit numeric flag becomes a number in the pack and text comparison fails. Write flags as letters (`a` to `k`) and choose with fixed letters in the variables block, not expressions.
 - If a binding expression uses no `#binding` at all, a "Must define a source property name" error appears.
@@ -218,7 +218,7 @@ On a touch screen, when the UI profile is pocket, the vanilla HUD draws hearts a
 
 ## 8. Drawing items with the HUD subtitle `{record}`
 
-When carrying item runtime ID x 65536 in the title's subtitle to draw an icon, taking the slot from the binding `#hud_subtitle_text_string` left the icon empty with any expression. It was drawn when cut with `'%.11s'` from the variable `$var_subtitle_text` that the title factory provides and put into `#item_id_aux` of `property_bag`. Sending the subtitle as digits only breaks the vanilla block state slot check and gives an "expected a string" warning (Source: private research).
+When carrying item runtime ID x 65536 in the title's subtitle to draw an icon, the icon was drawn when cut with `'%.11s'` from the variable `$var_subtitle_text` that the title factory provides and put into `#item_id_aux` of `property_bag`. Sending the subtitle as digits only breaks the vanilla block state slot check and gives an "expected a string" warning (Source: private research). In the earlier setup, an icon that took the slot from the binding `#hud_subtitle_text_string` stayed empty. In this wiki's test, with `#item_id_aux: 0` in `property_bag` and a view binding from `#hud_subtitle_text_string` to `#item_id_aux` with `binding_condition: "always"`, the icon was drawn (measured, section 3 of [Binding expression caching](../design/binding-expression-caching.mdx)). The difference between the two setups was not checked (*unverified*).
 
 ## 9. Rule summary
 
@@ -226,5 +226,5 @@ When carrying item runtime ID x 65536 in the title's subtitle to draw an icon, t
 2. The title channel is a shared resource. Attach a long unique marker (`CUSTOMHUD:...`), hide the vanilla title only when it is your own marker, and assume other features can overwrite it.
 3. Put text that must always be shown on the sidebar scoreboard or the action bar, not the title.
 4. Scoreboard lines with the same text are merged, so tell them apart with an invisible tail such as `§r`.
-5. When taking a value out of the subtitle, use the `$var_subtitle_text` variable, not a binding, and write one-digit numeric flags as letters.
+5. When taking a value out of the subtitle, use the `$var_subtitle_text` variable, or, for a binding, give it a `property_bag` default and `binding_condition: "always"`. Write one-digit numeric flags as letters.
 6. Even if you hide the vanilla HUD with `SetHud`, elements the pack added remain.

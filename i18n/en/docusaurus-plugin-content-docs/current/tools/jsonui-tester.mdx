@@ -61,23 +61,25 @@ It prints diagnostics and the visible labels (text, position) and exits with cod
 ### Tests
 
 ```bash
-cd jsonui-tester && npm test    # 80 tests: expressions 50, size and JSON 21, definition resolution 8, latch 1
+cd mcbe-json-ui-tester && npm test    # 105 tests, including 11 checks against 1.26.63 measurements
 ```
 
-For deployment, `.github/workflows/jsonui-tester.yml` runs the tests every time something lands on `main`, and uploads the GUI files to GitHub Pages only when the repository is public. The free plan cannot use Pages on a private repository.
+The tester lives in the public repository [PresentKim/mcbe-json-ui-tester](https://github.com/PresentKim/mcbe-json-ui-tester). `.github/workflows/pages.yml` uploads the GUI to GitHub Pages every time something lands on `main`.
 
 ## What the prototype found
 
 | Finding | Details |
 |---|---|
 | The label of recipe 1 can go behind the background | The inner `bg_image` of `bg@common.common_panel` has `layer: 1`, so a sibling label with no layer set (layer 0) is drawn beneath it (LAY-18). The sample pack fixed it by giving the title `layer: 2` |
-| `$variable` substitution inside an expression | The game substitutes (BND-33, measured 2026-11-16). The tester's measurement-first mode still does not substitute and warns, so view packs that use variables inside expressions in CN mode |
+| `$variable` substitution inside an expression | The game substitutes the value as one string (BND-33, measured 2026-11-16). The tester substitutes the same way in both modes. A value with quotes keeps the quotes as characters |
+| Checks against 1.26.63 measurements | Labels draw only string values. Chest slot counts 0 and 1 are the empty string, and the durability bindings give the max durability. A touch slot press answers with pick then swap, and a quick move moves directly. The item renderer and `live_player_renderer` at a layer sum of 99 or more, and a number `#entity_id` on `live_horse_renderer`, are reported as diagnostics |
 | The MOD-04 warning has to look through to the base | The `bindings` of `long_form` is safe because the base has no `bindings`. The warning checks the base chain after reading all files |
 | Most vanilla hiding is an engine global value | If the simulated data does not know a HUD `#visible` flag, everything shows, so there is an option "treat unknown global `#visible` as false" (on by default) |
 
 ## Limits
 
-- It is not the game. Rules whose evidence is code (NB, CN) are kept as they are, and where they differ from measurement, "measurement first" mode follows the measurement (BND-05 discarding the whole array, MOD-02 ignoring a different path, EXP-10 no literal truncation, BND-33). Both can be wrong.
+- It is not the game. Rules whose evidence is code (NB, CN) are kept as they are, and where they differ from measurement, "measurement first" mode follows the measurement (BND-05 discarding the whole array, MOD-02 ignoring a different path, EXP-10 no literal truncation). Both can be wrong.
+- The layer sum limit is diagnosed but not applied when drawing. The measured sum counted only ancestors inside the pack, while the tester's sum includes the vanilla chest screen ancestors (about 13 to 43).
 - The engine data is simulated. The bindings a screen controller supplies are only the part found in `src/engine/host.js`. The item renderer, paper doll, scrolling, animation, input focus and sound are not drawn or are only placeholders.
 - Text width is an approximation (6px for ASCII, 9px for wide characters, 10px per line). A layout fitted to the text with `%c` can differ by a few pixels, and localization is not done.
 - Only PNG and JPG textures are drawn (no TGA). 9-slice uses CSS `border-image` and tint uses multiply blending, so colors differ slightly.

@@ -131,7 +131,7 @@ These are the values used as `"type"` in vanilla 1.26.50.4 and their counts (VN 
 | `tooltip_trigger`, `selection_wheel`, `label_cycler`, `image_cycler`, `grid_page_indicator`, `carousel_label` | 2, 1, 1, 1, 1, 1 | X | Special |
 
 - **[LAY-01]** Judge the list of valid types by vanilla usage, not by the official enum. The official enum is missing types vanilla uses, such as `factory`, `collection_panel`, `tooltip_trigger` and `scroll_track`. `scrollbar_track` in the wiki type table is a typo (vanilla has `scroll_track`, conflict C-34), and the legacy types `tab`, `grid_item` and `scrollbar` never appear in vanilla. `carousel_label`, which the wiki classifies as legacy, remains once in vanilla. `{vanilla}` (Source: VN, BC-facts official schema section, BW-doc)
-- **[LAY-02]** `scroll_box` is not a type but a **control name** in `ui_common.json`. Do not assemble scrolling by hand; reuse the `common.scrolling_panel` template with variables such as `$scrolling_content`. `{vanilla, working pack}` (Source: VN server_form.json `scrolling_panel@common.scrolling_panel`, BA expressions and operators chapter, AP, MJ 4.2-2)
+- **[LAY-02]** `scroll_box` is not a type but a **control name** in `ui_common.json`. Do not assemble scrolling by hand; reuse the `common.scrolling_panel` template with variables such as `$scrolling_content`. `{vanilla, working pack}` (Source: VN server_form.json `scrolling_panel@common.scrolling_panel`, BA chapter 5, AP, MJ 4.2-2)
 
 ### 3.2 Size
 
@@ -150,7 +150,7 @@ These are the values used as `"type"` in vanilla 1.26.50.4 and their counts (VN 
 - **[LAY-03]** Use the size keywords in the table above. The meaning "based on the other axis" for `%x`/`%y` was judged from a vanilla comment (`25%x * 56.25%`) and usage. The meaning of `"default"` differs by type: a panel appears to be 100% and a label the text size (conflict C-36). In the Cinnabar reconstruction, an omitted size is `100%c` if it is the main axis of a stack panel, the texture ratio for a ratio image, and the parent size otherwise (LAY-38). In size expressions `%c` and the like are written after `%` (LAY-36). `{vanilla, code, inferred}` (Source: VN store_search_screen.json:64 comment, VN exhaustive search, BW-doc, CN)
 - **[LAY-04]** **A stack panel gives no space to hidden (`#visible` false) children.** Collapsing a conditional row pulls what is below up, and turning power-of-two spacers on and off makes the sum the coordinate (pattern recipe 6). `{working pack, measured}` (Source: BA chapter 4, BC-S12)
 - **[LAY-05]** The position (`offset`) of a static control cannot be bound. To change a position, bind **the size of a spacer placed before it** so the stack pushes the next child. The Cinnabar reconstruction accepts an `[x, y]` binding on `#offset`, but measurement is followed (conflict C-44). `{measured, working pack}` (Source: BC-S12, BA chapter 4, conflict C-44)
-- **[LAY-06]** Make responsiveness with `max_size` and `min_size`. Example: with `"size": [314, "100% - 64px"]` and `"max_size": [314, 236]`, the window height shrinks on small screens. `{working pack, vanilla}` (Source: BA expressions and operators chapter, VN max_size 204 uses)
+- **[LAY-06]** Make responsiveness with `max_size` and `min_size`. Example: with `"size": [314, "100% - 64px"]` and `"max_size": [314, 236]`, the window height shrinks on small screens. `{working pack, vanilla}` (Source: BA chapter 5, VN max_size 204 uses)
 - **[LAY-07]** If you put a background as `"100%sm"` inside a `"100%cm"` box, when a row inside hides, the box and background shrink together and what is below follows up. `{measured}` (Source: BC-S12)
 - **[LAY-08]** If you put a label and a `"100%sm"` button inside a `"100%cm"` panel, the button hitbox fits the text size exactly in each language. Using `"100%c"` in the same place makes the button fall below the label. `{measured}` (Source: BC-S10)
 - **[LAY-09]** When putting an icon-only button in a row whose height is set by its children, give an explicit square size. A percentage height does not decide the row height. `{measured}` (Source: BC-rules)
@@ -170,7 +170,7 @@ These are the values used as `"type"` in vanilla 1.26.50.4 and their counts (VN 
 
 - **[LAY-13]** A bound `alpha` applies only as 0 and 1. If you need translucency, make copies with different literal alpha and show only one. The Cinnabar reconstruction accepts the number of a bound `alpha` as is. If the measuring expression used a literal like `0.5`, that value is the integer 0 (EXP-27) and may have looked like "only 0 and 1", so it must be measured again with `.5` (conflict C-45). `{measured, conflict}` (Source: BC-S12, CN, conflict C-45)
 - **[LAY-14]** The combination of a size binding + `use_anchored_offset` + a collection cell crashed the client twice on a chest screen. Avoid this combination. `{measured}` (Source: BC-S6)
-- **[LAY-15]** Whether layout is redone when the size binding value changes while the screen is open was not measured. `{unverified}` (Source: BC-S6, BC text and localization chapter)
+- **[LAY-15]** Whether layout is redone when the size binding value changes while the screen is open was not measured. `{unverified}` (Source: BC-S6, BC chapter 8)
 
 ### 3.4 Anchors and offsets
 
@@ -181,14 +181,14 @@ These are the values used as `"type"` in vanilla 1.26.50.4 and their counts (VN 
 
 - **[LAY-18]** `layer` is a **relative value** to the parent. To know which of two overlapping controls is in front, you must compare the layers of the whole ancestor chain. `{measured}` (Source: BC-rules)
 - **[LAY-19]** For siblings on the same layer, **array order does not guarantee draw order.** If front and back matter, give different layers. `{measured}` (Source: BC-rules, MJ 4.2-10)
-- **[LAY-20]** If the same data must be drawn in the order "all outlines -> all lines -> all nodes -> hover", raising layers within one item is not enough (the next item's outline covers the previous item). Draw the same collection several times with factories on different layers. `{working pack}` (Source: BA expressions and operators chapter)
-- **[LAY-21]** Layers of 50 or more are common in vanilla too. A warning that the layer is high can be ignored. `{vanilla, inferred}` (Source: MJ expressions and operators chapter)
+- **[LAY-20]** If the same data must be drawn in the order "all outlines -> all lines -> all nodes -> hover", raising layers within one item is not enough (the next item's outline covers the previous item). Draw the same collection several times with factories on different layers. `{working pack}` (Source: BA chapter 5)
+- **[LAY-21]** Layers of 50 or more are common in vanilla too. A warning that the layer is high can be ignored. `{vanilla, inferred}` (Source: MJ chapter 5)
 
 ### 3.6 Clipping and overlays
 
-- **[LAY-22]** `clips_children: true` clips children to its own area. Giving a child `allow_clipping: false` draws it outside the ancestor's clipping (a tooltip that goes out of a scroll area). `{vanilla, working pack}` (Source: VN clips_children 27 uses and allow_clipping 7 uses, BA expressions and operators chapter, AP 4.8)
-- **[LAY-23]** To darken the surroundings when a tooltip shows, put a very large translucent black image (BA 4000x4000 alpha 0.3, AP 500x500 alpha 0.225) behind the tooltip and give it `allow_clipping: false`. `{working pack}` (Source: BA expressions and operators chapter, AP 4.8)
-- **[LAY-24]** If you need a background fitted to the text width, grow the parent to `"100%c"`/`"100%cm"` with a measuring label of `alpha: 0`, and draw the visible label separately on top. `{working pack}` (Source: BA expressions and operators chapter)
+- **[LAY-22]** `clips_children: true` clips children to its own area. Giving a child `allow_clipping: false` draws it outside the ancestor's clipping (a tooltip that goes out of a scroll area). `{vanilla, working pack}` (Source: VN clips_children 27 uses and allow_clipping 7 uses, BA chapter 5, AP 4.8)
+- **[LAY-23]** To darken the surroundings when a tooltip shows, put a very large translucent black image (BA 4000x4000 alpha 0.3, AP 500x500 alpha 0.225) behind the tooltip and give it `allow_clipping: false`. `{working pack}` (Source: BA chapter 5, AP 4.8)
+- **[LAY-24]** If you need a background fitted to the text width, grow the parent to `"100%c"`/`"100%cm"` with a measuring label of `alpha: 0`, and draw the visible label separately on top. `{working pack}` (Source: BA chapter 5)
 
 ### 3.7 Grids
 
@@ -197,8 +197,8 @@ These are the values used as `"type"` in vanilla 1.26.50.4 and their counts (VN 
 
 ### 3.8 9-slice and tiles
 
-- **[LAY-27]** For 9-slice, put a `.json` of the same name next to the texture file and write `nineslice_size` (`[left, top, right, bottom]` or one value) and `base_size`. Vanilla UI JSON does not use `nineslice_size` as a literal property and uses it once through a binding (`#banner_nineslice_size` -> `#nineslice_size`). `{working pack, vanilla}` (Source: BA expressions and operators chapter, AP 4.9, VN start_screen.json:1639)
-- **[LAY-28]** For a repeating background, give the image `"tiled": true`. `{vanilla, working pack}` (Source: VN 44 uses, AP 4.9, BA expressions and operators chapter)
+- **[LAY-27]** For 9-slice, put a `.json` of the same name next to the texture file and write `nineslice_size` (`[left, top, right, bottom]` or one value) and `base_size`. Vanilla UI JSON does not use `nineslice_size` as a literal property and uses it once through a binding (`#banner_nineslice_size` -> `#nineslice_size`). `{working pack, vanilla}` (Source: BA chapter 5, AP 4.9, VN start_screen.json:1639)
+- **[LAY-28]** For a repeating background, give the image `"tiled": true`. `{vanilla, working pack}` (Source: VN 44 uses, AP 4.9, BA chapter 5)
 
 ### 3.9 Rules added from the Bedrock Wiki comparison
 

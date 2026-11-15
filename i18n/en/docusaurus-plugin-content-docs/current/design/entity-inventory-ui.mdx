@@ -172,7 +172,7 @@ The `overlay` is built only when the full name matches. This is the definition i
 
 - `ignored` does not see the control's own `$` declarations and is evaluated in the parent scope (FILE-34). So the copy variable goes on the parent `overlay` and the child `host` compares it. In game only the setup with the copy on the parent was tested (measured).
 - When `ignored` is true the control is not built, so a chest with another name has none of that example's controls. In jsonui-tester the control count of a mobile ordinary chest went from 3,569 when hidden only with `visible` to 2,207 (*unverified*, static simulation).
-- `sync_grid` is the empty grid that stops flicker when slots change (section 8.3).
+- `sync_grid` is an empty grid placed to stop flicker when slots change. With this binding-hide setup, no flicker was seen even without the grid. Item type changes and many slots changing at once were not tested, so the example keeps the grid as a precaution (section 8.3).
 - `overlay` and `cover` are at `layer` 1. With `overlay` at 50 and `cover` at 100, only the window's `inventory_item_renderer` icons were not drawn, while names, counts and backgrounds were (measured). Lowering both to 1 drew the icons (measured, ANI-38). This agrees with a community report that an item renderer at layer 100 hid items while 4 and 50 were fine.
 - The limit depends on the sum of all ancestor layers, not on the control's own `layer`. In a chest screen with an outer window at 1, a cover at 1 and a window at 2, item renderers and `live_player_renderer` controls were lined up at layers 0 to 999. Both were drawn up to a sum of 94 inside the example and neither was drawn from 99. Wrapping the same cells in a panel with 148 more layers (sums of 152 and up) drew none of them (measured, mobile, 2026-11-16). The sum leaves out the ancestor layers of the vanilla chest panel, so the exact limit can only be placed between 94 and 99. A `live_horse_renderer` in the same screen was drawn at every sum (measured).
 - A jsonui-tester check with the resource packs of the four examples and three test packs from outside the wiki, loaded together in both orders, showed only each name's own window with vanilla hidden, and only vanilla for a plain unnamed chest. In a game test with the four examples in one world, each entity also opened its own window without vanilla, and the unnamed Entity Menu Lab lock test entity opened the vanilla chest screen (measured).
@@ -182,7 +182,7 @@ The `overlay` is built only when the full name matches. This is the definition i
 - Each cell's `inventory_item_renderer` reads `#item_id_aux` of `container_items` at its `collection_index`.
 - Cells are radio toggles as in the research screen (`radio_toggle_group`, `toggle_group_forced_index`). Selecting one shows a border and a large detail icon. Selection is handled only on the client and does not reach the server.
 - The toggles keep items in their slots. The toggle takes the cell press, so the item did not move.
-- `lockMode` does not protect items in entity slots. In the test, items with none, inventory and slot locks in a vanilla chest screen could all be taken out at once. The lock only worked in the player inventory: an inventory lock let the item move within the inventory, and a slot lock did not let it move.
+- `lockMode` does not stop taking items out of entity slots. It does stop putting locked items into entity slots and dropping them (below). In the test, items with none, inventory and slot locks in a vanilla chest screen could all be taken out at once. The lock only worked in the player inventory: an inventory lock let the item move within the inventory, and a slot lock did not let it move.
 - The other direction is blocked. Items with inventory and slot locks could not be moved from the inventory into an entity chest slot. Inventory and slot locked items in entity slots could be taken out but could not be dropped (measured, mobile, 2026-11-16).
 - A locked item's tooltip gets a "cannot be moved" line. That line also goes into the `#hover_text` of section 2.4.
 
@@ -277,7 +277,7 @@ The Script API has no function that opens a container screen. On Discord the ans
 
 The menu entity opens with C2.
 
-Seating the menu entity on the player is not used. An entity with the `parrot_tame` family can ride the shoulder seats of the vanilla player.json, but in the test a tap never hit the riding entity.
+Seating the menu entity on the player is not used. An entity with the `parrot_tame` family can ride the shoulder seats of the vanilla player.json. A shoulder rider is not tappable unless it has `minecraft:rideable` with `rider_can_interact: true`, and even then only from one direction.
 
 Giving the riding entity its own `minecraft:rideable` with `rider_can_interact: true` made it tappable. It has 1 seat and `family_types` set to a family nothing has, so nothing actually rides it. With it on one shoulder and a cube without this value on the other, the interact button showed from one direction only, and pressing it opened the chest screen of the entity with this value (measured, mobile, 2026-11-16). Since the button shows from one direction only, C2 stays the better way to open a menu.
 

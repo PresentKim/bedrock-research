@@ -16,7 +16,7 @@ A panel that floats the name and icon of the block you look at and the items and
 To state the conclusion first: a side that knows the numeric ID of items (a custom server that sends the item list directly to the client) can draw icons and counts without touching the player inventory. The key is two things.
 
 1. The server carries the item's **runtime ID x 65536** in the subtitle as fixed-width text fields.
-2. The pack cuts that value out of **the variable the title factory provides** (`$subtitle_text`), not out of a binding, and puts it in `#item_id_aux` of `property_bag`. Taking it out with a binding left the icon empty.
+2. The pack cuts that value out of **the variable the title factory provides** (`$subtitle_text`) and puts it in `#item_id_aux` of `property_bag`. Taken out through a binding, the icon drew only with an `#item_id_aux` default in `property_bag` and `binding_condition: "always"` (section 3.4).
 
 A side that does not know numeric IDs, such as a Script API add-on, still uses the inventory mirror or the texture path (section 2).
 
@@ -257,7 +257,7 @@ How to read the expressions:
 
 | Symptom | Cause and fix |
 | --- | --- |
-| The icon is empty | When the cell was taken out with a `#hud_subtitle_text_string` **binding** expression, the icon was empty in every form: truncation, fixed width, adding and subtracting, erasing padding characters. Take it out of the title factory variable `$subtitle_text` and put it into `property_bag`. In another test, icons were drawn through a binding expression as well (section 3.4) |
+| The icon is empty | The earlier `#hud_subtitle_text_string` binding setup left the icon empty in every form: truncation, fixed width, adding and subtracting, erasing padding characters. Taking the cell out of the title factory variable `$subtitle_text` and putting it into `property_bag` draws it. To read it through a binding, put `#item_id_aux: 0` in `property_bag` and bind with `binding_condition: "always"`. That setup drew the icon (section 3.4) |
 | Gray cells and "expected a string" | The subtitle was sent as only a number. Put a character (`i`) at the front |
 | Counts or digit characters do not show | Values converted to numbers did not show in the label (`" 219"`, `"1,532/4,096"`). Send them in a cell that starts with `§f`, and to make them text in an expression use `'§r' + value` |
 | The count expression is not computed | Put the count expression in the **label's own** `variables`. An expression put on the parent panel or `('§r' + $variable)` inside `text` was not computed |
