@@ -230,8 +230,19 @@ How to read the expressions:
 
 ### 3.4 When there are many cells
 
-- `$variable`s cannot be used in a binding expression, and an expression from a variable block put inside another expression was not computed. So **a fixed expression per cell number** is made in advance and picked in with `requires` of `variables`. With 28 cells that is 28 item expressions and 28 count expressions. Do not write them by hand: build them with a generator, and check with a test that the server's cell width constants and the pack's expressions are the same.
+- In the test that built this setup, `$variable`s inside a binding expression did not work, and an expression from a variable block put inside another expression was not computed. So **a fixed expression per cell number** is made in advance and picked in with `requires` of `variables`. With 28 cells that is 28 item expressions and 28 count expressions. Do not write them by hand: build them with a generator, and check with a test that the server's cell width constants and the pack's expressions are the same.
 - In a chest screen test, `$variable`s inside a binding expression were substituted. Using `('#' + $v)` (with `$v` set to `hover_text`) as `source_property_name` read `#hover_text`. An expression with no `#` property at all (`('§r' + $v)`, or a variable holding an expression used as is) left "Must define a source property name in the binding!" in the content log and that control's bindings did not work (measured, mobile, 2026-11-16). How this differs from the expressions that failed in the HUD setup above was not checked (*unverified*).
+- The HUD did not need a fixed expression per cell either. A 6-cell subtitle read through four cell definitions drew the same icons and counts in all four rows (measured, mobile, 2026-11-16).
+
+| Cell definition | Passed per cell | Expression |
+| --- | --- | --- |
+| Section 3.3 method | `$index` | Per-cell fixed expressions picked with `requires` |
+| Format string variable | `"$skip_item": "%.20s"` | One expression that cuts with `($skip_item * $subtitle_text)` |
+| Number variable | `"$skip_item": 20` | One expression that cuts with `(('%.' + $skip_item + 's') * $subtitle_text)` |
+| Binding expression | `"$skip_item": "%.20s"` | Reads the global `#hud_subtitle_text_string` and binds the same single expression through view bindings to the icon's `#item_id_aux` and the count label's `#text` |
+
+- The single expression also goes in a variable block (`requires` is a condition that is always true). A cell instance passes only the cell position, as in `{ "slot3@ns.slot": { "$skip_item": "%.58s", "$skip_count": "%.69s" } }`. With N cells, the fixed expression method puts N `requires` blocks in each cell definition, while this method has one.
+- In the binding expression row, the icon had `#item_id_aux: 0` in `property_bag` and was bound with `binding_condition: "always"`. How this differs from the record in section 4 that icons were empty when taken out through a binding was not checked (*unverified*).
 - When cells of a row are empty, do not make that whole row `ignored` (for example, not creating the second row when its first cell is empty). `ignored` is evaluated once at creation, but when the title changes the factory recreates the controls, so it is judged again for each new title (FILE-17, COL-17).
 
 ### 3.5 Rules for the sending side
@@ -245,7 +256,7 @@ How to read the expressions:
 
 | Symptom | Cause and fix |
 | --- | --- |
-| The icon is empty | When the cell was taken out with a `#hud_subtitle_text_string` **binding** expression, the icon was empty in every form: truncation, fixed width, adding and subtracting, erasing padding characters. Take it out of the title factory variable `$subtitle_text` and put it into `property_bag` |
+| The icon is empty | When the cell was taken out with a `#hud_subtitle_text_string` **binding** expression, the icon was empty in every form: truncation, fixed width, adding and subtracting, erasing padding characters. Take it out of the title factory variable `$subtitle_text` and put it into `property_bag`. In another test, icons were drawn through a binding expression as well (section 3.4) |
 | Gray cells and "expected a string" | The subtitle was sent as only a number. Put a character (`i`) at the front |
 | Counts or digit characters do not show | Values converted to numbers did not show in the label (`" 219"`, `"1,532/4,096"`). Send them in a cell that starts with `§f`, and to make them text in an expression use `'§r' + value` |
 | The count expression is not computed | Put the count expression in the **label's own** `variables`. An expression put on the parent panel or `('§r' + $variable)` inside `text` was not computed |
