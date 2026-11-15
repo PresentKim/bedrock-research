@@ -104,7 +104,7 @@ The menu entity's name tag was not visible in first person (measured). Whether i
 ```
 
 - `$container_title` cannot be used in binding expressions, but it can be compared in `ignored` and `visible` property expressions. Declare the copy variable `$bwiki_title` and compare the copy (measured, HOST-48).
-- `('%.6s' * $bwiki_title)` cuts the first 6 bytes of the name. `§` is 2 bytes in UTF-8, so `§b§w` is 6 bytes. That this prefix comparison works in a property fixed at creation time was checked only in jsonui-tester, and there is a community report that prefix comparisons on `$container_title` work. It was not checked in game (*unverified*).
+- `('%.6s' * $bwiki_title)` cuts the first 6 bytes of the name. `§` is 2 bytes in UTF-8, so `§b§w` is 6 bytes. This prefix comparison also worked in game in a property fixed at creation time (measured, in a test with all ten wiki examples in one world). It agrees with a community report that prefix comparisons on `$container_title` work.
 - On mobile the copy variable goes on `panel`, and `header_area`, `background_panel` and `half_screen` are left out with `ignored`. The grey background disappeared and the window floated over the world like the classic UI (measured, with the 2048 test pack comparing the full name).
 - On desktop the path key `small_chest_panel/root_panel` is hidden with `visible`.
 - These properties override vanilla definitions, so they compete with other packs that write the same properties (MOD-13). The four examples write this part byte for byte the same, so the values are the same whichever example is on top. Competition remains with packs that write other values (*inferred*).
@@ -131,7 +131,7 @@ The `overlay` is built only when the full name matches. This is the definition i
 "overlay": {
   "type": "panel",
   "size": [ "100%", "100%" ],
-  "layer": 50,
+  "layer": 1,
   "$bwiki_title": "$container_title",
   "controls": [
     {
@@ -145,7 +145,7 @@ The `overlay` is built only when the full name matches. This is the definition i
               "type": "input_panel",
               "modal": true,
               "size": [ "100%", "100%" ],
-              "layer": 100,
+              "layer": 1,
               "controls": [
                 {
                   "sync_grid": {
@@ -172,7 +172,8 @@ The `overlay` is built only when the full name matches. This is the definition i
 - `ignored` does not see the control's own `$` declarations and is evaluated in the parent scope (FILE-34). So the copy variable goes on the parent `overlay` and the child `host` compares it. In game only the setup with the copy on the parent was tested (measured).
 - When `ignored` is true the control is not built, so a chest with another name has none of that example's controls. In jsonui-tester the control count of a mobile ordinary chest went from 3,569 when hidden only with `visible` to 2,207 (*unverified*, static simulation).
 - `sync_grid` is the empty grid that stops flicker when slots change (section 8.3).
-- In a jsonui-tester check with the resource packs of all four examples loaded, each name showed only its own window with vanilla hidden, and a plain unnamed chest showed only vanilla. They were not turned on together in game (*unverified*, static check only).
+- `overlay` and `cover` are at `layer` 1. With `overlay` at 50 and `cover` at 100, only the window's `inventory_item_renderer` icons were not drawn, while names, counts and backgrounds were (measured). Lowering both to 1 drew the icons (measured, ANI-38). This agrees with a community report that an item renderer at layer 100 hid items while 4 and 50 were fine.
+- In a game test with the four examples on in one world, each entity opened its own window (measured, in a test with all ten wiki examples in one world). A jsonui-tester check with the four resource packs loaded also showed only each name's own window with vanilla hidden, and only vanilla for a plain unnamed chest.
 
 ### 2.3 Icon grid and selection
 
@@ -318,7 +319,7 @@ Entity Menu Lab puts the setup of sections 2.2 to 2.5 on one screen. The menu en
 2. Take "Entity Menu Lab" (book and quill) from the end of the items category of the creative inventory, or use `/give @s bwiki:entity_menu_lab`.
 3. Hold the item and tap the middle of the screen to open the menu.
 4. Sneak and use the item to open the settings. Choose between the menu screen and the lock test (diamonds with none, inventory and slot locks in a vanilla chest screen). The lock test reports in chat whenever a count changes. The menu entity is named `§b§w§m§l`, and the lock test entity gets no name, so the vanilla chest screen opens (section 2.2.1).
-5. It can be turned on in the same world as the other entity inventory examples (section 2.2.3, *unverified*, static jsonui-tester check only).
+5. It can be turned on in the same world as the other entity inventory examples (section 2.2.3, measured).
 
 | Row | Slot read | Content |
 | --- | --- | --- |
@@ -379,7 +380,7 @@ Picking goes through the server, but the delay before the details changed was ba
 
 <AddonDownload id="entity-research-screen" />
 
-1. Turn on the behavior pack whose name starts with `[bedrock-research]entity-research-screen-bp` in a new world. The resource pack turns on with it as a dependency. It can be turned on in the same world as Entity Menu Lab and the other entity inventory examples (section 2.2.3, *unverified*, static jsonui-tester check only).
+1. Turn on the behavior pack whose name starts with `[bedrock-research]entity-research-screen-bp` in a new world. The resource pack turns on with it as a dependency. It can be turned on in the same world as Entity Menu Lab and the other entity inventory examples (section 2.2.3, measured).
 2. Take "Research" (enchanted book) from the end of the items category of the creative inventory, or use `/give @s bwiki:entity_research`.
 3. Hold the item and tap the middle of the screen to open the research screen.
 4. Sneak and use the item to reset the research and get 64 of each of the 10 materials.
@@ -390,7 +391,7 @@ Example add-on measurement video (mobile 1.26.63, 2026-11-15).
 
 ## 8. 2048 test: animation replay and flicker
 
-This test draws 2048 with entity slots to check whether the tile slide animations can replay on every move in an open chest screen (mobile 1.26.63, 2026-11-15). The screen opens with C2 and is inserted the way section 2.2 describes. The example add-on Entity 2048 (section 8.5) is that test pack tidied up, and the code below is copied from its files. The example add-on differs from the test pack in names, identifiers and the prefix convention of section 2.2. The example add-on itself was not opened in game (*unverified*).
+This test draws 2048 with entity slots to check whether the tile slide animations can replay on every move in an open chest screen (mobile 1.26.63, 2026-11-15). The screen opens with C2 and is inserted the way section 2.2 describes. The example add-on Entity 2048 (section 8.5) is that test pack tidied up, and the code below is copied from its files. The example add-on differs from the test pack in names, identifiers, the prefix convention of section 2.2 and the layers of section 2.2.3. The example add-on also opened its own screen in game (measured, in a test with all ten wiki examples in one world).
 
 ### 8.1 Slot layout
 
@@ -497,7 +498,7 @@ All of these are measured. Forcing a layout pass with a label whose width change
 2. Take "2048" from the end of the items category of the creative inventory, or use `/give @s bwiki:entity_2048`.
 3. Hold the item and tap the middle of the screen to open the 2048 screen. The direction buttons on both sides slide the tiles, and New starts a new board.
 
-It can be turned on in the same world as the other entity inventory examples (Entity Menu Lab, the research screen) (section 2.2.3, *unverified*, static jsonui-tester check only).
+It can be turned on in the same world as the other entity inventory examples (Entity Menu Lab, the research screen) (section 2.2.3, measured).
 
 ## Related rules
 
@@ -505,7 +506,7 @@ It can be turned on in the same world as the other entity inventory examples (En
 | --- | --- | --- |
 | HOST-16 to HOST-20 | [Screen hosts and data](../json-ui/screen-hosts-and-data.mdx) | Entity inventory screen, slot identity, screen redeclaration, script-side cautions |
 | HOST-48 to HOST-50 | [Screen hosts and data](../json-ui/screen-hosts-and-data.mdx) | Picking by entity name, inserting the window with `modifications`, an empty grid against flicker |
-| ANI-37 | [Images and animation](../json-ui/images-and-animation.mdx) | Replaying animations by building the control again |
+| ANI-37, ANI-38 | [Images and animation](../json-ui/images-and-animation.mdx) | Replaying animations by building the control again, an item renderer not drawn at a high layer |
 | COL-22, COL-23 | [Collections and factories](../json-ui/collections-and-factory.mdx) | Picking factory kinds with a `property_bag` dictionary lookup |
 | FILE-34 | [Files and definitions](../json-ui/files-and-definitions.mdx) | `ignored` is evaluated in the parent scope |
 | MOD-13 | [Modifying vanilla screens](../json-ui/modifying-vanilla.mdx) | Using only `modifications` that define nothing |
