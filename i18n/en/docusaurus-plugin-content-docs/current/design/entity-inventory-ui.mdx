@@ -174,6 +174,7 @@ The `overlay` is built only when the full name matches. This is the definition i
 - When `ignored` is true the control is not built, so a chest with another name has none of that example's controls. In jsonui-tester the control count of a mobile ordinary chest went from 3,569 when hidden only with `visible` to 2,207 (*unverified*, static simulation).
 - `sync_grid` is the empty grid that stops flicker when slots change (section 8.3).
 - `overlay` and `cover` are at `layer` 1. With `overlay` at 50 and `cover` at 100, only the window's `inventory_item_renderer` icons were not drawn, while names, counts and backgrounds were (measured). Lowering both to 1 drew the icons (measured, ANI-38). This agrees with a community report that an item renderer at layer 100 hid items while 4 and 50 were fine.
+- The limit depends on the sum of all ancestor layers, not on the control's own `layer`. In a chest screen with an outer window at 1, a cover at 1 and a window at 2, item renderers and `live_player_renderer` controls were lined up at layers 0 to 999. Both were drawn up to a sum of 94 inside the example and neither was drawn from 99. Wrapping the same cells in a panel with 148 more layers (sums of 152 and up) drew none of them (measured, mobile, 2026-11-16). The sum leaves out the ancestor layers of the vanilla chest panel, so the exact limit can only be placed between 94 and 99. A `live_horse_renderer` in the same screen was drawn at every sum (measured).
 - A jsonui-tester check with the resource packs of the four examples and three test packs from outside the wiki, loaded together in both orders, showed only each name's own window with vanilla hidden, and only vanilla for a plain unnamed chest. In a game test with the four examples in one world, each entity also opened its own window without vanilla, and the unnamed Entity Menu Lab lock test entity opened the vanilla chest screen (measured).
 
 ### 2.3 Icon grid and selection
@@ -586,7 +587,7 @@ Each cell has one `live_horse_renderer` that draws one entity. Several community
 | Screen value | none | global `#entity_id` | Not drawn. The chest screen does not provide it |
 
 - The example uses quoted names. Real player cells hold `p"<id>"` and simulated player cells hold `b"<id>"`. Each cell has two renderers that receive the value with `p` or `b` removed, and only the one whose value changed is visible (`#visible`).
-- A `live_player_renderer` in the same cell drew neither you nor other entities (measured).
+- A `live_player_renderer` in the same cell drew neither you nor other entities (measured). That test was inside an outer window at 50 and a cover at 100. With the layer sum lowered to 94 or less, `live_player_renderer` drew you in the chest screen too (section 2.2.3, measured). Whether it draws other entities at low layers was not tested (*unverified*).
 - The model is about twice as tall as the renderer control and spills out of the cell, so the cell uses `clips_children: true` (measured).
 - A player's head sits at the top of the control, but a custom entity is drawn higher in the same control. Moving the control down by 1.35 times its size puts it where a player would be (measured at sizes 16, 24 and 32).
 - An entity out of view (10 blocks behind you) was still drawn (measured). Cells for other real players were not tested (*unverified*).
