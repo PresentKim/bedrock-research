@@ -224,6 +224,18 @@ Bars have two conditions.
 
 No way to turn a number into text was found. `('v' + #item_durability_total_amount)` drew only `v`, and a number binding put straight into `#text` drew nothing. Put numbers meant for the screen into the name or lore as text.
 
+A label draws its value only when the value is text. This comes from a side by side comparison in a chest screen (measured, mobile, 2026-11-16).
+
+| Value | As is | With `'v'` or `'§r'` in front |
+| --- | --- | --- |
+| Durability `#item_durability_total_amount`, `#item_durability_current_amount` | Not shown | `'v' +` showed only `v`, `'§r' +` showed nothing |
+| Slot name `219` read with `(#hover_text - '§o' - '§f' - '§r')` | Not shown | `'v' +` showed `v219` |
+| Slot name ` 219` (leading space) | Not shown | `'§r' +` showed `219` |
+| Slot name `1,532/4,096` | Not shown | `'§r' +` showed `1` (only the leading integer is kept, EXP-30) |
+| Comparison `(#inventory_stack_count = '')` | Not tested | `'v' +` showed `vtrue` or `vfalse` |
+
+A value that became an integer, like a number read from a slot name, shows once text is put in front of it, but the durability values did not show in any way.
+
 A variable inside a size array such as `[160, "$line_h"]` gave a height of 0 and the rows overlapped. Pass a whole-array variable such as `"size": "$line_size"`.
 
 ### 2.5 A button that reaches the script
@@ -589,7 +601,7 @@ Each cell has one `live_horse_renderer` that draws one entity. Several community
 - The example uses quoted names. Real player cells hold `p"<id>"` and simulated player cells hold `b"<id>"`. Each cell has two renderers that receive the value with `p` or `b` removed, and only the one whose value changed is visible (`#visible`).
 - A `live_player_renderer` in the same cell drew neither you nor other entities (measured). That test was inside an outer window at 50 and a cover at 100. With the layer sum lowered to 94 or less, `live_player_renderer` drew you in the chest screen too (section 2.2.3, measured). Whether it draws other entities at low layers was not tested (*unverified*).
 - The model is about twice as tall as the renderer control and spills out of the cell, so the cell uses `clips_children: true` (measured).
-- A player's head sits at the top of the control, but a custom entity is drawn higher in the same control. Moving the control down by 1.35 times its size puts it where a player would be (measured at sizes 16, 24 and 32).
+- A player's head sits at the top of the control, but a custom entity is drawn higher in the same control. Moving the control down by 1.35 times its size puts it where a player would be (measured at sizes 16, 24 and 32). With a center line drawn on a control that was not moved, the custom entity's feet sat on the control center. Comparing 1.35, 1.5 and 1.62 times at size 16 side by side, 1.35 matched the player best and the others sat lower (measured, mobile, 2026-11-16).
 - An entity out of view (10 blocks behind you) was still drawn (measured). Cells for other real players were not tested (*unverified*).
 - Community reports say the renderer turns the model toward the cursor and that `#look_at_cursor: false` does not stop it (*unverified*). This could not be checked on mobile.
 
