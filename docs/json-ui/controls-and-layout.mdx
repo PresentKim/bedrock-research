@@ -204,7 +204,7 @@ MS Learn의 `minecraft:ui_element` 문서(커밋 a9fd1c0)는 요소 속성을 �
 
 위키(BW) 문서를 바닐라 1.26.50.4와 대조해 더한 규칙이다. 위키 문장만 있는 것은 `미검증`, 위키의 게임 스크린샷이 있는 것은 `실측`(제3자 기록)으로 표시했다.
 
-- **[LAY-29]** 그리드 칸에 정적 자식을 직접 놓으려면 자식에 `"grid_position": [행, 열]`을 준다(0부터). 바닐라도 71회 쓰고, 엔진이 만든 그리드의 특정 칸을 덮어쓰는 데도 쓴다. `{바닐라, 실측}` (출처: VN, BW-doc Control 표, BW-dyn 스크린샷)
+- **[LAY-29]** 그리드 칸에 정적 자식을 직접 놓으려면 자식에 `"grid_position": [열, 행]`을 준다(0부터). `grid_dimensions [4, 2]` 격자에서 `[3, 0]`은 오른쪽 위, `[0, 1]`은 왼쪽 아래에 놓였다(실측, 모바일, 2026-11-16, C-48). 바닐라도 71회 쓰고, 엔진이 만든 그리드의 특정 칸을 덮어쓰는 데도 쓴다. `{바닐라, 실측}` (출처: VN, HXC, BW-dyn 스크린샷)
 - **[LAY-30]** 개수가 바인딩으로 정해지는 그리드는 `grid_rescaling_type: "horizontal"`과 고정 폭을 주고 `#maximum_grid_items`(또는 `maximum_grid_items`)로 개수를 정한다. 열 수는 `floor(그리드 폭 / 템플릿 폭)`이다(160px ÷ 32px = 5열, 개수 15 → 3행). 높이는 `"100%c"`로 둔다. `{실측}` (출처: BW-dyn 스크린샷)
 - **[LAY-31]** **그리드는 숨은(`visible` false) 항목에도 자리를 준다.** 스택 패널(LAY-04)과 반대라서, 조건부 항목을 그리드에 두면 빈칸이 생긴다. 접혀야 하는 목록은 스택 패널로 만든다. Cinnabar 재구성에서도 그리드 칸 위치가 인덱스로 정해져 숨은 칸이 자리를 차지한다. `{코드, 미검증}` (출처: BW-dyn "Useful Information", CN)
 - **[LAY-32]** `grid_rescaling_type: "vertical"`은 게임을 크래시시킬 수 있다는 경고가 있다. 바닐라는 1회(`store_item_list_screen.json`) 쓴다. 새로 만들 때는 `horizontal`을 쓴다. `{미검증, 바닐라}` (출처: BW-dyn, VN)
@@ -268,7 +268,7 @@ Cinnabar(`CN`)는 26.30 네이티브 클라이언트의 JSON UI 해석기를 재
 - **[LAY-48]** (반영안) `common.scrolling_panel`은 `$touch`에 따라 `scroll_touch`(터치)와 `scroll_mouse`(마우스) 하위 트리 중 하나만 만든다(`ui_common.json:4718-4750`). 스크롤 내용까지의 경로와 크기 변수(`_touch` 짝)가 입력 모드마다 다르므로, 경로 키나 `source_control_name`으로 스크롤 안을 가리키면 두 경로를 다 고려하거나 인스턴스에 `"$touch": true`를 넘겨 한쪽으로 고정한다(`resource_packs_screen.json:2685`도 그렇게 한다). `{바닐라}` (출처: jua-netease-docs, bedrock-samples)
 - **[LAY-49]** (반영안) `#anchored_offset_value_x/y`는 `use_anchored_offset: true`인 컨트롤에서 값 곱하기 부모 크기만큼 앵커 방향으로 민다. `anchor_from`이 `center`면 효과가 없다. 정적 컨트롤에서 쓰려면 모서리·가장자리 앵커를 준다. `{코드, 미검증, 충돌}` (출처: jua-cinnabar, jua-json-ui-examples, jua-bedrock-core) 충돌 C-61.
 - **[LAY-50]** (반영안) 엔진 컬렉션 그리드(`hotbar_items` 등)를 다른 모양으로 그릴 때는 바닐라 정의를 복사하면서 `grid_dimension_binding` 속성 자체를 지우고 `grid_dimensions`를 고정한다. `bindings`만 비우면 Cinnabar 모델에서는 차원 바인딩이 자동으로 다시 붙는다. `{코드, 미검증, 충돌}` (출처: jua-cinnabar, jua-json-ui-examples, bedrock-samples) 충돌 C-62.
-- **정정(적용 대상)**: LAY-29의 `grid_position`은 `[열, 행]`이다(C-48 해소). 근거는 `inventory_screen.json:1200`(3×3 제작 칸의 `crafting_input_item_top_mid`가 `[1, 0]`, `mid_left`가 `[0, 1]`), `trade_screen.json:327`(`[4, 1]` 그리드의 자식이 `[0, 0]`~`[3, 0]`), `inventory_screen.json:1054`(갑옷 `[1, 4]` 그리드의 자식이 `[0, 0]`~`[0, 3]`)다.
+- **정정(적용함)**: LAY-29의 `grid_position`은 `[열, 행]`이다(C-48 해소, 2026-11-16 실측으로 확인). 근거는 `inventory_screen.json:1200`(3×3 제작 칸의 `crafting_input_item_top_mid`가 `[1, 0]`, `mid_left`가 `[0, 1]`), `trade_screen.json:327`(`[4, 1]` 그리드의 자식이 `[0, 0]`~`[3, 0]`), `inventory_screen.json:1054`(갑옷 `[1, 4]` 그리드의 자식이 `[0, 0]`~`[0, 3]`)다.
 - **보강안(미적용)**: LAY-02에 `scrolling_panel`의 `$touch` 분기를, LAY-03에 `wrap_content` 바닐라 0회를, LAY-10·LAY-12 표에 중국판 문서의 세 번째 근거(C-37)를, LAY-18·LAY-33에 위키·NE의 `layer` 설명을, LAY-27에 Mojira 기록을, LAY-40에 바닐라 `#priority` 바인딩 3회(`store_common.json:732·8239·8503`, 부모 스택이 `use_priority: true`)와 MS Learn Update1.26.0 서술을 더한다. 시각 편집기의 미리보기가 엔진 규칙과 다르다는 주의(편집기가 `%c`와 스택 배치를 근사한다)는 디버깅 장으로 옮긴다.
 
 ## 충돌 판정 (이 장의 규칙과 관련된 것)
@@ -282,7 +282,7 @@ Cinnabar(`CN`)는 26.30 네이티브 클라이언트의 JSON UI 해석기를 재
 | C-43 | `#`가 없는 바인딩 식 | 실측은 `bindings` 배열 전체가 버려진다, Cinnabar는 그 바인딩 하나만 | 실측 우선(BND-05) |
 | C-44 | 정적 `offset` 바인딩 | 실측은 안 됨(LAY-05), Cinnabar는 `#offset`에 `[x, y]`를 받는다. 생성 위치(정적, 팩토리)에 따른 차이일 수 있다 | 실측 우선: LAY-05 유지 |
 | C-45 | 바인딩한 `alpha` | 실측은 0과 1만, Cinnabar는 숫자를 그대로 받는다. 측정 식이 `0.5` 리터럴을 썼다면 정수 0이 되어 그렇게 보였을 수 있다 | 미해결: `.5`로 재측정 |
-| C-48 | `grid_position` 축 순서 | 바닐라 세 곳 대조 | 해소: `[열, 행]` |
+| C-48 | `grid_position` 축 순서 | 바닐라 세 곳 대조, 실측 | 해소: `[열, 행]` |
 | C-49 | 오른쪽·아래 앵커의 offset 부호 | 바닐라 분포와 `common.close_button` | 해소: 뒤집히지 않는다 |
 | C-56 | `resolve_sibling_scope` 없을 때 검색 범위 | 화면 루트부터 너비 우선(Cinnabar, 바닐라) | 해소: Cinnabar·바닐라 쪽 |
 | C-61, C-62 | 정적 `#anchored_offset_value`, `grid_dimension_binding`을 남긴 그리드 | 위 LAY-49, LAY-50 | 미해결 |
