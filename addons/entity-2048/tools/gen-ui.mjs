@@ -209,7 +209,7 @@ function overlay() {
   return {
     type: "panel",
     size: ["100%", "100%"],
-    layer: 50,
+    layer: 1,
     $bwiki_title: "$container_title",
     controls: [
       {
@@ -220,7 +220,7 @@ function overlay() {
           controls: [
             {
               cover: {
-                type: "input_panel", modal: true, size: ["100%", "100%"], layer: 100,
+                type: "input_panel", modal: true, size: ["100%", "100%"], layer: 1,
                 controls: [
                   {
                     sync_grid: {
