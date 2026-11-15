@@ -67,20 +67,12 @@ The menu entity's name tag was not visible in first person (measured). Whether i
 
 #### 2.2.2 Hiding vanilla (shared by the four examples)
 
-`chest_screen.json`:
+No property of a vanilla definition is overridden. One view binding is inserted with `modifications` into the `bindings` of each vanilla control to hide, and that binding reads a marker control inside the example's window.
 
-```json
-"small_chest_panel/root_panel": {
-  "$bwiki_title": "$container_title",
-  "visible": "(not (('%.6s' * $bwiki_title) = '§b§w'))"
-}
-```
-
-`pocket_containers.json` (the 2048 example file; only the `modifications` value on `panel` differs per example):
+`pocket_containers.json` (the 2048 example file; only the `overlay` name inserted into `panel` differs per example):
 
 ```json
 "panel": {
-  "$bwiki_title": "$container_title",
   "modifications": [
     {
       "array_name": "controls",
@@ -91,23 +83,30 @@ The menu entity's name tag was not visible in first person (measured). Whether i
 },
 
 "header_area": {
-  "ignored": "(('%.6s' * $bwiki_title) = '§b§w')"
-},
-
-"background_panel": {
-  "ignored": "(('%.6s' * $bwiki_title) = '§b§w')"
-},
-
-"half_screen": {
-  "ignored": "(('%.6s' * $bwiki_title) = '§b§w')"
+  "modifications": [
+    {
+      "array_name": "bindings",
+      "operation": "insert_back",
+      "value": [ { "binding_type": "view", "source_control_name": "entity_ui_hide_vanilla", "source_property_name": "#entity_ui_vanilla_visible", "target_property_name": "#visible", "binding_condition": "always" } ]
+    }
+  ]
 }
 ```
 
-- `$container_title` cannot be used in binding expressions, but it can be compared in `ignored` and `visible` property expressions. Declare the copy variable `$bwiki_title` and compare the copy (measured, HOST-48).
-- `('%.6s' * $bwiki_title)` cuts the first 6 bytes of the name. `§` is 2 bytes in UTF-8, so `§b§w` is 6 bytes. This prefix comparison also worked in game in a property fixed at creation time (measured, in a test with all ten wiki examples in one world). It agrees with a community report that prefix comparisons on `$container_title` work.
-- On mobile the copy variable goes on `panel`, and `header_area`, `background_panel` and `half_screen` are left out with `ignored`. The grey background disappeared and the window floated over the world like the classic UI (measured, with the 2048 test pack comparing the full name).
-- On desktop the path key `small_chest_panel/root_panel` is hidden with `visible`.
-- These properties override vanilla definitions, so they compete with other packs that write the same properties (MOD-13). The four examples write this part byte for byte the same, so the values are the same whichever example is on top. Competition remains with packs that write other values (*inferred*).
+`background_panel` and `half_screen` get the same binding. `chest_screen.json` inserts the same binding at the path key `small_chest_panel/root_panel`. These definitions have no `bindings` of their own (MOD-04, MOD-08).
+
+The marker control sits inside `host` of the `overlay` in section 2.2.3.
+
+```json
+"entity_ui_hide_vanilla": { "type": "panel", "size": [ 0, 0 ], "property_bag": { "#entity_ui_vanilla_visible": false } }
+```
+
+- The binding finds the marker on the screen through `source_control_name` and sets `#visible` to false. The marker is inside `host`, so it is built only when the name matches. Hidden controls are still found by the name lookup (BND-25), so the marker must be left out with `ignored`, not hidden with `visible`.
+- On screens without the marker (ordinary chest, barrel) the binding did not hide vanilla (measured, compatibility test packs).
+- On mobile the grey background also disappeared and the window floated over the world like the classic UI, and there was no flicker while slot items changed every 0.5 s (measured, compatibility test packs).
+- When several packs insert bindings into the same vanilla control, they all read the marker of the same name and write the same value. `modifications` from several packs stack (MOD-02). So add-ons outside the wiki that follow the marker name `entity_ui_hide_vanilla` and the property `#entity_ui_vanilla_visible` can be turned on together. In a test with two test packs that know nothing of each other and the 2048 and matchmaking test packs switched to the same approach, all in one world, each opened only its own window (measured).
+- Leaving vanilla controls out with `ignored` would be lighter, since they would not be built. But `ignored` is a property that takes only `$` variables (FILE-16), so it has to be written on the vanilla definition, and that competes with other packs that write the same property (MOD-13). `modifications` cannot change properties (MOD-03). So vanilla is built and then hidden. The control count of the matchmaking test screen went from 369 to 2,375 (*unverified*, static simulation), but no slowdown was noticed in game (measured).
+- Desktop was not checked, because jsonui-tester does not apply `modifications` at a path key (*unverified*).
 
 #### 2.2.3 Inserting the window
 
@@ -140,6 +139,7 @@ The `overlay` is built only when the full name matches. This is the definition i
         "size": [ "100%", "100%" ],
         "ignored": "(not ($bwiki_title = '§b§w§2§0'))",
         "controls": [
+          { "entity_ui_hide_vanilla": { "type": "panel", "size": [ 0, 0 ], "property_bag": { "#entity_ui_vanilla_visible": false } } },
           {
             "cover": {
               "type": "input_panel",
@@ -173,7 +173,7 @@ The `overlay` is built only when the full name matches. This is the definition i
 - When `ignored` is true the control is not built, so a chest with another name has none of that example's controls. In jsonui-tester the control count of a mobile ordinary chest went from 3,569 when hidden only with `visible` to 2,207 (*unverified*, static simulation).
 - `sync_grid` is the empty grid that stops flicker when slots change (section 8.3).
 - `overlay` and `cover` are at `layer` 1. With `overlay` at 50 and `cover` at 100, only the window's `inventory_item_renderer` icons were not drawn, while names, counts and backgrounds were (measured). Lowering both to 1 drew the icons (measured, ANI-38). This agrees with a community report that an item renderer at layer 100 hid items while 4 and 50 were fine.
-- In a game test with the four examples on in one world, each entity opened its own window (measured, in a test with all ten wiki examples in one world). A jsonui-tester check with the four resource packs loaded also showed only each name's own window with vanilla hidden, and only vanilla for a plain unnamed chest.
+- A jsonui-tester check with the resource packs of the four examples and three test packs from outside the wiki, loaded together in both orders, showed only each name's own window with vanilla hidden, and only vanilla for a plain unnamed chest. In a game test with the four examples in one world, each entity also opened its own window without vanilla, and the unnamed Entity Menu Lab lock test entity opened the vanilla chest screen (measured).
 
 ### 2.3 Icon grid and selection
 
@@ -478,7 +478,7 @@ All of these are measured. Forcing a layout pass with a label whose width change
 }
 ```
 
-- The tests in the table hid vanilla with `visible: false`. How the flicker behaves with the setup that leaves the mobile vanilla out with `ignored` (section 2.2.2) was not checked (*unverified*).
+- The tests in the table hid vanilla with `visible: false`. The current setup, which turns `#visible` off with a binding (section 2.2.2), also had no flicker with the empty grid in place (measured, compatibility test packs).
 - Whether the grey drawn without a grid is the hidden vanilla cells, and why an empty grid makes the flicker go away, is not known.
 - With vanilla cells visible, the flicker may have gone unnoticed because the vanilla cells or background covered it (*inferred*).
 
@@ -506,10 +506,11 @@ It can be turned on in the same world as the other entity inventory examples (En
 | --- | --- | --- |
 | HOST-16 to HOST-20 | [Screen hosts and data](../json-ui/screen-hosts-and-data.mdx) | Entity inventory screen, slot identity, screen redeclaration, script-side cautions |
 | HOST-48 to HOST-50 | [Screen hosts and data](../json-ui/screen-hosts-and-data.mdx) | Picking by entity name, inserting the window with `modifications`, an empty grid against flicker |
+| BND-25 | [Bindings](../json-ui/bindings.mdx) | `source_control_name` search scope, hidden subtrees are searched too |
 | ANI-37, ANI-38 | [Images and animation](../json-ui/images-and-animation.mdx) | Replaying animations by building the control again, an item renderer not drawn at a high layer |
 | COL-22, COL-23 | [Collections and factories](../json-ui/collections-and-factory.mdx) | Picking factory kinds with a `property_bag` dictionary lookup |
-| FILE-34 | [Files and definitions](../json-ui/files-and-definitions.mdx) | `ignored` is evaluated in the parent scope |
-| MOD-13 | [Modifying vanilla screens](../json-ui/modifying-vanilla.mdx) | Using only `modifications` that define nothing |
+| FILE-16, FILE-34 | [Files and definitions](../json-ui/files-and-definitions.mdx) | `ignored` takes only `$` variables and is evaluated in the parent scope |
+| MOD-02, MOD-08, MOD-13 | [Modifying vanilla screens](../json-ui/modifying-vanilla.mdx) | `modifications` from several packs stack, hiding by adding a binding, using only `modifications` that define nothing |
 | ANI-03 | [Images and animation](../json-ui/images-and-animation.mdx) | Progress bars drawn with `#clip_ratio` |
 | ANI-06 | [Images and animation](../json-ui/images-and-animation.mdx) | The item renderer and `#item_id_aux` |
 | EXP-27 | [Expressions](../json-ui/expressions.mdx) | Real literals that start with a dot |
