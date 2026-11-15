@@ -24,9 +24,9 @@ GitHub Pages 배포(`.github/workflows/pages.yml`)는 저장소가 공개일 때
 
 ## 예제 애드온
 
-페이지에서 내려받는 시험 애드온의 소스는 `addons/<id>/bp`, `addons/<id>/rp`에 있다. `npm run build-addons`(시작과 빌드 전에 자동으로 실행)가 `static/downloads/<id>-v<버전>.mcaddon`을 만들고, 페이지에서는 `<AddonDownload id="<id>" />`로 내려받기 링크를 단다.
+페이지에서 내려받는 시험 애드온의 소스는 `addons/<id>/bp`, `addons/<id>/rp`에 있다. `npm run build-addons`(시작과 빌드 전에 자동으로 실행)가 `static/downloads/[bedrock-research]<id>_v<버전>.mcaddon`을 만들고(안의 폴더는 `<id>_bp`, `<id>_rp`), 페이지에서는 `<AddonDownload id="<id>" />`로 내려받기 링크를 단다.
 
-버전은 BP와 RP manifest의 `version`, 팩 이름 끝의 `v<버전>`, 설명 앞의 `v<버전> - `, BP가 의존하는 RP 버전, 스크립트의 `PACK_VERSION`이 모두 같아야 한다. 하나라도 다르면 빌드가 실패하므로 고칠 때 함께 올린다. 애드온마다 크리에이티브 아이템 분류에 전용 테스트 아이템(`bwiki:<이름>_test`, 태그 `bwiki:test_launcher`)을 두고, 스크립트는 그 아이템을 쓸 때만 메뉴를 연다. 아이템 식별자나 UUID가 애드온끼리 겹쳐도 빌드가 실패한다.
+팩 이름(manifest `header.name`)은 `[bedrock-research]<id>-<bp|rp>_v<버전>`이다(예: `[bedrock-research]entity-2048-bp_v1.1.0`). 버전은 BP와 RP manifest의 `version`, 팩 이름 끝의 `v<버전>`, 설명 앞의 `v<버전> - `, BP가 의존하는 RP 버전, 스크립트의 `PACK_VERSION`이 모두 같아야 한다. 하나라도 다르면 빌드가 실패하므로 고칠 때 함께 올린다. 애드온마다 크리에이티브 아이템 분류에 전용 테스트 아이템(`bwiki:<이름>_test`, 태그 `bwiki:test_launcher`)을 두고, 스크립트는 그 아이템을 쓸 때만 메뉴를 연다. 아이템 식별자나 UUID가 애드온끼리 겹쳐도 빌드가 실패한다.
 
 ## 영어판
 
