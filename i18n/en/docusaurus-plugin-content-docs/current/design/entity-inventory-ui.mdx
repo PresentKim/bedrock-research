@@ -62,10 +62,11 @@ The script names the menu entity's `nameTag` with the shared prefix `§b§w`, ma
 | Entity Menu Lab (section 6) | `§b§w§m§l`. Only the menu mode gets the name; the lock experiment entity has no name, so the vanilla chest screen opens |
 | Research screen (section 7) | `§b§w§r§s` |
 | Matchmaking (section 9) | `§b§w§m§m` |
+| Figure lobby (section 10) | `§b§w§m§f` |
 
 The menu entity's name tag was not visible in first person (measured). Whether it shows in third person or to other players was not tested (*unverified*, section 8.4).
 
-#### 2.2.2 Hiding vanilla (shared by the four examples)
+#### 2.2.2 Hiding vanilla (shared by the examples)
 
 No property of a vanilla definition is overridden. One view binding is inserted with `modifications` into the `bindings` of each vanilla control to hide, and that binding reads a marker control inside the example's window.
 
@@ -567,6 +568,66 @@ In a Node run with a stand-in for `@minecraft/server`, accepting automatically f
 <video controls preload="metadata" width="100%" src={require('@site/static/video/entity-matchmaking-addon.mp4').default} />
 
 Measurement video (mobile, 2026-11-15). The video and the screenshots above come from the test pack v1.0.0 that this example was built from. The screen and the script behavior are the same as the example add-on; only the names, identifiers, vanilla hiding (section 2.2.2) and layers (section 2.2.3) differ. No problems were seen with the test pack (measured).
+
+## 10. Example: figure lobby
+
+This example uses the same queue flow as the matchmaking example in section 9 and draws every lobby member as a standing figure (an entity doll). A grid of 2 rows x 4 figure cells replaces the player slots (up to 8 people, you included), there are four emote buttons, and simulated players slowly look around. Its names and identifiers differ from the section 9 example, so both can be turned on in the same world.
+
+### 10.1 Drawing the figures
+
+Each cell has one `live_horse_renderer` that draws one entity. Several community reports say the renderer draws an entity when its `#entity_id` gets the Script API `entity.id` string. How to pass that id through slot names in a chest screen was found by measurement:
+
+| Way | Slot name | Binding | Result (measured) |
+| --- | --- | --- | --- |
+| As is | `-4294967295` | `#hover_text` straight into `#entity_id` | Not drawn. The value carries format codes |
+| Quoted name | `"-4294967295"` | `(#hover_text - '§o' - '§f' - '§r')` | Drawn. The received value is `-4294967295` without quotes |
+| Two numbers joined | `-4294`, `967295` (two slots) | `('"' + #hi + #lo + '"')` | Drawn |
+| Digits only | `-4294967295` | `(#hover_text - '§o' - '§f' - '§r')` | Not drawn. It turns into a number (EXP-30) |
+| Screen value | none | global `#entity_id` | Not drawn. The chest screen does not provide it |
+
+- The example uses quoted names. Real player cells hold `p"<id>"` and simulated player cells hold `b"<id>"`. Each cell has two renderers that receive the value with `p` or `b` removed, and only the one whose value changed is visible (`#visible`).
+- A `live_player_renderer` in the same cell drew neither you nor other entities (measured).
+- The model is about twice as tall as the renderer control and spills out of the cell, so the cell uses `clips_children: true` (measured).
+- A player's head sits at the top of the control, but a custom entity is drawn higher in the same control. Moving the control down by 1.35 times its size puts it where a player would be (measured at sizes 16, 24 and 32).
+- An entity out of view (10 blocks behind you) was still drawn (measured). Cells for other real players were not tested (*unverified*).
+- Community reports say the renderer turns the model toward the cursor and that `#look_at_cursor: false` does not stop it (*unverified*). This could not be checked on mobile.
+
+### 10.2 Simulated player entities
+
+For every viewer, each simulated player gets its own entity `bwiki:entity_matchmaking_figures_bot` (Steve or Alex) placed at the viewer's feet. Its collision box is 0.1, so it does not catch the tap that opens the screen.
+
+| Hiding it from the world | Result (measured) |
+| --- | --- |
+| `{ "*": "q.is_in_ui" }` in the render controller `part_visibility` | Hidden in the world and drawn in the figure cell. The example uses this |
+| An animation that sets the root bone `scale` to `q.is_in_ui ? 1.0 : 0.0` | Same |
+| `!q.property('…') \|\| q.is_in_ui` in `part_visibility` (with a bool property) | Still visible in the world |
+
+### 10.3 Emotes and looking around
+
+- The emotes are Hi (wave), Clap, Jump and Nod. A press plays `playAnimation` on your player entity, and for a simulated player on that player's entity for every viewer. The emotes showed in the figure cells (measured). The player entity definition did not need to list the animations.
+- Body and head angles changed with `setRotation` did not show in the figures (measured).
+- So the gaze is passed as integer entity properties (`bwiki:yaw`, `bwiki:head_yaw`, `bwiki:pitch`), and an always-running animation turns the root bone (`root`) and the head bone (`head`). `q.property` was readable inside the animation (measured).
+- The properties are targets. The client entity's `pre_animation` moves variables toward them every frame in proportion to `q.delta_time` (the body slowly, the head faster), and the animation uses those variables. The figures turned smoothly through the values in between (measured). The server sends properties only when the gaze changes.
+- A simulated player picks a new gaze every 1.5 to 4 seconds: head left and right -50 to 50 degrees, up and down -25 to 25 degrees, and with a 40% chance a new body angle of -45 to 45 degrees (near the front).
+
+### 10.4 Slot layout
+
+The entity has `inventory_size: 243` and the name `§b§w§m§f` (section 2.2.1). Slots 1 to 43 match section 9.2, except that the player slot keys (32 to 41) are unused.
+
+| Slots | Content |
+| --- | --- |
+| 44 to 67 | 8 figure cells x 3 slots: entity id (`p"<id>"` or `b"<id>"`), cell key (`E` empty seat, `M` another member, `Y` you, followed by `A` accepted or `X` declined), name |
+| 68 to 71, 72 to 75 | 4 emote buttons and their labels |
+
+### 10.5 Example add-on
+
+<AddonDownload id="entity-matchmaking-figures" />
+
+1. Turn on the behavior pack whose name starts with `[bedrock-research]entity-matchmaking-figures-bp` in a new world. The resource pack turns on with it as a dependency. It can be turned on in the same world as the other entity inventory examples (section 2.2.2).
+2. Take "Minigame Lobby" from the end of the items category of the creative inventory, or use `/give @s bwiki:entity_matchmaking_figures`.
+3. Hold the item and tap the middle of the screen to open the lobby. Pick a game and press Play to fill the figure cells.
+
+The measurements (mobile, 2026-11-15) used the test packs v1.0.0 to v1.3.0 that this example was built from. The screen and the script behavior are the same as the example add-on; only the names and identifiers differ. The example add-on itself has not been run in game yet (*unverified*).
 
 ## Related rules
 
