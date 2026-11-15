@@ -1,6 +1,6 @@
 import { ItemStack, system, world } from "@minecraft/server";
 
-const PACK_VERSION = "v1.0.0";
+const PACK_VERSION = "v1.0.1";
 const LAUNCHER = "bwiki:entity_matchmaking_figures";
 const BOX = "bwiki:entity_matchmaking_figures_box";
 const BOT = "bwiki:entity_matchmaking_figures_bot";

@@ -283,19 +283,19 @@ function overlay() {
   return {
     type: "panel",
     size: ["100%", "100%"],
-    layer: 50,
-    $emf_title: "$container_title",
+    layer: 1,
+    $bwiki_title: "$container_title",
     controls: [
       {
         host: {
           type: "panel",
           size: ["100%", "100%"],
-          ignored: `(not ($emf_title = '${TITLE}'))`,
+          ignored: `(not ($bwiki_title = '${TITLE}'))`,
           controls: [
             { entity_ui_hide_vanilla: { type: "panel", size: [0, 0], property_bag: { "#entity_ui_vanilla_visible": false } } },
             {
               cover: {
-                type: "input_panel", modal: true, size: ["100%", "100%"], layer: 100,
+                type: "input_panel", modal: true, size: ["100%", "100%"], layer: 1,
                 controls: [
                   {
                     sync_grid: {
