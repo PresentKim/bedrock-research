@@ -1,0 +1,251 @@
+---
+title: Building basic components with the inventory UI
+description: A gallery that draws 25 basic Ore UI style components in an entity chest screen, one page each. Page panels shown by a page key slot, the slot layout and page module contract, drawing rules learned about labels and layers, and how each component is built and what was measured.
+sidebar_position: 5.2
+sources:
+  - repo-guide
+---
+
+# Building basic components with the inventory UI
+
+This gallery redraws the Ore UI components of [ore-ui-react](https://github.com/PresentKim/ore-ui-react) in the chest screen of the [entity inventory menu](./entity-inventory-ui.mdx). It was built to see whether that screen can replace server forms (DDUI). This page covers 25 basic components. Sliders are on [Inventory UI sliders](./inventory-ui-slider.mdx), and extended components such as item grids and input are on [Inventory UI enhanced components](./inventory-ui-enhanced-components.mdx).
+
+The only path from the chest screen to the server is a slot button press (a quick move, [entity inventory menu section 2.5](./entity-inventory-ui.mdx#25-a-button-that-reaches-the-script)). The server passes values to the screen through slot item names (section 2.4 of the same page). Every component is built from these two paths alone.
+
+Notation:
+
+- Measured: checked on mobile 1.26.63 with a test pack outside the wiki (IUC, `invui-components`), 2026-11-16. The version in parentheses is that test pack's version.
+- Tester: static simulation in the [JSON UI tester](../tools/jsonui-tester.mdx) (jsonui-tester).
+- Mock: a Node run that imitates `@minecraft/server`.
+- *Inference*: a cause guessed from a result. It was not tested on its own.
+
+Sizes and colors were copied from the ore-ui-react CSS (1 GUI px = 0.2rem). The original CSS marks most values as estimates itself, so they can differ from the in-game Ore UI.
+
+## 1. Shared framework
+
+### 1.1 Window
+
+The window is a dark 410x214 panel. The top row has `InvUI`, the page name, `<` `>`, a Pages button, and the version with the page number. The bottom row is a status line that shows the last press the server handled. Pages are drawn in the 394x168 area between them.
+
+### 1.2 Pages are visibility panels
+
+All page panels are built at the start, and each one is visible only while the name in slot 1 (the page key) equals its key.
+
+```json
+"gate": {
+  "type": "panel", "size": [ 394, 168 ], "collection_index": 1,
+  "bindings": [
+    { "binding_type": "collection", "binding_collection_name": "container_items", "binding_name": "#hover_text", "binding_condition": "always" },
+    { "binding_type": "view", "binding_condition": "always", "source_property_name": "((#hover_text - '§o' - '§f' - '§r') = 'toggle')", "target_property_name": "#visible" }
+  ]
+}
+```
+
+- At first a factory cell keyed by the page key built each page. No slot reads inside the pages worked. The toggle and the checkbox appeared only for a moment, with their animation, at the instant of a page change (measured, v1.1.0). Collection and view bindings inside controls built by a keyed factory seem not to work (*inference*). So pages became visibility panels, and page switching worked (measured, v1.2.1).
+- So that hidden pages do not keep evaluating slots, the generator changes `binding_condition` from `always` to `visible` for page bindings that do not set `#visible`. The visibility bindings of the page panels and of the page picker stay `always`.
+- This change must copy each binding object. When the generator edited a shared binding object in place, the slot reads of the page panels also became `visible` conditioned. Only the page opened first was shown, and after moving to another page no page showed again, even after coming back. A hidden panel does not read its slot again, so it never became visible again (measured, v1.2.0). Copying the bindings fixed it (measured, v1.2.1).
+
+### 1.3 Slot layout
+
+The entity has 243 slots (HOST-16).
+
+| Slot | Content |
+| --- | --- |
+| 1 | Page key |
+| 2, 3 | Page name, status line |
+| 4 | Page picker state (`open`, `closed`) |
+| 5 | Footer (version, page number) |
+| 6, 7, 8 | Pages, `<`, `>` buttons |
+| 10 to 189 | Slots used by the current page. Page number n is slot 10 + n |
+| 190 to 214 | The 25 page picker buttons |
+
+On a page change the script clears slots 10 to 189 and fills only the new page's button slots with button items.
+
+### 1.4 Page modules
+
+A page is a pair: the script module `bp/scripts/pages/<key>.js` and the generator module `tools/pages/<key>.mjs`.
+
+| Script module `page` | Content |
+| --- | --- |
+| `key`, `title` | The page key (slot 1) and the name shown on screen |
+| `slots` | Names for page numbers. The generator and the script use the same numbers |
+| `buttons` | The page numbers used as buttons |
+| `init()` | The first state. It is kept per player and per page, so it survives a visit to another page |
+| `render(state)` | `{ number: text }`. The script writes only changed slots, as paper names |
+| `press(state, n)` | Handles button n. The returned text goes to the status line |
+| `tick(state)` | Optional. Called every tick (toast lifetimes, the self-filling progress bar) |
+
+- The script module uses no game API, so the generator can import it as is.
+- The generator module exports `ui = { page, build(ctx) }`. `ctx.slot(n)` turns a page number into a slot number and checks the range. `ctx.def(name, body)` makes a `<key>_<name>` definition and returns its reference text.
+- `gen-ui.mjs` collects the slot numbers of buttons mapped to `button.container_auto_place` in the UI, checks that they equal `buttons`, and stops if they differ.
+- `check-page.mjs` starts each page from its first state, presses each button once and runs a tick, and checks that `render` never writes a button slot, that every value is text, and that no value is digits only (section 2).
+
+### 1.5 Page picker
+
+Pressing Pages makes the server write `open` to slot 4, and 25 page name buttons (5 columns by 5 rows, 74x14 each) appear on a cover panel at layer 40. Pressing one goes to that page and closes the cover. The test pack had 45 picker buttons on the same cover with no diagnostics in the tester (v1.4.0). The 25 button layout is new in this example add-on and was not checked in the tester.
+
+## 2. Drawing rules
+
+| Rule | Evidence |
+| --- | --- |
+| A label draws only text. A slot name of digits only, or a value that starts with a digit after an expression, becomes a number and is not drawn | [Entity inventory menu section 2.4](./entity-inventory-ui.mdx#24-drawing-from-slot-names-lore-and-durability) (measured), EXP-30. A digits-only NumberInput value did not show (measured, v1.2.1) |
+| Values that start with a digit get a format code in front (`§0`, `§r`), or are read by a label that removes only `§o` and keeps `§f` (`keepFormat`) | Badge numbers drew with `§r` and `keepFormat` (measured, v1.4.2) |
+| Text and icons added to a slot button go into a layer 20 panel that is always above the button faces | Accordion titles were hidden by the button face (measured, v1.3.0) |
+| Text gets a higher layer sum than the fill under it | Below |
+| A slider's default bar and hover bar are not the same control | Below |
+
+Layer sums. PlayerList names and Badge numbers did not show (measured, v1.4.1). Both texts sat on a fill with the same layer sum (the sum of all ancestor layers). Raising the text layer in every such place made all the missing text show (measured, v1.4.2). The inference is that with equal sums the fill can cover the text (*inference*). The NumberInput value text also had the same sum of 4 as its field fill (*inference*, raised in v1.4.0). From v1.4.2 the test pack checks each page, in its first state and after four button presses, for drawings with an equal or higher layer sum that cover the middle of a text (tester). For the same reason the selected text of Segment and Tabs, the active text of Chips, and the Toast text were raised too. None of these was seen hidden.
+
+Slider bars. When one slider control used the same bar for `default_control` and `hover_control`, the dark track disappeared while a finger was on the slider (measured, v1.1.0). A separate hover bar fixed it. Details are on [Inventory UI sliders](./inventory-ui-slider.mdx).
+
+### 2.1 Replaying animations
+
+Drawings that replay when a server value changes, such as the toggle thumb, the check mark, the tab panel, the carousel track and toasts, go in a small factory cell keyed by a slot name (`keyedCell`). A new key builds a new control, so its animation starts from the beginning ([entity inventory menu section 8.2](./entity-inventory-ui.mdx#82-animation-replay), ANI-37, COL-22). These cells mostly hold drawings without bindings. If the *inference* in section 1.2 holds, bindings inside a keyed factory may not work. Only the TextBlock variant cell holds a slot label inside, and there is no record of how it looks in game.
+
+## 3. Components
+
+Components below without a "Measured" entry were checked only this far: no diagnostics in the tester, and no errors in the mock after pressing every button and running 40 ticks (v1.1.0, v1.4.0).
+
+### 3.1 Toggle
+
+- Shows: a 32x15 base (a white bar on the green left half, a ring on the gray right half) and a 17x17 thumb that rises 2 above it. A disabled example that cannot be pressed sits beside it.
+- Build: the whole switch is a slot button. The drawing is a factory cell keyed by the `on`/`off` the server writes, so the thumb slides for 0.18 seconds on every change.
+- Measured: a toggle built the same way switched with every server answer in the input test pack (probe v1.3.0). In IUC, while pages were keyed factories (v1.1.0), it showed only at the instant of a page change. There is no separate record for the toggle page after the switch to visibility panels.
+
+### 3.2 Checkbox
+
+- Shows: a 13x13 box (off: a dark box with a gray border; on: a green box with a white check), a `Checked`/`Unchecked` label, and a disabled example.
+- Build: one slot button covers the box and the label. The check drawing is a state keyed factory, and the check mark fades in over 0.15 seconds.
+- Measured: a checkbox built the same way worked in the input test pack (probe v1.3.0). The IUC record is the same as for Toggle.
+
+### 3.3 Button
+
+- Shows: Secondary, Primary and Danger buttons, a disabled state the server turns on and off, and the last pressed button with its count.
+- Build: each button is a slot button with default, hover and pressed drawings as its state controls. When disabled, a server value hides the slot button and a half transparent (0.5) drawing shows in its place. The original acts on press down, but a slot button sends on release like a vanilla button.
+
+### 3.4 RoundedButton
+
+- Shows: Small, Medium and Large sizes.
+- Build: the same slot button as Button. The rounded corners (radius 6, 8, 10) are steps of rectangles with a different width per row.
+
+### 3.5 RadioGroup
+
+- Shows: one choice of Easy, Normal and Hard, and a Hardcore option that cannot be pressed.
+- Build: a slot button per row, and the server writes the chosen value. The 45 degree diamond is drawn as steps whose row length grows and shrinks by 1 (no rotation).
+
+### 3.6 Segment
+
+- Shows: one choice of Day, Night and Rain, sharing borders with their neighbors, and two disabled buttons.
+- Build: a slot button per button. When the server writes the chosen value, a green face shows at that place. The selected text layer was raised (section 2).
+
+### 3.7 Stepper
+
+- Shows: Difficulty (Peaceful to Hard) without wrap, Season (Spring to Winter) with wrap, and a disabled example.
+- Build: the left and right arrows are slot buttons. The server writes the current label and whether each end is reached (`on`/`off`). An arrow at the end hides its slot button and shows a dim drawing.
+
+### 3.8 Pagination
+
+- Shows: 12 pages, a window of 5 number cells, previous and next, and `Page n of 12`.
+- Build: the two arrows and five number cells are slot buttons. For each number cell the server writes `p7` (another page) or `c7` (the current page), and that key builds one number drawing. The current page is a green cell.
+
+### 3.9 Tabs
+
+- Shows: General, Video and Audio tabs, a locked tab, and three lines of text per tab.
+- Build: a slot button per tab. When the server writes the active tab id, a factory cell keyed by that id builds the panel anew (like `Mount` in the original). The selected tab text layer was raised (section 2).
+
+### 3.10 Accordion
+
+- Shows: three items, a disabled item, and a switch between one open item and many.
+- Build: a slot button per header. Items below an open item have to move down by its body height, so for each item the server writes position and state together, such as `p1o` (one open item above, this item open), and the UI shows one of the panels prebuilt for each position. The chevron is two step drawings, up and down.
+- Measured: header titles were hidden by the slot button face (v1.3.0). The text moved to a layer 20 panel (section 2). The result after the move was checked only in the tester.
+
+### 3.11 Dropdown
+
+- Shows: five options (one disabled) and the current value.
+- Build: a slot button for the trigger and for each option. When the server writes the open state, the list appears on a higher layer panel. One transparent slot button on the lowest layer covers the whole page area, so a press outside the trigger and the list closes it. Disabled options have no slot button. The original's flip at the screen edge is gone, and the position is fixed in advance.
+
+### 3.12 Modal
+
+- Shows: a half transparent backdrop, a light window, Cancel and Delete, and a result text.
+- Build: a server state shows a high layer panel. The backdrop around the window is four slot buttons that share one slot, and a press there closes the modal. Inside the window only the Cancel and Delete slot buttons exist. Esc closes the whole chest screen, so no key closes only the modal.
+
+### 3.13 Toast
+
+- Shows: 3 and 8 second notices, up to 3, closed by a press.
+- Build: three notice spots exist in advance and the server writes their text. The server shortens each lifetime every tick and removes the notice. A new notice spot gets one of `a` to `f` as its key and the others get `still`, so only the new notice fades in over 0.15 seconds. Nothing can be drawn outside the chest screen (HUD). The text layer was raised (section 2, tester).
+
+### 3.14 Tooltip
+
+- Shows: bubbles opened by a press on four sides (right, left, top, bottom) and a hover bubble for PC.
+- Build: mobile has no hover, so the target is a slot button and the server opens and closes the bubble. While a bubble is open, a slot button covering the page shows, so a press outside closes it. The hover bubble lives inside the button's hover state drawing and shows without the server. It does not show on mobile (*inference*).
+
+### 3.15 Carousel
+
+- Shows: 7 slides, 3 at a time, a slide on page change, dots, and a loop switch.
+- Build: the arrows, dots and Loop are slot buttons. When the server writes a page and direction such as `p2f` (page 2, forward), the track with that key is built anew and slides in from the side over 0.25 seconds. The original has no such slide.
+
+### 3.16 ProgressBar
+
+- Shows: a bar changed by buttons (-10, -1, +1, +10, 0%, 100%), a bar that fills by 1 every tick, and the value text.
+- Build: the fill is a keyed cell with 101 steps (`w0` to `w100`). One cell definition receives only the slot number as a variable, so both bars share it. The value text starts with a digit, so a `keepFormat` label reads it (section 2).
+
+### 3.17 ProgressCircle
+
+- Shows: 20 segment rings in two sizes, the value text in the middle, and automatic progress with Play.
+- Build: rotation and round shapes cannot be drawn, so one segment per 5% sits on the circle in advance, and the server writes `on`/`off` for each segment. The value text is written with `§0` in front (section 2).
+
+### 3.18 TextBlock
+
+- Shows: title, body and caption samples, formatting inside one line (InlineTextBlock), and server text shown in the three variants in turn.
+- Build: size is approximated with `font_scale_factor` and bold with `§l`. Letter spacing cannot change. Color and weight change inside one label with format codes. The variant is a keyed cell with a slot label inside (section 2.1).
+
+### 3.19 Scroll
+
+- Shows: a list of 14 rows that can be pressed and a long text, both vanilla scroll views.
+- Build: `scroll_view` drags inside the screen without the server. The server does not know the scroll position and receives only presses on the row slot buttons in the list. The track and thumb are White rectangles. Like vanilla, the scroll view has a `#gesture_control_enabled` binding.
+- Measured: dragging over the list buttons pressed a button instead of scrolling, and only dragging the scrollbar scrolled (v1.2.1). The `#gesture_control_enabled` binding was added after that (v1.3.0), with no recorded result. The layer of the picked row name was raised (v1.4.3, tester).
+
+### 3.20 Badge
+
+- Shows: red notice badges on Mail, Friends and Alerts icon buttons (hidden at 0, `99+` from 100), plus add, remove and clear all.
+- Build: icons are pixel drawings merged into rectangles. The server writes a badge size key (`none`, `one`, `two`, `many`) and the number text separately, and the size key shows a round badge of the right width. The number gets `§r` in front and is read by a `keepFormat` label.
+- Measured: the numbers did not show (v1.4.1). Raising the number layer made them show (v1.4.2).
+
+### 3.21 Rating
+
+- Shows: a five star rating (pressing the same star again clears it) and a read-only average with half stars.
+- Build: stars are pixel drawings. For each star the server writes `on`/`off` (my rating) or `full`/`half`/`none` (the average). A half star is a drawing with only the left half in gold.
+
+### 3.22 Spinner
+
+- Shows: a dot ring, three pulsing dots, a bar that goes back and forth, and Start/Stop.
+- Build: all three run on client animations alone (`alpha` and `offset` animations looped with `next`), without the server. The server only shows the running panel or the stopped panel with `on`/`off`.
+
+### 3.23 Steps
+
+- Shows: four steps (done, current, pending), lines between steps, a step description, Back, and Next (Finish at the last step).
+- Build: the server writes `done`/`current`/`pending` per step, `on`/`off` per line, and whether each button is active. Back on the first step is a drawing that cannot be pressed.
+
+### 3.24 Chips
+
+- Shows: active tags removed with x, suggested tags added back with a press, and Reset.
+- Build: each of the 8 tags has a slot button in both the active row and the suggestion row. When the server writes `a0` (active row, place 0) or `s2` (suggestion row, place 2) for a tag, the UI shows the tag at that place. The active text layer was raised (section 2).
+
+### 3.25 Breadcrumb
+
+- Shows: a path of up to 5 levels and up to 4 items under the current level.
+- Build: the 5 path cells and 4 item cells are slot buttons. The server writes `link`/`current`/`none` per path cell, and `dir`/`leaf`/`none` with a name per item. A press on an earlier level goes back, and a press on an item goes in. Names are written with `§7`, `§f` or `§r` in front and read with `keepFormat`.
+
+## 4. Example add-on
+
+<AddonDownload id="inventory-ui-basic-components" />
+
+1. Open the file to import it (on mobile, tap the file and open it with Minecraft). In a new world, turn on the behavior pack whose name starts with `[bedrock-research]inventory-ui-basic-components-bp`. The resource pack turns on with it as a dependency.
+2. Take "Inventory UI Basic Components" (map) from the end of the items category of the creative inventory, or use `/give @s bwiki:inventory_ui_basic_components_test`.
+3. Hold the item and tap the middle of the screen to open the gallery (the entity in front of the view, C2 in [entity inventory menu section 3](./entity-inventory-ui.mdx#3-ways-to-open-the-screen)).
+4. Change pages with `<` `>` and Pages and press the components. The status line at the bottom shows the press the server received.
+
+- The entity name is `§b§w§b§c` ([entity inventory menu section 2.2.1](./entity-inventory-ui.mdx#221-naming-convention)). Hiding vanilla uses the same marker `entity_ui_hide_vanilla` and property `#entity_ui_vanilla_visible` as the other entity inventory examples, so they can be turned on in the same world (section 2.2.2 of that page).
+- `tools/gen-ui.mjs` writes `rp/ui/iubc.json`. `node tools/check-page.mjs <key>` checks one page.
+- The text on screen is in English.
+- The measurements above were made with the IUC test pack. This example add-on is that test pack (v1.4.9) cut down to these 25 pages, with new names, identifiers, entity name and namespace. The example add-on itself has not been run in game yet (*unverified*).

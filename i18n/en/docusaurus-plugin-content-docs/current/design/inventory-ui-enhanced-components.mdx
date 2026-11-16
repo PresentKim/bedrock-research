@@ -1,0 +1,266 @@
+---
+title: Building enhanced components with the inventory UI
+description: Text input, number input, keybinds, a color picker, a radial menu, a tutorial, charts, a real item grid, shop cards, a recipe view, a player card and list, a table, a tree, a countdown and a drag-drawn pattern lock drawn in an entity chest screen. On-screen keyboards, the sense hook that reads slots, animation and marker collection requests, server-computed rows written into fixed row slots, prebuilt width variants and the measured record.
+sidebar_position: 5.3
+sources:
+  - repo-guide
+---
+
+# Building enhanced components with the inventory UI
+
+This is one of the pages that draw Ore UI style components on the chest screen from [Building menu screens from an entity inventory](./entity-inventory-ui.mdx). Basic components such as toggles, buttons and tabs are in [Building basic components with the inventory UI](./inventory-ui-basic-components.mdx), and sliders and the drag split experiments are in [Building sliders with the inventory UI](./inventory-ui-slider.mdx). This page covers 17 components that combine many slot buttons or need much server-side computation.
+
+In a chest screen, the only paths to the server are slot presses (quick move) and changes to slot items. The server gives values to the screen through slot item names (entity inventory page sections 2.4 and 2.5). Every component below uses only these two paths.
+
+Labels:
+
+- **Measured**: checked in game with the IUC test pack (`invui-components`). 1.26.63 mobile, 2026-11-16. The version in parentheses is the test pack version the record comes from.
+- **Tester**: no diagnostics in the [JSON UI tester](../tools/jsonui-tester.mdx) static simulation.
+- **Mock**: a Node run imitating `@minecraft/server` pressed every button and ran ticks without errors.
+- *Inference*: an interpretation that no test separated.
+
+## 1. Shared frame
+
+### 1.1 Window and slot layout
+
+The window is a dark 410x214 panel. The top row has the page name, `<` `>` and a Pages button, and the bottom row has the status text written by the server. The entity has `inventory_size: 243`.
+
+| Slots | Content |
+| --- | --- |
+| 1~8 | Frame: page key, page title, status line, picker state (`open`/`closed`), footer, Pages, `<`, `>` |
+| 10~189 | Slots used by the current page. Inside a page they are numbered 0~179 |
+| 190~206 | 17 page picker buttons (5 columns) |
+
+On a page change the server clears slots 10~189 and fills only the button slots of the new page.
+
+### 1.2 Pages are visibility panels
+
+All pages are built up front, and only the panel whose page key matches the name in slot 1 is visible. The generator changes the bindings outside the visibility decision to `binding_condition: "visible"`, so hidden pages do not evaluate them. Only the bindings that decide visibility stay `always`.
+
+- The first build chose pages with a factory cell keyed by the page key. None of the slot reads inside it worked (measured, v1.1.0). Collection and view bindings appear not to work inside controls made by a factory (*inference*).
+- The first visibility panel build showed only the page opened first. The generator edited a shared binding object in place, so the slot reads of the page panels also got the `visible` condition, and a hidden panel never read its slot again to become visible (measured, v1.2.0). Copying the binding before changing it made page switching work (measured, v1.2.1).
+
+### 1.3 Page modules
+
+Each page has one script module (`bp/scripts/pages/<key>.js`) and one UI module (`tools/pages/<key>.mjs`). The script module uses no game API, so the generator imports it as is and checks that the slot buttons placed in the UI match the script's button list.
+
+| Field | Content |
+| --- | --- |
+| `buttons` | Page slot numbers used as slot buttons |
+| `init(env)` | Initial state per player and page. `env` has `playerId` and `playerName` |
+| `render(state, env)` | Returns, per slot number, text (a paper name) or `{ item, count, name, marker }` (a real item) |
+| `press(state, slot, env)` | Handles a slot button press. The returned text goes to the status line |
+| `tick(state, env)` | Work every tick (countdown, drag settling) |
+| `sense(state, read, env)` | Reads the items in the page slots every tick. `read(n)` returns `{ item, count, marker }` or nothing |
+
+Pages leave requests in their state instead of calling the game API. The frame handles and clears the requests after `press` and after `tick`.
+
+```js
+function applyRequests(player, state) {
+  if (state.animation) {
+    player.playAnimation(state.animation);
+    delete state.animation;
+  }
+  if (state.collectMarkers) {
+    collectMarkers(player);
+    delete state.collectMarkers;
+  }
+}
+```
+
+Items written with `marker: true` carry lore unique to this add-on. `collectMarkers` removes items with that lore from the player inventory and the cursor (`cursor_inventory`). Slot button items carry different lore, and the server removes them from the player inventory every tick.
+
+### 1.4 Text and prebuilt variants
+
+- A label did not draw a value the server wrote as a digits-only slot name (measured, v1.2.1, NumberInput). Slots that show numbers get a leading `§r`. `tools/check-page.mjs` reports a digits-only value as a failure.
+- Values that start with a digit, or keep color codes, are drawn by a label that removes only `§o` (table cells, countdown time, shop messages).
+- When a text and the background under it have the same layer sum, the background can cover the text (*inference*). Raising the text layer in those places made all the missing text appear (measured, v1.4.2). Text and icons added to slot buttons sit in a layer 20 panel, so they always draw above the button face.
+- Continuous values (bar widths, chart heights, colors) pick one of several prebuilt variants with a slot name key. A factory cell picked by key holds only static drawings without bindings (the measurement in section 1.2). A factory cell is rebuilt when its key changes, so an animation inside it plays again from the start (entity inventory page section 8.2).
+
+## 2. Input components
+
+### 2.1 TextInput
+
+There is a name field (16 characters) and a password field (12 characters), with an on-screen keyboard below. The keyboard has four rows (digits, `qwertyuiop`, `asdfghjkl`, `zxcvbnm`) plus Shift (caps lock), Back, Clear and Space. The password is masked with `*`, and an eye button shows it. The line below shows the character count of the current field.
+
+- The vanilla text box (`text_edit_box`) could not be read in a chest screen. The four paths, `#item_name` of the box, `#text` of the label inside the box, the global `#item_name` and `#text` of the box, were all empty (measured, input test pack `invui-input-probe` v1.1.0, mobile, 2026-11-16). So each character gets one slot button. There are 43 buttons.
+- The server keeps the text of both fields and writes it into slot names. It adds `_` after the focused field and writes the placeholder into a separate slot for an empty field.
+- The focus (`name`/`pass`) goes through one slot name, and the field it matches shows a white border.
+- Caps lock goes through one slot name, `lower`/`upper`. Each letter key has a lowercase and an uppercase label, and the value shows one of them.
+- Checked: tester, mock (v1.1.0). There is no game record for this page.
+
+### 2.2 NumberInput
+
+The - and + buttons step by 1 (0~64). Tapping the value opens a keypad (7 8 9 Back, 4 5 6 -, 1 2 3 ., 0 OK) that types into the value field. OK reads the input as a number and clamps it to the range. Input is up to 8 characters. Below is a disabled example (`alpha` 0.5).
+
+- The value field is three slot buttons (-, value, +) on a background, and shows a white border while editing.
+- The server received the presses but the number did not show (measured, v1.2.1). The slot name was digits only. It still did not show after the leading `§r` was added (measured, v1.3.0). The value text was moved to a higher layer than the field background (v1.4.0). The background could cover the text at the same layer sum (*inference*). There is no record of whether the number shows on this page after v1.4.0.
+
+### 2.3 Keybinds
+
+Six actions (Jump, Sneak, Attack, Use item, Inventory, Drop item) each have a key cell. Tapping a key cell gives it a white border and "Pick a key", and a list of 30 keys with Cancel opens on the right. The conflict rule is one of swap (exchange), replace (clear the old key) and block (refuse).
+
+- Real key presses cannot be captured in a chest screen, so the key is picked from a list of names. The pick shows only on screen; game controls stay the same.
+- The listening action goes through one slot name (`none`, `l0`~`l5`), and the list through `open`/`closed`.
+- Checked: tester, mock (v1.1.0).
+
+### 2.4 ColorPicker
+
+It has a 5x5 saturation and value area, a 12 cell hue bar, 16 dye swatches, a hex keypad (0~f and Back), a preview swatch, hex text and HSV text. There are 70 buttons.
+
+- The colors of the 5x5 area are a prebuilt panel per hue (12 hues), picked by a factory cell keyed by the hue slot name (`h0`~`h11`). Above it sit 25 slot buttons and 25 knobs (only one visible, by the slot name `s<saturation>v<value>`).
+- The preview swatch picks one of 213 static swatches (the grid colors and the dye colors) with a factory cell. A hex value typed on the keypad that is not among them shows the nearest grid color, while the hex text shows the typed value exactly.
+- Checked: tester, mock (v1.1.0).
+
+### 2.5 RadialMenu
+
+A disc 120 across (stacked 2px strips) with 8 items on its rim. Each item is a slot button, and the picked item shows in the middle and in the text on the right.
+
+- Instead of an angle test, each rim position has its own button. A PC mouse lights the item through the button hover state; phones have no hover and pick on tap.
+- It worked well (measured, v1.2.1).
+
+## 3. Guides and charts
+
+### 3.1 Tutorial
+
+On a mock screen (search field, Play button, settings panel), pressing Start tutorial shows, per step, a dark cover, a highlight frame and a guide card (title, text, "1 of 3", Back, and Next or Finish). Back on the first step is a drawing that cannot be pressed.
+
+- The step number goes through a slot name (`off`, `s0`~`s2`), and one prebuilt cover panel per step is shown. The generator computes the highlight and card positions ahead of time (the card goes below the target, or above if there is no room).
+- Checked: tester, mock (v1.1.0).
+
+### 3.2 BarChart
+
+Eight bars, with negative values in red. Prev and Next pick one of four datasets (Monthly sales, Profit, Losses, All zero), and there are Random and Negate.
+
+- Bar heights have 40 steps of 2px (0~39). The server writes, per bar, a fill key (`p<k>` positive, `n<k>` negative) and a mask key (`m<k>`). The fill paints up to the higher of the baseline and the value, and a mask in the background color covers up to the lower one, leaving only the part between. The baseline height is also picked by key (`l<k>`).
+- Every bar uses the same factory cell definition and passes only the slot number as a variable (`$iuenh_slot`), the same method as [binding expression caching](./binding-expression-caching.mdx).
+- Checked: tester, mock (v1.1.0).
+
+### 3.3 LineChart
+
+Eight points and a stepped line. There are four datasets and Random.
+
+- Rotated segments cannot be drawn, so the line is 37 columns 4px wide. The server computes the lowest and highest height that the line between the points passes in each column and writes them as a fill key (`f<k>`) and a mask key (`m<k>`). The points are also picked by height key (`d<k>`).
+- Checked: tester, mock (v1.1.0).
+
+## 4. Components with real items
+
+When `render` returns `{ item, count }`, the frame puts that real item in the slot. The UI draws the slot with `inventory_item_renderer` (`#item_id_aux`) and a count label (`('§r' + #inventory_stack_count)`). The slot button slots and the slots that show items are different slots.
+
+### 4.1 ItemGrid
+
+A 9x3 grid of real item icons with counts. Tapping a cell gives it a selection frame and shows its name and count on the right. There are Shuffle, Add diamond (one more on a diamond stack, or a new stack in an empty cell when the stack has 64) and Clear selected (empty the selected cell).
+
+- 27 slot buttons (slots 0~26) and 27 item slots (slots 30~56) overlap in the same places. The selection goes through one slot name (`none`, `s0`~`s26`).
+- Checked: tester, mock (v1.4.0).
+
+### 4.2 ShopCard
+
+Three product cards (Apple 2, Ender Pearl 8, Diamond 25 coins). Each card has an icon, a name, a price, a quantity stepper (1~16), a total and Buy. Above them are the coin balance (50 at the start) and Earn 10.
+
+- The card icon is a real item stack of the chosen quantity, so the quantity also shows as the icon count.
+- The server keeps the balance and checks each purchase. When coins are short it writes a red failure message, and on a purchase a green one.
+- Checked: tester, mock (v1.4.0).
+
+### 4.3 RecipeView
+
+A 3x3 grid of ingredient icons, an arrow and a result icon with its count. Prev and Next go through five recipes (Crafting Table, Stick, Torch, Chest, Iron Pickaxe), and the ingredient counts show below.
+
+- Checked: tester, mock (v1.4.0).
+
+### 4.4 PlayerCard
+
+The live figure of the viewing player, the name, a status dot (Online, Away, Busy), a level line, an Activity line, and Wave and Change status buttons.
+
+- One `live_horse_renderer` draws the figure. The server writes the player id wrapped in double quotes (`"<id>"`) into a slot name, and the renderer takes `(#hover_text - '§o' - '§f' - '§r')` as `#entity_id` ([entity inventory page section 10.1](./entity-inventory-ui.mdx#101-drawing-the-figures)).
+- Wave leaves an animation id in `state.animation`, and the frame waves the player's arm with `playAnimation`. The same method showed in the figure cells of the figure lobby example (measured, entity inventory page section 10.3).
+- When Wave was a button that only changed text, the status line and the count changed but the figure did not move (measured, v1.4.2). There is no record of whether the arm moves on this page since the version that uses `playAnimation` (v1.4.3).
+- The Activity title sat on a background with the same layer sum, so its layer was raised (v1.4.2, section 1.4).
+
+### 4.5 PlayerList
+
+Eight lobby rows. Each row has a name, a role tag (Host, Member), a status badge (Ready, Waiting, AFK, Not in lobby) and Kick or Invite. The host row shows a Kick drawing that cannot be pressed. The right side shows "Ready x of y" and the last action.
+
+- There are 7 buttons, without the host. In each row a status slot (`ready`, `waiting`, `afk`, `out`) picks the badge and a button kind slot (`host`, `kick`, `invite`) picks the button drawing.
+- The names did not show (measured, v1.4.1). Raising the layer of the name text made them show (measured, v1.4.2).
+
+## 5. Components whose rows the server computes
+
+For a list whose row count changes, the UI does not create rows. The server computes the visible rows, writes them in order into fixed row slots, and writes an empty value (`off`, `none`) into the rows left over.
+
+### 5.1 Table
+
+A 12 player leaderboard (Player, Kills, Deaths, Score). Tapping a header sorts by that column, and tapping it again flips the direction. Tapping a row selects it, and Prev and Next go 5 rows at a time. At the ends the paging button becomes a drawing that cannot be pressed.
+
+- The server sorts and pages, and writes into 5 row slots (20 cell slots and 5 row state slots). The sort column and direction go through one slot name (such as `c3d`) that picks the header arrow.
+- A row button stands for a row position on screen, not a player. The server finds the player at that position in the list currently shown.
+- Checked: tester, mock (v1.4.0).
+
+### 5.2 TreeView
+
+Twelve nodes on three levels, including the top nodes Worlds, Packs and options.txt. Tapping an arrow expands or collapses, and tapping a name selects. The right side shows the selected node, its path and the number of visible rows.
+
+- The server follows the expanded nodes to compute the visible rows and writes them into 12 row slots. Each row gets a level and mark key (`L<level><c|o|l>`, collapsed, open, leaf), a level key (`L<level>`) and a text slot per level.
+- Each row has prebuilt buttons per level, and the level key shows one set. Levels that can have children (0, 1) have an expand/collapse button and a select button; the last level has only a select button. There are 60 buttons.
+- When a node is collapsed while the selected node is under it, the selection moves to the collapsed node.
+- Checked: tester, mock (v1.4.0).
+
+### 5.3 Countdown
+
+An MM:SS clock that counts down every tick (1 minute at the start), Start, Pause, Reset, +30s (up to 59:59), a 101 step bar, and an alert that flashes at zero.
+
+- The server's `tick` takes one tick off and writes the time text. The bar picks one of 101 prebuilt widths with a width key (`w0`~`w100`).
+- The alert is a factory cell picked by key (`idle`/`up`). The `up` panel chains three alpha animations, which play from the start when the key change rebuilds the panel.
+- Checked: tester, mock (v1.4.0).
+
+## 6. PatternLock
+
+A lock pattern drawn by dragging sticks through a 3x3 grid of dot cells. The drawing order shows as numbers on the dots. The first pattern of 4 or more dots is saved, and later patterns are compared with it. Set / Unlock switches the mode, and Forget removes the saved pattern.
+
+### 6.1 Drawing with a drag split
+
+The dot cells and the stick cell use vanilla chest slot mappings instead of slot buttons (`button.container_take_all_place_all`, `button.container_take_half_place_one`, `button.coalesce_stack`, `button.shape_drawing`, `button.container_slot_hovered`). The stick cell holds 64 marker sticks.
+
+1. Tap the stick cell to pick up the sticks.
+2. Without lifting the finger, drag across the dot cells. The engine splits the sticks over the cells it passes.
+3. Every tick the server reads the marker stick count of each dot cell with `sense` and adds the cells whose count grew to the path.
+4. When the cells have not changed for 20 ticks, the drag counts as settled and is judged. Each dot counts once.
+5. After judging, the server empties the dot cells, refills the stick cell to 64, and removes the marker sticks from the player inventory and the cursor with `collectMarkers`.
+
+With fewer than 4 dots the result is "Too short"; in set mode the pattern is saved; in unlock mode the result is "Unlocked" or "Wrong pattern".
+
+### 6.2 Checked
+
+- Saving, "Wrong pattern" and "Unlocked" came out right (measured, v1.4.8). A result appears only after settling, so the settling step also ran in game (*inference*).
+- In DragLab, which tested the same drag method, tapping the stick cell and then dragging made the server receive the passed cells in order, almost every tick. Passing 11 cells put 5 sticks in each with 9 left in hand. Holding the stick cell and dragging right away placed nothing. Passing a cell again changed nothing. Stopping outside a cell left the item held (measured, v1.4.5).
+- So the server settles and resets on its own. Imitating a drag and waiting 25 ticks emptied the cells, brought back 64 sticks and removed the marker sticks from the player inventory (mock, v1.4.6). There is no game record of whether marker sticks on the cursor are collected.
+- When the server refilled the stick cell during a drag, the held stack was released and the drag ended (measured, v1.4.9). Only emptying the cells runs the sticks out (measured, v1.4.8). So the server cannot know that a drag passed the same cell twice, and PatternLock counts each dot once. The experiments are described in [Building sliders with the inventory UI](./inventory-ui-slider.mdx).
+- Tester and mock (v1.4.8): drawing 1-2-3-6 saved the pattern and put 1, 2, 3, 4 on the dots. The same pattern gave "Unlocked", 1-4-7-8 gave "Wrong pattern", and two dots gave "Too short".
+
+## 7. What remains
+
+- All measurements are on a phone. There is no record of PC hover states (RadialMenu, slot buttons) or mouse drags.
+- TextInput, Keybinds, ColorPicker, Tutorial, the charts and most of chapters 4 and 5 went through the tester and the mock only. There is no game record of whether they look right.
+- The example add-on itself has not been run in game (*unverified*). It differs from the IUC test pack only in names, identifiers and the page set (17 of 48).
+
+## 8. Example add-on
+
+<AddonDownload id="inventory-ui-enhanced-components" />
+
+1. Open the file to import it (on mobile, tap the file and open it with Minecraft). In a new world, turn on the behavior pack starting with `[bedrock-research]inventory-ui-enhanced-components-bp`. The resource pack comes along as a dependency and no experiment toggles are needed. It can be turned on in the same world as the other entity inventory examples ([entity inventory page section 2.2.2](./entity-inventory-ui.mdx#222-hiding-vanilla-shared-by-the-examples)).
+2. Take "Inventory UI Enhanced Components" (painting icon) from the end of the items category in the creative inventory, or use `/give @s bwiki:inventory_ui_enhanced_components_test`.
+3. Hold the item and tap the middle of the screen to open the window. The first page is TextInput.
+4. Use `<` `>` to move between pages, or press Pages to pick one of the 17. The bottom line shows the last press the server handled.
+5. On the PatternLock page, tap the stick cell on the left once to pick the sticks up, drag through the dots without lifting, then lift. The result appears a second later. The frame clears the page slots when you leave for another page, so the page's `enter` refills the sticks when you come back.
+
+- The text on screen is in English.
+- The entity name is `§b§w§i§u§e` and the UI namespace is `iuenh`. Hiding vanilla uses the same marker `entity_ui_hide_vanilla` and property `#entity_ui_vanilla_visible` as the other examples.
+- The generator is in `tools/`. `node tools/gen-ui.mjs` rebuilds `rp/ui/iuenh.json`, and `node tools/check-page.mjs <key>` checks a page's button list and slot names.
+
+## Related rules
+
+| ID | Page | Content |
+| --- | --- | --- |
+| HOST-16 ~ HOST-20 | [Screen hosts and data channels](../json-ui/screen-hosts-and-data.mdx) | Entity inventory screens, slot identification, notes on the script side |
+| ANI-37 | [Images and animation](../json-ui/images-and-animation.mdx) | Replaying an animation by rebuilding the control |
+| ANI-06 | [Images and animation](../json-ui/images-and-animation.mdx) | Item renderer and `#item_id_aux` |

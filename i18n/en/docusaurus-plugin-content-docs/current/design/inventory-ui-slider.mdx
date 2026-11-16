@@ -1,0 +1,285 @@
+---
+title: Building sliders with the inventory UI
+description: A record of the ways tried to send a slider value to the server from an entity chest screen, with the measured result and the cause of each failure. It covers tap sliders, drag plus Apply, a touch start signal, layered step buttons, SliderLab, drag mapping comparisons, server filtering and drag split paths, then gives the final design (a slider whose hidden global step button sends the value on release) and an example add-on.
+sidebar_position: 5.1
+sources:
+  - repo-guide
+---
+
+# Building sliders with the inventory UI
+
+This page records the tests of building a slider in the chest screen of [Building a menu screen with an entity inventory](./entity-inventory-ui.mdx). For each approach it states what was done, what came out and why it did not work, and it ends with the design in use now and an example add-on.
+
+Two test packs were used.
+
+- IIP: the chest screen input probe pack, v1.0.0 to v1.3.0. It tried toggles, sliders and text input first.
+- IUC: the InvUI component gallery pack, v1.0.0 to v1.4.9. It moves Ore UI components into the chest screen, and most slider tests ran there.
+
+Marks:
+
+- measured: checked in game. All of them are mobile 1.26.63, 2026-11-16.
+- tester: checked in the `mcbe-json-ui-tester` static simulation.
+- mock: checked in a Node run that imitates `@minecraft/server`.
+- *inference*: an explanation whose cause was not isolated by a test.
+
+## 1. Why a slider is hard in the chest screen
+
+- The only channel from the chest screen to the server is a slot action. Buttons become quick moves of hidden slots ([entity inventory menu](./entity-inventory-ui.mdx) section 2.5). All the server learns is "slot button n was pressed".
+- An on-screen `slider` drags, and other controls read its value (`#slider_value`), but there is no channel that sends that value to the server (IIP v1.0.0, measured).
+- Text in a text box could not be read. All four paths were empty: the box's `#item_name`, `#text` of the text label inside the box, the global `#item_name`, and the box's `#text` (IIP v1.1.0, measured). So text input cannot carry a value either.
+- Mobile has no hover. A Hover slider with cell mappings that have no `from_button_id` changed only when a cell was tapped (IIP v1.2.0, measured). The server has no way to learn which cells a finger passes over.
+
+## 2. Approaches and results
+
+### 2.1 Tap slider
+
+- Tried: one slot button per step over the bar. The pressed cell is the value, and the server returns it in a slot name that draws the thumb and fill.
+- Result: the thumb came to the pressed spot (IIP v1.0.0, measured). It still worked after the Ore UI look (IIP v1.3.0, measured).
+- Limits: no dragging. It uses one slot number per step. Each press makes a round trip to the server, so the thumb moves a little late.
+
+### 2.2 Drag slider with Apply buttons
+
+- Tried: drag an on-screen slider and show only the "Apply k" button that matches `#slider_value`. Pressing Apply sends that slot button to the server.
+- Result: the thumb dragged. The value was a step index (8 on the `index` row, the `fraction` row empty). Pressing "Apply 8" made the server receive 8 (IIP v1.0.0, measured). A custom slider with the Ore UI look and Apply also worked (IIP v1.3.0, measured).
+- Limits: after dragging, Apply needs one more press.
+
+The same pack tried three more ways to drag and send with one slider.
+
+| Tried | Result (measured) | Cause |
+| --- | --- | --- |
+| Drag + ping: the slider in a slot also sends a quick move when pressed (IIP v1.2.0) | It dragged, but the server did not get the touch | Not isolated |
+| Ping first: the quick move mapping before the slider mapping (IIP v1.3.0) | The server got every touch, but the thumb did not drag | The first mapping likely took the press so the slider did not get it (*inference*) |
+| Named ping: `slider_track_button` set to `button.container_auto_place` (IIP v1.3.0) | The server got nothing and the thumb did not drag | Not isolated |
+
+### 2.3 Drawing on screen
+
+Before sending the value, the drawing on screen had to be right.
+
+- With the engine thumb as is, the thumb followed the finger while the green fill moved separately by step (IUC v1.2.1, measured).
+- When the default bar and the hover bar were the same control, the dark background disappeared while the finger was on the slider (IUC v1.1.0, measured). From IUC v1.2.0 the hover bar (`bar_hover`) is a separate control.
+- So from IUC v1.3.0 the engine thumb and fill are empty panels, and one thumb and one fill are drawn per step, visible only when `(#slider_value = k)`. The value shows on screen at once while dragging (tester).
+
+### 2.4 Swapping in step buttons on a touch start signal
+
+- Tried: a slot button covering the whole bar sends the touch start to the server, and the server swaps that area for 11 step buttons. The test checks whether the step button under the released finger registers a press (added in IUC v1.2.0).
+- Result: pressing the bar made the server receive "touch start" and swap in the step buttons, but the step button where the finger lifted did not register a press (IUC v1.3.0, measured).
+- Cause: on touch, a slot button reaches the server only after the tap ends. When the server gets the start signal, the finger has already lifted (the explanation drawn from the IUC v1.3.0 measurement).
+
+### 2.5 Dragging across tap cells
+
+- Tried: hold one cell of the tap slider, drag to another cell and release.
+- Result: no cell registered a press (IUC v1.4.0, measured).
+- Cause: on touch the server only learns of taps that press and release on the same cell (the explanation drawn from the same measurement).
+
+### 2.6 Hidden step buttons over or under the slider
+
+- Tried: 11 invisible slot buttons, one per step position, over the same slider (layer 20) or under it (slider layer 12, buttons 1). The slot buttons are mapped with `consume_event: false` (IUC v1.4.1). The buttons sat on the step boundaries (tester).
+- Result: in the row with the buttons on top, the slider did not move and only the value went to the server. In the row with the slider on top, only the slider moved and nothing went to the server (IUC v1.4.1, measured).
+- Cause: the control on top takes the touch. A `pressed` mapping, which goes by position, does not pass the press to the control below even with `consume_event: false` (same measurement).
+
+### 2.7 SliderLab, first round: five ways to reach the server
+
+The SliderLab page of IUC v1.4.2 put five rows on one screen.
+
+| Row | Setup | Result (IUC v1.4.2, measured) |
+| --- | --- | --- |
+| A | Hidden slot buttons under the slider, one per step. Only the button of the current step is visible, and the mapping is `mapping_type: "global"`, `consume_event: false` | Releasing off the slider sent the current step value, and the value was right. Releasing on the slider sent nothing |
+| B | A with `button_up_right_of_first_refusal` on the step button mapping | Same as A. A and B each sent their value in the same tick |
+| C | Slider in a slot, a quick move mapping after the drag mapping | Sent nothing |
+| D | Slider in a slot, `slider_selected_button` set to `button.container_auto_place` | Sent nothing |
+| E | Slider in a slot, `slider_deselected_button` set to `button.container_auto_place` | Sent nothing |
+
+- A global mapping presses every visible step button wherever the finger lifts (measured). So if only the button of the current step is visible, that button is the current value.
+- The release on the slider was taken to be swallowed by the slider's drag mapping (*inference*), and the second round changed the drag mapping.
+- The cause of C, D and E sending nothing was not isolated.
+
+### 2.8 SliderLab, second round: drag mappings compared
+
+- Tried: all four rows had A's global step buttons, and only the slider drag mapping differed. A: as in vanilla (`button_up_right_of_first_refusal: true`). B: without it. C: with `consume_event: false` added. D: both changes (IUC v1.4.3).
+- Result: values mostly arrived. The four rows sent together in the same tick. After one slider was touched, dragging the slider of another row moved both with the same value: almost always for B, C and D, and a few times for A (IUC v1.4.3, measured).
+- Cause: with several sliders on one screen, their values mix. Why they mix was not isolated.
+
+### 2.9 SliderLab, third round: one row at a time
+
+- Tried: only the row picked from A to D is visible, plus an empty slot button ("Tap here") unrelated to the slider (IUC v1.4.4).
+- Result: A, C and D sent the dragged and released value to the server. Only B did not work properly (IUC v1.4.4, measured).
+- Cause: why B failed was not isolated. The only difference between B and D is `consume_event: false`.
+
+### 2.10 Drag mapping and the tap cells below
+
+- Tried: the drag slider on the Slider page dropped Apply and became `releaseSlider`, with global step buttons and the SliderLab C mapping (`consume_event: false` on the drag mapping) (IUC v1.4.5).
+- Result: dragging the drag slider and releasing over the tap slider also pressed the tap slider (IUC v1.4.6, measured).
+- Cause: `consume_event: false` on the drag mapping was taken to pass the release on to the tap cell below.
+- So the drag mapping went back to vanilla (SliderLab A) (IUC v1.4.7). Releasing over the tap slider after a drag still pressed the tap cell (IUC v1.4.8, measured). Why the tap cell is pressed with the vanilla mapping was not isolated. The mapping alone could not stop it, so the server filters it (section 2.11).
+
+### 2.11 Filtering taps on the server
+
+- Tried: the server does not apply a tap cell press at once and holds it until the end of the tick. If the drag value changed in the same tick, the tap is taken as the end of a drag and dropped (IUC v1.4.9).
+- Result: a tap in the same tick as a drag value change was dropped, and a tap with the drag value unchanged was applied (IUC v1.4.9, mock). There is no record of this filter being checked in game (*unverified*).
+- Limits: a drag that ends on the same step it started from leaves the drag value unchanged, so a release over a tap cell is applied as a tap (*inference*, it follows from the rule).
+
+### 2.12 Drag split paths (DragLab)
+
+Apart from sliders, the DragLab page tested whether the server can learn which cells a finger passed. The left cell held 64 marker sticks, and the 11 cells on the right had vanilla chest slot mappings (`take_all_place_all`, `shape_drawing` and others). The server reads the cells every tick and writes down the cells passed and the tick.
+
+| Tried | Result (measured) | Cause |
+| --- | --- | --- |
+| Tap the stick cell, then drag (IUC v1.4.5) | The server got the passed cells in order, almost every tick (`1@t1159 2@t1159 3@t1161 ... 11@t1174`, 5 per cell, 9 left in hand) | Vanilla drag split puts items into each cell |
+| Hold the stick cell and drag at once (IUC v1.4.5) | Nothing was placed | On touch, the first tap likely has to pick up the item before a split starts (*inference*) |
+| Pass a cell that was already passed (IUC v1.4.5) | It did not change | During one drag, a cell is not filled again |
+| Stop somewhere that is not a cell (IUC v1.4.5) | The held item stayed and Reset could not be pressed | The item left in hand likely took the next press (*inference*) |
+| The server empties each cell a stick enters (IUC v1.4.8) | It placed 32 per cell until the sticks ran out and stopped | Emptied items do not come back, so the sticks in hand run down |
+| Refill the stick cell to 64 while emptying cells (IUC v1.4.9) | When the server refilled the stick cell mid drag, the held state was released and the drag ended | Refilling the cell the items came from releases the held state. Emptying other cells did not end the drag |
+
+- After a drag, if no cell changed for 20 ticks, the server emptied the cells and returned the sticks (IUC v1.4.6, mock).
+- In short, drag split reports "each cell passed, once, in the order passed". Emptying cells runs out the sticks and refilling ends the drag, so during one drag the server cannot learn that a cell was passed again (IUC v1.4.9, measured).
+- A slider passes cells again when the value goes back, so it cannot be built on this path (*inference*).
+- It suits input that passes each cell once in order. A pattern lock drawn by passing over 3x3 dots (PatternLock) saved and showed "Wrong pattern" and "Unlocked" correctly (IUC v1.4.8, measured). That design is covered in [Inventory UI enhanced components](./inventory-ui-enhanced-components.mdx).
+
+## 3. Summary
+
+| Item | Works | Evidence | Cause |
+| --- | --- | --- | --- |
+| Tap step buttons (tap slider) | Yes | IIP v1.0.0, v1.3.0, measured | One slot button per value |
+| Drag slider value on screen | Yes | IIP v1.0.0, IUC v1.3.0, measured and tester | Other controls read `#slider_value` |
+| Sending a drag value with Apply | Yes | IIP v1.0.0, v1.3.0, measured | Only the matching Apply is visible. Needs one more press |
+| Release sends the value through a hidden global step button | Yes | IUC v1.4.2, v1.4.4, measured | A global mapping presses the visible step buttons wherever the finger lifts |
+| Sending when released on the slider | Not in v1.4.2 | IUC v1.4.2, measured | The drag mapping likely takes the input (*inference*). The v1.4.4 record does not separate release positions |
+| Touch start detection | No | IUC v1.3.0, measured | A slot button reaches the server only after the tap ends |
+| Dragging across tap cells | No | IUC v1.4.0, measured | Only taps that press and release on the same cell register |
+| Buttons layered over the slider | Buttons get it, slider does not move | IUC v1.4.1, measured | The control on top takes the touch |
+| Buttons layered under the slider | Slider moves, nothing reaches the server | IUC v1.4.1, measured | Same |
+| `consume_event: false` on a `pressed` mapping | Does not pass to the control below | IUC v1.4.1, measured | A mapping that goes by position does not pass the press on |
+| `consume_event: false` on the drag mapping | Value arrives, the tap cell below is pressed too | IUC v1.4.4, v1.4.6, measured | The release was taken to pass down |
+| Tap cell below with the vanilla drag mapping | Still pressed | IUC v1.4.8, measured | Not isolated. The server filters it |
+| Server drops a tap in the same tick | Works in mock | IUC v1.4.9, mock | *Unverified* in game |
+| Slider in a slot with a quick move mapping | No | IIP v1.2.0, IUC v1.4.2, measured | Not isolated |
+| `slider_selected_button`, `slider_deselected_button` | No | IUC v1.4.2, measured | Not isolated |
+| Several sliders on one screen | Values mix | IUC v1.4.3, measured | Not isolated. The vanilla mapping (A) mixed least |
+| Drag mapping without only `button_up_right_of_first_refusal` (B) | Did not work properly | IUC v1.4.4, measured | Not isolated. D, which also had `consume_event: false`, worked |
+| Drag split path | Passed cells arrive in order | IUC v1.4.5, measured | Vanilla drag split |
+| Revisiting a cell | Not registered | IUC v1.4.5, measured | During one drag a cell is not filled again |
+| Emptying cells mid drag | Sticks run out and it stops | IUC v1.4.8, measured | Emptied items do not return to the hand |
+| Refilling the stick mid drag | The drag ends | IUC v1.4.9, measured | Refilling the source cell releases the held state |
+
+## 4. Final design
+
+A slider has two parts.
+
+1. An on-screen slider. While dragging, the thumb, the fill and the value text are drawn on screen from `#slider_value` (section 2.3).
+2. One hidden slot button per step. Its mapping is a global mapping from `button.menu_select` to `button.container_auto_place`, and the button is visible only when `(#slider_value = k)`. On release the one visible button is pressed and the current value goes to the server.
+
+The drag mapping stays as in vanilla (SliderLab A). In the one row at a time test, values arrived for A, C and D. The C mapping also pressed the tap cell below on the Slider page (section 2.10), and D uses the same `consume_event: false`. A mixed least when several sliders shared the screen (section 2.8). A also pressed the tap cell below (section 2.10), so the server filter goes with it.
+
+This is the slider made by the example add-on generator (`releaseSlider` in `tools/lib.mjs`), without the thumb, bar and per-step drawing controls.
+
+```json
+"ius_slider": {
+  "type": "slider",
+  "size": [ 198, 18 ],
+  "layer": 3,
+  "slider_name": "ius_slider",
+  "slider_track_button": "ius_slider",
+  "slider_direction": "horizontal",
+  "slider_steps": 11,
+  "slider_box_control": "knob",
+  "default_control": "bar",
+  "hover_control": "bar_hover",
+  "background_control": "track",
+  "background_hover_control": "track_hover",
+  "progress_control": "fill",
+  "progress_hover_control": "fill_hover",
+  "always_handle_pointer": true,
+  "focus_enabled": true,
+  "property_bag": { "#slider_steps": 11, "#slider_value": 0, "#slider_timeout": 0.25 },
+  "button_mappings": [
+    { "from_button_id": "button.menu_select", "to_button_id": "ius_slider", "mapping_type": "pressed", "button_up_right_of_first_refusal": true }
+  ]
+}
+```
+
+This is the hidden slot button of step 4. There is one for each step 0 to 10, at the same place as the slider and on a lower layer. The slot number (`collection_index`) differs per step.
+
+```json
+"ius_slider_step4": {
+  "type": "stack_panel",
+  "collection_name": "container_items",
+  "size": [ 198, 18 ],
+  "layer": 1,
+  "controls": [
+    {
+      "button": {
+        "type": "button",
+        "size": [ 198, 18 ],
+        "collection_index": 34,
+        "default_control": "default",
+        "hover_control": "hover",
+        "pressed_control": "pressed",
+        "bindings": [
+          { "binding_type": "collection_details", "binding_collection_name": "container_items" },
+          { "binding_type": "view", "binding_condition": "always", "source_control_name": "ius_slider", "source_property_name": "(#slider_value = 4)", "target_property_name": "#visible" }
+        ],
+        "button_mappings": [
+          { "from_button_id": "button.menu_select", "to_button_id": "button.container_auto_place", "mapping_type": "global", "consume_event": false }
+        ]
+      }
+    }
+  ]
+}
+```
+
+- The button's `default`, `hover` and `pressed` are empty panels, so it is invisible.
+- The visibility binding reads the slider's `#slider_value` through `source_control_name`.
+
+The server has two rules.
+
+1. The global mapping presses the current step button wherever the finger lifts. The same value comes again when other buttons are pressed, so a value equal to the current one is ignored.
+2. A tap cell press that comes in the tick where the drag value changed is taken as the end of a drag and dropped (section 2.11, *unverified* in game).
+
+This is the handling in `bp/scripts/pages/slider.js` of the example add-on. `holdTap` holds the tap, and `settleTap` compares the held tap with the drag value change at the end of the tick.
+
+```js
+tick: (state) => {
+  const { tap, dropped } = settleTap(state);
+  if (dropped !== undefined) return `tap ${dropped * 10} ignored, it was the end of a drag`;
+  if (tap === undefined) return undefined;
+  state.value = tap;
+  return `slider ${state.value * 10}`;
+},
+press: (state, slot) => {
+  if (slot < STEPS) {
+    holdTap(state, slot);
+    return undefined;
+  }
+  const step = slot - DRAG.step;
+  if (step === state.drag) return undefined;
+  state.drag = step;
+  markDragMoved(state);
+  return `drag slider ${step * 10}`;
+},
+```
+
+- The server's first drag value equals the slider's first value (`#slider_value` 0). Otherwise the first release after opening the screen makes the step button send 0, which counts as a value change, and a first tap in the same tick is dropped (*inference*, it follows from the rule).
+- Several of these sliders on one screen may mix values as in section 2.8. The TwoHandleSlider page of the example has two, so it shows whether they mix (*unverified*).
+
+## 5. Example add-on
+
+<AddonDownload id="inventory-ui-slider" />
+
+1. Turn on the behavior pack whose name starts with `[bedrock-research]inventory-ui-slider-bp` in a new world. The resource pack turns on with it as a dependency. It can be turned on in the same world as the other entity inventory examples ([entity inventory menu](./entity-inventory-ui.mdx) section 2.2.2).
+2. Take "Inventory UI Slider" (comparator) from the end of the items category of the creative inventory, or use `/give @s bwiki:inventory_ui_slider_test`.
+3. Hold the item and tap the middle of the screen to open the slider screen.
+4. Change pages with `<` `>` or Pages on the top row. The bottom row shows what the server handled last.
+
+| Page | Content |
+| --- | --- |
+| Slider | A tap slider (each tap goes to the server) and a slider with the final design (section 4). Dragging the drag slider and releasing over the tap slider should show "ignored" on the bottom row |
+| TextSlider | A tap slider with words (four difficulties) and a slider with the final design (three weathers). The word changes at once while dragging, and on release the word the server got shows next to it |
+| TwoHandleSlider | A tap bar that moves the nearer handle, and two sliders with the final design (Low, High). If the two values cross, the server sorts them and adds "swapped" |
+| XYSlider | A 10x10 tap grid. The pressed cell is the X, Y value |
+
+- The text in game is English.
+- `tools/gen-ui.mjs` writes `rp/ui/ius.json`, and `tools/check-page.mjs` checks that the UI buttons and the script buttons of a page are the same list.
+- This example moves the Slider, TextSlider, TwoHandleSlider and XYSlider pages of IUC. TextSlider and TwoHandleSlider used drag plus Apply in IUC and use the final design here. The example add-on itself has not been run in game yet (*unverified*).
+
+The measurements used the test packs (IIP, IUC) of the research repository.
