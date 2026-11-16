@@ -59,7 +59,24 @@ sources:
 
 NPC 편집 화면의 외형 목록은 칸마다 NPC 외형을 이 렌더러로 그린다. 리소스 팩이 `npc_interact.skin_model`에 `property_bag { "rotate_mode": "auto", "scale_*": 0.6 }`를 더해도 바뀌지 않았다. 대신 호버한 외형만 돌았고, 초상은 실제 NPC가 고개를 돌리면 따라 돌았다. 화면이 칸마다 외형의 변환, `rotate_mode`(호버한 칸만 `"auto"`), `actor_id`(그 NPC)를 다시 써 넣는 것으로 보인다 *(코드)*. 이 화면의 초상은 팩으로 바꿀 수 없다. NPC 대화 화면은 시험하지 않았다.
 
-## 6. 예제 애드온
+## 6. 다른 엔티티 렌더러와의 차이
+
+엔티티나 캐릭터를 그리는 다른 렌더러와 비교한 것이다. 각 렌더러가 읽는 키와 동작은 클라이언트 코드(Android 1.26.52)에서 읽었고, 이 절의 내용은 `actor_portrait_renderer` 줄의 실측 말고는 게임에서 시험하지 않았다 *(코드)*.
+
+| 렌더러 | 그리는 것 | 고르는 방법 | 회전 | 바닐라 쓰임 |
+| --- | --- | --- | --- | --- |
+| `actor_portrait_renderer` | 월드의 아무 엔티티 | `property_bag`의 정수 `actor_id` | `property_bag`의 크기, 회전, 이동과 `rotate_mode: "auto"`. 커서를 보지 않는다 | NPC 화면 |
+| `live_horse_renderer` | 월드의 몹 | `#entity_id`(문자열만. 정수로 적으면 그리지 않는다) | 늘 커서를 본다. 끄는 키가 없다 | 말 화면 |
+| `live_player_renderer` | 로컬 플레이어 | 고를 수 없다 | 정면 고정. `#look_at_cursor: true`면 머리와 몸이 커서를 본다 | 인벤토리 화면 |
+| `hud_player_renderer` | 로컬 플레이어 | 고를 수 없다 | 비스듬히 고정. 플레이어 상태가 바뀐 뒤 몇 초만 그린다 | HUD 인형 |
+| `paper_doll_renderer` | 월드 엔티티가 아니라 스킨으로 만든 모델 | 선택한 스킨, `#skin_idx`와 `#pack_id`, `#skin_name`, `#player_uuid` | `rotation`(`auto`, `gesture_x`, `custom_y`), `#custom_rot_y`, `#set_target_rotation`. 애니메이션은 `#animation_to_play`로 고른다 | 일시 정지 화면, 스킨 화면 |
+| `equipment_preview_renderer` | 스스로 만든 갑옷 거치대가 입은 아이템 | `#item_id_aux`, 염색 색, 갑옷 장식 | 고정 각도 | 대장장이 작업대 |
+
+- 아무 엔티티나 정수 ID로 고르고 크기와 방향을 마음대로 바꾸는 것은 `actor_portrait_renderer`뿐이다.
+- `live_horse_renderer`도 아무 몹이나 그릴 수 있다. ID를 문자열로 주고 몹이 아닌 엔티티(아이템 엔티티 등)는 그리지 않는다. 늘 커서를 보므로 HUD 초상에는 맞지 않는다.
+- 플레이어를 그리는 세 렌더러(`live_player`, `hud_player`, `paper_doll`)는 ID가 필요 없다. 여러 플레이어 월드에서 내 모습만 그리면 되는 경우는 이쪽이 맞다. `paper_doll_renderer`는 월드가 없는 메뉴에서도 그린다.
+
+## 7. 예제 애드온
 
 <AddonDownload id="actor-portrait" />
 
@@ -71,7 +88,7 @@ NPC 편집 화면의 외형 목록은 칸마다 NPC 외형을 이 렌더러로 �
 - 가운데의 `apt` 글자는 바닐라 제목이다. 다른 HUD 예제와 함께 켜도 되도록 숨기지 않는다.
 - 화면의 글은 영어다.
 
-## 7. 실측 기록
+## 8. 실측 기록
 
 연구 저장소의 시험 팩(`ui-key-probe` v1.0.0~v1.0.1, 출처 약어 `UKP`)으로 터치 입력 기기에서 2026-11-17에 실측했다. 시험 팩은 위 네 칸 말고도 `translate_x`, `use_live_animation`, 식으로 만든 ID 칸과 NPC 화면 수정을 함께 담았다. 예제 애드온은 그중 동작을 확인한 키만 옮긴 것이다. 예제 애드온 자체는 아직 게임에서 돌리지 않았다.
 

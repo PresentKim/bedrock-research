@@ -59,7 +59,24 @@ Put turning portraits in controls whose content does not change often. If the ti
 
 The skin list of the NPC edit screen draws each NPC skin with this renderer. Adding `property_bag { "rotate_mode": "auto", "scale_*": 0.6 }` to `npc_interact.skin_model` from a resource pack changed nothing. Instead, only the hovered skin turned, and the portraits turned along when the real NPC turned its head. The screen seems to write the skin transform, `rotate_mode` (`"auto"` only for the hovered cell) and `actor_id` (that NPC) again for each cell *(code)*. The portraits on this screen cannot be changed by a pack. The NPC dialogue screen was not tested.
 
-## 6. Example add-on
+## 6. Differences from other entity renderers
+
+This compares the other renderers that draw entities or characters. The keys and behavior of each were read from the client code (Android 1.26.52), and apart from the measured `actor_portrait_renderer` row nothing in this section was tested in game *(code)*.
+
+| Renderer | What it draws | How it is picked | Rotation | Vanilla use |
+| --- | --- | --- | --- | --- |
+| `actor_portrait_renderer` | any entity in the world | integer `actor_id` in `property_bag` | size, rotation and offset in `property_bag`, and `rotate_mode: "auto"`. Does not look at the cursor | NPC screen |
+| `live_horse_renderer` | a mob in the world | `#entity_id` (string only; written as an integer it draws nothing) | always looks at the cursor, with no key to turn it off | horse screen |
+| `live_player_renderer` | the local player | cannot be picked | fixed front view. With `#look_at_cursor: true` the head and body look at the cursor | inventory screen |
+| `hud_player_renderer` | the local player | cannot be picked | fixed at an angle. Drawn only for a few seconds after the player state changes | HUD doll |
+| `paper_doll_renderer` | a model built from a skin, not a world entity | the selected skin, `#skin_idx` with `#pack_id`, `#skin_name`, `#player_uuid` | `rotation` (`auto`, `gesture_x`, `custom_y`), `#custom_rot_y`, `#set_target_rotation`. Animations are picked with `#animation_to_play` | pause screen, skin screens |
+| `equipment_preview_renderer` | the item worn by an armor stand it creates itself | `#item_id_aux`, dye color, armor trim | fixed angle | smithing table |
+
+- `actor_portrait_renderer` is the only one that picks any entity by an integer id and freely changes its size and direction.
+- `live_horse_renderer` can also draw any mob. The id is given as a string, and entities that are not mobs (such as item entities) are not drawn. It always looks at the cursor, so it does not suit a HUD portrait.
+- The three renderers that draw the player (`live_player`, `hud_player`, `paper_doll`) need no id. When only your own look is needed in a multiplayer world, they are the better fit. `paper_doll_renderer` draws even in menus without a world.
+
+## 7. Example add-on
 
 <AddonDownload id="actor-portrait" />
 
@@ -71,7 +88,7 @@ The skin list of the NPC edit screen draws each NPC skin with this renderer. Add
 - The `apt` text in the middle is the vanilla title. It is not hidden so that other HUD examples can run alongside.
 - The on-screen text is in English.
 
-## 7. Measurement record
+## 8. Measurement record
 
 Measured on a touch input device on 2026-11-17 with the research repository probe pack (`ui-key-probe` v1.0.0~v1.0.1, source abbreviation `UKP`). Besides the four cells above, the probe pack also had cells for `translate_x`, `use_live_animation` and an expression id, plus the NPC screen change. The example add-on carries over only the keys whose behavior was confirmed. The example add-on itself has not been run in game yet.
 
