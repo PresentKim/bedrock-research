@@ -1,6 +1,6 @@
 ---
 title: Images and animation
-description: image properties, progress bars, custom renderers, anim_type and easing, Aseprite flipbooks, and the paper doll and NetEase differences (ANI-01~39).
+description: image properties, progress bars, custom renderers, anim_type and easing, Aseprite flipbooks, the paper doll and NetEase differences, and the entity portrait and progress bar property_bag (ANI-01~43).
 sidebar_position: 9
 sources:
   - repo-guide
@@ -253,6 +253,24 @@ These were measured on Windows with a chest screen probe pack built to check com
 
 - **[ANI-39]** The colors of `gradient_renderer` cannot be changed by binding. Putting `[1, 0, 0, 1]` from a `property_bag` into `#color1` with a view binding, or into `#color`, still drew the gradient with the static `color1` (white). The same binding on the `#color` of a white image turned it red. The default gradient runs from top (`color1`) to bottom (`color2`). To change colors, prepare one gradient per color and choose with `#visible`, or bind `#color` on an image with a white-to-transparent texture. `&#123;measured&#125;` (Source: CPR)
 
+## 9.10 Rules added from measuring renderer property_bag keys
+
+These were measured with a probe pack (`UKP`) that lays out on the HUD the keys `actor_portrait_renderer` and `progress_bar_renderer` read from `property_bag`. The portrait renderer keys appear neither in the vanilla files nor in the Discord records.
+
+```json
+"my_portrait": {
+  "type": "custom",
+  "renderer": "actor_portrait_renderer",
+  "size": [ 44, 63 ],
+  "property_bag": { "actor_id": -4294967295, "rotate_mode": "auto" }
+}
+```
+
+- **[ANI-40]** `actor_portrait_renderer` draws the entity whose id is the integer `actor_id` in `property_bag`. In a single player world, a HUD control with `"actor_id": -4294967295` (that player's Script API `Player.id`) drew the player. In the same `property_bag`, `scale_x`, `scale_y` and `scale_z` (0.5) changed the size, `rotate_y` (180) the body direction (the back showed) and `rotate_x` (45) tilted it forward. `translate_x` 0.5 did not move it visibly. An id built with the expression `"(0 + $subtitle_text)"` (the same id in the subtitle) drew nothing. Emote, attack and sneak animations showed as they are, while walking and the view direction were not followed. A cell with `use_live_animation: true` looked the same as one without it. Entity ids differ per world and player, so a static id is for testing. `&#123;measured&#125;` (Source: UKP)
+- **[ANI-41]** `rotate_mode: "auto"` of `actor_portrait_renderer` keeps the portrait turning. A control made by the title factory (`hud_title_text_factory`) is rebuilt each time the title is sent again, and the angle went back to the start (sent every second, it turned and snapped back). With the title sent once and a long stay time it turned without breaks. The cause is the same as ANI-12. `&#123;measured&#125;` (Source: UKP)
+- **[ANI-42]** Adding `rotate_mode: "auto"` and `scale_*` 0.6 to the `property_bag` of the NPC edit screen skin list portrait (`npc_interact.skin_model`) from a resource pack changed nothing. Only the hovered skin turned, and the portraits turned along when the real NPC turned its head. The screen seems to write these keys again for each cell. The portraits on this screen cannot be transformed by a pack. `&#123;measured, inferred&#125;` (Source: UKP)
+- **[ANI-43]** `progress_bar_renderer` also draws from static values in `property_bag` without bindings. A bar with `#progress_bar_total_amount`, `#progress_bar_current_amount` and the visibility keys `#progress_bar_visible` and `#touch_progress_bar_visible` (both `true`) was drawn, and without the visibility keys it was not drawn (touch input device). The default look is a green fill on a gray background. With `is_durability: true` the background turned black and the fill color followed the ratio (orange at 37%, green at 90%). For `is_storage_bar`, used by the vanilla bundle bar, and `drop_shadow` and `round_value`, used by the durability bar, no difference could be judged on a 4px high bar. `&#123;measured, vanilla&#125;` (Source: UKP, VN ui_common.json `durability_bar`)
+
 ## How evidence is marked and source abbreviations
 
 A rule carries an ID in the form `[chapter abbreviation-number]`, and the `{…}` at the end is the verification level. The priority of verdicts is `measured` > `vanilla` > `working pack` > `code` > `inferred`, and `unverified` and `conflict` must be checked before use. `C-nn` is a number in the [conflict table](./conflicts.mdx), and the value counts of `VN` are the tallies in the [value dictionary](./value-dictionary.mdx). Rule IDs of other chapters (`LAY-`, `BND-`, `HOST-`, etc.) are on the corresponding pages of the same JSON UI chapter.
@@ -273,3 +291,4 @@ A rule carries an ID in the form `[chapter abbreviation-number]`, and the `{…}
 | `NE` | NetEase (China edition) developer documentation |
 | `E2048` | Mobile 1.26.63 measurement with the entity inventory 2048 test pack (2026-11-15) |
 | `CPR` | Windows measurement with the community report probe pack (research repository `community-probe` v1.0.0, 2026-11-16) |
+| `UKP` | Touch input device measurement with the renderer property_bag probe pack (research repository `ui-key-probe` v1.0.0~v1.0.1, 2026-11-17) |
