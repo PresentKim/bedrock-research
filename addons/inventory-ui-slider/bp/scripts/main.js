@@ -1,7 +1,7 @@
 import { ItemStack, system, world } from "@minecraft/server";
 import { PAGES } from "./pages/index.js";
 
-const PACK_VERSION = "v1.0.0";
+const PACK_VERSION = "v1.0.1";
 const LAUNCHER = "bwiki:inventory_ui_slider_test";
 const BOX = "bwiki:inventory_ui_slider_box";
 const TAG = "bwiki_inventory_ui_slider";

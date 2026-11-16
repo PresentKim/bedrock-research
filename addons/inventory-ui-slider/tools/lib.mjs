@@ -150,9 +150,10 @@ export function customSlider(name, { width, steps, offset, value = 0 }) {
 
 export function releaseSlider(name, { width, steps, offset, slotOfStep, value = 0 }) {
   const slider = customSlider(name, { width, steps, offset, value });
+  const [drag, ...rest] = slider.button_mappings;
   const emptyFaces = ["default", "hover", "pressed"].map((state) => ({ [state]: { type: "panel", size: ["100%", "100%"] } }));
   return [
-    { [name]: { ...slider, layer: 3 } },
+    { [name]: { ...slider, layer: 3, button_mappings: [{ ...drag, consume_event: false }, ...rest] } },
     ...Array.from({ length: steps }, (_, k) => slotWrap(`${name}_step${k}`, [width, 18], offset, {
       button: {
         type: "button", size: [width, 18], collection_index: slotOfStep(k),

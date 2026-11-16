@@ -13,7 +13,7 @@ This page records the tests of building a slider in the chest screen of [Buildin
 Two test packs were used.
 
 - IIP: the chest screen input probe pack, v1.0.0 to v1.3.0. It tried toggles, sliders and text input first.
-- IUC: the InvUI component gallery pack, v1.0.0 to v1.4.9. It moves Ore UI components into the chest screen, and most slider tests ran there.
+- IUC: the InvUI component gallery pack, v1.0.0 to v1.5.1. It moves Ore UI components into the chest screen, and most slider tests ran there.
 
 Marks:
 
@@ -111,6 +111,7 @@ The SliderLab page of IUC v1.4.2 put five rows on one screen.
 - Result: dragging the drag slider and releasing over the tap slider also pressed the tap slider (IUC v1.4.6, measured).
 - Cause: `consume_event: false` on the drag mapping was taken to pass the release on to the tap cell below.
 - So the drag mapping went back to vanilla (SliderLab A) (IUC v1.4.7). Releasing over the tap slider after a drag still pressed the tap cell (IUC v1.4.8, measured). Why the tap cell is pressed with the vanilla mapping was not isolated. The mapping alone could not stop it, so the server filters it (section 2.11).
+- On the Slider page with the vanilla mapping back, releasing on the slider itself sent nothing to the server (IUC v1.4.9, measured). The slider most likely takes the release first (*inference*, `button_up_right_of_first_refusal`). The server filter now handles the tap cell below, so the drag mapping went back to C (`consume_event: false`) (IUC v1.5.1).
 
 ### 2.11 Filtering taps on the server
 
@@ -144,7 +145,8 @@ Apart from sliders, the DragLab page tested whether the server can learn which c
 | Drag slider value on screen | Yes | IIP v1.0.0, IUC v1.3.0, measured and tester | Other controls read `#slider_value` |
 | Sending a drag value with Apply | Yes | IIP v1.0.0, v1.3.0, measured | Only the matching Apply is visible. Needs one more press |
 | Release sends the value through a hidden global step button | Yes | IUC v1.4.2, v1.4.4, measured | A global mapping presses the visible step buttons wherever the finger lifts |
-| Sending when released on the slider | Not in v1.4.2 | IUC v1.4.2, measured | The drag mapping likely takes the input (*inference*). The v1.4.4 record does not separate release positions |
+| Sending when released on the slider, vanilla drag mapping (A) | No | IUC v1.4.2, v1.4.9, measured | The drag mapping likely takes the release first (*inference*) |
+| Sending when released on the slider, `consume_event: false` drag mapping (C) | Expected to work | IUC v1.4.4 (the C row sent values, but the record does not separate release positions), to be checked in IUC v1.5.1 | The release is passed on, so it should reach the global step button (*inference*). The tap cell below is pressed too, so the server filters it |
 | Touch start detection | No | IUC v1.3.0, measured | A slot button reaches the server only after the tap ends |
 | Dragging across tap cells | No | IUC v1.4.0, measured | Only taps that press and release on the same cell register |
 | Buttons layered over the slider | Buttons get it, slider does not move | IUC v1.4.1, measured | The control on top takes the touch |
@@ -169,7 +171,7 @@ A slider has two parts.
 1. An on-screen slider. While dragging, the thumb, the fill and the value text are drawn on screen from `#slider_value` (section 2.3).
 2. One hidden slot button per step. Its mapping is a global mapping from `button.menu_select` to `button.container_auto_place`, and the button is visible only when `(#slider_value = k)`. On release the one visible button is pressed and the current value goes to the server.
 
-The drag mapping stays as in vanilla (SliderLab A). In the one row at a time test, values arrived for A, C and D. The C mapping also pressed the tap cell below on the Slider page (section 2.10), and D uses the same `consume_event: false`. A mixed least when several sliders shared the screen (section 2.8). A also pressed the tap cell below (section 2.10), so the server filter goes with it.
+The drag mapping gets `consume_event: false` (SliderLab C). With the vanilla mapping (A), releasing on the slider sent nothing (section 2.10). C also presses the tap cell under the released finger, but so did A (section 2.10), so the server filter (section 2.11) goes with either. A mixed least when several sliders shared the screen (section 2.8); several C sliders on one screen still need checking.
 
 This is the slider made by the example add-on generator (`releaseSlider` in `tools/lib.mjs`), without the thumb, bar and per-step drawing controls.
 
@@ -193,7 +195,7 @@ This is the slider made by the example add-on generator (`releaseSlider` in `too
   "focus_enabled": true,
   "property_bag": { "#slider_steps": 11, "#slider_value": 0, "#slider_timeout": 0.25 },
   "button_mappings": [
-    { "from_button_id": "button.menu_select", "to_button_id": "ius_slider", "mapping_type": "pressed", "button_up_right_of_first_refusal": true }
+    { "from_button_id": "button.menu_select", "to_button_id": "ius_slider", "mapping_type": "pressed", "button_up_right_of_first_refusal": true, "consume_event": false }
   ]
 }
 ```
