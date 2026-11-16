@@ -1,0 +1,89 @@
+---
+title: Drawing entity portraits with actor_portrait_renderer
+description: How to draw a player portrait on the HUD by writing an entity id and size and rotation keys in the property_bag of actor_portrait_renderer. Per-key measurements, why rotation rewinds under the title factory, the limit that the NPC screen overwrites pack keys, and an example add-on.
+sidebar_position: 1
+sources:
+  - repo-guide
+---
+
+# Drawing entity portraits with actor_portrait_renderer
+
+`actor_portrait_renderer` draws one entity from the world inside a UI control. Vanilla uses it in one place only, the NPC screen (`skin_model` in `npc_interact_screen.json`), and writes no `property_bag`. Which entity it draws and how is set by keys in `property_bag`, and those keys appear neither in the vanilla files nor in the community records. This page is a sub plan of [Deep research on little-known elements](./index.mdx) and records how those keys behaved on the HUD and how to use them.
+
+## 1. Summary
+
+- With an integer `actor_id` in a static `property_bag`, it draws that entity. It drew the player of a single player world (`Player.id` is `-4294967295`) on the HUD.
+- `scale_*`, `rotate_x` and `rotate_y` change the size and direction, and `rotate_mode: "auto"` keeps it turning.
+- Only a static integer id works. A value built with an expression drew nothing, so picking other players or entities is hard.
+- A control made by the title factory is rebuilt each time the title is sent again, and the rotation rewinds.
+- The NPC edit screen writes these keys again for each cell and overwrites what a pack sets.
+
+## 2. property_bag keys
+
+| Key | Value | Measured |
+| --- | --- | --- |
+| `actor_id` | integer | `-4294967295` drew the player. A value built with an expression like `"(0 + $subtitle_text)"` (the same id) drew nothing |
+| `scale_x`, `scale_y`, `scale_z` | number, default 1 | 0.5 gave half size |
+| `rotate_x`, `rotate_y`, `rotate_z` | number (degrees), default 0 | `rotate_y` 180 showed the back and `rotate_x` 45 tilted it forward. `rotate_z` was not tested |
+| `translate_x`, `translate_y`, `translate_z` | number, default 0 | `translate_x` 0.5 did not move it visibly. The unit is unknown |
+| `rotate_mode` | string | `"auto"` keeps it turning (section 4) |
+| `use_live_animation` | boolean | No visible difference between a cell with `true` and one without |
+| `skin` | string (JSON) | Not tested. Looks like a key that picks a variant with `variant` and `mark_variant` *(code)* |
+
+Emote, attack and sneak animations showed in every cell regardless of the keys. No cell followed walking or the view direction.
+
+## 3. Drawing your own portrait on the HUD
+
+```json
+"portrait": {
+  "type": "custom",
+  "renderer": "actor_portrait_renderer",
+  "size": [ 44, 63 ],
+  "enable_scissor_test": true,
+  "layer": 2,
+  "property_bag": { "actor_id": -4294967295, "rotate_mode": "auto" }
+}
+```
+
+- The size follows the control size. At the size above, the whole player was drawn aligned to the bottom of the cell.
+- `-4294967295` is the player id of a single player world (or the host of that world). Other players have different ids and are not drawn. The example add-on shows your id on the action bar so you can tell whether it matches.
+- To show it on the HUD, declare `hud_title_text_factory` once more on `root_panel` as in section 3.2 of [HUD item icons](../hud-item-icons.mdx), and pick the panel by the title text.
+
+## 4. Why the rotation rewinds
+
+The probe pack first sent the title again every second while the item was held, and the `"auto"` cell kept turning and snapping back to the starting angle. When the title arrives again, the title factory rebuilds the control, and the new control starts its rotation from 0 (the same cause as ANI-12). With the title sent only once and a long stay time, it turned without breaks.
+
+Put turning portraits in controls whose content does not change often. If the title has to carry other information often, move the portrait to another factory or a fixed control.
+
+## 5. The NPC screen
+
+The skin list of the NPC edit screen draws each NPC skin with this renderer. Adding `property_bag { "rotate_mode": "auto", "scale_*": 0.6 }` to `npc_interact.skin_model` from a resource pack changed nothing. Instead, only the hovered skin turned, and the portraits turned along when the real NPC turned its head. The screen seems to write the skin transform, `rotate_mode` (`"auto"` only for the hovered cell) and `actor_id` (that NPC) again for each cell *(code)*. The portraits on this screen cannot be changed by a pack. The NPC dialogue screen was not tested.
+
+## 6. Example add-on
+
+<AddonDownload id="actor-portrait" />
+
+1. Open the file to import it (on mobile, tap the file and open it with Minecraft). In a new single player world, turn on the behavior pack starting with `[bedrock-research]actor-portrait-bp`. The resource pack comes along as a dependency and no experiment toggles are needed.
+2. Take "Actor Portrait" (spyglass) from the end of the items category in the creative inventory, or use `/give @s bwiki:actor_portrait_test`.
+3. While it is held, four portraits appear at the top left of the HUD. Still stays as is, Auto keeps turning, Back shows the back at half size and Tilt leans forward. They disappear when you put it away.
+
+- The action bar tells whether your id is `-4294967295`. If not, the portraits are empty.
+- The `apt` text in the middle is the vanilla title. It is not hidden so that other HUD examples can run alongside.
+- The on-screen text is in English.
+
+## 7. Measurement record
+
+Measured on a touch input device on 2026-11-17 with the research repository probe pack (`ui-key-probe` v1.0.0~v1.0.1, source abbreviation `UKP`). Besides the four cells above, the probe pack also had cells for `translate_x`, `use_live_animation` and an expression id, plus the NPC screen change. The example add-on carries over only the keys whose behavior was confirmed. The example add-on itself has not been run in game yet.
+
+## What is left
+
+- The unit of `translate_*`, `rotate_z`, variant selection with `skin`, and what `use_live_animation` changes.
+- A way to draw entities other than the player. The id must be written into the resource pack in advance, so check whether there are cases where the id stays fixed (for example an entity reused in the same world).
+- PC, consoles and multiplayer worlds.
+
+## Related rules
+
+| ID | Page | Content |
+| --- | --- | --- |
+| ANI-40, ANI-41, ANI-42 | [Images and animation](../../json-ui/images-and-animation.mdx) | Measured `property_bag` of `actor_portrait_renderer` |
+| ANI-12 | [Images and animation](../../json-ui/images-and-animation.mdx) | Animations restart when a factory rebuilds the control |

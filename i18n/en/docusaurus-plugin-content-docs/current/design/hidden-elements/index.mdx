@@ -1,0 +1,54 @@
+---
+title: Deep research on little-known elements
+description: Overview of the plan to find JSON UI elements that vanilla rarely uses or that have no recorded usage, and to check whether they actually work. How they are found, candidates and status, the sub page (actor_portrait_renderer), and what is left.
+sidebar_position: 0
+sources:
+  - repo-guide
+---
+
+# Deep research on little-known elements
+
+What is known about JSON UI covers only what the vanilla files and the community use. The client reads more names than that. This plan picks elements the client reads but vanilla rarely uses or nobody has written down how to use, checks their real behavior with probe packs, and records the ones that can be used.
+
+## 1. How they are found
+
+1. Collect every property, binding and renderer name the vanilla `resource_pack/ui` uses, including keys inside `property_bag`.
+2. Among the names the client (Windows 1.26.63, Android 1.26.52) reads while parsing JSON UI, pick those missing from step 1, and check that the parsing code really reads them.
+3. Search this wiki, the community chat records and other documentation sites for those names, and drop the ones whose usage is already known.
+4. Lay out the rest in a probe pack and check them in game. Only measured results move into rules and sub pages.
+
+Step 2 gives the evidence level `code`. Usage is not written down until it is checked in game.
+
+## 2. Candidates and status
+
+| Element | Vanilla | Existing records | Status |
+| --- | --- | --- | --- |
+| `property_bag` keys of `actor_portrait_renderer` (`actor_id`, `scale_*`, `rotate_*`, `translate_*`, `rotate_mode`, `use_live_animation`, `skin`) | renderer once (NPC screen), keys 0 times | none | partly measured. [Sub page](./actor-portrait-renderer.mdx) |
+| `is_durability`, `is_storage_bar`, `drop_shadow`, `round_value` of `progress_bar_renderer` | durability bar, bundle bar | only a copy of the durability bar setup | partly measured (ANI-43). Only drawing from static values and the durability color were checked |
+| `opacity_override` of `vignette_renderer` | once (credits screen, `0.0`) | none | not measured |
+| `toggle_manager_behavior`, `toggle_manage_groups` | 0 times | none | not measured. Looks like a manager that gathers or clears toggle group state *(code)* |
+| `slider_manager_behavior`, `slider_manage_groups` | 0 times | none | not measured |
+| `follows_cursor_inside_parent`, `priority_rule`, `alternate_input_scope` | 0 times | none | not measured |
+| `slider_inverted`, `slider_speed` | 0 times | names only in the JSON UI LSP dictionary | not measured |
+| `vertical_scroll_delta` | 0 times | classified as China-only in the NetEase docs | not measured. The international client reads it too *(code)* |
+| `tts_index_order` | 0 times | none | not measured |
+| Renderers `bohr_model_renderer`, `gfx_multithreaded_renderer` | 0 times | none | not measured |
+
+## 3. Sub pages
+
+| Page | Content | Example add-on |
+| --- | --- | --- |
+| [Drawing entity portraits with actor_portrait_renderer](./actor-portrait-renderer.mdx) | How to draw a player portrait on the HUD with the entity id and transform keys in `property_bag`, and the rotation and per-screen limits | `actor-portrait` |
+
+## 4. What is left
+
+- Put the unmeasured candidates in a probe pack and check them. For elements whose behavior is hard to guess, like the toggle manager, compare one cell per value.
+- Look again at the remaining `progress_bar_renderer` keys with a large bar to see pixel differences.
+- Only one touch input device was measured. PC and consoles were not tested.
+
+## Related rules
+
+| Rule | Content |
+| --- | --- |
+| ANI-40, ANI-41, ANI-42 | `property_bag` of `actor_portrait_renderer` |
+| ANI-43 | Static values and bar keys of `progress_bar_renderer` |
