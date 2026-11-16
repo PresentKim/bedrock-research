@@ -14,7 +14,7 @@ The only path from the chest screen to the server is a slot button press (a quic
 
 Notation:
 
-- Measured: checked on mobile 1.26.63 with a test pack outside the wiki (IUC, `invui-components`), 2026-11-16. The version in parentheses is that test pack's version.
+- Measured: checked on mobile 1.26.63 with a test pack outside the wiki (IUC, `invui-components`), 2026-11-16. The version in parentheses is that test pack's version. The "Measured (example add-on v1.0.0, ...)" line in each component of section 3 was checked with the example add-on of this wiki.
 - Tester: static simulation in the [JSON UI tester](../../tools/jsonui-tester.mdx) (jsonui-tester).
 - Mock: a Node run that imitates `@minecraft/server`.
 - *Inference*: a cause guessed from a result. It was not tested on its own.
@@ -100,17 +100,21 @@ Slider bars. When one slider control used the same bar for `default_control` and
 
 ### 2.1 Replaying animations
 
-Drawings that replay when a server value changes, such as the toggle thumb, the check mark, the tab panel, the carousel track and toasts, go in a small factory cell keyed by a slot name (`keyedCell`). A new key builds a new control, so its animation starts from the beginning ([entity inventory menu section 8.2](../entity-inventory-ui.mdx#82-animation-replay), ANI-37, COL-22). These cells mostly hold drawings without bindings. If the *inference* in section 1.2 holds, bindings inside a keyed factory may not work. Only the TextBlock variant cell holds a slot label inside, and there is no record of how it looks in game.
+Drawings that replay when a server value changes, such as the toggle thumb, the check mark, the tab panel, the carousel track and toasts, go in a small factory cell keyed by a slot name (`keyedCell`). A new key builds a new control, so its animation starts from the beginning ([entity inventory menu section 8.2](../entity-inventory-ui.mdx#82-animation-replay), ANI-37, COL-22). These cells mostly hold drawings without bindings. If the *inference* in section 1.2 holds, bindings inside a keyed factory may not work. Only the TextBlock variant cell holds a slot label inside. In the example add-on measurement, changing the variant changed the lines (section 3.18).
 
 ## 3. Components
 
-Components below without a "Measured" entry were checked only this far: no diagnostics in the tester, and no errors in the mock after pressing every button and running 40 ticks (v1.1.0, v1.4.0).
+All 25 were run in game with example add-on v1.0.0 and behaved as designed. Each component ends with that measurement and its clip. In the test pack, every component had no diagnostics in the tester and no errors in the mock after pressing every button and running 40 ticks (v1.1.0, v1.4.0).
 
 ### 3.1 Toggle
 
 - Shows: a 32x15 base (a white bar on the green left half, a ring on the gray right half) and a 17x17 thumb that rises 2 above it. A disabled example that cannot be pressed sits beside it.
 - Build: the whole switch is a slot button. The drawing is a factory cell keyed by the `on`/`off` the server writes, so the thumb slides for 0.18 seconds on every change.
-- Measured: a toggle built the same way switched with every server answer in the input test pack (probe v1.3.0). In IUC, while pages were keyed factories (v1.1.0), it showed only at the instant of a page change. There is no separate record for the toggle page after the switch to visibility panels.
+- Measured: a toggle built the same way switched with every server answer in the input test pack (probe v1.3.0). In IUC, while pages were keyed factories (v1.1.0), it showed only at the instant of a page change.
+
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): the thumb moved with each switch on and off. The disabled toggle showed too.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/toggle.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/toggle.webm').default} />
 
 ### 3.2 Checkbox
 
@@ -118,92 +122,164 @@ Components below without a "Measured" entry were checked only this far: no diagn
 - Build: one slot button covers the box and the label. The check drawing is a state keyed factory, and the check mark fades in over 0.15 seconds.
 - Measured: a checkbox built the same way worked in the input test pack (probe v1.3.0). The IUC record is the same as for Toggle.
 
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): the box switched between checked and unchecked. The disabled example showed too.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/checkbox.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/checkbox.webm').default} />
+
 ### 3.3 Button
 
 - Shows: Secondary, Primary and Danger buttons, a disabled state the server turns on and off, and the last pressed button with its count.
 - Build: each button is a slot button with default, hover and pressed drawings as its state controls. When disabled, a server value hides the slot button and a half transparent (0.5) drawing shows in its place. The original acts on press down, but a slot button sends on release like a vanilla button.
+
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): presses on Secondary, Primary and Danger were counted. The Disable buttons grayed the buttons out and Enable restored them.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/button.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/button.webm').default} />
 
 ### 3.4 RoundedButton
 
 - Shows: Small, Medium and Large sizes.
 - Build: the same slot button as Button. The rounded corners (radius 6, 8, 10) are steps of rectangles with a different width per row.
 
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): presses on Small, Medium and Large all registered.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/roundedbutton.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/roundedbutton.webm').default} />
+
 ### 3.5 RadioGroup
 
 - Shows: one choice of Easy, Normal and Hard, and a Hardcore option that cannot be pressed.
 - Build: a slot button per row, and the server writes the chosen value. The 45 degree diamond is drawn as steps whose row length grows and shrinks by 1 (no rotation).
+
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): the selection moved to the pressed row (Easy).
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/radiogroup.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/radiogroup.webm').default} />
 
 ### 3.6 Segment
 
 - Shows: one choice of Day, Night and Rain, sharing borders with their neighbors, and two disabled buttons.
 - Build: a slot button per button. When the server writes the chosen value, a green face shows at that place. The selected text layer was raised (section 2).
 
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): Day, Night and Rain were picked in turn.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/segment.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/segment.webm').default} />
+
 ### 3.7 Stepper
 
 - Shows: Difficulty (Peaceful to Hard) without wrap, Season (Spring to Winter) with wrap, and a disabled example.
 - Build: the left and right arrows are slot buttons. The server writes the current label and whether each end is reached (`on`/`off`). An arrow at the end hides its slot button and shows a dim drawing.
+
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): Difficulty changed, and Season wrapped (Spring, Summer, Winter). The arrows dimmed at the ends.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/stepper.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/stepper.webm').default} />
 
 ### 3.8 Pagination
 
 - Shows: 12 pages, a window of 5 number cells, previous and next, and `Page n of 12`.
 - Build: the two arrows and five number cells are slot buttons. For each number cell the server writes `p7` (another page) or `c7` (the current page), and that key builds one number drawing. The current page is a green cell.
 
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): pages 1 to 12 went by in a window of 5 number cells, and the current page was green.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/pagination.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/pagination.webm').default} />
+
 ### 3.9 Tabs
 
 - Shows: General, Video and Audio tabs, a locked tab, and three lines of text per tab.
 - Build: a slot button per tab. When the server writes the active tab id, a factory cell keyed by that id builds the panel anew (like `Mount` in the original). The selected tab text layer was raised (section 2).
 
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): General, Video and Audio were selected, and the locked tab could not be selected.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/tabs.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/tabs.webm').default} />
+
 ### 3.10 Accordion
 
 - Shows: three items, a disabled item, and a switch between one open item and many.
 - Build: a slot button per header. Items below an open item have to move down by its body height, so for each item the server writes position and state together, such as `p1o` (one open item above, this item open), and the UI shows one of the panels prebuilt for each position. The chevron is two step drawings, up and down.
-- Measured: header titles were hidden by the slot button face (v1.3.0). The text moved to a layer 20 panel (section 2). The result after the move was checked only in the tester.
+- Measured: header titles were hidden by the slot button face (v1.3.0). The text moved to a layer 20 panel (section 2). After the move it behaved as designed in the example add-on measurement below.
+
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): single open mode worked, and with Multiple on several items stayed open together.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/accordion.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/accordion.webm').default} />
 
 ### 3.11 Dropdown
 
 - Shows: five options (one disabled) and the current value.
 - Build: a slot button for the trigger and for each option. When the server writes the open state, the list appears on a higher layer panel. One transparent slot button on the lowest layer covers the whole page area, so a press outside the trigger and the list closes it. Disabled options have no slot button. The original's flip at the screen edge is gone, and the position is fixed in advance.
 
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): Forest was chosen, then Desert.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/dropdown.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/dropdown.webm').default} />
+
 ### 3.12 Modal
 
 - Shows: a half transparent backdrop, a light window, Cancel and Delete, and a result text.
 - Build: a server state shows a high layer panel. The backdrop around the window is four slot buttons that share one slot, and a press there closes the modal. Inside the window only the Cancel and Delete slot buttons exist. Esc closes the whole chest screen, so no key closes only the modal.
+
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): a tap on the backdrop closed the modal. Cancel and Delete worked too.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/modal.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/modal.webm').default} />
 
 ### 3.13 Toast
 
 - Shows: 3 and 8 second notices, up to 3, closed by a press.
 - Build: three notice spots exist in advance and the server writes their text. The server shortens each lifetime every tick and removes the notice. A new notice spot gets one of `a` to `f` as its key and the others get `still`, so only the new notice fades in over 0.15 seconds. Nothing can be drawn outside the chest screen (HUD). The text layer was raised (section 2, tester).
 
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): 3 and 8 second toasts stacked with their countdowns and faded out.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/toast.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/toast.webm').default} />
+
 ### 3.14 Tooltip
 
 - Shows: bubbles opened by a press on four sides (right, left, top, bottom) and a hover bubble for PC.
-- Build: mobile has no hover, so the target is a slot button and the server opens and closes the bubble. While a bubble is open, a slot button covering the page shows, so a press outside closes it. The hover bubble lives inside the button's hover state drawing and shows without the server. It does not show on mobile (*inference*).
+- Build: mobile has no hover, so the target is a slot button and the server opens and closes the bubble. While a bubble is open, a slot button covering the page shows, so a press outside closes it. The hover bubble lives inside the button's hover state drawing and shows without the server. On mobile it showed too when the button was tapped (measurement below).
+
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): bubbles opened on all four sides and an outside tap closed them. On mobile, tapping "Hover me (PC)" also showed its bubble "Shown by hover alone".
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/tooltip.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/tooltip.webm').default} />
 
 ### 3.15 Carousel
 
 - Shows: 7 slides, 3 at a time, a slide on page change, dots, and a loop switch.
 - Build: the arrows, dots and Loop are slot buttons. When the server writes a page and direction such as `p2f` (page 2, forward), the track with that key is built anew and slides in from the side over 0.25 seconds. The original has no such slide.
 
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): pages of three slides went by with Loop on.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/carousel.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/carousel.webm').default} />
+
 ### 3.16 ProgressBar
 
 - Shows: a bar changed by buttons (-10, -1, +1, +10, 0%, 100%), a bar that fills by 1 every tick, and the value text.
 - Build: the fill is a keyed cell with 101 steps (`w0` to `w100`). One cell definition receives only the slot number as a variable, so both bars share it. The value text starts with a digit, so a `keepFormat` label reads it (section 2).
+
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): the buttons changed the value, and the automatic fill ran and paused.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/progressbar.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/progressbar.webm').default} />
 
 ### 3.17 ProgressCircle
 
 - Shows: 20 segment rings in two sizes, the value text in the middle, and automatic progress with Play.
 - Build: rotation and round shapes cannot be drawn, so one segment per 5% sits on the circle in advance, and the server writes `on`/`off` for each segment. The value text is written with `§0` in front (section 2).
 
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): the rings and value text showed 35%, 41%, 61% and 91%.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/progresscircle.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/progresscircle.webm').default} />
+
 ### 3.18 TextBlock
 
 - Shows: title, body and caption samples, formatting inside one line (InlineTextBlock), and server text shown in the three variants in turn.
 - Build: size is approximated with `font_scale_factor` and bold with `§l`. Letter spacing cannot change. Color and weight change inside one label with format codes. The variant is a keyed cell with a slot label inside (section 2.1).
 
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): the next text and variant buttons changed the lines.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/textblock.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/textblock.webm').default} />
+
 ### 3.19 Scroll
 
 - Shows: a list of 14 rows that can be pressed and a long text, both vanilla scroll views.
 - Build: `scroll_view` drags inside the screen without the server. The server does not know the scroll position and receives only presses on the row slot buttons in the list. The track and thumb are White rectangles. Like vanilla, the scroll view has a `#gesture_control_enabled` binding.
-- Measured: dragging over the list buttons pressed a button instead of scrolling, and only dragging the scrollbar scrolled (v1.2.1). The `#gesture_control_enabled` binding was added after that (v1.3.0), with no recorded result. The layer of the picked row name was raised (v1.4.3, tester).
+- Measured: dragging over the list buttons pressed a button instead of scrolling, and only dragging the scrollbar scrolled (v1.2.1). The `#gesture_control_enabled` binding was added after that (v1.3.0), with no recorded result for dragging over the list buttons. The layer of the picked row name was raised (v1.4.3, tester).
+
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): a list row was picked ("Picked Row 6") and the long text scrolled.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/scroll.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/scroll.webm').default} />
 
 ### 3.20 Badge
 
@@ -211,30 +287,54 @@ Components below without a "Measured" entry were checked only this far: no diagn
 - Build: icons are pixel drawings merged into rectangles. The server writes a badge size key (`none`, `one`, `two`, `many`) and the number text separately, and the size key shows a round badge of the right width. The number gets `§r` in front and is read by a `keepFormat` label.
 - Measured: the numbers did not show (v1.4.1). Raising the number layer made them show (v1.4.2).
 
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): the badges showed counts 3, 5, 1 and 0, and 99+ for Alerts. Clear all worked.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/badge.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/badge.webm').default} />
+
 ### 3.21 Rating
 
 - Shows: a five star rating (pressing the same star again clears it) and a read-only average with half stars.
 - Build: stars are pixel drawings. For each star the server writes `on`/`off` (my rating) or `full`/`half`/`none` (the average). A half star is a drawing with only the left half in gold.
+
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): the stars set a rating ("Rated 3 of 5", "Rated 4 of 5"), and the average 3.5 showed with a half star.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/rating.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/rating.webm').default} />
 
 ### 3.22 Spinner
 
 - Shows: a dot ring, three pulsing dots, a bar that goes back and forth, and Start/Stop.
 - Build: all three run on client animations alone (`alpha` and `offset` animations looped with `next`), without the server. The server only shows the running panel or the stopped panel with `on`/`off`.
 
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): Start and Stop showed and hid the dot ring, the pulsing dots and the bar.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/spinner.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/spinner.webm').default} />
+
 ### 3.23 Steps
 
 - Shows: four steps (done, current, pending), lines between steps, a step description, Back, and Next (Finish at the last step).
 - Build: the server writes `done`/`current`/`pending` per step, `on`/`off` per line, and whether each button is active. Back on the first step is a drawing that cannot be pressed.
+
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): Back and Next went through Account, World, Rules and Done, and then Finished showed.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/steps.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/steps.webm').default} />
 
 ### 3.24 Chips
 
 - Shows: active tags removed with x, suggested tags added back with a press, and Reset.
 - Build: each of the 8 tags has a slot button in both the active row and the suggestion row. When the server writes `a0` (active row, place 0) or `s2` (suggestion row, place 2) for a tag, the UI shows the tag at that place. The active text layer was raised (section 2).
 
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): tags were removed and added back, and the "Active filters" count changed with them.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/chips.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/chips.webm').default} />
+
 ### 3.25 Breadcrumb
 
 - Shows: a path of up to 5 levels and up to 4 items under the current level.
 - Build: the 5 path cells and 4 item cells are slot buttons. The server writes `link`/`current`/`none` per path cell, and `dir`/`leaf`/`none` with a name per item. A press on an earlier level goes back, and a press on an item goes in. Names are written with `§7`, `§f` or `§r` in front and read with `keepFormat`.
+
+Measured (example add-on v1.0.0, mobile 1.26.63, 2026-11-16): the path went into Worlds, Creative and Backups and back to Home, and the empty level message showed.
+
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/basic/breadcrumb.jpg').default} src={require('@site/static/video/inventory-ui-ddui/basic/breadcrumb.webm').default} />
 
 ## 4. Example add-on
 
@@ -248,4 +348,4 @@ Components below without a "Measured" entry were checked only this far: no diagn
 - The entity name is `§b§w§b§c` ([entity inventory menu section 2.2.1](../entity-inventory-ui.mdx#221-naming-convention)). Hiding vanilla uses the same marker `entity_ui_hide_vanilla` and property `#entity_ui_vanilla_visible` as the other entity inventory examples, so they can be turned on in the same world (section 2.2.2 of that page).
 - `tools/gen-ui.mjs` writes `rp/ui/iubc.json`. `node tools/check-page.mjs <key>` checks one page.
 - The text on screen is in English.
-- The measurements above were made with the IUC test pack. This example add-on is that test pack (v1.4.9) cut down to these 25 pages, with new names, identifiers, entity name and namespace. The example add-on itself has not been run in game yet (*unverified*).
+- Apart from the "Measured (example add-on v1.0.0, ...)" lines in section 3, the measurements above were made with the IUC test pack. This example add-on is that test pack (v1.4.9) cut down to these 25 pages, with new names, identifiers, entity name and namespace. Example add-on v1.0.0 was run in game, and the results are in each component of section 3.
