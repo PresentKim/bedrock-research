@@ -1,6 +1,6 @@
 ---
 title: actor_portrait_renderer로 엔티티 초상 그리기
-description: actor_portrait_renderer의 property_bag에 엔티티 ID와 크기, 회전 키를 적어 HUD에 플레이어 초상을 그리는 법. 키별 실측, 제목 팩토리에서 회전이 되감기는 이유, NPC 화면에서 팩 키가 덮어써지는 한계, 예제 애드온.
+description: actor_portrait_renderer의 property_bag에 엔티티 ID와 크기, 회전 키를 적어 HUD에 플레이어 초상을 그리는 법. 키별 실측, 제목 팩토리에서 회전이 되감기는 이유, NPC 화면에서 팩 키가 덮어써지는 한계, live_horse·live_player·hud_player·paper_doll·equipment_preview 렌더러와의 비교, 예제 애드온.
 sidebar_position: 1
 sources:
   - repo-guide
@@ -17,6 +17,7 @@ sources:
 - ID는 정적인 정수만 된다. 식으로 만든 값은 그리지 않았다. 그래서 다른 플레이어나 엔티티를 골라 그리는 데는 쓰기 어렵다.
 - 제목 팩토리로 만든 컨트롤은 제목을 다시 보낼 때마다 새로 만들어져 회전이 되감긴다.
 - NPC 편집 화면은 칸마다 이 키들을 다시 써서 팩이 적은 값을 덮어쓴다.
+- 엔티티를 그리는 렌더러 여섯 가운데 정수 ID로 아무 엔티티나 고르고 변환을 마음대로 주는 것은 이 렌더러뿐이다. 내 모습만 그리면 되면 ID가 필요 없는 플레이어 렌더러가 낫다(6절).
 
 ## 2. property_bag 키
 
@@ -72,9 +73,47 @@ NPC 편집 화면의 외형 목록은 칸마다 NPC 외형을 이 렌더러로 �
 | `paper_doll_renderer` | 월드 엔티티가 아니라 스킨으로 만든 모델 | 선택한 스킨, `#skin_idx`와 `#pack_id`, `#skin_name`, `#player_uuid` | `rotation`(`auto`, `gesture_x`, `custom_y`), `#custom_rot_y`, `#set_target_rotation`. 애니메이션은 `#animation_to_play`로 고른다 | 일시 정지 화면, 스킨 화면 |
 | `equipment_preview_renderer` | 스스로 만든 갑옷 거치대가 입은 아이템 | `#item_id_aux`, 염색 색, 갑옷 장식 | 고정 각도 | 대장장이 작업대 |
 
-- 아무 엔티티나 정수 ID로 고르고 크기와 방향을 마음대로 바꾸는 것은 `actor_portrait_renderer`뿐이다.
-- `live_horse_renderer`도 아무 몹이나 그릴 수 있다. ID를 문자열로 주고 몹이 아닌 엔티티(아이템 엔티티 등)는 그리지 않는다. 늘 커서를 보므로 HUD 초상에는 맞지 않는다.
-- 플레이어를 그리는 세 렌더러(`live_player`, `hud_player`, `paper_doll`)는 ID가 필요 없다. 여러 플레이어 월드에서 내 모습만 그리면 되는 경우는 이쪽이 맞다. `paper_doll_renderer`는 월드가 없는 메뉴에서도 그린다.
+### 6.1 렌더러별 키와 조건
+
+**`live_horse_renderer`**
+- 읽는 키: `property_bag`의 `#entity_id` 하나. 문자열이어야 하고 엔진이 10진 정수로 바꿔 읽는다. JSON 정수로 적으면 읽지 못해 아무것도 그리지 않는다. 바닐라 말 화면은 이 값을 바인딩으로 받는다.
+- 조건: 찾은 엔티티가 몹 분류여야 그린다. 아이템 엔티티, 투사체 같은 것은 그리지 않는다. 말 화면인지는 검사하지 않으므로 다른 화면에서도 `#entity_id`만 주면 그릴 것으로 보인다 *(추론)*.
+- 회전: 머리와 몸이 늘 커서 쪽을 본다(가로, 세로 거리를 40으로 나눈 값의 아크탄젠트 x 20도). 마우스가 아닌 입력에서는 고정된 거리로 계산한다. 크기는 컨트롤 너비를 따른다.
+
+**`live_player_renderer`**
+- 그리는 것: 로컬 플레이어만. ID를 받지 않는다. 플레이어에 연결된 엔티티도 함께 그리는 반복이 있다 *(무엇인지 확인 못 함)*.
+- 읽는 키: `property_bag`의 `#look_at_cursor`(불리언 `true`일 때만 켜짐). 바닐라 PC 인벤토리 화면은 `true`, 포켓 인벤토리 화면은 키가 없다.
+- 회전: 정면을 보도록 180도 돌린다. `#look_at_cursor`면 머리와 몸이 커서를 보고, 아니면 고정이다. 크기는 너비와 높이 중 작은 값이다. 잠자기 같은 플레이어 상태에 따라 0.6배로 줄이고 기울이는 분기가 있다 *(상태 이름은 추론)*.
+
+**`hud_player_renderer`**
+- 그리는 것: 로컬 플레이어만. 읽는 키가 없다.
+- 회전: 몸과 머리를 -22.5도 돌린 비스듬한 고정 자세다.
+- 조건: 플레이어 상태가 바뀌면 타이머를 3초로 두고 그 동안만 그린다. HUD 왼쪽 위에 잠깐 나타나는 인형이 이것이다.
+
+**`paper_doll_renderer`**
+- 그리는 것: 월드 엔티티가 아니라 스킨으로 만든 플레이어 모델이다. 월드가 없는 메뉴에서도 그린다.
+- 스킨 고르기: 컨트롤 속성 `use_selected_skin`(기본 참), `use_uuid`, `use_skin_by_name`과 `property_bag`의 `#skin_idx`, `#pack_id`, `#skin_name`, `#player_uuid`.
+- 회전: 컨트롤 속성 `rotation`이 `auto`(누적 시간 x 30도), `gesture_x`(끌기), `custom_y`(`#custom_rot_y` 값)를 고르고, `starting_rotation`, `camera_tilt_degrees`가 시작 각도와 카메라 기울기를 정한다. `#set_target_rotation`을 주면 그 각도까지 돌았다가 원래 방식으로 돌아간다. 바닐라는 `#skin_rotation`으로 `auto`를 켠다.
+- 애니메이션: `#animation_to_play`, `#animation_to_play_when_done`, `#sound_to_play`로 고른다. `#disable_head_follow_mouse`면 머리가 커서를 보지 않는다.
+
+**`equipment_preview_renderer`**
+- 그리는 것: 렌더러가 스스로 만든 `minecraft:armor_stand`가 입은 아이템이다.
+- 읽는 키: `#item_id_aux`, `#item_custom_color`, `#armor_trim_pattern`, `#armor_trim_material`.
+- 회전: 고정 각도다. 바닐라 대장장이 작업대는 `rotation_x` 30, `rotation_y` -30을 준다.
+
+### 6.2 무엇을 쓸까
+
+| 하고 싶은 것 | 맞는 렌더러 |
+| --- | --- |
+| 정해진 엔티티 하나를 원하는 각도와 크기로, 또는 계속 돌리며 | `actor_portrait_renderer` |
+| 화면이 알려 주는 몹(문자열 ID)을 커서를 보는 모습으로 | `live_horse_renderer` |
+| 내 모습을 여러 플레이어 월드에서도 ID 없이 | `live_player_renderer`, `paper_doll_renderer` |
+| 월드 밖 메뉴에서 스킨 미리 보기, 끌어서 돌리기, 애니메이션 고르기 | `paper_doll_renderer` |
+| 갑옷이나 장식 아이템 미리 보기 | `equipment_preview_renderer` |
+
+- 아무 엔티티나 정수 ID로 고르고 크기와 방향을 마음대로 바꾸는 것은 `actor_portrait_renderer`뿐이다. 대신 ID를 리소스 팩에 미리 적어야 한다.
+- `live_horse_renderer`는 ID를 문자열로 받으므로 바인딩으로 바꿔 줄 수 있을지도 모른다. 늘 커서를 보므로 HUD 초상에는 맞지 않는다.
+- 플레이어를 그리는 세 렌더러는 ID가 필요 없지만 변환 키가 없다.
 
 ## 7. 예제 애드온
 

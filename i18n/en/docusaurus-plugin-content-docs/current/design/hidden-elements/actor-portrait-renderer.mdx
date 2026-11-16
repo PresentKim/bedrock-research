@@ -1,6 +1,6 @@
 ---
 title: Drawing entity portraits with actor_portrait_renderer
-description: How to draw a player portrait on the HUD by writing an entity id and size and rotation keys in the property_bag of actor_portrait_renderer. Per-key measurements, why rotation rewinds under the title factory, the limit that the NPC screen overwrites pack keys, and an example add-on.
+description: How to draw a player portrait on the HUD by writing an entity id and size and rotation keys in the property_bag of actor_portrait_renderer. Per-key measurements, why rotation rewinds under the title factory, the limit that the NPC screen overwrites pack keys, a comparison with the live_horse, live_player, hud_player, paper_doll and equipment_preview renderers, and an example add-on.
 sidebar_position: 1
 sources:
   - repo-guide
@@ -17,6 +17,7 @@ sources:
 - Only a static integer id works. A value built with an expression drew nothing, so picking other players or entities is hard.
 - A control made by the title factory is rebuilt each time the title is sent again, and the rotation rewinds.
 - The NPC edit screen writes these keys again for each cell and overwrites what a pack sets.
+- Among the six renderers that draw entities, this is the only one that picks any entity by an integer id and takes free transforms. When only your own look is needed, the player renderers that need no id fit better (section 6).
 
 ## 2. property_bag keys
 
@@ -72,9 +73,47 @@ This compares the other renderers that draw entities or characters. The keys and
 | `paper_doll_renderer` | a model built from a skin, not a world entity | the selected skin, `#skin_idx` with `#pack_id`, `#skin_name`, `#player_uuid` | `rotation` (`auto`, `gesture_x`, `custom_y`), `#custom_rot_y`, `#set_target_rotation`. Animations are picked with `#animation_to_play` | pause screen, skin screens |
 | `equipment_preview_renderer` | the item worn by an armor stand it creates itself | `#item_id_aux`, dye color, armor trim | fixed angle | smithing table |
 
-- `actor_portrait_renderer` is the only one that picks any entity by an integer id and freely changes its size and direction.
-- `live_horse_renderer` can also draw any mob. The id is given as a string, and entities that are not mobs (such as item entities) are not drawn. It always looks at the cursor, so it does not suit a HUD portrait.
-- The three renderers that draw the player (`live_player`, `hud_player`, `paper_doll`) need no id. When only your own look is needed in a multiplayer world, they are the better fit. `paper_doll_renderer` draws even in menus without a world.
+### 6.1 Keys and conditions per renderer
+
+**`live_horse_renderer`**
+- Key read: only `#entity_id` in `property_bag`. It must be a string, which the engine parses as a decimal integer. Written as a JSON integer it cannot be read and nothing is drawn. The vanilla horse screen gets this value through a binding.
+- Condition: the entity found must be in the mob category. Item entities, projectiles and the like are not drawn. It does not check for the horse screen, so it would likely draw on other screens too when given `#entity_id` *(inferred)*.
+- Rotation: the head and body always face the cursor (the arctangent of the horizontal and vertical distance divided by 40, times 20 degrees). Inputs other than the mouse use a fixed distance. The size follows the control width.
+
+**`live_player_renderer`**
+- Draws: only the local player. It takes no id. There is a loop that also draws entities linked to the player *(not identified)*.
+- Key read: `#look_at_cursor` in `property_bag` (on only when it is boolean `true`). The vanilla PC inventory screen sets `true`; the pocket inventory screen has no key.
+- Rotation: turned 180 degrees to face front. With `#look_at_cursor` the head and body face the cursor, otherwise they are fixed. The size is the smaller of width and height. There is a branch that shrinks it to 0.6 and tilts it for player states such as sleeping *(state names inferred)*.
+
+**`hud_player_renderer`**
+- Draws: only the local player. It reads no keys.
+- Rotation: a fixed angled pose with the body and head turned -22.5 degrees.
+- Condition: when the player state changes it sets a timer to 3 seconds and draws only during that time. This is the doll that briefly appears at the top left of the HUD.
+
+**`paper_doll_renderer`**
+- Draws: a player model built from a skin, not a world entity. It draws even in menus without a world.
+- Skin choice: the control properties `use_selected_skin` (default true), `use_uuid`, `use_skin_by_name`, and `#skin_idx`, `#pack_id`, `#skin_name`, `#player_uuid` in `property_bag`.
+- Rotation: the control property `rotation` picks `auto` (accumulated time x 30 degrees), `gesture_x` (drag) or `custom_y` (the `#custom_rot_y` value), and `starting_rotation` and `camera_tilt_degrees` set the start angle and camera tilt. Given `#set_target_rotation`, it turns to that angle and then goes back to its previous mode. Vanilla turns on `auto` with `#skin_rotation`.
+- Animation: picked with `#animation_to_play`, `#animation_to_play_when_done` and `#sound_to_play`. With `#disable_head_follow_mouse` the head does not follow the cursor.
+
+**`equipment_preview_renderer`**
+- Draws: the item worn by a `minecraft:armor_stand` the renderer creates itself.
+- Keys read: `#item_id_aux`, `#item_custom_color`, `#armor_trim_pattern`, `#armor_trim_material`.
+- Rotation: a fixed angle. The vanilla smithing table gives `rotation_x` 30 and `rotation_y` -30.
+
+### 6.2 Which to use
+
+| Goal | Renderer |
+| --- | --- |
+| One given entity at a chosen angle and size, or turning continuously | `actor_portrait_renderer` |
+| A mob the screen tells you about (string id), shown looking at the cursor | `live_horse_renderer` |
+| Your own look without an id, also in multiplayer worlds | `live_player_renderer`, `paper_doll_renderer` |
+| Skin preview, drag to rotate or picking animations in menus outside a world | `paper_doll_renderer` |
+| Previewing armor or trim items | `equipment_preview_renderer` |
+
+- `actor_portrait_renderer` is the only one that picks any entity by an integer id and freely changes its size and direction. In exchange the id has to be written into the resource pack in advance.
+- `live_horse_renderer` takes the id as a string, so a binding might be able to change it. It always looks at the cursor, so it does not suit a HUD portrait.
+- The three renderers that draw the player need no id but have no transform keys.
 
 ## 7. Example add-on
 
