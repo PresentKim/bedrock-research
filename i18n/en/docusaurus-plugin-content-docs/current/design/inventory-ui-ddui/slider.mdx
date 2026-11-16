@@ -1,14 +1,14 @@
 ---
 title: Building sliders with the inventory UI
 description: A record of the ways tried to send a slider value to the server from an entity chest screen, with the measured result and the cause of each failure. It covers tap sliders, drag plus Apply, a touch start signal, layered step buttons, SliderLab, drag mapping comparisons, server filtering and drag split paths, then gives the final design (a slider whose hidden global step button sends the value on release) and an example add-on.
-sidebar_position: 5.1
+sidebar_position: 1
 sources:
   - repo-guide
 ---
 
 # Building sliders with the inventory UI
 
-These tests started from the question of whether a chest screen can replace server forms (DDUI, CustomForm). Replacing server forms smoothly needs at least toggles and sliders, so the input probe pack (IIP) first checked whether a chest screen can take text input, toggles and sliders, and the Ore UI component gallery (IUC) carried the slider tests on. The screens are built the way [Building menu screens from an entity inventory](./entity-inventory-ui.mdx) describes (the chest screen of an invisible container entity, redrawn with a resource pack). For each approach it states what was done, what came out and why it did not work, and it ends with the design in use now and an example add-on.
+These tests started from the question of whether a chest screen can replace server forms (DDUI, CustomForm). Replacing server forms smoothly needs at least toggles and sliders, so the input probe pack (IIP) first checked whether a chest screen can take text input, toggles and sliders, and the Ore UI component gallery (IUC) carried the slider tests on. The screens are built the way [Building menu screens from an entity inventory](../entity-inventory-ui.mdx) describes (the chest screen of an invisible container entity, redrawn with a resource pack). For each approach it states what was done, what came out and why it did not work, and it ends with the design in use now and an example add-on.
 
 Two test packs were used.
 
@@ -24,7 +24,7 @@ Marks:
 
 ## 1. Why a slider is hard in the chest screen
 
-- The only channel from the chest screen to the server is a slot action. Buttons become quick moves of hidden slots ([entity inventory menu](./entity-inventory-ui.mdx) section 2.5). All the server learns is "slot button n was pressed".
+- The only channel from the chest screen to the server is a slot action. Buttons become quick moves of hidden slots ([entity inventory menu](../entity-inventory-ui.mdx) section 2.5). All the server learns is "slot button n was pressed".
 - An on-screen `slider` drags, and other controls read its value (`#slider_value`), but there is no channel that sends that value to the server (IIP v1.0.0, measured).
 - Text in a text box could not be read. All four paths were empty: the box's `#item_name`, `#text` of the text label inside the box, the global `#item_name`, and the box's `#text` (IIP v1.1.0, measured). So text input cannot carry a value either.
 - Mobile has no hover. A Hover slider with cell mappings that have no `from_button_id` changed only when a cell was tapped (IIP v1.2.0, measured). The server has no way to learn which cells a finger passes over.
@@ -135,7 +135,7 @@ Apart from sliders, the DragLab page tested whether the server can learn which c
 - After a drag, if no cell changed for 20 ticks, the server emptied the cells and returned the sticks (IUC v1.4.6, mock).
 - In short, drag split reports "each cell passed, once, in the order passed". Emptying cells runs out the sticks and refilling ends the drag, so during one drag the server cannot learn that a cell was passed again (IUC v1.4.9, measured).
 - A slider passes cells again when the value goes back, so it cannot be built on this path (*inference*).
-- It suits input that passes each cell once in order. A pattern lock drawn by passing over 3x3 dots (PatternLock) saved and showed "Wrong pattern" and "Unlocked" correctly (IUC v1.4.8, measured). That design is covered in [Inventory UI enhanced components](./inventory-ui-enhanced-components.mdx).
+- It suits input that passes each cell once in order. A pattern lock drawn by passing over 3x3 dots (PatternLock) saved and showed "Wrong pattern" and "Unlocked" correctly (IUC v1.4.8, measured). That design is covered in [Inventory UI enhanced components](./enhanced-components.mdx).
 
 ## 3. Summary
 
@@ -268,7 +268,7 @@ press: (state, slot) => {
 
 <AddonDownload id="inventory-ui-slider" />
 
-1. Turn on the behavior pack whose name starts with `[bedrock-research]inventory-ui-slider-bp` in a new world. The resource pack turns on with it as a dependency. It can be turned on in the same world as the other entity inventory examples ([entity inventory menu](./entity-inventory-ui.mdx) section 2.2.2).
+1. Turn on the behavior pack whose name starts with `[bedrock-research]inventory-ui-slider-bp` in a new world. The resource pack turns on with it as a dependency. It can be turned on in the same world as the other entity inventory examples ([entity inventory menu](../entity-inventory-ui.mdx) section 2.2.2).
 2. Take "Inventory UI Slider" (comparator) from the end of the items category of the creative inventory, or use `/give @s bwiki:inventory_ui_slider_test`.
 3. Hold the item and tap the middle of the screen to open the slider screen.
 4. Change pages with `<` `>` or Pages on the top row. The bottom row shows what the server handled last.

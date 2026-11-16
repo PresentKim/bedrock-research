@@ -1,0 +1,54 @@
+---
+title: Imitating DDUI with the inventory UI
+description: Overview of the plan to imitate server forms (DDUI, CustomForm) with an entity chest screen (InventoryUI). The goal, the inputs and outputs a chest screen offers, the three sub plans (sliders, basic components, enhanced components) with their example add-ons, and what remains.
+sidebar_position: 0
+sources:
+  - repo-guide
+---
+
+# Imitating DDUI with the inventory UI
+
+A script can open a server form (DDUI, CustomForm) directly, but its look and behavior are fixed. This plan checks whether a screen built the way [Building menu screens from an entity inventory](../entity-inventory-ui.mdx) describes (the chest screen of an invisible container entity, redrawn with a resource pack) can replace server forms. The look follows the Ore UI components that [ore-ui-react](https://github.com/PresentKim/ore-ui-react) supports.
+
+## 1. Starting point
+
+Replacing server forms smoothly needs at least toggles and sliders. So the input probe pack (IIP) first checked whether a chest screen can take text input, toggles and sliders, and then a gallery test pack (IUC) rebuilt the Ore UI components one by one. All measurements are mobile 1.26.63, 2026-11-16.
+
+## 2. Inputs and outputs of the chest screen
+
+| Direction | Channel | Status |
+| --- | --- | --- |
+| To the server | A slot button press (quick move mapping; the server sees the emptied slot and refills it) | Measured. Only a tap pressed and released on the same slot registers |
+| To the server | A hidden global button pressed on release (sending a slider value, INP-37) | Measured |
+| To the server | Reading the slots crossed by a drag split (INP-39) | Measured. Each slot once, in first crossed order |
+| To the server | Text typed in a text box | No. No binding could read it (IIP) |
+| To the screen | Slot item names (text) and real items (icons and counts) | Measured |
+| Inside the screen | Toggles, checkboxes, slider values, animations | Measured. They do not go through the server |
+
+Other inputs (double tap, moving one item at a time, dropping, long press, dropping outside the window, PC right click and Q, swipes) are being tested on the gallery's InputLab page (*unverified*).
+
+## 3. Sub plans
+
+| Page | Content | Example add-on |
+| --- | --- | --- |
+| [Building sliders with the inventory UI](./slider.mdx) | A retrospective of the ways tried to send a slider value to the server, their results and the causes of failure. The final design is a slider whose hidden global step button sends the value on release | `inventory-ui-slider` |
+| [Building basic components with the inventory UI](./basic-components.mdx) | The shared frame and drawing rules, plus 25 components such as toggles, checkboxes, buttons, tabs, accordions, dropdowns, modals and toasts | `inventory-ui-basic-components` |
+| [Building enhanced components with the inventory UI](./enhanced-components.mdx) | 17 components such as on-screen keyboard text input, number input, keybinds, a color picker, charts, an item grid, a shop, recipes, a player card and list, a table, a tree, a countdown and a lock pattern | `inventory-ui-enhanced-components` |
+
+The three add-ons use different names and screen markers, so they can be on together. The modification that hides vanilla chest parts uses the same text as the other entity inventory examples.
+
+## 4. What remains
+
+- The three example add-ons are the final configurations moved from the gallery; there is no record yet of the add-ons themselves running in game.
+- Sending on release over the slider (the `consume_event: false` drag mapping) and the server tap filter need another check ([sliders sections 2.10 and 2.11](./slider.mdx)).
+- Measuring the InputLab input candidates.
+- Several players and other devices (PC, console) were not tested.
+
+## Related rules
+
+| Rule | Content |
+| --- | --- |
+| LAY-58 | A fill with the same layer sum can cover a label |
+| INP-37 | A slider that sends its value on release |
+| INP-38 | When `consume_event: false` works and when it does not |
+| INP-39 | Reading the slots crossed by a drag split |

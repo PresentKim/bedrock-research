@@ -1,21 +1,21 @@
 ---
 title: Building basic components with the inventory UI
 description: A gallery that draws 25 basic Ore UI style components in an entity chest screen, one page each. Page panels shown by a page key slot, the slot layout and page module contract, drawing rules learned about labels and layers, and how each component is built and what was measured.
-sidebar_position: 5.2
+sidebar_position: 2
 sources:
   - repo-guide
 ---
 
 # Building basic components with the inventory UI
 
-To see whether a chest screen can replace server forms (DDUI, CustomForm), a gallery test pack (IUC) redrew the Ore UI components that [ore-ui-react](https://github.com/PresentKim/ore-ui-react) supports in a chest screen. The screen is built the way the [entity inventory menu](./entity-inventory-ui.mdx) describes (the chest screen of an invisible container entity, redrawn with a resource pack). This page covers 25 basic components. Sliders are on [Building sliders with the inventory UI](./inventory-ui-slider.mdx), and enhanced components such as item grids and input are on [Building enhanced components with the inventory UI](./inventory-ui-enhanced-components.mdx).
+To see whether a chest screen can replace server forms (DDUI, CustomForm), a gallery test pack (IUC) redrew the Ore UI components that [ore-ui-react](https://github.com/PresentKim/ore-ui-react) supports in a chest screen. The screen is built the way the [entity inventory menu](../entity-inventory-ui.mdx) describes (the chest screen of an invisible container entity, redrawn with a resource pack). This page covers 25 basic components. Sliders are on [Building sliders with the inventory UI](./slider.mdx), and enhanced components such as item grids and input are on [Building enhanced components with the inventory UI](./enhanced-components.mdx).
 
-The only path from the chest screen to the server is a slot button press (a quick move, [entity inventory menu section 2.5](./entity-inventory-ui.mdx#25-a-button-that-reaches-the-script)). The server passes values to the screen through slot item names (section 2.4 of the same page). Every component is built from these two paths alone.
+The only path from the chest screen to the server is a slot button press (a quick move, [entity inventory menu section 2.5](../entity-inventory-ui.mdx#25-a-button-that-reaches-the-script)). The server passes values to the screen through slot item names (section 2.4 of the same page). Every component is built from these two paths alone.
 
 Notation:
 
 - Measured: checked on mobile 1.26.63 with a test pack outside the wiki (IUC, `invui-components`), 2026-11-16. The version in parentheses is that test pack's version.
-- Tester: static simulation in the [JSON UI tester](../tools/jsonui-tester.mdx) (jsonui-tester).
+- Tester: static simulation in the [JSON UI tester](../../tools/jsonui-tester.mdx) (jsonui-tester).
 - Mock: a Node run that imitates `@minecraft/server`.
 - *Inference*: a cause guessed from a result. It was not tested on its own.
 
@@ -88,7 +88,7 @@ Pressing Pages makes the server write `open` to slot 4, and 25 page name buttons
 
 | Rule | Evidence |
 | --- | --- |
-| A label draws only text. A slot name of digits only, or a value that starts with a digit after an expression, becomes a number and is not drawn | [Entity inventory menu section 2.4](./entity-inventory-ui.mdx#24-drawing-from-slot-names-lore-and-durability) (measured), EXP-30. A digits-only NumberInput value did not show (measured, v1.2.1) |
+| A label draws only text. A slot name of digits only, or a value that starts with a digit after an expression, becomes a number and is not drawn | [Entity inventory menu section 2.4](../entity-inventory-ui.mdx#24-drawing-from-slot-names-lore-and-durability) (measured), EXP-30. A digits-only NumberInput value did not show (measured, v1.2.1) |
 | Values that start with a digit get a format code in front (`§0`, `§r`), or are read by a label that removes only `§o` and keeps `§f` (`keepFormat`) | Badge numbers drew with `§r` and `keepFormat` (measured, v1.4.2) |
 | Text and icons added to a slot button go into a layer 20 panel that is always above the button faces | Accordion titles were hidden by the button face (measured, v1.3.0) |
 | Text gets a higher layer sum than the fill under it | Below |
@@ -96,11 +96,11 @@ Pressing Pages makes the server write `open` to slot 4, and 25 page name buttons
 
 Layer sums. PlayerList names and Badge numbers did not show (measured, v1.4.1). Both texts sat on a fill with the same layer sum (the sum of all ancestor layers). Raising the text layer in every such place made all the missing text show (measured, v1.4.2). The inference is that with equal sums the fill can cover the text (*inference*). The NumberInput value text also had the same sum of 4 as its field fill (*inference*, raised in v1.4.0). From v1.4.2 the test pack checks each page, in its first state and after four button presses, for drawings with an equal or higher layer sum that cover the middle of a text (tester). For the same reason the selected text of Segment and Tabs, the active text of Chips, and the Toast text were raised too. None of these was seen hidden.
 
-Slider bars. When one slider control used the same bar for `default_control` and `hover_control`, the dark track disappeared while a finger was on the slider (measured, v1.1.0). A separate hover bar fixed it. Details are on [Inventory UI sliders](./inventory-ui-slider.mdx).
+Slider bars. When one slider control used the same bar for `default_control` and `hover_control`, the dark track disappeared while a finger was on the slider (measured, v1.1.0). A separate hover bar fixed it. Details are on [Inventory UI sliders](./slider.mdx).
 
 ### 2.1 Replaying animations
 
-Drawings that replay when a server value changes, such as the toggle thumb, the check mark, the tab panel, the carousel track and toasts, go in a small factory cell keyed by a slot name (`keyedCell`). A new key builds a new control, so its animation starts from the beginning ([entity inventory menu section 8.2](./entity-inventory-ui.mdx#82-animation-replay), ANI-37, COL-22). These cells mostly hold drawings without bindings. If the *inference* in section 1.2 holds, bindings inside a keyed factory may not work. Only the TextBlock variant cell holds a slot label inside, and there is no record of how it looks in game.
+Drawings that replay when a server value changes, such as the toggle thumb, the check mark, the tab panel, the carousel track and toasts, go in a small factory cell keyed by a slot name (`keyedCell`). A new key builds a new control, so its animation starts from the beginning ([entity inventory menu section 8.2](../entity-inventory-ui.mdx#82-animation-replay), ANI-37, COL-22). These cells mostly hold drawings without bindings. If the *inference* in section 1.2 holds, bindings inside a keyed factory may not work. Only the TextBlock variant cell holds a slot label inside, and there is no record of how it looks in game.
 
 ## 3. Components
 
@@ -242,10 +242,10 @@ Components below without a "Measured" entry were checked only this far: no diagn
 
 1. Open the file to import it (on mobile, tap the file and open it with Minecraft). In a new world, turn on the behavior pack whose name starts with `[bedrock-research]inventory-ui-basic-components-bp`. The resource pack turns on with it as a dependency.
 2. Take "Inventory UI Basic Components" (map) from the end of the items category of the creative inventory, or use `/give @s bwiki:inventory_ui_basic_components_test`.
-3. Hold the item and tap the middle of the screen to open the gallery (the entity in front of the view, C2 in [entity inventory menu section 3](./entity-inventory-ui.mdx#3-ways-to-open-the-screen)).
+3. Hold the item and tap the middle of the screen to open the gallery (the entity in front of the view, C2 in [entity inventory menu section 3](../entity-inventory-ui.mdx#3-ways-to-open-the-screen)).
 4. Change pages with `<` `>` and Pages and press the components. The status line at the bottom shows the press the server received.
 
-- The entity name is `§b§w§b§c` ([entity inventory menu section 2.2.1](./entity-inventory-ui.mdx#221-naming-convention)). Hiding vanilla uses the same marker `entity_ui_hide_vanilla` and property `#entity_ui_vanilla_visible` as the other entity inventory examples, so they can be turned on in the same world (section 2.2.2 of that page).
+- The entity name is `§b§w§b§c` ([entity inventory menu section 2.2.1](../entity-inventory-ui.mdx#221-naming-convention)). Hiding vanilla uses the same marker `entity_ui_hide_vanilla` and property `#entity_ui_vanilla_visible` as the other entity inventory examples, so they can be turned on in the same world (section 2.2.2 of that page).
 - `tools/gen-ui.mjs` writes `rp/ui/iubc.json`. `node tools/check-page.mjs <key>` checks one page.
 - The text on screen is in English.
 - The measurements above were made with the IUC test pack. This example add-on is that test pack (v1.4.9) cut down to these 25 pages, with new names, identifiers, entity name and namespace. The example add-on itself has not been run in game yet (*unverified*).

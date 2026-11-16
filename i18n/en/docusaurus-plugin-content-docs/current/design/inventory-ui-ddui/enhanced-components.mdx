@@ -1,21 +1,21 @@
 ---
 title: Building enhanced components with the inventory UI
 description: Text input, number input, keybinds, a color picker, a radial menu, a tutorial, charts, a real item grid, shop cards, a recipe view, a player card and list, a table, a tree, a countdown and a drag-drawn pattern lock drawn in an entity chest screen. On-screen keyboards, the sense hook that reads slots, animation and marker collection requests, server-computed rows written into fixed row slots, prebuilt width variants and the measured record.
-sidebar_position: 5.3
+sidebar_position: 3
 sources:
   - repo-guide
 ---
 
 # Building enhanced components with the inventory UI
 
-This is one of the pages on a gallery test pack (IUC) that drew Ore UI style components in a chest screen to see whether a chest screen can replace server forms (DDUI, CustomForm). The screen is built the way [Building menu screens from an entity inventory](./entity-inventory-ui.mdx) describes (the chest screen of an invisible container entity, redrawn with a resource pack). Basic components such as toggles, buttons and tabs are in [Building basic components with the inventory UI](./inventory-ui-basic-components.mdx), and sliders and the drag split experiments are in [Building sliders with the inventory UI](./inventory-ui-slider.mdx). This page covers 17 components that combine many slot buttons or need much server-side computation.
+This is one of the pages on a gallery test pack (IUC) that drew Ore UI style components in a chest screen to see whether a chest screen can replace server forms (DDUI, CustomForm). The screen is built the way [Building menu screens from an entity inventory](../entity-inventory-ui.mdx) describes (the chest screen of an invisible container entity, redrawn with a resource pack). Basic components such as toggles, buttons and tabs are in [Building basic components with the inventory UI](./basic-components.mdx), and sliders and the drag split experiments are in [Building sliders with the inventory UI](./slider.mdx). This page covers 17 components that combine many slot buttons or need much server-side computation.
 
 In a chest screen, the only paths to the server are slot presses (quick move) and changes to slot items. The server gives values to the screen through slot item names (entity inventory page sections 2.4 and 2.5). Every component below uses only these two paths.
 
 Labels:
 
 - **Measured**: checked in game with the IUC test pack (`invui-components`). 1.26.63 mobile, 2026-11-16. The version in parentheses is the test pack version the record comes from.
-- **Tester**: no diagnostics in the [JSON UI tester](../tools/jsonui-tester.mdx) static simulation.
+- **Tester**: no diagnostics in the [JSON UI tester](../../tools/jsonui-tester.mdx) static simulation.
 - **Mock**: a Node run imitating `@minecraft/server` pressed every button and ran ticks without errors.
 - *Inference*: an interpretation that no test separated.
 
@@ -133,7 +133,7 @@ On a mock screen (search field, Play button, settings panel), pressing Start tut
 Eight bars, with negative values in red. Prev and Next pick one of four datasets (Monthly sales, Profit, Losses, All zero), and there are Random and Negate.
 
 - Bar heights have 40 steps of 2px (0~39). The server writes, per bar, a fill key (`p<k>` positive, `n<k>` negative) and a mask key (`m<k>`). The fill paints up to the higher of the baseline and the value, and a mask in the background color covers up to the lower one, leaving only the part between. The baseline height is also picked by key (`l<k>`).
-- Every bar uses the same factory cell definition and passes only the slot number as a variable (`$iuenh_slot`), the same method as [binding expression caching](./binding-expression-caching.mdx).
+- Every bar uses the same factory cell definition and passes only the slot number as a variable (`$iuenh_slot`), the same method as [binding expression caching](../binding-expression-caching.mdx).
 - Checked: tester, mock (v1.1.0).
 
 ### 3.3 LineChart
@@ -172,7 +172,7 @@ A 3x3 grid of ingredient icons, an arrow and a result icon with its count. Prev 
 
 The live figure of the viewing player, the name, a status dot (Online, Away, Busy), a level line, an Activity line, and Wave and Change status buttons.
 
-- One `live_horse_renderer` draws the figure. The server writes the player id wrapped in double quotes (`"<id>"`) into a slot name, and the renderer takes `(#hover_text - '§o' - '§f' - '§r')` as `#entity_id` ([entity inventory page section 10.1](./entity-inventory-ui.mdx#101-drawing-the-figures)).
+- One `live_horse_renderer` draws the figure. The server writes the player id wrapped in double quotes (`"<id>"`) into a slot name, and the renderer takes `(#hover_text - '§o' - '§f' - '§r')` as `#entity_id` ([entity inventory page section 10.1](../entity-inventory-ui.mdx#101-drawing-the-figures)).
 - Wave leaves an animation id in `state.animation`, and the frame waves the player's arm with `playAnimation`. The same method showed in the figure cells of the figure lobby example (measured, entity inventory page section 10.3).
 - When Wave was a button that only changed text, the status line and the count changed but the figure did not move (measured, v1.4.2). There is no record of whether the arm moves on this page since the version that uses `playAnimation` (v1.4.3).
 - The Activity title sat on a background with the same layer sum, so its layer was raised (v1.4.2, section 1.4).
@@ -234,7 +234,7 @@ With fewer than 4 dots the result is "Too short"; in set mode the pattern is sav
 - Saving, "Wrong pattern" and "Unlocked" came out right (measured, v1.4.8). A result appears only after settling, so the settling step also ran in game (*inference*).
 - In DragLab, which tested the same drag method, tapping the stick cell and then dragging made the server receive the passed cells in order, almost every tick. Passing 11 cells put 5 sticks in each with 9 left in hand. Holding the stick cell and dragging right away placed nothing. Passing a cell again changed nothing. Stopping outside a cell left the item held (measured, v1.4.5).
 - So the server settles and resets on its own. Imitating a drag and waiting 25 ticks emptied the cells, brought back 64 sticks and removed the marker sticks from the player inventory (mock, v1.4.6). There is no game record of whether marker sticks on the cursor are collected.
-- When the server refilled the stick cell during a drag, the held stack was released and the drag ended (measured, v1.4.9). Only emptying the cells runs the sticks out (measured, v1.4.8). So the server cannot know that a drag passed the same cell twice, and PatternLock counts each dot once. The experiments are described in [Building sliders with the inventory UI](./inventory-ui-slider.mdx).
+- When the server refilled the stick cell during a drag, the held stack was released and the drag ended (measured, v1.4.9). Only emptying the cells runs the sticks out (measured, v1.4.8). So the server cannot know that a drag passed the same cell twice, and PatternLock counts each dot once. The experiments are described in [Building sliders with the inventory UI](./slider.mdx).
 - Tester and mock (v1.4.8): drawing 1-2-3-6 saved the pattern and put 1, 2, 3, 4 on the dots. The same pattern gave "Unlocked", 1-4-7-8 gave "Wrong pattern", and two dots gave "Too short".
 
 ## 7. What remains
@@ -247,7 +247,7 @@ With fewer than 4 dots the result is "Too short"; in set mode the pattern is sav
 
 <AddonDownload id="inventory-ui-enhanced-components" />
 
-1. Open the file to import it (on mobile, tap the file and open it with Minecraft). In a new world, turn on the behavior pack starting with `[bedrock-research]inventory-ui-enhanced-components-bp`. The resource pack comes along as a dependency and no experiment toggles are needed. It can be turned on in the same world as the other entity inventory examples ([entity inventory page section 2.2.2](./entity-inventory-ui.mdx#222-hiding-vanilla-shared-by-the-examples)).
+1. Open the file to import it (on mobile, tap the file and open it with Minecraft). In a new world, turn on the behavior pack starting with `[bedrock-research]inventory-ui-enhanced-components-bp`. The resource pack comes along as a dependency and no experiment toggles are needed. It can be turned on in the same world as the other entity inventory examples ([entity inventory page section 2.2.2](../entity-inventory-ui.mdx#222-hiding-vanilla-shared-by-the-examples)).
 2. Take "Inventory UI Enhanced Components" (painting icon) from the end of the items category in the creative inventory, or use `/give @s bwiki:inventory_ui_enhanced_components_test`.
 3. Hold the item and tap the middle of the screen to open the window. The first page is TextInput.
 4. Use `<` `>` to move between pages, or press Pages to pick one of the 17. The bottom line shows the last press the server handled.
@@ -261,6 +261,6 @@ With fewer than 4 dots the result is "Too short"; in set mode the pattern is sav
 
 | ID | Page | Content |
 | --- | --- | --- |
-| HOST-16 ~ HOST-20 | [Screen hosts and data channels](../json-ui/screen-hosts-and-data.mdx) | Entity inventory screens, slot identification, notes on the script side |
-| ANI-37 | [Images and animation](../json-ui/images-and-animation.mdx) | Replaying an animation by rebuilding the control |
-| ANI-06 | [Images and animation](../json-ui/images-and-animation.mdx) | Item renderer and `#item_id_aux` |
+| HOST-16 ~ HOST-20 | [Screen hosts and data channels](../../json-ui/screen-hosts-and-data.mdx) | Entity inventory screens, slot identification, notes on the script side |
+| ANI-37 | [Images and animation](../../json-ui/images-and-animation.mdx) | Replaying an animation by rebuilding the control |
+| ANI-06 | [Images and animation](../../json-ui/images-and-animation.mdx) | Item renderer and `#item_id_aux` |
