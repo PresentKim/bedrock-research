@@ -5,6 +5,8 @@ sidebar_position: 8
 sources:
   - repo-ore-ui-customizer
   - ore-ui-customizer-app
+  - repo-ore-ui-loading
+  - private-research
 ---
 
 # 8Crafter Ore UI Customizer analysis
@@ -66,7 +68,7 @@ The shape of adding one route to `routes.json` (the value injected by the built-
 }
 ```
 
-Runtime: it runs on Coherent Gameface (the types include `CoherentArrayProxy`). The communication methods (facet, query, router events) are in the [overview](./overview.mdx). In the query responses the app simulates for testing, item images take the form `"pack://textures/items/stick.png"`.
+Runtime: it runs on Coherent Gameface (the types include `CoherentArrayProxy`). The communication methods (facet, query, router events) are in the [overview](./overview.mdx). In the query responses the app simulates for testing, item images take the form `"pack://textures/items/stick.png"`. The real in-game bundle draws item icons through the engine protocol `geo-item://` ([Icons and containers](./geo-item-and-containers.mdx)).
 
 ## 4. Customization techniques `{verified}`
 
@@ -158,16 +160,16 @@ A minimal theme example:
 
 | What you want to change | With a resource pack | Evidence level |
 | --- | --- | --- |
-| Layout, color and behavior of Ore UI screens | Not possible with a plaintext pack (the reason this tool edits game files directly). Possible with an encrypted pack ([Loading paths](./loading-paths.mdx)) | confirmed + this repository's measurement |
-| Item and block icons shown in Ore UI | Works. The engine passes `pack://textures/...` and it resolves through the pack stack | confirmed by this repository's measurement |
+| Layout, color and behavior of Ore UI screens | Not possible with a plaintext pack (the reason this tool edits game files directly). Up to 26.63 it was possible with an encrypted pack ([Loading paths](./loading-paths.mdx)). Not possible from 26.64 | confirmed + this repository's measurement |
+| Item and block icons shown in Ore UI | The in-game bundle draws icons through the engine protocol `geo-item://`, and the engine renders the item itself. `pack://textures/...` is a different kind of URL, a plain texture path, and it reads textures from plaintext server packs too. Whether a texture replacement pack shows up in `geo-item://` icons was not tested | this repository's measurement (`geo-item://`, `pack://`), not verified (replacement pack) |
 | Ore UI bundle images (`hbui/assets/*`) | Not possible with a plaintext pack. It is the relative path `/hbui/assets/`, not a pack path | confirmed |
 | Ore UI strings | May work by overriding `.lang` | unverified |
 | Screens where JSON UI and Ore UI coexist | Pack modifications show only when the JSON UI side is chosen | inferred (`vanilla.screenTechStack`) |
 
-- The tool's initial judgment that "there is no route to replace Ore UI files with a pack" is correct for plaintext packs. Follow-up measurement confirmed the encrypted pack route.
+- The tool's judgment that "there is no route to replace Ore UI files with a pack" is correct for plaintext packs. Up to 26.63 there was an encrypted pack route, and in 26.64 Mojang blocked resource pack access to Ore UI for a security reason, so the judgment now holds for every pack (Source: private research).
 - Checking whether a screen has moved: which screens went to Ore UI is more certain if you look at whether files remain in vanilla `resource_pack/ui/*.json`, together with `supportedRoutes` in the install folder's `gui/dist/hbui/routes.json` and the facet use in `gameplay-*.js`. The 13 `vanilla.gameplay.*` facets (furnace, container, death and respawn, bed, coordinate HUD, etc.) signal that some in-game screens already have an Ore UI code path `{inferred}`.
 - **Version fragility is much greater for Ore UI patches than for JSON UI**: a JSON UI pack breaks when an element name changes, but an Ore UI patch fails its regular expression if the shape of the minified code changes even slightly. The app treating "partial failure" as a normal state is the evidence.
-- When a user asks "please change Ore UI with a resource pack too": it is not possible with a plaintext pack. The options are to have each person install a client-side tool (like this app) or for the server to send an encrypted pack.
+- When a user asks "please change Ore UI with a resource pack too": it is not possible with a resource pack. The option is to have each person install a client-side tool (like this app). Having the server send an encrypted pack worked only up to 26.63.
 
 ## 6. Defects of this version and the license
 

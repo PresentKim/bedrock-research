@@ -7,6 +7,7 @@ sources:
   - bedrock-wiki
   - ms-learn
   - bedrock-samples
+  - repo-guide
 ---
 
 # 아이템
@@ -96,7 +97,7 @@ block_placer 아이템은 `minecraft:icon`을 생략하면 블록의 3D 아이�
 - `minecraft:display_name`은 객체 `{"value": "..."}`이며 값은 번역 키일 수 있다. `§` 코드와 `\n`을 지원한다. lang에서는 `item.<ns:id>.name=...`이다. 줄바꿈 로어 흉내는 `item.zxx:light_soul_ring.name=§cLight Soul Ring§r\nHold on screen to activate§r`처럼 쓰고, 이름 결합은 `"%item.bucketCustomFish.name%entity.blaze.name"`이다. lang 값 끝의 공백은 잘리니 `§r`을 붙인다. `pack.name`/`pack.description`도 BP와 RP lang에서 번역된다.
 - 로어: 아이템 JSON에 `minecraft:lore` 컴포넌트는 없다. 스크립트 `ItemStack.setLore`를 `playerInventoryItemChange`에서 자동으로 쓰거나 전리품 `set_lore`를 쓴다. 제한은 약 100줄 x 약 1000자다. 바닐라 툴팁 순서는 정확히 재현할 수 없다. 이름 툴팁은 빈 이름이나 `§§`로 줄일 수 있지만 배경은 지울 수 없다. 툴팁의 인챈트 텍스트는 JSON UI로만 지운다.
 - 레시피 결과 이름: 레시피에서 `set_name`은 동작하지 않고 제작 결과 스크립트 이벤트도 없다.
-- 이름 lang 키 형식(conflicting): 새 format에서는 `.name` 없이 `item.<ns>:<id>=Name`이면 된다는 보고가 있다. 26.50부터 커스텀 아이템 툴팁의 lang 키가 `item.` 대신 `tile.` 접두사를 쓴다는 보고도 있다. lang 파일 이름의 대소문자(`en_US.lang`)가 틀리면 조용히 실패한다. 기울임꼴은 이름 앞에 서식 초기화 코드를 붙여 없앤다. 길이 제한을 넘은 이름은 모루에서 바꿀 수 없고 바닐라 아이템 이름은 바꿀 수 없다. 공격 피해 줄의 lang 키 후보는 `attribute.name.minecraft:attack_damage`와 `attribute.name.generic.attackDamage`(어느 쪽인지 불명)이고 "+N" 문구는 하드코딩이다.
+- 이름 lang 키 형식(conflicting): 새 format에서는 `.name` 없이 `item.<ns>:<id>=Name`이면 된다는 보고가 있다. 26.50부터 커스텀 아이템 툴팁의 lang 키가 `item.` 대신 `tile.` 접두사를 쓴다는 보고도 있다. 툴팁 키는 아이템에도 `tile.<id>.tooltip`이고 줄바꿈으로 여러 줄을 쓴다. `tile.redstone.tag.source=Redstone power source` 같은 바닐라 키는 블록 태그와 묶여 있지 않으므로, 같은 툴팁을 여러 아이템에 보이려면 아이템마다 키를 적는다. lang 파일 이름의 대소문자(`en_US.lang`)가 틀리면 조용히 실패한다. 기울임꼴은 이름 앞에 서식 초기화 코드를 붙여 없앤다. 길이 제한을 넘은 이름은 모루에서 바꿀 수 없고 바닐라 아이템 이름은 바꿀 수 없다. 공격 피해 줄의 lang 키 후보는 `attribute.name.minecraft:attack_damage`와 `attribute.name.generic.attackDamage`(어느 쪽인지 불명)이고 "+N" 문구는 하드코딩이다.
 - 로어 세부: `setLore`로 단 로어는 크리에이티브 인벤토리에서 보이지 않는다. 로어 한도를 128이라고 한 언급도 있다. 전리품 `set_lore`는 rawtext 번역을 쓸 수 있지만 `set_name`은 번역하지 않는다. 2026-10에도 아이템 JSON 로어 컴포넌트는 없다.
 
 ## 3. 아이콘과 item_texture.json
@@ -261,7 +262,7 @@ system.beforeEvents.startup.subscribe(({ itemComponentRegistry }) => {
 ### 염색
 
 - `minecraft:dyeable`은 텍스처 alpha 1 부분이 염색되지 않는다(알파 기반, 개 갑옷 참고). 플레이어가 염색하는 것을 막을 수 없다. 염색 방어구 텍스처는 회색조로 그린다. 알파 채널이 있는 .tga가 필요하고 .png로는 안 됐다는 보고가 있다. (single report)
-- 블록 아이템 무기의 dyeable은 손에 든 모습만 물들고 인벤토리 아이콘은 물들지 않는다(버그). 커스텀 아이템은 제작대에서 염색할 수 없어 색마다 레시피를 두어 우회한다(약 32개). 가마솥 염색식 커스텀 갑옷은 답이 없었다.
+- 블록 아이템 무기의 dyeable은 손에 든 모습만 물들고 인벤토리 아이콘은 물들지 않는다(버그). 제작대 염색은 Java 기능이고, Bedrock의 `minecraft:dyeable` 아이템은 가마솥으로 염색한다는 답이 있었다. 번들처럼 색 변형이 고정된 아이템을 색마다 만들려면 색마다 레시피가 필요하다(약 32개).
 - 가죽 갑옷 색을 정하는 전리품 함수는 없고 `random_dye`가 최선이다(`set_data`로 검은색이 나오지 않음). 늑대 갑옷은 `random_dye`를 받지 않는다(버그로 여겨짐). 몹 스포너는 NBT에 장비 전리품 표를 담지 못하니 염색 갑옷을 입은 좀비를 구조물로 불러온다. 2026-03 시점에는 ItemStack + ItemDyeableComponent로 염색된 가죽 갑옷을 만들 수 없었다.
 - 2026년 dyeable 버그: `default_color`를 설정하고 `default`/`dyed` 텍스처가 다르면 손에 든 모습이 아이콘과 다르다(MCPE-237529). `ItemDyeableComponent#color`는 가마솥에서 염색하기 전에는 `default_color`가 있어도 `undefined`다(MCPE-237576). `#defaultColor`는 항상 `undefined`다(MCPE-237575). 바닐라 염색 아이템은 스크립트에 dyeable을 노출하지 않는다(MCPE-237577). 복제한 ItemStack 접근 크래시(MCPE-237909)는 2026-04-30에 고쳐졌다고 하나 2026-05-15에도 오류가 났다. 블록 아이템 오버라이드의 dyeable은 설치하면 색이 유지되지 않는다.
 - `q.armor_color_slot`은 방어구 슬롯에서만 동작한다. 방어구가 아닌 어태처블에 `variable.is_dyed`를 설정하는 방법과 커스텀 엔티티의 가죽 갑옷 염색 색은 해결되지 않았다.
@@ -392,7 +393,7 @@ geometry 루트 뼈에는 `"binding": "q.item_slot_to_bone_name(c.item_slot)"`�
 - 로케이터는 어태처블에서 동작하지 않는다(2026-11-11에도 같은 답, 플레이어에는 들고 있는 아이템용 로케이터가 하나뿐). 애니메이션 로케이터의 파티클은 로케이터가 아니라 플레이어 앞에 한 번만 생긴다(스크립트 파티클이 우회). 어태처블은 렌더 컨트롤러 기능을 다 쓸 수 없다. `uv_anim` 머티리얼 속성은 동작하지 않으니 프레임별로 그룹을 숨기고 보이거나 렌더 컨트롤러로 텍스처 프레임을 바꾼다. `ignore_lighting`은 어태처블 렌더 컨트롤러에서 동작하지 않으니 머티리얼을 바꾼다. 메시(평면 텍스처) 모델은 인챈트 반짝임을 받지 않는다. 동적 색은 렌더 컨트롤러의 색 오버레이로만 된다.
 - 두 텍스처를 항상 켜거나 오버레이하려면 렌더 컨트롤러 두 개(하나는 `Texture.default`, 다른 하나는 다른 텍스처 키)를 쓴다. 맥락별 geometry/텍스처는 `"geometry": ["(c.item_slot == 'main_hand' && c.is_first_person) ? Geometry.icon : Geometry.sword"]`처럼 삼항식을 쓴다.
 - 텍스처 메시(바닐라 활이 쓰는 돌출 2D 텍스처)는 2D 아이템이 커스텀 핫바 아이콘을 유지하면서 다르게 들리게 하거나 렌더 컨트롤러로 아이콘과 3D를 함께 보이게 한다. 투명해질 수 있고(바닐라 활을 참고해도 투명하게 보인 보고가 있음) 메시가 아니라 뼈를 회전한다(메시는 법선이 이상함). 2026-10-26에는 아이템 메시 지원이 사라졌고 예상보다 큰 아이템 텍스처에는 이제 모델과 어태처블이 필요하다는 말이 나왔다. 16x16 텍스처인데 2배 크기로 렌더링되는 아이템은 버그로 보였다. (single report)
-- 손과 슬롯 텍스처는 나눌 수 있다. 아이템은 16x16 아이콘을 보이고 어태처블은 32x32 텍스처를 쓴다. 블록을 어태처블로 쓰려면 `block_placer` 아이템을 만들고 그 아이템에 어태처블을 준다.
+- 손과 슬롯 텍스처는 나눌 수 있다(핫바에는 2D 아이콘, 손에는 3D 모델). 아이템은 16x16 아이콘을 보이고 어태처블은 32x32 텍스처를 쓴다. 해상도가 높은 손 모델은 바닐라 들기 애니메이션을 깨뜨리므로 그 애니메이션을 어태처블 안에 다시 만든다. 블록을 어태처블로 쓰려면 `block_placer` 아이템을 만들고 그 아이템에 어태처블을 준다.
 - 2D 아이템에서 들고 있는 아이템을 숨기려면 샘플 어태처블을 복사해 식별자를 바꾸고 빈 geometry나 투명 텍스처를 쓴다. 착용품과 함께 손 아이템을 숨기려면 `rightItem` 뼈를 0으로 스케일한다(1인칭에서는 보였다는 보고).
 - 어태처블의 애니메이션 텍스처는 렌더 컨트롤러에서 `array.frames[Math.mod(math.floor(query.anim_time * 5), 9)]`를 쓴다. 스프라이트 시트 토템 애니메이션은 텍스처가 많은 어태처블과 렌더 컨트롤러 `controller.render.item_animation_totem`을 쓴다.
 - 아이템별 동적 텍스처(물약 종류/레벨/지속, 아이템 이름)는 쿼리가 없다. BP에서 플레이어 속성으로 변수를 보낸다. 물약 텍스처는 UI 오버레이 없이는 레벨이나 지속 시간에 따라 바꿀 수 없다.
@@ -400,7 +401,8 @@ geometry 루트 뼈에는 `"binding": "q.item_slot_to_bone_name(c.item_slot)"`�
 ## 11. 블록 아이템, 3D 아이콘, 애니메이션 아이템
 
 - 블록의 자동 아이템을 명시적 아이템으로 교체하려면 같은 식별자로 아이템을 만들고 `minecraft:block_placer {block, replace_block_item:true}`를 둔다. 식별자가 다르면 `replace_block_item`은 효과가 없다. `minecraft:max_stack_size:1`, `minecraft:wearable`, 반짝임 등을 제어할 수 있다. `minecraft:icon`을 빼면 블록 모델이 렌더링된다. `minecraft:foil`은 `minecraft:glint`가 됐다(인벤토리 UI에서만 보이고 손 반짝임에는 어태처블이 필요). replace를 써도 블록과 아이템은 별도 숫자 ID를 갖는다. 블록 아이템 오버라이드는 블록에서 태그를 물려받지만 자동 생성 블록 아이템은 물려받지 않는다. 블록 아이템 replace에는 1.26 이상이 필요하다(위키 기준).
-- `item_display_transforms`는 geometry 파일에 있고 블록의 `minecraft:item_visual`이 아이템 모습을 제어한다. 블록 아이콘을 옮기거나 키우려면 `item_display_transforms` + `fit_to_frame: false`(gui에서는 기본 true)를 쓴다. 교차 모델 블록은 인벤토리에서 찌그러져 보이니 아이콘을 텍스처로 둔다.
+- `item_display_transforms`는 geometry 파일에 있고 블록의 `minecraft:item_visual`이 아이템 모습을 제어한다. 블록 아이콘을 옮기거나 키우려면 `item_display_transforms` + `fit_to_frame: false`(gui에서는 기본 true)를 쓴다. 교차 모델 블록은 인벤토리에서 찌그러져 보이니 아이콘을 텍스처로 둔다. 이 변환은 블록으로 그려지는 아이템에만 쓰인다. 맥락 이름(`shelf`, `embedded` 포함), 드는 엔티티마다 달라지는 모양, 바닥과 머리 칸 변환의 게임 측정은 [어태처블과 아이템 렌더링](../rendering/attachables-and-items.mdx)을 본다.
+- `minecraft:render_offsets`: 형식 1.21.90 아이템에서는 "deprecated and is not available in json format 1.21.90"으로 거부되고, 형식 1.16.100 아이템은 "use json format version 1.20.0 or higher"로 등록되지 않는다. 형식 1.20.0~1.21.80은 확인하지 않았다. `{실측}`(2026-11-17, 출처: repo-guide)
 - 3D로 떨어지는 아이템/3D 인벤토리 아이콘: 어태처블은 장착됐을 때만 렌더링된다. 원하는 geometry의 블록을 만들고 같은 식별자의 아이템에 `minecraft:block_placer`와 `"replace_block_item": true`를 준 뒤 `use_on`을 쓸 수 없는 블록으로 제한해 설치되지 않게 한다. 또는 `placement_filter`(공기 조건이나 존재하지 않는 태그)로 설치할 수 없는 블록 자체를 아이템으로 쓰고 item display transform으로 스케일한다. 대안은 `EntityItemDropAfterEvent`/`EntityItemPickupBeforeEvent`로 떨어진 아이템을 더미 엔티티로 바꾸는 것이다.
 - 애니메이션 아이템 트릭: 플립북 텍스처를 가진 블록에 `item_display_transforms` 회전을 모두 0으로 주면 인벤토리 아이콘이 평평해진다. `placement_filter` 블록 조건 air로 설치를 막는다(block_placer 아이템 불필요). format은 블록 1.20.80 이상, 아이템 1.21.60 이상이다. 블록 JSON에는 텍스처 경로가 아니라 terrain_texture 타일 ID를 쓴다. 16/32/64px 텍스처에 큐브 모델 변형을 쓰면 프레임이 늦으니 텍스처마다 돌출 모델을 권한다. 아이템은 `flipbook_textures`로 애니메이션할 수 없다. 선택지는 (1) 텍스처가 다른 뼈 그룹을 바꾸는 어태처블 애니메이션(초보자에게 권장), (2) 렌더 컨트롤러가 텍스처를 바꾸는 어태처블, (3) 설치할 수 없는 애니메이션 블록이다. 인벤토리 아이콘은 고정 또는 플립북뿐이고 쿨다운 중 아이콘을 바꾸려면 다른 아이템으로 교체해야 한다.
 - 빛나는 아이템: 블록 아이템은 `light_emission`으로 빛날 수 있다. 진짜 아이템이나 어태처블을 추가하면 빛이 사라진다. 커스텀 블록 모델은 인챈트 반짝임을 보일 수 없다(NBT 인챈트만). Vibrant Visuals에서는 다른 광원 아래에 서면 빛이 덮인다. 반짝임 색은 바꿀 수 없지만(하드코딩) 반짝임 텍스처는 바꿀 수 있다. 연료 컴포넌트는 블록에 없지만 `minecraft:fuel`은 아이템 컴포넌트이므로 `BP/items/<id>.json`에 `minecraft:block_placer`(`block`, `aligned_placement`, `replace_block_item`)와 함께 두면 된다는 답이 있다(2026-05). 블록 `components`의 `tag:minecraft:wool`은 블록 태그이고 아이템 태그는 아이템의 `minecraft:tags`에 둔다.
@@ -473,7 +475,7 @@ geometry 루트 뼈에는 `"binding": "q.item_slot_to_bone_name(c.item_slot)"`�
 | 1.26.40 스미딩 base 제한(MCPE-242206) | 내구도 0 `durability` + `wearable slot.armor.body` |
 | 크리에이티브 숨기기(보고 엇갈림) | `menu_category` category `none` 시험 |
 | 아이템 NBT(셜커 내용 등) 스크립트 미노출 | 블록으로 설치해 인벤토리 읽기 |
-| 커스텀 아이템 제작대 염색 불가 | 색마다 레시피 |
+| 제작대 염색 없음(Java 기능) | `minecraft:dyeable`은 가마솥, 색이 고정된 변형은 색마다 레시피 |
 | 번들 `storage_weight_modifier` 무시 | 스크립트 컨테이너(중첩은 렉) |
 | 커스텀 인챈트 불가 | 오프핸드 책 같은 아이템 + 스크립트, `minecraft:glint` |
 

@@ -70,7 +70,7 @@ sources: [private-research, bedrock-wiki, ms-learn]
 - 엔티티 머티리얼은 `RP/materials/<x>.material`이다. 애니메이션 엔티티 텍스처 등에서는 파일 이름이 `entity.material`이어야 하고 `.json` 확장자가 **없어야** 한다. 내장 머티리얼 이름에는 네임스페이스가 없다. 머티리얼이 로드되지 않으면 콘텐츠 로그에 오류가 남는다. `confirmed`
 - 어태처블 `materials`에 키가 올바로 없으면 "Material ... referenced but not defined"가 난다. 이 오류는 manifest의 팩 버전을 올리자 해결된 사례도 있다.
 - Bedrock Wiki에 따르면 1.16부터 바닐라 머티리얼 상속에 문제가 있고, 한 사용자는 바닐라 정의 전체를 복사해야만 동작했다. 반대로 커스텀 `.material` 파일에 바닐라 머티리얼 항목을 넣지 말라는 조언도 있다(nocull을 시도하자 렌더링이 멈췄다). `conflicting`
-- 엔티티용이 아닌 머티리얼을 엔티티에 쓰면 "shaders/color_texture.fragment cannot be assigned to an entity"가 난다. 단색 분홍은 깨진 머티리얼, 분홍·검정 체커는 누락 텍스처다. 2026-04-23/24 무렵에는 애드온 없이도 바닐라 말, 물고기, 열대어가 분홍으로 보였다. 변경 사항은 게임을 완전히 재시작해야 반영되며 `/reload all`로는 머티리얼이 갱신되지 않는다.
+- 엔티티용이 아닌 머티리얼을 엔티티에 쓰면 "shaders/color_texture.fragment cannot be assigned to an entity"가 난다. 단색 분홍은 깨진 머티리얼, 분홍·검정 체커는 누락 텍스처다. 2026-04-23/24 무렵에는 애드온 없이도 바닐라 말, 물고기, 열대어가 분홍으로 보였다. 변경 사항은 게임을 완전히 재시작해야 반영되며 `/reload all`로는 머티리얼이 갱신되지 않는다. 커스텀 하늘 머티리얼이 없을 때도 콘텐츠 로그에 `[Rendering][error] ... | Mesh material doesn't exist`가 난다.
 - 바닐라 정의 위치: `...\Minecraft for Windows\Content\data\resource_packs\vanilla\materials\entity.material`(Windows GDK는 `C:\XboxGames\Minecraft for Windows\Content\data`)이나 BDS에서 찾는다. 위키의 목록은 오래됐고 bedrock-samples에도 일부 있다.
 - Microsoft는 머티리얼을 사실상 문서화하지 않았다(Microsoft Learn의 material-files 문서가 일부 있다). 엔티티 머티리얼은 VV와 릴리스마다 깨지며 한 개발자는 전면 재작성이 필요하다고 말한다.
 - Marketplace: 바닐라 머티리얼을 수정하지 않고 네임스페이스를 붙이면 Marketplace 애드온에서 커스텀 머티리얼을 쓸 수 있다.
@@ -171,7 +171,7 @@ Mojang식 아웃라인 예:
 - 알려진 문제: 아웃라인된 몹 위에서 조준점이 사라진다(이후 템플릿에서 수정). 아웃라인 레이어가 `!q.is_in_ui` 상황을 깨뜨릴 수 있다. 플레이어 머티리얼을 바꾸는 서버 팩은 아웃라인을 깨뜨릴 수 있다.
 - Template V3(3.2 zip, 2026-06-18/19): 단일 머티리얼로 재작성, 1인칭 아이템 아웃라인, 카툰 엣지, 아웃라인 텍스처 대신 오버레이 색을 추가했다. 알려진 문제는 Blending이 VV와 잘 맞지 않고 VV에서 1인칭 어태처블 아웃라인이 버그라는 점이다. 스크립트로 특정 플레이어에게만 보여 주는 아웃라인 예는 `entity.playAnimation(name, { players: [...] })`를 쓴다.
 - 역헐(inverted-hull) 아웃라인은 제대로 렌더링되지 않는다는 보고가 있고, 단면 머티리얼로 "부풀린 큐브를 뺀" 느낌을 낼 수 있지만(진짜 스텐실 아님) 불완전하고 모델 안쪽에 선이 생긴다.
-- 포털·안이 더 큰 효과: `EnableStencilTest`는 여전히 동작한다. 엔티티 마스킹(포털 같은) 효과는 지오메트리 구역마다 커스텀 머티리얼 약 5개로 만든다. 가짜 포털·방 효과는 완전한 3D 방 모델과 커스텀 스텐실 머티리얼이다.
+- 포털·안이 더 큰 효과: `EnableStencilTest`는 여전히 동작한다. 엔티티 마스킹(포털 같은) 효과는 지오메트리 구역마다 커스텀 머티리얼 약 5개로 만든다. 가짜 포털·방 효과는 완전한 3D 방 모델과 커스텀 스텐실 머티리얼이다. 모델 윗면으로만 안이 보이고 옆면은 숨는 스텐실 "틈(rift)" 효과를 VV를 켜고 끄고 모두 동작하게 만든 사례가 있다. 틈 가장자리 밖으로 나온 물체도 그릴 수 있었고, 1인칭에서 플레이어 몸이 안쪽에 그려지는 한계가 남았다(`single report`). VV 오버월드에서 큐브 앞 스텐실 평면이 회색 텍스처로 보이는 문제(하늘 쪽에서는 가려짐)는 미해결이다.
 - fog 없는 스카이박스(멀티패스): 큰 스카이박스를 먼저 그리고 색을 가진 작은 것을 그린다(큰 것만으로는 효과 없음). 머티리얼 `"+states":["EnableStencilTest","StencilWrite","DisableDepthWrite"]`, `"-defines":["FANCY","ENABLE_FOG","ENABLE_LIGHT"]`, `stencilRef` 3.
 
 ## 깊이: 벽 너머 보이기, 앞에 그리기
@@ -192,7 +192,7 @@ Mojang식 아웃라인 예:
 
 ## VV에서의 머티리얼
 
-- Simple/Fancy와 VV의 머티리얼은 서로 호환되지 않으므로 그래픽 모드 쿼리로 머티리얼을 바꾼다. 커스텀 머티리얼은 VV에서 잘 동작하지 않는다(머티리얼 변형 깨짐, 스텐실은 고쳐짐). VV에서는 `DisableColorWrite`가 깨져서 마스크를 숨길 수 없다. VV/RenderDragon 커스텀 셰이더 아웃라인이 Windows에서는 되고 모바일에서는 실패했다(기본 엔진에서 유효하지 않은 머티리얼). Fancy용 `"custom_unshaded:entity": {"-defines": ["FANCY"]}`는 VV에서 대응책이 없고, `+defines: USE_EMISSIVE` 커스텀 머티리얼은 VV에서 시각 문제가 있다(미해결).
+- Simple/Fancy와 VV의 머티리얼은 서로 호환되지 않으므로 그래픽 모드 쿼리로 머티리얼을 바꾼다. 커스텀 머티리얼은 2026-11-14 기준 대체로 VV에서 동작한다는 언급이 있고, 그에 맞춰 "Entity Outline" 템플릿이 갱신됐다(`single report`). 그 전까지는 VV에서 머티리얼 변형이 깨졌다(스텐실은 먼저 고쳐짐). VV에서는 `DisableColorWrite`가 깨져서 마스크를 숨길 수 없다. VV/RenderDragon 커스텀 셰이더 아웃라인이 Windows에서는 되고 모바일에서는 실패했다(기본 엔진에서 유효하지 않은 머티리얼). Fancy용 `"custom_unshaded:entity": {"-defines": ["FANCY"]}`는 VV에서 대응책이 없고, `+defines: USE_EMISSIVE` 커스텀 머티리얼은 VV에서 시각 문제가 있다(미해결).
 - VV 스텐실: 1.21.120 전에는 VV에서 스텐실이 완전히 깨졌고 이후 "어느 정도" 고쳐졌지만 일반 렌더링과 수정 방식이 달라서 옛 머티리얼을 다시 만들어야 한다. VV에서는 아웃라인이 엔티티 **뒤에** 그려진다. 일반 그래픽용 아웃라인은 VV에서 앞에 그려지거나 깜빡이고, VV용을 일반 그래픽에서 쓰면 엔티티 그림자가 아웃라인을 덮고 문·표지판에 그림자가 생긴다. VV 스텐실은 불안정하니 클리어를 강제하는 투명 본을 넣거나, 깊이·색 쓰기를 끄고 스텐실 0을 설정하는 전체 화면 불투명/alphablend 패스를 그린다. 1인칭 아이템 아웃라인에는 추가 설정이 필요하다.
 - Fancy 스텐실 아웃라인: 하늘·물 위에 그리려면 두 머티리얼 모두 `Blending` 상태가 필요하다. 부작용으로 다른 투명 블록을 통과해 그려지지 않고 각도에 따라 깜빡인다. `FANCY` define을 빼고 렌더 컨트롤러 `ignore_lighting: true`로 그림자를 없앨 수 있다. VV에서는 그림자를 피하려고 texture_set에 아주 작은 발광 값(약 5/255)을 준다. 텍스처 투명에는 `ALPHA_TEST` define으로 충분하다. VV에는 빛나지 않으면서 조명을 무시하는 제대로 된 방법이 없다.
 - 알파와 디더링: VV는 투명 머티리얼에 알파 테스트를 강제한다. 투명 글로우 머티리얼(`entity_alphablend` + `USE_EMISSIVE` + 스텐실 상태)이 VV 1인칭에서 깨지는 원인은 디더링이니 접근성 설정에서 끄거나 최소 알파를 올려 알파 테스트를 피한다. 커스텀 투명·반투명 머티리얼은 VV에서 예상대로 동작하지 않을 수 있다. 1px 떨어진 alpha-blend 큐브 2개는 VV에서 되지만 비침 버그가 생겼다. `entity_nocull`은 VV에서 제대로 동작하지 않는다.
@@ -208,6 +208,8 @@ Mojang식 아웃라인 예:
 - 플랫폼별 셰이더 형식: Windows와 Android는 평문 GLSL/HLSL이고, Nintendo Switch는 미리 컴파일된 NVN 셰이더(매직 0x12345678, Maxwell SM53)이며 새 Switch 버전은 Vulkan과 material.bin(veka.)이다. NetEase(중국판)는 RenderDragon 대신 HAL을 쓴다. Windows GDK판에서는 ReShade, RenderDoc, Nsight를 쓸 수 있다(UWP판은 불가). 참고: veka0/mcbe-shader-codebase(preview, obfuscated 브랜치), veka0/lazurite, ddf8196/MaterialBinTool.
 - 중국판(NetEase)은 OpenGL로 렌더링하고 Java식 셰이더와 더 넓은 엔진 접근(카메라, 추가 HUD 버튼)을 지원하며 RTX는 없다. 중국판의 빛 왜곡·먼 스카이박스 효과는 글로벌판에서 재현할 수 없다고 했다(`unverified`).
 - 커뮤니티 프로젝트(2026-11 기준): 26.60용 RenderDragon 소스 재구성 https://github.com/PandaMine5/RenderDragon2src (디더링·액터 없음), Java 셰이더(Bliss, Complementary, BSL, Photon)를 Bedrock에서 돌리는 Arke https://github.com/LiteLDev/Arke , 셰이더 파이프라인 예 https://github.com/bambosan/mirai , PC 화면에 후처리를 덧씌우는 ShaderGlass.
+- End 하늘: End 하늘 `material.bin`을 고쳐 VV용 애니메이션 End 하늘(VV 노이즈 제거, 별, 오로라 같은 색, 별똥별, 움직이는 블랙홀)을 만든 사례가 있다. non-VV RenderDragon 셰이더 "Immersive End Visuals"는 End 하늘을 바꾸며 Android는 머티리얼 로더, Windows는 `material.bin` 수동 교체가 필요하다(Android, iOS, Windows에서 동작한다고 함). https://www.curseforge.com/minecraft-bedrock/texture-packs/immersive-end-visuals
+- 엔드 포털 모습은 픽셀(fragment) 셰이더 효과다. 셰이더가 효과를 그리고, 블록의 두 번째 텍스처 채널에 둔 마스크 텍스처로 그릴 곳을 감지한다. 현재 커스텀 셰이더 편집은 사실상 폐기된 방식이고 VV와 동작하지 않는다는 답이 있었다. 포털 너머를 보여 주는 Immersive Portals식 효과는 애드온에 노출된 데이터로 만들 수 없다(`single report`). 셰이더 입문: https://learnopengl.com/Getting-started/Shaders
 - GDC 발표 "Modernizing the Rendering of Minecraft"는 DragonFX(GLSL 기반 셰이딩 언어)와 그림자·반사 양자화를 다룬다.
 - Java 셰이더 개발 조언: Iris 튜토리얼로 시작해 읽기 쉬운 셰이더(BSL, Glimmer)를 공부한다. GPU는 분기에 약하다. 진짜 `.hlsl` 셰이더를 쓰는 방법에 대한 안내는 찾지 못했다.
 - JSON UI 색수차 흉내: 셰이더를 팩에 넣을 수 없으므로 텍스처에 굽거나 크기를 살짝 다르게 한 가산 사본 3장(R, G, B)을 그린다.

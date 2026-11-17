@@ -24,6 +24,7 @@ sources:
 - **폼 렉**: grid, `binding_condition: once`, factory 0/1 생성, `ignored`, 페이지 분할, 탭 지연 로드, 요소 합치기로 줄인다.
 - **Hidden-slot 텍스트 대체**: chest UI에는 임의 라벨이 없으니 숨긴 아이템의 이름, lore, 내구도로 텍스트와 값을 나른다(무거움).
 - **PC/모바일 차이**: HUD 버튼은 터치 전용이다. 폼을 연 채 이동하는 것도 터치에서만 된다. 혼합 커스텀 핫바는 모바일과 데스크톱에서 다르게 동작한다(미해결).
+- **이미지 안 터치 위치 불가**: 이미지의 어디를 눌렀는지 정확히 알 수 없다. 보이지 않는 버튼을 grid로 깔아 칸 단위로 감지한다.
 - **링크 불가**: 애드온은 클릭 가능한 링크를 열 수 없다. JSON UI로 QR 코드 이미지를 보인다(qrcode-monkey.com).
 - **거래 주민 교체 모드**: UI가 새로 고쳐지면서 화면이 닫혀 불가능하다.
 - **중복 자식 이름 경고**: `how_to_play_screen.json`의 중복 자식 컨트롤 이름 경고는 앞으로 오류가 된다. 오래된 팩의 hud_screen은 파싱 오류를 낸다. 스크립트가 활성일 때 HUD "waila" 팩이 `JSON UI parse failure - expected a string`을 냈다.
@@ -57,8 +58,10 @@ sources:
 - **26.70.22 preview (2026-10-28)**: 아이템 툴팁 lang 키가 `item.<id>.tooltip`이 되고 `~LINEBREAK~`로 줄을 나눈다(26.50의 `tile.` prefix가 필요 없어짐). 커스텀 DDUI 강제 닫기 키 "Close Custom Screens". Ore UI 메인 메뉴 버전 표시의 "1." prefix 제거(MCPE-243637). 체인지로그에 Ore UI 내부 패키지 `@mojang/bedrock-core-engine`, `@mojang/react-device-information`이 나왔다. [보충 2026-10-28]
 - **26.62.1 hotfix (2026-11-05)**: Ore UI 해시 파일 이름이 바뀌었다(`index-196362d73210d5a80339.js`, `index-8a62c541ed5f344be00f.css`, `menus-theme-ed1e9065b019d5f4427f.css`, `gameplay-theme-922e7c15cd35326d4a6a.css`). [보충 2026-11-04]
 - **26.70.23 preview (2026-11-03)**: 체인지로그가 `ui/data_driven_container_screen.json`(namespace `data_driven_container`, 커스텀 블록 엔티티 컨테이너 UI)을 크리에이터가 고치지 않을 것으로 보고 하위 호환을 보장하지 않는다고 했다. "Support existing custom Minecraft emoji Unicode code points in Ore UI screens"가 들어갔지만 저장 토스트 외 대부분 화면(사망 화면, 월드 목록)에서는 네모로 나온다는 보고가 있다. `/chat show <global|party|world>` 채팅 채널, 오프핸드 스왑 키(F), `offhand_cooldown_renderer` 문자열, lang `hbui.MainMenu.Discovery.*`가 생겼다. DDUI 패널 배경이 사라졌다는 단일 보고가 있다. [보충 2026-11-03..06]
+- **26.70.24 preview (2026-11-10)**: Script API beta에 virtual container와 전용 `ui/virtual_container_screen.json`이 생겼다. 새 DDUI 데모 "Primitive components"에 체크박스 상태와 nineslice 이미지("Slice 4, scale 2")가 있다(SolidJS로 만들었다는 주장은 확인되지 않음). 인벤토리에 방어구 표시를 켜고 끄는 개인 토글이 생겼고, 오프핸드 스왑이 바닐라 오프핸드 아이템에도 동작한다. 새 메인 메뉴(Discovery)는 PC 전용이라는 보고가 있다. `@minecraft/server-ui`는 preview 2.4.0-rc.1.26.70-preview.24, preview beta 2.5.0-beta.1.26.70-preview.24다.
 - **UWP 1.26.6301.0 (2026-11-10 보고)**: Ore UI 번들 이름이 `gameplay-react-<hash>.js`다. Conduit 클라이언트 v0.5.0-beta가 .62/.63을 지원한다.
 - **2026-11-12**: Marketplace 광고, Realms 배너, 서버, 최근 월드가 있는 새 메인 메뉴가 목격됐다(버전 미상). *unverified*
+- **26.64 / 26.65 (2026-11-16)**: 26.64에서 리소스 팩의 Ore UI 접근이 보안 문제로 막혀 리소스 팩으로 만든 커스텀 Ore UI가 더는 동작하지 않는다(ALT-11). 26.65는 2026-11-16부터 배포됐다. 이 시점 `@minecraft/server-ui`는 stable 2.3.0, beta 2.4.0-beta.1.26.63-stable이다.
 
 ## 도구와 자료
 
@@ -89,6 +92,7 @@ sources:
 - **Bedrock UI Studio**: 바인딩과 화면 크기를 시뮬레이션하는 브라우저 JSON UI 미리보기 겸 편집기(커스텀 HUD, preserved title 지원, 긴 폼 작업 중). 대부분 AI로 만들었다고 한다. 링크는 아직 없다. 2026년에 나온 편집기 다수가 AI로 만들어졌고 DDUI(Ore UI)는 다룰 수 없다는 지적이 있다. [보충 2026-10-29]
 - **@bedrock-core 0.1.0 (Better Connected, 2026-10-26)**: Regolith 대신 캐시, 증분 빌드, 멀티 팩을 지원하는 자체 JS/TS 빌드 시스템, CLI starter, UI 컴파일러/런타임의 Stacks, Tabs, 클라이언트 내비게이션, Observable과 Sync stable 1.0을 담았다. container screen이 아이템과 인벤토리를 렌더한다. builder에는 `scripts/index.js` 같은 `entry`(같은 이름의 `.ts`)가 필요하고, Node.js 26.13 이상이 필요하다고 적혀 있다는 보고가 있다. https://bedrock-core.drav.dev/
 - **Ore UI 도구**: Ore UI Customizer(8Crafter) https://www.8crafter.com/utilities/ore-ui-customizer 는 Ore UI 파일을 직접 고치고 플러그인, Lite Play Screen, 광고 제거 플러그인을 준다. LAN 월드 지우기처럼 팩으로 안 되는 변경에는 Ore UI 파일 직접 수정이 필요했다. OreUI-Viewer https://github.com/xKingDark/OreUI-Viewer 는 게임 파일을 복사해 게임 밖에서 미리 본다(최근 업데이트로 깨졌을 수 있음). 공개된 Ore UI 디자이너는 없다(2025-10 기준). 분석은 [Ore UI Customizer 분석](../ore-ui/customizer-tool.mdx)에 있다.
+- **Ore UI 디자인 참고**: https://katorly.dev/OreUI/. JSON UI로 Ore UI 모양을 낼 때 참고한 디자인 자료로 공유됐다.
 - **Glyph 도구**: Glyph Tools https://nhanaz.github.io/glyph/ (16x16 칸, 페이지당 256 glyph, E0 페이지는 E000..E0FF, PNG/JSON 내보내기), Glyph Editer https://boredape874.github.io/forBE/.
 - **BedrockAdvancements 제작 사이트**: https://bedrockadvancements.com/create. Java식 업적 UI를 만든다.
 - **GeoUI Studio**: https://au12jp.github.io/GeouiStudio/, https://github.com/Au12jp/GeouiStudio. render controller로 적용한 미리 만든 cube로 UI를 짜는 브라우저 타임라인 편집기다(JSON UI를 피함. 동적 텍스트 예정).
@@ -124,5 +128,4 @@ sources:
 - **`:`로 시작하는 결과에서 빼기**: title `xTitle:1816`에서 `#data` = `:1816`을 얻은 뒤 `(#data - ':')`가 빈 값이 된다. 숫자로 시작하는 결과가 숫자로 취급되는 규칙과 관련 있어 보이지만 확인되지 않았다. [보충 2026-10-24]
 - **서버 폼 다시 보내기의 번쩍임과 지연**: 수정한 server_form factory로 폼을 다시 보낼 때 화면 사이가 번쩍이는 이유, 서버 폼이 늦게 열리는 요인. 버튼을 누를 때마다 폼이 닫혀 진행바 연출이 처음부터 다시 도는 문제도 같은 뿌리다. 화면 애니메이션을 끄면(`"$screen_animations": []`, `"$background_animations": []`, HOST-43) 다시 열 때의 움직임이 줄고, 서버에 알릴 필요가 없는 탭과 선택은 라디오 toggle로 두면 폼이 닫히지 않는다(INP-36). 다시 보낸 폼에서 연출이 이어 보이게 하는 방법은 확인되지 않았다.
 - **컨테이너 toggle 상태 보존**: 컨테이너를 닫았다 열어도 커스텀 toggle 상태를 남기는 방법. 화면 안에서 남기는 방법은 없고, 엔티티 인벤토리에서는 상태를 서버에 두고 슬롯 아이템으로 다시 그리는 우회가 있다([화면별 노트](./community-reports-screens.mdx)의 컨테이너 원리).
-- **`content.zipe` 신뢰 경로의 앞날**: Mojang이 이 경로를 막을지, 언제 막을지.
 - **`titleraw` `§u` 배경 트릭**, `binding_collection_prefix`/`notify_on_ellipses`의 용도, stack panel `use_priority`의 용도.

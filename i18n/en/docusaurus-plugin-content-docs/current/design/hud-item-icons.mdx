@@ -47,9 +47,16 @@ The script of the public WAILA add-on (r4isen1920/WAILA, MIT) serializes the ite
 
 If you give an item texture path (`textures/items/...`) as the `texture` of an `image`, you can draw a picture similar to an icon. The community recommends it as a way to avoid the problem of aux ids shifting with version and add-ons (community report). It is a flat picture, so the shapes the renderer draws, such as block items and dyed items, do not appear.
 
-### 2.3 In server forms, the binding route also works
+### 2.3 The binding route
 
-Server form buttons are different. Carrying a value like `aux:65536` in the button image string `#form_button_texture` and binding `(#texture - 'aux:')` to `#item_id_aux` works in the Chest-UI family (PAT-11, community report). The "does not work with bindings" in section 4 below is the result for the **HUD title channel**.
+Putting a numeric ID taken from text into `#item_id_aux` through a binding expression also works.
+
+- Server form buttons: carrying a value like `aux:65536` in the button image string `#form_button_texture` and binding `(#texture - 'aux:')` to `#item_id_aux` works in the Chest-UI family (PAT-11, community report).
+- HUD title: a row that filled the icon's `#item_id_aux` and the count label's `#text` with one view binding expression reading the global `#hud_subtitle_text_string` drew the same icons and counts as the title factory variable row (measured, mobile, 2026-11-16, section 3.4). The icon had `#item_id_aux: 0` in `property_bag` and `binding_condition: "always"`. Why the binding in the first setup stayed empty in every format (section 4) was not found (*unverified*). A binding passes the expression result to the renderer as is, so an integer result should draw *(code)*.
+
+On either route, the item renderer reads `#item_id_aux` only when it is a JSON integer, and draws air for text or a real number *(code, EXP-47)*. So end the expression with `(... - 0)` so that the final result is read back as an integer. If an intermediate result starts with a digit, a space, `+`, `-` or `.`, only the leading number is kept as an integer at that point and the rest of the text is dropped. This is the likely reason why zero padding in section 3.1 was not read while `x` padding worked (an intermediate result that starts with `x` stays text). Put number fields after a letter marker.
+
+Some bindings do not exist on the HUD. `#bundle_item_renderer_data`, which fills bundle content slots, exists only on container screens, not on the HUD, so a bundle content slot on the HUD is never filled. This matches the measurement where that slot was empty on the HUD *(code)*.
 
 ## 3. How to carry a numeric ID in the title
 

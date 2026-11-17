@@ -2,7 +2,7 @@
 title: Attachables and item rendering
 description: The structure of attachables that attach 3D items to the hand and body, bindings, positioning, bows and crossbows, armor, glint, particles, item texture size
 sidebar_position: 2
-sources: [private-research, bedrock-wiki, bedrock-samples]
+sources: [private-research, bedrock-wiki, bedrock-samples, repo-guide]
 ---
 
 # Attachables and item rendering
@@ -83,6 +83,21 @@ Use an attachable without cubes, an empty texture, or a scale 0 animation.
 - If the item model has no proper display transform, it renders as a full cube in the hand.
 - `item_display_transforms` had bugs in 1.26.40 and broke differently in .40 and .50. The slab inventory icon alignment problem was fixed in the Preview but was off in Pocket UI. Block model size is validated before the transform (MCPE-236317), and item icon face shading is applied before the display transform (MCPE-235788). The third-person rotation fix (fixing blocks that were turned 180 degrees in third person) changed the holding angle of heads, stairs and the heavy core, and the vanilla head display transform is odd.
 
+## How items are drawn in each context
+
+Markers: `{code}` is a conclusion from reading the Android 1.26.52.3 client binary, and `{measured}` is what a test pack showed in game on 2026-11-17 (Source: repo-guide).
+
+- The engine splits the contexts in which it draws an item into 10 names: `gui`, `firstperson_righthand`, `firstperson_lefthand`, `thirdperson_righthand`, `thirdperson_lefthand`, `ground`, `fixed` (item frame), `head`, `embedded`, `shelf`. These are the column names of `item_display_transforms` in block geometry, and each entry takes `translation`, `rotation`, `scale`, `rotation_pivot` and `scale_pivot` (only `gui` also takes `fit_to_frame`). Unknown names are silently ignored. The value ranges are -80~80 for translation, -360~360 for rotation and 0~4 for scale. `embedded` is accepted from geometry format 1.21.110, but no place that uses it was found. `shelf` is rejected in files below format 1.26.40, and the shelf then appears to use `fixed`. Vanilla models do not use `embedded` or `shelf`. `{code}`
+- These transforms are taken only from the item's block. There is no path that applies them to items not drawn as a block or to attachables. No item component chooses between drawing a flat sprite and a 3D model either. `{code}`
+- No query tells whether the item is being drawn in a frame, on a shelf, on the ground or in a similar context. What an attachable can tell apart is only `c.is_first_person`, `c.item_slot` (`head`, `torso`, `body`, `main_hand`, `off_hand`; the leg and feet slots appear to be empty strings), `q.is_in_ui` ("being drawn as part of the UI") and `q.owner_identifier`/`q.is_owner_identifier_any`. `{code}`
+- The client entity keys on the holder side are `enable_attachables`, `hide_held_items` (expression), `held_item_scale` (must be greater than 0), `held_item_ignores_lighting` and `hide_armor`. `{code}`
+- A fox, which has no `enable_attachables`, does not use attachables. An item with an attachable held in its mouth showed as the item icon. `{measured}`
+- Armor stands and allays draw the item with its default attachable, not the player one (the one choosing the player with `q.owner_identifier`). `{measured}`
+- A client entity with an invisible body, `enable_attachables` and `held_item_scale` 2 holding an item in the main hand shows only the item in the air. A diamond sword showed at 2x size, a grass block as a 3D block, and an item with an attachable as the attachable model, and an entity with `hide_held_items` on showed nothing. This draws any vanilla item in the world. `{measured}`
+- For an item drawn as a block, the `head` transform (armor stand head slot) and the `ground` transform (dropped item) applied. An icon-only item is a flat sprite on the ground. Items placed in frames and shelves showed, but the per-context transform difference was not checked up close. `{measured}`
+- `minecraft:render_offsets`: The parsing code is still in the engine (`position`, `rotation`, `scale` of `first_person`/`third_person` under `main_hand`/`off_hand`), but on a format 1.21.90 item the content log says "minecraft:render_offsets has been deprecated and is not available in json format 1.21.90" and the component is rejected. A format 1.16.100 item is not registered at all ("use json format version 1.20.0 or higher"), so a script `new ItemStack` throws "Invalid item identifier". Formats 1.20.0~1.21.80 were not checked. `{measured}`
+- Up to 1.26.6x, a custom block cannot be made to draw the items inside it like an item frame or shelf through JSON. See the block entity section of [Blocks](../content/blocks.mdx).
+
 ## Glint
 
 On attachables use the `entity_alphatest_glint` material or `minecraft:glint` (always on). An armor-style render controller shows only when enchanted.
@@ -125,7 +140,7 @@ Use `entity_emissive_alpha` for glowing parts and `breeze_wind_charge` for unsha
 - An empty `pre_animation: []` in an armor attachable (format 1.21.130) gave an error and removing it fixed it.
 - For the problem of custom armor arm bones not following on some skins, renaming the folder was suggested (`unverified`).
 - To render armor and items on a mob, the client entity must have exactly `"enable_attachables": true`. If misspelled, the entity becomes transparent. If the held and worn geometries overlap, fix it with render controller conditions and queries.
-- Elytra: The cape texture overwrites the whole elytra texture, and an extra geometry texture breaks together with the cape (unresolved).
+- Elytra: The cape texture overwrites the whole elytra texture, and an extra geometry texture breaks together with the cape (unresolved). If an edited custom elytra model looks broken, one answer says the likely cause, unless you use custom animations, is that the model was moved off center while editing rather than the pivot (`single report`).
 - An attempt to make vanilla armor trims glow under VV with a MERS PNG (min_engine 1.26.0, PBR and VV capability settings) did not glow (unresolved).
 
 ## Fishing line
@@ -140,10 +155,12 @@ A vanilla-like fishing line cannot be reproduced, so use particles or an entity 
 
 - Performance: Item textures over 128x128 lagged badly, and a 500x500 texture was slower than a 300-cube model. Under 512x512 is recommended. With more than 4 thousand custom items, the inventory lags.
 - A 2D item larger than 16x16 looks too close in first person, so a geo attachable is recommended. In the hand, mostly the upper half of the texture is visible.
+- To show a 2D icon in the hotbar and a 3D model in the hand, use an attachable. When splitting a 16x16 slot icon and a 32x32 hand texture with an attachable, the higher-resolution hand model breaks the vanilla holding animation, so rebuild that animation inside the attachable.
 
 ## Other
 
 - Hide the attachable of an invisible player with the render controller condition `!query.is_invisible`.
+- A held item not binding to `rightItem` after the model was changed dynamically has been reported (suspected bug, unresolved).
 - If an animation name conflicts with another pack, punching and mining animations break when the pack order is not at the top.
 - Use `c.is_first_person` inside attachables. Set positions with Blockbench bone binding and preview.
 - Item icons allow only fully transparent pixels and not translucent ones, while attachables allow translucency too.

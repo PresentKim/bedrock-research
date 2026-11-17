@@ -42,7 +42,7 @@ A custom server can embed the resource pack in its executable (`go:embed` in Go)
 
 1. **Version**: The `manifest.json` version is set automatically from a hash of the pack contents. The same contents give the same version, so the client cache is kept; when the contents change, the version changes and the client downloads again. If you encrypt, put the secret in the hash too.
 2. **JSON minify**: Remove `//` and `/* */` comments and whitespace from `.json` files (key order and strings stay as they are). Do not touch `manifest.json`. If the file is still not valid JSON after removing comments, the server refuses to start (the game cannot read such a file either). JSON UI files have many comments, so this saves quite a lot of size.
-3. **Encryption**: This works the same way as vanilla marketplace packs. During play, the game fetches Ore UI pages only from packs that are encrypted or have a `content.zipe`. So even a pack you do not encrypt must be sent with an empty `content.zipe` for the pack's DDUI and Ore UI screens to draw as usual `{measured}`.
+3. **Encryption**: This works the same way as vanilla marketplace packs. Up to 26.63, the game fetched in-game Ore UI pages only from packs that were encrypted or had a `content.zipe`. So a pack you did not encrypt, sent with an empty `content.zipe`, had its DDUI and Ore UI screens drawn `{measured}`. In 26.64 Mojang blocked resource pack access to Ore UI for a security reason, and now neither encrypted packs nor `content.zipe` packs change Ore UI pages (Source: private research).
    - Each file is encrypted with AES-256-CFB8 using a 32-character key (the IV is the first 16 bytes of the key). `manifest.json` and `pack_icon.png` stay as they are.
    - `contents.json` lists the paths and keys (the first 256 bytes are the header: version 0, magic `FC B9 CF 9B`, pack UUID), and the list is encrypted the same way with the pack's **content key**. The server gives the content key to the client at join (gophertunnel `Pack.WithContentKey`).
    - If you derive the key from the server secret with HMAC, the same contents give the same key and version. **If you lose or change the secret, the keys and versions of every pack change and clients download the packs again.** Do not put the secret in the repository.
@@ -51,13 +51,13 @@ A custom server can embed the resource pack in its executable (`go:embed` in Go)
 
 In Dragonfly, the server setting `Resources.Required = true` forces the client to apply the pack at join.
 
-The evidence that an encrypted pack is trusted in Ore UI file lookup, and what `content.zipe` is, are in [../basics/pack-delivery-and-encryption.mdx](../basics/pack-delivery-and-encryption.mdx) (Source: repo-ore-ui-loading).
+The evidence that an encrypted pack was trusted in Ore UI file lookup up to 26.63, and what `content.zipe` is, are in [../basics/pack-delivery-and-encryption.mdx](../basics/pack-delivery-and-encryption.mdx) (Source: repo-ore-ui-loading).
 
 ## Pack encryption and CDN (community)
 
 - **CDN (`cdn_config.json`)**: The client is picky. The Content-Type must be zip (`application/zip`; the `application/x-zip-compressed` that GitHub Pages sends is also accepted) and a `Content-Length` header is required. There is a case where a Cloudflare Workers response had no Content-Length and the client waited forever at "loading resources". For BDS to give a CDN link, the pack must be registered as required (for example the uuid/version in `system_resource_packs`). The system folder cannot properly override the vanilla loot tables or the crafting catalogue, so putting the pack in the world is another option. Geyser also supports remote pack URLs: https://geysermc.org/wiki/geyser/packs *(confirmed)*
 - **CDN hosting**: There is a case using Cloudflare R2 (free tier). If BDS does not recognize the resource pack, first check `pack_id` and `version` in `world_resource_packs.json`.
-- **Server-encrypted packs and Ore UI**: A pack the server encrypted and sent makes Ore UI load that pack's `hbui/`. In gophertunnel, give the key with `pack.WithContentKey(key)`.
+- **Server-encrypted packs and Ore UI**: Up to 26.63, a pack the server encrypted and sent made Ore UI load that pack's `hbui/`. From 26.64 this is blocked. In gophertunnel, give the key with `pack.WithContentKey(key)`.
 - **Pack encryption (EncryptMyPack and others)**: It is for RPs only and does not work on vanilla BDS. You need PocketMine, Endstone, Dragonfly (recommended for Geyser users) or a proxy in front of BDS. The decryption key is received locally for an add-on, or during data exchange for a server pack. Skin packs share a single key.
 - **Audio constraint**: By protocol, audio can be played only from a dynamic RP sent in advance. `PlaySoundPacket` was mentioned for client music.
 

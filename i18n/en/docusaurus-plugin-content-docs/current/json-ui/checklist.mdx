@@ -1,0 +1,57 @@
+---
+title: Output checklist
+description: Weight of evidence, a list of things easy to invent, the 12-item verification checklist and the report format to check before handing over JSON UI work. For both human and AI authors.
+sidebar_position: 13.5
+sources:
+  - repo-guide
+  - private-research
+---
+
+# Output checklist
+
+This page is the checklist to go through before handing a JSON UI pack or a description of one to someone else. Use the same order whether you build it yourself or review work an AI produced. Look up the original text of rule IDs in the [rule ID table](../reference/rules.mdx).
+
+## Weight of evidence
+
+- Trust rule levels in the order **`measured` > `vanilla` > `working pack` > `code` > `inferred`**. Within `code`, `NB`, which read the real client, is more direct than `CN`, which is reconstructed code (verification levels in the [overview](./index.mdx)).
+- The markers of the community notes map roughly like this: *confirmed* or several matching reports is `working pack`, *single report* is `inferred`, and *unverified* and **conflicting** are `unverified` and `conflict`.
+- When a `measured` rule and a community report differ, follow the rule. If the community side has a version or date, the version may have changed, so report both. Known differences are in the cross-check table (D numbers) of [Community reports and cross-checks](./community-reports.mdx), with a verdict.
+- Do not state content that rests on `conflict`, `unverified`, *unverified* or **conflicting** evidence as fact in the output; mark it "needs in-game check".
+
+## Things easy to invent
+
+These look plausible but do not exist. Fix them when they appear in output.
+
+- The operators `%`, `>=`, `<=`, `!=`, `==`, `&&`, `||`, the ternary, and chained comparison `(a < x < b)` (EXP-01, EXP-02, EXP-03). Write a range as `((a < #v) and (#v < b))`.
+- A format built from a binding value such as `'%.' + #n + 's'`, and padding formats such as `'%5.3s'` (EXP-25).
+- Number conversion with `(#v * 1)` (use `(#v - 0)` or `(0 + #v)`, EXP-16, EXP-31), and decimal literals with a leading digit such as `0.5` (they become the integer 0, EXP-27).
+- The control types `text` (really `label`), `scroll_box` and `scrollbar_track` (LAY-01, LAY-02). The key `grid_dimension` (really `grid_dimensions`) and `grid_fill_direction: left_to_right` (LAY-26).
+- `resolve_ancestor_scope` (BND-01), renderer names not in vanilla (ANI-05), and binding names not in vanilla (`#player_health`, `#player_name`, `#item_aux_id`; the real item binding is `#item_id_aux`).
+- Image rotation, blur, bindings on animation properties (`duration`, `fps`), calling scripts from JSON UI, and opening custom URLs.
+- Changing the layout or behavior of Ore UI screens with a resource pack. It is blocked from 26.64 (ALT-11). What a plaintext pack reaches is about the texture and text color of in-game Ore UI buttons (ALT-15).
+- Drawing custom models or entities in international edition UI. `netease_paper_doll_renderer` and the like are China edition only (ANI-36).
+- Old Script API: `runCommandAsync`, the method `isValid()` (now the property `isValid`), `world.events.*`, `worldInitialize`, `chatSend` in stable, and `addButtonList` and `getSelectedButtonId` of server-ui.
+
+## Verification checklist
+
+Check each item before reporting.
+
+1. Is every new file registered in `ui/_ui_defs.json`, and are files at vanilla paths left unregistered (FILE-01)?
+2. Are `modifications` in the file at the same path as vanilla (MOD-02)? Do they insert into the definition that declares the array directly (MOD-04)? Is no vanilla control removed with `remove` (MOD-05)?
+3. Does the JSON follow the engine parser's rules (no trailing commas, quoted keys, FILE-30)?
+4. Is every expression wrapped in parentheses with no forbidden operators? Does every view expression have at least one `#property` (BND-05)?
+5. Is number conversion done with `- 0` or `0 +`? Do decimal literals start with `.`?
+6. Is the N of `'%.Ns'` counted in UTF-8 bytes? A color code `§x` is 3 bytes and each Korean character is 3 bytes (EXP-09, EXP-24).
+7. Does each server form button itself have the `collection_details` binding and the `button.form_button_click` mapping (COL-04, INP-04)?
+8. Are screens chosen at the creation level with `ignored` or a length 0/1 factory, not by hiding with `visible: false` (COL-10, COL-11)?
+9. Are vanilla control, binding and renderer names checked against the vanilla files of the target version?
+10. Is there no way for a non-number value to reach a size or position binding (crash, LAY-10, LAY-11)?
+11. Does each label's `localize` match the intent (TXT-01)?
+12. If you have a vanilla copy (`resource_pack` of `bedrock-samples`), run the screen through the static simulator [mcbe-json-ui-tester](https://github.com/PresentKim/mcbe-json-ui-tester) and look at engine error messages, rule ID warnings, hidden labels and the positions of visible labels. For a server form give the title and button texts, for the HUD the title text. If the project has its own checker, run it too. Passing simulation and static checks does not mean it works in game.
+
+## Report format
+
+- Write the rule IDs used as evidence (for example "changed to `(#v - 0)` (EXP-16)").
+- For content from the community, name the note page and the period (for example "community notes, reported 2026-05").
+- Mark parts that rest on `conflict`, `unverified` or *conflicting* evidence as "needs in-game check".
+- Do not call it done before checking in game. Separate what was checked statically from what must be checked in game. If an experiment is needed, suggest changing one thing at a time, confirming in the log that the screen really opened, and keeping the experiment screen separate (DBG-02, DBG-03, DBG-04).

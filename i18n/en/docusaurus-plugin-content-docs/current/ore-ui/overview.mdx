@@ -8,9 +8,14 @@ sources:
   - bedrock-wiki
   - gameface-docs
   - ms-learn
+  - private-research
 ---
 
 # Ore UI overview
+
+:::caution[Blocked from 26.64]
+The routes for changing Ore UI files (HTML, JS, CSS) with a resource pack, namely a pack the server sends encrypted and a pack with an empty `content.zipe`, worked up to 26.63. In 26.64 Mojang blocked resource pack access to Ore UI for a security reason, so these methods can no longer change Ore UI pages (Source: private research). The measurements in this section are records from an earlier version (Windows 1.26.52). The button style bridge and `pack://` textures are routes that do not go through the trust decision, and they were not retested on 26.64.
+:::
 
 The subjects of the analysis are the Windows 1.26.52 (`Microsoft.MinecraftUWP 1.26.5203.0`) install folder, the engine behavior analysis of the Android 1.26.52.3 native client library, and a measurement on 2026-10-23 in which a Dragonfly test server sent probe resource packs (plaintext and encrypted) to a Windows 1.26.52 client. (Source: repo-ore-ui-loading)
 
@@ -25,17 +30,17 @@ The engine that draws Ore UI is Coherent Labs' Gameface. Its old name was Hummin
 - Scrollbars are not drawn.
 - There is no `fetch`.
 
-The detailed list is in [Page environment](./page-environment.mdx) and [UI style](./style.mdx). The Bedrock Wiki states that "JSON UI is being replaced by Ore UI, and Ore UI is hardcoded and cannot be changed with resource packs" (Source: bedrock-wiki, json-ui-intro). The measurements in this section show that this sentence is true for plaintext packs and not true for encrypted packs.
+The detailed list is in [Page environment](./page-environment.mdx) and [UI style](./style.mdx). The Bedrock Wiki states that "JSON UI is being replaced by Ore UI, and Ore UI is hardcoded and cannot be changed with resource packs" (Source: bedrock-wiki, json-ui-intro). The measurements in this section show that up to 26.63 this sentence was true for plaintext packs and not true for encrypted packs. From 26.64 encrypted packs are blocked as well, so for Ore UI files the sentence holds.
 
 ## Conclusion table
 
 | What you want to change | With a resource pack | Evidence |
 | --- | --- | --- |
-| The layout and behavior (JS), CSS theme and HTML of Ore UI screens | **Possible with an encrypted pack** (the server sends it with the key). Not possible with a plaintext pack | `{code}` loading paths chapters 3 and 7, `{measured}` |
+| The layout and behavior (JS), CSS theme and HTML of Ore UI screens | Up to 26.63, **possible with an encrypted pack** (the server sends it with the key). Not possible from 26.64. Not possible with a plaintext pack | `{code}` loading paths chapters 3 and 7, `{measured}` |
 | **The look of in-game Ore UI buttons** (background texture, text color, border color; default, hover, pressed, locked) | **Possible.** Change `$new_ui_button_texture`, `$text_color` and `$border_color` of `common_buttons.light_text_button`, and the `texture` of `common_buttons.focus_border` | `{measured}`, `{code}` |
 | Other Ore UI colors, margins and fonts | Not possible. The only definitions the engine passes on are the two above | `{code}` |
 | Game textures that Ore UI uses through `pack://` | Possible. A texture from an untrusted server pack was used | `{measured}` |
-| Bundle images (`hbui/assets/*`) | Not possible with a plaintext pack. They go through the same `ui://` lookup, so an encrypted pack should work (not tested) | `{installed}`, `{code}`, `{inferred}` |
+| Bundle images (`hbui/assets/*`) | Not possible with a plaintext pack. They go through the same `ui://` lookup, so up to 26.63 an encrypted pack should have worked (not tested). Not possible from 26.64 | `{installed}`, `{code}`, `{inferred}` |
 | Fonts (`hbui/fonts`) | Not possible. They are read only from the install folder | `{code}` |
 | DDUI screen layouts (the server form `CustomForm`, containers such as chest, barrel and shulker box) | **Not possible for now.** They are read from the pack folder but only the built-in pack passes | `{code}` |
 | Menu (out-of-game) Ore UI | There is no button bridge either. The menu bundle only declares facet names and does not use them | `{code}` |
@@ -47,11 +52,11 @@ The detailed list is in [Page environment](./page-environment.mdx) and [UI style
 2. **`pack://` textures**: a texture that Ore UI requested as `pack://textures/...png` was resolved even from an untrusted server pack `{measured}`.
 3. **The DDUI layouts `ddui/root` and `ddui/composition`**: layout JSON is read from the resource pack folder. The engine filters so that only the game's built-in packs are read, so user packs are currently blocked `{code}`. The frontend is ready to handle "layouts whose source pack is not vanilla" `{code}`.
 
-An Ore UI file request (`ui://...`) searches the pack stack first before going to the install folder. But it looks at **trusted packs only** `{code}`. A `hbui/*.css` put in a plaintext server pack was not applied, and when the same pack was sent encrypted it was applied `{measured}`. The trust decision for encrypted packs is covered in [Loading paths](./loading-paths.mdx).
+An Ore UI file request (`ui://...`) searches the pack stack first before going to the install folder. But it looks at **trusted packs only** `{code}`. A `hbui/*.css` put in a plaintext server pack was not applied, and when the same pack was sent encrypted it was applied `{measured, 1.26.52}`. The trust decision for encrypted packs is covered in [Loading paths](./loading-paths.mdx). From 26.64 an encrypted pack no longer changes Ore UI files either.
 
-## It works without a server
+## Empty `content.zipe` (up to 26.63)
 
-If you put an empty file `content.zipe` (0 bytes) in a local resource pack folder, the pack is opened with the encrypted access strategy even without a key and is trusted `{measured}`. Whether an empty `content.zipe` also works in a pack sent from a server was not tested. The method is in [Modifying Ore UI pages](./modifying-pages.mdx).
+Up to 26.63, putting an empty file `content.zipe` (0 bytes) in a local resource pack folder made the pack open with the encrypted access strategy even without a key, and it was trusted `{measured}`. A plaintext pack sent by a server with an empty `content.zipe` also had its in-game Ore UI page used `{measured}` ([Resource pack delivery](../server/resource-pack-delivery.mdx)). From 26.64 both cases are blocked. The test records are in [Modifying Ore UI pages](./modifying-pages.mdx).
 
 ## Where the files are `{installed}`
 
@@ -74,7 +79,7 @@ An Ore UI page talks to the game through events on the global `engine` object (S
 - Queries: sending `query:subscribe/name` brings `query:subscribed/id` and `query:updated/id`. Release is `query:unsubscribe`.
 - Router: `core:router:push`, `replace`, `go`, `back`, the change notification `core:router:changed`, and the current state `core:router:requestState`.
 - Facet namespaces: `core.*` (input, locale, router, sound, safe zone), `vanilla.*` (world list, options, resource packs, realms), `vanilla.gameplay.*` (13 names: furnace progress, container item and size queries, death info, respawn, bed, coordinate HUD, and so on), `debug.*`, `dev.*`, `test.*`. All 162 names are in the [Customizer analysis](./customizer-tool.mdx).
-- Item images are passed by the engine as `pack://` URLs such as `pack://textures/items/stick.png`. A furnace has `burnProgress` and `litProgress` (0~1), and a container item has the fields `amount`, `name`, `damageValue`, `maxDamage` and `image`.
+- The in-game bundle draws item and block icons through the engine protocol `geo-item://`. The engine renders the item itself `{measured}` ([Icons and containers](./geo-item-and-containers.mdx)). `pack://textures/...png` is a different kind of URL, a plain texture path. In the query responses that the Customizer app imitates for testing, item images have the form `pack://textures/items/stick.png`. A furnace has `burnProgress` and `litProgress` (0~1), and a container item has the fields `amount`, `name`, `damageValue`, `maxDamage` and `image`.
 - There is a facet `vanilla.screenTechStack` that chooses, per screen, whether to use JSON UI or Ore UI (`getTechStackForScreen`, `getPreferredTechStackForScreen`, `selectTechStackForScreen`). The values are `JsonUI=0` and `OreUI=1`. For a screen where both implementations coexist, JSON UI modifications are assumed to show only when the JSON UI side is chosen `{inferred}`. If a modification does not show, first check which side that screen opened with.
 
 ## Screen selection and strings `{code, inferred}`
@@ -86,8 +91,8 @@ An Ore UI page talks to the game through events on the global `engine` object (S
 ## What remains and limits
 
 - Whether DDUI layouts are blocked for user packs was **not measured.** It can be tested with a behavior pack that shows the `@minecraft/server-ui` `CustomForm` and a resource pack containing `ddui/root/custom_form.json`. The DDUI pack filter (+0x88/+0x89) is a different value from `isTrusted`, so it may not open even when encrypted.
-- Whether the menu (`index.html`) can be changed by a server pack, and when it returns to the original after leaving a server, was not tested. Per community reports (2026-10-30~11-05), replacing `/hbui/index.html` in a local global resource pack works and needs a game restart to apply (hiding LAN worlds, World Filter, and so on).
+- Whether the menu (`index.html`) can be changed by a server pack, and when it returns to the original after leaving a server, was not tested. Per community reports (2026-10-30~11-05), up to 26.63 replacing `/hbui/index.html` in a local global resource pack worked and needed a game restart to apply (hiding LAN worlds, World Filter, and so on). From 26.64 this is blocked too.
 - Whether facet reads and engine calls work from injected JS was not tested (DDUI queries and commands work).
-- Mojang may change the trust decision for encrypted packs in future versions. Recheck the access strategy table in [Loading paths](./loading-paths.mdx) for every version.
+- In 26.64 Mojang blocked resource pack access to Ore UI. The access strategy table in [Loading paths](./loading-paths.mdx) is an analysis of an earlier version (Android 1.26.52.3). How versions after 26.64 decide this was not analyzed.
 - The exact names of +0x88/+0x89 (for example `isBaseGamePack`, `isSlicePack`) could not be confirmed.
 - The analyzed binary is the Android version and the measurements are on the Windows version. The engine code is believed to be the same but this is not guaranteed.

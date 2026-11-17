@@ -1,6 +1,6 @@
 ---
 title: JSON UI가 맞지 않을 때
-description: 파티클 글리프와 Ore UI 화면 등 JSON UI 밖의 선택지(ALT-01~16).
+description: UI 기술 네 가지의 비교와 고르는 법, 파티클 글리프와 Ore UI 화면 등 JSON UI 밖의 선택지(ALT-01~16).
 sidebar_position: 12
 sources:
   - repo-guide
@@ -32,6 +32,27 @@ JSON UI는 화면 좌표에 고정된 2D 표시와 메뉴를 위한 도구다. �
 
 
 JSON UI는 **화면 좌표**에 고정된 2D 표시와 메뉴용이다. 표시만 필요하고 상호작용이 없거나, 월드 공간을 따라가야 하는 것은 다른 수단이 더 낫다. 이 장의 근거는 JSON UI를 전혀 쓰지 않고 대미지 숫자를 띄우는 Premium Damage Indicator(DI)와, Ore UI 화면을 게임 파일 패치로 고치는 8Crafter Ore UI Customizer(OUC)다.
+
+## 12.0 UI 기술 네 가지와 고르는 법
+
+배드락에서 화면을 만드는 기술은 넷이다(2026-11 기준). 표의 Marketplace와 전망 칸은 커뮤니티 보고다.
+
+| 기술 | 정체 | 팩으로 꾸미기 | 열린 채 갱신 | Marketplace | 전망 |
+| --- | --- | --- | --- | --- | --- |
+| JSON UI | 리소스 팩 `ui/*.json`. HUD, 서버 폼, 상자, NPC 대화, 인벤토리 등 게임 중 화면 대부분 | 된다(유일한 수단) | 서버 폼은 다시 보내야 한다. 상자 화면과 HUD는 실시간 | 애드온은 바닐라 UI 파일을 못 건드린다. 월드 템플릿은 된다 | Mojang은 공식 지원한 적이 없고 단계적으로 대체하는 중이다. 커뮤니티는 1~3년 안 폐기를 예상한다 |
+| Ore UI | React 기반 웹 UI(Coherent Gameface). 설정, 월드 목록, 로딩, 사망 화면 등 | 리소스 팩으로 배치·동작을 바꿀 수 없다. 26.63까지는 루트에 빈 `content.zipe`를 둔 로컬 팩이나 서버가 암호화해 보낸 팩이 게임 중 Ore UI 페이지를 바꿨지만 26.64부터 막혔다(ALT-11). 게임 중 Ore UI 버튼의 텍스처·글자색은 팩의 `common_buttons.light_text_button` 변수로 바뀐다(ALT-15) | 된다 | 해당 없음 | 메뉴부터 하나씩 JSON UI를 대체한다 |
+| DDUI (`CustomForm` + `Observable*`) | `@minecraft/server-ui`가 Ore UI 위에 그리는 스크립트 폼. 26.30(2026-06-16)에 정식 | 크기·배경·위치·글꼴을 못 바꾼다. 프리뷰에 겉모습만 바꾸는 `styleId`가 있다 | 된다 | 안 된다는 보고가 있다(2026-04) | Mojang은 레이아웃 파일과 스타일 파일을 나눠 공개할 예정이라고 했고 일정은 없다 |
+| server-ui 폼 (`ActionFormData`, `ModalFormData`, `MessageFormData`) | 스크립트 폼. 화면은 JSON UI의 `server_form.json`이 그린다 | JSON UI로 된다 | 안 된다(다시 열기) | 바닐라 UI 수정이 필요하면 안 된다 | DDUI를 꾸밀 수 있게 되면 밀려날 것이라는 게 커뮤니티 합의다 |
+
+무엇을 고를지는 다음 순서로 정한다.
+
+1. 3D 위치를 따라가는 표시(머리 위 숫자, 피격 표시)는 UI 기술로 안 된다. 파티클이나 엔티티를 쓴다(ALT-01). 숫자는 글리프 아틀라스 파티클로 그린다(ALT-03).
+2. 값이 바뀌는 관리자 패널이고 모양이 상관없으면 DDUI가 가장 쉽다.
+3. 모양을 바꿔야 하는 메뉴·목록은 ActionForm과 JSON UI로 만든다(HOST-01).
+4. 입력 양식은 ModalForm과 JSON UI로 만든다. 슬라이더·토글은 엔진이 그리고 팩은 자리만 잡는다(HOST-11).
+5. 열어 둔 채 값이 바뀌는 화면(제작 진행, 실시간 칸)은 엔티티 인벤토리를 쓴 상자 화면으로 만든다(HOST-16).
+6. 알림은 HUD에 띄운다. 최신 값 하나면 타이틀, 여러 개가 쌓이면 채팅 채널이다(HOST-14).
+7. Marketplace 애드온은 바닐라 UI를 못 고치므로 엔티티·렌더 컨트롤러·파티클로 UI를 흉내 낸다(커뮤니티 보고). 렌더 컨트롤러 큐브로 UI를 짜는 GeoUI Studio 같은 도구도 있다.
 
 ## 12.1 판단 기준
 
@@ -69,25 +90,25 @@ Ore UI는 Mojang이 JSON UI를 대체해 가는 웹 기술 기반 UI다. 리소�
 | 바꾸고 싶은 것 | 리소스팩으로 |
 | --- | --- |
 | Ore UI 화면의 배치·동작·CSS (평문 팩) | 불가(ALT-11) |
-| 게임 중 Ore UI 화면의 HTML·JS·CSS (루트에 빈 `content.zipe`를 둔 로컬 팩, 또는 서버가 암호화해 보낸 팩) | 됨, 실측(ALT-11) |
+| 게임 중 Ore UI 화면의 HTML·JS·CSS (루트에 빈 `content.zipe`를 둔 로컬 팩, 또는 서버가 암호화해 보낸 팩) | 26.63까지 됨(실측), 26.64부터 막힘(ALT-11) |
 | 게임 중 Ore UI 버튼의 배경 텍스처·글자색·테두리색 | 됨, 실측(ALT-15) |
 | Ore UI가 `pack://`로 쓰는 게임 텍스처 | 됨, 실측(ALT-12) |
 | Ore UI 번들 자체 이미지·폰트 | 불가(ALT-12) |
 | DDUI 화면 레이아웃(`ddui/root`) | 지금은 불가, 내장 팩만 읽음(ALT-16) |
 | JSON UI·Ore UI가 공존하는 화면 | JSON UI 쪽이 선택됐을 때만 보임(ALT-13) |
 
-- **[ALT-11]** Ore UI 화면은 설치 폴더 `data/gui/dist/hbui/`의 해시 붙은 압축 JS·CSS·HTML 번들이다. 엔진은 Ore UI 파일(`ui://…`)을 찾을 때 설치 폴더보다 팩 스택을 먼저 보지만, 신뢰된 팩(`isTrusted`)만 본다. 신뢰 판정은 팩을 여는 접근 전략이 정하고 UUID·마켓플레이스 서명은 보지 않는다. 평문 팩(Zip·Directory 전략)은 설치 폴더의 내장 팩만 신뢰되므로 일반 리소스팩·평문 서버 팩으로는 배치·동작·CSS를 바꿀 수 없다. 암호화 팩 전략 세 종류는 언제나 신뢰되므로, 그 전략으로 열린 팩의 `hbui/<파일>`은 게임 중 Ore UI 페이지(`gameplay.html`: 사망·침대·인벤토리·DDUI·거래·블록 화면)의 HTML·JS·CSS를 바꾼다. 그렇게 여는 길은 두 가지다. **(1) 서버 없이: 로컬 리소스팩 폴더의 루트에 0바이트 빈 파일 `content.zipe`를 두면** 엔진이 그 팩을 `DirectoryPackWithEncryptionAccessStrategy`로 연다. 엔진은 이 파일이 있는지만 보고, 키 없이 팩 폴더의 평문 파일을 그대로 읽는다. `.mcpack`으로 가져올 때는 zip 맨 위에 `manifest.json`과 `content.zipe`가 바로 있어야 한다(한 단계 깊으면 아무 메시지 없이 가져오기가 되지 않는다). 같은 가짜 암호화 헤더를 `contents.json`에 단 팩은 바뀌지 않는다. **(2) 서버가 아무 32바이트 콘텐츠 키로 암호화해 키와 함께 보낸 팩**(같은 팩을 평문으로 보내면 바뀌지 않음을 실측). 이 페이지의 JS가 바닐라 DDUI 데이터 저장소를 읽고 써서, 서버가 보낸 레이아웃대로 그리고 누름·입력을 돌려받는 화면을 만들 수 있다(OL 3장·6장~9장). 바꾼 `gameplay.html`에는 바닐라 번들의 해시 붙은 파일 이름이 들어가므로 게임 업데이트마다 설치본과 맞춘다. 클라이언트 설치 폴더를 직접 패치하는 도구(OUC)는 그 클라이언트에만 적용되고 업데이트마다 다시 적용해야 한다. `{코드, 실측}` (출처: OUC 2장·3장, OL 3장·6장·7장·8장·9장)
+- **[ALT-11]** 26.64부터 리소스 팩은 Ore UI 파일을 바꿀 수 없다. 26.64가 보안 문제로 리소스 팩의 Ore UI 접근을 막았다(커뮤니티 보고). 이 규칙의 나머지는 26.63까지의 동작이다. Ore UI 화면은 설치 폴더 `data/gui/dist/hbui/`의 해시 붙은 압축 JS·CSS·HTML 번들이다. 엔진은 Ore UI 파일(`ui://…`)을 찾을 때 설치 폴더보다 팩 스택을 먼저 보지만, 신뢰된 팩(`isTrusted`)만 본다. 신뢰 판정은 팩을 여는 접근 전략이 정하고 UUID·마켓플레이스 서명은 보지 않는다. 평문 팩(Zip·Directory 전략)은 설치 폴더의 내장 팩만 신뢰되므로 일반 리소스팩·평문 서버 팩으로는 배치·동작·CSS를 바꿀 수 없다. 암호화 팩 전략 세 종류는 언제나 신뢰되므로, 그 전략으로 열린 팩의 `hbui/<파일>`은 게임 중 Ore UI 페이지(`gameplay.html`: 사망·침대·인벤토리·DDUI·거래·블록 화면)의 HTML·JS·CSS를 바꾼다. 그렇게 여는 길은 두 가지다. **(1) 서버 없이: 로컬 리소스팩 폴더의 루트에 0바이트 빈 파일 `content.zipe`를 두면** 엔진이 그 팩을 `DirectoryPackWithEncryptionAccessStrategy`로 연다. 엔진은 이 파일이 있는지만 보고, 키 없이 팩 폴더의 평문 파일을 그대로 읽는다. `.mcpack`으로 가져올 때는 zip 맨 위에 `manifest.json`과 `content.zipe`가 바로 있어야 한다(한 단계 깊으면 아무 메시지 없이 가져오기가 되지 않는다). 같은 가짜 암호화 헤더를 `contents.json`에 단 팩은 바뀌지 않는다. **(2) 서버가 아무 32바이트 콘텐츠 키로 암호화해 키와 함께 보낸 팩**(같은 팩을 평문으로 보내면 바뀌지 않음을 실측). 이 페이지의 JS가 바닐라 DDUI 데이터 저장소를 읽고 써서, 서버가 보낸 레이아웃대로 그리고 누름·입력을 돌려받는 화면을 만들 수 있다(OL 3장·6장~9장). 바꾼 `gameplay.html`에는 바닐라 번들의 해시 붙은 파일 이름이 들어가므로 게임 업데이트마다 설치본과 맞춘다. 클라이언트 설치 폴더를 직접 패치하는 도구(OUC)는 그 클라이언트에만 적용되고 업데이트마다 다시 적용해야 한다. `{코드, 실측}` (출처: OUC 2장·3장, OL 3장·6장·7장·8장·9장, 커뮤니티)
 - **[ALT-12]** Ore UI가 게임 텍스처를 쓸 때는 `pack://textures/…png` URL로 요청하고, 이 경로는 신뢰하지 않는 서버 팩의 텍스처로도 풀린다(버튼 텍스처로 실측). 따라서 텍스처를 바꾸는 리소스팩은 Ore UI의 아이템·블록 아이콘에도 반영될 것이다(아이콘 자체는 따로 확인하지 않음). 번들 자체 이미지(`/hbui/assets/`)와 폰트(`gui/dist/hbui/fonts`)는 설치 폴더에서 읽어 팩으로 바뀌지 않는다. `{코드, 실측, 추론}` (출처: OUC 3장·4.6, OL 4장·6장)
 - **[ALT-13]** 화면마다 JSON UI와 Ore UI 중 무엇을 쓸지 고르는 facet `vanilla.screenTechStack`(`getTechStackForScreen`, `getPreferredTechStackForScreen`, `selectTechStackForScreen`)이 있다. 두 구현이 공존하는 화면에서는 JSON UI 수정이 JSON UI 쪽이 선택됐을 때만 보인다고 보고, 수정이 안 보이면 먼저 그 화면이 어느 쪽으로 열렸는지 확인한다. `{코드, 추론}` (출처: OUC 0장)
 - **[ALT-14]** Ore UI의 데이터 채널은 바인딩이 아니라 facet이다(`engine.trigger("facet:request", 이름)` → `facet:updated:<이름>`). 게임 중 화면용 `vanilla.gameplay.*` facet(화로 진행도, 컨테이너 아이템·크기, 사망 정보, 리스폰, 침대, 좌표 HUD 등)이 있다는 것은 해당 화면이 Ore UI로 옮겨 가는 중이거나 옮겨 갔다는 신호다. JSON UI로 그 화면을 재스킨하는 작업은 이전 위험을 감안한다. `{코드, 추론}` (출처: OUC 3장)
 - **[ALT-15]** 엔진은 JSON UI 정의 두 개를 팩 스택에서 풀어 facet `vanilla.resourcePackOverrides`로 게임 중 Ore UI(`gameplay.html` 전체: 사망·침대·인벤토리·DDUI·거래 등)에 넘긴다. `common_buttons.light_text_button`의 하위 컨트롤 `default`·`hover`·`pressed`·`locked`에서 `$new_ui_button_texture`(배경, 나인슬라이스 포함), `$text_color`(글자색), `$border_color`(테두리색)를, `common_buttons.focus_border`에서 `texture`를 가져가 primary·secondary 버튼의 기본·hover/focus·pressed/selected·disabled 상태에 입힌다. 따라서 `_global_variables.json`의 `$light_button_*_text_color`나 `textures/ui/button_borderless_light*.png`를 바꾼 팩은 Ore UI 사망 화면 버튼까지 바꾼다(서버 팩으로 실측). 다른 정의·속성은 넘어가지 않고, 게임 밖 메뉴 번들은 이 facet을 쓰지 않는다. `{코드, 실측}` (출처: OL 4장·6장)
 - **[ALT-16]** DDUI 레이아웃(`ddui/root/*.json` = `minecraft:ui-root`, `ddui/composition` = `minecraft:ui-composition`)은 리소스팩 폴더에서 읽지만, 엔진은 게임 내장(퍼스트파티) 팩으로 표시된 팩만 읽는다(POI의 `minecraft:` 이름공간 허용 판정과 같은 플래그). 사용자·서버 팩에 `ddui/root/custom_form.json`을 넣어도 쓰이지 않을 것이다. JS는 바닐라가 아닌 출처 팩의 레이아웃(`isCreatorDataDriven`, 자기 팩 이미지만 허용)을 이미 처리하므로, 엔진 검사가 풀리면 열릴 통로다. `{코드, 추론}` (출처: OL 5장)
 
-"Ore UI 화면도 리소스팩으로 바꿔 달라"는 요구에는 "팩 루트에 빈 `content.zipe`를 두거나 서버가 팩을 암호화해 보내면 게임 중 Ore UI 화면의 배치·동작을 바꿀 수 있고(ALT-11), 평문 팩으로는 게임 중 Ore UI 버튼 모양과 게임 텍스처만 바뀐다(ALT-12, ALT-15)"가 답이다. 진짜 컨테이너(상자·화로·인벤토리)를 Ore UI로 여는 것, 바닐라 DDUI 레이아웃(ALT-16), HUD는 암호화 팩으로도 닿지 않는다.
+"Ore UI 화면도 리소스팩으로 바꿔 달라"는 요구에는 "26.64부터 리소스 팩으로는 Ore UI 화면의 배치·동작을 바꿀 수 없다(ALT-11, 26.63까지는 팩 루트에 빈 `content.zipe`를 두거나 서버가 팩을 암호화해 보내면 바뀌었다). 평문 팩으로는 게임 중 Ore UI 버튼 모양과 게임 텍스처만 바뀐다(ALT-12, ALT-15)"가 답이다. 진짜 컨테이너(상자·화로·인벤토리)를 Ore UI로 여는 것, 바닐라 DDUI 레이아웃(ALT-16), HUD는 26.63까지의 암호화 팩으로도 닿지 않았다.
 
 ### ALT-11 보충: 암호화 팩으로 Ore UI 파일 바꾸기의 세부
 
-아래는 ALT-11이 기대는 Ore UI 로딩 조사(OL)의 실측 세부다. 수준은 `실측`과 `코드`다.
+아래는 ALT-11이 기대는 Ore UI 로딩 조사(OL)의 실측 세부다. 수준은 `실측`과 `코드`다. 26.63까지의 기록이고, 26.64부터는 이 방법으로 Ore UI 파일이 바뀌지 않는다.
 
 - Ore UI는 파일(`/hbui/…`)을 찾을 때 설치 폴더보다 팩 스택을 먼저 보되 신뢰된 팩만 본다. 팩 안 위치는 `hbui/<파일>`이다. 사본을 팩 루트나 `gui/dist/hbui/`에 둘 필요는 없다(`hbui/`에만 두어도 바뀌었다, 2026-10-24 실측).
 - 서버가 보낼 때는 아무 32바이트 키로 팩을 암호화해 그 키와 함께 보낸다(`ResourcePacksInfo`의 콘텐츠 키, gophertunnel `pack.WithContentKey`). 마켓플레이스 형식은 다음과 같다. `contents.json`은 0~3바이트 버전 0, 4~7바이트 마법수 `0x9BCFB9FC`(리틀 엔디언), 0x10에 팩 UUID 길이와 문자열, 0x100부터 파일 목록 JSON(`{"content":[{"path","key"}]}`)을 콘텐츠 키로 AES-256-CFB8 암호화한 것이다(IV는 키 앞 16바이트). `manifest.json`과 `pack_icon.png`는 평문으로 두고, 나머지 파일은 파일마다 무작위 32바이트 키로 같은 방식으로 암호화한다.

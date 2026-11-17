@@ -7,6 +7,7 @@ sources:
   - bedrock-wiki
   - ms-learn
   - bedrock-samples
+  - repo-guide
 ---
 
 # Blocks
@@ -109,7 +110,7 @@ system.beforeEvents.startup.subscribe(({ blockComponentRegistry }) => {
 
 - One note said a `minecraft:custom_components` array is needed, but that is the old format that has been invalid since 1.21.90.
 - Conflicting gametest dependency versions break script loading. At that time on the stable release use `@minecraft/server` 2.7.0 and server-ui 2.0.0, and leave out the unused `@minecraft/server-gametest`. (single report)
-- Causes of `child 'x:y' not valid here` / `component found in input but not present in Schema`: the component not registered with the API, registered in the wrong registry (itemComponentRegistry), an old format_version (for example 1.20.80), no script module in the manifest, a script error or wrong import, or one of several manifests in a folder. `bone_visibility` placed outside `minecraft:geometry` gives the same error. Wrapping in a fake `minecraft:components` object is not a solution.
+- Causes of `child 'x:y' not valid here` / `component found in input but not present in Schema`: the component not registered with the API, registered in the wrong registry (itemComponentRegistry), an old format_version (for example 1.20.80), no script module in the manifest, a script error or wrong import, or one of several manifests in a folder. `bone_visibility` placed outside `minecraft:geometry` gives the same error. Wrapping in a fake `minecraft:components` object is not a solution. The error goes away only once the script loads and works. There is also a report of a single block failing to register at random and being fixed by rewriting it identically. (single report)
 - Registration timing: importing main one tick late, as in `system.run(() => import("./main"))`, breaks startup registration. If there is even one script error, block/item components may not attach. `/reload` does not run startup again.
 - `Block custom component 'x' is not being used by a block` means the format_version or location is wrong. `component used on block but not registered in script` means it is not registered or the `@minecraft/server` metadata version is wrong. Right after the 2026-03 block schema change, every custom component got `No transformer found for component ... Cannot downgrade from modern slice to legacy component` (MCPE-237057).
 - The nesting depth of custom component parameters is at most 2. `tag` is also a valid custom component namespace.
@@ -227,7 +228,25 @@ part.setPermutation(BlockPermutation.resolve(part.typeId, {
 - What cannot be done: falling blocks (the hardcoded `minecraft:falling_block` entity) and animations. A chest opening animation is imitated by changing geometry in steps with states and permutations. A multi-block sharing one block entity also does not work yet.
 - Bugs: changing container items with scripts after a redstone update closes the open UI (26.50). A snowlogged container block entity drops its items.
 - Giving `dynamic_properties:true` to the loot function `carry_over_block_entity_data` passes block dynamic properties to the item (26.40).
-- Storage methods before block entities: keep per-block data in world or entity dynamic properties. Entity-based storage lags with many blocks and disappears with `/kill @e`. A block entity can show items with an attachable.
+- Storage methods before block entities: keep per-block data in world or entity dynamic properties. Entity-based storage lags with many blocks and disappears with `/kill @e`.
+
+### container measurements (Windows 1.26.65)
+
+Tested on a format 1.26.20 block with `minecraft:geometry.full_block`, `minecraft:block_entity` `{ "dynamic_properties": true, "container": { "slot_count": 3 } }` and one custom component, in a world with Upcoming Creator Features on. `{measured}` (Source: repo-guide)
+
+| What | Result |
+| --- | --- |
+| Using the block | A container UI opens. 3 slots, no title (no `title` was given) |
+| Custom component `onPlayerInteract` on the same use | Did not fire (1 trial) |
+| `/replaceitem block <position> slot.container <slot> <item>` | Works |
+| Script `minecraft:inventory` component | Sees the slots (`size 3`, the inserted items and counts) |
+| Are inserted items drawn on the block | No. The block looks the same |
+| Breaking the block (`/setblock ... air destroy`) | The contents and the block item drop |
+
+### Custom blocks like item frames and shelves
+
+- Item frames and shelves hold the item in their own block entity, and a dedicated renderer tied in engine code to that block entity type draws it. The fields of `minecraft:block_entity` are only `dynamic_properties` and `container` (`slot_count`), and no field chooses the block entity type or renderer. `container` has an experiment check and cannot be used together with `minecraft:crafting_table`. `{code}` (Android 1.26.52.3 binary)
+- So up to 1.26.6x a custom block cannot be made to draw the items inside it like an item frame or shelf with JSON alone. `container` only stores items and opens a UI (as measured above). The ways left are using the vanilla item frames (`minecraft:frame`, `glow_frame`) and shelves as they are (the frame shape cannot be changed), or having an invisible entity inside the block hold the item (the display entity in [Attachables and item rendering](../rendering/attachables-and-items.mdx)).
 
 ## 7. Geometry, size, collision/selection boxes
 
@@ -242,7 +261,7 @@ part.setPermutation(BlockPermutation.resolve(part.typeId, {
 
 - What can be used is `minecraft:geometry.full_block` and `minecraft:geometry.cross` and so on (the `minecraft:` prefix is required). For cross use `alpha_test_single_sided` to avoid flicker. Other vanilla models such as slime, lantern, cauldron and sign must be made by hand. Reusing full_block reduces pack size.
 - Internals of `minecraft:geometry.cross` (extracted from BDS): 2 cubes (origin [-10.2,0,0], size [20.4,16,0], Y axis +-45 degrees, pivot [0,8,0], material instance "cross", format 1.21.60).
-- Characteristics of full_block: the bottom face is rotated 180 degrees (fixed in format 1.26). It has no named main bone, so culling rules cannot reference a bone and UV lock does not apply. An `opaque` full_block is forced into unit cube culling. Transforming a full_block with transformation breaks culling (MCPE-241209). The only way to cast shadows on neighbors is `minecraft:geometry.full_block` + `opaque` (hardcoded). `minecraft:embedded_visual` is for flower pots only.
+- Characteristics of full_block: the bottom face is rotated 180 degrees (fixed in format 1.26). It has no named main bone, so culling rules cannot reference a bone and UV lock does not apply. An `opaque` full_block is forced into unit cube culling. Transforming a full_block with transformation breaks culling (MCPE-241209). The only way to cast shadows on neighbors is `minecraft:geometry.full_block` + `opaque` (hardcoded). `minecraft:embedded_visual` is for flower pots only. The bug where full_block faces render wrongly next to snow layers is fixed in the Preview as of 2026-11-15.
 
 ### bone_visibility
 
@@ -290,6 +309,7 @@ part.setPermutation(BlockPermutation.resolve(part.typeId, {
 
 ### material_instances
 
+- A format 1.26.20 block with `minecraft:material_instances` but no `minecraft:geometry` is not registered (whether the texture is a pack texture or `stone`, and also with `render_method: opaque`). Nothing is left in the content log (verbose), and `/give` gives a syntax error. Adding `minecraft:geometry.full_block` makes it register. Blocks without `material_instances` (only `display_name`, only `block_entity`, only a custom component) register. `{measured}` (Windows 1.26.65, Source: repo-guide)
 - A block that uses geometry must use `minecraft:material_instances`. Keys are face names (`up`, `down`, `north` and so on, not top/bottom, `*` is the default, and custom face names from Blockbench also work). The fields of each instance are `texture` (not `textures`), `render_method`, `face_dimming` (bool), `ambient_occlusion` (a number in 1.26.20 and above, `0.55` for sand-style partial darkening), `tint_method` and `isotropic`. The texture name is a key of `terrain_texture.json` (not a path). Vanilla textures must also be defined in terrain_texture, and a short name alone is not enough.
 - Instances of one block cannot mix `render_method` (`MaterialInstances can't mix and match`). A block mixing opaque and translucent is thought to be impossible, and for a beacon style set both to blend.
 - Choosing a render method: `alpha_test_to_opaque` fixes disappearing at a distance and is used for leaves. `alpha_test` is for cutouts. `blend` has ordering problems, so put translucent cubes last or use `alpha_test_single_sided`/`double_sided`. With complex geometry, blend is drawn over blocks in front. A `double_sided` block disappears at half the render distance. Opaque with transparent pixels looks black. For cobweb/outline style use `alpha_test_single_sided`. Add-on maker apps ignore `blend`/`alpha_test`, so write the JSON by hand. `render_method` is a material instance field, not in blocks.json.
@@ -381,7 +401,8 @@ For `explosion_resistance` of `minecraft:destructible_by_explosion` use the blas
 ```
 
 - `use_liquid_clipping` is a known bug that has never worked (MCPE-236319). `minecraft:liquid_clipped` is an item component, and since 26.10, if true on a block placer item it is placed only on water (lily pad style). A seagrass style block needs a tick custom component that checks `isWaterlogged`. Custom fluids, water/powder snow fog and custom cauldron liquids are impossible.
-- Snowlogging: `"minecraft:precipitation_interactions": {"precipitation_behavior": "snowlogging"}` (the schema name is `snow_log_no_collision`). It must have no collision and was experimental until 1.26.30. To avoid being buried like flowers in snow, use `none`. When buried in snow, containers drop their items and texture variations return to the first value. The snow layer on custom blocks cannot be blocked in worldgen.
+- Snowlogging: `"minecraft:precipitation_interactions": {"precipitation_behavior": "snowlogging"}` (the schema name is `snow_log_no_collision`). It must have no collision and was experimental until 1.26.30. To avoid being buried like flowers in snow, use `none`. When buried in snow, containers drop their items and texture variations return to the first value. A custom flower with precipitation behavior snowlogging showed only the first of its `terrain_texture.json` texture variations when placed by a feature, and all three with `none` (looks like a bug but unconfirmed; splitting the variations with permutations was suggested). The snow layer on custom blocks cannot be blocked in worldgen.
+- `detection_rules` is an array, but the 1.26.20 schema supports only water, so minItems/maxItems is 1. Lava logging is said to be planned (unverified). Snowlogging is done with `minecraft:precipitation_interactions`, not `liquid_detection`.
 
 ## 13. Redstone
 

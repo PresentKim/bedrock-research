@@ -174,7 +174,7 @@ The `overlay` is built only when the full name matches. This is the definition i
 - When `ignored` is true the control is not built, so a chest with another name has none of that example's controls. In jsonui-tester the control count of a mobile ordinary chest went from 3,569 when hidden only with `visible` to 2,207 (*unverified*, static simulation).
 - `sync_grid` is an empty grid placed to stop flicker when slots change. With this binding-hide setup, no flicker was seen even without the grid. Item type changes and many slots changing at once were not tested, so the example keeps the grid as a precaution (section 8.3).
 - `overlay` and `cover` are at `layer` 1. With `overlay` at 50 and `cover` at 100, only the window's `inventory_item_renderer` icons were not drawn, while names, counts and backgrounds were (measured). Lowering both to 1 drew the icons (measured, ANI-38). This agrees with a community report that an item renderer at layer 100 hid items while 4 and 50 were fine.
-- The limit depends on the sum of all ancestor layers, not on the control's own `layer`. In a chest screen with an outer window at 1, a cover at 1 and a window at 2, item renderers and `live_player_renderer` controls were lined up at layers 0 to 999. Both were drawn up to a sum of 94 inside the example and neither was drawn from 99. Wrapping the same cells in a panel with 148 more layers (sums of 152 and up) drew none of them (measured, mobile, 2026-11-16). The sum leaves out the ancestor layers of the vanilla chest panel, so the exact limit can only be placed between 94 and 99. A `live_horse_renderer` in the same screen was drawn at every sum (measured).
+- The limit depends on the sum of all ancestor layers, not on the control's own `layer`. In a chest screen with an outer window at 1, a cover at 1 and a window at 2, item renderers and `live_player_renderer` controls were lined up at layers 0 to 999. Both were drawn up to a sum of 94 inside the example and neither was drawn from 99. Wrapping the same cells in a panel with 148 more layers (sums of 152 and up) drew none of them (measured, mobile, 2026-11-16). The sum leaves out the ancestor layers of the vanilla chest panel, so the exact limit can only be placed between 94 and 99. A `live_horse_renderer` in the same screen was drawn at every sum (measured). This renderer places the model at a fixed depth and draws with its own projection, so screen layers do not affect it *(code)*.
 - A jsonui-tester check with the resource packs of the four examples and three test packs from outside the wiki, loaded together in both orders, showed only each name's own window with vanilla hidden, and only vanilla for a plain unnamed chest. In a game test with the four examples in one world, each entity also opened its own window without vanilla, and the unnamed Entity Menu Lab lock test entity opened the vanilla chest screen (measured).
 
 ### 2.3 Icon grid and selection
@@ -223,8 +223,6 @@ Bars have two conditions.
 
 ![v1.5.0 screen. Only the fill with no clipping shows green. The clipped bars are empty both with property_bag 0.5 and with constant expressions](/img/design/entity-menu-lab-clip.png)
 
-No way to turn a number into text was found. `('v' + #item_durability_total_amount)` drew only `v`, and a number binding put straight into `#text` drew nothing. Put numbers meant for the screen into the name or lore as text.
-
 A label draws its value only when the value is text. This comes from a side by side comparison in a chest screen (measured, mobile, 2026-11-16).
 
 | Value | As is | With `'v'` or `'§r'` in front |
@@ -235,7 +233,7 @@ A label draws its value only when the value is text. This comes from a side by s
 | Slot name `1,532/4,096` | Not shown | `'§r' +` showed `1` (only the leading integer is kept, EXP-30) |
 | Comparison `(#inventory_stack_count = '')` | Not tested | `'v' +` showed `vtrue` or `vfalse` |
 
-A value that became an integer, like a number read from a slot name, shows once text is put in front of it, but the durability values did not show in any way.
+A value that became an integer, like a number read from a slot name, shows as text once `'v'` or `'§r'` is put in front of it. The durability values did not show in any way. The durability bindings most likely arrive as real numbers, and joining a real number to text gives empty text (EXP-22) *(code, inference)*. Put durability meant for the screen into the name or lore as text.
 
 A variable inside a size array such as `[160, "$line_h"]` gave a height of 0 and the rows overlapped. Pass a whole-array variable such as `"size": "$line_size"`.
 
@@ -277,7 +275,11 @@ The Script API has no function that opens a container screen. On Discord the ans
 
 The menu entity opens with C2.
 
+C3 works because the inventory button does not pick the screen on the client. The button only sends an open-inventory request to the server, and the server picks what opens. While the player rides, the server can open the vehicle's container, the same path that opens the inventory of a chest boat or a donkey *(code)*.
+
 Seating the menu entity on the player is not used. An entity with the `parrot_tame` family can ride the shoulder seats of the vanilla player.json. A shoulder rider is not tappable unless it has `minecraft:rideable` with `rider_can_interact: true`, and even then only from one direction.
+
+When the client picks the entity to tap, it leaves out its own passengers, the vehicle it rides, and other passengers of the same vehicle *(code)*. A shoulder rider not being tappable as is matches this, and `rider_can_interact` turns on the exception to it *(code)*. Leaving out the vehicle and fellow passengers was not tested in game. So an entity the player rides, as in C3, most likely cannot be opened by tapping, and C3 opens with the inventory button (*inference*).
 
 Giving the riding entity its own `minecraft:rideable` with `rider_can_interact: true` made it tappable. It has 1 seat and `family_types` set to a family nothing has, so nothing actually rides it. With it on one shoulder and a cube without this value on the other, the interact button showed from one direction only, and pressing it opened the chest screen of the entity with this value (measured, mobile, 2026-11-16). Since the button shows from one direction only, C2 stays the better way to open a menu.
 
@@ -300,12 +302,12 @@ function spotInFront(player, distance, drop) {
 }
 ```
 
-The C3 entity has `minecraft:rideable` with `family_types: ["player"]` and seat `position: [0, 0, 0]`. While riding, the hint `action.hint.exit.<entity identifier>` showed untranslated. Add this key to the resource pack language file.
+The C3 entity has `minecraft:rideable` with `family_types: ["player"]` and seat `position: [0, 0, 0]`. While riding, the hint `action.hint.exit.<entity identifier>` showed untranslated. Add this key to the resource pack language file. Depending on the input method, the client first looks up `action.hint.exit.scheme.<name>` or `action.hint.exit.console.<name>`, and uses `action.hint.exit.<name>` when that has no translation *(code)*. The vanilla language file has both forms, as in `action.hint.exit.pig` and `action.hint.exit.scheme.pig`. Add the `scheme.` and `console.` keys only for different text per input method; otherwise the one default key is enough.
 
 Other workarounds mentioned on Discord were not tested.
 
 - Put an entity inside a furniture block with a hit box a little larger than the block, so tapping the block taps the entity (2025-10-22, 2026-03-09).
-- A 26.50 preview mention that interacting with a custom block that has a container opens the inventory screen (2026-08-21). Whether it reached a stable release was not checked.
+- A 26.50 preview mention that interacting with a custom block that has a container opens the inventory screen (2026-08-21). On Windows 1.26.65 with the "Upcoming Creator Features" experiment on, a block with `container` in `minecraft:block_entity` opened a chest UI when used (section 8.4, measured). Using it as a block menu was not tested.
 - A report that a seat far from the entity center opens the screen and closes it at once (2026-05-05). C3 put the seat at the center.
 
 ## 4. Test summary (1.26.63 mobile, 2026-11-14)
@@ -321,17 +323,17 @@ Other workarounds mentioned on Discord were not tested.
 | Condition, texture and bar from the name | Works. The data item is unlocked paper |
 | Bar from durability | Works |
 | Constant `#clip_ratio` | The bar stayed empty |
-| Number to text | Drew nothing |
+| Number to text | A value read from a slot name that became an integer showed with `'v'` or `'§r'` in front. The durability values did not show (section 2.4, 2026-11-16) |
 | Button by pressing the slot | Stopped being detected after 2 presses on touch. The first tap only picks the slot, and a tap on another slot button swapped the two slots |
 | Quick move button | The count rose every time, past 10 presses. No button item stayed in the player inventory after closing (C, C2 and C3) |
 | Opening with C, C2, C3 | All open. C2 was the easiest to use |
 | C2 | One tap opened it while walking or turning. Moving the entity every tick while open did not close or flicker the screen. Other actions while holding the menu item were not hindered |
 | C3 | The inventory button opened the menu instead of the player inventory. Sneaking got off |
-| Entity riding the player | Could not be tapped |
+| Entity on the player's shoulder | Not tappable as is. With `minecraft:rideable` and `rider_can_interact: true` it was tappable from one direction (section 3, 2026-11-16) |
 
 ## 5. What remains
 
-- Several players: whether one player can tap another player's menu entity, and cleanup when each player has an entity.
+- Several players: whether one player can tap another player's menu entity, and cleanup when each player has an entity. The client's open check lets only the entity's owner through when `restrict_to_owner` of `minecraft:inventory` is true, and treats every player the same when it is false *(code)*. One menu entity per player with that player as owner could keep others from opening it (*inference*, not tested). How to set the owner was not checked. `private` is not part of this check *(code)*. The interact button shows only while the entity's container private flag is off, though, so the need for `private: false` (section 2.1) may come from `private` turning that flag on (*inference*).
 - Behavior on Windows, iOS and controller input (the `button.menu_ok` mapping).
 - Whether the name tag shows in third person and to other players when picking by entity name (section 8.4).
 
@@ -513,7 +515,7 @@ All of these are measured. Forcing a layout pass with a label whose width change
 
 - The title of an entity chest screen is the nameTag (measured, HOST-19). `minecraft:inventory` and the Script API `Container` and `EntityInventoryComponent` have no field or function that sets the title apart from the nameTag (Microsoft Learn documentation).
 - Community reports disagree on whether the language file's `entity.<id>.name` becomes the title when there is no nameTag (**conflicting**).
-- A custom block can give a title with `container.title` (a language key or text) of `minecraft:block_entity`, and opens on tap with `show_ui_on_interaction` (on by default). A user reports it as an experimental feature in 26.50 and 26.60 (*single report*).
+- A custom block can give a title with `container.title` (a language key or text) of `minecraft:block_entity`, and opens on tap with `show_ui_on_interaction` (on by default), according to documentation and reports. A user reports it as an experimental feature in 26.50 and 26.60 (*single report*). The string `show_ui_on_interaction` is absent from the 1.26.52.3 (Android) and 1.26.63 (Windows) clients, and in 1.26.52.3 `container` reads only one key, `slot_count` *(code)*. So these builds cannot use that field or the title, and both most likely arrived in a later build (*inference*). On Windows 1.26.65 with the "Upcoming Creator Features" experiment on, a block with only `container: { "slot_count": 3 }` opened a chest UI with 3 slots and no title when used (measured).
 - `minecraft:nameable` has no field that hides the name tag (`allow_name_tag_renaming`, `always_show`, `default_trigger`, `name_actions`). There is a report that a behavior-pack-only entity with no client entity file draws no name tag (*single report*).
 - A candidate for hiding the name tag is `Entity.nameplateRenderDistance` (writable from `@minecraft/server` 2.8.0). Whether 0 hides it was not tested (*unverified*).
 
@@ -618,7 +620,10 @@ Each cell has one `live_horse_renderer` that draws one entity. Several community
 - The model is about twice as tall as the renderer control and spills out of the cell, so the cell uses `clips_children: true` (measured).
 - A player's head sits at the top of the control, but a custom entity is drawn higher in the same control. Moving the control down by 1.35 times its size puts it where a player would be (measured at sizes 16, 24 and 32). With a center line drawn on a control that was not moved, the custom entity's feet sat on the control center. Comparing 1.35, 1.5 and 1.62 times at size 16 side by side, 1.35 matched the player best and the others sat lower (measured, mobile, 2026-11-16).
 - An entity out of view (10 blocks behind you) was still drawn (measured). Cells for other real players were not tested (*unverified*).
-- Community reports say the renderer turns the model toward the cursor and that `#look_at_cursor: false` does not stop it (*unverified*). Mobile has no cursor, so this report could not be checked there. On mobile the figure was always drawn at the same default angle regardless of the entity's real facing, and a facing changed with `setRotation` did not show either (measured). Turning bones with an animation, as in section 10.3, did show in the figure (measured).
+- Community reports say the renderer turns the model toward the cursor and that `#look_at_cursor: false` does not stop it. The code agrees: the only `property_bag` key this renderer reads is `#entity_id`, and the angle depends only on the input method *(code)*. Mobile has no cursor, so this report could not be checked in game. On mobile the figure was always drawn at the same default angle regardless of the entity's real facing, and a facing changed with `setRotation` did not show either (measured). Turning bones with an animation, as in section 10.3, did show in the figure (measured).
+- The renderer overwrites the entity's body and head rotation only while drawing and restores the original values afterwards. So the entity seen in the world and the server never see the changed rotation. This overwrite is also why `setRotation` did not show in the figure *(code, not tested separately in game)*.
+- With a desktop mouse, the angle follows the distance between the control center and the cursor and turns at most about 31 degrees. On a phone with no cursor, the angle is fixed: about 16 degrees looking down and about 25 degrees to the side *(code, angles not measured in game)*.
+- The fixed phone angle could likely be cancelled by a root bone animation that turns the other way only when `q.is_in_ui`. Which sign faces forward is unknown. With a desktop mouse the angle changes, so this cancelling does not fit there *(code, inference, unverified)*.
 
 ### 10.2 Simulated player entities
 

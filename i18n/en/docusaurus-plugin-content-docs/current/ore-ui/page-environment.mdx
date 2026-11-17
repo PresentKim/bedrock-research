@@ -15,6 +15,10 @@ sources:
 
 # Page environment
 
+:::caution[Blocked from 26.64]
+The tests on this page were done with a pack replacing the in-game page (an encrypted pack or a `content.zipe` pack). That route worked up to 26.63, and in 26.64 Mojang blocked resource pack access to Ore UI for a security reason (Source: private research). The results below record the Gameface page environment of earlier versions.
+:::
+
 These are things seen on a real client while building the server-driven test screens and the renderer. The environment is Windows 1.26.52 (2026-10-27) and the engine features are Windows 1.26.60.5 (2026-10-28). iOS and iPad are written separately. In the notation, `{record}` marks something written as fact in the private research documents whose measurement conditions were not kept. (Source: repo-ore-ui-loading, private-research)
 
 ## 0. Concept: a Gameface page is not a browser
@@ -147,7 +151,7 @@ The "Media" tab of the DDUI test screen loads `<img>`, `<video>` and `<audio>` f
 
 ## 11. Community notes
 
-These are reports from community conversations (2025-10 ~ 2026-11-13). They were not tested in this repository. The trust markers are the same as in [Community reports and cross-checks](../json-ui/community-reports.mdx). (Source: private-research)
+These are reports from community conversations (2025-10 ~ 2026-11-17). They were not tested in this repository. The trust markers are the same as in [Community reports and cross-checks](../json-ui/community-reports.mdx). (Source: private-research)
 
 - **CSS**: there is a report that `display` works only with flex, inline and block and `inline-block` does not. `inline` conflicts with the Gameface document in chapter 0. **conflicting** `<br>` is turned off, so mixing formatted `span`s with text containing line breaks is hard.
 - **Pressing a DDUI button from page JS**: hbui has no Script API, so the script and the HTML are connected through a DDUI form (script, DDUI form, HTML in that order). The following form was reported as a call that presses a DDUI button from page JS. It uses `dataStoreButtonPress` from chapter 3 and was not tested in this repository.
@@ -159,4 +163,5 @@ These are reports from community conversations (2025-10 ~ 2026-11-13). They were
 - **Drag and drop overlay**: show a custom DDUI form, cover it with Ore UI HTML, intercept input in JS, and send only the result (for example `{type:'move',from,to}`) to the server as a JSON command. Sending directly inside `mouseup` dropped the connection, so it is sent about 120 ms later. Duplicate click prevention is 400 ms, and click versus drag is distinguished at 3 px (6 px for touch). Shift is read from `keydown` keyCode 16 or `event.shiftKey`, and on touch a long press is used as Shift.
 - **Imitating the HUD with DDUI input**: an approach of receiving mouse movement through DDUI to move the screen was tried. DDUI detects Shift and Space. There is a case where the HUD version was removed because of heavy lag.
 - **External content**: the engine blocks external network access from the UI (same as the chapter 1 measurement), so external content must be relayed by the server. There is a case where an external web page was shown through a server proxy.
+- **JS engine**: there is a report that Ore UI (Gameface) runs its JS on V8, and that Bedrock runs this V8 without JIT (jitless), so WebAssembly is unavailable to pages. This is a different target from the Script API engine (QuickJS). *single report*
 - **Per-device speed and version**: there is an opinion that iOS and consoles do not allow JIT so JS is slow while the Google Play version allows it. *unverified* The Switch 2 received a separately built version from 26.60. On Switch 1, if a page intercepts input you cannot leave the screen, so provide a close handler.

@@ -128,7 +128,7 @@ system.afterEvents.scriptEventReceive.subscribe((ev) => {
 
 - **`playerJoin`에는 Player 객체가 없다**: `playerId`/`playerName`만(`playerId`도 엔티티 `player.id`와 매칭이 안 된 사례). 첫 입장 처리는 `world.afterEvents.playerSpawn` + `event.initialSpawn === true`(리스폰은 false). `initialSpawn`은 "세션당" 매 입장마다 true이며 평생 첫 입장이 아니다 → 진짜 첫 입장은 태그/DP 플래그.
 - **로딩 완료 이벤트 없음**: `playerSpawn`은 클라이언트 렌더 전에 발생해 메시지/폼이 누락될 수 있다. 입장 후 최대 1분간 메시지를 못 보는 경우도. 우회: ~20~100틱 지연 후 `isValid` 확인, `world.getAllPlayers().includes(player)`가 될 때까지 폴링(+~25틱), 이동 감지(작은 impulse 후 위치 변화), 입력 권한(Camera/Movement) 50틱 비활성, 폼 `UserBusy` 재시도, BDS면 server-net `SetLocalPlayerAsInitializedPacket`. `playerDimensionChange`, `isValid`, `isChunkLoaded`, 입력 권한은 로딩 화면 중에도 true라 판별 불가. 첫 입장 폼은 `initialSpawn` 후 100~160틱 지연을 권하는 보고가 있다. `worldLoad`는 플레이어가 접속하기 전에 발생하므로 거기서 보낸 메시지는 아무도 보지 못한다.
-- **퇴장**: `world.beforeEvents.playerLeave`(2.7.0-beta에 PlayerLeaveBeforeEvent)는 early-execution 호출만 허용(DP 쓰기 OK, `system.run`은 너무 늦음). 크래시/타임아웃 시 핸들이 이미 파괴돼 있을 수 있어 캐시를 주기적으로 재조정. 싱글플레이어 호스트가 월드를 닫으면 leave가 발생하지 않는다. 플레이어별 Map은 leave에서 삭제.
+- **퇴장**: `world.beforeEvents.playerLeave`(2.7.0-beta에 PlayerLeaveBeforeEvent)는 early-execution 호출만 허용(DP 쓰기 OK, `system.run`은 너무 늦음). 다른 before 이벤트처럼 읽기 전용이라 `player.runCommand`는 실패한다. HTTP 요청은 된다는 보고가 있고(*single report*), 대안으로 `world.beforeEvents.entityRemove`가 제안됐다. 크래시/타임아웃 시 핸들이 이미 파괴돼 있을 수 있어 캐시를 주기적으로 재조정. 싱글플레이어 호스트가 월드를 닫으면 leave가 발생하지 않는다. 플레이어별 Map은 leave에서 삭제.
 - **입장/퇴장 메시지**: 스크립트로 제거 불가(`beforeEvents.playerJoin` 취소도 안 숨김). RP `.lang`의 `multiplayer.player.joined` 등을 비우거나 JSON UI로 숨김. BDS 외(로컬/Realms)에서는 이것뿐. 커스텀 메시지: `pauseNotification.title.onePlayer=%s joined your game!` + `{translate, with:[name]}`.
 - **사망 중 플레이어**: 사망 화면 동안 `player.isValid`는 false(즉시 리스폰이어도 ~1틱), 채팅창을 열면 무기한 사망 상태일 수 있다. 사망 시 태그/점수 변경 불가, `@a`가 찾지 못함 → DP(사망 중에도 동작) 또는 `playerSpawn`에서 처리.
 
@@ -197,7 +197,7 @@ system.afterEvents.scriptEventReceive.subscribe((ev) => {
 
 #### 존재하지 않는 이벤트 (2026-11 기준 보고)
 
-이동(`playerMove`), 점프(`entityJump`), 웅크림 해제, 수면 시작, 태그 추가/제거, 인벤토리 화면 열기, 제작(크래프팅/제련), 거래(주민), 낚시 성공, 바이옴 변경, 플레이어의 청크 진입, 탑승(**conflicting**, 위 `entityMount` 보고), 월드 저장, `/fill` 가로채기, 돌 생성기, 몹이 몹 먹기, 작물 짓밟기 취소, 크리티컬 히트, 경험치 구슬 픽업, 커서 아이템 변경, 청크 최초 생성, 엔티티 인벤토리 변경, 구조물 진입, 좀비의 주민 타깃팅, `entityHitEntity`/`entityHitBlock` before, 스윙 취소, 피스톤 before, 차원 변경 before, 압력판 before. 대부분 폴링(`runInterval`)이나 인벤토리 diff, 커스텀 블록/아이템 컴포넌트, 엔티티 JSON 이벤트 → `scriptevent`로 우회한다.
+이동(`playerMove`), 점프(`entityJump`), 웅크림 해제, 수면 시작, 태그 추가/제거, 인벤토리 화면 열기, 제작(크래프팅/제련), 거래(주민), 낚시 성공, 바이옴 변경, 플레이어의 청크 진입, 탑승(**conflicting**, 위 `entityMount` 보고), 월드 저장, `/fill` 가로채기, 돌 생성기, 몹이 몹 먹기, 작물 짓밟기 취소, 크리티컬 히트, 경험치 구슬 픽업, 커서 아이템 변경, 청크 최초 생성, 엔티티 인벤토리 변경, 구조물 진입, 좀비의 주민 타깃팅, `entityHitEntity`/`entityHitBlock` before, 스윙 취소, 피스톤 before, 차원 변경 before, 압력판 before, 물·용암 흐름에 따른 블록 업데이트. 대부분 폴링(`runInterval`)이나 인벤토리 diff, 커스텀 블록/아이템 컴포넌트, 엔티티 JSON 이벤트 → `scriptevent`로 우회한다.
 
 ### 데미지와 전투
 

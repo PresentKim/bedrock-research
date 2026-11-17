@@ -96,13 +96,25 @@ new CustomForm(player, "Entity Monitor")
 - A script DDUI changing an open form appears to use the path update rules of chapter 5 below `{inferred}`.
 - Changing the vanilla DDUI layout (`ddui/root`) with a pack is currently blocked ([Loading paths](./loading-paths.mdx)).
 
+### Community notes
+
+Reports from community conversations in 2026-11. Not tested in this repository. (Source: private research)
+
+- **Fonts and color codes**: in Ore UI and DDUI, text drawn with the "blurry" font (buttons and so on) does not support `§` color codes. DDUI labels use a different, non-blurry font, so color codes work there.
+- **Pack selection for button images**: someone asked why giving a server-ui form image `imageDetails: {"imageSrc": ..., "imagePackId": ...}` did not work, and there was no answer. *single report*
+- **Textures from other packs**: per a 2026-11-16 report, referring to vanilla textures by giving another pack's UUID no longer works. Copy the images you need into your own pack. Another reported trick leaves src as an empty string and appends `.png?` to the end of the path. Whether base64 images are accepted is unknown.
+
 ## 2. What a custom renderer can do
+
+:::caution[Blocked from 26.64]
+The renderer from chapter 2 on relies on a pack replacing the in-game page (`gameplay.html`). That route worked up to 26.63, and in 26.64 Mojang blocked resource pack access to Ore UI for a security reason (Source: private research). What follows is the record on Windows 1.26.52. The packet and data store rules are vanilla DDUI's channel and remain useful as reference.
+:::
 
 This is a way for the server to send only data, draw the screen it wants on top of Ore UI, and get the player's actions back. It is a custom renderer that borrows the data channel of vanilla DDUI instead of vanilla `CustomForm`.
 
 | What you want to do | Result | Evidence |
 | --- | --- | --- |
-| Put your own HTML, JS and CSS into the in-game Ore UI screen (`gameplay.html`) | **Works.** The server sends the resource pack encrypted | `{measured, code}` |
+| Put your own HTML, JS and CSS into the in-game Ore UI screen (`gameplay.html`) | **Worked** up to 26.63: the server sent the resource pack encrypted. Does not work from 26.64 | `{measured, code}` |
 | Draw screens from server data, change values in real time (4Hz or more) | **Works** | `{measured}` |
 | Get buttons, toggles, sliders, text input and selections back at the server | **Works** | `{measured}` |
 | Hundreds of buttons (a 200-item grid), tab switching, partial updates | **Works** | `{measured}` |
@@ -114,7 +126,7 @@ This is a way for the server to send only data, draw the screen it wants on top 
 | Change vanilla DDUI layouts (`ddui/root`) with a pack | Does not work. The engine reads only built-in packs | `{code}` |
 | Out-of-game menu | Not tested | none |
 
-The prerequisite is the encrypted pack (or `content.zipe`) of [Modifying Ore UI pages](./modifying-pages.mdx). A plaintext pack cannot change Ore UI files.
+The prerequisite is the encrypted pack (or `content.zipe`) of [Modifying Ore UI pages](./modifying-pages.mdx), and this prerequisite holds only up to 26.63. A plaintext pack cannot change Ore UI files.
 
 ## 3. Overall structure
 
@@ -315,4 +327,4 @@ go run . ../ddui-pack OreUiProbeContentKey0123456789AB <custom texture pack fold
 - Switch value patches to path updates (`Update`) to shrink packets (following the chapter 5 rules).
 - Whether the out-of-game menu (`index.html`) also changes with a server pack, and when it returns to the original after leaving the server.
 - A way to match the vanilla bundle names in `gameplay.html` automatically on game updates (the server cannot see the install, so it is manual per version).
-- If Mojang changes the trust decision for encrypted packs, everything is blocked. Check every version.
+- In 26.64 Mojang blocked resource pack access to Ore UI, so the whole custom renderer no longer works.

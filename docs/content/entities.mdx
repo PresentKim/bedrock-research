@@ -7,6 +7,7 @@ sources:
   - bedrock-wiki
   - ms-learn
   - bedrock-samples
+  - repo-guide
 ---
 
 # 엔티티 (동작 쪽)
@@ -109,7 +110,7 @@ BP 엔티티 파일(`BP/entities/*.json`)은 `minecraft:entity` 아래에 `descr
 - `.mcaddon`은 BP와 RP 폴더가 최상위에 있어야 하고 `behavior_packs`/`resource_packs` 안에 중첩되면 안 된다.
 - 오래된 팩에서 스폰 알이 사라지거나 새끼 말·토끼가 초기화되면 manifest의 `min_engine_version`을 현재 값(예: `[1,21,130]`)으로 올린다.
 - 보이지 않는 몹을 진단할 때는 Content Log GUI/File을 켜고 `controller.render.default`로 렌더 컨트롤러를 시험한다. `description` 바로 아래의 `animation_controllers` 키는 1.10.0 이상에서 유효하지 않다. 옛 format(1.8.0식) 렌더 컨트롤러는 `Error parsing render Controllers`를 낸다.
-- 바닐라 행동 파일은 bedrock-samples의 `behavior_pack/entities`가 항상 최신이다(zombie 약 600줄, wolf 약 1200줄). 다만 샘플 클라이언트 엔티티에는 빠진 것이 있다(zombie.entity.json의 컨트롤러와 spear 변수 오류, iron golem RP의 `controller.render.iron_golem` 누락). 보트 엔티티는 텍스처만 바꿀 수 있다(보트 뼈와 애니메이션은 하드코딩). 엔티티 문서의 이벤트 목록에는 바닐라 이벤트가 많이 빠져 있고 `damage_sensor` 문서에는 자료형과 버전 정보가 없다. (출처: bedrock-samples)
+- 바닐라 행동 파일은 bedrock-samples의 `behavior_pack/entities`가 항상 최신이다(zombie 약 600줄, wolf 약 1200줄). 다만 샘플 클라이언트 엔티티에는 빠진 것이 있다(zombie.entity.json의 컨트롤러와 spear 변수 오류, iron golem RP의 `controller.render.iron_golem` 누락). 보트 엔티티는 텍스처만 바꿀 수 있다(보트 뼈와 애니메이션은 하드코딩). 샘플의 `minecart.json`과 `minecart_v1.0.json` 중 v1.0은 옛 버전일 뿐이다. 엔티티 문서의 이벤트 목록에는 바닐라 이벤트가 많이 빠져 있고 `damage_sensor` 문서에는 자료형과 버전 정보가 없다. (출처: bedrock-samples)
 - `minecraft:lightning_bolt`는 리소스 템플릿에 type_family만 있고 geometry와 애니메이션이 없다. 불이나 피해 없는 번개는 자체 모델을 가진 더미 엔티티로 만든다.
 - 서드파티 애드온 제작 앱(MAM)은 권하지 않는다. Blockbench와 수작업 JSON을 쓴다.
 - 구조 오류: 그룹 이름 없이 `component_groups` 바로 아래에 둔 컴포넌트는 엔티티 로드를 막고, `component_groups` 안에 중첩한 `events`는 vindicator 복제본을 떠오르고 멈추게 했다. 같은 키를 두 번 쓰는 JSON(`minecraft:physics` 두 번)도 피한다.
@@ -363,7 +364,8 @@ BP 엔티티 파일(`BP/entities/*.json`)은 `minecraft:entity` 아래에 `descr
 - 물에 들어가면 하차하는 문제는 좌석을 높여야 했다. 월드를 다시 불러오면 하차할 수 있으니 센서로 감지해 더미를 재스폰하고 다시 태운다.
 - 좌석이 원점에서 약 5.8블록 넘게 멀면 엔티티 인벤토리가 즉시 닫힌다(거리 검사, 해결책 없음). 탑승자의 `is_collidable`이 탈것을 밀어내는 문제도 `minecraft:physics`로 끄지 못했다.
 - 고정 좌석 여러 개는 좌석을 가진 본체와 미리 스폰한 탑승 엔티티를 쓴다. 회전 포탑은 자식 엔티티를 본체의 탑승자로 두고 플레이어를 포탑에 태운다.
-- 플레이어에게 엔티티를 태우려면 `/ride`와 parrot 계열 family(`parrot_tame`)를 쓰거나 `player.json` rideable을 수정한다. 위치와 회전은 `player.json` rideable이 정한다. 물고기 몹은 다른 엔티티를 탈 수 없다(하드코딩). 탄 엔티티는 공격, 인계철선, 피스톤, 압력판, 흐르는 물에 취약하다. 탑승자는 밀리지 않고 1인칭에서 렌더링되지 않는다.
+- 플레이어에게 엔티티를 태우려면 `/ride`와 parrot 계열 family(`parrot_tame`)를 쓰거나 `player.json` rideable을 수정한다. 위치와 회전은 `player.json` rideable이 정한다. 물고기 몹은 다른 엔티티를 탈 수 없다(하드코딩). 탄 엔티티는 공격, 인계철선, 피스톤, 압력판, 흐르는 물에 취약하다. 탑승자는 밀리지 않고 1인칭에서 렌더링되지 않는다. 2026-11-15에도 parrot식 좌석 엔티티는 `player.entity.json`과 렌더 컨트롤러를 고쳐도 1인칭에서 보이지 않았고, 제안된 대안은 어태처블(아이템이 있어야 함)이었다.
+- 몹을 한자리에 붙잡아 두려면 보이지 않는 좌석 엔티티에 태우고 좌석을 주기적으로(1초마다) 제자리로 옮긴다. 허스크, 여우, NPC, 주민, 알레이가 이렇게 앉은 채 돌아다니지 않았다. `{실측}`(2026-11-17, 출처: repo-guide)
 - 좀비 기수: `/ride ... start_riding ... teleport_rider`는 어른 좀비에게 실패하고 아기 좀비만 된다. 아기 피글린만 호글린을 탄다. Camel husk(1.21.130)는 `/summon minecraft:camel_husk ~ ~ ~ ~ ~ minecraft:spawn_with_rider`로 소환한다.
 - 말 체력 바 숨기기는 `/hud @s hide horse_health`(되돌리기 `/hud @s reset horse_health`) 또는 체력 value=max=min=1이다. 바닐라 말/낙타/돼지 좌석 위치는 행동 파일에서만 바뀐다. 리드 위치는 모델에 `lead` 로케이터를 추가한다.
 - 배/광산 수레가 엔티티를 태우지 않게 하려면 warden 런타임 ID를 쓰거나 폭을 1.375보다 크게 한다.
@@ -564,7 +566,9 @@ proj.shoot({ x: v.x * 1.5, y: v.y * 1.5, z: v.z * 1.5 });
 ## 13. 렌더 거리, 디더링, 그림자, 히트박스
 
 - 렌더 거리: 커스텀 엔티티는 약 64~70블록 밖에서 렌더링되지 않고 늘릴 수 없다. 렌더링은 히트박스가 시야에 있느냐에 묶여 있다. 뒤에 있으면 사라지는 큰 모델은 geometry description의 `visible_bounds_width/height/offset`을 키운다. ticking area와 `should_update_bones_and_effects_offscreen`은 도움이 되지 않는다. 2026-11에도 같은 답이 나왔다. 아주 큰 엔티티는 `visible_bounds`를 키워도 사라진다. (confirmed)
-- ender dragon 런타임 ID(conflicting): ender dragon만 멀리서 렌더링된다. `minecraft:ender_dragon` 런타임 ID로 된다는 사람과 안 된다는 사람이 있고 부작용이 있다. 대안은 바닐라 ender dragon 클라이언트 엔티티를 교체하고 float 속성과 렌더 컨트롤러로 모델을 바꾸거나, 플레이어 가까이에 프록시 엔티티를 두거나, 먼 행성은 파티클로 LOD를 바꾸는 것이다(파티클은 멀리 보임). 투명한 ender dragon을 함께 두는 트릭도 공유됐다. 다른 런타임 ID로 멀리 렌더링하려는 트릭은 엔티티를 깨뜨렸다.
+- ender dragon 런타임 ID(conflicting): ender dragon만 멀리서 렌더링된다. `minecraft:ender_dragon` 런타임 ID로 된다는 사람과 안 된다는 사람이 있고 부작용이 있다. 대안은 바닐라 ender dragon 클라이언트 엔티티를 교체하고 float 속성과 렌더 컨트롤러로 모델을 바꾸거나, 플레이어 가까이에 프록시 엔티티를 두거나, 먼 행성은 파티클로 LOD를 바꾸는 것이다(파티클은 멀리 보임). 투명한 ender dragon을 함께 두는 트릭도 공유됐다. 다른 런타임 ID로 멀리 렌더링하려는 트릭은 엔티티를 깨뜨렸다. ender dragon 런타임 ID는 렌더링을 유지하지만 하드코딩된 드래곤 AI를 뺄 수 없다.
+- 멀리 있는 텍스트 엔티티(conflicting): `minecraft:tick_world` radius를 키워도 사라졌다는 보고와 늘 동작했다는 보고가 엇갈린다. 흔한 우회는 실제 엔티티를 플레이어 곁에 두고 모델만 애니메이션(뼈나 루트 오프셋)으로 멀리 옮기는 것이다. 멀리서 보는 납작한 텍스트 면의 z-fighting은 0.01 px가 아니라 0.1 px쯤 띄워 막는다(거리가 멀수록 간격이 더 필요하다).
+- 특정 엔티티 변형에만 인챈트 반짝임처럼 보이는 효과는 렌더 컨트롤러 텍스처 배열로 다시 칠한 텍스처를 바꿔 끼우는 방법이 동작했고 warden 런타임 ID 방법은 동작하지 않았다. 공유된 템플릿은 1인칭 주먹 애니메이션을 없앴다. (single report)
 - 디더링(카메라 가까이에서 흐려짐)은 플레이어 접근성 설정 "mob dithering"에서 오며 팩으로 끌 수 없다. 히트박스 0으로 꺼진다는 보고가 있지만 다른 것이 깨질 수 있다.
 - 그림자 크기는 히트박스/scale 컴포넌트를 따른다. 투명화 그림자 제거에는 `minecraft:renders_when_invisible` + 무한 투명 `spell_effects`를 쓴다.
 - 충돌 박스는 width/height만 있고 x/z를 따로 줄 수 없으며 여러 개도 없다. 우회법은 투명 블록이나 블록 안으로 튀어나온 박스다. 피해 히트박스만 바꾸는 `custom_hit_test`가 있지만 고정이고 회전하지 않으며 스크립트로 감지할 수 없다. 머리 히트박스는 본체에 탄 별도 머리 엔티티가 피해를 전달하게 한다(엔티티 두 개, 성능 비용).
@@ -595,7 +599,7 @@ proj.shoot({ x: v.x * 1.5, y: v.y * 1.5, z: v.z * 1.5 });
 ### player.entity.json (RP)
 
 - 1.21.130 창 업데이트로 깨졌다. Mojang이 `variable.melee_spear_equipped`, 창 컨트롤러 두 개, 바뀐 1인칭 컨트롤러를 추가해, 오래된 사본으로 덮어쓰는 팩은 창 애니메이션, 휘두르기/공격, 수영, 1인칭이 깨지고 `Unknown variable`이 난다. 해결법은 설치된 게임의 최신 바닐라 파일(`...\Content\data\resource_packs\vanilla_1.21.130\entity\player.entity.json`)에서 시작해 자기 애니메이션, 스크립트, 컨트롤러를 다시 추가하는 것이다. 애니메이션 컨트롤러와 1인칭 애니메이션 파일도 같이 가져온다. (confirmed)
-- bedrock-samples가 뒤처졌던 시기가 있다. 1.21.130.3 플레이어 클라이언트 엔티티는 `first_person_item_rotation_factor`와 pre_animation/initialize가 빠져 있고 창 오류가 났다. 커뮤니티 바닐라 리소스 팩 저장소도 `variable.melee_spear_equipped`가 없었다. 게임 설치 폴더의 파일을 쓴다.
+- bedrock-samples가 뒤처졌던 시기가 있다. 1.21.130.3 플레이어 클라이언트 엔티티는 `first_person_item_rotation_factor`와 pre_animation/initialize가 빠져 있고 창 오류가 났다. 커뮤니티 바닐라 리소스 팩 저장소도 `variable.melee_spear_equipped`가 없었다. 게임 설치 폴더의 파일을 쓴다. `v.first_person_item_rotation_factor`는 `v.first_person_rotation_factor`의 새 이름이다. 2026-11-14 기준 bedrock-samples에는 이 이름과 창 변수(`v.melee_spear_equipped`(bool), `v.fp_melee_spear_attack_item_rotation_z`/`_y`, `v.fp_melee_spear_attack_item_position_x`/`_y`/`_z`, `v.tp_melee_spear_base_arm_rotation_x` 외 여럿)가 없어, 이것이 빠진 커스텀 플레이어 클라이언트 엔티티는 창을 들 때 오류를 낸다. 현재 바닐라 플레이어 엔티티는 프리뷰 버전 파일에서 가져온다.
 - 창 애니메이션에 필요한 변수: 플레이어 `initialize`에 `variable.melee_spear_equipped`, `variable.first_person_item_rotation_factor = 0.625` 등. 창은 애니메이션 컨트롤러 파일이 따로 있다. 수정 후에는 게임 전체를 재시작한다. 창 어태처블 오류 `q.item_slot_to_bone_name(c.item_slot) returned a bone name that doesn't exist`는 `spear` 뼈가 없는 것으로 min_engine_version 불일치와 관련이 있다.
 - `can't find animation first_person_breathing_bob`는 animations에 `"first_person_breathing_bob": "animation.player.first_person.breathing_bob"`를 추가해 고친다. 바닐라 흔들림을 없애려면 그 애니메이션을 덮어쓴다.
 - 페르소나/캐릭터 생성기 스킨(조건부): `player.entity.json`을 덮어쓰면 페르소나 스킨이 꺼져 모두 Steve가 된다. 플레이어 클라이언트 엔티티에 `min_engine_version`을 정의하면 페르소나 렌더 컨트롤러가 삽입된다. bedrock-samples의 빈 템플릿에 `player.entity.json`이 들어 있으면 기본 스킨이 모두 Steve가 되니 지운다. 기본 스킨 텍스처는 하드코딩이다.
@@ -608,6 +612,7 @@ proj.shoot({ x: v.x * 1.5, y: v.y * 1.5, z: v.z * 1.5 });
 - 플레이어 모델 등록 한계가 약 1.14MB라는 언급이 있다. (single report) 오프핸드 지도 위치/크기는 JSON UI가 아니라 엔티티/플레이어 파일이 정한다. 26.x "tiny takeover" 업데이트 후 옛 체력 표시 팩과 함께 쓰면 새끼 동물이 거대해 보인다.
 - `player.entity.json`을 덮어쓰지 않고 플레이어 애니메이션을 재생하려면 `/playanimation`이나 스크립트 `playAnimation`을 쓴다. 2026-10에도 `player.entity.json`에 애니메이션을 추가하면 스킨과 1인칭이 깨질 수 있다는 보고가 나왔다. RP만으로 오프핸드 표시를 바꿀 수는 없다.
 - Actions & Stuff 호환은 그 팩의 `player.json`에 자기 내용을 손으로 합치거나 서브팩을 쓴다.
+- 지도에서 플레이어를 숨기려면 투명화 대신 애니메이션으로 플레이어 모델을 0.01로 스케일한다. (single report)
 - 1인칭 피격 붉은 효과는 `is_hurt_color`로 끈다. 화면 흔들림(view bob)은 리소스 팩으로 바꿀 수 없고 공격 레이캐스트 원점도 고정이다.
 - 스킨: 3D 크리에이터 스킨은 감지할 수 없고 커스텀 모델을 깨뜨린다. 2D 64x/128x 스킨만 동작하고 클래식 스킨은 커스텀 geometry를 쓰지 않는다. slim/classic 구분은 `v.short_arm_offset_left == 0.5`로 한다(1인칭을 한 번 거쳐야 값이 정해짐). 모델을 강제한 경우에는 구분할 수 없다는 보고가 있다.
 - 해결되지 않은 것: 엘리트라 앞으로 숙이기 보정, 탑승 위치/카메라 이동(카메라는 RP에서 바꿀 수 없음), 낙타식 좌석이 등을 따라가게 하기, 탈것/탑승자 회전 동기화.
@@ -631,7 +636,8 @@ proj.shoot({ x: v.x * 1.5, y: v.y * 1.5, z: v.z * 1.5 });
 ## 16. 블록 보조 엔티티, 더미 엔티티, 홀로그램
 
 - 블록처럼 동작하는 엔티티(인벤토리, 아이템 전시, 애니메이션, 상호작용 가구, 서랍)는 `playerPlaceBlock`에서 투명 엔티티를 스폰하고(`system.run` + `dimension.spawnEntity(id, block.center())`) 파괴할 때 죽여서 만든다. 블록마다 엔티티를 두면 많을 때 렉이 생기고 `/kill @e`에 함께 지워진다. 떨어지는 블록식 커스텀 블록은 같은 텍스처의 커스텀 엔티티가 필요하다. iron golem/wither 같은 멀티블록 소환은 하드코딩이라 스크립트로 재현한다.
-- 인벤토리를 가진 블록은 블록에 인벤토리 컴포넌트가 없으니 블록 위치에 투명 엔티티를 둔다. `minecraft:inventory`(`inventory_size`, 호퍼 상호작용을 피하려고 `container_type` `"inventory"`, `can_be_siphoned_from` 없음), `minecraft:physics` `{has_gravity:false, has_collision:false, push_towards_closest_space:false}`, 질식 방지 `minecraft:breathable`(`breathes_solids:true`, `suffocate_time:0`, `breathes_air/water/lava:true`, `generates_bubbles:false`)를 둔다. `dimension.getEntitiesAtBlockLocation`으로 찾고 블록의 `onBreak`에서 인벤토리를 떨군다. UI는 JSON UI가 필요하다.
-- 더미 엔티티는 다른 엔티티가 제거된 뒤에도 태그나 상태를 보관하기 좋다(컴포넌트가 적고 RP가 필요 없다). 투명 홀로그램 엔티티는 빈 모델(더 나음) 또는 투명 텍스처를 쓴다. 가짜 떨어진 아이템은 텍스처 없는 엔티티에 mainHand 아이템과 회전 애니메이션을 준다.
+- 실험 기능 없이는 블록에 인벤토리 컴포넌트가 없으니, 인벤토리를 가진 블록은 블록 위치에 투명 엔티티를 둔다(실험 기능 "Upcoming Creator Features"의 `minecraft:block_entity` `container`는 [블록](./blocks.mdx)을 본다). `minecraft:inventory`(`inventory_size`, 호퍼 상호작용을 피하려고 `container_type` `"inventory"`, `can_be_siphoned_from` 없음), `minecraft:physics` `{has_gravity:false, has_collision:false, push_towards_closest_space:false}`, 질식 방지 `minecraft:breathable`(`breathes_solids:true`, `suffocate_time:0`, `breathes_air/water/lava:true`, `generates_bubbles:false`)를 둔다. `dimension.getEntitiesAtBlockLocation`으로 찾고 블록의 `onBreak`에서 인벤토리를 떨군다. UI는 JSON UI가 필요하다.
+- 더미 엔티티는 다른 엔티티가 제거된 뒤에도 태그나 상태를 보관하기 좋다(컴포넌트가 적고 RP가 필요 없다). 투명 홀로그램 엔티티는 빈 모델(더 나음) 또는 투명 텍스처를 쓴다. 가짜 떨어진 아이템은 텍스처 없는 엔티티에 mainHand 아이템과 회전 애니메이션을 준다. 몸이 보이지 않는 엔티티에 `enable_attachables`, `held_item_scale`을 주면 든 아이템만 그 배율로 공중에 보이고(아무 바닐라 아이템이나, 블록은 3D로), `hide_held_items`로 숨긴다. `{실측}`(2026-11-17, 출처: repo-guide, 자세한 내용은 [어태처블과 아이템 렌더링](../rendering/attachables-and-items.mdx))
+- 플레이어별 화면 필터: 플레이어마다 머리 위에 숨은 엔티티를 두고 플레이어 ID로 태그를 붙인 뒤 `dim.getEntities({location, maxDistance: 12, families: ['xfiltersdemo:filter'], tags: [...]})`로 찾으면 각 플레이어가 자기 필터를 가진다(게임플레이 화면에만 적용).
 - 경매장 패턴: 아이템 스택을 상자 엔티티에 넣어 구조물로 저장하고(`structureManager.createFromWorld(id, dim, loc, loc, {saveMode: StructureSaveMode.World, includeBlocks:false, includeEntities:true})`), UI용 표시 정보는 따로 보관한다.
 - 우는 천사 엔티티는 스크립트 FOV 검사 대신 creaking의 `look` 컴포넌트를 쓸 수 있다. 조명은 빛 블록으로 만드는 동적 조명이 불안정하고 컴포넌트는 없다. 유황 큐브가 커스텀 블록을 받아들이게 하려면 블록/아이템 태그 `minecraft:sulfur_cube_archetype_bouncy`를 쓴다.

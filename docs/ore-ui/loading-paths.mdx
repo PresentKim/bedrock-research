@@ -9,6 +9,10 @@ sources:
 
 # 로딩 경로와 신뢰 판정
 
+:::caution[26.64부터 막힘]
+이 페이지의 신뢰 판정 분석은 Android 1.26.52.3, 실측은 Windows 1.26.52 기준이다. 암호화 팩과 `content.zipe` 팩이 Ore UI 파일을 바꾸던 길은 26.63까지 동작했고, 26.64에서 Mojang이 보안 문제로 리소스팩의 Ore UI 접근을 막았다(출처: 비공개 조사). 26.64 이후 판의 판정 방식은 분석하지 않았다.
+:::
+
 주소는 Android 1.26.52.3 arm64 분석 기본 주소(ELF 주소 + 0x100000)다. (출처: repo-ore-ui-loading)
 
 ## 0. 개념: 팩 스택과 "신뢰"
@@ -37,12 +41,12 @@ body { background-color: rgba(255, 0, 255, 0.6) !important; }
    - 경로에 `../`나 `..\`가 있으면 거부한다.
    - 경로를 정규화한 뒤 **팩 스택(0x110바이트 팩 항목 배열)을 앞에서부터 돈다.** 각 팩에서 팩 접근 전략의 가상 함수(+0x30)가 참일 때만 그 팩에 파일이 있는지(`@0x112ac30c`, 하위 팩, 팩 순, 가상 함수 +0x38 = `hasAsset(path, false, false)`) 본다. 있으면 그 팩에서 준다.
    - 없으면 `gui/dist/` + 기준 폴더 + 경로를 **앱 패키지 파일 시스템**(`Core::FileSystem`, `@0x09cf66f8`)에서 연다.
-3. **필터는 `isTrusted()`다**: 바로 다음 슬롯(+0x38)이 `hasAsset`이고, 배드락 `PackAccessStrategy`의 가상 함수 순서(`... isWritable`, `setIsTrusted`/`isTrusted`, `hasAsset` ...)와 맞는다. "내장 팩과 마켓플레이스 팩만 신뢰된다"는 처음 짐작은 틀렸다. 서버가 보낸 암호화 팩도 신뢰된다.
+3. **필터는 `isTrusted()`다**: 바로 다음 슬롯(+0x38)이 `hasAsset`이고, 배드락 `PackAccessStrategy`의 가상 함수 순서(`... isWritable`, `setIsTrusted`/`isTrusted`, `hasAsset` ...)와 맞는다. "내장 팩과 마켓플레이스 팩만 신뢰된다"는 처음 짐작은 틀렸다. 분석한 판에서는 서버가 보낸 암호화 팩도 신뢰되었다.
 4. `routes.json`(`@0x09cd39dc`)과 폰트(`gui/dist/hbui/fonts`, `@0x096de4bc`)는 설치 폴더에서만 읽는다.
 
-8Crafter Ore UI Customizer의 "Export as RP"가 "RP에서 Ore UI를 불러오게 하는 모드가 필요하다"고 적은 것은 평문 팩 기준으로 맞다. 클라이언트 모드 없이도 암호화 팩이면 된다.
+8Crafter Ore UI Customizer의 "Export as RP"가 "RP에서 Ore UI를 불러오게 하는 모드가 필요하다"고 적은 것은 평문 팩 기준으로 맞다. 26.63까지는 클라이언트 모드 없이도 암호화 팩이면 됐고, 26.64부터는 암호화 팩도 막혔다.
 
-## 2. 암호화 팩은 신뢰된다
+## 2. 암호화 팩은 신뢰되었다 (26.63까지)
 
 ### 접근 전략별 판정 `{코드}`
 
@@ -76,7 +80,7 @@ body { background-color: rgba(255, 0, 255, 0.6) !important; }
 
 ### 로컬 팩(`content.zipe`) `{실측, 2026-10-27}`
 
-평문 팩 폴더에 `content.zipe`를 더하면 키 없이도 `DirectoryPackWithEncryptionAccessStrategy`로 열리고, 신뢰되어 Ore UI 파일을 바꾼다. 엔진은 이 파일이 있는지만 본다. 자세한 시험 결과는 [Ore UI 페이지 바꾸기](./modifying-pages.mdx)의 로컬 시험 절에 있다.
+26.63까지는 평문 팩 폴더에 `content.zipe`를 더하면 키 없이도 `DirectoryPackWithEncryptionAccessStrategy`로 열리고, 신뢰되어 Ore UI 파일을 바꿨다. 엔진은 이 파일이 있는지만 보았다. 서버가 보낸 평문 팩에 빈 `content.zipe`를 넣어도 게임 중 Ore UI 페이지가 쓰였다 `{실측}`([리소스팩 전달](../server/resource-pack-delivery.mdx)). 26.64부터는 막혔다. 자세한 시험 결과는 [Ore UI 페이지 바꾸기](./modifying-pages.mdx)의 로컬 시험 절에 있다.
 
 ## 3. 버튼 스타일 다리 `vanilla.resourcePackOverrides` `{코드}`
 
@@ -123,7 +127,7 @@ body { background-color: rgba(255, 0, 255, 0.6) !important; }
 | 사망 화면 버튼 | **노랑 바탕·빨강 글자, hover는 하늘 바탕·초록 글자.** 팩의 텍스처와 글자색이 Ore UI 버튼에 들어갔다 |
 | 사망 화면 배경 | 자홍이 아니다. 평문 팩의 `hbui/...css`는 쓰이지 않았다 |
 
-정리: 다리와 `pack://` 텍스처는 신뢰하지 않는 서버 팩으로도 된다. Ore UI 파일 조회는 평문 서버 팩에서는 되지 않는다. 같은 팩을 암호화해 보내면 된다.
+정리: 다리와 `pack://` 텍스처는 신뢰하지 않는 서버 팩으로도 된다. Ore UI 파일 조회는 평문 서버 팩에서는 되지 않는다. 26.63까지는 같은 팩을 암호화해 보내면 됐다.
 
 탐침 요령: JSON UI 화면의 패널을 `ignored: true`로 숨겼는데 화면이 그대로 보이면 그 화면은 Ore UI다. 이 방법으로 어떤 화면이 어느 기술로 열렸는지 가릴 수 있다.
 
@@ -144,8 +148,7 @@ body { background-color: rgba(255, 0, 255, 0.6) !important; }
 ## 6. 규칙 요약
 
 1. 평문 팩(Zip, Directory 접근 전략)은 신뢰되지 않으므로 `hbui/`의 파일이 무시된다.
-2. 암호화 접근 전략 세 종류는 팩 UUID, 서명, manifest와 상관없이 언제나 신뢰된다.
-3. 평문 팩으로도 버튼 스타일 다리와 `pack://` 텍스처는 닿는다.
+2. 분석한 판(1.26.52)에서 암호화 접근 전략 세 종류는 팩 UUID, 서명, manifest와 상관없이 언제나 신뢰되었다. 이 길은 26.63까지 동작했고 26.64부터 막혔다.
+3. 평문 팩으로도 버튼 스타일 다리와 `pack://` 텍스처는 닿는다(1.26.52 실측).
 4. 폰트와 `routes.json`은 팩이 아닌 설치 폴더에서만 읽는다.
 5. DDUI 레이아웃(`ddui/root`)은 내장 팩만 읽힌다.
-6. 판이 바뀔 때마다 접근 전략 표의 +0x30 구현과 번들 파일 이름 해시를 다시 확인한다.

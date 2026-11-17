@@ -29,6 +29,7 @@ Put the pack list in `world_behavior_packs.json` and `world_resource_packs.json`
 
 Check the active packs with `/packstack`, and on the client side with `/packstack client`. `texturepack-required=true` in `server.properties` alone does not force a pack. "Pack Stack - None" in the log (including modded BDS) means the pack is not registered in world_behavior_packs.json/world_resource_packs.json.
 
+- **Large server packs slow down joining**: a server add-on of about 100 MB with many custom blocks took a very long time to join because of the pack download on connect. *(single report)*
 - **Marketplace packs and servers**: Marketplace packs cannot be moved to BDS, and Marketplace add-ons cannot be used on a server. On a Realm, add an add-on you installed yourself in the Realm settings. The workaround for using non-Marketplace add-ons on consoles exists only on Xbox and not on PlayStation.
 
 - **System packs (Preview 26.30.28 / Stable 26.30)**: if you create `system_behavior_packs` and `system_resource_packs` in the BDS folder yourself, the packs inside apply to every world automatically, and their IDs cannot be reused by other packs. If a pack is not per-world, world_*_packs.json is not needed. Load order follows `pack.name`, not the folder name (test: "Resource Pack 1" before "2"). Changelog wording: "Added new pack folder to dedicated server for system packs".
@@ -126,6 +127,8 @@ Run BDS in pack optimization mode to bundle loose files into an archive and stri
 
 (Source: repo-ore-ui-loading, analysis of the native client libraries of Windows 1.26.52 and Android 1.26.52.3, and measurements on the Dragonfly test server on 2026-10-23)
 
+This section describes the behavior up to 26.63. From 26.64, resource-pack access to Ore UI is blocked for a security reason (Source: private research, no details published).
+
 **If the server sends a resource pack encrypted with a content key, that pack can change Ore UI HTML, JS and CSS** `{code, measured}`. Ore UI file lookup (`ui://...`) searches the pack stack first before going to the install folder, and it looks at **trusted packs only**. `hbui/*.css` put in a plaintext server pack did not apply, and it applied when the same pack was sent encrypted.
 
 ### isTrusted by access strategy
@@ -142,7 +145,7 @@ Run BDS in pack optimization mode to bundle loose files into an archive and stri
 - **The pack UUID and manifest content are not used in the trust decision.** Even if you imitate a Marketplace add-on UUID, a plaintext pack is opened with the Zip/Directory strategy and the decision looks only at the install location.
 - `Failed encrypted file signature check` in the binary was code on the world storage (LevelDB) side. The pack signature (`signatures.json`) check was not followed, and a pack that was only encrypted without a signature was trusted in measurement.
 - The first guess that "only built-in packs and Marketplace packs are trusted" was wrong.
-- Mojang may change this decision in the future, so check for each release.
+- Resource-pack access to Ore UI is blocked from 26.64, so this table applies only up to 26.63.
 
 ### Marketplace encryption format (implemented by the test server)
 

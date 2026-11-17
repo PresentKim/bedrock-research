@@ -2,7 +2,7 @@
 title: Chest UI (Chest-UI and the entity chest)
 description: The structure of the Chest-UI working pack that draws an action form as a Java-server-style chest screen, changes in the item icon expression and the numeric ID table, and the entity chest method where real items move
 sidebar_position: 5
-sources: [repo-chest-ui, chest-ui, private-research, bedrock-wiki]
+sources: [repo-chest-ui, chest-ui, private-research, bedrock-wiki, repo-guide]
 ---
 
 "Chest UI" refers to two things. One is the **form method**, which reskins the script `ActionFormData` with a resource pack so it looks like a chest (no items move; they are only buttons). The other is the **entity chest method**, which makes the client open a real chest window (items are actually moved). This page explains the two in turn. The rule for choosing is one line: use a form for screens where nothing is put in or taken out, and use a chest only where real items move.
@@ -182,6 +182,18 @@ tedo0627/InventoryUIResourcePack (MIT, as the server documentation states. I cou
 ### 5.3 Take-all and put-all buttons (Quick Container technique)
 
 Put one button next to the chest window and overlap as many invisible buttons as there are slots under it. If you change each button's press into that slot's vanilla quick move (`button.container_auto_place`, `consume_event: false`), one click becomes a shift-click on every slot. The server receives a plain item move request per slot, so no server code is needed. Take-out moves the chest slots (`$quick_container_size`), and put-in moves the 27 inventory slots (including the hotbar if `$quick_put_hotbar`). "Put only what exists" moves only inventory slots whose item (`#item_id_aux`) is also in one of the front 54 chest slots. JSON UI has no loops, so a generator writes a named control (`quick_c<n>`) per chest slot and 54 comparison bindings per inventory slot into the file. The hidden button reads that slot control's `#item_id_aux` with `source_control_name` (first match from the screen root) and is visible only when the same item exists. The tooltip is a label inside the button's hover state, so translation keys resolve (the `#hover_text` of `common.hover_text` is not translated). The icons are vanilla `up_arrow`, `down_arrow` and `store_filter_icon` (Source: private research).
+
+### 5.4 Opening a container screen from a script
+
+- **Not possible in stable** `{code}`: in stable releases up to 1.26.63, a script cannot open a container screen. `interactWithEntity` and `interactWithBlock` exist only on `SimulatedPlayer` of `@minecraft/server-gametest`, so they cannot be used on a real player. When you need a chest window, use the entity chest above.
+- **Virtual container (26.70.24 preview, beta)**: a beta API that appeared in `@minecraft/server` `2.13.0-beta.1.26.70-preview.24`. In the preview the "Beta APIs" experiment must be on. It opens a chest-like screen for that player without an entity. This wiki did not test it in game (Source: private research, type definitions).
+  - `world.virtualContainerManager.create({ size, title? })` returns a `VirtualContainer`. It extends `Container` and has `open(player)`, `close(player?)`, `getViewers()` and `title`. `size` is 1 to 54 slots.
+  - `open` throws `VirtualContainerOpenError`. The reasons are `ContainerScreenOpen`, `PlayerDead`, `PlayerNotReady`, `PlayerSleeping`, `PlayerSpectating` and `PreviousScreenClosing`.
+  - The events are `VirtualContainerCloseAfterEvent` (`items`, `reason`: `PlayerClosed`, `PlayerDied`, `PlayerLeft`, `PlayerSpectating`, `ServerClosed`, `UserBusy`) and `VirtualContainerItemChangeAfterEvent` (`slot`, `beforeItemStack`, `itemStack`), and a subscription can filter with `{ containers }`.
+  - The contents are lost on reload. A workaround moves a chest's contents in on open and writes them back on close.
+  - The JSON UI file is `ui/virtual_container_screen.json`. It has the same structure as the chest screen, so chest screen modifications carry over, and the title can tell several screens apart. The default look is the plain chest screen. To open it from a JSON UI button, make the button cause an item drop and have the script detect it and open the screen (one sacrificial slot is needed). There is a report that item locking worked only in the player inventory.
+- **The server chooses which inventory screen opens** `{code}`: pressing E makes the client send only a request to open the inventory, and the server decides what opens. So while riding, the mount's container (chest boat, donkey) can open. The vanilla server opens a container screen only when the player is not riding and has no container open. This condition matches `ContainerScreenOpen` and `PreviousScreenClosing` of `VirtualContainerOpenError` `{inferred}`. (Windows 1.26.63 and Android 1.26.52.3 analysis)
+- **The plain inventory screen cannot be detected**: a script cannot know that a player opened the plain inventory screen. The `containerOpened` and `containerClosed` events cover only container UIs. `q.is_in_ui` cannot send data to the server either (Source: private research).
 
 ## 6. Rule summary
 

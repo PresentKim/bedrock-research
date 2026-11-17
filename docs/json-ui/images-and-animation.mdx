@@ -271,6 +271,13 @@ Cinnabar(`CN`)는 26.30 네이티브 클라이언트의 JSON UI 해석기를 재
 - **[ANI-42]** NPC 편집 화면의 외형 목록 초상(`npc_interact.skin_model`)에 리소스 팩이 `property_bag`의 `rotate_mode: "auto"`와 `scale_*` 0.6을 더해도 바뀌지 않았다. 호버한 외형만 돌았고, 초상은 실제 NPC가 고개를 돌리면 따라 돌았다. 화면이 칸마다 이 키들을 다시 써 넣는 것으로 보인다. 이 화면의 초상은 팩으로 변환할 수 없다. `&#123;실측, 추론&#125;` (출처: UKP)
 - **[ANI-43]** `progress_bar_renderer`는 바인딩 없이 `property_bag`의 정적 값으로도 그린다. `#progress_bar_total_amount`, `#progress_bar_current_amount`와 보이기 키 `#progress_bar_visible`, `#touch_progress_bar_visible`(둘 다 `true`)를 적은 막대가 그려졌고, 보이기 키를 빼면 그리지 않았다(터치 입력 기기). 기본 모양은 회색 바탕에 초록 채움이다. `is_durability: true`면 바탕이 검정이 되고 채움 색이 비율을 따랐다(37%는 주황, 90%는 초록). 바닐라 꾸러미 막대가 쓰는 `is_storage_bar`, 내구도 막대가 쓰는 `drop_shadow`, `round_value`는 높이 4px 막대에서 차이를 판정하지 못했다. `&#123;실측, 바닐라&#125;` (출처: UKP, VN ui_common.json `durability_bar`)
 
+## 9.11 아이템 트림 글로 URL 그림 그리기 실측
+
+아이템의 갑옷 트림 재료에 주소 글을 넣고 칸마다 그 주소의 그림을 그리는 시험 팩(`UII`)을 Windows에서 실측한 것이다(2026-11-16, 게임 판은 기록하지 않았다). 칸 컨트롤은 `common.item_renderer`의 `controls`에 `modifications`로 넣어 인벤토리, 상자, HUD 핫바 칸이 모두 받는다.
+
+- **[ANI-44]** 아이템의 트림 재료(`Trim.Material`)에 아무 글(예: `URL:https://.../x.png`)을 넣은 아이템은 `.mcstructure` 상자로 `/structure load`해 불러와도 그 글을 지녔다. 갑옷이 아닌 검도 같았다. 상자, 인벤토리, 핫바 칸(HUD 핫바 포함)에서 컬렉션 바인딩 `#armor_trim_material`이 그 원문을 돌려줬다. 상자 화면에서 집은 아이템은 전역 `#inventory_selected_armor_trim_material`이 같은 글을 돌려줬지만, HUD에는 이 전역 값이 없어 그것을 쓰는 view 식은 빈 글조차 내지 않았다. 등록되지 않은 재료를 가진 갑옷은 바닐라 아이콘이 그려지지 않았고 검은 그려졌다. `&#123;실측&#125;` (출처: UII)
+- **[ANI-45]** `custom` 컨트롤 `renderer: "profile_image_renderer"`의 `#profile_image_options`에 `{"type":7,"url":"<주소>"}` 글을 주면 그 주소의 그림을 그렸다(GitHub raw PNG, Wikimedia JPEG·PNG). PNG 투명도는 유지됐다. GIF는 움직이지 않고 정지 그림으로 그려졌다. 응답이 없는 주소는 아무것도 그리지 않았다. ANI-44의 칸 값에서 표식(`URL:`) 뒤를 이 글에 넣으면, 그림을 팩에 넣지 않고도 아이템마다 다른 그림을 칸 아이콘 위에 그린다. `&#123;실측&#125;` (출처: UII)
+
 ## 근거 표기와 출처 약어
 
 규칙은 `[장약어-번호]` 형식의 ID를 달고, 끝의 `{…}`는 검증 수준이다. 판정 우선순위는 `실측` > `바닐라` > `작동팩` > `코드` > `추론`이고, `미검증`과 `충돌`은 쓰기 전에 확인한다. `C-nn`은 [충돌 판정표](./conflicts.mdx)의 번호, `VN`의 값 횟수는 [값 사전](./value-dictionary.mdx)의 집계다. 다른 장의 규칙 ID(`LAY-`, `BND-`, `HOST-` 등)는 같은 JSON UI 장의 해당 페이지에 있다.
@@ -292,3 +299,4 @@ Cinnabar(`CN`)는 26.30 네이티브 클라이언트의 JSON UI 해석기를 재
 | `E2048` | 엔티티 인벤토리 2048 시험 팩의 모바일 1.26.63 실측(2026-11-15) |
 | `CPR` | 커뮤니티 보고 실측 팩(연구 저장소 `community-probe` v1.0.0)의 Windows 실측(2026-11-16) |
 | `UKP` | 렌더러 property_bag 실측 팩(연구 저장소 `ui-key-probe` v1.0.0~v1.0.1)의 터치 입력 기기 실측(2026-11-17) |
+| `UII` | 아이템 트림 글 URL 그림 시험 팩(연구 저장소 `url-item-image` v1.0.1~v1.0.2)의 Windows 실측(2026-11-16) |

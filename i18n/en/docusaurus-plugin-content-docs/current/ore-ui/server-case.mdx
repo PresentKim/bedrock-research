@@ -9,12 +9,16 @@ sources:
 
 # Server-driven Ore UI screen operations notes
 
+:::caution[Blocked from 26.64]
+This way of operating relies on a pack replacing the in-game page (`hbui/gameplay.html`), and that route worked up to 26.63. In 26.64 Mojang blocked resource pack access to Ore UI for a security reason, so the pack's page is no longer used (Source: private research). Facts such as the data store packets and Gameface behavior remain useful as reference.
+:::
+
 These are findings from running the experiments in the previous pages as menu screens on a real server. The server sends only a screen name and data, and the layout is decided by the pack's in-game page. (Source: private research)
 
 ## 1. Structure
 
 - Page: can be built with React 18 + react-facet (TypeScript). Components are built on ore-ui-react and `@react-facet/dom-fiber`.
-- Resource pack: replaces the in-game page `hbui/gameplay.html`. It loads the vanilla bundle and then adds its own CSS and JS. An unencrypted pack needs an empty `content.zipe` for the page to be used ([resource pack delivery](../server/resource-pack-delivery.mdx)).
+- Resource pack: replaces the in-game page `hbui/gameplay.html`. It loads the vanilla bundle and then adds its own CSS and JS. Up to 26.63, an unencrypted pack with an empty `content.zipe` had its page used ([resource pack delivery](../server/resource-pack-delivery.mdx)). From 26.64 neither an encrypted pack nor a `content.zipe` pack changes the page.
 - Server: opens the DDUI screen, sends the root to the data store and receives presses. The client's DDUI packets are intercepted in a packet hook. If no new screen is shown after a press, closing the screen feels the same as a form button.
 - When a new root for the same form arrives, React patches only what changed, so the window, scroll position, input field text and loaded item images stay as they are. A root for a different form is redrawn from scratch.
 - Gameface does not send `click` to a plain `div`, so presses are received with `mousedown`.

@@ -17,10 +17,14 @@ All verification levels are `code`. It was read from compiled output, so it does
 
 Each finding is paired with a measurement (`OL`, the Ore UI loading survey) made by sending probe packs from a server (Dragonfly) and checking on Windows 1.26.52. The binary answers "why it happens" and the measurement answers "whether it really happens".
 
+:::caution[Blocked from 26.64]
+The route that NB-17 and NB-20 describe (encrypted packs and `content.zipe` packs changing Ore UI files) worked up to 26.63. In 26.64 Mojang blocked resource pack access to Ore UI for a security reason (Source: private research). The analysis on this page records an earlier version, and versions after 26.64 were not analyzed.
+:::
+
 ## 0. At a glance
 
 - An Ore UI file request (`ui://…`) looks at the **pack stack first**, before the install folder, but only at trusted packs. `hbui/…` in ordinary and server resource packs is not used (NB-17).
-- Encrypted pack access strategies (`EncryptedFileAccessStrategy` and others) are **always trusted**. So a pack the server sends encrypted with any content key, or a local pack with only a 0-byte `content.zipe` in its root, replaces Ore UI files (NB-20).
+- Encrypted pack access strategies (`EncryptedFileAccessStrategy` and others) are **always trusted**. So a pack the server sends encrypted with any content key, or a local pack with only a 0-byte `content.zipe` in its root, replaced Ore UI files (NB-20). This route worked up to 26.63 and is blocked from 26.64.
 - The look of in-game Ore UI buttons comes from two JSON UI definitions (`common_buttons.light_text_button`, `common_buttons.focus_border`) through `vanilla.resourcePackOverrides` (NB-18).
 - DDUI layouts (`ddui/root`, `ddui/composition`) are read only from packs that carry the built-in pack marker (NB-19).
 - The item icon `geo-item://<name>?width=&height=&id=&bag=` accepts the `#item_id_aux` property bag that the JSON UI item renderer uses (NB-22).
@@ -29,7 +33,7 @@ Each finding is paired with a measurement (`OL`, the Ore UI loading survey) made
 
 | Topic | Earlier claim | Binary result | Verdict |
 | --- | --- | --- | --- |
-| Modifying Ore UI with a resource pack (ALT-11) | "A pack cannot fix it" (OUC code, community) | Layout, behavior and CSS are looked up only from trusted packs. But the encrypted access strategy is always trusted | **Supplemented.** It is not that it cannot be changed at all |
+| Modifying Ore UI with a resource pack (ALT-11) | "A pack cannot fix it" (OUC code, community) | Layout, behavior and CSS are looked up only from trusted packs. But the encrypted access strategy is always trusted | Up to 26.63, **supplemented** (it was not that it could not be changed at all). From 26.64 Ore UI files cannot be changed with a pack |
 | Button look (ALT-15) | "A pack cannot fix it" | `resourcePackOverrides` passes two JSON UI button definitions to Ore UI buttons | Confirmed (including measurement) |
 | DDUI user pack layouts (ALT-16) | Mojang statement: internal packs only until stage 2 | Only packs with the built-in pack marker are read | Supported (inferred) |
 | Item icons (ALT, HOST-17) | Only the numeric ID method was known | `geo-item://` finds the item by name and takes `#item_id_aux` from the property bag | New fact |
@@ -115,4 +119,4 @@ DDUI (the `CustomForm` family of `@minecraft/server-ui`) is the way Ore UI draws
 
 | # | Claim | Who | Reverse engineering result | Result | NB | Guide |
 | --- | --- | --- | --- | --- | --- | --- |
-| C-12 | Ore UI cannot be changed with a resource pack | Guide (ALT-11, OUC code), community | Layout, behavior and CSS are right (only trusted packs are looked up). But the in-game button look passes through the bridge and `pack://` textures resolve even from a server pack (R-16, R-17). A local pack with an empty `content.zipe` in its root opens with the encrypted access strategy and is trusted, so it can change Ore UI files too (NB-20, OL chapter 7 measurement) | **Supplemented.** It is not that it "cannot be changed at all" | NB-17, NB-18 | ALT-11, ALT-12, ALT-15 |
+| C-12 | Ore UI cannot be changed with a resource pack | Guide (ALT-11, OUC code), community | Layout, behavior and CSS are right (only trusted packs are looked up). But the in-game button look passes through the bridge and `pack://` textures resolve even from a server pack (R-16, R-17). Up to 26.63, a local pack with an empty `content.zipe` in its root opened with the encrypted access strategy and was trusted, so it could change Ore UI files too (NB-20, OL chapter 7 measurement). In 26.64 resource pack access to Ore UI was blocked | Up to 26.63, **supplemented** (it was not that it "could not be changed at all"). From 26.64 the claim holds for Ore UI files | NB-17, NB-18 | ALT-11, ALT-12, ALT-15 |

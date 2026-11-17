@@ -9,6 +9,10 @@ sources:
 
 # Loading paths and the trust decision
 
+:::caution[Blocked from 26.64]
+The trust decision analysis on this page is based on Android 1.26.52.3 and the measurements on Windows 1.26.52. The route by which encrypted packs and `content.zipe` packs changed Ore UI files worked up to 26.63, and in 26.64 Mojang blocked resource pack access to Ore UI for a security reason (Source: private research). How versions after 26.64 decide this was not analyzed.
+:::
+
 Addresses are the Android 1.26.52.3 arm64 analysis base address (ELF address + 0x100000). (Source: repo-ore-ui-loading)
 
 ## 0. Concept: the pack stack and "trust"
@@ -37,12 +41,12 @@ The hash in the file name (`cb1e5471975ef2c1abb9`) differs for each game version
    - A path containing `../` or `..\` is rejected.
    - After normalizing the path, it **walks the pack stack (an array of 0x110-byte pack entries) from the front.** Only when the virtual function (+0x30) of a pack's access strategy is true does it check whether that pack has the file (`@0x112ac30c`, sub packs, pack order, virtual function +0x38 = `hasAsset(path, false, false)`). If it has it, it serves from that pack.
    - If not, it opens `gui/dist/` + base folder + path from the **app package file system** (`Core::FileSystem`, `@0x09cf66f8`).
-3. **The filter is `isTrusted()`**: the next slot right after (+0x38) is `hasAsset`, which matches the virtual function order of Bedrock's `PackAccessStrategy` (`... isWritable`, `setIsTrusted`/`isTrusted`, `hasAsset` ...). The first guess that "only built-in packs and marketplace packs are trusted" was wrong. Encrypted packs sent by a server are trusted too.
+3. **The filter is `isTrusted()`**: the next slot right after (+0x38) is `hasAsset`, which matches the virtual function order of Bedrock's `PackAccessStrategy` (`... isWritable`, `setIsTrusted`/`isTrusted`, `hasAsset` ...). The first guess that "only built-in packs and marketplace packs are trusted" was wrong. In the analyzed version, encrypted packs sent by a server were trusted too.
 4. `routes.json` (`@0x09cd39dc`) and fonts (`gui/dist/hbui/fonts`, `@0x096de4bc`) are read only from the install folder.
 
-The note in 8Crafter Ore UI Customizer's "Export as RP" that "a mod that makes the game load Ore UI from the RP is required" is correct for plaintext packs. An encrypted pack works without a client mod.
+The note in 8Crafter Ore UI Customizer's "Export as RP" that "a mod that makes the game load Ore UI from the RP is required" is correct for plaintext packs. Up to 26.63 an encrypted pack worked without a client mod, and from 26.64 encrypted packs are blocked too.
 
-## 2. Encrypted packs are trusted
+## 2. Encrypted packs were trusted (up to 26.63)
 
 ### Decision per access strategy `{code}`
 
@@ -76,7 +80,7 @@ The vtables of the pack access strategy classes were found by their RTTI names (
 
 ### Local pack (`content.zipe`) `{measured, 2026-10-27}`
 
-If you add `content.zipe` to a plaintext pack folder, it opens with `DirectoryPackWithEncryptionAccessStrategy` even without a key, is trusted and changes Ore UI files. The engine only checks whether this file exists. The detailed test results are in the local test section of [Modifying Ore UI pages](./modifying-pages.mdx).
+Up to 26.63, adding `content.zipe` to a plaintext pack folder made it open with `DirectoryPackWithEncryptionAccessStrategy` even without a key, be trusted and change Ore UI files. The engine only checked whether this file existed. A plaintext pack sent by a server with an empty `content.zipe` also had its in-game Ore UI page used `{measured}` ([Resource pack delivery](../server/resource-pack-delivery.mdx)). From 26.64 this is blocked. The detailed test results are in the local test section of [Modifying Ore UI pages](./modifying-pages.mdx).
 
 ## 3. The button style bridge `vanilla.resourcePackOverrides` `{code}`
 
@@ -123,7 +127,7 @@ The server is Dragonfly (authentication off, port 19140, resource packs required
 | Death screen buttons | **Yellow background and red text, hover is sky blue background and green text.** The pack's texture and text color went into the Ore UI buttons |
 | Death screen background | Not magenta. The plaintext pack's `hbui/...css` was not used |
 
-Summary: the bridge and `pack://` textures work even with an untrusted server pack. Ore UI file lookup does not work with a plaintext server pack. Sending the same pack encrypted makes it work.
+Summary: the bridge and `pack://` textures work even with an untrusted server pack. Ore UI file lookup does not work with a plaintext server pack. Up to 26.63, sending the same pack encrypted made it work.
 
 Probe tip: if you hide a JSON UI screen's panels with `ignored: true` and the screen is still visible, that screen is Ore UI. This method can tell which technology a screen opened with.
 
@@ -144,8 +148,7 @@ The switch that opens container screens with Ore UI, and the conclusion that a s
 ## 6. Rule summary
 
 1. Plaintext packs (Zip, Directory access strategies) are not trusted, so files in `hbui/` are ignored.
-2. The three encrypted access strategies are always trusted regardless of the pack UUID, signature and manifest.
-3. A plaintext pack still reaches the button style bridge and `pack://` textures.
+2. In the analyzed version (1.26.52), the three encrypted access strategies were always trusted regardless of the pack UUID, signature and manifest. This route worked up to 26.63 and is blocked from 26.64.
+3. A plaintext pack still reaches the button style bridge and `pack://` textures (measured on 1.26.52).
 4. Fonts and `routes.json` are read only from the install folder, not from packs.
 5. DDUI layouts (`ddui/root`) are read only from built-in packs.
-6. Every time the version changes, recheck the +0x30 implementations in the access strategy table and the bundle file name hashes.
