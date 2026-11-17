@@ -1,7 +1,7 @@
 import { system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 
-const PACK_VERSION = "v1.3.0";
+const PACK_VERSION = "v1.3.1";
 const TEST_ITEM = "bwiki:json_ui_performance_test";
 const COUNTS = [100, 500, 1000, 2000];
 
