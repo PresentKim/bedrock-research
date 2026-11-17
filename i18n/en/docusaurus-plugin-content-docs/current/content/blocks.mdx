@@ -266,6 +266,7 @@ Tested on a format 1.26.20 block with `minecraft:geometry.full_block`, `minecraf
 ### bone_visibility
 
 - Written inside the `minecraft:geometry` object as `{"identifier": ..., "bone_visibility": {...}}`, and values are booleans or Molang. In 1.26.20 and above a raw boolean fails with `invalid string`, so use the strings `"true"`/`"false"` or 0/1 (MCPE-238524). A key controls only the cubes directly under that bone and ignores nested groups, and adding `*` to the end of the key includes nested bones. Bone visibility does not accumulate across permutations, so a 6-face block like glow lichen needs all 64 permutations.
+- Pack size: instead of one geometry per shape, use one geometry per block type with bones for every part, and a per-permutation `bone_visibility` that turns on only that shape's bones. One file holding 640 connection shape geometries (3,808 cubes, only 43 distinct) was 1,476 KB (64.6% of the main pack); the bone version is 31 KB. Three geometries that differed only in identifier (161 KB) were merged into one shared geometry (45 KB, about 6 KB after minifying). In game the shapes looked the same `{measured}` (2026-11-09). Why the difference grows in encrypted packs is in [Pack delivery, encryption and obfuscation](../basics/pack-delivery-and-encryption.mdx).
 - Uses: showing flowers in pots, doors/hinges, cake stages, wall torch variants, fence connections. Flower pot example:
 
 ```json
@@ -297,6 +298,7 @@ Tested on a format 1.26.20 block with `minecraft:geometry.full_block`, `minecraf
 
 - `minecraft:transformation` specifies rotation/scale/translation, and scale is around the block center. Collision/selection box scale applies only when that component is specified explicitly (MCPE-238027). A block rotation cannot exclude specific bones and there is only UV lock. `uv_lock` rotates square faces around the face center, not the block center. Snowlogging ignores transformation (MCPE-240710).
 - There are five coordinate systems: model/collision/selection (model units, bottom center, x+ is west), leashable offset (x+ is east), transformation translation/pivot (block units, center), voxel shape (model units, bottom north-west corner), item_display_transforms. Voxel shapes have a limit of 4500 unique ones after deduplication on world load.
+- Collision and selection boxes that a server sends in block properties are also read in the geometry coordinate system, whose x axis is opposite to the world's. For shapes that are asymmetric east to west (east/west variants), send the boxes mirrored in x so they match the drawn model `{measured}` (2026-11-05).
 
 ### Item display
 

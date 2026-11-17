@@ -72,6 +72,24 @@ Dragonfly has no such API, so you build hooks that send packets to the session. 
 | A player model that exists in no world | [fake-blocks-and-chunks.mdx](fake-blocks-and-chunks.mdx) |
 | Title and subtitle | Send the subtitle before the title, because the client shows the subtitle together with the next title. If sent as a raw JSON title, the client converts translation keys into its own language |
 
+To follow a player from above with a camera, instead of resending `Set` every tick (for example every other tick at 72 degrees, 16 blocks up, 0.1 s easing), use the client's `minecraft:fixed_boom` preset so the client follows the player itself. A preset based on `follow_orbit` (60 degrees down, 12 blocks) serves the same purpose [code, not yet checked in game].
+
+## Camera spline (real client) [measured]
+
+Results of sending `CameraInstruction.Spline` from a server and testing it in a real client (gophertunnel v1.63.0 server, 2026-11-14, platform not recorded).
+
+- **The position curve is not used**: the client did not use the position curve of a server-sent spline, only its rotation key frames. With two points, duplicated end points, progress as control point indices, five distinct points with cumulative distance progress, eye-relative coordinates, the linear type, the end point 6 blocks above the eyes, and progress times as fractions or ticks, the camera always went to the player's first-person position and only rotated for 1.5 s.
+- **A free camera `Set` must come first**: a spline alone without `Set` did nothing. There is a report that a spline in the same tick as `Set` is ignored (MCPE-173524; MiNET sends it a second later). With a 1 s wait, the `Set` view held for 1 s, then the spline started and the position changed at once.
+- **Removing the progress key frames crashed the client.**
+- **Rotation value order**: sending (pitch, yaw) rotated left and right; (yaw, pitch) rotated up and down. MiNET uses (pitch, yaw, roll) with positive pitch up.
+- **Protocol definition**: per Mojang `bedrock-protocol-docs`, control points are world coordinates, progress is 0 to 1 over the whole curve, and `SplineType` 0 is Catmull-Rom and 1 is linear. A working example (Mcblend) uses Catmull-Rom with at least four distinct points, removes consecutive duplicate points (they break the client), gives progress as the cumulative distance ratio, and uses linear below four points [code].
+- **gophertunnel v1.63.0 field issue**: gophertunnel v1.63.0 writes the spline's `SplineType`, `SplineIdentifier` and `LoadFromJson` as optional fields, and the client reads the packet correctly only when all three are empty. Setting a value misaligns the packet. To change the type, write the spline packet yourself in the layout the client reads, and test that the default type is byte-identical to gophertunnel.
+- **What works instead**: chaining eased (sine in-out) `Set` moves, one per stop.
+
+## Locator bar [measured]
+
+Turning on the locator bar rule with `GameRulesChanged` and sending waypoints with `LocatorBar` and `PlayerLocation` from a custom server did not show the bar in a real client (2026-11-14). The rule names `locatorbar`, `locatorBar`, `playerWaypoints` and `locator_bar` all gave the same result. Other game rules are sent lowercase (`dodaylightcycle`, `showcoordinates`), and Dragonfly's `level.dat` key is also `locatorbar`. The vanilla HUD draws the bar in place of the XP bar only when `#hotbar_with_locator_bar` is true. Turning on `locatorbar` and `locatorBar` in the `StartGame` game rules has no recorded result (*unverified*).
+
 ## More observations on forms and HUD (server development measurements)
 
 ### Screen host

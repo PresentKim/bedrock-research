@@ -29,6 +29,7 @@ The look of a custom block is decided by `minecraft:geometry` (the model) and `m
 - z-fighting on cross and plant geometry: `alpha_test_single_sided` (like kelp, `alpha_test_single_sided_to_opaque` from a distance).
 - Translucency in the inventory: Blocks using legacy rendering (`textures` in the resource pack `blocks.json`) break translucency in the inventory UI. Remove that and use `minecraft:geometry` and material_instances (Bedrock Wiki `blocks/custom-glass-blocks`).
 - Other choices: `alpha_test_to_opaque` draws low-opacity backgrounds opaque. Use `alpha_test_one_sided` for glass, and make glass visible from one side only with block culling and blend. In a case where using `alpha_test_single_sided_to_opaque` on custom leaves produced black artifacts, alpha_test was suggested (`unverified`). Blend glass on a complex model has a draw order problem, and Blockbench has no blend render mode.
+- On custom block geometry, plain `alpha_test` also draws back faces. So every box needs all six faces, and a missing face shows as a hole through the model `{recorded}`. Use `alpha_test_single_sided` when back faces are not needed.
 - If transparent pixels come out black, the transparent pixels of the texture must carry real color information (otherwise it is an editor or converter problem) and it must be a PNG.
 
 ## Emission
@@ -45,6 +46,8 @@ The look of a custom block is decided by `minecraft:geometry` (the model) and `m
 - X-ray packs: the vanilla block shape `structure_void` removes AO (the fluoroscopy pack).
 - Chest-like shapes: The vanilla chest is rendered as a block entity. A custom block can imitate it by turning off AO and face_dimming, but it looks odd in Fancy and Simple. Reproducing the vanilla chest, PBR and the old water shader with a simple pack is impossible.
 - z-fighting: Coordinates are kept to one decimal place, so use a small `inflate`. Turning on VV brings back the z-fighting of 2D planes (no solution).
+- Thin block models (a core with arms reaching out): inset faces that touch the block boundary by 0.1 px. With 0.01 px they still flickered against the neighbor block's face `{measured}`. Make the core 0.05 px larger than the arms and ends so touching faces never share a plane (when the texture has a hole in the middle, those inner faces are visible).
+- A transparent hole in a block face lets the neighbor block's face show through, and that area flickers. Fill it with an extra underlay texture layer behind the hole `{recorded}`.
 - There is a bug where faces of `minecraft:geometry.full_block` render wrongly next to snow layers, fixed in the Preview as of 2026-11-15.
 
 ## Overlays, tint, break cracks

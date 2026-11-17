@@ -43,12 +43,12 @@ These are findings from running the experiments in the previous pages as menu sc
 
 - When the window size changes, Gameface resolves a press to the position before the change. So windows of the same size switch an open screen in place, and windows of a different size open the screen anew.
 - Gameface does not deliver a press to an empty transparent element. A press on an empty spot inside the window is handled in the document's `mousedown` and `touchstart` by checking whether the target is inside the window.
-- On touch, a `mousedown` follows a tap. A `mousedown` within 700ms after a tap is treated as the same tap and ignored.
+- On touch, a `mousedown` follows a tap. A `mousedown` within 700ms after a tap is treated as the same tap and ignored. The order of the tap and the `mousedown` differs by device ([page environment](./page-environment.mdx) section 2).
 - Gameface subtracts the `min-height` of a growing box from the height it receives, so do not put `min-height` on a growing row.
 - Gameface does not stretch an empty flex item, so set the row and cell sizes of a grid in percent.
-- The page has no canvas (`getContext`). Pixel art (for example an 8x8 skin face) is sent by the server as a pixel list and drawn by laying boxes out as rows and cells.
+- The page has no canvas (`getContext`). Pixel art (for example an 8x8 skin face) is sent by the server as a pixel list and drawn by laying boxes out as rows and cells. The skin face is the 8x8 front of the head (hat layer included). With a skin geometry (Persona or custom model) it is read from the box UV of the first cube of the `head` and `hat` bones, otherwise from the standard skin positions (for a 64px skin, head (8,8) and hat (40,8)), and vanilla `textures/ui/icon_steve` is drawn when the face is empty. A face read this way came out wrong on some clients, and the cause is not verified `{record}`.
 - There is no engine command that opens the game chat window from a page. Commands are taken from an input field on the page and sent to the server.
-- To leave a server, the page can call vanilla `vanillaGameplayLeaveGameCommandGroup.leaveGame()` and let the client leave on its own. Only for a client without this command does the server drop the connection.
+- To leave a server, the page can call vanilla `vanillaGameplayLeaveGameCommandGroup.leaveGame()` (the same command as the death screen's title screen button) and let the client leave on its own. Only for a client without this command does the server drop the connection.
 
 ## 4. Inventory click rules the server implements
 
@@ -85,3 +85,14 @@ The GUI scale arrives as the `html` font size, so `rem` sizes follow it. The saf
 - **When the game updates, match the vanilla bundle file names (hashes) written in the pack's `hbui/gameplay.html` to the install.** If they are wrong, the whole in-game Ore UI does not appear. Match the font file names in the CSS `@font-face` too.
 - Set the screen-size box with `vw` and `vh`, not percent (on iPad the body height is 0).
 - Do not depend on the vanilla CSS and JS for a screen (on iOS the pack's `hbui` folder replaces the game's wholesale). The pack CSS declares fonts directly through `ui://hbui/fonts`.
+
+## 9. Testing screens outside the game
+
+The page layout can be tested in a desktop browser with a stand-in engine `{code}`.
+
+- The test HTML loads the pack's `hbui` CSS, the page bundle and the mock engine script, and sets the `html` font size to 10px (the same as GUI scale 2, [page environment](./page-environment.mdx) section 8).
+- The mock engine provides `on` and `trigger` on `window.engine`. On `trigger("query:subscribe/<name>", id, ...args)` it answers on the next tick through the `query:subscribed/<id>` listeners. For `vanilla.ddui.screenId` it gives `{screenId: "minecraft:custom_form"}`, and for `vanilla.ddui.string` (arguments `minecraft`, `custom_form_data_1`) it gives the root JSON the server would send.
+- `window.__commands__.vanillaDduiDataStoreSetCommandGroup.setDataStorePathString.callable` pushes the arguments it receives onto an array, so the events the page would send to the server can be checked.
+- Server-side test code dumps the root the server would send for each screen to a JSON file.
+- Playwright opens the page in a 1280x720 window, adds `*{animation:none!important;transition:none!important}` and takes a screenshot. It is compared with a baseline image using pixelmatch (`threshold: 0.1`), giving the share of changed pixels.
+- This checks only whether the layout changed. A browser is not Gameface, so presses that arrive only as `mousedown` and the Gameface behavior in section 3 and in [page environment](./page-environment.mdx) sections 2 and 11 do not show in this test. Check those in game.

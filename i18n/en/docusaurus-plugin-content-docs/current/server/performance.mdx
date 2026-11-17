@@ -43,6 +43,7 @@ In MS Learn's `server.properties`, the keys that directly affect performance are
   - Join packets and skins exceed 2KB, so they benefit.
   - snappy can cause join failures on some devices or very old clients (rare now, and consoles are reported fine). In 2026-11 snappy + 512 was still recommended, with the explanation that first-generation PS4 and some old phones may be blocked but this is rare.
   - The claim that snappy stops crash bots only filters out simple bots that did not implement snappy.
+  - Flate cost per level (a 128 KB sample similar to a chunk batch, Go benchmark, 4 cores) `{measured}`: level 1 took 1.17 ms for 16,952 B, level 3 1.82 ms for 15,553 B, level 6 5.50 ms for 13,903 B. In gophertunnel, build a `packet.Compression` with the Flate ID and a configurable level and put it in the server config `Compression`. That implementation must be registered under the Flate ID (upstream behavior table in [dragonfly-notes.mdx](dragonfly-notes.mdx)).
 - **Memory**: Usually 1/4~1/10 of a Java server, and under 1GB for a solo world. If memory grows over several hours, it is usually a BP/script leak. For a BDS using 4~5GB with no players, scripts, chunk loaders and a large `.ldb` were named as candidate causes (resolution unconfirmed). Work around it with regular restarts (.bat + Task Scheduler). Hoppers and pathfinding are CPU hotspots.
 - **A 30~60 second freeze caused by one add-on**: It is almost always the add-on's fault, so remove them one by one. A corrupted chunk can also keep eating CPU, so restore a backup and test locally. Splitting one large add-on into several creates a script context per pack and makes it heavier instead (subpacks are better).
 - **Long-term operation case**: A vanilla world running since 1.16 with 28.8GB, 16k+ .ldb files and 5.4 million chunks had no lag even on 1.26.21. For rubberbanding at high latency, the client-authoritative movement setting was used. Starlink CGNAT was solved with a playit.gg tunnel.
@@ -64,12 +65,16 @@ In MS Learn's `server.properties`, the keys that directly affect performance are
 ### Summary
 - **All work of one world runs on one CPU core at a time**. With several worlds, several cores are used.
 - The cost of one world is mostly **the number of block entities in tick range x 20 times/second** (blocks that have a `Tick`, such as hoppers and chests) plus the packets and chunk transfer of that world's players.
+- In a CPU profile of a world with 1,024 custom block entities that have a `Tick`, the target selection of `tickBlocksRandomly` itself was 36% of tick time (about 87 us per tick) (Xeon 2.1 GHz 4 cores, Go 1.26.0) `{measured}`. A block entity with no per-tick work is cheaper without a `Tick` at all.
+- A world ticks only while it has a loader, and block entities tick only inside a loader's tick range. A synchronous test world ticks every loaded chunk, so behavior that depends on tick range must be tested on a real asynchronous world `{code}`.
 
 ## Measuring join time
 
 To see where joining is slow, record the time at four points: Login handling, resource pack completion, StartGame sent, and the client's SetLocalPlayerAsInitialised. The time from StartGame being sent until loading finishes (client loading) grows with the number of block states and permutations. In Dragonfly, pack download is handled inside gophertunnel and is not shown separately, so the span from login to pack completion is merged into one. To compare, join several times with the same client and device and use the second join's value, or clear the client's pack cache.
 
 Values measured when drawing the same shape as an entity versus a custom block: client loading was 4,005ms on the entity side and 9,019ms (+5.0 seconds) on the side that added 2 blocks (37,249 states per block, 74,498 in total). With 12,083 filled cells, FPS was 7~20 for entities and 184 for blocks (1% low 60). Custom blocks with many block states increase join loading, but when drawing many they are far lighter than entities. (Source: private research)
+
+Join time after shrinking the resource packs (one join each on a real device, 2026-11-09, platform not recorded) `{measured}`: cutting the encrypted total of six packs from 2.96 MB to 1.26 MB (the default pack from 2.51 MB to 0.85 MB) took the total from 17,629.5 ms to 11,407.1 ms (-35%), login to pack completion from 4,971.6 ms to 3,041.2 ms (-39%), and client loading from 12,657.9 ms to 8,365.3 ms (-34%). The methods were merging the connection shapes of one block kind into one geometry with per-permutation bone visibility, merging pixel-identical textures, removing unused textures and CSS, and recompressing images. Client loading dropped because the number of block geometries fell at the same time. These are single runs and can vary with the network. Why encrypted packs do not compress is in [resource-pack-delivery.mdx](resource-pack-delivery.mdx).
 
 ## The client gets heavy first
 

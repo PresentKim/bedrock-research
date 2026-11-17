@@ -80,6 +80,7 @@ The **subtitle** carries icons and cells at fixed widths.
 - The pack's truncation `'%.Ns'` is in **bytes**. `§` is 2 bytes, so `§f12` is 4 bytes. Keep the leading cells that are cut by position in ASCII, and put multibyte characters such as Hangul only at the very end.
 - Padding with 0 or sending a value with something added was not read as an item. Removing the padding characters (`x`, `~`) in the pack worked.
 - The leading `i` of the subtitle keeps the subtitle a string. Sending only a number broke the vanilla check that treats the subtitle as a string, giving gray cells and an "expected a string" warning.
+- A circular progress gauge in an info line is drawn with custom font glyphs: the second row of `glyph_E1` (U+E110 to U+E11A) holds 11 progress frames, and the server puts the frame for the current progress into the line. The glyph is drawn at about 10 px, about 60% of an item cell, so it fits next to the icon and count (*unverified*: the setup is recorded without measurement conditions).
 
 An example of building cells on the server side (Go):
 
@@ -258,7 +259,7 @@ How to read the expressions:
 - Send the subtitle before the title. A subtitle that holds icons had to arrive paired with its title.
 - Send the fade-in and fade-out times as 0 and the stay time long (for example 60 seconds), and resend only when the content changed. Even if unchanged, resend before the stay time ends (for example every 30 seconds).
 - Only one title is visible at a time. When sending an ordinary title such as a level-up, do not send the panel until that title ends. Move text that must always be up to another channel such as a sidebar scoreboard (section 6 of [HUD and titles](../server-ui/hud-and-titles.mdx)).
-- Do the gaze tracking when moving or turning and at a short interval. For crops, use a box whose height grows with the stage, and for blocks without a collision box, judging by the whole cell matches the client crosshair.
+- Do the gaze tracking when moving or turning (at most once per 0.1 s) and at a short interval (0.2 s), up to 6 blocks from the eyes, skipping air and liquids. A crop is judged as a box (stage+1)/8 of a block high, so a gaze passing over the empty space above a short crop reaches the block behind it. Other blocks without a collision box (flowers and so on) are judged as the whole cell. This judgment was taken to match the client crosshair but was not compared in game (*unverified*).
 
 ## 4. Pitfalls
 

@@ -99,6 +99,12 @@ The `textures` array overlays from top to bottom. If an upper layer has alpha pi
 - If part_visibility seems to have no effect, check whether another render controller on the same entity is still active (hide the original by condition). There is a case where `query.property('x')>0` worked in a second render controller and `==4` did not (unresolved). Using `query.distance_from_camera` in part_visibility did not work.
 - `part_visibility: false` (a non-Molang value) really culls geometry, but a bone hidden by Molang still submits draw calls (only the rasterizer culls).
 
+## Packing data into variant values
+
+- Molang numbers are 32-bit floats. An integer a server puts into `variant` or `mark_variant` is exact only up to 2^24 (16,777,216); above that the low bits are lost. A box whose width, height and depth were bit-packed into `query.variant` drew far too large while the value went past 24 bits, and matched once it fit in 24 bits `{measured}` (2026-11-10).
+- So when packing several values into one number, split them to stay under 2^24. Four codes of 0 to 192 each would make about 470 million in one number, so they were split into two: `variant = a + 193 * b` and `mark_variant = c + 193 * d`. The render controller decodes them with `math.mod(query.variant, 193)` and `math.floor(query.variant / 193)` and uses one bit of a decoded code as the `part_visibility` condition of one bone (`core`, `up`, `down`, `north` and so on). For example the second bit is `math.mod(math.floor(v.code / 2), 2) == 1`. The texture tier is picked by an `Array.tier[...]` index. A server-side test recomputes the same formulas for every code; the edge values were not tested separately in game `{code}`.
+- The same method can carry an entity pose (rotation, scale, offset) in variant values, so it can be tuned at once without re-sending the pack (the display entity in [Attachables and item rendering](./attachables-and-items.mdx)).
+
 ## Several render controllers
 
 - Both entities and attachables can list several in `render_controllers`, and one entity can draw two geometries at once. Render controllers can be stacked many times. Render controllers behave like layers, and the top of the list is drawn first. Using 2 controllers on one geometry also works, but there is a counterargument that shared bones exist twice and it is slightly slower.

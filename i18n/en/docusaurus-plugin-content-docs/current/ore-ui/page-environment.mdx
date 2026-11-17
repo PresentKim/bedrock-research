@@ -74,9 +74,11 @@ The test screen receives, in the `document` capture phase, mouse (`mousedown`, `
 - `mousemove` arrives (2371 times). `pointermove` was 0 times, so pointer events appear not to arrive. `scroll` arrives.
 - `click` arrived once on a scroll handle (`button=0 buttons=0 detail=undefined`). It does not arrive on a plain `div`, so presses are received with `mousedown`. Which elements receive `click` is not verified.
 - The right button arrives as `button=2` on `mousedown` and `mouseup` (2026-11-04). There was no `contextmenu` line.
-- While Alt is held, `keydown key= code=Alt keyCode=18 repeat=true` keeps arriving. `key` is empty.
+- While Alt is held, `keydown key= code=Alt keyCode=18 repeat=true` keeps arriving. `key` is empty. Some page implementations still assume a held key's repeats may not carry `repeat` and throttle held keys themselves to one press per 120 ms. Which devices behave that way is not verified `{code}`.
 - Wheel, focus, text input and IME composition, and gamepad were pushed out by the Alt repeat lines and left no results (not verified).
 - A touch device sends `mousedown` on a tap but does not send `mousemove` while the finger moves. Scrollbar dragging and screen dragging also receive `touchstart` and `touchmove` and read coordinates from `touches[0]` `{record}`.
+- The `touches` list of a touch event may hold only the finger that changed. A second finger that lands later is not seen together with the first, so two-finger zoom worked only when both fingers landed together `{measured, 2026-10-29}`. Collecting fingers by `identifier` from every `touchstart`, `touchmove` and `touchend` of the page, in listeners registered before any other, lets any two fingers zoom.
+- On touch devices the order of a tap's `touchstart` and the `mousedown` that follows it is not the same on every device. So the page waits a moment before deciding a press `{code}`.
 - While the screen was open, the client kept sending `ServerBoundDiagnostics` (157). No `ScriptMessage` arrived.
 - The phone back button did not arrive on the page as a key. Android `KEYCODE_BACK` 4, browser back 166, `GoBack` and `BrowserBack` are all set to be received as close.
 
@@ -139,7 +141,12 @@ The game bundle and the vanilla pack have 18 container DDUI screens (`minecraft:
 
 ## 9. Strings and translation
 
-- Client markers in text (item names, dates) are converted to the client language by the page and drawn. The `§` colors in server text are based on a dark background, so text on a window is changed to the dark variant color ([UI style](./style.mdx)).
+- Client markers in text (item names, dates) are converted to the client language by the page and drawn `{code}`.
+  - Form: the server puts `U+FDD0 <kind>:<value> U+FDD1 <fallback> U+FDD2` into the text. The kind is `k` (translation key), `d` (date) or `a` (time ago), and the value is a key or Unix seconds. The fallback is text the server made in the player's language. These are Unicode noncharacters, so they do not occur in normal text.
+  - The page replaces each marker in every text, tooltip and input placeholder with the result of `coreTranslateCommandGroup.translate(key)`, `formatDate(seconds)` or `getHowLongAgoAsString(seconds)` (section 4). When the client does not know the key, it draws the fallback.
+  - Chat (`Text`) and titles cannot draw markers, so the server replaces markers in packets going there with the fallback in a packet hook.
+  - A marker takes width, so it is not put in fixed-width cells (list row names, slot counts).
+- The `§` colors in server text are based on a dark background, so text on a window is changed to the dark variant color ([UI style](./style.mdx)).
 
 ## 10. Media `{measured, Windows 1.26.52, 2026-10-24}`
 
@@ -149,7 +156,14 @@ The "Media" tab of the DDUI test screen loads `<img>`, `<video>` and `<audio>` f
 - Gameface's `<img>` has no `naturalWidth` (`undefined`).
 - To match the earlier documents saying video supports only WebM (VP8 and VP9, one Vorbis audio track) and `<audio>` is not supported, the MDN example `flower.webm` (CC0, VP8 + Vorbis) was put in the pack, with two cells: muted autoplay and a play-with-sound button. These two cells have not yet been run in game.
 
-## 11. Community notes
+## 11. Layout and drawing
+
+- Gameface counts an element's border (`border`) in `scrollHeight`. A scrolling box with a border reports overflow even when its content fits, and a hand-drawn scrollbar appears. Put the border and shadow on a box wrapping the scrolling box `{code}`.
+- Gameface lays the page out once a frame. An element measured right after its text changes still has the size from before (zero, or the previous tooltip's size). A tooltip is placed invisible in a corner and measured and positioned two frames later `{code}`. The `<style>` in section 1 is not measured right after attaching for the same reason.
+- Text in an overlay panel with no text color is drawn in the engine's default color, black `{measured, 2026-10-29}`.
+- If a button's hover and pressed images are not loaded in advance, the button border flashes in the text color (white) while the image loads. Keeping those images loaded and making the border color transparent stops the flash `{measured, 2026-10-29}`.
+
+## 12. Community notes
 
 These are reports from community conversations (2025-10 ~ 2026-11-17). They were not tested in this repository. The trust markers are the same as in [Community reports and cross-checks](../json-ui/community-reports.mdx). (Source: private-research)
 

@@ -1,6 +1,6 @@
 ---
 title: "Protocol basics: RakNet, NetherNet, connection flow"
-description: "Bedrock protocol layers, the join handshake, NetherNet signaling and ports, server-authoritative movement, SubChunk requests, libraries, WebSocket, security and proxies"
+description: "Bedrock protocol layers, the join handshake, NetherNet signaling and ports, server-authoritative movement, SubChunk requests, the client blob cache, libraries, WebSocket, security and proxies"
 sidebar_position: 2
 sources:
   - private-research
@@ -193,7 +193,57 @@ From 1.18 the world height is -64~319, so sending whole columns would nearly dou
 - The client progressively requests (1) the tick area (roughly everything within 4 chunks) and (2) visible subchunks with `SubChunkRequestPacket` (dimension ID and subchunk position; Y is the absolute subchunk number, -4~20 for -64~319). Requests are not binding, so the server may ignore them and send in its own order.
 - At positions without a response yet, an invisible blocking placeholder block is placed. The response is `SubChunkPacket`: dimension ID, position, serialized subchunk (including block entities; an empty string if there is no data), result (0 undefined, 1 success, 2 chunk not found, 3 different dimension, 4 player not found, 5 index out of range), heightmap, and blob cache flag and ID. A third-party server usually needs only success (1).
 - The client accepts responses only for subchunks marked `NeedsRequest`, and after processing a success it ignores packets for the same subchunk until the whole chunk is marked as request mode again. Later changes are sent as ordinary block updates.
-- The heightmap is announced bit by bit per subchunk with a status byte (if 1, a 16x16 array of height values follows) to keep lighting and rain and snow handling working. The blob cache ID is based on the combined unit of subchunk and block entities, so it differs from the ID of an ordinary LevelChunk.
+- The heightmap is announced bit by bit per subchunk with a status byte (if 1, a 16x16 array of height values follows) to keep lighting and rain and snow handling working. This document describes the subchunk blob cache ID as based on the combined unit of subchunk and block entities, and says it therefore differs from the ID of an ordinary LevelChunk. Dragonfly's implementation builds the blob from block data only and sends block entity NBT outside the cache every time (see "Client blob cache" below).
+
+## Client blob cache
+
+The client keeps a blob cache that stores subchunk and biome data sent by the server under a hash of the content. For a client with the cache on, data that has not changed can be skipped by sending only its hash. The flow and the blob contents below were read from Dragonfly code (`server/session/chunk.go`) `{code}`, and the measurements were taken against a Dragonfly server with a gophertunnel fake client that has the cache on (a cache that looks up by hash only) `{measured}`. Dragonfly already implements this flow and uses it as is when a client joins with the cache on.
+
+| Step | Packet | Sender | Content |
+|---|---|---|---|
+| 1 | `ClientCacheStatus{Enabled}` | client | Sent once at join to say whether the cache is supported. Nintendo Switch and some others send `false`. In gophertunnel this value is `Conn.ClientCacheEnabled()` |
+| 2 | `LevelChunk{CacheEnabled: true, BlobHashes}` | server | In subchunk request mode it carries only the biome blob hash |
+| 3 | `SubChunkRequest` | client | Requests subchunks |
+| 4 | `SubChunk{CacheEnabled: true}` | server | Each entry carries the block data hash in `BlobHash` and only the block entity NBT in `RawPayload`. An all-air subchunk is sent as `SuccessAllAir` with no blob |
+| 5 | `ClientCacheBlobStatus{HitHashes, MissHashes}` | client | Hashes it already has (hit) and hashes it lacks (miss). One packet holds up to 4095 hashes |
+| 6 | `ClientCacheMissResponse{Blobs}` | server | The actual data for the misses. Dragonfly keeps sent blobs in the session, up to 4096, until a hit or miss answer arrives |
+
+### Cache key
+
+- The key is only the xxhash64 (seed 0) of the blob bytes. Chunk x and z, world, dimension and server are not part of it, and `ClientCacheBlobStatus` and `ClientCacheMissResponse` carry no coordinates `{code}`.
+- According to a Mojang developer's explanation, the cache survives the end of a session, a blob received from another server is reused when the content is exactly the same, and the client computes the hash of a received blob itself and drops it on a mismatch. Whether the real client looks up by hash alone, without coordinates, was not checked in game (*unverified*).
+
+### Protocol document and Dragonfly implementation
+
+- The protocol document (1.18.10) describes the subchunk blob as the combined unit of subchunk and block entities. Dragonfly's subchunk blob holds block data only, and block entity NBT is sent in `RawPayload` every time.
+- The Mojang explanation says blobs should use the disk format (block NBT palette), but Dragonfly uses the network format (block runtime IDs). When added custom blocks shift runtime IDs, the hashes change too, so the first join after the update is all misses. Old blobs are not reused wrongly.
+
+### When two subchunk blobs are equal (Dragonfly)
+
+The bytes of a Dragonfly subchunk blob hold the version (9), the layer count, the **subchunk Y index**, and per layer the bit width, indices and palette (block runtime IDs). So to share a blob with a subchunk of another chunk, the Y cell, block layout, palette order and layer count must all match; x and z do not matter.
+
+- Two chunks filled with the same stone (differing only in x) hit as a blob from another coordinate on reconnect, while a chunk with the same stone one subchunk higher was a new blob `{measured}`.
+- The palette grows in the order blocks were first placed. On save, `Compact` drops only unused entries and keeps the order. So the same shape placed in a different order is a different blob. Entries left by removed blocks disappear after save and load: a cell filled with diamond and then covered with stone became the same blob as a cell that was stone from the start `{measured}`. A column that has not been saved yet still holds the empty entries and can differ.
+- The biome blob is one per whole column (all heights). Block entity NBT is outside the blob.
+
+### Measurements `{measured}`
+
+- When a hash whose data has not arrived yet comes back as a miss again from another chunk, Dragonfly sends that data only once, because it deletes the session blob at the first miss. In the test, 12 misses got 11 response blobs.
+- Values measured in a lobby where most subchunks are air (gophertunnel v1.63.0 period):
+
+| Case | LevelChunk | blob subchunks | hit | miss | miss response |
+|---|---|---|---|---|---|
+| First join (empty cache) | 861 | 8 | 829 | 40 | 10 blobs, 9030 B |
+| Resend in the same session | 861 | 8 | 869 | 0 | 0 |
+| Reconnect (cache kept) | 861 | 8 | 868 | 1 | 1 blob, 1040 B |
+
+40 misses map to 10 blobs because the same biome hash repeats across chunks (the server sends each hash once).
+
+### Ideas for more reuse `{inferred}`
+
+- Normalizing the palette before building the blob (for example sorting by runtime ID) makes equal shapes equal blobs regardless of placement order. The Y index is part of the format and cannot be removed.
+- Keeping existing runtime IDs stable when adding custom blocks keeps the cache valid across updates.
+- A test fake client that sends hundreds of `SubChunkRequest` in one batch is disconnected by gophertunnel (upstream behavior table in [dragonfly-notes.mdx](dragonfly-notes.mdx)).
 
 ## Security, crashers, anti-cheat, proxies
 

@@ -29,6 +29,7 @@ sources: [private-research, bedrock-wiki, ms-learn]
 - 교차·식물 지오메트리의 z-fighting: `alpha_test_single_sided`(멀리서는 다시마처럼 `alpha_test_single_sided_to_opaque`).
 - 인벤토리의 반투명: 레거시 렌더링(리소스 팩 `blocks.json`의 `textures`) 블록은 인벤토리 UI에서 반투명이 깨진다. 그것을 지우고 `minecraft:geometry`와 material_instances를 쓴다(Bedrock Wiki `blocks/custom-glass-blocks`).
 - 그 밖의 선택: `alpha_test_to_opaque`는 낮은 불투명도 배경을 불투명하게 그린다. 유리에는 `alpha_test_one_sided`를 쓰고, 한쪽에서만 보이는 유리는 블록 컬링과 blend로 만든다. 커스텀 잎에 `alpha_test_single_sided_to_opaque`를 쓰자 검은 아티팩트가 생긴 사례에는 alpha_test가 제안됐다(`unverified`). 복잡한 모델의 blend 유리는 그리기 순서 문제가 있고, Blockbench에는 blend 렌더 모드가 없다.
+- 커스텀 블록 지오메트리에서 그냥 `alpha_test`는 뒷면도 그린다. 그래서 상자마다 여섯 면을 모두 둬야 하고, 빠진 면은 모델을 꿰뚫는 구멍으로 보인다 `{기록}`. 뒷면이 필요 없으면 `alpha_test_single_sided`를 쓴다.
 - 투명 픽셀이 검정으로 나오면 텍스처의 투명 픽셀에 실제 색 정보가 있어야 하고(아니면 편집기·변환기 문제) PNG여야 한다.
 
 ## 발광
@@ -45,6 +46,8 @@ sources: [private-research, bedrock-wiki, ms-learn]
 - 엑스레이 팩: 바닐라 블록 셰이프 `structure_void`가 AO를 없앤다(fluoroscopy 팩).
 - 상자 같은 모양: 바닐라 상자는 블록 엔티티로 렌더링된다. 커스텀 블록은 AO와 face_dimming을 꺼서 흉내 낼 수 있지만 Fancy·Simple에서 이상해 보인다. 바닐라 상자, PBR, 옛 물 셰이더를 단순 팩으로 재현하는 것은 불가능하다.
 - z-fighting: 좌표는 소수점 한 자리로 유지되니 `inflate`를 작게 쓴다. VV를 켜면 2D 평면의 z-fighting이 돌아온다(해결책 없음).
+- 얇은 블록 모델(가운데 심과 사방으로 뻗는 팔): 블록 경계에 닿는 면은 0.1 px 안으로 들인다. 0.01 px로는 이웃 블록의 면과 여전히 깜빡였다 `{실측}`. 심은 팔과 끝 부분보다 0.05 px 크게 만들어 맞닿는 면이 한 평면에 놓이지 않게 한다(텍스처 가운데가 뚫려 있으면 그 안쪽 면이 보인다).
+- 블록 면에 투명한 구멍이 있으면 그 자리로 이웃 블록의 면이 비치고, 그 부분이 깜빡인다. 구멍 뒤에 밑깔개 텍스처 층을 하나 더 둬서 메운다 `{기록}`.
 - `minecraft:geometry.full_block`의 면이 눈 레이어 옆에서 잘못 그려지는 버그가 있고, 2026-11-15 기준 프리뷰에서 고쳐졌다.
 
 ## 오버레이, 틴트, 파괴 균열

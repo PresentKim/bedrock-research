@@ -55,16 +55,49 @@ A change that moves client data or modifies a patch must leave the golden unchan
 | It takes the ingredients of the recipe the client picked regardless of slot position | A shaped recipe can be crafted in any arrangement | Reject if the items in the crafting grid do not match the recipe shape (anywhere inside the grid, mirrored only when allowed). For recipes that forbid mirroring, send `AssumeSymmetry=false` to the client |
 | The result block state in vanilla recipe data (chest orientation and so on) can differ from the creative list | The client recipe book lists a recipe only when the result matches the creative entry, so some recipes do not show | Send the recipe result's block runtime ID equal to the item's creative entry (when there is only one entry) |
 | Grass and mycelium spread (`spreadDirt`) looks only at light | Grass survives and spreads even under custom solid blocks that do not block light | If a full solid block (`model.Solid`) is above, turn the grass back into dirt and do not let it spread from such dirt (same as vanilla) |
-| There is no setting to choose separately the local address to bind the NetherNet listener to and the public address to announce | A server behind 1:1 NAT or a tunnel announces an address that does not fit | Add a local address (one address to bind and announce) and a public address (announced in place of the local address) to the listener config |
+| There is no setting to choose separately the local address to bind the NetherNet listener to and the public address to announce. The listener offers every interface address as an ICE candidate | A server behind 1:1 NAT or a tunnel announces an address that does not fit. Behind a tunnel, players cannot reach those candidates and the host's own addresses are exposed | Add a local address (one address to bind and announce) and a public address (announced in place of the local address) to the listener config, and offer only those addresses as candidates `{code}` |
+| It does not send `VoxelShapes` | A 1.26 client logs that the shape list is missing `{measured}` | Send the basic shapes `minecraft:empty` and `minecraft:unit_cube` at join |
+| It sends no entity properties (no `SyncActorProperty`, no `AddActor.EntityProperties`) `{code}` | `PlayerUpdateEntityOverrides`, which overrides an entity's int, float, bool or enum client property per player, cannot be used as is | First build property definition sync, property values when an entity is added, and render controllers using `query.property` in the resource pack. Text (name tags) cannot be a property |
+| When `Use` of an `item.Usable` returns true, the hand item read before `Use` is written back `{code}` | Changes `Use` made to the held item are undone | Return false from a `Use` that edits the held item |
+| `HandleBlockBreak` carries no face `{code}` | Breaking cannot be blocked on only one face of a block (for example its front) | Record per player the face last hit in `Punch(pos, face, tx, user)` of `block.Punchable`, and cancel the break when that face is the front |
+| Entities are saved with the world `{code}` | Display entities the server spawned come back after the world is reloaded | Have the display entity delete itself in `Tick` when its block is gone or the session does not know it, and respawn it when the column loads. A non-saved entity type from the optimizations below also works |
+| gophertunnel closes the connection when one batch holds too many packets (`maximumInBatch`) | A fake client that sent 861 `SubChunkRequest` in one batch was disconnected with no log `{measured}` | The fake client sends 64 per tick |
+| gophertunnel's decoder looks up the compression algorithm of each received batch by its ID and drops the connection when the result is not the connection's configured compression `{code}` | Replacing the Flate compression with a level-configurable implementation without registering it cut every client off at Login, over both RakNet and NetherNet `{measured}` | Register the replacement under the Flate ID with `packet.RegisterCompression` and use the same value as the server config `Compression` |
+
+## Click dispatch order `{code}`
+
+When a block is clicked, Dragonfly handles it in this order.
+
+1. The player handler gets it first. Cancelling ends it there.
+2. The clicked block's `Activate` (`block.Activatable`). Skipped when the player sneaks while holding an item.
+3. If `Activate` returns false, the held item's `UseOnBlock` (`item.UsableOnBlock`).
+4. If neither applies, the held block is placed.
+
+Clicking the air calls the held item's `Use`. The client sends air-use packets only for items it knows are usable, so a custom item needs `minecraft:use_modifiers` in its client entry for `Use` to be called ([custom-items-and-blocks.mdx](custom-items-and-blocks.mdx)). `Punch` (`block.Punchable`) cannot stop breaking. `BreakInfo().BreakHandler` runs after the block is removed, and also runs when explosions or liquids break it.
+
+## Item stack values `{code}`
+
+Values attached with `item.Stack.WithValue` are saved in the item NBT under `dragonflyData`, so they persist in player data, containers and other stored stacks. Stacks with different values count as different items and do not stack; equal values stack.
 
 ## Optimizations to try in a fork
 
 - Cache the list of chunks that are targets of random and block entity ticks, and recompute only when a loader is added, removed or moved, a chunk is added or deleted, or on `SetTickRange` (force a recompute every 100 ticks as a safety net). Reuse the block entity position buffer.
 - Incremental saving: save modified columns oldest first, up to 16 per second, to split up save stalls (`Save`/`Close` save everything).
-- Encode palette entry NBT once per runtime ID and reuse it.
+- Encode palette entry NBT once per runtime ID and reuse it. Upstream palette NBT encoding is not deterministic (map order), so skipping `Put` by byte comparison below needs this cache first `{code}`.
 - Skip `Put` to LevelDB when the value has not changed (per-key hash). Delete empty subchunks.
 - Cache subchunk network data per column version.
-- Build recipe and creative data once per block registry and share it.
+- Build recipe and creative data once per block registry and share it. Upstream rebuilds the recipe entries on every send with a new RecipeID from `uuid.New`, so caching also needs a fixed RecipeID `{code}`.
 - When the client is receiving chunks, increase the number of chunks sent per tick (from 4 to 16).
 - Send weather packets only when the value changes.
 - Have a temporary entity type that is not saved, such as display entities, and do not mark the column as modified for those entities.
+
+Values measured with `go test -bench` (2 s) on a fork with these optimizations `{measured}`.
+
+| Benchmark | Upstream | Fork |
+|---|---|---|
+| Tick of 5,000 block entities | 6.92 ms (4,670 allocs) | 3.29 ms (161 allocs) |
+| Tick range for 450 loaders and 600 chunks | 6.30 ms | 3.22 ms |
+| Disk encoding of 24 subchunks | 116 us | 27 us |
+| Re-saving 100 unchanged columns | 11.8 ms, 11.7 MB | 4.9 ms, 3.5 MB |
+| Subchunk entry with 2 viewers | 4,249 ns | 7 ns (cache hit) |
+| Sending recipes | 6,173 ns | 1,859 ns |

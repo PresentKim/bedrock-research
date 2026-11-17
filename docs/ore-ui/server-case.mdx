@@ -43,12 +43,12 @@ sources:
 
 - 창 크기가 바뀌면 Gameface가 누름을 바뀌기 전 자리로 판정한다. 그래서 크기가 같은 창끼리는 열린 화면을 그 자리에서 바꾸고, 크기가 다른 창은 화면을 새로 연다.
 - Gameface는 비어 있는 투명한 요소에 누름을 주지 않는다. 창 안 빈 곳의 누름은 문서(`document`)의 `mousedown`·`touchstart`에서 대상이 창 안인지 보고 처리한다.
-- 터치에서는 탭 뒤에 `mousedown`이 따라온다. 탭 뒤 700ms 안의 `mousedown`은 같은 탭으로 보고 무시한다.
+- 터치에서는 탭 뒤에 `mousedown`이 따라온다. 탭 뒤 700ms 안의 `mousedown`은 같은 탭으로 보고 무시한다. 탭과 `mousedown`의 순서는 기기마다 다르다([페이지 환경](./page-environment.mdx) 2장).
 - Gameface는 자라는 상자의 `min-height`를 받을 높이에서 빼므로 자라는 줄에는 `min-height`를 두지 않는다.
 - Gameface는 빈 flex 항목을 늘리지 않으므로 격자의 줄과 칸 크기는 퍼센트로 정한다.
-- 페이지에 캔버스(`getContext`)가 없다. 픽셀 그림(예: 스킨 얼굴 8x8)은 서버가 픽셀 목록으로 보내고 상자를 줄과 칸으로 놓아 그린다.
+- 페이지에 캔버스(`getContext`)가 없다. 픽셀 그림(예: 스킨 얼굴 8x8)은 서버가 픽셀 목록으로 보내고 상자를 줄과 칸으로 놓아 그린다. 스킨 얼굴은 머리 앞면 8x8(모자 겹 포함)이다. 스킨 모델(Persona, 사용자 모델)이 있으면 `head`·`hat` 뼈의 첫 큐브 박스 UV에서, 없으면 표준 스킨 자리(64px 기준 머리 (8,8), 모자 (40,8))에서 읽고, 얼굴이 비면 바닐라 `textures/ui/icon_steve`를 그린다. 이렇게 읽은 얼굴이 클라이언트에 따라 잘못 나왔고 원인은 확인 안 됨 `{기록}`.
 - 페이지에서 게임 채팅창을 여는 엔진 명령이 없다. 명령은 페이지의 입력칸에서 받아 서버로 보낸다.
-- 서버 나가기는 페이지가 바닐라 `vanillaGameplayLeaveGameCommandGroup.leaveGame()`을 불러 클라이언트가 스스로 나가게 할 수 있다. 이 명령이 없는 클라이언트에서만 서버가 접속을 끊는다.
+- 서버 나가기는 페이지가 바닐라 `vanillaGameplayLeaveGameCommandGroup.leaveGame()`(사망 화면의 타이틀 화면 버튼과 같은 명령)을 불러 클라이언트가 스스로 나가게 할 수 있다. 이 명령이 없는 클라이언트에서만 서버가 접속을 끊는다.
 
 ## 4. 서버가 구현하는 인벤토리 클릭 규칙
 
@@ -85,3 +85,14 @@ GUI 배율은 `html` 글자 크기로 오므로 `rem` 크기가 따라간다. �
 - **게임이 업데이트되면 팩의 `hbui/gameplay.html`에 적은 바닐라 번들 파일 이름(해시)을 설치본과 맞춘다.** 틀리면 게임 중 Ore UI 전체가 뜨지 않는다. CSS `@font-face`의 글꼴 파일 이름도 맞춘다.
 - 화면 크기 상자는 퍼센트가 아닌 `vw`·`vh`로 잡는다(iPad에서 body 높이가 0).
 - 화면은 바닐라 CSS·JS에 기대지 않는다(iOS에서는 팩의 `hbui` 폴더가 게임 것을 통째로 대신한다). 글꼴은 팩 CSS가 `ui://hbui/fonts`로 직접 선언한다.
+
+## 9. 게임 밖에서 화면 시험
+
+페이지의 레이아웃은 데스크톱 브라우저에서 엔진을 흉내 내어 시험할 수 있다 `{코드}`.
+
+- 시험 HTML은 팩의 `hbui` CSS와 페이지 번들, 흉내 엔진 스크립트를 불러오고 `html` 글자 크기를 10px로 둔다(GUI 배율 2와 같다, [페이지 환경](./page-environment.mdx) 8장).
+- 흉내 엔진은 `window.engine`의 `on`·`trigger`를 둔다. `trigger("query:subscribe/<이름>", id, ...인자)`를 받으면 다음 틱에 `query:subscribed/<id>` 리스너로 답한다. `vanilla.ddui.screenId`에는 `{screenId: "minecraft:custom_form"}`, `vanilla.ddui.string`(인자 `minecraft`, `custom_form_data_1`)에는 서버가 보낼 루트 JSON을 준다.
+- `window.__commands__.vanillaDduiDataStoreSetCommandGroup.setDataStorePathString.callable`은 받은 인자를 배열에 쌓아, 페이지가 서버로 보낼 이벤트를 확인할 수 있게 한다.
+- 화면마다 서버가 보낼 루트를 서버 쪽 시험 코드가 JSON 파일로 뽑아 둔다.
+- Playwright로 1280x720 창에 열고 `*{animation:none!important;transition:none!important}`를 넣은 뒤 찍는다. 기준 그림과 pixelmatch(`threshold: 0.1`)로 비교해 달라진 픽셀 비율을 낸다.
+- 레이아웃이 바뀌었는지만 본다. 브라우저는 Gameface가 아니므로 `mousedown`으로만 오는 누름, 3장과 [페이지 환경](./page-environment.mdx) 2장, 11장의 Gameface 동작은 이 시험에 나타나지 않는다. 그것은 게임에서 확인한다.

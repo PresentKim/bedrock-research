@@ -19,6 +19,9 @@ Send `UpdateBlock` (position, block runtime ID, layer 0 block or layer 1 liquid)
 
 - A block the client predicted and drew when it was not actually placed is also corrected by resending the real block. Resending the surrounding blocks after a block `Activate` succeeds erases the ghost block the client placed by prediction.
 - On top of a block the server sent as an interactive block (Dragonfly `Activatable`), the client does not predict placing the block it holds.
+- When layer 0 of a cell becomes air, the client moves the layer 1 (liquid layer) block up to layer 0. When restoring a fake view that used both layers, restore layer 1 first and layer 0 after it. In the reverse order the layer 1 block is left behind as a clickable block `{measured}` (2026-11-10).
+- Vanilla stained glass sent on layer 1 of a cell whose layer 0 is a solid block is drawn by the client, so it can tint a real block. Whether a custom block sent on layer 1 is drawn too was not checked `{measured}`.
+- The client aims at, clicks and mines a fake block on layer 0 as if it were real. A display-only custom block with no collision or selection box on layer 0 lets clicks reach the face behind it `{measured}`.
 
 ## Fake chunks
 
@@ -72,3 +75,4 @@ Example: packet order
 - The client matches block runtime IDs **in block state order**. If you merge the state into one number, the order cannot drift from the server. Properties are sorted by name (to match the order in which the client numbers states). With `block-network-ids-are-hashes` (BDS default true), a stable hash ID is used instead of the sequence number.
 - Entity models are drawn half a turn from the world (the model's front faces north). When converting world coordinates to model coordinates, flip only the sign of z and leave x as it is.
 - `Rotation` of a debug shape is [pitch, yaw, roll] in degrees, and yaw 0 reads from north. The reference differs from entity yaw (south 0, north 180), so using it as is flips north and south. A value in radians is effectively 0 degrees.
+- A debug shape box is drawn centered on its position, not from a corner. A box meant to cover a block goes at the block's center with the block model's size (half for a slab) `{measured}` (2026-11-10).

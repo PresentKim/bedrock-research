@@ -1,6 +1,6 @@
 ---
 title: "프로토콜 기초: RakNet, NetherNet, 접속 흐름"
-description: "Bedrock 프로토콜 계층, 접속 핸드셰이크, NetherNet 시그널링과 포트, 서버 권위 이동, SubChunk 요청, 라이브러리, WebSocket, 보안과 프록시"
+description: "Bedrock 프로토콜 계층, 접속 핸드셰이크, NetherNet 시그널링과 포트, 서버 권위 이동, SubChunk 요청, 클라이언트 blob 캐시, 라이브러리, WebSocket, 보안과 프록시"
 sidebar_position: 2
 sources:
   - private-research
@@ -193,7 +193,57 @@ server-authoritative-block-breaking-pick-range-scalar=1.5
 - 클라이언트는 ① 틱 영역(대략 4청크 안 전부)과 ② 보이는 서브청크를 점진적으로 `SubChunkRequestPacket`(차원 ID와 서브청크 위치. Y는 절대 서브청크 번호로, -64~319면 -4~20)으로 요청한다. 요청은 구속력이 없어 서버가 무시하고 자기 순서로 보내도 된다.
 - 응답을 받기 전 위치에는 보이지 않는 막힌 자리 블록이 놓인다. 응답은 `SubChunkPacket`: 차원 ID, 위치, 직렬화 서브청크(블록 엔티티 포함. 데이터가 없으면 빈 문자열), 결과(0 정의 없음, 1 성공, 2 청크 없음, 3 다른 차원, 4 플레이어 없음, 5 인덱스 범위 밖), 높이맵, blob 캐시 여부와 ID다. 3rd party 서버는 보통 성공(1)만 쓰면 된다.
 - 클라이언트는 `NeedsRequest` 표시가 있는 서브청크의 응답만 받고, 성공 처리 뒤에는 청크 전체가 다시 요청 모드로 표시되기 전까지 같은 서브청크의 패킷을 무시한다. 이후 변경은 일반 블록 갱신으로 보낸다.
-- 높이맵은 서브청크마다 상태 바이트(1이면 16x16 높이값 배열이 뒤따름)로 조금씩 알려 조명과 비·눈 처리를 유지한다. blob 캐시 ID는 서브청크와 블록 엔티티를 합친 덩어리 기준이라 일반 LevelChunk의 ID와 다르다.
+- 높이맵은 서브청크마다 상태 바이트(1이면 16x16 높이값 배열이 뒤따름)로 조금씩 알려 조명과 비·눈 처리를 유지한다. 이 문서는 서브청크의 blob 캐시 ID를 서브청크와 블록 엔티티를 합친 덩어리 기준이라 설명하고, 그래서 일반 LevelChunk의 ID와 다르다고 한다. Dragonfly 구현은 블록 데이터만 blob으로 만들고 블록 엔티티 NBT는 캐시 밖에서 매번 보낸다(아래 "클라이언트 blob 캐시").
+
+## 클라이언트 blob 캐시
+
+클라이언트는 서버가 보낸 서브청크·바이옴 데이터를 내용의 해시로 저장해 두는 blob 캐시를 가진다. 캐시를 켠 클라이언트에는 바뀌지 않은 데이터를 해시만 보내고 넘어갈 수 있다. 아래 흐름과 blob 내용은 Dragonfly 코드(`server/session/chunk.go`)를 읽은 것이고 `{코드}`, 측정은 캐시를 켠 gophertunnel 가짜 클라이언트(해시로만 찾는 캐시)로 Dragonfly 서버에 접속해 잰 것이다 `{실측}`. Dragonfly는 이 흐름을 이미 구현해 두어, 클라이언트가 캐시를 켜고 접속하면 그대로 쓴다.
+
+| 순서 | 패킷 | 보내는 쪽 | 내용 |
+|---|---|---|---|
+| 1 | `ClientCacheStatus{Enabled}` | 클라이언트 | 접속 때 한 번 캐시 지원 여부를 알린다. Nintendo Switch 등은 `false`를 보낸다. gophertunnel에서는 `Conn.ClientCacheEnabled()`가 이 값이다 |
+| 2 | `LevelChunk{CacheEnabled: true, BlobHashes}` | 서버 | 서브청크 요청 모드에서는 바이옴 blob 해시 하나만 담는다 |
+| 3 | `SubChunkRequest` | 클라이언트 | 서브청크를 요청한다 |
+| 4 | `SubChunk{CacheEnabled: true}` | 서버 | 항목마다 `BlobHash`에 블록 데이터 해시, `RawPayload`에 블록 엔티티 NBT만 담는다. 공기뿐인 서브청크는 blob 없이 `SuccessAllAir`로 보낸다 |
+| 5 | `ClientCacheBlobStatus{HitHashes, MissHashes}` | 클라이언트 | 이미 가진 해시(hit)와 없는 해시(miss). 한 패킷에 해시가 4095개까지 들어간다 |
+| 6 | `ClientCacheMissResponse{Blobs}` | 서버 | miss의 실제 데이터. Dragonfly는 보낸 blob을 hit·miss 답이 올 때까지 세션에 최대 4096개 들고 있다 |
+
+### 캐시 키
+
+- 키는 blob 바이트의 xxhash64(시드 0) 하나다. 청크 x·z, 월드, 차원, 서버는 키에 들어가지 않고, `ClientCacheBlobStatus`와 `ClientCacheMissResponse`에도 좌표가 없다 `{코드}`.
+- Mojang 개발자의 설명으로는 캐시가 접속이 끝나도 남고, 내용이 정확히 같으면 다른 서버에서 받은 blob도 다시 쓰며, 클라이언트는 받은 blob의 해시를 직접 계산해 맞지 않으면 버린다. 실제 클라이언트가 좌표 없이 해시만으로 찾는지는 게임에서 확인하지 않았다(*unverified*).
+
+### 프로토콜 문서와 Dragonfly 구현
+
+- 프로토콜 문서(1.18.10)는 서브청크 blob을 서브청크와 블록 엔티티를 합친 덩어리로 설명한다. Dragonfly의 서브청크 blob은 블록 데이터만 담고 블록 엔티티 NBT는 `RawPayload`로 매번 보낸다.
+- Mojang 설명은 blob에 디스크 형식(블록 NBT 팔레트)을 쓰라고 하지만 Dragonfly는 네트워크 형식(블록 런타임 ID)을 쓴다. 커스텀 블록을 더해 런타임 ID가 밀리면 해시도 바뀌므로 업데이트 뒤 첫 접속은 모두 miss가 된다. 예전 blob이 잘못 쓰이지는 않는다.
+
+### 두 서브청크 blob이 같아지는 조건 (Dragonfly)
+
+Dragonfly 서브청크 blob의 바이트에는 버전(9), 층 수, **서브청크 Y 번호**, 층마다 비트 폭·인덱스·팔레트(블록 런타임 ID)가 들어간다. 그래서 다른 청크의 서브청크와 같은 blob이 되려면 Y 칸, 블록 배치, 팔레트 순서, 층 수가 모두 같아야 하고 x·z는 상관없다.
+
+- 같은 돌로 채운 두 청크(x만 다름)는 재접속 때 다른 좌표의 blob으로 hit 했고, 같은 돌을 한 서브청크 위에 둔 청크는 새 blob이었다 `{실측}`.
+- 팔레트는 블록이 처음 놓인 순서로 쌓인다. 저장 때 `Compact`가 안 쓰는 항목만 빼고 순서는 그대로 둔다. 그래서 같은 모양도 놓은 순서가 다르면 다른 blob이다. 지운 블록이 남긴 항목은 저장·로드 뒤 사라져, 다이아몬드로 채운 뒤 돌로 덮은 칸이 처음부터 돌인 칸과 같은 blob이 됐다 `{실측}`. 아직 저장하지 않은 칼럼은 빈 항목을 들고 있어 다를 수 있다.
+- 바이옴 blob은 칼럼 전체(모든 높이)가 하나다. 블록 엔티티 NBT는 blob 밖이다.
+
+### 측정 `{실측}`
+
+- 데이터가 아직 오지 않은 해시가 다른 청크에서 또 miss로 오면 Dragonfly는 그 데이터를 한 번만 보낸다. 첫 miss에서 세션의 blob을 지우기 때문이다. 시험에서 miss 12건에 응답 blob은 11개였다.
+- 서브청크 대부분이 공기인 로비에서 잰 값(gophertunnel v1.63.0 시기):
+
+| 경우 | LevelChunk | blob 서브청크 | hit | miss | miss 응답 |
+|---|---|---|---|---|---|
+| 첫 접속(빈 캐시) | 861 | 8 | 829 | 40 | blob 10개, 9030 B |
+| 같은 접속에서 재전송 | 861 | 8 | 869 | 0 | 0 |
+| 재접속(캐시 유지) | 861 | 8 | 868 | 1 | blob 1개, 1040 B |
+
+miss 40건에 blob이 10개인 것은 같은 바이옴 해시가 여러 청크에서 겹치기 때문이다(서버는 해시마다 한 번만 보낸다).
+
+### 재사용을 늘리는 생각 `{추론}`
+
+- blob을 만들기 전에 팔레트를 정규화하면(예: 런타임 ID 순 정렬) 놓은 순서가 달라도 같은 모양이면 같은 blob이 된다. Y 번호는 형식에 들어 있어 뺄 수 없다.
+- 커스텀 블록을 더할 때 기존 런타임 ID가 밀리지 않게 하면 업데이트 뒤에도 캐시가 유지된다.
+- 시험하는 가짜 클라이언트가 `SubChunkRequest`를 한 배치에 수백 개 보내면 gophertunnel이 연결을 닫는다([dragonfly-notes.mdx](dragonfly-notes.mdx)의 업스트림 동작 표).
 
 ## 보안, 크래셔, 안티치트, 프록시
 

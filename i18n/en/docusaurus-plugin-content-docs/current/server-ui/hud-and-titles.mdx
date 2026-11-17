@@ -193,7 +193,8 @@ This is a HUD panel that shows the name, icon and information of the block you l
 - Load icons into the subtitle in fixed-width slots. Fill each slot with the item runtime ID x 65536 as text (fill empty positions with a letter such as `x`), and attach letters before and after to preserve the string form. If you send only digits, the block state check, in which the pack treats the subtitle as a string, breaks (gray slot, an "expected a string" warning).
 - The pack cuts slots from the **variable** `$var_subtitle_text` that the title factory provides, erases the filler letters, and puts the result in `#item_id_aux` of `property_bag`. The panel text is also all drawn with this variable.
 - Send the subtitle before the title. When sending a regular title (level up and so on), pause the panel until that title ends.
-- Line-of-sight tracing runs when moving or turning and at short intervals, with a ray check (excluding air and liquid) up to a few blocks from the eyes. Crops are judged as a box whose height grows with the stage, and blocks without a collision box are judged as the whole cell, which matches the client crosshair. Send only what changed and occasionally resend.
+- Line-of-sight tracing runs when moving or turning (at most once per 0.1 s) and every 0.2 s, with a ray check (excluding air and liquid) up to 6 blocks from the eyes. Crops are judged as a box (stage + 1) / 8 of a block high, so looking over a short crop hits the block behind it. Blocks without a collision box (flowers and so on) are judged as the whole cell, which matches the client crosshair. Send only what changed and occasionally resend.
+- A circular gauge for work in progress can be drawn with custom font glyphs. Put 11 frames in the second row of the glyph page `glyph_E1` (U+E110 to U+E11A), and place the character for the current progress in the panel's item line at about 10 px (60% of a slot).
 
 ### 5.2 What to avoid in JSON UI
 
@@ -215,6 +216,8 @@ The title holds only one at a time, so if you load a feature that uses the title
 ## 7. Touch pocket layout `{record}`
 
 On a touch screen, when the UI profile is pocket, the vanilla HUD draws hearts at the top left and hunger at the top right with `not_centered_gui_elements`. If those places overlap the server's lines, redefine that version in `hud_screen.json` and place hearts, armor, hunger, air bubbles and mount hearts above the hotbar (the classic touch layout, the same place as vanilla `centered_gui_elements_at_bottom_middle_touch`). The hotbar is drawn separately by the pocket layout, so it is not put in, and only the paper doll is left at the top left (Source: private research).
+
+A setup without redefining that panel also exists `{code}` (not yet checked in game): use path keys to set only the vanilla heart, armor, hunger, air bubble and mount heart renderers to `ignored`, and `insert_back` a panel holding the same renderers above the hotbar (the `centered_gui_elements_at_bottom_middle_touch` position) with `modifications`. The vanilla `controls` array is not rewritten, so the paper doll stays at the top left and controls vanilla adds later survive.
 
 ## 8. Drawing items with the HUD subtitle `{record}`
 
