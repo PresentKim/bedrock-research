@@ -60,7 +60,7 @@ Conditions: Windows 1.26.65, flat world, VSync off in settings, 10 seconds per r
 | --- | --- | --- |
 | First frame (100 and 2000) | 2 to 3 seconds after opening, the name, description and icon of every visible cell were filled | Same |
 | Frame cost with the list open | About 0.12ms more than the world alone | About 0.05ms more than the world alone |
-| Difference by button count | 100 and 2000 the same | 100 and 2000 the same |
+| Difference by button count | 100 and 2000 the same (up to 20000 in section 3.1) | 100 and 2000 the same (up to 20000 in section 3.1) |
 | Longest frame while opening (2000, 12-second capture) | 43ms, no frame over 50ms | 43ms, no frame over 50ms |
 | VSync on | 60fps, about 0.1 CPU core for the process | Same |
 
@@ -68,6 +68,23 @@ Conditions: Windows 1.26.65, flat world, VSync off in settings, 10 seconds per r
 - The difference was the same at 100 and 2000 buttons. If off-screen cells had been re-evaluated every time, 2000 would have been heavier, so in this setup the cost of `always` did not grow with the cell count. Why was not checked.
 - The opening cost was the same for both. The cost of building cells comes from the cell count and the controls per cell, not the binding condition (sections 1 and 4 of [JSON UI optimization](./index.mdx)).
 - With VSync on, both stayed at 60fps and no difference showed. The difference may show more on a machine with less frame headroom, but that was not measured.
+
+### 3.1 Up to 20000 buttons
+
+Later the same day the game was started again and the same method was used with more buttons (measured). In this run the world alone was about 297 to 300 fps both at the start and at the end. Opening was captured for 25 seconds.
+
+| Buttons | A fps | V fps | Longest frame while opening (A / V) |
+| --- | --- | --- | --- |
+| 2000 | 288.3, 287.1, 286.2 | 294.9, 294.3, 295.9 | 44ms / 42ms |
+| 5000 | 281.6, 282.3 | 288.8, 289.1 | 79ms / 82ms |
+| 10000 | 283.6, 282.8 | 289.3, 287.9 | 137ms / 142ms |
+| 20000 | 283.5, 284.0 | 291.7, 292.5 | 273ms / 264ms |
+
+- At every button count V was about 6 to 8 fps higher than A (about 0.07 to 0.09ms per frame).
+- The fps with the list open did not drop as the count went from 2000 to 20000. Neither the cost of `always` nor the cost of the list itself grew with the button count.
+- The longest frame while opening grew with the button count, by about 13 to 14ms per 1000, and was the same for A and V. The opening cost does not depend on the binding condition.
+- That frame may also include the time the script takes to build the form. Opening A with 20000 buttons put script Watchdog warnings (Spike 404ms, Slowdown) in the content log, but only during the 1 to 2 seconds of building the form, and none during the fps runs 30 seconds later. The script is the same for A and V.
+- From 5000 buttons the cells were drawn overlapping at the top of the window. This is the same as the 2-column grid overlapping from about 3000 (COL-49). Values from 5000 up were measured on this broken layout.
 
 ## 4. Steps to move over
 
@@ -94,7 +111,7 @@ An add-on that opens the A and V lists of section 3. The router picks the window
 
 1. Open the file to import it (on mobile, tap the file and open it with Minecraft). In a new world, turn on the behavior pack whose name starts with `[bedrock-research]collection-view-order-bp`. The resource pack turns on with it as a dependency, and no experimental toggle is needed.
 2. Take "Collection View Order Test" from the end of the Items category of the creative inventory. You can also run `/give @s bwiki:collection_view_order_test`.
-3. Use the item or run `/scriptevent bwiki:collection_view_order` to open a menu that picks the version (A, V) and the button count (100, 1000, 2000). The text at the top of the window shows which version it is.
+3. Use the item or run `/scriptevent bwiki:collection_view_order` to open a menu that picks the version (A, V) and the button count (100, 2000, 5000, 10000, 20000). From 5000 the cells overlap, so those counts are for comparing cost. The text at the top of the window shows which version it is.
 4. To compare frames, turn VSync off and open the two versions one after the other in the same spot while measuring fps.
 
 - `server_form.json` differs from the other server form examples only in the router line (section 9 of [JSON UI optimization](./index.mdx)). Turning it on in the same world as them follows the convention, but it was not checked in game with this add-on.

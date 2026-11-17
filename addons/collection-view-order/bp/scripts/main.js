@@ -1,9 +1,9 @@
 import { system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 
-const PACK_VERSION = "v1.0.0";
+const PACK_VERSION = "v1.1.0";
 const TEST_ITEM = "bwiki:collection_view_order_test";
-const COUNTS = [100, 1000, 2000];
+const COUNTS = [100, 2000, 5000, 10000, 20000];
 const MODES = [
   { title: "§b§wcv:A", label: "A: collection then view, always" },
   { title: "§b§wcv:V", label: "V: collection then view, no always" },
