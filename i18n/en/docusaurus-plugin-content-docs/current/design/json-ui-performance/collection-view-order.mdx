@@ -1,0 +1,116 @@
+---
+title: Filling the first frame without always
+description: A plan that puts the label bindings of a grid cell in collection binding then view binding order so the cell fills from the first frame without binding_condition always. The problem, the method, a measured comparison with the always cells of the grid example (first frame, fps, opening), steps to move over, what not to do, and a comparison add-on.
+sidebar_position: 2
+sources:
+  - repo-guide
+  - private-research
+---
+
+# Filling the first frame without always
+
+The cells of the [grid button list](./grid-button-list.mdx) cut the button text to draw a name and a description. When this calculation is done with a view binding, cells can be empty on the first frame, so `binding_condition: "always"` is often put on the bindings. This plan fills the first frame with **binding order** instead of `always`, and compares the two setups on the same grid.
+
+## 1. Problem
+
+- Bindings inside a cell built by a factory or grid can run too early and stay empty (BND-07). A view binding that reads a collection value that has not arrived yet draws empty text on the first frame.
+- There is a community report that a collection value shows from the start when put directly through `binding_name`, but is skipped once when calculated through a view binding. The fix used in that report was to put `always` on both bindings.
+- `always` re-evaluates on every update even when the value does not change (BND-23). With many cells, that cost is a worry.
+
+## 2. Method
+
+In the `bindings` array of the same control, put **the collection binding first and the view binding that reads its value after it**. Neither has a condition (the default `none`, BND-35).
+
+```json title="always version (grid example v1.3.1)"
+"bindings": [
+  { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text", "binding_condition": "always" },
+  { "binding_type": "view", "binding_condition": "always", "source_property_name": "('%.12s' * #form_button_text)", "target_property_name": "#text" }
+]
+```
+
+```json title="order version (grid example v1.4.0)"
+"bindings": [
+  { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text" },
+  { "binding_type": "view", "source_property_name": "('%.12s' * #form_button_text)", "target_property_name": "#text" }
+]
+```
+
+Bindings are evaluated in array order, so when the later view binding reads, the earlier collection binding has already put `#form_button_text` in place. In the reverse order the view reads the empty value first (BND-37).
+
+## 3. Measured comparison
+
+Two lists with the same screen router, window, 2-column grid and cell face were compared; only the bindings of the name and description labels differ. In both versions the cell's `collection_details` binding and the grid length binding use `always`, and the progress bar uses collection then view with no condition. The add-on in section 6 opens these two lists.
+
+| Version | Name and description labels |
+| --- | --- |
+| A | Collection then view, both `always` (same as grid example v1.3.1) |
+| V | Collection then view, no condition (same as grid example v1.4.0) |
+
+Conditions: Windows 1.26.65, flat world, VSync off in settings, 10 seconds per run with Intel PresentMon 2.6.0 while the list is open (2026-11-18, measured).
+
+| State | fps | CPU time per frame |
+| --- | --- | --- |
+| World alone (no list) | 294.2, 294.4 | 3.23ms |
+| A, 100 buttons | 284.0, 284.6 | 3.35ms |
+| A, 2000 buttons | 281.9, 283.7, 284.8, 284.5 | 3.34~3.37ms |
+| V, 100 buttons | 291.0, 289.3 | 3.27~3.28ms |
+| V, 2000 buttons | 288.0, 291.1 | 3.27~3.30ms |
+
+| What to look at | A (`always`) | V (order only) |
+| --- | --- | --- |
+| First frame (100 and 2000) | 2 to 3 seconds after opening, the name, description and icon of every visible cell were filled | Same |
+| Frame cost with the list open | About 0.12ms more than the world alone | About 0.05ms more than the world alone |
+| Difference by button count | 100 and 2000 the same | 100 and 2000 the same |
+| Longest frame while opening (2000, 12-second capture) | 43ms, no frame over 50ms | 43ms, no frame over 50ms |
+| VSync on | 60fps, about 0.1 CPU core for the process | Same |
+
+- Dropping `always` saved about 0.07ms per frame while the list was open. On this machine that is about 284 to about 290 fps.
+- The difference was the same at 100 and 2000 buttons. If off-screen cells had been re-evaluated every time, 2000 would have been heavier, so in this setup the cost of `always` did not grow with the cell count. Why was not checked.
+- The opening cost was the same for both. The cost of building cells comes from the cell count and the controls per cell, not the binding condition (sections 1 and 4 of [JSON UI optimization](./index.mdx)).
+- With VSync on, both stayed at 60fps and no difference showed. The difference may show more on a machine with less frame headroom, but that was not measured.
+
+## 4. Steps to move over
+
+Steps to move cells that fill the first frame with `always` over to the order method.
+
+1. Find the bindings with `always` inside the cell. Split them into the cell's `collection_details`, grid or factory length bindings, and label or image bindings inside the cell.
+2. For each label or image binding, check that the collection binding comes **before** the view binding. If it comes after, swap them.
+3. Remove `binding_condition` from those two bindings.
+4. Check that the view expression does not divide a string by a number. Convert with `(#v - 0)` before dividing (EXP-16, EXP-49).
+5. Keep `always` on the cell's `collection_details` and the length binding. A setup without it on these two was not measured in this comparison. With the default condition, factories and grids inside a router window were empty at first (COL-47, COL-48).
+6. Open the list and look at the first frame, cells further down after scrolling, and a hovered cell (hover state).
+
+## 5. What not to do
+
+- **Do not write an expression straight into `binding_name` of a collection binding.** A version written as `binding_name: "('%.12s' * #form_button_text)"` with `binding_name_override: "#text"` froze the client as soon as the 100-button list opened (Windows 1.26.65, 2026-11-18, measured). Which expression causes it was not isolated. Vanilla UI does have such collection expression bindings (for example `(not #realm_slot_is_filled)` in `choose_realm_screen.json`).
+- **Do not divide a string by a number.** `(#text / 100)` froze the Windows 1.26.65 client (EXP-49). `* 1` does not turn it into a number.
+- **Do not put the view binding before the collection binding.** The order is the whole method.
+
+## 6. Comparison add-on
+
+<AddonDownload id="collection-view-order" />
+
+An add-on that opens the A and V lists of section 3. The router picks the window by the form titles `§b§wcv:A` and `§b§wcv:V`.
+
+1. Open the file to import it (on mobile, tap the file and open it with Minecraft). In a new world, turn on the behavior pack whose name starts with `[bedrock-research]collection-view-order-bp`. The resource pack turns on with it as a dependency, and no experimental toggle is needed.
+2. Take "Collection View Order Test" from the end of the Items category of the creative inventory. You can also run `/give @s bwiki:collection_view_order_test`.
+3. Use the item or run `/scriptevent bwiki:collection_view_order` to open a menu that picks the version (A, V) and the button count (100, 1000, 2000). The text at the top of the window shows which version it is.
+4. To compare frames, turn VSync off and open the two versions one after the other in the same spot while measuring fps.
+
+- `server_form.json` differs from the other server form examples only in the router line (section 9 of [JSON UI optimization](./index.mdx)). Turning it on in the same world as them follows the convention, but it was not checked in game with this add-on.
+- The menu and screen text is in English.
+
+## 7. Open items
+
+- Whether cells further down fill after scrolling in the order version. The list could not be scrolled in this measurement setup.
+- The same comparison on mobile.
+- Whether `always` can also be dropped from the cell's `collection_details` and the grid length binding.
+- Which expression made the collection expression binding freeze.
+
+## Related rules
+
+| ID | Page | Contents |
+| --- | --- | --- |
+| BND-07, BND-23, BND-35, BND-37 | [Bindings](../../json-ui/bindings.mdx) | Binding timing inside cells, meaning and default of conditions, collection then view order |
+| COL-47, COL-48 | [Collections and factories](../../json-ui/collections-and-factory.mdx) | Binding conditions of factories and grids inside a router window |
+| EXP-16, EXP-49 | [Expressions](../../json-ui/expressions.mdx) | Turning a string into a number, dividing a string by a number freezes |

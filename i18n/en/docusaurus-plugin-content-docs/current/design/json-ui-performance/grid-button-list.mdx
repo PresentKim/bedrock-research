@@ -1,0 +1,139 @@
+---
+title: Grid button list
+description: A plan that draws thousands of server form buttons in a 2-column grid. A title router builds the window only for this form, grid cells in a scroll area each read one button, the binding conditions of a cell, splitting the button text, the example add-on and measurements per version.
+sidebar_position: 1
+sources:
+  - repo-guide
+  - private-research
+---
+
+# Grid button list
+
+This plan draws a server form (action form) button list with the rules of [JSON UI optimization](./index.mdx). The vanilla server form takes a long time to open or freezes with thousands of buttons (community report, section 4 of [JSON UI optimization](./index.mdx)). This setup draws the same button data in a 2-column grid, and even a 2000-button list opens and scrolls to the end.
+
+## 1. Goals
+
+- Open a server form with thousands of buttons without freezing.
+- Build nothing for any other server form (creation gate, section 2 of [JSON UI optimization](./index.mdx)).
+- Draw an icon, a name, a description and a progress bar in every cell, and send that button to the server when pressed.
+- Stay out of the way of the other server form examples turned on in the same world (section 9 of [JSON UI optimization](./index.mdx)).
+
+## 2. Screen structure
+
+| Level | Control | What it does |
+| --- | --- | --- |
+| 1 | `main_screen_content` of `server_form.json` | Inserts the router next to `server_form_factory` with `modifications`. Hides vanilla `long_form` when the title starts with `§b§w` |
+| 2 | Router `screen_router` (`collection_panel`) | Looks up `#§b§wjp:J` in `property_bag` with the first 10 bytes of the title and puts the result in `#collection_length`. It builds one window for this title and none otherwise (HOST-06, COL-22, COL-23) |
+| 3 | Window `list_window` | Background, title line, close button and scroll area. The scroll area stays inside the window. Kept outside the window at all times, it took touches from other forms (LAY-57) |
+| 4 | Scroll area `common.scrolling_panel` | Takes the panel around the grid through `$scrolling_content` |
+| 5 | Grid `list_grid` | `collection_name: "form_buttons"`, builds cells from `grid_item_template`. The cell count comes from putting `#form_button_length` into `#maximum_grid_items` |
+| 6 | Cell `list_cell` (`common.button`) | Gets its own button index through `collection_details`. Pressing it sends `button.form_button_click` with that index |
+| 7 | Cell face `list_face` | The default, hover and pressed states share one definition and differ only in the background texture |
+
+Inside a window built by a gate factory, action form button data reached only the cells of grid + `collection_name`. Fixed `collection_index` cells and inner factories stayed empty (COL-40). So the list is built as a grid.
+
+## 3. Cell bindings
+
+```json title="rp/ui/jup.json (excerpt)"
+"name": {
+  "type": "label", "layer": 3, "size": [ 76, 10 ], "offset": [ 22, 3 ],
+  "anchor_from": "top_left", "anchor_to": "top_left",
+  "color": [ 0.1, 0.1, 0.1 ], "localize": false, "text": "#text",
+  "bindings": [
+    { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text" },
+    { "binding_type": "view", "source_property_name": "('%.12s' * #form_button_text)", "target_property_name": "#text" }
+  ]
+},
+
+"list_cell@common.button": {
+  "size": [ 100, 30 ],
+  "$focus_enabled": false,
+  "$pressed_button_name": "button.form_button_click",
+  "bindings": [ { "binding_type": "collection_details", "binding_collection_name": "form_buttons", "binding_condition": "always" } ],
+  "controls": [
+    { "default@jup.list_face": {} },
+    { "hover@jup.list_face": { "$bg_texture": "textures/ui/button_borderless_lighthover" } },
+    { "pressed@jup.list_face": { "$bg_texture": "textures/ui/button_borderless_lightpressed" } }
+  ]
+},
+
+"list_grid": {
+  "type": "grid",
+  "size": [ 200, "100%c" ],
+  "grid_rescaling_type": "horizontal",
+  "grid_item_template": "jup.list_cell",
+  "collection_name": "form_buttons",
+  "bindings": [
+    { "binding_name": "#form_button_length", "binding_name_override": "#maximum_grid_items", "binding_condition": "always" }
+  ]
+}
+```
+
+| Binding | Condition | Reason |
+| --- | --- | --- |
+| Grid length `#maximum_grid_items` | `always` | With the default condition, factories and grids inside a router window were empty at first (COL-47, COL-48) |
+| Cell `collection_details` | `always` | Same reason. A cell that loses its button index sends a different index when pressed |
+| Icon `#form_button_texture` | None | One collection binding puts it straight into `#texture` |
+| Name, description, progress bar | None | A collection binding takes `#form_button_text` first, and the view binding after it cuts that value. Up to v1.3.1 both had `always`. How to drop it and the comparison are in [Filling the first frame without always](./collection-view-order.mdx) |
+
+- Labels are on `layer: 3` and the icon on `layer: 2`, above the background. On the same layer as the background, text in a scroll area looked empty until something touched it (LAY-55).
+- `$focus_enabled: false` keeps cells from taking gamepad or keyboard focus.
+
+## 4. Splitting the button text
+
+A server form button sends only one text and one icon. The script pads the parts to fixed widths and joins them, and the cell cuts them apart.
+
+| Part | What the script makes | Cell expression |
+| --- | --- | --- |
+| Name | Padded to 12 characters (`Item 7      `) | `('%.12s' * #form_button_text)` |
+| Description | Padded to 20 characters | `(('%.32s' * #form_button_text) - ('%.12s' * #form_button_text))` |
+| Progress value | A number text from 0 to 100 | `(1 - (((#form_button_text - ('%.32s' * #form_button_text)) - 0) / 100))` into `#clip_ratio` |
+
+- `'%.Ns' * #text` cuts the first N bytes, and string `-` string removes that part.
+- The progress value is still a string after the removal. **Turn it into a number with `- 0` before dividing** (EXP-16). Dividing a string by a number froze the Windows 1.26.65 client (EXP-49). `* 1` does not turn a string into a number.
+- The filled part of the progress bar does not show since v1.3.1. The cause was not isolated (section 6).
+
+## 5. Example add-on
+
+<AddonDownload id="json-ui-performance" />
+
+1. Open the file to import it (on mobile, tap the file and open it with Minecraft). In a new world, turn on the behavior pack whose name starts with `[bedrock-research]json-ui-performance-bp`. The resource pack turns on with it as a dependency, and no experimental toggle is needed.
+2. Take "JSON UI Optimization Test" from the end of the Items category of the creative inventory. You can also type the name in the search box or run `/give @s bwiki:json_ui_performance_test`.
+3. Use the item to open a menu that picks the button count (100, 500, 1000, 2000); picking one opens a list with that many buttons. `/scriptevent bwiki:json_ui_performance` opens it too. Pressing a button shows its number in chat.
+
+<video controls preload="metadata" width="100%" src={require('@site/static/video/json-ui-performance-addon.mp4').default} />
+
+Video of the example add-on (mobile, 2026-11-14, v1.2.0). It picks a button count in the menu and opens the list.
+
+![The 2000-button list scrolled to the end](/img/design/json-ui-performance-list-2000.png)
+
+The 2000-button list opens, and scrolled to the end, the last cells still draw their icon, name, description and progress bar. A pressed cell turns green (v1.2.0, mobile 1.26.63).
+
+- It can be turned on in the same world as the other server form examples (section 9 of [JSON UI optimization](./index.mdx), measured). Test items and script event names differ per add-on and do not collide.
+- The add-on version is in the pack names, the descriptions and the file name. When a fixed version comes out, the link above points to the new file; remove the old version and import the new one.
+- The menu and screen text is in English, so the screen looks the same whatever the game language or font.
+
+### Version history
+
+| Version | Change | Measured |
+| --- | --- | --- |
+| v1.2.0 | Router, window, 2-column grid | Mobile 1.26.63: the 2000-button list opened and was drawn to the end (2026-11-14) |
+| v1.3.0 | The progress bar expression is `((... * 1) / 100)` | Windows 1.26.65: opening the list froze the client. The expression divided a string by a number (EXP-49, 2026-11-18) |
+| v1.3.1 | `* 1` replaced with `- 0` | Windows 1.26.65: the 100-button list opened normally. The filled part of the progress bar did not show (2026-11-18) |
+| v1.4.0 | `always` removed from the name and description label bindings | Measured with a test pack of the same cells: the first frame was filled and fps went from about 284 to about 290 ([Filling the first frame without always](./collection-view-order.mdx), Windows 1.26.65, 2026-11-18). The v1.4.0 pack itself was not opened in game again |
+
+## 6. Open items
+
+- Why the filled part of the progress bar does not show since v1.3.1.
+- From 3000 buttons (about 45000px) the 2-column grid drew the cells overlapping at the top. Whether the cause is the count or the height was not settled (COL-49).
+- Opening time was not measured on mobile.
+
+## Related rules
+
+| ID | Page | Contents |
+| --- | --- | --- |
+| BND-37 | [Bindings](../../json-ui/bindings.mdx) | Filling the first frame without `always` with collection then view order |
+| COL-22, COL-23, COL-40, COL-47 ~ COL-49 | [Collections and factories](../../json-ui/collections-and-factory.mdx) | Dictionary lookup, button data inside a gate, binding conditions inside a router window, grid limits |
+| EXP-16, EXP-49 | [Expressions](../../json-ui/expressions.mdx) | Turning a string into a number, dividing a string by a number freezes |
+| HOST-06 | [Screen hosts and data channels](../../json-ui/screen-hosts-and-data.mdx) | Screen routing |
+| LAY-55, LAY-57 | [Controls and layout](../../json-ui/controls-and-layout.mdx) | Text layers, touch of scroll areas |

@@ -1,7 +1,7 @@
 ---
 title: JSON UI optimization
-description: What slows a screen down (creation, bindings, drawing) and how to reduce it. Creation gates, binding conditions, choosing between grid and factory, screen open speed, and a checking order.
-sidebar_position: 1
+description: What slows a screen down (creation, bindings, drawing) and how to reduce it. Creation gates, binding conditions, choosing between grid and factory, screen open speed, a checking order, the sub-plans (grid button list, filling the first frame without always) and their comparison.
+sidebar_position: 0
 sources:
   - repo-guide
   - private-research
@@ -41,13 +41,13 @@ When there are several screens or tabs, switching from "create everything and hi
 
 ### Computed length factory (a runtime gate)
 
-- If a factory's `#collection_length` is 0, nothing is created. Putting in a condition converted to 0/1 like `((#title_text = 'my_screen') * 1)` makes a gate that "creates that screen only when the condition holds" (COL-11). A full example is in recipe 4 (PAT-04) of [Pattern recipes](../json-ui/recipes.mdx).
+- If a factory's `#collection_length` is 0, nothing is created. Putting in a condition converted to 0/1 like `((#title_text = 'my_screen') * 1)` makes a gate that "creates that screen only when the condition holds" (COL-11). A full example is in recipe 4 (PAT-04) of [Pattern recipes](../../json-ui/recipes.mdx).
 - When there are many screens, pick from one gate with a `property_bag` dictionary lookup. Put `"#route_<title>": ["screen id"]` in `property_bag` and feed the result of `('#route_' + #title_text)` into `#collection_length`, and only that one screen is created from `control_ids` (HOST-06, COL-22, COL-23). It worked in game measurement without freezing (COL-39).
 - If you put `binding_condition: "visible"` on the factory length binding inside a hidden layout, the invisible layout did not create button cells (BND-32). But a layout that is visible from the start created the cells on the first frame.
 
 ### Pitfalls of gates
 
-- **Inside** a layout created by a gate factory, action form button data reached only the cells of `grid` + `collection_name`. Fixed `collection_index` cells and inner factories were empty (COL-40). Build the button list inside a gate with a grid. But in a window created by a router placed in `$screen_content` of `third_party_server_screen`, when all the cell bindings were set to `binding_condition: "always"`, fixed cells, toggle cells and inner factories were filled as soon as it opened (COL-47, C-65). With the default condition they were empty at first and filled only after switching a tab once. The wiki examples put the router next to `server_form_factory` inside `main_screen_content` instead of `$screen_content` (section 8.1). In that place too the screens filled as soon as they opened (measured, mobile 1.26.63, 2026-11-15).
+- **Inside** a layout created by a gate factory, action form button data reached only the cells of `grid` + `collection_name`. Fixed `collection_index` cells and inner factories were empty (COL-40). Build the button list inside a gate with a grid. But in a window created by a router placed in `$screen_content` of `third_party_server_screen`, when all the cell bindings were set to `binding_condition: "always"`, fixed cells, toggle cells and inner factories were filled as soon as it opened (COL-47, C-65). With the default condition they were empty at first and filled only after switching a tab once. The wiki examples put the router next to `server_form_factory` inside `main_screen_content` instead of `$screen_content` (section 9). In that place too the screens filled as soon as they opened (measured, mobile 1.26.63, 2026-11-15).
 - A factory inside a cell created by a factory was not created at first if `#title_text` and the length binding had the default condition. Give both bindings `always` (COL-48).
 - If you always keep a scroll area covering the whole screen outside the router, it took over touches of other forms' buttons and the close button even when empty (LAY-57). Put the scroll area inside the window the router creates.
 - The expressions of every control that can be created must be safe even for wrong input (an empty string, another form's body). A setup in which an expression that puts a string into a numeric property is created in every form froze or killed the client (DBG-19). Make an expression that goes into a numeric property get created only inside a gate that checks the input format.
@@ -60,7 +60,7 @@ When there are several screens or tabs, switching from "create everything and hi
 - **No several bindings on the same target**: if you attach several bindings to the same target, they are not merged and the last one wins. Merge them into one expression. A binding that reads and writes the same name (reading `#len` and writing to `#len`) becomes a loop, the string keeps growing and memory increases (community report).
 - **Keep repetition tricks short**: there is a report that the trick of repeating a string with a binding loop stops after about 20 repetitions, and a case-insensitive search that runs a `property_bag` mapping per character lagged when typing a long input or erasing it (community report).
 - **The HUD data channel**: even when the HUD is hidden by the inventory, chat, a form or F1, title and actionbar are still processed. With a heavy binding, processing backed up and froze for several seconds up to about a minute. Increase the update interval to 2~4 ticks or put the data control in `hud_content`. A 10,000-character title also had no problem once user bindings were reduced (community report).
-- **One expression for the same expression in every cell**: picking a fixed expression per cell number with `requires` puts as many blocks as there are cells into each cell definition. Keeping one expression in the definition and passing only the position to each cell raised the screen frame rate of a 256-cell HUD from about 4 to 5 to about 22, and of a 512-cell HUD from about 1 to 2 to about 14. At 64 cells no difference could be seen (measured, [Binding expression caching](./binding-expression-caching.mdx)).
+- **One expression for the same expression in every cell**: picking a fixed expression per cell number with `requires` puts as many blocks as there are cells into each cell definition. Keeping one expression in the definition and passing only the position to each cell raised the screen frame rate of a 256-cell HUD from about 4 to 5 to about 22, and of a 512-cell HUD from about 1 to 2 to about 14. At 64 cells no difference could be seen (measured, [Binding expression caching](../binding-expression-caching.mdx)).
 
 ## 4. Lists: grid and factory
 
@@ -80,7 +80,7 @@ When there are several screens or tabs, switching from "create everything and hi
 ## 5. Opening screens fast
 
 - **Light first tab, defer the rest**: merging 3 elements per store card into 1, deferring expensive content of tabs not opened first (button text, 3D block rendering), and opening with the lightest tab took 1.6 seconds down to 0.8 seconds (community report). For tabs, create only the selected one with the gate of section 2.
-- **Tabs and selection on the client**: if you make tabs and list cells radio toggles and put the details inside the `checked` state of a cell toggle, it changes without a server round trip and without closing the form. Send the server only actions it must know about, like a proceed button (INP-36). The details can be created by a `visible` condition factory the first time a cell is chosen (BND-32). The setup is in [Server form research screen](./server-form-research-screen.mdx).
+- **Tabs and selection on the client**: if you make tabs and list cells radio toggles and put the details inside the `checked` state of a cell toggle, it changes without a server round trip and without closing the form. Send the server only actions it must know about, like a proceed button (INP-36). The details can be created by a `visible` condition factory the first time a cell is chosen (BND-32). The setup is in [Server form research screen](../server-form-research-screen.mdx).
 - **Hidden forms also stay in memory**: there is a report of merging into one toggle rather than hiding several forms with different styles (community report).
 - **Turn off open animations**: giving `third_party_server_screen` `"$screen_animations": []` and `"$background_animations": []` makes the form appear immediately without animation. On a screen where the menu is visited often, the next form does not overlap or flicker (HOST-43).
 - The rule of thumb that about 75 elements is fine was shared (community report).
@@ -100,35 +100,26 @@ When there are several screens or tabs, switching from "create everything and hi
 4. Gather bindings that do the same calculation in several places into one data source, and put `once` on values that do not change (section 3).
 5. Defer expensive content that is not visible on the first screen (section 5).
 
-## 8. Example add-on
+## 8. Sub-plans
 
-<AddonDownload id="json-ui-performance" />
+Two plans apply the rules of this page to a server form button list.
 
-An add-on that draws a server form button list with the configuration this page recommends. A router looks up the form title (`§b§wjp:J`) in a `property_bag` and builds the window, scroll area and 2-column grid only for this form (section 2, COL-47, LAY-57). Other forms build nothing. The cell's `collection_details` binding and the grid length binding use `always`. The name and description labels and the progress bar put a view binding after the collection binding, so they fill from the first frame without `always` (BND-37). Labels sit on a higher layer than the background (LAY-55).
+| Document | What it covers |
+| --- | --- |
+| [Grid button list](./grid-button-list.mdx) | A router builds a window, a scroll area and a 2-column grid only for this form and draws thousands of buttons (sections 2 and 4), with an example add-on |
+| [Filling the first frame without always](./collection-view-order.mdx) | Putting the label bindings of a grid cell in collection then view order to drop `always`, a measured comparison with the old `always` cells, and the steps to move over |
 
-1. Open the file to import it (on mobile, tap the file and open it with Minecraft). In a new world, turn on the behavior pack whose name starts with `[bedrock-research]json-ui-performance-bp`. The resource pack turns on with it as a dependency, and no experimental toggle is needed.
-2. Take "JSON UI Optimization Test" from the end of the Items category of the creative inventory. You can also type the name in the search box or run `/give @s bwiki:json_ui_performance_test`.
-3. Use the item to open a menu that picks the button count (100, 500, 1000, 2000); picking one opens a list with that many buttons. `/scriptevent bwiki:json_ui_performance` opens it too. Pressing a button shows its number in chat.
+The two setups compared on the same grid (Windows 1.26.65, 2026-11-18, measured). The full figures and conditions are in [Filling the first frame without always](./collection-view-order.mdx).
 
-<video controls preload="metadata" width="100%" src={require('@site/static/video/json-ui-performance-addon.mp4').default} />
+| What to look at | Label bindings with `always` | Collection then view, no `always` |
+| --- | --- | --- |
+| First frame | Filled | Filled |
+| fps with the list open (VSync off, world alone about 294) | About 284 | About 290 |
+| Longest frame while opening (2000 buttons) | 43ms | 43ms |
 
-Video of the example add-on (mobile, 2026-11-14, v1.2.0). It picks a button count in the menu and opens the list.
+## 9. The shared `server_form.json` of the server form examples
 
-![The 2000-button list scrolled to the end](/img/design/json-ui-performance-list-2000.png)
-
-The 2000-button list opens, and scrolled to the end, the last cells still draw their icon, name, description and progress bar. A pressed cell turns green. Opening time was not measured.
-
-The v1.3.0 progress bar expression `((… * 1) / 100)` divided a string by a number, so opening the list froze the client on Windows 1.26.65 (EXP-49). v1.3.1 replaces `* 1` with `- 0`, and the 100-button list opened normally on Windows 1.26.65. In this version the filled part of the progress bar did not show, though (measured, 2026-11-18). The video and picture above are v1.2.0 (mobile 1.26.63).
-
-v1.4.0 removes `always` from the collection and view bindings of the name and description labels. A test pack with the same cells and only `always` removed opened the 100-button list on Windows 1.26.65, and 2 seconds later the name, description and icon of every visible cell were filled (BND-37, measured, 2026-11-18). v1.4.0 itself was not opened in game again.
-
-- It can be turned on in the same world as the other server form examples (section 8.1, measured). Test items and script event names differ per add-on and do not collide.
-- The add-on version is in the pack names, the descriptions and the file name. When a fixed version comes out, the link above points to the new file; remove the old version and import the new one.
-- The menu and screen text is in English, so the screen looks the same whatever the game language or font.
-
-### 8.1 The shared `server_form.json` of the server form examples
-
-The five server form examples of this wiki (this add-on, the two versions of the [server form research screen](./server-form-research-screen.mdx), and Item Icon Slots and Item Aux Probe of [item numeric IDs](./item-aux-id.mdx)) do not redeclare `third_party_server_screen`. Their `server_form.json` is byte-identical across the five packs except for the one router line inserted into `main_screen_content`. This is the file of this add-on.
+The five server form examples of this wiki (the example add-on of the [grid button list](./grid-button-list.mdx), the two versions of the [server form research screen](../server-form-research-screen.mdx), and Item Icon Slots and Item Aux Probe of [item numeric IDs](../item-aux-id.mdx)) do not redeclare `third_party_server_screen`. Their `server_form.json` is byte-identical across the five packs except for the one router line inserted into `main_screen_content`. Below is the file of the grid button list example.
 
 ```json title="rp/ui/server_form.json"
 {
@@ -195,7 +186,7 @@ The five server form examples of this wiki (this add-on, the two versions of the
 
 | Example | Title | Length the router cuts |
 | --- | --- | --- |
-| JSON UI optimization | `§b§wjp:J` | `('%.10s' * #title_text)` |
+| JSON UI optimization (grid button list) | `§b§wjp:J` | `('%.10s' * #title_text)` |
 | Server form research screen | `§b§wrs:Fa`, `§b§wrs:Fb`, `§b§wrs:Ga`, `§b§wrs:Gb` | `'%.11s'` |
 | Server form research screen (texture version) | `§b§wrt:Fa`, `§b§wrt:Fb`, `§b§wrt:Ga`, `§b§wrt:Gb` | `'%.11s'` |
 | Item Aux Probe | `§b§wap:scan` | `'%.13s'` |
@@ -209,14 +200,15 @@ In a jsonui-tester check with all five resource packs loaded, each title showed 
 
 | ID | Page | Contents |
 | --- | --- | --- |
-| FILE-16, FILE-17, FILE-34 | [Files and definitions](../json-ui/files-and-definitions.mdx) | The meaning, evaluation time and scope of `ignored` |
-| BND-06, BND-10, BND-11, BND-31, BND-32 | [Bindings](../json-ui/bindings.mdx) | `once`, gathering calculations, data sources, gate binding conditions |
-| COL-10 ~ COL-13, COL-16, COL-18, COL-22, COL-23, COL-37, COL-39, COL-40, COL-47 ~ COL-50 | [Collections and factories](../json-ui/collections-and-factory.mdx) | Creation gates, factory and grid cost, dictionary lookup, data inside a router window, grid limits |
-| LAY-55 ~ LAY-57 | [Controls and layout](../json-ui/controls-and-layout.mdx) | Text layers, `offset` inside stacks, touch of scroll areas |
-| INP-36 | [Input, buttons and toggles](../json-ui/input-buttons-toggles.mdx) | Client tabs and selection |
-| HOST-06, HOST-43, HOST-51 | [Screen hosts and data channels](../json-ui/screen-hosts-and-data.mdx) | Screen routing, open animation, the shared convention of the server form examples |
-| MOD-13 | [Modifying vanilla screens](../json-ui/modifying-vanilla.mdx) | Using only `modifications` that define nothing |
-| DBG-19 | [Debugging, verification and version management](../json-ui/debugging-and-versions.mdx) | Safety of expressions created in every form |
-| PAT-04 | [Pattern recipes](../json-ui/recipes.mdx) | A computed length factory example |
+| FILE-16, FILE-17, FILE-34 | [Files and definitions](../../json-ui/files-and-definitions.mdx) | The meaning, evaluation time and scope of `ignored` |
+| BND-06, BND-07, BND-10, BND-11, BND-31, BND-32, BND-37 | [Bindings](../../json-ui/bindings.mdx) | `once`, binding order, gathering calculations, data sources, gate binding conditions, filling the first frame without `always` |
+| EXP-16, EXP-49 | [Expressions](../../json-ui/expressions.mdx) | Turning a string into a number, dividing a string by a number freezes |
+| COL-10 ~ COL-13, COL-16, COL-18, COL-22, COL-23, COL-37, COL-39, COL-40, COL-47 ~ COL-50 | [Collections and factories](../../json-ui/collections-and-factory.mdx) | Creation gates, factory and grid cost, dictionary lookup, data inside a router window, grid limits |
+| LAY-55 ~ LAY-57 | [Controls and layout](../../json-ui/controls-and-layout.mdx) | Text layers, `offset` inside stacks, touch of scroll areas |
+| INP-36 | [Input, buttons and toggles](../../json-ui/input-buttons-toggles.mdx) | Client tabs and selection |
+| HOST-06, HOST-43, HOST-51 | [Screen hosts and data channels](../../json-ui/screen-hosts-and-data.mdx) | Screen routing, open animation, the shared convention of the server form examples |
+| MOD-13 | [Modifying vanilla screens](../../json-ui/modifying-vanilla.mdx) | Using only `modifications` that define nothing |
+| DBG-19 | [Debugging, verification and version management](../../json-ui/debugging-and-versions.mdx) | Safety of expressions created in every form |
+| PAT-04 | [Pattern recipes](../../json-ui/recipes.mdx) | A computed length factory example |
 
 The evidence for items marked "community report" is private research (community conversations) and is at the level of a report by one or more people. Figures differ by device and version, so measure again on your own screen.
