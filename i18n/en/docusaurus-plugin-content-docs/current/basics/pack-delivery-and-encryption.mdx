@@ -131,18 +131,18 @@ This section describes the behavior up to 26.63. From 26.64, resource-pack acces
 
 **If the server sends a resource pack encrypted with a content key, that pack can change Ore UI HTML, JS and CSS** `{code, measured}`. Ore UI file lookup (`ui://...`) searches the pack stack first before going to the install folder, and it looks at **trusted packs only**. `hbui/*.css` put in a plaintext server pack did not apply, and it applied when the same pack was sent encrypted.
 
-### isTrusted by access strategy
+### Trust by pack form
 
-| Access strategy | `isTrusted` | `isWritable` |
+| Pack form | Trusted | Writable |
 |---|---|---|
-| `ZipPackAccessStrategy` | `location.fileSystem == 1` or the `+0x170` flag | `+0x171` flag |
-| `DirectoryPackAccessStrategy` | `location.fileSystem == 1` | Always true |
-| `EncryptedFileAccessStrategy` | **Always true** | Always false |
-| `ZippedEncryptedFilesAccessStrategy` | **Always true** | Always false |
-| `DirectoryPackWithEncryptionAccessStrategy` | **Always true** | Always true |
+| Plain zip pack | When it is in the app package location or an internal flag is set | Internal flag |
+| Plain folder pack | When it is in the app package location | Always true |
+| Encrypted files (`contents.json`) | **Always true** | Always false |
+| Encrypted files inside a zip (`.mcpack`) | **Always true** | Always false |
+| Encrypted folder pack (`content.zipe`) | **Always true** | Always true |
 
-- `location` is the `ResourceLocation` of the pack, and its first field is the file system kind. 1 is read as the app package (the built-in packs in the game install folder) `{inferred}`.
-- **The pack UUID and manifest content are not used in the trust decision.** Even if you imitate a Marketplace add-on UUID, a plaintext pack is opened with the Zip/Directory strategy and the decision looks only at the install location.
+- The app package location is read as the built-in packs in the game install folder `{inferred}`.
+- **The pack UUID and manifest content are not used in the trust decision.** Even if you imitate a Marketplace add-on UUID, a plaintext pack is opened as a plain zip or plain folder pack and the decision looks only at the install location.
 - `Failed encrypted file signature check` in the binary was code on the world storage (LevelDB) side. The pack signature (`signatures.json`) check was not followed, and a pack that was only encrypted without a signature was trusted in measurement.
 - The first guess that "only built-in packs and Marketplace packs are trusted" was wrong.
 - Resource-pack access to Ore UI is blocked from 26.64, so this table applies only up to 26.63.
@@ -165,7 +165,7 @@ After disconnecting, magenta sometimes remained on the menu screen too. It seems
 
 ### content.zipe: as a local pack without a server [measured, 2026-10-27]
 
-If you put an empty file `content.zipe` (0 bytes) in a plaintext pack folder, it is opened with `DirectoryPackWithEncryptionAccessStrategy` even without a key, so it is trusted and changes Ore UI files. The engine looks **only at whether this file exists**. The result was the same with an encryption header attached, or with only a pack zip or `manifest.json` put inside. The file reads the plaintext in the pack folder. A pack with the same header placed in `contents.json` (the `EncryptedFileAccessStrategy` path) and a `contents.json` inside a `.mcpack` did not change. The note in 8Crafter Ore UI Customizer's "Export as RP" that "a mode that loads Ore UI from the RP is needed" is correct for plaintext packs. Ore UI itself is covered in a separate section.
+If you put an empty file `content.zipe` (0 bytes) in a plaintext pack folder, it is opened as an encrypted folder pack even without a key, so it is trusted and changes Ore UI files. The engine looks **only at whether this file exists**. The result was the same with an encryption header attached, or with only a pack zip or `manifest.json` put inside. The file reads the plaintext in the pack folder. A pack with the same header placed in `contents.json` (the encrypted file route) and a `contents.json` inside a `.mcpack` did not change. The note in 8Crafter Ore UI Customizer's "Export as RP" that "a mode that loads Ore UI from the RP is needed" is correct for plaintext packs. Ore UI itself is covered in a separate section.
 
 ## JsonEncryptor: the parser syntax obfuscators rely on
 

@@ -52,7 +52,7 @@ After connecting, open the Ore UI death screen with `/die` and the pack's CSS is
 
 ### Concept
 
-Up to 26.63 no server was needed. A plaintext pack sent by a server with an empty `content.zipe` behaved the same ([Resource pack delivery](../server/resource-pack-delivery.mdx), `{measured}`). If you put a file named `content.zipe` in a plaintext pack folder, the engine opens that folder with `DirectoryPackWithEncryptionAccessStrategy` (reading plaintext without a key), and this strategy is always trusted.
+Up to 26.63 no server was needed. A plaintext pack sent by a server with an empty `content.zipe` behaved the same ([Resource pack delivery](../server/resource-pack-delivery.mdx), `{measured}`). If you put a file named `content.zipe` in a plaintext pack folder, the engine opens that folder as an encrypted folder pack (reading plaintext without a key), and this form is always trusted.
 
 ### Example
 
@@ -77,11 +77,11 @@ Header: 0 at bytes 0~3, `0x9BCFB9FC` (LE) at 4~7, the length byte of the content
 
 | Variant | Form | Targeted path | Background | Result |
 | --- | --- | --- | --- | --- |
-| `localprobe-listing` | `contents.json` = header + plaintext list (no keys) | `EncryptedFileAccessStrategy` | magenta | not changed |
-| `localprobe-header` | `contents.json` = only the 256-byte header | `EncryptedFileAccessStrategy` | sky blue | not changed |
-| `localprobe-zipe` | `content.zipe` = header + plaintext zip | `DirectoryPackWithEncryptionAccessStrategy` | yellow | **changed** |
-| `localprobe-mcpack.mcpack` | a zip with the same content as listing | `ZippedEncryptedFilesAccessStrategy` | orange | not changed |
-| `localprobe-zipe-manifest` | same as zipe but the inner zip has only `manifest.json` | Directory encryption | green | **changed** |
+| `localprobe-listing` | `contents.json` = header + plaintext list (no keys) | encrypted files | magenta | not changed |
+| `localprobe-header` | `contents.json` = only the 256-byte header | encrypted files | sky blue | not changed |
+| `localprobe-zipe` | `content.zipe` = header + plaintext zip | encrypted folder pack | yellow | **changed** |
+| `localprobe-mcpack.mcpack` | a zip with the same content as listing | encrypted files inside a zip | orange | not changed |
+| `localprobe-zipe-manifest` | same as zipe but the inner zip has only `manifest.json` | encrypted folder pack | green | **changed** |
 | `localprobe-zipe-empty` | `content.zipe` = only the 256-byte header | Directory encryption | blue | **changed** |
 | `localprobe-zipe-magic256` | 256 bytes, all zero except the magic number at 4~7 | same | red | not checked separately |
 | `localprobe-zipe-magic8` | 8 bytes `00000000 FCB9CF9B` | same | white | not checked separately |

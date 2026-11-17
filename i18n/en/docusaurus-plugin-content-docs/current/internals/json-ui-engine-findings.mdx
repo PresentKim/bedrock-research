@@ -13,7 +13,7 @@ sources:
 The JSON UI engine reads a resource pack's `ui/*.json` and builds the screen. There is no official documentation, so "does the engine read this key, in what order does it evaluate, what errors does it raise" was long guessed only from measurements and reconstructed code. This page collects what was learned by reading the actual client binary, **by topic**: modification (`modifications`), factories and collections, bindings and variables, input (hyperlinks), text (the color table), renderers (the paper doll), the server form schema, and error messages.
 
 
-All verification levels are `code`. It was read from compiled output, so it does not guarantee game behavior, and if it differs from in-game measurement, follow the measurement. `@0x…` is an analysis address in the Android 1.26.52.3 arm64 build and changes when the version changes. The analyzed code is not included, and only the behavior is rewritten in English.
+All verification levels are `code`. It was read from compiled output, so it does not guarantee game behavior, and if it differs from in-game measurement, follow the measurement. The analyzed build is Android 1.26.52.3 arm64. Binary details such as addresses and internal function names are not published on the site and are kept separately in the repository's `native-notes/`. The analyzed code is not included, and only the behavior is rewritten in English.
 
 ## 0. At a glance: what was confirmed and what was overturned
 
@@ -46,7 +46,7 @@ All verification levels are `code`. It was read from compiled output, so it does
 
 ### NB-01 There are only 11 `modifications` operation names
 
-The `modifications` resolve function (`@0x098474d4`) and the operation name table function (`@0x09845574`) map the same 11 names to numbers 1~11. A name must match exactly, and there are no other operation names.
+The engine's `modifications` resolve step and the operation name table map the same 11 names to numbers 1~11. A name must match exactly, and there are no other operation names.
 
 ### NB-02 `target_control` is read before `target`
 
@@ -82,7 +82,7 @@ A factory creates as many controls as there is data, and a collection is list da
 
 ### NB-07 A collection item is determined by its parent
 
-The function that creates controls (`@0x097988e8`) does the following for each control.
+When the engine creates controls, it does the following for each control.
 
 1. If `ignoreCollectionItem` is not true, it checks whether the parent control has a collection component and its collection name is not empty.
 2. If so, it attaches a collection item component to this control.
@@ -92,21 +92,21 @@ So `collection_index` is meaningful only on **a direct child of a parent that ha
 
 ### NB-13 The factory resolution function
 
-The function that creates controls (`@0x097988e8`) calls the factory resolution function (`@0x097a0b00`) (2026-10-23, analysis rounds 3 and 4).
+When the engine creates controls, it goes through a factory resolution step (2026-10-23 analysis).
 
-- **Which path it resolves by**: if the control type is a factory (type number 5) and it **directly** has `control_name` or `control_ids`, it resolves without a name. Otherwise, regardless of type, it resolves only when the `factory` member is **an object** and reads `name`. So a `"type": "factory"` control can also be used on the `factory` object side, and then `name` is needed.
+- **Which path it resolves by**: if the control type is a factory and it **directly** has `control_name` or `control_ids`, it resolves without a name. Otherwise, regardless of type, it resolves only when the `factory` member is **an object** and reads `name`. So a `"type": "factory"` control can also be used on the `factory` object side, and then `name` is needed.
 - **One factory per control**: when resolving, the control's factory component slot is replaced with a new factory.
 - **`control_name` is built right at resolution**: if the name is not empty, it builds that definition on the spot with the variable scope of the control that declared the factory and stores it as a prototype. Only when it is empty does it walk the `control_ids` object and store "kind -> definition string" (values are read converted to strings). The COL-29 difference, that the `control_name` cell sees the `$variables` of the declaring site while the `control_ids` cell sees only the passed variables, appears to come from here (only the first part of the prototype creation function was read).
 - `max_children_size` is read as an integer and is **0** if omitted.
 - `insert_location` is `"back"` if omitted and inserts at the front only for the five characters `"front"` (the same as NB-06).
-- This resolution function does not read `collection_name` or `property_bag_for_children`. The function that uses `property_bag_for_children` was not found by `ADRP`+`ADD` search.
+- This resolution function does not read `collection_name` or `property_bag_for_children`. The place that uses `property_bag_for_children` was not found.
 
 ### NB-14 `_first_hidden_child_index` is exclusive to the store description screen
 
-The strings `tags_factory_first_hidden_child_index`, `languages_factory_first_hidden_child_index` and `_first_hidden_child_index`, which vanilla does not have, were identified. All three functions are inside `store/servicecomponent/DescriptionComponent.cpp` (the description component of the store and marketplace detail screen). This path is attached to the assert message `Attribute does not exist at these indices` inside the functions.
+The strings `tags_factory_first_hidden_child_index`, `languages_factory_first_hidden_child_index` and `_first_hidden_child_index`, which vanilla does not have, were identified. All three values are used by the description component of the store and marketplace detail screen.
 
-- **Two dedicated functions** (`@0x0b76397c` tags, `@0x0b7642b0` languages): they read `tags_factory_first_hidden_child_index` (or `languages_…`) as an integer from the control's property bag. If it is absent, they use the number of tags (languages) of that product. They build a string array repeating `"tag"` (`"language"`) that many times and use it as the binding value. Vanilla `pdp_screen.json` has controls named `tags_factory` and `languages_factory`, and the `control_ids` kinds of those factories are `tag` and `language`. Vanilla moves this binding value to `#collection_length` (for example `#tag_collapsed_collection_length` -> `#collection_length`). Which binding name this responds to was not settled because the calling side was not read.
-- **The generic function** (`@0x0b743554`): it builds a key by appending `_first_hidden_child_index` to a prefix and reads an integer from the bag. It is called from two places, with prefixes `"tag_row"` (`@0x0b763d90`) and `"language_row"` (`@0x0b7646cc`). It splits off the items from that number onward and moves them to the next row. It appears to be used to show tags and languages folded into several rows.
+- **Two dedicated handlers** (tags, languages): they read `tags_factory_first_hidden_child_index` (or `languages_…`) as an integer from the control's property bag. If it is absent, they use the number of tags (languages) of that product. They build a string array repeating `"tag"` (`"language"`) that many times and use it as the binding value. Vanilla `pdp_screen.json` has controls named `tags_factory` and `languages_factory`, and the `control_ids` kinds of those factories are `tag` and `language`. Vanilla moves this binding value to `#collection_length` (for example `#tag_collapsed_collection_length` -> `#collection_length`). Which binding name this responds to was not settled because the calling side was not read.
+- **The generic handler**: it builds a key by appending `_first_hidden_child_index` to a prefix and reads an integer from the bag. It is used from two places, with prefixes `"tag_row"` and `"language_row"`. It splits off the items from that number onward and moves them to the next row. It appears to be used to show tags and languages folded into several rows.
 - **Meaning**: it is a **store screen internal value** that decides "when the description is folded, from which tag onward to hide or push to the next row". It is not a general JSON UI factory feature and has nothing to do with server form, HUD or chat factories.
 - **Who uses this value was not found.** Vanilla UI JSON never uses it. It appears that the engine layout records the number of the overflowing child, but this was not checked.
 - **Bonus**: it is an actual example of the engine directly giving a factory's length binding an **array of kind names**. It backs COL-27 (`CN`), that `#collection_length` receives an array of kind names, with the binary.
@@ -118,7 +118,7 @@ A binding connects a data source to a control property, and `ignored` and `varia
 
 ### NB-09 Binding resolution
 
-The binding resolve function (`@0x0979f9b8`) does the following.
+When the engine resolves bindings, it does the following.
 
 - If `bindings` is not an array, it leaves `Must define bindings as an array.`. Inside the array it reads only object items.
 - For each item it reads `binding_type`, `binding_name`, `binding_name_override`, `binding_collection_name`, `binding_collection_prefix` and `binding_condition`, and branches by type.
@@ -127,13 +127,13 @@ The binding resolve function (`@0x0979f9b8`) does the following.
   - Collection details type: uses `binding_collection_name` and `binding_collection_prefix`.
   - View type: reads `source_control_name`, `source_property_name`, `target_property_name`, `resolve_sibling_scope` and `resolve_ancestor_scope`. If the source or target property name is missing, each leaves an error.
 - The lookup range of a view type is **itself when `source_control_name` is empty** (the control name points to itself), and otherwise one of three: the default range, the sibling range (`resolve_sibling_scope`) or the ancestor range (`resolve_ancestor_scope`). If both are true, it leaves `resolve_ancestor_scope and resolve_sibling_scope cannot both be set!` and acts as the **sibling range**.
-- `binding_condition` (`@0x09843c50`) must be a string (otherwise `- expected a string.`), and the values are six: `none`, `once`, `always`, `always_when_visible`, `visible` and `visibility_changed`. **If omitted or an unknown value, it is `none`.**
+- `binding_condition` must be a string (otherwise `- expected a string.`), and the values are six: `none`, `once`, `always`, `always_when_visible`, `visible` and `visibility_changed`. **If omitted or an unknown value, it is `none`.**
 
 The function that converts the `binding_type` string into the four types above and its default when omitted were not read (BND-02, and the "omitted or unknown value is `global`" in BND-22 rests on CN as is).
 
 ### NB-10 The order of `ignored` and `variables`
 
-The function that resolves definitions (`@0x0983e680`) evaluates **`ignored` first** for each control.
+When the engine resolves definitions, it evaluates **`ignored` first** for each control.
 
 - `ignored` accepts null, boolean, integer, and variable or expression strings. Anything else (real number, array, object) leaves `An invalid value was provided for "ignored" field.`.
 - If true, it does not do the later processing (applying `variables`, etc.).
@@ -146,7 +146,7 @@ Since `ignored` is calculated before its own `variables`, values set by its own 
 
 ### NB-08 The `#hyperlink` allow list
 
-When a button is pressed, the engine reads `#hyperlink` from that control's property bag and passes it to the check function (`@0x0a54bb74`), and calls the open function (`@0x0a21dab4`) only when it passes. The check has two stages.
+When a button is pressed, the engine reads `#hyperlink` from that control's property bag and checks it, and opens it only when it passes. The check has two stages.
 
 1. **Prefix list (conditional)**: only when a certain condition function is true, a URL passes if it **starts with** one of `https://education.minecraft.net/`, `https://aka.ms/` and `ms-windows-store:`. What the condition is (it appears to be an edition or platform decision) was not checked.
 2. **Exact match list**: otherwise it must be **literally equal** to one of 116 URLs. The list is `https://www.minecraft.net/<language>/terms/r1`, `r2`, `r3` (29 languages each, 87), 20 `https://aka.ms/…` help and terms entries, a few EULA, copyright notice and terms entries, account settings (`https://account.xbox.com/Settings`), the gamertag change (`https://social.xbox.com/changegamertag`), and one iOS App Store address.
@@ -158,7 +158,7 @@ So an arbitrary URL put in by a resource pack or a server does not open. Even a 
 
 ### NB-11 The `§` color table is built from global variables
 
-The function that reads `ui/_global_variables.json` (`@0x098625b8`) reads the file and then takes out 29 variables to build one color table. They are the 16 `$0_color_format` to `$f_color_format`, 11 of `$coin_color` and `$material_quartz_color`, `iron`, `netherite`, `redstone`, `copper`, `gold`, `emerald`, `diamond`, `lapis`, `amethyst` and `resin`, and `$party_blue_color`. The count and order match Bedrock's `§` color codes (`0` to `f`, `g` coin, `h` to `v` materials, `w` party blue).
+The engine reads `ui/_global_variables.json` and then takes out 29 variables to build one color table. They are the 16 `$0_color_format` to `$f_color_format`, 11 of `$coin_color` and `$material_quartz_color`, `iron`, `netherite`, `redstone`, `copper`, `gold`, `emerald`, `diamond`, `lapis`, `amethyst` and `resin`, and `$party_blue_color`. The count and order match Bedrock's `§` color codes (`0` to `f`, `g` coin, `h` to `v` materials, `w` party blue).
 
 - The actual color of a `§` color code is the value of this global variable. If you change these variables in a resource pack's `_global_variables.json`, the `§` colors appear to change too (not verified in game).
 - The color of `§w` is `$party_blue_color` (present in vanilla). So `$party_blue_color` can also be used for a label's `color` (the survey's judgment that "there is no `$w_color_format` so there is no value to use" was only a naming difference).
@@ -177,11 +177,11 @@ The NetEase (China edition) documentation lists a renderer and properties that d
 | `netease_paper_doll`, `skeleton_model_name`, `netease_models` | 0 | NetEase `netease_paper_doll_renderer`, `RenderSkeletonModel`, `netease_models.json` |
 | `modelname`, `modelsize`, `screen_scale`, `init_rot_y`, `render_depth`, `freedom_gesture` | 0 | NetEase `paper_doll` and `netease_paper_doll` properties |
 | `use_selected_skin`, `camera_tilt_degrees`, `starting_rotation`, `enable_scissor_test`, `skin_rotation`, `animation_reset_name` | 1 each | Properties of the vanilla `paper_doll_renderer` control (below) |
-| `PaperDollRenderer`, `PaperDollPropertyBagSource`, `PaperDollResolvedUIDefSource`, `IPaperDollUIDefSource`, `IOffscreenPaperDollRenderer`, etc. | 26 (strings containing `PaperDoll`) | C++ type information (RTTI) names |
+| Strings containing `PaperDoll` | 26 | C++ type information (RTTI) names |
 
 - **The NetEase skeleton model feature is not in the international client.** There is not a single `netease` in the whole 328MB, and the long NetEase-only property names (`skeleton_model_name`, `netease_paper_doll`, etc.) are absent too. Even if you write NetEase properties in a resource pack, the international engine has no code that knows them.
 - But short names cannot be judged by string search. `paper_doll_renderer` and `gesture_x`, which vanilla uses 13 times, are also 0. The compiler appears to turn short strings into immediate values inside instructions or put them in a hash table. So the "absent" conclusion rests on the long names and the `netease` string, and each short name is not asserted to be absent (`code, inferred`).
-- The international paper doll appears to receive properties from **two places, the property bag and the UI definition** (`PaperDollPropertyBagSource`, `PaperDollResolvedUIDefSource`). This matches vanilla using `#skin_rotation` of `property_bag` and the control property `rotation` together. Only the type names were seen and the functions were not read.
+- The international paper doll appears to receive properties from **two places, the property bag and the UI definition** (there are types for the two sources). This matches vanilla using `#skin_rotation` of `property_bag` and the control property `rotation` together. Only the type names were seen and the functions were not read.
 - The control properties at the 13 vanilla `paper_doll_renderer` sites (VN exhaustive): `use_selected_skin` 12 (all `false`), `layer` 11, `animation_reset_name` 10, `anims` 10, `rotation` 8 (`gesture_x` 6, `auto` 1, variable 1), `camera_tilt_degrees` 8 (all `-10`), `starting_rotation` 8 (all `30`), `enable_scissor_test` 4 (all `true`), `property_bag` 2 (`#skin_rotation`). The NetEase documentation's `modelname`, `modelsize`, `animation` and `animation_looped` are 0 times.
 
 
@@ -189,25 +189,25 @@ The NetEase (China edition) documentation lists a renderer and properties that d
 
 ### NB-16 The server form JSON schema has 9 row types and includes `multiselect`
 
-The question was "can a server use the `multiselect` that appeared in modal forms" (2026-10-23, analysis rounds 6 and 7). The whole survey, including measurements, is in the multiselect page.
+The question was "can a server use the `multiselect` that appeared in modal forms" (2026-10-23 analysis). The whole survey, including measurements, is in the multiselect page.
 
-- The client has a cereal schema of the server form JSON (with a description string per field). The `form`, `modal` and `custom_form` schema function (`@0x1126decc`) calls the row type schema (`@0x112718f0`), and the enumerated values of `type` ("Type of control used") are nine: `label`, `toggle`, `slider`, `step_slider`, `dropdown`, `multiselect`, `input`, `header` and `divider`.
-- Six row schemas have `tooltip` (`@0x112700ac`, `@0x112703c0`, `@0x112708c0` slider, `@0x11270d24` dropdown, `@0x112710d8`, `@0x112714d0` input). `@0x112710d8` has `options` (string array), `defaults` (integer array) and `tooltip`, so it appears to be multiselect. The dropdown has `default` (integer). Neither has `control_locked`.
+- The client has a cereal schema of the server form JSON (with a description string per field). The `form`, `modal` and `custom_form` schema uses the row type schema, and the enumerated values of `type` ("Type of control used") are nine: `label`, `toggle`, `slider`, `step_slider`, `dropdown`, `multiselect`, `input`, `header` and `divider`.
+- Six row schemas have `tooltip` (slider, dropdown, input and three others). One of them has `options` (string array), `defaults` (integer array) and `tooltip`, so it appears to be multiselect. The dropdown has `default` (integer). Neither has `control_locked`.
 - **The schema and the measurement differ**: in the 1.26.52 Windows measurement, `defaults` was ignored and `default` (an array of numbers) set the default checks (`MS`). This schema appears not to be the real parser.
-- The word `multiselect` appears only in this schema and the pack manifest setting (`MultiSelectSetting`). The modal form bindings (`#custom_multiselect_toggled`, etc.) are not present as strings (they appear to be included as hashes).
+- The word `multiselect` appears only in this schema and the pack manifest setting. The modal form bindings (`#custom_multiselect_toggled`, etc.) are not present as strings (they appear to be included as hashes).
 
 
 ## 8. Outside JSON UI: equipment slots
 
 ### NB-15 There are 5 equipment slots, and the renderer draws numbers 0~4 fixed (outside JSON UI)
 
-This is not JSON UI, but it was confirmed with the same binary. The question was "equipment slots are known to be 4, so why, when a server sends a 5th slot in a packet, is that equipment drawn, while from the 6th on it is not" (2026-10-23, analysis round 5).
+This is not JSON UI, but it was confirmed with the same binary. The question was "equipment slots are known to be 4, so why, when a server sends a 5th slot in a packet, is that equipment drawn, while from the 6th on it is not" (2026-10-23 analysis).
 
-- **The equipment slot enumeration has 5 entries.** The function that registers `SharedTypes::Legacy::ArmorSlot` (`@0x0cce15f8`) registers `Head`, `Torso`, `Legs`, `Feet` and `Body` in this order (0~4). The slot name table for commands (`@0x127005c8`) also has five: `slot.armor.head`, `chest`, `legs`, `feet` and `body`. There is the message `Invalid armor slot '%s' specified. Only 'slot.armor.chest' and 'slot.armor.body' are supported.`, so Body appears to be a slot for animal armor such as wolf and horse armor.
-- **The equipment read function** (`@0x0f6797ac`): it takes the actor's equipment container and returns the item at the slot number through a virtual function (`+0x40`, read slot item). It is called from 53 places, and most call 0~4 expanded as constants without a loop (such as `MobArmorHeadId` to `MobArmorBodyId` in the mob kill telemetry `@0x0ba412e8`).
-- **The worn item render function** (`@0x0a00007c`, handles `variable.is_first_person` and `variable.gliding_speed_value`): it reads equipment 0~4 in turn and passes them with numbers 0~4 to the worn item handling functions (`@0x0a00101c`, `@0x0a0012b4`), then passes the main hand item as number 5 and the offhand item as number 6. The same order appears in two places. Whether the actor type is `0x13f` (player) is checked only when reading the first-person variable. In other words, this path draws the Body slot without distinguishing players from mobs.
+- **The equipment slot enumeration has 5 entries.** The engine registers the equipment slots `Head`, `Torso`, `Legs`, `Feet` and `Body` in this order (0~4). The slot name table for commands also has five: `slot.armor.head`, `chest`, `legs`, `feet` and `body`. There is the message `Invalid armor slot '%s' specified. Only 'slot.armor.chest' and 'slot.armor.body' are supported.`, so Body appears to be a slot for animal armor such as wolf and horse armor.
+- **Equipment read**: the engine reads the item at the slot number from the actor's equipment container. This read is used from 53 places, and most use 0~4 expanded as constants without a loop (such as `MobArmorHeadId` to `MobArmorBodyId` in the mob kill telemetry).
+- **Worn item rendering** (the step that handles `variable.is_first_person` and `variable.gliding_speed_value`): it reads equipment 0~4 in turn and passes them with numbers 0~4 to worn item handling, then passes the main hand item as number 5 and the offhand item as number 6. The same order appears in two places. Whether the actor is a player is checked only when reading the first-person variable. In other words, this path draws the Body slot without distinguishing players from mobs.
 - **Conclusion**: the player inventory UI shows only 4 slots, but the engine has 5 equipment slots. If a server puts an item into the player's slot 4 (Body), the renderer reads and draws it. From 5 onward, the renderer uses the number for hand items and does not read it as an equipment slot, so nothing sent is drawn.
-- **Not checked**: whether the equipment container stores 6th slot data (or discards it by a size limit), the internals of the two worn item handling functions, the field layout of `MobArmorEquipmentPacket` (the Body field is known from a 1.21-era protocol change), and in-game measurement. The verdict level is `code`.
+- **Not checked**: whether the equipment container stores 6th slot data (or discards it by a size limit), the internals of the two worn item handling sites, the field layout of `MobArmorEquipmentPacket` (the Body field is known from a 1.21-era protocol change), and in-game measurement. The verdict level is `code`.
 
 
 ## 9. Confirmed by strings
@@ -245,9 +245,9 @@ This is the result of matching the binary findings against other sources (the wi
 | R-08 | **The list of JSON UI resolution error messages.** 7 type checks (`- expected a bool.`, etc.), 6 bindings, 2 factories, `Invalid anim reference!`, `Must define 'images' as an array!`, `Must define state_controls as an array!`, 5 focus (`Expected a focus identifier.`, etc.), 2 fonts (`Expected a string for 'font_type'.`, etc.), `Expected variable not found in ancestor tree: '%s'`, `UI control reference not found: '%s'` | The community reported only `JSON UI parse failure - expected a string`, `Must define a source property name` and "cannot find variable in ancestor tree". The last has no such text in the binary and `Expected variable not found in ancestor tree` exists, so it appears to be wording from another version or a paraphrase | NB chapter 4 | DBG-34 |
 | R-09 | **4 button IDs not in vanilla.** `button.menu_tertiary_select`, `button.menu_textcursorleft`, `button.menu_textcursorright` and `button.menu_edu_play` have names in the engine but are 0 times in vanilla UI. The engine has 31 `button.menu_*` in all | Cannot be known from the wiki table and vanilla use | NB chapter 4 | INP-33 |
 | R-10 | **The international client has no NetEase UI 3D model feature.** There are 0 `netease` strings in the whole 328MB, and the long NetEase-only property names such as `skeleton_model_name` and `netease_paper_doll` are 0 too | The NE documentation lists only China edition features, and no one checked whether the international edition has them | NB-12 | ANI-36 |
-| R-11 | **The paper doll appears to receive properties from two places.** There are the types `PaperDollPropertyBagSource` and `PaperDollResolvedUIDefSource`. This matches vanilla using `#skin_rotation` of `property_bag` and the control property `rotation` together. Only type names were seen, so it is `inferred` | None | NB-12 | ANI-35 |
+| R-11 | **The paper doll appears to receive properties from two places.** There are types for a property bag source and a resolved UI definition source. This matches vanilla using `#skin_rotation` of `property_bag` and the control property `rotation` together. Only type names were seen, so it is `inferred` | None | NB-12 | ANI-35 |
 | R-13 | **Details of factory resolution.** `type: factory` can also be resolved on the `factory` object side, and there is one factory per control. `control_name` builds the prototype right at resolution with the declaring scope, and `control_ids` stores only strings. The `max_children_size` default is 0 | CN described only the result (the scope difference) | NB-13 | COL-45 |
-| R-14 | **The identity of `_first_hidden_child_index`.** The store detail screen description component (`DescriptionComponent.cpp`) folds tags and languages or pushes them to the next row with this integer in the property bag. It is not a general factory feature. The engine directly gives the length binding an array of kind names such as `["tag", …]` | None. It was investigated as a candidate for the story that "something new appeared in factories" | NB-14 | COL-46, COL-27 |
+| R-14 | **The identity of `_first_hidden_child_index`.** The store detail screen description component folds tags and languages or pushes them to the next row with this integer in the property bag. It is not a general factory feature. The engine directly gives the length binding an array of kind names such as `["tag", …]` | None. It was investigated as a candidate for the story that "something new appeared in factories" | NB-14 | COL-46, COL-27 |
 | R-15 | **The server form JSON schema.** The client has a form schema with description strings, and the row types are the 9 `label`, `toggle`, `slider`, `step_slider`, `dropdown`, `multiselect`, `input`, `header` and `divider`. The row that appears to be multiselect has `options`, `defaults` (integer array) and `tooltip`, but in the measurement (`MS`) `defaults` was ignored and `default` (an array of numbers) took effect. The schema appears not to be the real parser | Community and guide: only "multiselect cannot be sent through the Script API" | NB-16 | HOST-46 |
 | R-12 | **Size binding names.** `#total_size_binding` exists as an engine string but vanilla uses it 0 times. `#size_binding_x` has no whole string, so it appears to be assembled at runtime | None | NB chapter 4 | - |
 
@@ -274,9 +274,9 @@ Some of the guide IDs in the last column of the tables, such as `MOD-24`, `BND-3
 ## 11. What remains
 
 
-- For `grid_rescaling_type`, `propagate_alpha`, `clip_direction`, `Expected variable not found in ancestor tree` and `UI control reference not found`, even the `ADRP`+`ADD` search could not find the function that uses them. They appear to be accessed another way (a literal pool, a hashed property name table, etc.). LAY-32 (the `vertical` crash) and LAY-33 stay unverified as they are.
+- For `grid_rescaling_type`, `propagate_alpha`, `clip_direction`, `Expected variable not found in ancestor tree` and `UI control reference not found`, the place that uses them was not found. They appear to be accessed another way (a literal pool, a hashed property name table, etc.). LAY-32 (the `vertical` crash) and LAY-33 stay unverified as they are.
 - The `binding_type` string resolve function, the stage where `$x|default` inside a definition is applied, and the condition function of the `#hyperlink` prefix list have not yet been read.
-- Which properties `PaperDollPropertyBagSource` and `PaperDollResolvedUIDefSource` of the paper doll read, and the defaults of `use_selected_skin`, `camera_tilt_degrees` and `starting_rotation`, are unknown because the functions were not read (NB-12).
+- Which properties each of the two paper doll property sources reads, and the defaults of `use_selected_skin`, `camera_tilt_degrees` and `starting_rotation`, are unknown because the functions were not read (NB-12).
 - The binding expression evaluator (`not`, `and`, `%`, `'%.Ns'`, etc.) has almost no error messages and could not be found with this method. The expression rules (chapter 5) still rest on `CN` and measurement.
-- Whether the equipment container stores a 6th slot, and what the worn item handling functions (`@0x0a00101c`, `@0x0a0012b4`) draw, were not read (NB-15).
+- Whether the equipment container stores a 6th slot, and what the two worn item handling sites draw, were not read (NB-15).
 - All these verdicts are at the `code` level. If they differ from game behavior, follow the measurement.

@@ -28,13 +28,13 @@ The second one puts the vanilla name `stone` in the host and passes `{"#item_id_
 
 ### Resolution rules `{code}`
 
-`geo-item://` is registered together with `paperdoll://` and `https://` (the scheme registration function VA `0xb811e34`, using the same handler factory with flag 0/1), and the handler `OreUI::GeometryAtlasResourceHandlerImpl` (vtable `@0x12ea8058`) passes the URL to `OreUI::ItemResourceResolver` (vtable `+0x18`, `@0x0b91af24`). As a result, `GeometryAtlas::ItemHandleFactoryImpl` (vtable `+0x10`, VA `0x9666138`) builds the item handle.
+`geo-item://` is a scheme registered in the engine together with `paperdoll://` and `https://`. The engine's handler passes the URL to the item resolver, and the result decides which item to draw.
 
-1. The **host** of the URL is the item name. It is looked up with `ItemRegistryRef::lookupByName`, and if it is not found nothing is drawn.
-2. Query keys are sorted by FNV-1a 32-bit hash: `width` (`0x95876e1f`), `height` (`0xd5bdbb42`), `id` (`0x37386ae0`, integer), **`bag`** (`0x63b75f31`, JSON after URL decoding). The default size is 50.
-3. `bag` is the property bag of the JSON UI item renderer. If the property bag has no `#item_id_aux`, the factory fills in the id and aux value of the item found in step 1. **If it has one, that value is used as is.**
+1. The **host** of the URL is the item name. It is looked up by name in the item registry, and if it is not found nothing is drawn.
+2. The query keys are `width`, `height`, `id` (integer) and **`bag`** (JSON after URL decoding). The default size is 50.
+3. `bag` is the property bag of the JSON UI item renderer. If the property bag has no `#item_id_aux`, the engine fills in the id and aux value of the item found in step 1. **If it has one, that value is used as is.**
 
-So the host can be any vanilla name, and the item to draw can be given with `#item_id_aux` (runtime ID x 65536 + meta, the same value as the JSON UI AuxId). Registered custom items and custom blocks come out through the engine render just as in JSON UI. (The ADRP+ADD search in round 12 failed to find the usage because that code was not grouped as a function in the analysis tool, and it was found by re-scanning the bytes with a 64-instruction window.)
+So the host can be any vanilla name, and the item to draw can be given with `#item_id_aux` (runtime ID x 65536 + meta, the same value as the JSON UI AuxId). Registered custom items and custom blocks come out through the engine render just as in JSON UI.
 
 ### Measurements
 
@@ -76,8 +76,8 @@ So the host can be any vanilla name, and the item to draw can be given with `#it
 ### What switches to Ore UI `{code}`
 
 - The bundle's route `/gameplay/block-actors/:id` mounts only when the feature flag `vanilla.oreUIGameplay` is on (`alwaysMountedWithFeatureFlag`).
-- The facet `vanilla.screenSpecificOptions` has a property `devOreUIGameplayUI` (`@0x09e6f6cc`). The getter (`@0x09e6f998`) checks whether the integer value of option 593 (`0x251`) is 1, and the setter (`@0x09e6f9fc`) writes 1 to turn it on and 2 to turn it off. Besides those two, two other functions read this option (`@0x0b5db54c`, `@0x0b5db59c`). The second also checks whether the screen number falls in the bit mask `0x380103ef`, so it appears to be a table that allows the Ore UI switch per screen kind `{inferred}`. It is a developer build option and does not appear in the settings screen of the stable release.
-- `enableSDLInventoryPage` (feature toggle `0x28`, remote flighting key `mc-enable-sdl-inventory`, off by default) appears from its name and the surrounding toggles to be an owned-content page on the store side `{inferred}`. It is different from the in-game inventory.
+- The facet `vanilla.screenSpecificOptions` has a property `devOreUIGameplayUI`. It treats a game option as on when its integer value is 1, and writes 1 to turn it on and 2 to turn it off. Two other places also read this option. One of them also checks the screen kind, so it appears to be a table that allows the Ore UI switch per screen kind `{inferred}`. It is a developer build option and does not appear in the settings screen of the stable release.
+- `enableSDLInventoryPage` (a feature toggle, remote flighting key `mc-enable-sdl-inventory`, off by default) appears from its name and the surrounding toggles to be an owned-content page on the store side `{inferred}`. It is different from the in-game inventory.
 - Both switches are client options or Microsoft flighting. No route for a server to turn them on with a packet was found.
 
 ### Containers imitated by the server were dropped `{measured}`

@@ -52,7 +52,7 @@ go run . ../probe-pack OreUiProbeContentKey0123456789AB
 
 ### 개념
 
-26.63까지는 서버가 없어도 됐다. 서버가 보낸 평문 팩에 빈 `content.zipe`를 넣어도 같았다([리소스팩 전달](../server/resource-pack-delivery.mdx), `{실측}`). 평문 팩 폴더에 `content.zipe`라는 파일을 두면 엔진은 그 폴더를 `DirectoryPackWithEncryptionAccessStrategy`로 열고(키 없이 평문을 읽는다), 이 전략은 언제나 신뢰된다.
+26.63까지는 서버가 없어도 됐다. 서버가 보낸 평문 팩에 빈 `content.zipe`를 넣어도 같았다([리소스팩 전달](../server/resource-pack-delivery.mdx), `{실측}`). 평문 팩 폴더에 `content.zipe`라는 파일을 두면 엔진은 그 폴더를 암호화 폴더 팩으로 열고(키 없이 평문을 읽는다), 이 형태는 언제나 신뢰된다.
 
 ### 예
 
@@ -77,11 +77,11 @@ go run . wrap ../deathdebug-pack out
 
 | 변형 | 형태 | 노리는 경로 | 배경 | 결과 |
 | --- | --- | --- | --- | --- |
-| `localprobe-listing` | `contents.json` = 헤더 + 평문 목록(키 없음) | `EncryptedFileAccessStrategy` | 자홍 | 바뀌지 않음 |
-| `localprobe-header` | `contents.json` = 헤더 256바이트뿐 | `EncryptedFileAccessStrategy` | 하늘 | 바뀌지 않음 |
-| `localprobe-zipe` | `content.zipe` = 헤더 + 평문 zip | `DirectoryPackWithEncryptionAccessStrategy` | 노랑 | **바뀜** |
-| `localprobe-mcpack.mcpack` | listing과 같은 내용의 zip | `ZippedEncryptedFilesAccessStrategy` | 주황 | 바뀌지 않음 |
-| `localprobe-zipe-manifest` | zipe와 같되 안의 zip에 `manifest.json`만 | Directory 암호화 | 초록 | **바뀜** |
+| `localprobe-listing` | `contents.json` = 헤더 + 평문 목록(키 없음) | 암호화 파일 | 자홍 | 바뀌지 않음 |
+| `localprobe-header` | `contents.json` = 헤더 256바이트뿐 | 암호화 파일 | 하늘 | 바뀌지 않음 |
+| `localprobe-zipe` | `content.zipe` = 헤더 + 평문 zip | 암호화 폴더 팩 | 노랑 | **바뀜** |
+| `localprobe-mcpack.mcpack` | listing과 같은 내용의 zip | zip 안의 암호화 파일 | 주황 | 바뀌지 않음 |
+| `localprobe-zipe-manifest` | zipe와 같되 안의 zip에 `manifest.json`만 | 암호화 폴더 팩 | 초록 | **바뀜** |
 | `localprobe-zipe-empty` | `content.zipe` = 헤더 256바이트뿐 | Directory 암호화 | 파랑 | **바뀜** |
 | `localprobe-zipe-magic256` | 256바이트, 4~7 마법수 말고 모두 0 | 같음 | 빨강 | 따로 확인 안 함 |
 | `localprobe-zipe-magic8` | 8바이트 `00000000 FCB9CF9B` | 같음 | 하양 | 따로 확인 안 함 |

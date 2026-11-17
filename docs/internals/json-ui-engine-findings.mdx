@@ -13,7 +13,7 @@ sources:
 JSON UI 엔진은 리소스팩의 `ui/*.json`을 읽어 화면을 만든다. 공식 문서가 없으므로 "엔진이 이 키를 읽는가, 어떤 순서로 평가하는가, 어떤 오류를 내는가"는 오랫동안 실측과 재구성 코드로만 추정했다. 이 페이지는 실제 클라이언트 바이너리를 읽어 알게 된 것을 **주제별로** 모았다: 수정(`modifications`), 팩토리와 컬렉션, 바인딩과 변수, 입력(하이퍼링크), 텍스트(색표), 렌더러(종이 인형), 서버 폼 스키마, 오류 문구.
 
 
-검증 수준은 모두 `코드`다. 컴파일 결과를 읽은 것이라 게임 동작까지 보장하지 않으며, 게임 실측과 다르면 실측을 따른다. `@0x…`는 Android 1.26.52.3 arm64 빌드의 분석 주소이고 판이 바뀌면 달라진다. 분석한 코드는 싣지 않고 동작만 한국어로 다시 썼다.
+검증 수준은 모두 `코드`다. 컴파일 결과를 읽은 것이라 게임 동작까지 보장하지 않으며, 게임 실측과 다르면 실측을 따른다. 분석 대상은 Android 1.26.52.3 arm64 빌드다. 주소와 내부 함수 이름 같은 바이너리 세부는 사이트에 싣지 않고 저장소의 `native-notes/`에 따로 둔다. 분석한 코드는 싣지 않고 동작만 한국어로 다시 썼다.
 
 ## 0. 한눈에: 무엇을 확정하고 무엇을 뒤집었나
 
@@ -46,7 +46,7 @@ JSON UI 엔진은 리소스팩의 `ui/*.json`을 읽어 화면을 만든다. 공
 
 ### NB-01 `modifications` 연산 이름은 11개뿐이다
 
-`modifications` 해석 함수(`@0x098474d4`)와 연산 이름표 함수(`@0x09845574`)가 같은 11개 이름을 번호 1~11에 대응시킨다. 이름은 정확히 일치해야 하고, 이 밖의 연산 이름은 없다.
+엔진의 `modifications` 해석 단계와 연산 이름표가 같은 11개 이름을 번호 1~11에 대응시킨다. 이름은 정확히 일치해야 하고, 이 밖의 연산 이름은 없다.
 
 ### NB-02 `target_control`은 `target`보다 먼저 읽힌다
 
@@ -82,7 +82,7 @@ JSON UI 엔진은 리소스팩의 `ui/*.json`을 읽어 화면을 만든다. 공
 
 ### NB-07 컬렉션 항목은 부모로 정해진다
 
-컨트롤을 만드는 함수(`@0x097988e8`)는 컨트롤마다 다음을 한다.
+엔진은 컨트롤을 만들 때 컨트롤마다 다음을 한다.
 
 1. `ignoreCollectionItem`이 참이 아니면, 부모 컨트롤에 컬렉션 컴포넌트가 있고 그 컬렉션 이름이 비어 있지 않은지 본다.
 2. 그렇다면 이 컨트롤에 컬렉션 항목 컴포넌트를 붙인다.
@@ -92,21 +92,21 @@ JSON UI 엔진은 리소스팩의 `ui/*.json`을 읽어 화면을 만든다. 공
 
 ### NB-13 팩토리 해석 함수
 
-컨트롤을 만드는 함수(`@0x097988e8`)가 팩토리 해석 함수(`@0x097a0b00`)를 부른다(2026-10-23 3·4차 분석).
+엔진은 컨트롤을 만들 때 팩토리 해석 단계를 거친다(2026-10-23 분석).
 
-- **어느 경로로 해석하나**: 컨트롤 타입이 팩토리(타입 번호 5)이고 `control_name`이나 `control_ids`를 **직접** 가지면 이름 없이 해석한다. 그 밖에는 타입과 상관없이 `factory` 멤버가 **객체일 때만** 해석하고 `name`을 읽는다. 그래서 `"type": "factory"` 컨트롤도 `factory` 객체 쪽으로 쓸 수 있고, 그때는 `name`이 필요하다.
+- **어느 경로로 해석하나**: 컨트롤 타입이 팩토리이고 `control_name`이나 `control_ids`를 **직접** 가지면 이름 없이 해석한다. 그 밖에는 타입과 상관없이 `factory` 멤버가 **객체일 때만** 해석하고 `name`을 읽는다. 그래서 `"type": "factory"` 컨트롤도 `factory` 객체 쪽으로 쓸 수 있고, 그때는 `name`이 필요하다.
 - **컨트롤 하나에 팩토리 하나**: 해석할 때 컨트롤의 팩토리 컴포넌트 칸을 새 팩토리로 바꾼다.
 - **`control_name`은 해석할 때 바로 만든다**: 이름이 비어 있지 않으면 팩토리를 선언한 컨트롤의 변수 스코프로 그 정의를 그 자리에서 만들어 원형으로 저장한다. 비어 있을 때만 `control_ids` 객체를 돌며 "종류 → 정의 문자열"을 저장한다(값은 문자열로 바꿔 읽는다). `control_name` 셀이 선언한 곳의 `$변수`를 보고 `control_ids` 셀은 넘겨받은 변수만 본다는 COL-29의 차이가 여기서 나오는 것으로 보인다(원형 생성 함수는 앞부분만 읽었다).
 - `max_children_size`는 정수로 읽고 생략하면 **0**이다.
 - `insert_location`은 생략하면 `"back"`이고, 다섯 글자 `"front"`일 때만 앞에 넣는다(NB-06과 같다).
-- 이 해석 함수는 `collection_name`과 `property_bag_for_children`을 읽지 않는다. `property_bag_for_children`을 쓰는 함수는 `ADRP`+`ADD` 탐색으로 찾지 못했다.
+- 이 해석 함수는 `collection_name`과 `property_bag_for_children`을 읽지 않는다. `property_bag_for_children`을 쓰는 곳은 찾지 못했다.
 
 ### NB-14 `_first_hidden_child_index`는 상점 설명 화면 전용이다
 
-바닐라에 없는 `tags_factory_first_hidden_child_index`, `languages_factory_first_hidden_child_index`, `_first_hidden_child_index` 문자열이 무엇인지 확인했다. 세 함수 모두 `store/servicecomponent/DescriptionComponent.cpp`(상점·마켓플레이스 상세 화면의 설명 컴포넌트) 안에 있다. 함수 안의 assert 문구 `Attribute does not exist at these indices`에 이 경로가 붙어 있다.
+바닐라에 없는 `tags_factory_first_hidden_child_index`, `languages_factory_first_hidden_child_index`, `_first_hidden_child_index` 문자열이 무엇인지 확인했다. 세 값 모두 상점·마켓플레이스 상세 화면의 설명 컴포넌트가 쓴다.
 
-- **전용 함수 둘**(`@0x0b76397c` 태그, `@0x0b7642b0` 언어): 컨트롤의 속성 주머니에서 `tags_factory_first_hidden_child_index`(또는 `languages_…`)를 정수로 읽는다. 없으면 그 상품의 태그(언어) 개수를 쓴다. 그 수만큼 `"tag"`(`"language"`)를 반복한 문자열 배열을 만들어 바인딩 값으로 쓴다. 바닐라 `pdp_screen.json`에는 `tags_factory`, `languages_factory`라는 컨트롤이 있고, 그 팩토리의 `control_ids` 종류가 `tag`, `language`다. 바닐라는 이 바인딩 값을 `#collection_length`로 옮긴다(예: `#tag_collapsed_collection_length` → `#collection_length`). 어느 바인딩 이름에 대한 응답인지는 호출 쪽을 읽지 않아 확정하지 않았다.
-- **일반형 함수**(`@0x0b743554`): 접두어에 `_first_hidden_child_index`를 붙여 키를 만들고 주머니에서 정수로 읽는다. 부르는 곳은 둘이고 접두어는 `"tag_row"`(`@0x0b763d90`), `"language_row"`(`@0x0b7646cc`)다. 그 번호부터 뒤의 항목을 떼어 다음 줄로 옮긴다. 태그·언어를 여러 줄로 접어 보이는 데 쓰는 것으로 보인다.
+- **전용 처리 둘**(태그, 언어): 컨트롤의 속성 주머니에서 `tags_factory_first_hidden_child_index`(또는 `languages_…`)를 정수로 읽는다. 없으면 그 상품의 태그(언어) 개수를 쓴다. 그 수만큼 `"tag"`(`"language"`)를 반복한 문자열 배열을 만들어 바인딩 값으로 쓴다. 바닐라 `pdp_screen.json`에는 `tags_factory`, `languages_factory`라는 컨트롤이 있고, 그 팩토리의 `control_ids` 종류가 `tag`, `language`다. 바닐라는 이 바인딩 값을 `#collection_length`로 옮긴다(예: `#tag_collapsed_collection_length` → `#collection_length`). 어느 바인딩 이름에 대한 응답인지는 호출 쪽을 읽지 않아 확정하지 않았다.
+- **일반형 처리**: 접두어에 `_first_hidden_child_index`를 붙여 키를 만들고 주머니에서 정수로 읽는다. 쓰는 곳은 둘이고 접두어는 `"tag_row"`, `"language_row"`다. 그 번호부터 뒤의 항목을 떼어 다음 줄로 옮긴다. 태그·언어를 여러 줄로 접어 보이는 데 쓰는 것으로 보인다.
 - **뜻**: "설명을 접었을 때 몇 번째 태그부터 숨기거나 다음 줄로 넘길지"를 정하는 **상점 화면 내부 값**이다. 일반 JSON UI 팩토리 기능이 아니며, 서버 폼·HUD·채팅 팩토리와는 관계없다.
 - **누가 이 값을 쓰는지는 찾지 못했다.** 바닐라 UI JSON은 한 번도 쓰지 않는다. 엔진의 레이아웃이 넘친 자식 번호를 기록하는 것으로 보이지만 확인하지 않았다.
 - **덤**: 엔진이 팩토리의 길이 바인딩에 **종류 이름 배열**을 직접 준다는 실제 예다. `#collection_length`가 종류 이름 배열을 받는다는 COL-27(`CN`)을 바이너리로 뒷받침한다.
@@ -118,7 +118,7 @@ JSON UI 엔진은 리소스팩의 `ui/*.json`을 읽어 화면을 만든다. 공
 
 ### NB-09 바인딩 해석
 
-바인딩 해석 함수(`@0x0979f9b8`)는 다음을 한다.
+엔진은 바인딩을 해석할 때 다음을 한다.
 
 - `bindings`가 배열이 아니면 `Must define bindings as an array.`를 남긴다. 배열 안에서는 객체 항목만 읽는다.
 - 항목마다 `binding_type`, `binding_name`, `binding_name_override`, `binding_collection_name`, `binding_collection_prefix`, `binding_condition`을 읽고, 타입에 따라 갈린다.
@@ -127,13 +127,13 @@ JSON UI 엔진은 리소스팩의 `ui/*.json`을 읽어 화면을 만든다. 공
   - 컬렉션 상세형: `binding_collection_name`과 `binding_collection_prefix`를 쓴다.
   - view형: `source_control_name`, `source_property_name`, `target_property_name`, `resolve_sibling_scope`, `resolve_ancestor_scope`를 읽는다. 원본·대상 속성 이름이 없으면 각각 오류를 남긴다.
 - view형의 찾는 범위는 `source_control_name`이 **비어 있으면 자기 자신**(컨트롤 이름으로 자기를 가리킨다), 있으면 기본 범위·형제 범위(`resolve_sibling_scope`)·조상 범위(`resolve_ancestor_scope`) 셋 중 하나다. 둘 다 참이면 `resolve_ancestor_scope and resolve_sibling_scope cannot both be set!`를 남기고 **형제 범위**로 동작한다.
-- `binding_condition`(`@0x09843c50`)은 문자열이어야 하고(아니면 `- expected a string.`), 값은 `none`, `once`, `always`, `always_when_visible`, `visible`, `visibility_changed` 여섯 가지다. **생략하거나 모르는 값이면 `none`**이다.
+- `binding_condition`은 문자열이어야 하고(아니면 `- expected a string.`), 값은 `none`, `once`, `always`, `always_when_visible`, `visible`, `visibility_changed` 여섯 가지다. **생략하거나 모르는 값이면 `none`**이다.
 
 `binding_type` 문자열을 위 네 타입으로 바꾸는 함수와 생략 시 기본값은 읽지 않았다(BND-02, BND-22의 "생략·모르는 값은 `global`"은 CN 근거 그대로다).
 
 ### NB-10 `ignored`와 `variables`의 순서
 
-정의를 해석하는 함수(`@0x0983e680`)는 컨트롤마다 **`ignored`를 가장 먼저** 평가한다.
+엔진은 정의를 해석할 때 컨트롤마다 **`ignored`를 가장 먼저** 평가한다.
 
 - `ignored`는 null, 불리언, 정수, 그리고 변수·식 문자열을 받는다. 그 밖(실수, 배열, 객체)이면 `An invalid value was provided for "ignored" field.`를 남긴다.
 - 참이면 그 뒤 처리(`variables` 적용 등)를 하지 않는다.
@@ -146,7 +146,7 @@ JSON UI 엔진은 리소스팩의 `ui/*.json`을 읽어 화면을 만든다. 공
 
 ### NB-08 `#hyperlink` 허용 목록
 
-버튼을 누르면 엔진은 그 컨트롤의 속성 주머니에서 `#hyperlink`를 읽어 검사 함수(`@0x0a54bb74`)에 넘기고, 통과할 때만 여는 함수(`@0x0a21dab4`)를 부른다. 검사는 두 단계다.
+버튼을 누르면 엔진은 그 컨트롤의 속성 주머니에서 `#hyperlink`를 읽어 검사하고, 통과할 때만 연다. 검사는 두 단계다.
 
 1. **접두사 목록(조건부)**: 어떤 조건 함수가 참일 때만, URL이 `https://education.minecraft.net/`, `https://aka.ms/`, `ms-windows-store:` 중 하나로 **시작하면** 통과한다. 조건이 무엇인지(에디션·플랫폼 판정으로 보인다)는 확인하지 않았다.
 2. **정확히 일치 목록**: 그 밖에는 URL 116개 중 하나와 **글자 그대로 같아야** 통과한다. 목록은 `https://www.minecraft.net/<언어>/terms/r1`·`r2`·`r3`(29개 언어씩 87개), `https://aka.ms/…` 도움말·약관 20개, EULA·저작권 표시·약관 몇 개, 계정 설정(`https://account.xbox.com/Settings`), 게이머태그 변경(`https://social.xbox.com/changegamertag`), iOS 앱스토어 주소 하나다.
@@ -158,7 +158,7 @@ JSON UI 엔진은 리소스팩의 `ui/*.json`을 읽어 화면을 만든다. 공
 
 ### NB-11 `§` 색표는 전역 변수에서 만든다
 
-`ui/_global_variables.json`을 읽는 함수(`@0x098625b8`)는 파일을 읽은 뒤 변수 29개를 꺼내 색표 하나를 만든다. `$0_color_format`~`$f_color_format` 16개, `$coin_color`, `$material_quartz_color`·`iron`·`netherite`·`redstone`·`copper`·`gold`·`emerald`·`diamond`·`lapis`·`amethyst`·`resin` 11개, `$party_blue_color`다. 이 개수와 순서는 배드락의 `§` 색 코드(`0`~`f`, `g` 동전, `h`~`v` 재료, `w` 파티 파랑)와 같다.
+엔진은 `ui/_global_variables.json`을 읽은 뒤 변수 29개를 꺼내 색표 하나를 만든다. `$0_color_format`~`$f_color_format` 16개, `$coin_color`, `$material_quartz_color`·`iron`·`netherite`·`redstone`·`copper`·`gold`·`emerald`·`diamond`·`lapis`·`amethyst`·`resin` 11개, `$party_blue_color`다. 이 개수와 순서는 배드락의 `§` 색 코드(`0`~`f`, `g` 동전, `h`~`v` 재료, `w` 파티 파랑)와 같다.
 
 - `§` 색 코드의 실제 색은 이 전역 변수 값이다. 리소스팩의 `_global_variables.json`에서 이 변수를 바꾸면 `§` 색도 바뀔 것으로 보인다(게임에서 확인하지 않음).
 - `§w`의 색은 `$party_blue_color`(바닐라에 있음)다. 그래서 라벨 `color`에도 `$party_blue_color`를 쓸 수 있다(survey의 "`$w_color_format`이 없어 쓸 값이 없다"는 판단은 이름만 달랐던 것이다).
@@ -177,11 +177,11 @@ NetEase(중국판) 문서는 UI 안에 골격 모델·엔티티를 그리는 렌
 | `netease_paper_doll`, `skeleton_model_name`, `netease_models` | 0 | NetEase `netease_paper_doll_renderer`, `RenderSkeletonModel`, `netease_models.json` |
 | `modelname`, `modelsize`, `screen_scale`, `init_rot_y`, `render_depth`, `freedom_gesture` | 0 | NetEase `paper_doll`·`netease_paper_doll` 속성 |
 | `use_selected_skin`, `camera_tilt_degrees`, `starting_rotation`, `enable_scissor_test`, `skin_rotation`, `animation_reset_name` | 각 1 | 바닐라 `paper_doll_renderer` 컨트롤의 속성(아래) |
-| `PaperDollRenderer`, `PaperDollPropertyBagSource`, `PaperDollResolvedUIDefSource`, `IPaperDollUIDefSource`, `IOffscreenPaperDollRenderer` 등 | 26(`PaperDoll` 포함 문자열) | C++ 타입 정보(RTTI) 이름 |
+| `PaperDoll`을 포함한 문자열 | 26 | C++ 타입 정보(RTTI) 이름 |
 
 - **NetEase 골격 모델 기능은 국제판 클라이언트에 없다.** 328MB 전체에 `netease`가 한 번도 없고, NetEase 전용 속성 이름 중 긴 것(`skeleton_model_name`, `netease_paper_doll` 등)도 없다. 리소스팩에 NetEase 속성을 써도 국제판 엔진은 그것을 아는 코드가 없다.
 - 다만 짧은 이름은 문자열 검색으로 판정할 수 없다. 바닐라가 13번 쓰는 `paper_doll_renderer`와 `gesture_x`도 0개다. 컴파일러가 짧은 문자열을 명령 안의 즉시값으로 만들거나 해시 표로 넣는 것으로 보인다. 그래서 "없다"는 결론은 긴 이름과 `netease` 문자열에 기대고, 짧은 이름 하나하나는 없다고 단정하지 않는다(`코드, 추론`).
-- 국제판 종이 인형은 속성을 **속성 주머니와 UI 정의 두 곳**에서 받는 것으로 보인다(`PaperDollPropertyBagSource`, `PaperDollResolvedUIDefSource`). 바닐라가 `property_bag`의 `#skin_rotation`과 컨트롤 속성 `rotation`을 함께 쓰는 것과 맞는다. 타입 이름만 본 것이고 함수는 읽지 않았다.
+- 국제판 종이 인형은 속성을 **속성 주머니와 UI 정의 두 곳**에서 받는 것으로 보인다(두 출처에 대응하는 타입이 있다). 바닐라가 `property_bag`의 `#skin_rotation`과 컨트롤 속성 `rotation`을 함께 쓰는 것과 맞는다. 타입 이름만 본 것이고 함수는 읽지 않았다.
 - 바닐라 `paper_doll_renderer` 13곳의 컨트롤 속성(VN 전수): `use_selected_skin` 12(모두 `false`), `layer` 11, `animation_reset_name` 10, `anims` 10, `rotation` 8(`gesture_x` 6, `auto` 1, 변수 1), `camera_tilt_degrees` 8(모두 `-10`), `starting_rotation` 8(모두 `30`), `enable_scissor_test` 4(모두 `true`), `property_bag` 2(`#skin_rotation`). NetEase 문서의 `modelname`, `modelsize`, `animation`, `animation_looped`는 0회다.
 
 
@@ -189,25 +189,25 @@ NetEase(중국판) 문서는 UI 안에 골격 모델·엔티티를 그리는 렌
 
 ### NB-16 서버 폼 JSON 스키마의 행 종류는 9개이고 `multiselect`가 들어 있다
 
-질문은 "모달 폼에 생긴 `multiselect`를 서버가 쓸 수 있는가"였다(2026-10-23 6·7차 분석). 실측까지 한 조사 전체는 에 있다.
+질문은 "모달 폼에 생긴 `multiselect`를 서버가 쓸 수 있는가"였다(2026-10-23 분석). 실측까지 한 조사 전체는 에 있다.
 
-- 클라이언트에 서버 폼 JSON의 cereal 스키마(필드마다 설명 문자열)가 있다. `form`·`modal`·`custom_form` 스키마 함수(`@0x1126decc`)가 행 종류 스키마(`@0x112718f0`)를 부르고, `type`("Type of control used")의 열거값은 `label`, `toggle`, `slider`, `step_slider`, `dropdown`, `multiselect`, `input`, `header`, `divider` 아홉 개다.
-- `tooltip`을 가진 행 스키마가 여섯 개다(`@0x112700ac`, `@0x112703c0`, `@0x112708c0` 슬라이더, `@0x11270d24` 드롭다운, `@0x112710d8`, `@0x112714d0` 입력). `@0x112710d8`은 `options`(문자열 배열), `defaults`(정수 배열), `tooltip`을 가져 multiselect로 보인다. 드롭다운은 `default`(정수)다. 이 둘에는 `control_locked`가 없다.
+- 클라이언트에 서버 폼 JSON의 cereal 스키마(필드마다 설명 문자열)가 있다. `form`·`modal`·`custom_form` 스키마가 행 종류 스키마를 쓰고, `type`("Type of control used")의 열거값은 `label`, `toggle`, `slider`, `step_slider`, `dropdown`, `multiselect`, `input`, `header`, `divider` 아홉 개다.
+- `tooltip`을 가진 행 스키마가 여섯 개다(슬라이더, 드롭다운, 입력과 그 밖의 셋). 그중 하나는 `options`(문자열 배열), `defaults`(정수 배열), `tooltip`을 가져 multiselect로 보인다. 드롭다운은 `default`(정수)다. 이 둘에는 `control_locked`가 없다.
 - **스키마와 실측이 다르다**: 1.26.52 Windows 실측에서 `defaults`는 무시되고 `default`(번호 배열)가 기본 체크를 넣었다(`MS`). 이 스키마가 실제 해석기는 아닌 것으로 보인다.
-- `multiselect` 글자는 이 스키마와 팩 manifest 설정(`MultiSelectSetting`)에만 있다. 모달 폼 바인딩(`#custom_multiselect_toggled` 등)은 문자열로 없다(해시로 들어간 것으로 보인다).
+- `multiselect` 글자는 이 스키마와 팩 manifest 설정에만 있다. 모달 폼 바인딩(`#custom_multiselect_toggled` 등)은 문자열로 없다(해시로 들어간 것으로 보인다).
 
 
 ## 8. JSON UI 밖: 장비 슬롯
 
 ### NB-15 장비 슬롯은 5개이고, 렌더러가 0~4번을 고정으로 그린다 (JSON UI 밖)
 
-JSON UI는 아니지만 같은 바이너리로 확인했다. 질문은 "장비 슬롯은 4개로 알려져 있는데, 서버가 패킷으로 5번째 슬롯을 보내면 그 장비가 그려지고 6번째부터는 그려지지 않는 이유"였다(2026-10-23 5차 분석).
+JSON UI는 아니지만 같은 바이너리로 확인했다. 질문은 "장비 슬롯은 4개로 알려져 있는데, 서버가 패킷으로 5번째 슬롯을 보내면 그 장비가 그려지고 6번째부터는 그려지지 않는 이유"였다(2026-10-23 분석).
 
-- **장비 슬롯 열거형은 5개다.** `SharedTypes::Legacy::ArmorSlot`을 등록하는 함수(`@0x0cce15f8`)가 `Head`, `Torso`, `Legs`, `Feet`, `Body`를 이 순서(0~4)로 등록한다. 명령어용 슬롯 이름표(`@0x127005c8`)도 `slot.armor.head`·`chest`·`legs`·`feet`·`body` 다섯 개다. `Invalid armor slot '%s' specified. Only 'slot.armor.chest' and 'slot.armor.body' are supported.` 문구가 있어, Body는 늑대·말 갑옷 같은 동물 갑옷용 슬롯으로 보인다.
-- **장비 읽기 함수**(`@0x0f6797ac`): 액터의 장비 컨테이너를 꺼내 가상 함수(`+0x40`, 칸 아이템 읽기)로 슬롯 번호의 아이템을 돌려준다. 이 함수를 부르는 곳은 53개이고, 대부분 0~4를 반복문 없이 상수로 펼쳐 부른다(몹 처치 텔레메트리 `@0x0ba412e8`의 `MobArmorHeadId`…`MobArmorBodyId` 등).
-- **착용물 렌더 함수**(`@0x0a00007c`, `variable.is_first_person`·`variable.gliding_speed_value`를 다룬다): 장비 0~4번을 차례로 읽어 착용물 처리 함수(`@0x0a00101c`, `@0x0a0012b4`)에 번호 0~4로 넘기고, 이어서 주 손 아이템을 번호 5, 보조 손 아이템을 번호 6으로 넘긴다. 같은 순서가 두 곳에 있다. 액터 타입이 `0x13f`(플레이어)인지는 1인칭 변수를 읽을 때만 본다. 즉 이 경로는 플레이어와 몹을 가리지 않고 Body 칸을 그린다.
+- **장비 슬롯 열거형은 5개다.** 엔진은 장비 슬롯을 `Head`, `Torso`, `Legs`, `Feet`, `Body` 순서(0~4)로 등록한다. 명령어용 슬롯 이름표도 `slot.armor.head`·`chest`·`legs`·`feet`·`body` 다섯 개다. `Invalid armor slot '%s' specified. Only 'slot.armor.chest' and 'slot.armor.body' are supported.` 문구가 있어, Body는 늑대·말 갑옷 같은 동물 갑옷용 슬롯으로 보인다.
+- **장비 읽기**: 엔진은 액터의 장비 컨테이너에서 슬롯 번호의 아이템을 읽는다. 이 읽기를 쓰는 곳은 53개이고, 대부분 0~4를 반복문 없이 상수로 펼쳐 쓴다(몹 처치 텔레메트리의 `MobArmorHeadId`…`MobArmorBodyId` 등).
+- **착용물 렌더**(`variable.is_first_person`·`variable.gliding_speed_value`를 다루는 단계): 장비 0~4번을 차례로 읽어 착용물 처리에 번호 0~4로 넘기고, 이어서 주 손 아이템을 번호 5, 보조 손 아이템을 번호 6으로 넘긴다. 같은 순서가 두 곳에 있다. 액터가 플레이어인지는 1인칭 변수를 읽을 때만 본다. 즉 이 경로는 플레이어와 몹을 가리지 않고 Body 칸을 그린다.
 - **결론**: 플레이어 인벤토리 UI가 4칸만 보여 줄 뿐 엔진의 장비 칸은 5개다. 서버가 플레이어의 4번(Body) 칸에 아이템을 넣으면 렌더러가 읽어서 그린다. 5번 이후는 렌더러가 번호를 손 아이템에 쓰고 장비 칸으로 읽지 않으므로, 무엇을 보내도 그려지지 않는다.
-- **확인하지 않은 것**: 6번째 칸 데이터를 장비 컨테이너가 저장하는지(크기 제한으로 버리는지), 착용물 처리 함수 두 개의 내부, `MobArmorEquipmentPacket`의 필드 구성(Body 필드는 1.21대 프로토콜 변경으로 알려진 내용이다), 인게임 실측. 판정 수준은 `코드`다.
+- **확인하지 않은 것**: 6번째 칸 데이터를 장비 컨테이너가 저장하는지(크기 제한으로 버리는지), 착용물 처리 두 곳의 내부, `MobArmorEquipmentPacket`의 필드 구성(Body 필드는 1.21대 프로토콜 변경으로 알려진 내용이다), 인게임 실측. 판정 수준은 `코드`다.
 
 
 ## 9. 문자열로 확인한 것
@@ -245,9 +245,9 @@ JSON UI는 아니지만 같은 바이너리로 확인했다. 질문은 "장비 �
 | R-08 | **JSON UI 해석 오류 문구 목록.** 타입 검사 7종(`- expected a bool.` 등), 바인딩 6종, 팩토리 2종, `Invalid anim reference!`, `Must define 'images' as an array!`, `Must define state_controls as an array!`, 포커스 5종(`Expected a focus identifier.` 등), 글꼴 2종(`Expected a string for 'font_type'.` 등), `Expected variable not found in ancestor tree: '%s'`, `UI control reference not found: '%s'` | 커뮤니티는 `JSON UI parse failure - expected a string`, `Must define a source property name`, "cannot find variable in ancestor tree"만 보고했다. 마지막 것은 바이너리에 그 글자가 없고 `Expected variable not found in ancestor tree`가 있으므로, 다른 판의 문구이거나 바꿔 말한 것으로 보인다 | NB 4장 | DBG-34 |
 | R-09 | **바닐라에 없는 버튼 ID 4개.** `button.menu_tertiary_select`, `button.menu_textcursorleft`, `button.menu_textcursorright`, `button.menu_edu_play`는 엔진에 이름이 있지만 바닐라 UI에서 0회다. 엔진의 `button.menu_*`는 모두 31개다 | 위키 표와 바닐라 사용으로는 알 수 없다 | NB 4장 | INP-33 |
 | R-10 | **국제판 클라이언트에는 NetEase UI 3D 모델 기능이 없다.** 328MB 전체에 `netease` 문자열이 0개이고, `skeleton_model_name`·`netease_paper_doll` 등 NetEase 전용 긴 속성 이름도 0개다 | NE 문서는 중국판 기능만 적고, 국제판에 있는지는 누구도 확인하지 않았다 | NB-12 | ANI-36 |
-| R-11 | **종이 인형은 속성을 두 곳에서 받는 것으로 보인다.** `PaperDollPropertyBagSource`와 `PaperDollResolvedUIDefSource` 타입이 있다. 바닐라가 `property_bag`의 `#skin_rotation`과 컨트롤 속성 `rotation`을 함께 쓰는 것과 맞다. 타입 이름만 본 것이라 `추론`이다 | 없음 | NB-12 | ANI-35 |
+| R-11 | **종이 인형은 속성을 두 곳에서 받는 것으로 보인다.** 속성 주머니 출처와 해석된 UI 정의 출처에 대응하는 타입이 있다. 바닐라가 `property_bag`의 `#skin_rotation`과 컨트롤 속성 `rotation`을 함께 쓰는 것과 맞다. 타입 이름만 본 것이라 `추론`이다 | 없음 | NB-12 | ANI-35 |
 | R-13 | **팩토리 해석의 세부.** `type: factory`도 `factory` 객체 쪽으로 해석할 수 있고, 컨트롤 하나에 팩토리는 하나다. `control_name`은 해석할 때 선언 스코프로 원형을 바로 만들고 `control_ids`는 문자열만 저장한다. `max_children_size` 기본값은 0 | CN은 결과(스코프 차이)만 적었다 | NB-13 | COL-45 |
-| R-14 | **`_first_hidden_child_index`의 정체.** 상점 상세 화면 설명 컴포넌트(`DescriptionComponent.cpp`)가 속성 주머니의 이 정수로 태그·언어를 접거나 다음 줄로 넘긴다. 일반 팩토리 기능이 아니다. 엔진이 길이 바인딩에 `["tag", …]` 같은 종류 이름 배열을 직접 준다 | 없음. "팩토리에 뭔가 새로 생겼다"는 이야기의 후보로 조사했다 | NB-14 | COL-46, COL-27 |
+| R-14 | **`_first_hidden_child_index`의 정체.** 상점 상세 화면 설명 컴포넌트가 속성 주머니의 이 정수로 태그·언어를 접거나 다음 줄로 넘긴다. 일반 팩토리 기능이 아니다. 엔진이 길이 바인딩에 `["tag", …]` 같은 종류 이름 배열을 직접 준다 | 없음. "팩토리에 뭔가 새로 생겼다"는 이야기의 후보로 조사했다 | NB-14 | COL-46, COL-27 |
 | R-15 | **서버 폼 JSON 스키마.** 클라이언트에 설명 문자열이 붙은 폼 스키마가 있고 행 종류는 `label`·`toggle`·`slider`·`step_slider`·`dropdown`·`multiselect`·`input`·`header`·`divider` 9개다. multiselect로 보이는 행은 `options`·`defaults`(정수 배열)·`tooltip`을 갖지만, 실측(`MS`)에서는 `defaults`가 무시되고 `default`(번호 배열)가 먹었다. 스키마는 실제 해석기가 아닌 것으로 보인다 | 커뮤니티·가이드: "multiselect는 Script API로 보낼 수 없다"까지만 | NB-16 | HOST-46 |
 | R-12 | **크기 바인딩 이름.** `#total_size_binding`은 엔진 문자열로 있지만 바닐라는 0회 쓴다. `#size_binding_x`는 통째 문자열이 없어 실행 중에 조합되는 것으로 보인다 | 없음 | NB 4장 | — |
 
@@ -274,9 +274,9 @@ JSON UI는 아니지만 같은 바이너리로 확인했다. 질문은 "장비 �
 ## 11. 남은 것
 
 
-- `grid_rescaling_type`, `propagate_alpha`, `clip_direction`, `Expected variable not found in ancestor tree`, `UI control reference not found`는 `ADRP`+`ADD` 탐색으로도 쓰는 함수를 찾지 못했다. 다른 방식(리터럴 풀, 해시된 속성 이름표 등)으로 접근하는 것으로 보인다. LAY-32(`vertical` 크래시), LAY-33은 그대로 미검증이다.
+- `grid_rescaling_type`, `propagate_alpha`, `clip_direction`, `Expected variable not found in ancestor tree`, `UI control reference not found`는 쓰는 곳을 찾지 못했다. 다른 방식(리터럴 풀, 해시된 속성 이름표 등)으로 접근하는 것으로 보인다. LAY-32(`vertical` 크래시), LAY-33은 그대로 미검증이다.
 - `binding_type` 문자열 해석 함수, 정의 안 `$x|default`가 들어가는 단계, `#hyperlink` 접두사 목록의 조건 함수는 아직 읽지 않았다.
-- 종이 인형의 `PaperDollPropertyBagSource`·`PaperDollResolvedUIDefSource`가 어느 속성을 읽는지, `use_selected_skin`·`camera_tilt_degrees`·`starting_rotation`의 기본값은 함수를 읽지 않아 모른다(NB-12).
+- 종이 인형의 두 속성 출처가 각각 어느 속성을 읽는지, `use_selected_skin`·`camera_tilt_degrees`·`starting_rotation`의 기본값은 함수를 읽지 않아 모른다(NB-12).
 - 바인딩 식 평가기(`not`, `and`, `%`, `'%.Ns'` 등)는 오류 문구가 거의 없어 이번 방법으로는 찾지 못했다. 식 규칙(5장)은 여전히 `CN`과 실측이 근거다.
-- 장비 컨테이너가 6번째 칸을 저장하는지, 착용물 처리 함수(`@0x0a00101c`, `@0x0a0012b4`)가 무엇을 그리는지는 읽지 않았다(NB-15).
+- 장비 컨테이너가 6번째 칸을 저장하는지, 착용물 처리 두 곳이 무엇을 그리는지는 읽지 않았다(NB-15).
 - 이 판정은 모두 `코드` 수준이다. 게임 동작과 다르면 실측을 따른다.

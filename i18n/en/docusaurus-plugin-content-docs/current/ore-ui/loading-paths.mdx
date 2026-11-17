@@ -13,8 +13,6 @@ sources:
 The trust decision analysis on this page is based on Android 1.26.52.3 and the measurements on Windows 1.26.52. The route by which encrypted packs and `content.zipe` packs changed Ore UI files worked up to 26.63, and in 26.64 Mojang blocked resource pack access to Ore UI for a security reason (Source: private research). How versions after 26.64 decide this was not analyzed.
 :::
 
-Addresses are the Android 1.26.52.3 arm64 analysis base address (ELF address + 0x100000). (Source: repo-ore-ui-loading)
-
 ## 0. Concept: the pack stack and "trust"
 
 JSON UI works by a resource pack's `ui/*.json` overriding vanilla definitions. Ore UI is different. A screen is a bundle of `hbui/*.html`, `*.js` and `*.css` in the install folder, and that bundle requests files with addresses starting with `ui://`. When the engine receives a request, before going to the install folder it scans the pack stack (the stacked list of enabled resource packs) from the top, and if a **trusted pack** has a file at the same path, it serves that one. So "which packs are trusted" decides whether Ore UI can be changed. Trust is decided by how the pack is opened (the access strategy) and has nothing to do with the pack's contents.
@@ -36,13 +34,13 @@ The hash in the file name (`cb1e5471975ef2c1abb9`) differs for each game version
 
 ## 1. How an Ore UI file request is resolved `{code}`
 
-1. **URL normalization** (`@0x09cf635c`): if the request path does not start with `ui://`, the leading `/` is removed and `ui://` is prepended. The strings present are `ui://`, `ui://hbui/fonts/` and `coui://uiresources/...` (the Gameface inspector).
-2. **File lookup** (`@0x09cf68d4`)
+1. **URL normalization**: if the request path does not start with `ui://`, the leading `/` is removed and `ui://` is prepended. The strings present are `ui://`, `ui://hbui/fonts/` and `coui://uiresources/...` (the Gameface inspector).
+2. **File lookup**
    - A path containing `../` or `..\` is rejected.
-   - After normalizing the path, it **walks the pack stack (an array of 0x110-byte pack entries) from the front.** Only when the virtual function (+0x30) of a pack's access strategy is true does it check whether that pack has the file (`@0x112ac30c`, sub packs, pack order, virtual function +0x38 = `hasAsset(path, false, false)`). If it has it, it serves from that pack.
-   - If not, it opens `gui/dist/` + base folder + path from the **app package file system** (`Core::FileSystem`, `@0x09cf66f8`).
-3. **The filter is `isTrusted()`**: the next slot right after (+0x38) is `hasAsset`, which matches the virtual function order of Bedrock's `PackAccessStrategy` (`... isWritable`, `setIsTrusted`/`isTrusted`, `hasAsset` ...). The first guess that "only built-in packs and marketplace packs are trusted" was wrong. In the analyzed version, encrypted packs sent by a server were trusted too.
-4. `routes.json` (`@0x09cd39dc`) and fonts (`gui/dist/hbui/fonts`, `@0x096de4bc`) are read only from the install folder.
+   - After normalizing the path, it **walks the pack stack from the front.** Only when a pack's access strategy trusts that pack does it check whether that pack (including sub packs, in pack order) has the file. If it has it, it serves from that pack.
+   - If not, it opens `gui/dist/` + base folder + path from the **app package file system**.
+3. **The filter is whether the pack is trusted**. The first guess that "only built-in packs and marketplace packs are trusted" was wrong. In the analyzed version, encrypted packs sent by a server were trusted too.
+4. `routes.json` and fonts (`gui/dist/hbui/fonts`) are read only from the install folder.
 
 The note in 8Crafter Ore UI Customizer's "Export as RP" that "a mod that makes the game load Ore UI from the RP is required" is correct for plaintext packs. Up to 26.63 an encrypted pack worked without a client mod, and from 26.64 encrypted packs are blocked too.
 
@@ -50,20 +48,20 @@ The note in 8Crafter Ore UI Customizer's "Export as RP" that "a mod that makes t
 
 ### Decision per access strategy `{code}`
 
-The vtables of the pack access strategy classes were found by their RTTI names (`18PackAccessStrategy`, etc.) and slot +0x30 (`isTrusted`) was disassembled (analysis round 11, `DumpVtables.java`).
+The trust decision and the writable decision were checked for each access strategy that opens a pack.
 
-| Access strategy | +0x30 `isTrusted` | +0x28 `isWritable` |
+| Access strategy | Trust decision | Writable |
 | --- | --- | --- |
-| `ZipPackAccessStrategy` (`@0x1125865c`) | `location.fileSystem == 1` or the `+0x170` flag | the `+0x171` flag |
-| `DirectoryPackAccessStrategy` (`@0x112ee564`) | `location.fileSystem == 1` | always true |
-| `EncryptedFileAccessStrategy` (`@0x112f456c`) | **always true** | always false |
-| `ZippedEncryptedFilesAccessStrategy` (`@0x112f456c`, the same function) | **always true** | always false |
-| `DirectoryPackWithEncryptionAccessStrategy` (`@0x112f0a70`) | **always true** | always true |
+| Plaintext zip pack | When it is a built-in pack in the game install folder, or a separate flag on the pack is set | Depends on a separate flag on the pack |
+| Plaintext folder pack | When it is a built-in pack in the game install folder | always true |
+| Encrypted files | **always true** | always false |
+| Encrypted files inside a zip (the same decision as above) | **always true** | always false |
+| Encrypted folder pack (a folder with `content.zipe`) | **always true** | always true |
 
-- `location` is the pack's `ResourceLocation` (a field returned by the +0x18 slot of the access strategy), and its first field is the file system kind. 1 is read as the app package (`AppPackage`), that is, the built-in pack in the game install folder `{inferred, from the Bedrock ResourceFileSystem enum order}`.
-- **The pack UUID and the manifest content are not used for the trust decision.** The idea "can't we just use the UUID of a marketplace add-on" does not work. Even if you imitate the UUID, a plaintext pack opens with a Zip/Directory strategy, and that decision looks only at the install location.
-- The string `Failed encrypted file signature check` in the binary was in the world storage (LevelDB) code. The code that checks the pack signature (`signatures.json`) was not followed. In the measurements, a pack that was only encrypted without a signature was trusted.
-- The content key is looked up by `ClientContentKeyProvider` only from keys sent by the server, entitlements and the built-in table. It does not look at key files next to the pack or the world db (Source: private research).
+- "A built-in pack in the game install folder" is read as the case where the file system kind of the pack location is the app package `{inferred, from the enum order of Bedrock file system kinds}`.
+- **The pack UUID and the manifest content are not used for the trust decision.** The idea "can't we just use the UUID of a marketplace add-on" does not work. Even if you imitate the UUID, a plaintext pack opens with a plaintext zip or folder strategy, and that decision looks only at the install location.
+- The code that checks the pack signature (`signatures.json`) was not followed. In the measurements, a pack that was only encrypted without a signature was trusted.
+- The client looks up the content key only from keys sent by the server, entitlements and the built-in table. It does not look at key files next to the pack or the world db (Source: private research).
 
 ### Server measurement (Windows 1.26.52, 2026-10-23) `{measured}`
 
@@ -80,15 +78,15 @@ The vtables of the pack access strategy classes were found by their RTTI names (
 
 ### Local pack (`content.zipe`) `{measured, 2026-10-27}`
 
-Up to 26.63, adding `content.zipe` to a plaintext pack folder made it open with `DirectoryPackWithEncryptionAccessStrategy` even without a key, be trusted and change Ore UI files. The engine only checked whether this file existed. A plaintext pack sent by a server with an empty `content.zipe` also had its in-game Ore UI page used `{measured}` ([Resource pack delivery](../server/resource-pack-delivery.mdx)). From 26.64 this is blocked. The detailed test results are in the local test section of [Modifying Ore UI pages](./modifying-pages.mdx).
+Up to 26.63, adding `content.zipe` to a plaintext pack folder made it open with the encrypted folder pack strategy even without a key, be trusted and change Ore UI files. The engine only checked whether this file existed. A plaintext pack sent by a server with an empty `content.zipe` also had its in-game Ore UI page used `{measured}` ([Resource pack delivery](../server/resource-pack-delivery.mdx)). From 26.64 this is blocked. The detailed test results are in the local test section of [Modifying Ore UI pages](./modifying-pages.mdx).
 
 ## 3. The button style bridge `vanilla.resourcePackOverrides` `{code}`
 
 ### Engine side
 
-- The facet `vanilla.resourcePackOverrides` (`OreUI::ResourcePackOverridesFacet`) outputs two properties, `definitions` and `lastUpdated` (`@0x09ef8760`).
-- One definition is `identifier`, `control`, `propertyData[]` (`UI::Resources::ResolvedPropertyData`: `name`, `value` = a JSON string) and `textureData[]` (`ResolvedTextureData`: `identifier`, `path`, `sliceSize`, `uvSize`, `uvScale`).
-- **The definitions the engine resolves are two hardcoded ones** (`@0x09ef8a7c`).
+- The facet `vanilla.resourcePackOverrides` outputs two properties, `definitions` and `lastUpdated`.
+- One definition is `identifier`, `control`, `propertyData[]` (`name`, `value` = a JSON string) and `textureData[]` (`identifier`, `path`, `sliceSize`, `uvSize`, `uvScale`).
+- **The definitions the engine resolves are two hardcoded ones**.
 
 | Definition | Texture variable | Property variables |
 | --- | --- | --- |
@@ -133,9 +131,9 @@ Probe tip: if you hide a JSON UI screen's panels with `ignored: true` and the sc
 
 ## 4. DDUI layouts are read from packs but only built-in ones `{code}`
 
-- The loader (`@0x0b96ab2c`) walks the pack stack and opens each pack's `ddui/root` and `ddui/composition` folders. Files are interpreted as `minecraft:ui-root` (`@0x0b96b304`, error messages `DataDrivenUI Root .json file '{}'`, `Failed to load DataDrivenUI file`) and `minecraft:ui-composition` (`@0x0b96c468`). The pack UUID is recorded with them and becomes the `sourcePackId` that goes to JS (`vanilla.CoreDataDrivenUIDefinitionQuery`).
-- **Pack filtering**: only packs where at least one of two bools on the pack object (+0x88 `@0x112ac54c`, +0x89 `@0x112ac55c`) is true are read. The same two functions are used in the POI loader (`@0x10a29438`, `@0x10a2b6e8`) to raise "`Cannot use minecraft namespace found %s`" when a pack with both false uses a `minecraft:` identifier. So these two values are a "game built-in (first-party) pack" marker `{inferred}`. `ddui/root/*.json` of user and server packs is not read.
-- `/reload` has a DDUI branch (`commands.reload.ddui.success`, `@0x0ebd02fc`).
+- The loader walks the pack stack and opens each pack's `ddui/root` and `ddui/composition` folders. Files are interpreted as `minecraft:ui-root` (error messages `DataDrivenUI Root .json file '{}'`, `Failed to load DataDrivenUI file`) and `minecraft:ui-composition`. The pack UUID is recorded with them and becomes the `sourcePackId` that goes to JS (`vanilla.CoreDataDrivenUIDefinitionQuery`).
+- **Pack filtering**: only packs where at least one of two true/false markers on the pack is true are read. The POI loader looks at the same two markers and raises "`Cannot use minecraft namespace found %s`" when a pack with both false uses a `minecraft:` identifier. So these two values are a "game built-in (first-party) pack" marker `{inferred}`. `ddui/root/*.json` of user and server packs is not read.
+- `/reload` has a DDUI branch (`commands.reload.ddui.success`).
 - **The frontend is ready to accept creator packs** (`gameplay-*.js`)
   - A layout given by the engine is drawn with `isCreatorDataDriven: true` and `pack: sourcePackId`.
   - Image rule: if the layout's source pack is vanilla (`0575c61f-...`), images can point to another pack (`packId`). If it is not vanilla, it can use only its own pack's images (error messages `RequestedPack is not supported.`, `Cannot load vanilla images.`, `Image cannot look like a URL.`).
@@ -147,7 +145,7 @@ The switch that opens container screens with Ore UI, and the conclusion that a s
 
 ## 6. Rule summary
 
-1. Plaintext packs (Zip, Directory access strategies) are not trusted, so files in `hbui/` are ignored.
+1. Plaintext packs (plaintext zip and folder access strategies) are not trusted, so files in `hbui/` are ignored.
 2. In the analyzed version (1.26.52), the three encrypted access strategies were always trusted regardless of the pack UUID, signature and manifest. This route worked up to 26.63 and is blocked from 26.64.
 3. A plaintext pack still reaches the button style bridge and `pack://` textures (measured on 1.26.52).
 4. Fonts and `routes.json` are read only from the install folder, not from packs.
