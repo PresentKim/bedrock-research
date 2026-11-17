@@ -73,8 +73,18 @@ Dragonfly가 만드는 커스텀 아이템·블록 항목에는 Dragonfly가 아
 - 아이템: `minecraft:digger`(블록별·도구 태그별 캐기 속도), `minecraft:use_modifiers`, `minecraft:fuel`.
   - 클라이언트는 쓸 수 있다고 아는 아이템에만 허공 사용 패킷을 보낸다. 허공을 오른쪽 클릭할 때 반응해야 하는 커스텀 아이템은 클라이언트 항목에 `minecraft:use_modifiers`(예: `use_duration` 0.05, `movement_modifier` 1)를 둔다. 한 아이템에서 이렇게 해 허공 클릭이 서버에 왔다 [실측, 2026-11-01].
   - 커스텀 연료는 클라이언트 항목에 `minecraft:fuel`이 있어야 클라이언트가 화로 연료 칸에 넣게 해 준다. 없으면 서버는 태울 수 있어도 클라이언트가 칸을 거절한다 [코드, 게임 확인 전].
-- 블록: `BreakInfo`의 도구 태그(`tag:...`)와 곡괭이 등급, 클릭을 서버로 보내는 상호작용 표시, 퍼뮤테이션별 충돌 상자와 지오메트리 뼈 보임, 재질의 렌더 방식 이름(예: `alpha_test` 대신 `alpha_test_single_sided`).
+- 블록: `BreakInfo`의 도구 태그(항목 최상위 `blockTags` 목록. `tag:` 컴포넌트는 효과가 없다, 아래 실측)와 곡괭이 등급, 클릭을 서버로 보내는 상호작용 표시, 퍼뮤테이션별 충돌 상자와 지오메트리 뼈 보임, 재질의 렌더 방식 이름(예: `alpha_test` 대신 `alpha_test_single_sided`).
 - 블록 속성은 이름 순으로 정렬한다. 클라이언트가 상태 번호를 매기는 순서와 맞추기 위해서다.
+
+### 블록·아이템 정의 NBT에서 실측한 것
+
+Windows 1.26.65 클라이언트, Dragonfly master(프로토콜 1.26.60) 서버에서 접속 때 나가는 정의 NBT만 고쳐 보았다(2026-11-18). 클라이언트는 NBT 값의 형식을 엄격하게 보고, 형식이 다르면 값이 없는 것으로 다룬다 [코드].
+
+- **빛**: `minecraft:light_emission`의 `emission`은 Byte로 보낸다. Byte로 보낸 블록은 밤에 주변 바닥을 밝혔고, Int로 보낸 블록(Dragonfly 기본)은 밝히지 않았다 [실측]. `minecraft:light_dampening`의 `lightLevel`도 클라이언트가 Byte로 읽는다 [코드, 게임 확인 전].
+- **도구 태그**: 블록 항목 최상위의 `blockTags` 문자열 목록에 넣는다. 다이아몬드 곡괭이로 클라이언트가 캐기를 마친 시간은 `blockTags: ["minecraft:is_pickaxe_item_destructible"]` 블록 548ms, 같은 태그를 `tag:minecraft:is_pickaxe_item_destructible` 컴포넌트로 넣은 블록 4453ms, 태그 없는 블록 4449ms였다 [실측, 각 1회]. 바닐라 데이터 기반 블록 항목도 태그를 `blockTags`로 보낸다.
+- **블록 종류(`vanilla_block_data.block_archetype`)**: 커스텀 네임스페이스 블록에도 먹는다. 바닐라 반 블록 항목을 복제해 `{type: "slab_block", double_slab_block, is_double}`를 보내자 geometry 없이 반 블록 높이로 보였다. 같은 방식의 `stair_block`(`base_block`)은 꽉 찬 블록으로 보였다. 둘 다 텍스처는 알 수 없는 블록 텍스처였다 [실측].
+  - 블록 종류를 줄 때는 `properties`를 보내지 않는다. 바닐라 항목처럼 `properties` 없이 보내고 서버에 바닐라와 같은 상태(반 블록은 `minecraft:vertical_half`)를 등록하자 월드가 정상이었다. `properties`를 함께 보내자 블록 런타임 ID가 어긋나 공기가 불과 용암으로 보였다 [실측]. 클라이언트가 블록 종류에서 상태를 스스로 만드는 것으로 본다 [추론].
+- **아이템 `max_stack_size`**: `item_properties`에서 빼면 클라이언트가 그 아이템을 정상으로 다루지 않았다. 다른 커스텀 아이템에 합쳐졌고, 다시 나누자 둘 다 다른 아이템이 되었다 [실측, 1회]. 클라이언트는 `item_properties`의 키 대부분을 없으면 0으로 덮어 읽는다 [코드]. 늘 넣는다.
 
 ## 이름과 번역
 
