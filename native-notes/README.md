@@ -12,4 +12,5 @@ Docusaurus는 `docs/`만 빌드하므로 이 폴더는 사이트에 나오지 �
 | [ore-ui-geo-item.md](./ore-ui-geo-item.md) | `docs/ore-ui/geo-item-and-containers.mdx` |
 | [ore-ui-overview.md](./ore-ui-overview.md) | `docs/ore-ui/overview.mdx` |
 | [ore-ui-ddui-server-guide.md](./ore-ui-ddui-server-guide.md) | `docs/ore-ui/ddui-server-guide.mdx` |
+| [block-item-definition-nbt.md](./block-item-definition-nbt.md) | `docs/server/custom-items-and-blocks.mdx` "블록·아이템 정의 NBT에서 실측한 것" |
 | [pack-access-strategies.md](./pack-access-strategies.md) | `docs/basics/pack-delivery-and-encryption.mdx`, `docs/ore-ui/modifying-pages.mdx`, ALT-11 |
