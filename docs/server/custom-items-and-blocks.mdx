@@ -80,6 +80,17 @@ Dragonfly가 만드는 커스텀 아이템·블록 항목에는 Dragonfly가 아
 
 Windows 1.26.65 클라이언트, Dragonfly master(프로토콜 1.26.60) 서버에서 접속 때 나가는 정의 NBT만 고쳐 보았다(2026-11-18). 클라이언트는 NBT 값의 형식을 엄격하게 보고, 형식이 다르면 값이 없는 것으로 다룬다 [코드].
 
+네트워크로 보내는 정의 NBT는 같은 내용의 BP JSON과 키 배치나 형식이 다른 경우가 많다. BP JSON을 그대로 NBT로 옮기지 말고 바닐라 데이터 기반 블록 항목(Dragonfly `world/data_driven_blocks.nbt`)이나 실제 패킷을 본보기로 삼는다. 예:
+
+| BP JSON | 정의 NBT |
+| --- | --- |
+| `"minecraft:tags"` 또는 `"tag:<이름>": {}` 컴포넌트 | 항목 최상위 `blockTags` 문자열 목록 |
+| `"minecraft:light_emission": 15` | `"minecraft:light_emission": {"emission": <Byte>}` |
+| `"minecraft:collision_box": {"origin", "size"}` | `{"enabled", "boxes": [{"minX" ... "maxZ"}]}` |
+| `"minecraft:liquid_detection": {"detection_rules": [{"liquid_type", "can_contain_liquid", "on_liquid_touches"}]}` | `{"detectionRules": [{"liquidType", "canContainLiquid", "onLiquidTouches", ...}]}` |
+| `description.internal_vanilla_data.block_archetype: {"slab_block": {...}}` | `vanilla_block_data.block_archetype: {"type": "slab_block", ...}` |
+| `"minecraft:redstone_conductivity": {"redstone_conductor"}` | `{"redstoneConductor", "allowsWireToStepDown"}` |
+
 - **빛**: `minecraft:light_emission`의 `emission`은 Byte로 보낸다. Byte로 보낸 블록은 밤에 주변 바닥을 밝혔고, Int로 보낸 블록(Dragonfly 기본)은 밝히지 않았다 [실측]. `minecraft:light_dampening`의 `lightLevel`도 클라이언트가 Byte로 읽는다 [코드, 게임 확인 전].
 - **도구 태그**: 블록 항목 최상위의 `blockTags` 문자열 목록에 넣는다. 다이아몬드 곡괭이로 클라이언트가 캐기를 마친 시간은 `blockTags: ["minecraft:is_pickaxe_item_destructible"]` 블록 548ms, 같은 태그를 `tag:minecraft:is_pickaxe_item_destructible` 컴포넌트로 넣은 블록 4453ms, 태그 없는 블록 4449ms였다 [실측, 각 1회]. 바닐라 데이터 기반 블록 항목도 태그를 `blockTags`로 보낸다.
 - **블록 종류(`vanilla_block_data.block_archetype`)**: 커스텀 네임스페이스 블록에도 먹는다. 바닐라 반 블록 항목을 복제해 `{type: "slab_block", double_slab_block, is_double}`를 보내자 geometry 없이 반 블록 높이로 보였다. 같은 방식의 `stair_block`(`base_block`)은 꽉 찬 블록으로 보였다. 둘 다 텍스처는 알 수 없는 블록 텍스처였다 [실측].

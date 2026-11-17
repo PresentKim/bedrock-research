@@ -80,6 +80,17 @@ Things worth adding this way:
 
 With a Windows 1.26.65 client and a Dragonfly master (protocol 1.26.60) server, only the definition NBT sent at join was changed (2026-11-18). The client is strict about NBT value types and treats a value of the wrong type as missing [code].
 
+The definition NBT sent over the network often differs in key layout or type from a BP JSON with the same content. Do not convert BP JSON to NBT as is; take the vanilla data-driven block entries (Dragonfly `world/data_driven_blocks.nbt`) or real packets as the model. Examples:
+
+| BP JSON | Definition NBT |
+| --- | --- |
+| `"minecraft:tags"` or a `"tag:<name>": {}` component | the `blockTags` string list at the top level of the entry |
+| `"minecraft:light_emission": 15` | `"minecraft:light_emission": {"emission": <Byte>}` |
+| `"minecraft:collision_box": {"origin", "size"}` | `{"enabled", "boxes": [{"minX" ... "maxZ"}]}` |
+| `"minecraft:liquid_detection": {"detection_rules": [{"liquid_type", "can_contain_liquid", "on_liquid_touches"}]}` | `{"detectionRules": [{"liquidType", "canContainLiquid", "onLiquidTouches", ...}]}` |
+| `description.internal_vanilla_data.block_archetype: {"slab_block": {...}}` | `vanilla_block_data.block_archetype: {"type": "slab_block", ...}` |
+| `"minecraft:redstone_conductivity": {"redstone_conductor"}` | `{"redstoneConductor", "allowsWireToStepDown"}` |
+
 - **Light**: send `emission` of `minecraft:light_emission` as a Byte. A block sent with a Byte lit the floor around it at night; a block sent with an Int (the Dragonfly default) did not [measured]. The client also reads `lightLevel` of `minecraft:light_dampening` as a Byte [code, not yet checked in game].
 - **Tool tags**: put them in the `blockTags` string list at the top level of the block entry. With a diamond pickaxe the client finished breaking a block with `blockTags: ["minecraft:is_pickaxe_item_destructible"]` in 548 ms, a block with the same tag as a `tag:minecraft:is_pickaxe_item_destructible` component in 4453 ms, and a block with no tag in 4449 ms [measured, once each]. Vanilla data-driven block entries also send tags as `blockTags`.
 - **Block archetype (`vanilla_block_data.block_archetype`)**: it works on a custom namespace block. Cloning a vanilla slab entry and sending `{type: "slab_block", double_slab_block, is_double}` showed a half-block height without any geometry. A `stair_block` (`base_block`) sent the same way showed a full cube. Both showed the unknown block texture [measured].
