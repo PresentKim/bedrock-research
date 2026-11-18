@@ -566,6 +566,7 @@ proj.shoot({ x: v.x * 1.5, y: v.y * 1.5, z: v.z * 1.5 });
 ## 13. 렌더 거리, 디더링, 그림자, 히트박스
 
 - 렌더 거리: 커스텀 엔티티는 약 64~70블록 밖에서 렌더링되지 않고 늘릴 수 없다. 렌더링은 히트박스가 시야에 있느냐에 묶여 있다. 뒤에 있으면 사라지는 큰 모델은 geometry description의 `visible_bounds_width/height/offset`을 키운다. ticking area와 `should_update_bones_and_effects_offscreen`은 도움이 되지 않는다. 2026-11에도 같은 답이 나왔다. 아주 큰 엔티티는 `visible_bounds`를 키워도 사라진다. (confirmed)
+- 먼 거리 장식 기법: 플레이어를 따라다니는 엔티티 하나가 여러 모델을 갖고, 애니메이션으로 각 모델을 월드 좌표에 놓되 플레이어 위치만큼 보정한다. 엔티티가 늘 플레이어 곁에 있으니 큰 장식이 엔티티 거리 컬링(약 4청크) 밖에서도 그려진다. 15주년 기념 맵이 쓴 방식으로 소개됐다. (single report)
 - ender dragon 런타임 ID(conflicting): ender dragon만 멀리서 렌더링된다. `minecraft:ender_dragon` 런타임 ID로 된다는 사람과 안 된다는 사람이 있고 부작용이 있다. 대안은 바닐라 ender dragon 클라이언트 엔티티를 교체하고 float 속성과 렌더 컨트롤러로 모델을 바꾸거나, 플레이어 가까이에 프록시 엔티티를 두거나, 먼 행성은 파티클로 LOD를 바꾸는 것이다(파티클은 멀리 보임). 투명한 ender dragon을 함께 두는 트릭도 공유됐다. 다른 런타임 ID로 멀리 렌더링하려는 트릭은 엔티티를 깨뜨렸다. ender dragon 런타임 ID는 렌더링을 유지하지만 하드코딩된 드래곤 AI를 뺄 수 없다.
 - 멀리 있는 텍스트 엔티티(conflicting): `minecraft:tick_world` radius를 키워도 사라졌다는 보고와 늘 동작했다는 보고가 엇갈린다. 흔한 우회는 실제 엔티티를 플레이어 곁에 두고 모델만 애니메이션(뼈나 루트 오프셋)으로 멀리 옮기는 것이다. 멀리서 보는 납작한 텍스트 면의 z-fighting은 0.01 px가 아니라 0.1 px쯤 띄워 막는다(거리가 멀수록 간격이 더 필요하다).
 - 특정 엔티티 변형에만 인챈트 반짝임처럼 보이는 효과는 렌더 컨트롤러 텍스처 배열로 다시 칠한 텍스처를 바꿔 끼우는 방법이 동작했고 warden 런타임 ID 방법은 동작하지 않았다. 공유된 템플릿은 1인칭 주먹 애니메이션을 없앴다. (single report)
@@ -611,12 +612,12 @@ proj.shoot({ x: v.x * 1.5, y: v.y * 1.5, z: v.z * 1.5 });
 - 플레이어 애니메이션: 걷기는 `animation.player.move.arms` + `animation.player.move.legs`(NPC는 합친 `animation.humanoid.move`)다. 바닐라 휘두르기는 하드코딩이고 `v.attack_speed`/`v.attack`로 구동되며 Molang에서 읽기 전용이다. 1인칭 공격은 `animation.player.first_person.attack_rotation`이다. 채굴 속도는 haste/mining_fatigue로 바꾸고 팔은 휘두르지 않는다.
 - 1인칭에서 RP 애니메이션을 재생/중지할 때 깜빡이면 덮어쓰는 애니메이션을 player.animation.json 맨 끝에 두고 간격을 줄인다. 1인칭/3인칭은 애니메이션 상태는 따로지만 Molang 변수는 공유한다. 차단/비공개 Molang 변수를 읽는 커스텀 플레이어 컨트롤러는 타격 애니메이션과 3인칭 활을 깨뜨린다.
 - 플레이어 모델 등록 한계가 약 1.14MB라는 언급이 있다. (single report) 오프핸드 지도 위치/크기는 JSON UI가 아니라 엔티티/플레이어 파일이 정한다. 26.x "tiny takeover" 업데이트 후 옛 체력 표시 팩과 함께 쓰면 새끼 동물이 거대해 보인다.
-- `player.entity.json`을 덮어쓰지 않고 플레이어 애니메이션을 재생하려면 `/playanimation`이나 스크립트 `playAnimation`을 쓴다. 2026-10에도 `player.entity.json`에 애니메이션을 추가하면 스킨과 1인칭이 깨질 수 있다는 보고가 나왔다. RP만으로 오프핸드 표시를 바꿀 수는 없다.
+- `player.entity.json`을 덮어쓰지 않고 플레이어 애니메이션을 재생하려면 `/playanimation`이나 스크립트 `playAnimation`을 쓴다. 2026-10에도 `player.entity.json`에 애니메이션을 추가하면 스킨과 1인칭이 깨질 수 있다는 보고가 나왔다. RP만으로 오프핸드 표시를 바꿀 수는 없다. 기본 플레이어 공격 애니메이션을 끄는 애니메이션도 `/playanimation`으로 재생하면 동작한다. (single report)
 - Actions & Stuff 호환은 그 팩의 `player.json`에 자기 내용을 손으로 합치거나 서브팩을 쓴다.
 - 지도에서 플레이어를 숨기려면 투명화 대신 애니메이션으로 플레이어 모델을 0.01로 스케일한다. (single report)
 - 1인칭 피격 붉은 효과는 `is_hurt_color`로 끈다. 화면 흔들림(view bob)은 리소스 팩으로 바꿀 수 없고 공격 레이캐스트 원점도 고정이다.
 - 스킨: 3D 크리에이터 스킨은 감지할 수 없고 커스텀 모델을 깨뜨린다. 2D 64x/128x 스킨만 동작하고 클래식 스킨은 커스텀 geometry를 쓰지 않는다. slim/classic 구분은 `v.short_arm_offset_left == 0.5`로 한다(1인칭을 한 번 거쳐야 값이 정해짐). 모델을 강제한 경우에는 구분할 수 없다는 보고가 있다.
-- 해결되지 않은 것: 엘리트라 앞으로 숙이기 보정, 탑승 위치/카메라 이동(카메라는 RP에서 바꿀 수 없음), 낙타식 좌석이 등을 따라가게 하기, 탈것/탑승자 회전 동기화.
+- 해결되지 않은 것: 엘리트라 앞으로 숙이기 보정, 탑승 위치/카메라 이동(카메라는 RP에서 바꿀 수 없음), 낙타식 좌석이 등을 따라가게 하기, 탈것/탑승자 회전 동기화. 낙타가 앉고 설 때 좌석이 움직이는 동작은 하드코딩으로 보이며 이를 담은 컴포넌트 그룹은 찾지 못했다. (single report)
 
 ## 15. 스크립트와 엔티티 연동
 
