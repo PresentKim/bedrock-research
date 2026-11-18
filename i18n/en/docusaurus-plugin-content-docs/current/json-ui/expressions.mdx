@@ -1,6 +1,6 @@
 ---
 title: Expressions and operators
-description: Operators, string truncation, type conversion, dangerous expressions, Cinnabar evaluator run results, and AsaJS and StarLibV2 expression techniques (EXP-01~46).
+description: Operators, string truncation, type conversion, dangerous expressions, Cinnabar evaluator run results, and AsaJS and StarLibV2 expression techniques (EXP-01~49).
 sidebar_position: 5
 sources:
   - repo-guide
@@ -137,7 +137,7 @@ An expression is a string wrapped in parentheses. It is used in the `source_prop
 | `a - b` (number) | Subtraction. `('35' - 0)` is the number 35 | measured |
 | `a * b` | Multiplication. A boolean is 1/0. string `*` number is an empty string (EXP-31) | measured, working pack, code |
 | `'%.Ns' * #s` | The first **N bytes** of `#s` | working pack, code |
-| `a / b` | Division. Integer division for integers (EXP-18). string `/` string is the occurrence count (EXP-32) | measured, code |
+| `a / b` | Division. Integer division for integers (EXP-18). string `/` string is the occurrence count (EXP-32). string `/` number freezes the Windows 1.26.65 client (EXP-49) | measured, code |
 | `a > b`, `a < b` | Ordering comparison. Also used with strings like `$v > 'a'` | measured, working pack |
 | `>=`, `<=` | **Do not exist.** Parsing fails -> the property stays at its default | measured, code |
 | `%` (remainder) | **Does not exist.** `Invalid expression` assert | measured |
@@ -188,9 +188,9 @@ An expression is a string wrapped in parentheses. It is used in the `source_prop
 
 ## 5.4 Expressions that kill the client
 
-- **[EXP-21]** A chest screen using `(#count / 19)` and `('' + #count)` together exited the client as soon as it opened, and it was normal when both were removed. Which of the two was the cause was not isolated. Vanilla uses empty string **comparison** like `(not (#texture = ''))`, so comparison is safe. Do not divide strings, and when concatenating use a non-empty prefix like `('n=' + #x)`. `&#123;measured, vanilla, conflict&#125;` (Source: BC-facts, BC-S14, VN server_form.json:159, Appendix A C-13)
+- **[EXP-21]** A chest screen using `(#count / 19)` and `('' + #count)` together exited the client as soon as it opened, and it was normal when both were removed. This experiment did not isolate which of the two was the cause. In the later step-by-step measurement `(bool / 100)` was fine and `(#text / 100)` froze, so the division looks like the cause (EXP-49). That measurement was a freeze on Windows 1.26.65 and this record is an exit, so whether they are the same event was not checked. Vanilla uses empty string **comparison** like `(not (#texture = ''))`, so comparison is safe. Do not divide strings, and when concatenating use a non-empty prefix like `('n=' + #x)`. `&#123;measured, vanilla, conflict&#125;` (Source: BC-facts, BC-S14, VN server_form.json:159, Appendix A C-13)
 - **[EXP-49]** **Dividing a string by a number (`#text / 100`) freezes the Windows 1.26.65 client.** A single view binding `('' + (#form_button_text / 100))` in a server form button cell made it stop responding, using almost no CPU and never coming back. In the same cell `(#text * 1)`, `(1 - #text)`, `(bool / 100)` and `(#text - ('%.32s' * #text))` did not freeze. `* 1` does not turn a string into a number, so `((#a - #b) * 1) / 100` is the same expression. Convert with `(#v - 0)` before dividing (EXP-16). The same expression did not freeze on mobile 1.26.63 (wiki example `json-ui-performance` v1.3.0). It is the likely cause of EXP-21. `&#123;measured&#125;` (Source: step-by-step bisect on 2026-11-18, Windows 1.26.65)
-- **[EXP-22]** String + integer is concatenated but **string + float outputs nothing.** To show a float as text, split ranges with a comparison chain or send it through an integer channel. If you know the range of values, you can get the integer part by adding comparison results like `(0 + (#f > 0) + (#f > 1) + … + (#f > 9))`. Cause: the "text" of a real value is empty (CN). The literal `1.5` is the integer 1, so `('n=' + 1.5)` is `'n=1'` (EXP-27). Chest slot durability is a float too, so `('D ' + (0 + #item_durability_current_amount))` gave only `'D '` while a `> 100` comparison on the same value worked (COL-07). `&#123;measured, code&#125;` (Source: BC-facts, BW-type, CN-run, CPR)
+- **[EXP-22]** String + integer is concatenated but **in string + float the float part is empty and only the string is left.** To show a float as text, split ranges with a comparison chain or send it through an integer channel. If you know the range of values, you can get the integer part by adding comparison results like `(0 + (#f > 0) + (#f > 1) + … + (#f > 9))`. Cause: the "text" of a real value is empty (CN). The literal `1.5` is the integer 1, so `('n=' + 1.5)` is `'n=1'` (EXP-27). Chest slot durability is a float too, so `('D ' + (0 + #item_durability_current_amount))` gave only `'D '` while a `> 100` comparison on the same value worked (COL-07). `&#123;measured, code&#125;` (Source: BC-facts, BW-type, CN-run, CPR)
 - **[EXP-23]** The `#item_custom_color` of a dyeable custom item is a signed ARGB integer (`0x123456` -> `-15584170`). Comparing by RGB value does not match. `&#123;measured&#125;` (Source: BC-S14)
 
 ## 5.5 Rules added from the Bedrock Wiki comparison
@@ -210,7 +210,7 @@ Cinnabar (`CN`) is Rust code that reconstructs the JSON UI parser of the 26.30 n
 - **[EXP-29]** `and` and `or` have the same precedence and are computed from the left. `a or b and c` is `(a or b) and c`. Use parentheses when mixing. `&#123;code&#125;` (Source: CN test E12)
 - **[EXP-30]** A result string of an operation is reinterpreted. If it starts like a number, the leading integer (`'3/17'` -> 3, `'10 apples'` -> 10), if `yes`, `no`, `true` or `false`, a boolean, and if it starts with `#`, a property name. So `'042'` cut with `('%.3s' * #s)` is immediately the integer 42. `&#123;code&#125;` (Source: CN-run)
 - **[EXP-31]** string `*` number is an empty string, and number `*` string is the left number. `(#s * 1)` and `(1 * #s)` are not number conversions. The conversion is `(#s - 0)` or `(0 + #s)`. `(#s + 0)` appends a 0 at the end. `&#123;code&#125;` (Source: CN-run, the same conclusion as EXP-16)
-- **[EXP-32]** string `/` string is the occurrence count (`('a-b-a' / 'a')` = 2). string `/` number is always 1. Dividing by 0 leaves the left value as it is. `&#123;code&#125;` (Source: CN-run)
+- **[EXP-32]** string `/` string is the occurrence count (`('a-b-a' / 'a')` = 2). string `/` number is always 1. Dividing by 0 leaves the left value as it is. This value is the result of the reconstructed evaluator; in game, string `/` number froze the Windows 1.26.65 client (EXP-49). `&#123;code&#125;` (Source: CN-run)
 - **[EXP-33]** On a numeric string, `- '0'` erases every `0` (`'100'` -> 1). To convert to a number, use `- 0` without quotes. `&#123;code&#125;` (Source: CN-run)
 - **[EXP-34]** Comparing a string and a number with `=` is true only when both are falsy values ('' and 0). `('2' = 2)` is false and `(true = 'true')` is also false. Match the type of one side before comparing. `&#123;code&#125;` (Source: CN test E15)
 - **[EXP-35]** If the result of a parenthesized group is a `'#name'` string, it is replaced by the value in that control's bag. So a dictionary lookup result can be compared within the same expression, as in `(('#route_' + #id) = 'x')`. `&#123;code&#125;` (Source: CN-run, COL-23 reinforcement)
