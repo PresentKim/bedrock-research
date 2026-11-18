@@ -131,10 +131,25 @@ sources:
 - HUD와 상자 화면에서 그려지는지.
 - `#block_position`, `#has_focus`의 실제 역할, 회전 중심, 처음 각도.
 - 영역 크기에 따른 비용의 상한.
-- `.mcstructure` 파일을 직접 그리는 방법. 이 렌더러는 월드만 그렸다.
+- `.mcstructure` 파일을 직접 그리는 방법. 이 렌더러는 월드만 그렸다. 구조물 블록이 월드뿐 아니라 `.mcstructure` 파일도 그릴 수 있다는 커뮤니티 주장이 있어 바닐라 구조물 블록 화면으로 확인했지만, 파일을 그리는 경우는 찾지 못했다(아래).
+
+### 7.1 구조물 블록 불러오기 모드의 미리보기
+
+2026-11-19 Windows 1.26.65.1. 바닐라 구조물 블록을 놓고 화면에서 모드를 불러오기로 바꾼 뒤 구조물 이름을 넣었다. 구조물은 둘이다. 행동 팩 `structures/juc/gold.mcstructure`(3x2x3, 아래층 금과 레드스톤 블록, 위층 다이아몬드 블록, `/structure load juc:gold`로 내용 확인)와 `/structure save ... disk`로 월드에 저장한 `mystructure:juc_world`(2x2x2, 에메랄드와 석탄 블록, 저장 뒤 원래 자리는 비움)다. 붙일 자리에는 구조물 블록과 잔디만 있었다.
+
+| 이름 | 화면 미리보기 | 월드 |
+|---|---|---|
+| `juc:gold` | 경계 상자가 3x2x3으로 바뀌고, 안에는 붙일 자리의 현재 월드(구조물 블록, 잔디)가 그려짐. 금, 다이아몬드, 레드스톤 블록은 없음 | 흰 경계 상자만 3x2x3으로 바뀜 |
+| `mystructure:juc_world` | 경계 상자가 2x2x2로 바뀌고, 역시 현재 월드가 그려짐. 에메랄드와 석탄 블록은 없음 | 흰 경계 상자만 2x2x2로 바뀜. 반투명 블록 같은 미리보기는 없음 |
+| `mystructure:juc_world`, 상자 안에 청금석 블록을 놓은 뒤 | 청금석 블록이 그려짐 | 같음 |
+
+- 불러오기 모드의 미리보기는 파일이나 저장된 구조물의 내용이 아니라, 구조물 크기와 오프셋으로 정한 상자 안의 현재 월드였다. 이름은 상자 크기를 정하는 데만 쓰였다.
+- 바닐라 `structure_editor_screen.json`의 미리보기도 같은 `3d_structure_renderer`이고 `#block_position`, `#bottom_left_block`, `#top_right_block`, `#include_entities`, `#remove_blocks`, `#include_players`, `#has_focus`만 바인딩한다. 파일이나 이름을 받는 속성은 없다.
+- 그래서 이 미리보기 경로로 파일을 다른 화면에 그리는 방법도 없었다. 서버 폼에서 같은 그림을 얻으려면 구조물을 월드 예약 영역에 붙여 넣고 그 영역을 그린다(6절).
+- 화면의 가져오기 버튼은 운영 체제 파일 선택 창을 여는 경로라 재지 않았다.
 
 ## 8. 측정 애드온
 
 <AddonDownload id="json-ui-claims" />
 
-`/scriptevent bwiki:json_ui_claims 9`는 구조물 렌더러 창을, `/scriptevent bwiki:json_ui_claims r`은 같은 창과 함께 1초마다 움직이는 갑옷 거치대와 바뀌는 블록을 연다. 창의 영역은 (0,-60,0)부터 (10,-55,10)까지이므로 그 안에 블록을 놓고 가까이 선다. 설치 방법은 [미검증 JSON UI 주장 실측](./json-ui-claims.mdx#8-측정-애드온)에 있다.
+`/scriptevent bwiki:json_ui_claims 9`는 구조물 렌더러 창을, `/scriptevent bwiki:json_ui_claims r`은 같은 창과 함께 1초마다 움직이는 갑옷 거치대와 바뀌는 블록을 연다. 창의 영역은 (0,-60,0)부터 (10,-55,10)까지이므로 그 안에 블록을 놓고 가까이 선다. 설치 방법은 [미검증 JSON UI 주장 실측](./json-ui-claims.mdx#8-측정-애드온)에 있다. 7.1절의 파일 구조물은 행동 팩 `structures/juc/gold.mcstructure`이고 이름은 `juc:gold`다.

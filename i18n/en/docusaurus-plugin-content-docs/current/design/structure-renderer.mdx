@@ -131,10 +131,25 @@ The renderer draws an axis gizmo (green Y, blue X) in the top-right corner of it
 - Whether it draws on the HUD and in the chest screen.
 - The actual role of `#block_position` and `#has_focus`, the rotation center, the starting angle.
 - The upper bound of cost by region size.
-- Drawing a `.mcstructure` file directly. This renderer only drew the world.
+- Drawing a `.mcstructure` file directly. This renderer only drew the world. A community claim says a structure block can draw `.mcstructure` files as well as the world. This was checked with the vanilla structure block screen, but no case that draws a file was found (below).
+
+### 7.1 Load mode preview of the structure block
+
+2026-11-19 Windows 1.26.65.1. A vanilla structure block was placed, its mode was set to load on the screen, and a structure name was entered. Two structures were used: the behavior pack file `structures/juc/gold.mcstructure` (3x2x3, gold and redstone blocks on the bottom layer, diamond blocks on the top layer, content checked with `/structure load juc:gold`) and `mystructure:juc_world`, saved in the world with `/structure save ... disk` (2x2x2, emerald and coal blocks, the original spot emptied after saving). The paste spot held only the structure block and grass.
+
+| Name | Screen preview | World |
+|---|---|---|
+| `juc:gold` | the bounding box changed to 3x2x3 and showed the current world at the paste spot (structure block, grass). No gold, diamond or redstone blocks | only the white bounding box changed to 3x2x3 |
+| `mystructure:juc_world` | the bounding box changed to 2x2x2 and again showed the current world. No emerald or coal blocks | only the white bounding box changed to 2x2x2. No preview such as translucent blocks |
+| `mystructure:juc_world`, after placing a lapis block inside the box | the lapis block was drawn | same |
+
+- The load mode preview was not the content of the file or the saved structure but the current world inside the box set by the structure size and offset. The name only set the box size.
+- The preview in vanilla `structure_editor_screen.json` is the same `3d_structure_renderer` and binds only `#block_position`, `#bottom_left_block`, `#top_right_block`, `#include_entities`, `#remove_blocks`, `#include_players` and `#has_focus`. No property takes a file or a name.
+- So there was no way through this preview to draw a file on another screen. To get the same picture in a server form, paste the structure into a reserved world area and draw that area (section 6).
+- The import button on the screen opens the operating system file picker and was not measured.
 
 ## 8. Measurement add-on
 
 <AddonDownload id="json-ui-claims" />
 
-`/scriptevent bwiki:json_ui_claims 9` opens the structure renderer window, and `/scriptevent bwiki:json_ui_claims r` opens the same window with an armor stand that moves and a block that changes every second. The window's region runs from (0,-60,0) to (10,-55,10), so place blocks in it and stand nearby. Installation is described in [Measuring unverified JSON UI claims](./json-ui-claims.mdx#8-measurement-add-on).
+`/scriptevent bwiki:json_ui_claims 9` opens the structure renderer window, and `/scriptevent bwiki:json_ui_claims r` opens the same window with an armor stand that moves and a block that changes every second. The window's region runs from (0,-60,0) to (10,-55,10), so place blocks in it and stand nearby. Installation is described in [Measuring unverified JSON UI claims](./json-ui-claims.mdx#8-measurement-add-on). The file structure of section 7.1 is the behavior pack file `structures/juc/gold.mcstructure`, named `juc:gold`.
