@@ -94,22 +94,24 @@ When there are several screens or tabs, switching from "create everything and hi
 
 ### 6.1 Measured: setups that cut the control count
 
-Windows 1.26.65.1, 2026-11-18. A 30x20 grid (600 cells of 4x4) in a server form window received 600 buttons. The measurement add-on is the one from [Measuring unverified JSON UI claims](../json-ui-claims.mdx), and the window opens with `/scriptevent bwiki:json_ui_claims perf <variant> 600`. Control and binding counts are for the whole screen (including about 162 elements and 68 bindings outside the window).
+Windows 1.26.65.1, 2026-11-18. A grid of 4x4 cells in a server form window received as many buttons as cells. The measurement add-on is the one from [Measuring unverified JSON UI claims](../json-ui-claims.mdx), and the window opens with `/scriptevent bwiki:json_ui_claims perf <variant> <button count>`. The add-on's grid is 60x40 (2400 cells). Control and binding counts are for the whole screen (including about 162 elements and 68 bindings outside the window). FPS was read three times, 1.5 seconds apart, from the F3 panel with the game window in front (vsync off; for comparison, the HUD gave 177 to 194 and a small form 142 to 178).
 
-| Variant | Cell setup | Controls | Bindings |
-| --- | --- | --- | --- |
-| a | 10 images per cell, each showing through its own `#visible` expression | 6714 or more (tool count limit) | not countable |
-| b | 1 image per cell, `#form_button_texture` into `#texture` | 762 | 668 |
-| f | 1 label per cell, button text as is | 762 | 668 |
-| e | 1 label per cell, a fixed-width field cut out with `'%.Ns'` and minus | 762 | 1268 |
-| d | static image cells, no clipping | 762 | 68 |
-| c | the same grid as d inside a 40x40 panel with `clips_children` | 504 | 68 |
+| Variant | Cell setup | 600 cells controls | 600 cells bindings | 600 cells FPS | 2400 cells controls | 2400 cells FPS |
+| --- | --- | --- | --- | --- | --- | --- |
+| a | 10 images per cell, each showing through its own `#visible` expression | 6714 or more | not countable | 129 to 141 | 8192 or more (tool count limit) | 114 to 115 |
+| b | 1 image per cell, `#form_button_texture` into `#texture` | 762 | 668 | 127 to 141 | 2562 | 125 to 143 |
+| f | 1 label per cell, the 16-character button text as is | 762 | 668 | 144 to 146 | 2562 | 81 to 85 |
+| e | 1 label per cell, a 4-character fixed-width field cut out with `'%.Ns'` and minus | 762 | 1268 | 143 to 156 | 2562 | 127 to 128 |
+| d | static image cells, no clipping | 762 | 68 | 131 to 148 | 2562 | 126 to 130 |
+| c | the same grid as d inside a 40x40 panel with `clips_children` | 504 | 68 | 141 to 196 | 834 | 146 to 158 |
 
-- **Merging same-shaped controls into one `#texture`** (DBG-17): a cell that shows one of 10 images had almost 9 times as many controls. When the picture to choose is in the data, use one `#texture` binding instead.
-- **Fixed-width records** (HOST-08): the view binding that cuts out the field added one binding per cell (668 to 1268). The control count is the same. The frame cost could not be measured.
-- **`clips_children`**: only 341 of the 600 cells (down to a little over one row below the visible rows) were in the control tree for the grid inside the clipping panel. The unclipped grid had all 600. Whether the engine did not create the clipped cells or the measurement tool could not read them was not separated (inferred).
-- **Screen open time**: measured three times each from Enter to the screen change, every variant took about 0.7 to 1.3 seconds, with differences smaller than the run-to-run spread. `cache_screen: true` or `load_screen_immediately: true` on `third_party_server_screen` stayed in the same range.
-- **Not measured**: frame rate. The game window was not in the foreground during the measurement, so the F3 panel showed FPS `Unavailable` (below 2 fps) even on a small form. The effect of `low_frequency_rendering` and `render_only_when_topmost` and the frame cost of each variant could not be compared.
+- At 600 cells the differences between variants were about the size of the run-to-run spread (about plus or minus 10). They showed at 2400 cells.
+- **Merging same-shaped controls into one `#texture`** (DBG-17): a cell that shows one of 10 images had almost 9 times as many controls, and at 2400 cells its FPS (114 to 115) was lower than one `#texture` image (125 to 143). When the picture to choose is in the data, use one `#texture` binding instead.
+- **Drawn character count**: a label drawing the 16-character button text as is (f) was much slower at 2400 cells than one drawing a 4-character slice (e), 81 to 85 against 127 to 128, even though e had one more binding per cell. At this size the drawn characters cost more than one binding.
+- **Fixed-width records** (HOST-08): the view binding that cuts out the field added one binding per cell (668 to 1268 at 600 cells), yet the frame rate did not drop. Because of the character count difference above, the binding cost alone could not be separated.
+- **`clips_children`**: only 341 of 600 cells, and about 672 of 2400 (834 minus the 162 outside the window), were in the control tree for the grid inside the clipping panel, down to a little over one row below the visible rows. The unclipped grid had every cell. Its FPS was also the highest. Whether the engine did not create the clipped cells or the measurement tool could not read them was not separated (inferred).
+- **Screen flags**: `low_frequency_rendering: true` (d at 2400 cells 124 to 132) or `render_only_when_topmost: false` (122 to 125) on `third_party_server_screen` left the FPS unchanged (126 to 130 without them). `cache_screen: true` and `load_screen_immediately: true` did not change the open time either (about 0.7 to 1.3 seconds from Enter to the screen change).
+- A grid seemed to create every cell of `grid_dimensions` even with a `#maximum_grid_items` binding (600 buttons into a 60x60 grid went past the 8192 control limit). This was not checked separately.
 
 ## 7. Checking order
 
