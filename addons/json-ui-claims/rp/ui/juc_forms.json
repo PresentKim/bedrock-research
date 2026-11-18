@@ -181,14 +181,16 @@
     "type": "custom",
     "renderer": "3d_structure_renderer",
     "size": [ 120, 120 ],
+    "$include_entities|default": false,
+    "$include_players|default": false,
     "property_bag": {
       "#has_focus": false,
       "#block_position": "$block_position",
       "#bottom_left_block": "$bottom_left_block",
       "#top_right_block": "$top_right_block",
-      "#include_entities": false,
+      "#include_entities": "$include_entities",
       "#remove_blocks": false,
-      "#include_players": false
+      "#include_players": "$include_players"
     }
   },
 
@@ -206,6 +208,24 @@
     "controls": [
       { "frame": { "type": "image", "texture": "textures/ui/White", "alpha": 0.15, "size": [ 124, 124 ] } },
       { "view@juc_forms.structure_view_turn": { "offset": [ 2, 2 ], "anchor_from": "top_left", "anchor_to": "top_left" } },
+      { "caption": { "type": "label", "text": "$caption", "localize": false, "font_scale_factor": 0.7, "color": [ 1, 1, 0.4 ], "anchor_from": "bottom_left", "anchor_to": "bottom_left" } }
+    ]
+  },
+
+  "structure_box_clip": {
+    "type": "panel",
+    "size": [ 124, 134 ],
+    "controls": [
+      { "frame": { "type": "image", "texture": "textures/ui/White", "alpha": 0.15, "size": [ 124, 124 ] } },
+      {
+        "clip": {
+          "type": "panel", "size": [ 120, 120 ], "offset": [ 2, 2 ], "anchor_from": "top_left", "anchor_to": "top_left",
+          "clips_children": true,
+          "controls": [
+            { "view@juc_forms.structure_view": { "size": [ 160, 160 ], "offset": [ -20, -20 ], "anchor_from": "bottom_left", "anchor_to": "bottom_left" } }
+          ]
+        }
+      },
       { "caption": { "type": "label", "text": "$caption", "localize": false, "font_scale_factor": 0.7, "color": [ 1, 1, 0.4 ], "anchor_from": "bottom_left", "anchor_to": "bottom_left" } }
     ]
   },
@@ -233,8 +253,8 @@
           "type": "stack_panel", "orientation": "horizontal", "layer": 2, "size": [ 400, 134 ], "offset": [ 4, 14 ],
           "anchor_from": "top_left", "anchor_to": "top_left",
           "controls": [
-            { "rel@juc_forms.structure_box": { "$caption": "64x6x64 at 0", "$block_position": [ 0, 0, 0 ], "$bottom_left_block": [ -32, -64, -32 ], "$top_right_block": [ 32, -58, 32 ] } },
-            { "abs@juc_forms.structure_box": { "$caption": "far 5000", "$block_position": [ 0, 0, 0 ], "$bottom_left_block": [ 5000, -64, 5000 ], "$top_right_block": [ 5004, -58, 5004 ] } },
+            { "rel@juc_forms.structure_box_clip": { "$caption": "entities on, clipped", "$include_entities": true, "$block_position": [ 0, 0, 0 ], "$bottom_left_block": [ 0, -60, 0 ], "$top_right_block": [ 10, -55, 10 ] } },
+            { "abs@juc_forms.structure_box": { "$caption": "entities+players on", "$include_entities": true, "$include_players": true, "$block_position": [ 0, 0, 0 ], "$bottom_left_block": [ 0, -60, 0 ], "$top_right_block": [ 10, -55, 10 ] } },
             {
               "turn": {
                 "type": "input_panel",
@@ -247,7 +267,7 @@
                 "controls": [
                   {
                     "box@juc_forms.structure_box_turn": {
-                      "$caption": "drag, abs 3..6", "$block_position": [ 0, 0, 0 ], "$bottom_left_block": [ 3, -60, 3 ], "$top_right_block": [ 6, -56, 6 ]
+                      "$caption": "entities off, drag", "$block_position": [ 0, 0, 0 ], "$bottom_left_block": [ 0, -60, 0 ], "$top_right_block": [ 10, -55, 10 ]
                     }
                   }
                 ]
@@ -262,9 +282,12 @@
   "marker_probe": {
     "type": "stack_panel",
     "size": [ 250, "100%c" ],
-    "layer": 30,
     "anchor_from": "top_left",
     "anchor_to": "top_left",
+    "bindings": [
+      { "binding_name": "#title_text", "binding_condition": "always" },
+      { "binding_type": "view", "binding_condition": "always", "source_property_name": "(#title_text = 'Marker probe')", "target_property_name": "#visible" }
+    ],
     "controls": [
       {
         "m1@juc_forms.text_label": {
