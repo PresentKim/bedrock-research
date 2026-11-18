@@ -60,7 +60,7 @@ JSON UI 자료는 서로 모순되는 주장이 많다(위키의 오기, 게임 
 | C-24 | 숫자 변환 `(1 * #v)` 등 | facts: "덧셈을 제외한 모든 산술" (BC-facts) | S12: `- 0`만 (BC-S12) | C-04와 같은 문제. BW-type 주석이 `* #float`도 깨졌다고 적음. 2026-10-21: C-04와 함께 원인 교체(CN-28). 2026-11-18 Windows 1.26.65.1 실측은 C-04와 같다 | 해소(원인 교체, 코드와 실측): C-04와 같음 | EXP-16, EXP-31 |
 | C-25 | `font_size` 값 | 공식 enum `small/normal/large/extra_large` (BC-facts) | — | VN `medium` 4회 추가 사용 | 해소: `medium`도 바닐라가 씀 | TXT-05 |
 | C-26 | `input_mode_condition` 값 | 공식 enum `not_gaze`, `gamepad_and_not_gaze` (BC-facts) | — | VN은 `gamepad` 7, `gamepad_and_not_gaze` 4, `not_gamepad` 1. `not_gaze`는 미사용 | 해소: 바닐라 값 사용 | INP-02 |
-| C-27 | 채팅 토스트 `destroy_at_end` | 값 `chat_grid_item`이 팩토리 컨트롤 이름과 달라 파괴되는지 의심 (AP 4.5) | — | VN 바닐라 채팅도 인스턴스 `chat_item`, 값 `chat_grid_item`으로 같은 형태. 2026-10-21: CN 모델에서 `destroy_at_end`는 인스턴스 이름이 일치하는 가장 가까운 조상을 지우고, 채팅 컨트롤러가 만든 줄에 인스턴스 이름 `chat_grid_item`을 준다(CN-56). 그렇다면 바닐라 `control_ids`의 `chat_item@…`과 달라도 값과 맞는다 | 부분 해소: 바닐라와 같은 형태이고 CN 모델로는 이름이 일치함. 게임 실측은 없음. Windows 1.26.65.1 측정 환경(DLL 주입)에서 팩에 `ui/hud_screen.json`이 있으면 월드 진입 시 크래시해 재지 못함 | ANI-14, ANI-21 |
+| C-27 | 채팅 토스트 `destroy_at_end` | 값 `chat_grid_item`이 팩토리 컨트롤 이름과 달라 파괴되는지 의심 (AP 4.5) | — | VN 바닐라 채팅도 인스턴스 `chat_item`, 값 `chat_grid_item`으로 같은 형태. 2026-10-21: CN 모델에서 `destroy_at_end`는 인스턴스 이름이 일치하는 가장 가까운 조상을 지우고, 채팅 컨트롤러가 만든 줄에 인스턴스 이름 `chat_grid_item`을 준다(CN-56). 그렇다면 바닐라 `control_ids`의 `chat_item@…`과 달라도 값과 맞는다. 2026-11-18 Windows 1.26.65.1 실측([기록](../design/json-ui-claims.mdx#62-hud-타이틀)): HUD `hud_title_text_factory`가 만든 컨트롤 이름은 `control_ids`의 키(`hud_title_text`)였고 `juc_d_inst_a@...` 같은 인스턴스 이름은 무시됐다. `destroy_at_end`는 `hud_title_text`일 때만 약 1초 뒤 지웠고 인스턴스 이름과 정의 이름으로는 지우지 않았다 | 부분 해소(실측): 팩토리 컨트롤은 `control_ids` 키 이름과 맞아야 지워진다. 채팅 토스트 자체는 재지 않음 | ANI-14, ANI-21 |
 | C-28 | 타이틀 팩토리의 `$title_text` | 엔진 문서 근거 없음, 팩 동작이 근거 (AP 4.1) | — | VN 액션바 라벨이 `"text": "$actionbar_text"`, 타이틀 애니메이션이 `$title_fade_in_time` 사용. 팩토리가 데이터를 변수로 주입하는 같은 계열 | 부분 해소: 유사 바닐라 사례로 보강 | COL-17, HOST-28 |
 | C-29 | `variables` 단일 객체 | 배열이 표준 | AP가 객체로 씀 | VN 객체 4회(realms_settings_screen.json:2557 등) | 해소: 둘 다 됨 | FILE-13 |
 | C-30 | 액션 폼에 `label()` 섞기 | 인덱스와 `selection`이 어긋남 (BC 4.1-(3)) | — | VN 1.26.50 `form_buttons` 팩토리에 `label`, `header`, `divider` 행이 있음 | 해소: 같은 컬렉션에 들어오므로 어긋남이 구조적으로 맞음 | COL-19 |
@@ -117,7 +117,7 @@ JSON UI 자료는 서로 모순되는 주장이 많다(위키의 오기, 게임 
 5. 크기 바인딩의 상한과 열린 화면에서의 재레이아웃 (C-14, LAY-15). 실측(Windows 1.26.65.1): `#size_binding_x` 2는 폭 100 부모에서 200으로 상한이 없었다. 재레이아웃은 재지 않았다
 6. ~~`property_bag` 사전 조회 라우터 (HOST-06)~~ → 해소: 된다(DF, COL-39). 다만 그 팩토리가 만든 컨트롤 안에서는 액션 폼 데이터가 격자에만 닿았다(COL-40). 화면 맨 위 라우터에서 바인딩을 `always`로 두면 고정 칸과 안쪽 팩토리도 받았다(COL-47, C-65)
 7. `factory_variables`로 셀에 변수를 넘길 수 있는지 (COL-15, BND-14)
-8. `destroy_at_end`가 어떤 이름과 맞아야 파괴되는지 (C-27). Windows 1.26.65.1 측정 환경(DLL 주입)에서 팩에 `ui/hud_screen.json`이 있으면 월드 진입 시 크래시해 재지 못함
+8. ~~`destroy_at_end`가 어떤 이름과 맞아야 파괴되는지 (C-27)~~ 해소: 팩토리 컨트롤은 `control_ids`의 키 이름(`hud_title_text`)과 맞을 때만 지워졌다. 인스턴스 이름과 정의 이름은 지우지 않았다(Windows 1.26.65.1 실측, HUD 타이틀)
 9. HUD `always_accepts_input`에서 터치·컨트롤러 호버 (INP-16)
 10. 모달 폼 드롭다운 페이지 전환 패턴 (HOST-13)
 11. NPC 대화 버튼 개수 제한과 NBT 확장 (HOST-24)
@@ -126,7 +126,7 @@ JSON UI 자료는 서로 모순되는 주장이 많다(위키의 오기, 게임 
 14. ~~위키가 대안으로 적은 `(0 + #v)` 변환 (C-04, EXP-16)~~ 해소: 된다(EXP-17, 상자 칸 개수 실측)
 15. ~~`#size_binding`에 `use_anchored_offset`이 필요한지 (C-37, LAY-10)~~ 해소: 필요 없다(Windows 1.26.65.1 실측)
 16. ~~`modifications`의 `insert_after`, `replace` 등 나머지 연산 (C-39, MOD-14)~~ 해소: 나머지 8가지 모두 동작(Windows 1.26.65.1 실측)
-17. `visibility_changed` 래치 패턴 (BND-18). Windows 1.26.65.1 측정 환경(DLL 주입)에서 팩에 `ui/hud_screen.json`이 있으면 월드 진입 시 크래시해 HUD 타이틀로는 재지 못함
+17. ~~`visibility_changed` 래치 패턴 (BND-18)~~ 해소: HUD 타이틀 채널에서 동작(Windows 1.26.65.1 실측, `JUC one`, `other`, `JUC two`, `plain again` 순서에 저장값 `JUC one`, `JUC one`, `JUC two`, `JUC two`)
 18. ~~그리드가 숨은 항목에 자리를 주는지 (LAY-31)~~ 해소: 자리를 준다(Windows 1.26.65.1 실측)
 19. 버튼 ID로 애니메이션 재생 (INP-20)
 20. ~~`'%N.Ms'` 패딩 서식, 특히 `('%5.3s' * #s)`가 자르는지 (C-05, EXP-25)~~ 해소: 자르지도 채우지도 않고 입력을 그대로 돌려준다(Windows 1.26.65.1 실측, `%7.4s` 등 6가지)

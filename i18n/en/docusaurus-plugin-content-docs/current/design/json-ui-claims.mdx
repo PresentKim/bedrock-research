@@ -194,15 +194,42 @@ A `"type": "custom"`, `"renderer": "3d_structure_renderer"` control was placed o
 | near x, z 5000 (not loaded) | nothing |
 | wrapped in an `input_panel` (`gesture_tracking_button: "button.turn_structure"`) with view bindings of that panel's `#gesture_delta_source`, `#gesture_mouse_delta_x`, `#gesture_mouse_delta_y` into the renderer | rotates when dragged |
 | same wrapper without the view bindings | no rotation |
+| region [0,-60,0]..[10,-55,10], `#include_entities` true | the armor stand inside the region is drawn |
+| same region, `#include_entities` and `#include_players` true | the armor stand and the player standing in the region are drawn |
+| same region, both false | blocks only, no entities |
+| with the form open, a script moves the armor stand and switches the block at (4,-57,4) between diamond and air every second | the renderer image follows the entity movement and the block change (checked on screen by the user) |
+| renderer enlarged to 160x160 so its top right reaches past a 120x120 parent with `clips_children: true` | the top-right axis is not visible; the structure shifts toward the top left by the same amount |
 
 - The two corners are absolute world coordinates and the upper corner is exclusive. `#block_position` had no visible effect on the image.
+- The renderer draws the current world in the region. Entities and players are added with their flags, and movement and block changes show while the form is open.
+- The vanilla files have no `property_bag` key that turns off the top-right axis. Making the renderer larger than its box and cutting it with the parent's `clips_children` hid it.
 - Coordinates from a `$variable` per instance worked. Building arrays from server text, the HUD and the chest screen were not measured.
+
+### 6.2 HUD title
+
+Measured in a panel inserted into `hud.root_panel` with `insert_front`. In the first round, entering the world with `ui/hud_screen.json` in the pack crashed the game. That crash came from the packet capture module of the measurement tool (DLL injection). After the tool was fixed, re-entering the world did not crash with the latch alone, one title factory, an added `destroy_at_end` animation, and finally three factories plus the latch. So no link between the HUD file contents and the crash was confirmed.
+
+| Item | Result | Related |
+|---|---|---|
+| a zero-size panel copies `#hud_title_text_string` into `property_bag` `#saved` with `visibility_changed`; `#visible` is "contains `JUC` and differs from `#saved`" | for the titles `JUC one`, `other`, `JUC two`, `plain again`, `saved` read `JUC one`, `JUC one`, `JUC two`, `JUC two` | BND-18, D-13 |
+| the same latch inside a parent hidden by the action bar (`off`); while hidden, `JUC cc` then `other` | `JUC cc` once the parent was shown again; it recorded while hidden | D-20 |
+| four panels with the `hud_title_text_factory` factory, `control_ids` `hud_title_text` renamed like `juc_d_inst_a@...` | every created control was named `hud_title_text` (the instance name is ignored) | C-27 |
+| alpha animation inside with `destroy_at_end`: instance name / definition name / `hud_title_text` | the first two were not destroyed; only `hud_title_text` was destroyed about 1 second later | C-27 |
+| factory control without a destroying animation | stays after the title ends | HOST-27 |
+| only the `alpha` of `hud_title_text` set to constant 1.0 | the title still disappears when it ends | HOST-41 |
+| `alpha` of `hud_title_text`, `hud_title_text/title_frame/title_background` and `hud_title_text/subtitle_frame/subtitle_background` all 1.0 | stays until the next title | HOST-41 |
+| default, open a server form and set a title by script 3 seconds later | the HUD (hotbar, title, latch labels) is not drawn | HOST-44 |
+| only `"force_render_below": true` on `third_party_server_screen` | the HUD is drawn behind the form; titles and latch values that arrive while the form is open update | HOST-44 |
+| plus `"screen_draws_last": true` on `hud_screen` | the HUD is drawn on top of the form | HOST-44 |
+| only `"screen_draws_last": true` on `hud_screen` | not drawn | HOST-44 |
+
+- `destroy_at_end` must match the name of the control the factory made, and that name is the `control_ids` key.
+- To keep the vanilla title, the `alpha` of all three controls that carry a destroying animation had to be overridden.
+- Inserting with `insert_front` into `long_form`, which only inherits `controls`, removed the whole form body (same as MOD-04). The measurement add-on inserts into `long_form_scrolling_content`, which declares `controls` itself.
 
 ## 7. Items that could not be measured
 
-- **HUD title items** (BND-18 latch, D-20 placement, HOST-41 constant `alpha`, C-27 `destroy_at_end` name): in this measurement setup (DLL injection), any `ui/hud_screen.json` in the pack crashed the game on world entry. A namespace-only file, our own `insert_front` file and the HUD file of the repo's actor-portrait add-on all did, and so did a retry after the tool was patched and restarted: 4 of 4. The other test packs in the same world have no HUD file. Whether the injected tool or the pack causes it was not separated.
 - **Live input filter** (INP-25): a `common.text_edit_box` inside the action form window showed the hover border, but the tool's keyboard input (PostMessage, SendInput) did not put text into it. Whether the tool or the screen not forwarding input is the cause was not separated.
-- **HUD drawn over a server form** (HOST-44, `force_render_below`, `screen_draws_last`): needs a HUD file, so it could not be measured for the same reason.
 - Bound `#alpha` 0.5 (C-45, needs pixel comparison), expressions that risk a hang such as string division, `#item_id_aux` ranges with custom items, the NPC dialogue button count and a slider-driven `#anchored_offset_value_x` were left out of this list. Particle playback is outside JSON UI and was not covered.
 
 ## 8. Measurement add-on
@@ -210,6 +237,7 @@ A `"type": "custom"`, `"renderer": "3d_structure_renderer"` control was placed o
 <AddonDownload id="json-ui-claims" />
 
 1. Open the file to import it. In a new world, turn on the behavior pack that starts with `[bedrock-research]json-ui-claims-bp`. The resource pack comes on as a dependency.
-2. Take "JSON UI Claims Test" from the creative inventory and use it, or run `/scriptevent bwiki:json_ui_claims`, to open the window menu. The last word opens a window directly, as in `/scriptevent bwiki:json_ui_claims 1` (1 expressions, 2 layout, 3 files, 4 form controls, 5 additional items, 6/7/8 multi-line marker, 9 structure renderer, s a 3-button form, a/b/c title gate, m message form). Open window 9 near blocks placed from (3,-60,3) to (5,-57,5).
-3. To check the other operations in section 4, change the `modifications` in `ui/thanks_for_testing_screen.json` and reload the UI. The add-on ships only the first variant (three inserts).
+2. Take "JSON UI Claims Test" from the creative inventory and use it, or run `/scriptevent bwiki:json_ui_claims`, to open the window menu. The last word opens a window directly, as in `/scriptevent bwiki:json_ui_claims 1` (1 expressions, 2 layout, 3 files, 4 form controls, 5 additional items, 6/7/8 multi-line marker, 9 structure renderer, r structure renderer with a moving armor stand and a changing block, h a form with a title 3 seconds after opening, s a 3-button form, a/b/c title gate, m message form). Open window 9 near blocks placed from (3,-60,3) to (5,-57,5).
+3. To check the other operations in section 4, change the `modifications` in `ui/thanks_for_testing_screen.json` and reload the UI. The add-on ships the last variant (an insert into the `variables` array), so the second line of window 3 shows FROM_VARIABLES.
 4. `ui/juc_err.json` has a deliberate JSON syntax error (a trailing comma). Window 3 shows on its `errs` row that the definition after the error is missing.
+5. The latch values (`saved`, `now`, `child latch`) show at the top left of the HUD. Send titles containing `JUC`, such as `/title @s title JUC one`, to follow the order in section 6.2. Sending `off` to the action bar hides the parent of `child latch`. The constant `alpha` and the two screen flags change vanilla behaviour, so they are not in the add-on; add them to `ui/hud_screen.json` and `ui/server_form.json` as in the section 6.2 table to check them.
