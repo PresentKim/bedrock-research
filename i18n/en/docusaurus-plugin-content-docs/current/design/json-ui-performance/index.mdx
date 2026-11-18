@@ -92,6 +92,25 @@ When there are several screens or tabs, switching from "create everything and hi
 - To hide only itself while keeping the children, use `alpha: 0` + `propagate_alpha: false`. A child's alpha is multiplied by the parent's alpha (community report).
 - If the text of a list in a scroll area looks empty until something touches it, it is a layer problem, not lag. It happens when a label is on the same layer as the background image. Put the icon on `layer: 2` and the label on `layer: 3`, above the background (LAY-55). Changing binding conditions or expressions did not fix it.
 
+### 6.1 Measured: setups that cut the control count
+
+Windows 1.26.65.1, 2026-11-18. A 30x20 grid (600 cells of 4x4) in a server form window received 600 buttons. The measurement add-on is the one from [Measuring unverified JSON UI claims](../json-ui-claims.mdx), and the window opens with `/scriptevent bwiki:json_ui_claims perf <variant> 600`. Control and binding counts are for the whole screen (including about 162 elements and 68 bindings outside the window).
+
+| Variant | Cell setup | Controls | Bindings |
+| --- | --- | --- | --- |
+| a | 10 images per cell, each showing through its own `#visible` expression | 6714 or more (tool count limit) | not countable |
+| b | 1 image per cell, `#form_button_texture` into `#texture` | 762 | 668 |
+| f | 1 label per cell, button text as is | 762 | 668 |
+| e | 1 label per cell, a fixed-width field cut out with `'%.Ns'` and minus | 762 | 1268 |
+| d | static image cells, no clipping | 762 | 68 |
+| c | the same grid as d inside a 40x40 panel with `clips_children` | 504 | 68 |
+
+- **Merging same-shaped controls into one `#texture`** (DBG-17): a cell that shows one of 10 images had almost 9 times as many controls. When the picture to choose is in the data, use one `#texture` binding instead.
+- **Fixed-width records** (HOST-08): the view binding that cuts out the field added one binding per cell (668 to 1268). The control count is the same. The frame cost could not be measured.
+- **`clips_children`**: only 341 of the 600 cells (down to a little over one row below the visible rows) were in the control tree for the grid inside the clipping panel. The unclipped grid had all 600. Whether the engine did not create the clipped cells or the measurement tool could not read them was not separated (inferred).
+- **Screen open time**: measured three times each from Enter to the screen change, every variant took about 0.7 to 1.3 seconds, with differences smaller than the run-to-run spread. `cache_screen: true` or `load_screen_immediately: true` on `third_party_server_screen` stayed in the same range.
+- **Not measured**: frame rate. The game window was not in the foreground during the measurement, so the F3 panel showed FPS `Unavailable` (below 2 fps) even on a small form. The effect of `low_frequency_rendering` and `render_only_when_topmost` and the frame cost of each variant could not be compared.
+
 ## 7. Checking order
 
 1. Count how many controls are created for one screen. In-game debug overlays (Conduit Client, etc.) show element and binding counts, the factory tree and FPS (community report).
