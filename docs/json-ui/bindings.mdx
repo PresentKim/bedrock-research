@@ -104,7 +104,7 @@ MS Learn `minecraft:ui_element` 문서의 `bindings` 항목은 `binding_collecti
 | `source_property_name` | view 바인딩의 식 또는 읽을 속성 |
 | `target_property_name` | view 바인딩 결과를 쓸 속성 |
 
-- **[BND-01]** 바인딩 키는 위 표의 것을 쓴다. `resolve_ancestor_scope`는 바닐라에 한 번도 없으므로 쓰지 않는다(`resolve_sibling_scope`는 53회). 엔진은 이 키를 읽는다(조상 범위, BND-25·BND-36). 바닐라가 쓰지 않으므로 권장하지 않는다는 결론은 같다. `{바닐라, 코드}` (출처: VN, MJ 4.2-1, 충돌 C-07, NB-09)
+- **[BND-01]** 바인딩 키는 위 표의 것을 쓴다. `resolve_ancestor_scope`는 바닐라에 한 번도 없으므로 쓰지 않는다(`resolve_sibling_scope`는 53회). 엔진은 이 키를 읽는다(조상 범위, BND-25·BND-36). 바닐라가 쓰지 않으므로 권장하지 않는다는 결론은 같다. Windows 1.26.65.1에서 `resolve_ancestor_scope`는 `Unknown property` 로그 없이 받아들여져 조상을 읽었지만, 플래그 없는 `source_control_name` 읽기도 형제, 사촌, 조상, 창 맨 위의 먼 컨트롤을 모두 찾았다([실측 기록](../design/json-ui-claims.mdx)). `{바닐라, 코드, 실측}` (출처: VN, MJ 4.2-1, 충돌 C-07, NB-09)
 - **[BND-02]** `binding_type`을 생략한 항목은 전역 속성을 읽는다(예: `{ "binding_name": "#title_text" }`). `{바닐라, 코드, 추론}` (출처: VN server_form.json:138, BC 4.1, BA 2장, BW-intro, BW-dyn)
 - **[BND-03]** 바닐라가 쓰는 `binding_type` 횟수: `collection` 787, `collection_details` 287, `global` 265, `view` 240, `none` 1. 템플릿은 이 값을 변수로 받는 경우가 많다(`$store_factory_binding_type` 등). `{바닐라}` (출처: VN, 값 사전)
 
@@ -170,7 +170,7 @@ MS Learn `minecraft:ui_element` 문서의 `bindings` 항목은 `binding_collecti
 
 위키(BW) 문서를 바닐라 1.26.50.4와 대조해 더한 규칙이다. 위키 문장만 있는 것은 `미검증`, 위키의 게임 스크린샷이 있는 것은 `실측`(제3자 기록)으로 표시했다.
 
-- **[BND-18]** **값 보존(래치).** 크기 0 패널의 `property_bag`에 `"#saved": ""`를 두고, `{ "binding_name": "#src", "binding_name_override": "#saved", "binding_condition": "visibility_changed" }`로 **가시성이 바뀌는 순간에만** 원본을 복사한다. 이 패널의 `#visible`을 "새 값이 키워드를 포함하고(EXP-07) 저장값과 다를 때"로 두면, 조건이 맞는 순간 한 프레임 보였다가 저장 직후 조건이 거짓이 되어 다시 숨는다. 바깥 라벨은 `source_control_name`으로 `#saved`를 읽는다. `property_bag`은 인스턴스마다 따로라 같은 컴포넌트를 여러 개 둬도 섞이지 않는다. HUD 타이틀 채널(HOST-14)에서 "내 키워드가 든 마지막 타이틀"을 다른 타이틀이 와도 유지하는 데 쓴다. 상자 칸에서는 실측으로 동작했다: 래치 패널에 `collection_index`를 주고 `#hover_text`를 collection 바인딩으로 `#saved`에 복사하며 `#visible`을 "새 값이 비어 있지 않고 저장값과 다를 때"로 두자, 칸 이름이 바뀌면 따라가고 칸이 비면 마지막 이름을 지켰다. HUD 타이틀 채널에서는 아직 확인하지 않았다. `{실측(상자 칸), 미검증(타이틀)}` (출처: BW-title, VN `visibility_changed` 7회, CPR)
+- **[BND-18]** **값 보존(래치).** 크기 0 패널의 `property_bag`에 `"#saved": ""`를 두고, `{ "binding_name": "#src", "binding_name_override": "#saved", "binding_condition": "visibility_changed" }`로 **가시성이 바뀌는 순간에만** 원본을 복사한다. 이 패널의 `#visible`을 "새 값이 키워드를 포함하고(EXP-07) 저장값과 다를 때"로 두면, 조건이 맞는 순간 한 프레임 보였다가 저장 직후 조건이 거짓이 되어 다시 숨는다. 바깥 라벨은 `source_control_name`으로 `#saved`를 읽는다. `property_bag`은 인스턴스마다 따로라 같은 컴포넌트를 여러 개 둬도 섞이지 않는다. HUD 타이틀 채널(HOST-14)에서 "내 키워드가 든 마지막 타이틀"을 다른 타이틀이 와도 유지하는 데 쓴다. 상자 칸에서는 실측으로 동작했다: 래치 패널에 `collection_index`를 주고 `#hover_text`를 collection 바인딩으로 `#saved`에 복사하며 `#visible`을 "새 값이 비어 있지 않고 저장값과 다를 때"로 두자, 칸 이름이 바뀌면 따라가고 칸이 비면 마지막 이름을 지켰다. HUD 타이틀 채널에서는 아직 확인하지 않았다. Windows 1.26.65.1 측정 환경(DLL 주입)에서 팩에 `ui/hud_screen.json`이 있으면 월드 진입 시 크래시해 재지 못했다([실측 기록](../design/json-ui-claims.mdx)). `{실측(상자 칸), 미검증(타이틀)}` (출처: BW-title, VN `visibility_changed` 7회, CPR)
 - **[BND-19]** 팩토리·그리드가 만든 컨트롤은 `source_control_name`으로 **바깥** 컨트롤의 속성을 읽을 수 있지만, 바깥 컨트롤은 만들어진 컨트롤의 속성을 읽지 못한다. 공유할 값은 팩토리 바깥 데이터 소스(BND-11)에 둔다. `{미검증}` (출처: BW-dyn "Useful Information")
 - **[BND-20]** `resolve_sibling_scope: true`는 `source_control_name` 검색을 형제 범위로 제한하지만, 부모와 형제의 이름이 같으면 부모가 우선한다. 읽을 컨트롤 이름은 조상과 겹치지 않게 짓는다. 원인: 형제 검색이 부모 자신부터 너비 우선으로 시작한다(BND-25). `{코드}` (출처: BW-doc Data Binding 표, CN)
 - **[BND-21]** 버튼 상태 컨트롤 안에서는 상태 변수로 생성 자체를 가를 수 있다: 호버 때만 보일 자식에 `"ignored": "$default_state"`. 바닐라도 `"ignored": "$hover_state"`(2), `"visible": "$default_state"`(3), `"visible": "($hover_state or $pressed_state)"`(5)를 쓴다. INP-09의 변수 식이 `ignored`에도 된다는 뜻이다. `{바닐라, 미검증}` (출처: BW-btn, VN)
@@ -211,9 +211,9 @@ Android 1.26.52.3 클라이언트의 네이티브 라이브러리를 분석해 �
 
 - 원칙: 그대로 가져오면 `global`, 계산하면 `view`.
 - 같은 대상에 바인딩을 여러 개 걸면 합쳐지지 않고 마지막 것이 이긴다. 한 식으로 합친다. 같은 이름을 읽고 쓰는 바인딩(`#len` → `#len`)은 루프가 되어 문자열이 계속 붙고 메모리가 는다.
-- `resolve_ancestor_scope`는 1.21.130에 생겼지만 정식판에서 동작하지 않거나 오류를 낸다는 보고와 된다는 보고가 엇갈려 `resolve_sibling_scope`를 이어 쓰라고 권한다(D-12, BND-01).
+- `resolve_ancestor_scope`는 1.21.130에 생겼지만 정식판에서 동작하지 않거나 오류를 낸다는 보고와 된다는 보고가 엇갈려 `resolve_sibling_scope`를 이어 쓰라고 권한다(D-12, BND-01). Windows 1.26.65.1 실측에서는 오류 없이 조상을 읽었다(BND-01). `resolve_sibling_scope: true`가 검색을 좁힌다는 쪽도 맞았다: 형제는 읽고 사촌은 비었다.
 - 큰 폼의 팩토리·그리드 길이 바인딩에 `once`를 걸면 렉과 유령 버튼이 준다. 단 제목으로 고르는 레이아웃의 `#visible`은 `always`로 둔다(BND-31). view 바인딩에는 `binding_condition`을 걸 수 없다는 보고가 있으나(D-11) 레이아웃 `#visible`에 `always`·`visible`이 효과가 있었다는 실측(BND-31, BND-32)을 따른다.
-- **preserved title(래치) 패턴은 동작한다.** BND-18의 값 보존은 HUD 타이틀 채널의 표준으로 2026-07까지 여러 사람이 동작을 확인했다(D-13, 가이드 수준은 `미검증`에서 상향 후보). `data_control`은 루트에 둔다는 쪽이 다수다(D-20).
+- **preserved title(래치) 패턴은 동작한다.** BND-18의 값 보존은 HUD 타이틀 채널의 표준으로 2026-07까지 여러 사람이 동작을 확인했다(D-13, 가이드 수준은 `미검증`에서 상향 후보). `data_control`은 루트에 둔다는 쪽이 다수다(D-20). 둘 다 Windows 1.26.65.1 측정 환경(DLL 주입)에서 팩에 `ui/hud_screen.json`이 있으면 월드 진입 시 크래시해 재지 못했다.
 - `property_bag_for_children`은 2026-05 무렵 정식판에 들어왔다(BND-28).
 - 존재하지 않는 바인딩 이름(`#item_aux_id`, 정답은 `#item_id_aux`)은 오류 없이 `property_bag` 기본값을 돌려준다. 바인딩 이름은 바닐라 파일이나 JSON UI Dumper에서 복사한다.
 - 모바일 크래시 보고: `binding_name` 안에 `and`를 인라인으로 쓰면 모바일이 죽었다. 계산은 view 바인딩에서 한다.
@@ -228,7 +228,7 @@ Android 1.26.52.3 클라이언트의 네이티브 라이브러리를 분석해 �
 
 | ID | 주제 | 주장과 근거 | 판정 |
 | --- | --- | --- | --- |
-| C-07 | `resolve_ancestor_scope` | MJ 분석 저장소는 바닐라 1.26.50에서 "추가 확인"이라 했다. 바닐라 0회, `resolve_sibling_scope` 53회. 엔진은 읽는다(NB-09) | 해소: 엔진에는 있지만 바닐라 0회라 권장하지 않는다 |
+| C-07 | `resolve_ancestor_scope` | MJ 분석 저장소는 바닐라 1.26.50에서 "추가 확인"이라 했다. 바닐라 0회, `resolve_sibling_scope` 53회. 엔진은 읽는다(NB-09). Windows 1.26.65.1 실측: 오류 없이 조상을 읽었고, 플래그 없이도 같은 조상을 찾았다 | 해소: 받아들여지지만 바닐라 0회이고 플래그 없이도 읽히므로 권장하지 않는다 |
 | C-11 | 팩토리 셀 안의 `visible` | S9는 무시됨, S11은 `always`면 즉시, 기본 조건이면 늦게 적용. 나중 측정이 원인을 바인딩 타이밍으로 설명 | 해소: `binding_condition: "always"` |
 | C-15 | `#propagateAlpha` 바인딩 | AP에서만 본 용법이었으나 바닐라 `hud_screen.json:3567`이 전역 `#hud_propagate_alpha`를 `#propagateAlpha`로 바인딩 | 해소: 바닐라도 바인딩한다 |
 | C-43 | `#`가 없는 바인딩 식 | 실측은 `bindings` 배열 전체가 버려진다, Cinnabar는 그 바인딩 하나만. Cinnabar는 관대한 구현일 수 있다 | 실측 우선: BND-05 유지 |
@@ -238,5 +238,5 @@ Android 1.26.52.3 클라이언트의 네이티브 라이브러리를 분석해 �
 ## 실측이 필요한 항목
 
 - `factory_variables`로 셀에 변수를 넘길 수 있는지(COL-15, BND-14).
-- `visibility_changed` 래치 패턴(BND-18)의 단독 동작.
+- `visibility_changed` 래치 패턴(BND-18)의 단독 동작. Windows 1.26.65.1 측정 환경(DLL 주입)에서 팩에 `ui/hud_screen.json`이 있으면 월드 진입 시 크래시해 HUD 타이틀로는 재지 못했다.
 - 초기화와 자기 증가 바인딩이 문자열 길이를 세는 데 몇 프레임 걸리는지(BND-30).

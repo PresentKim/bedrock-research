@@ -1,0 +1,215 @@
+---
+title: Measuring unverified JSON UI claims
+description: A record of claims in the JSON UI chapter that were still marked unverified, inferred, conflicting or single report, measured with one add-on on Windows 1.26.65.1. The method, per-item results for expressions, layout, files and modifications, and server forms, the items that could not be measured and why, and the measurement add-on.
+sidebar_position: 6
+sources:
+  - repo-guide
+  - private-research
+  - bedrock-samples
+---
+
+# Measuring unverified JSON UI claims
+
+The [JSON UI](../json-ui/index.mdx) chapter still had claims from community reports and code reading marked `unverified`, `inferred`, `conflicting` or *single report*. This page records the ones that could be measured on Windows, measured with one add-on. Each rule entry carries a short form of its result; the numbers and conditions are here.
+
+- Target: Windows 1.26.65.1, a single-player world, GUI 480x253 (client 1920x1009, scale 4). Measured on 2026-11-18.
+- Anything the vanilla files of the official samples `preview` branch (1.26.70.24) already show (for example an expression in a collection `binding_name`, a state variable expression in `ignored`) was not measured.
+- Other platforms, Ore UI and DDUI internals, anything that needs multiplayer, Marketplace policy and rumours about future versions were left out.
+
+## 1. Method
+
+- The add-on picks a window by the server form title `§b§wjc:N`. A router (`collection_panel`) goes into `main_screen_content` of `server_form.json` with `insert_back`, and the first 10 bytes of the title are looked up as a `property_bag` key. This is the same scheme as the other server form examples, and they work together in one world.
+- The script sends the input strings as button texts. The cells of a window are `stack_panel` cells with a fixed `collection_index`; a label receives `#form_button_text` as `#v` and draws the result of a view expression into `#text`.
+- Measurement used MCP tools: edit the JSON, reload the UI (`ui_reload`), then read control tree rects, the content log and the text in screen captures. Rects are client pixels; one GUI unit is 4 pixels.
+- A label whose result is only a number showed nothing (section 2.4), so numbers and booleans were read wrapped as `('R' + expression)`.
+
+## 2. Expressions
+
+### 2.1 Operators
+
+| Expression | Input | Result | Related |
+|---|---|---|---|
+| `('R' + (#v != '5'))` | `5` | `R` (no value) | EXP-02 |
+| `('R' + ((#v - 0) >= 10))` | `10` | `R` (no value) | EXP-03 |
+| `('R' + (not ((#v - 0) < 10)))` | `10` | `Rtrue` | EXP-03 |
+| `('R' + ((#v - 0) % 5))` | `17` | `R` (no value) | D-07, C-06 |
+| `('R' + ((#v - 0) - (((#v - 0) / 5) * 5)))` | `17` | `R2` | EXP-38, C-48 |
+| same expression, divisor 3 | `-7` | `R-1` (`-7 / 3` is `R-2`) | EXP-38 |
+| `('R' + (5 < (#v - 0) < 7))` | `10` | `Rtrue` (wrong true) | C-41 |
+| `('R' + (((#v - 0) > 5) and ((#v - 0) < 17)))` | `10` | `Rtrue` | EXP-04 |
+| `('R' + ((5 < (#v - 0)) and ((#v - 0) < 7)))` | `10` | whole label empty | see below |
+| `('R' + (#v < 'c'))`, `>`, `< 'a'` | `b` | `Rtrue`, `Rfalse`, `Rfalse` | D-10 |
+| `('R' + ((#v - 0) + 1))` | `2147483647` | `R-2147483648` | D-27 |
+| `(translate('gui.ok', #v))` | `b` | empty | D-21 |
+
+- Every time the window loaded, the content log printed `JSON UI parse failure: Invalid expression.` 6 times. Six rows also gave no value (`!=`, `>=`, `%` twice, the `and` comparison with a literal on the left, `translate`). The log has no control path, so lines and rows were not matched one by one.
+- Only the expression that joins a comparison with the literal on the left (`(5 < x)`) through `and` failed; writing the same thing as `(x > 5)` worked. The cause was not separated.
+
+### 2.2 String minus and leading characters
+
+| Input and expression | Result |
+|---|---|
+| `abab` - `'ab'` | empty string |
+| `xaxbx` - `'x'` | `ab` |
+| `' x'` - `'zz'` | ` x` (leading space kept) |
+| `':x'` - `'zz'` | `:x` |
+| `'-x'`, `'+x'`, `'1x'`, `'#x'`, `'/x'`, `'<x'` - `'zz'` | empty |
+| `'Info: a'`, `'nancy'`, `'0x12'`, `'inf'` - `'zz'` | empty |
+| `'' + '1x'`, `'' + 'Info: a'`, `'' + '0x12'` | empty |
+| `'§r' + '1x'`, `'z' + '1x'`, `'z' + '/x'` | `1x`, `z1x`, `z/x` |
+
+- String `-` removes every occurrence (EXP-12, D-08).
+- A label was empty when the result started with `-`, `+`, a digit, `#`, `/`, `<`, `inf`, `nan` or `0x` (EXP-48). Results starting with a space or `:` showed as they were. A `/` in the middle showed without doubling. `\` was not measured.
+
+### 2.3 `'%.Ns'` cuts
+
+| Input | N | Result |
+|---|---|---|
+| `§cAB` | 1, 2, 3, 4 | broken, broken, `§c` (blank), `§cA` |
+| `가나다` | 2, 3, 4, 6 | broken, `가`, `가` + broken, `가나` |
+| `😀xy` | 2, 4, 5 | broken, emoji box, emoji + `x` |
+| `abcdef` | `%7.4s`, `%-7.4s`, `%9s`, `%-9s`, `%09s`, `%4.2s` | all `abcdef` unchanged |
+| `abcdef` | `%.4s` | `abcd` |
+
+- `§` cuts as 2 bytes, Hangul as 3 bytes, emoji as 4 bytes (EXP-24). Cutting in the middle of a character dropped that piece and also the character concatenated right after it (`']'`).
+- Formats with a width or padding neither cut nor pad; they returned the input unchanged. The only working format was `'%.Ns'` (EXP-25, C-05).
+- `(('%.3s' * 'abcdef') + (#v - #v))` was `abc`: a literal is cut too. With no `#` property in the same expression, the binding failed with `Must define a source property name in the binding!` (C-42, BND-05).
+- A format built at run time worked. `(('%.' + #v + 's') * 'abcdef')` (`#v` is `3`), `('%.' + $n + 's')` (`$n` is 3) and `('%.' + '3' + 's')` all gave `abc` (EXP-43, D-04).
+
+### 2.4 Numbers
+
+| Expression | Input | Result |
+|---|---|---|
+| `((#v - 0) * 2)`, `((#v - 0) * $two)` | `4` | `8`, `8` |
+| `(#v * 1)` | `4` | empty string |
+| `((#v * 1) + 1)`, `((#v * 1) = 4)` | `4` | `1`, `false` |
+| `(#v - 0)`, `((#v - 0) = 4)` | `4` | `4`, `true` |
+| `(#v + 1)` | `4` | `41` (concatenated) |
+| `(#v + $zero)`, `((#v + $zero) + 1)`, `$zero` is JSON `0.0` | `4` | `4`, `5` |
+| `((#v - 0) * 0.3)`, `* 1.5` | `10` | `0`, `10` |
+| `(((#v - 0) * .3) = 3)` | `10` | `true` |
+| `((#v - 0) * .3)`, `(((#v - 0) * .5) * 2)` | `10` | no value in the label |
+| `((#v - 0) / 4)` | `10` | `2` |
+
+- Multiplying by a literal worked (unlike a 2026-09 single community report).
+- `* 1` does not convert to a number; it makes an empty string (D-01). `- 0` converts.
+- `(#v + $zero)` with the JSON variable `0.0` became a number, so `+ 1` gave `5`. Adding an integer to a string concatenates (`41`). Even so, the content log printed `Expected variable not found in ancestor tree: '$zero'` for those rows (D-02).
+- A decimal literal with a leading digit becomes an integer (`0.3` is 0, `1.5` is 1, `100.0` is 100). `.3` computes as a decimal (D-03, EXP-27).
+- A float result did not show in a label even after `'R' +`. Integers and booleans showed when concatenated; a number alone in `#text` showed nothing.
+- A parenthesized string value in `property_bag` is evaluated. Reading `"#pb": "('A' + 'B')"` through a label with `text: "#pb"` showed `AB`, `"plain"` showed `plain`, and `"(1 + 2)"` was a number and stayed empty.
+
+## 3. Layout
+
+The parent is a 100x40 box.
+
+| Item | Result (GUI units) | Related |
+|---|---|---|
+| `size: "default"` and no size | same: panel 100x40, label `Hello` 24x10, vertical stack_panel 100x10 (width of parent, height sum of children), grid of 2x2 10x10 cells 20x20 | C-36 |
+| panel with no size (siblings 30x10, 50x20) | 100x40, the parent size | community single report |
+| `"50%"`-wide child in a `100%c` parent (sibling 40x10) | parent width 0, `%` child width 0, fixed sibling drawn at 40x10 | LAY cycle |
+| `#size_binding_x` = .5 (declared 10x10) | width 50 (0.5 x parent). 50 with `use_anchored_offset` too | C-14, C-37 |
+| `#size_binding_x` = 2 | width 200 (exceeds the parent, no clamp) | C-14 |
+| `#size_binding_x_absolute` = 20 | width 20 | D-22 |
+| static `#anchored_offset_value_x` = 10, `use_anchored_offset`, top_left | x moved 1000 (10 x parent width) | C-61 |
+| same value, center | no move | C-61 |
+| same value, no `use_anchored_offset` | no move | C-61 |
+| `#anchored_offset_value_x` = .1, bottom_left | x moved 10 | C-61 |
+| `#anchored_offset_value_x_absolute` = 10, top_left | no move | D-22 |
+| grid [4,1], cell 1 `#visible` false | cells 2 and 3 stay at x 40, 60 | D-14, LAY-31 |
+| same cells in a horizontal stack_panel | cell 2 moves to x 20 | LAY-04 |
+| top-level `"ignored": "$hide"` in the definition, `"$hide": true` at the reference | the control was created in all three cases (true, false, omitted) and the log printed `Expected variable not found in ancestor tree: '$hide'` | A.3 #22 |
+
+- On a static control, `#anchored_offset_value_x` moved by a multiple of the parent size and only with a corner anchor.
+- `collection_name` on a `panel` logged `Unknown property [collection_name]`, and `collection_index` on its children logged `Unknown property [collection_index]` (same as COL-38).
+
+## 4. Files and modifications
+
+| Item | Result | Related |
+|---|---|---|
+| In the same-path vanilla file `thanks_for_testing_screen.json`, on `text_panel` (children title, desc, desc2): `insert_after` (title), `insert_before` (desc2), `insert_back` with an object `value` | inserted in the order title, after, desc, before, desc2, object | C-39, MOD-14, MOD-01 |
+| `move_front` (desc2) + `move_back` (title) | desc2, desc, title | C-39 |
+| `swap` (title, `target_control` desc2) | desc2, desc, title | C-39 |
+| `replace` (desc, new panel) | title, new panel, desc2 | C-39 |
+| `move_after` (title, `target_control` desc2) | desc, desc2, title | C-39 |
+| `move_before` (desc2, `target` title) | desc2, title, desc | MOD-24 |
+| `insert_back` into `array_name: "variables"` with `{ "requires": "$multiline_description", "$description_text_line_2": "FROM_VARIABLES" }` (a definition without its own `variables` array) | the second line changed to FROM_VARIABLES | MOD-03, C-64 |
+| three packs (json-ui-performance, collection-expr-probe, this add-on) `insert_back` into the same `main_screen_content` | `jup_router`, `jcx_router` and `juc_router` all present | D-05, MOD-02 |
+| a definition with an unknown type (`no_such_type`) in the middle | definitions before and after were created; log `Type 'no_such_type' not ...` | D-06 |
+| a JSON syntax error (trailing comma inside an object) in the middle | the definitions before the error and the erroring one were created; the one after logged `UI control reference not found: 'b'` | D-06, FILE-30 |
+| two controls named `dup` in one `controls` array | both created, no log | FILE-39 |
+| one namespace split over two files (`juc_split.outer` references `juc_split.inner` in the other file) | child created | file split |
+
+- A `modifications` entry on `variables` took effect in this case. That differs from the earlier measurement (MOD-03, `variables` ignored). Only a target definition without its own `variables` array was measured.
+- A same-path vanilla file **newly** added to the pack and a file newly registered in `_ui_defs.json` were not read by `ui_reload` (Ctrl+R); the world had to be re-entered. Edits to files that were already loaded were picked up by `ui_reload`.
+
+## 5. Server forms and bindings
+
+| Item | Result | Related |
+|---|---|---|
+| `#form_button_length` of an action form with 35 buttons + 4 `label` + 3 `divider` + 2 `header` | 44 (every row counted) | COL-31 |
+| `collection_index: 1` and a collection binding on a `label` right under a `collection_name` `stack_panel` | read `b1` | COL-02, C-31 |
+| fixed cells inside the router window, bindings with default conditions | empty on the first open (both when opened straight from the HUD and when coming from a menu form) | C-65, COL-47 |
+| same cells with `always` on both bindings | filled from the first open | C-65, COL-47 |
+| four radio toggles with the same `toggle_name` in two different parents | pressing a toggle in the other parent turned off the one that was on | C-66, INP-32, INP-35 |
+| three radio toggles made by a grid | pressing 1 then 3 left only 3 on | C-66 |
+| `((#title_text - 'formA:' - 'formB:') = #title_text)` | false for the titles `formA:x` and `formB:y`, true for `plain` | HOST-33 |
+| MessageFormData | drawn by `popup_dialog_factory` of `third_party_server_screen` (1 root, 72 controls, the modal in `popup_dialog.json`); `server_form_factory` had 0 roots | community unverified |
+| `source_control_name` view binding (no flag) | read a sibling, a cousin, an ancestor and a distant control at the top of the window | BND-01, D-12 |
+| same binding with `resolve_sibling_scope: true` | read the sibling, the cousin stayed empty | community conflicting |
+| ancestor read with `resolve_ancestor_scope: true` | read it; no `Unknown property` log (it also reads without the flag) | D-12, C-07 |
+
+## 6. Additional items
+
+These were measured separately after sections 1 to 5, on the same day and version. The windows are `§b§wjc:5` (expressions, lengths, buttons) and `§b§wjc:6` (structure renderer).
+
+| Item | Result | Related |
+|---|---|---|
+| `stack_panel` factory (`control_name`) inside the router window, 6 buttons, length binding condition `visible` | 0 controls for all four (even the vanilla-style `#form_button_contents`) | COL-48 |
+| same factories, condition `always` | `#form_button_contents` 6, `#form_button_length` 6, `(#form_button_length - 1)` 5, `((#form_button_length * 0) + 1)` 1 | COL-36 |
+| grid (`grid_rescaling_type: "horizontal"`) `#maximum_grid_items`, `always_when_visible` | `#form_button_length` 6 cells, `(#form_button_length - 1)` 5 cells | COL-36 |
+| `common.button` with `locked_control` and a view binding to `#enabled` (false for one button) | that button drew its locked control and pressing it twice left the form open; pressing the other button closed the form with selection 1 | disabling a server form button |
+| `((not (#v = 'a')) or (#v = 'b'))`, the swapped order, three terms | no value | EXP-29 |
+| `(not ((#v = 'a') and (#v = 'c')))` | no value | EXP-29 |
+| `(not (#v = 'a') or (#v = 'b'))` (not term without parentheses) | `false` (correct) | EXP-29 |
+| `(((#v = 'a') = false) or (#v = 'b'))` | `false` (correct) | EXP-29 |
+| `((#v = 'b') or (#v = 'c') or (#v = 'a'))` | `true` | EXP-29 |
+| `text: "#form_text"` on a control under `main_screen_content` | empty | reading the form body |
+| `((#form_text - '~x') = #form_text)` on a control inside `long_form`, body `first line`, newline, `second line ~x` | `false` (marker found). Two lines without the marker gave `true`, one line with the marker `false` | multi-line marker |
+
+- A parenthesized `(not ...)` used as an operand of `and`/`or`, or a `not` over a parenthesized `and` group, made the whole expression give no value regardless of the number of terms. The report that the first term goes wrong with three or more terms was not reproduced in this form. Write the not term without the parentheses or as `(... = false)`.
+- Factory and grid lengths computed from an expression worked. This is a different structure from the earlier record (COL-36), and the cause of that record was not separated. Inside the router window the length binding needed `always` (same as COL-48).
+
+### 6.1 `3d_structure_renderer`
+
+A `"type": "custom"`, `"renderer": "3d_structure_renderer"` control was placed outside the structure block screen (in the server form window) with only `property_bag` values and none of the structure editor bindings. The world had 3x3x3 gold blocks from (3,-60,3), with a diamond block and a redstone block on two top corners.
+
+| Setting | Result |
+|---|---|
+| `#bottom_left_block` [3,-60,3], `#top_right_block` [5,-57,5] | only 2x3x2 gold blocks drawn |
+| [3,-60,3]..[6,-56,6] | the 3x3x3 and the two blocks on top drawn |
+| same corners, `#block_position` [0,0,0] and [40,0,40] | same image |
+| `#block_position` [3,-60,3], corners [0,0,0]..[2,3,2] | nothing |
+| player more than 17 blocks away | drawn |
+| `[-32,-64,-32]`..`[32,-58,32]`, 64x6x64 | drawn scaled to fit the box, F3 60 fps (vsync cap) |
+| near x, z 5000 (not loaded) | nothing |
+| wrapped in an `input_panel` (`gesture_tracking_button: "button.turn_structure"`) with view bindings of that panel's `#gesture_delta_source`, `#gesture_mouse_delta_x`, `#gesture_mouse_delta_y` into the renderer | rotates when dragged |
+| same wrapper without the view bindings | no rotation |
+
+- The two corners are absolute world coordinates and the upper corner is exclusive. `#block_position` had no visible effect on the image.
+- Coordinates from a `$variable` per instance worked. Building arrays from server text, the HUD and the chest screen were not measured.
+
+## 7. Items that could not be measured
+
+- **HUD title items** (BND-18 latch, D-20 placement, HOST-41 constant `alpha`, C-27 `destroy_at_end` name): in this measurement setup (DLL injection), any `ui/hud_screen.json` in the pack crashed the game on world entry. A namespace-only file, our own `insert_front` file and the HUD file of the repo's actor-portrait add-on all did, and so did a retry after the tool was patched and restarted: 4 of 4. The other test packs in the same world have no HUD file. Whether the injected tool or the pack causes it was not separated.
+- **Live input filter** (INP-25): a `common.text_edit_box` inside the action form window showed the hover border, but the tool's keyboard input (PostMessage, SendInput) did not put text into it. Whether the tool or the screen not forwarding input is the cause was not separated.
+- **HUD drawn over a server form** (HOST-44, `force_render_below`, `screen_draws_last`): needs a HUD file, so it could not be measured for the same reason.
+- Bound `#alpha` 0.5 (C-45, needs pixel comparison), expressions that risk a hang such as string division, `#item_id_aux` ranges with custom items, the NPC dialogue button count and a slider-driven `#anchored_offset_value_x` were left out of this list. Particle playback is outside JSON UI and was not covered.
+
+## 8. Measurement add-on
+
+<AddonDownload id="json-ui-claims" />
+
+1. Open the file to import it. In a new world, turn on the behavior pack that starts with `[bedrock-research]json-ui-claims-bp`. The resource pack comes on as a dependency.
+2. Take "JSON UI Claims Test" from the creative inventory and use it, or run `/scriptevent bwiki:json_ui_claims`, to open the window menu. The last word opens a window directly, as in `/scriptevent bwiki:json_ui_claims 1` (1 expressions, 2 layout, 3 files, 4 form controls, 5 additional items, 6/7/8 multi-line marker, 9 structure renderer, s a 3-button form, a/b/c title gate, m message form). Open window 9 near blocks placed from (3,-60,3) to (5,-57,5).
+3. To check the other operations in section 4, change the `modifications` in `ui/thanks_for_testing_screen.json` and reload the UI. The add-on ships only the first variant (three inserts).
+4. `ui/juc_err.json` has a deliberate JSON syntax error (a trailing comma). Window 3 shows on its `errs` row that the definition after the error is missing.

@@ -115,7 +115,7 @@ The screen controller knows the factory name and puts data in directly. There is
 // The form posted in the community (2026-10-19). Creates only one screen by the first character of the title
 ```
 
-- If you compute an engine name (`#form_button_contents`, `#form_button_length`) with an expression and put it in the length, the factory did not create buttons. Move engine names as they are with `binding_name_override` [COL-36].
+- With an expression of `#form_button_length` (such as `(#form_button_length - 1)`) in the length, the factory still made that many controls (Windows 1.26.65.1, length binding `always`). With a `visible` condition on the length binding, even `#form_button_contents` made 0. The DF measurement, taken in another structure, recorded that an expression made no buttons [COL-36].
 - Vanilla also takes the length as a `$variable` (`$panel_length`, `$selected_grid_dimensions`, etc.) and picks with an expression (`('#' + $icon_overlay_collection_name)`) (VN).
 
 ### 6.9.5 What created controls receive
@@ -265,9 +265,9 @@ Caution (author's document): some parts such as dividers and tips cannot be used
 
 The change in commit `6bf7875` of 1.0.3.3 only renamed the second `padding` and `header_contents` in the same `controls` array to `padding_top`/`padding_bottom`, `auto_padding_top`/`auto_padding_bottom` and `right_header_contents` in seven places across two files (in some places the first name was changed too), and the change record says "fix JSON UI errors in the new version". When this survey counted all 4,626 `controls` arrays of the vanilla 1.26.50.4 UI, there were 0 cases of the same name (before `@`) appearing twice in one array. Siblings with the same name also make the `source_control_name` search (BND-25) and path keys (`parent/child`) ambiguous.
 
-#### SLB 8. `#form_button_length` [confirmed (usage), unverified (meaning)]
+#### SLB 8. `#form_button_length` [confirmed (usage), measured (meaning)]
 
-A button factory uses `{ "binding_name": "#form_button_length", "binding_name_override": "#collection_length" }` (binding type omitted = global), and a grid puts the same value into `#maximum_grid_items`. Vanilla 1.26.50 `server_form.json` does not use this binding and builds lists only with `collection_name` and factories. The EasyUIBuilder example and the community schema (Bugrock JSON UI Schemas) also list the same name. It appears to be a global value the engine gives for "the number of action form buttons" [inferred].
+A button factory uses `{ "binding_name": "#form_button_length", "binding_name_override": "#collection_length" }` (binding type omitted = global), and a grid puts the same value into `#maximum_grid_items`. Vanilla 1.26.50 `server_form.json` does not use this binding and builds lists only with `collection_name` and factories. The EasyUIBuilder example and the community schema (Bugrock JSON UI Schemas) also list the same name. It is a global value the engine gives for "the number of action form buttons". On Windows 1.26.65.1, an action form with 35 buttons, 4 `label`, 3 `divider` and 2 `header` rows gave 44. It counts every row, not only buttons ([measurement record](../design/json-ui-claims.mdx)).
 
 
 ### 6.10.1 Proposals (not applied)
@@ -276,14 +276,14 @@ Below are the rules the StarLibV2 analysis proposed adding to the guide. They ar
 
 - **[PAT-13]** **A 2D layout made with keys.** For each vertical factory item, (1) turn on the left and right spacers of a horizontal stack with keys in the button string to push the button sideways, and (2) put the picture inside a zero-height panel and let a sizer that can be turned off by a key decide the item height, and the item after one carrying a "no height" key is placed on the same row. The server sends only an ordinary button list and the `selection` numbers do not change. Give horizontal spacers together so that the press areas of overlapping items do not overlap. `&#123;working pack, inferred&#125;` (Source: SLB chapter 4, GrimUI key document)
 - **[FILE-39]** Name siblings in the same `controls` array differently (the name before `@`). There are reports that from a version around April 2025 duplicate names cause JSON UI errors (SLB 1.0.3.3), and none of the 4,626 `controls` arrays of vanilla 1.26.50 has a duplicate. Split a common name like `padding` into `padding_top` and `padding_bottom`. `&#123;working pack, vanilla&#125;` (Source: SLB chapter 7, VN exhaustive survey)
-- **[COL-31]** The action form button count is said to be readable through the global binding `#form_button_length`. Put it into the factory's `#collection_length` or the grid's `#maximum_grid_items` with `binding_name_override`. The vanilla 1.26.50 UI does not use this name. `&#123;working pack, unverified&#125;` (Source: SLB chapter 8, EUB example)
+- **[COL-31]** The action form row count is read through the global binding `#form_button_length`. Put it into the factory's `#collection_length` or the grid's `#maximum_grid_items` with `binding_name_override`. The vanilla 1.26.50 UI does not use this name. On Windows 1.26.65.1, a form with 35 buttons, 4 `label`, 3 `divider` and 2 `header` rows gave 44, so label, divider and header rows are counted too ([measurement record](../design/json-ui-claims.mdx)). `&#123;working pack, measured&#125;` (Source: SLB chapter 8, EUB example)
 
 **List of items needing measurement**
 
 
 1. If two siblings with the same name are put in the same `controls` array, what is left in the Content Log in 1.26.50 and whether both are created. -> FILE-39
-2. Whether binding `#form_button_length` to a label gives the action form button count (and whether label, header and divider rows are included, COL-19). -> COL-31
-3. Whether `#item_name`, read by another control with `source_control_name` while typing in a `common.text_edit_box`, updates per character and is emptied when the form is reopened. -> INP-25
+2. ~~Whether binding `#form_button_length` to a label gives the action form button count (and whether label, header and divider rows are included, COL-19).~~ -> COL-31. Measured (Windows 1.26.65.1): label, header and divider rows are counted too (35 buttons + 9 rows = 44)
+3. Whether `#item_name`, read by another control with `source_control_name` while typing in a `common.text_edit_box`, updates per character and is emptied when the form is reopened. -> INP-25. Not measured on Windows 1.26.65.1: the measurement tool's keyboard input did not reach a `common.text_edit_box` inside an ActionForm window, and the cause was not separated
 4. Whether a button that overflows a zero-height panel can be pressed (the input hit test of the overflowing area). -> PAT-13
 
 ## How evidence is marked and source abbreviations

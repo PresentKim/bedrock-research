@@ -100,7 +100,7 @@ Swap the position of the existing `#example_binding_1` and `#example_binding_2` 
 
 </Excerpt>
 
-위키 예제의 읽는 법: 컨트롤을 기준으로 삼을 때는 `control_name`, 바인딩을 기준으로 삼을 때는 `array_name: "bindings"`와 `where`를 쓰고, 두 번째 기준이 필요한 `move_after`·`move_before`·`swap`은 `target`(엔진은 `target_control`을 먼저 읽는다, MOD-24)을 쓴다. 이 프로젝트에서 게임 동작이 확인된 것은 `insert_back`, `insert_front`, `remove`뿐이다(MOD-01, MOD-14).
+위키 예제의 읽는 법: 컨트롤을 기준으로 삼을 때는 `control_name`, 바인딩을 기준으로 삼을 때는 `array_name: "bindings"`와 `where`를 쓰고, 두 번째 기준이 필요한 `move_after`·`move_before`·`swap`은 `target`(엔진은 `target_control`을 먼저 읽는다, MOD-24)을 쓴다. `insert_back`, `insert_front`, `remove`에 더해 나머지 8가지도 Windows 1.26.65.1 실측에서 동작했다(MOD-01, MOD-14).
 
 ### 같은 경로 파일에 쓰는 세 가지 형태의 한 장 예제
 
@@ -152,9 +152,9 @@ Swap the position of the existing `#example_binding_1` and `#example_binding_2` 
 }
 ```
 
-- **[MOD-01]** `modifications`는 `array_name`, `operation`, `value`(넣을 항목 배열), `where`(지울 항목을 찾는 조건)로 쓴다. 이 프로젝트 출처에서 확인된 `operation`은 `insert_back`, `insert_front`, `remove`다. 바닐라 자신은 `modifications`를 한 번도 쓰지 않는다(팩 전용 기능). 엔진의 연산 이름표는 11가지이고(MOD-23), 나머지 8가지의 게임 동작은 이 프로젝트 출처에서 확인되지 않았다(MOD-14). `{작동팩, 코드, 바닐라}` (출처: AP-samples hud_screen.json, BA 2장, BC 4.1, VN 0회, NB-01)
+- **[MOD-01]** `modifications`는 `array_name`, `operation`, `value`(넣을 항목 배열), `where`(지울 항목을 찾는 조건)로 쓴다. 이 프로젝트 출처에서 확인된 `operation`은 `insert_back`, `insert_front`, `remove`다. 바닐라 자신은 `modifications`를 한 번도 쓰지 않는다(팩 전용 기능). 엔진의 연산 이름표는 11가지이고(MOD-23), 나머지 8가지도 Windows 1.26.65.1 실측에서 동작했다(MOD-14). `{작동팩, 코드, 바닐라, 실측}` (출처: AP-samples hud_screen.json, BA 2장, BC 4.1, VN 0회, NB-01, 2026-11-18 Windows 1.26.65.1)
 - **[MOD-02]** `modifications`는 **파일 경로 단위**로 해석된다. 바닐라 파일과 같은 경로의 사본에 쓴 것만 바닐라 정의에 적용되고, 여러 팩의 것이 팩 순서대로 쌓인다. 다른 경로 파일에 쓰면, 팩 자신의 namespace 정의는 새 정의로 읽혀 원래 정의를 대체하고(`Type not specified`, `Unknown property [modifications]`), 바닐라 정의는 조용히 무시된다(FILE-22). Cinnabar 재구성은 이 구분 없이 namespace와 이름만으로 합치지만, 실측을 따른다(충돌 C-46). `{실측}` (출처: BC-facts, 충돌 C-46)
-- **[MOD-03]** 게임에서 `modifications`가 닿은 배열은 `controls`와 `bindings`이고, `variables`를 지정하면 무시되었다. 엔진은 `array_name`을 고정 목록으로 거르지 않으므로(MOD-25) `button_mappings` 같은 다른 배열도 해석은 되지만 효과는 실측되지 않았다(충돌 C-64). `target_control` 키는 엔진이 실제로 읽는다(MOD-24). `{실측, 코드, 충돌}` (출처: BC-facts, NB-02, NB-03, 충돌 C-10, 충돌 C-64)
+- **[MOD-03]** 게임에서 `modifications`가 닿은 배열은 `controls`와 `bindings`이고, `variables`를 지정하면 무시되었다(BC-facts). 그런데 Windows 1.26.65.1 실측에서는 자기 `variables` 배열이 없는 `thanks_for_testing`의 `text_panel`에 `array_name: "variables"`로 `insert_back`을 하자 `$description_text_line_2`가 `FROM_VARIABLES`로 바뀌었다([주장 실측](../design/json-ui-claims.mdx)). 두 실측이 어긋나고, 자기 `variables` 배열이 있는 정의는 재지 않았다. 엔진은 `array_name`을 고정 목록으로 거르지 않으므로(MOD-25) `button_mappings` 같은 다른 배열도 해석은 되지만 효과는 실측되지 않았다(충돌 C-64). `target_control` 키는 엔진이 실제로 읽는다(MOD-24). `{실측, 코드, 충돌}` (출처: BC-facts, NB-02, NB-03, 충돌 C-10, 충돌 C-64, 2026-11-18 Windows 1.26.65.1)
 - **[MOD-04]** 대상이 **직접 선언하지 않고 상속만 받은 배열**에 insert하면 새 배열이 생겨 상속받은 내용을 가린다(바닐라 내용이 통째로 사라짐). 그래서 배열을 직접 선언한 정의에 넣는다. 상속받은 배열이 원래 없는 정의(예: 바인딩이 없는 `hud_title_text`의 `bindings`)에 넣는 것은 문제없다. `{실측, 작동팩}` (출처: BC-facts, AP-samples hud_screen.json)
 - **[MOD-05]** 파생 정의에서 **상속받은 자식 컨트롤**을 `remove`하면 로그도 없이 그 파일의 수정 전체가 적용되지 않는다. 반면 정의가 직접 가진 **바인딩 항목**을 `where`로 지정해 `remove`하는 것은 동작한다. 설정·인벤토리 화면에는 지우면 안 되는 필수 토글도 있다(MOD-16). Cinnabar 재구성은 진단만 남기고 나머지를 적용하지만, 실측을 따른다(충돌 C-47). `{실측, 작동팩}` (출처: BC-facts, AP 4.4, BW-doc, 충돌 C-47)
 - **[MOD-06]** 바닐라 컨트롤은 지우지 말고 **바인딩으로 숨긴다.** 숨김 조건을 `#visible` view 바인딩으로 덧붙이거나, 감싼 패널의 가시성으로 가린다. 설정·인벤토리 화면의 필수 토글은 빼면 개발 빌드에서 assert가 나므로 숨기더라도 남긴다(MOD-16). `{실측, 작동팩}` (출처: BC 6.3-7, BA 2장, AP 4.4, BW-doc)
@@ -196,7 +196,7 @@ Swap the position of the existing `#example_binding_1` and `#example_binding_2` 
 
 - **[MOD-11]** 화면의 내용을 통째로 바꾸려면 화면 정의를 같은 경로 파일에서 재선언해 `$screen_content`를 바꾼다. 바닐라도 `shulker_box_screen@chest.small_chest_screen`, `barrel_screen@chest.small_chest_screen`처럼 같은 방식으로 화면을 만든다. `{바닐라, 실측}` (출처: VN chest_screen.json:240·258, BC 4.3-(2), BC-facts)
 - **[MOD-12]** 화면 정의를 재선언하면 같은 화면을 재선언하는 다른 팩과는 한쪽만 남는다. 일반 NPC 대화 같은 바닐라 기능도 재선언한 속성(`render_game_behind` 등)을 함께 받는다. 꼭 필요할 때만 쓰고, 바닐라 내용을 감싸 두어 원래 기능이 계속 동작하게 한다. `{작동팩, 추론}` (출처: AP 4.2)
-- **[MOD-13]** 여러 애드온이 같은 바닐라 화면에 붙어야 하면 **아무 정의도 하지 않는 `modifications`만** 쓴다. 바닐라 파일에 정의(속성 덮어쓰기 포함)를 쓰면 다른 팩의 같은 정의와 덮어쓰기 경쟁을 한다. `{실측, 추론}` (출처: BC 6.3-9, BC-facts, BW-best)
+- **[MOD-13]** 여러 애드온이 같은 바닐라 화면에 붙어야 하면 **아무 정의도 하지 않는 `modifications`만** 쓴다. 바닐라 파일에 정의(속성 덮어쓰기 포함)를 쓰면 다른 팩의 같은 정의와 덮어쓰기 경쟁을 한다. Windows 1.26.65.1 실측에서 세 팩이 같은 `main_screen_content`에 건 `insert_back`은 셋 다 들어갔다([주장 실측](../design/json-ui-claims.mdx)). `{실측, 추론}` (출처: BC 6.3-9, BC-facts, BW-best, 2026-11-18 Windows 1.26.65.1)
 
 ### 2.5 고르는 법 요약
 
@@ -210,7 +210,7 @@ Swap the position of the existing `#example_binding_1` and `#example_binding_2` 
 
 위키(BW) 문서를 바닐라 1.26.50.4와 대조해 더한 규칙이다. 위키 문장만 있는 것은 `미검증`, 위키의 게임 스크린샷이 있는 것은 `실측`(제3자 기록)으로 표시했다.
 
-- **[MOD-14]** 위키가 문서화한 `operation`은 11가지다: `insert_back`, `insert_front`, `insert_after`, `insert_before`, `move_back`, `move_front`, `move_after`, `move_before`, `swap`, `replace`, `remove`. 기준 항목은 `controls`에서는 `"control_name": "이름"`, `bindings`에서는 `"where": { "binding_name": "#x" }`로 찾고, 두 번째 기준이 필요한 `move_after`·`move_before`·`swap`은 `"target": { … }`을 쓴다. `replace`는 `where`로 찾은 항목을 `value`로 바꾼다. 이 프로젝트 출처에서 동작이 확인된 것은 `insert_back`, `insert_front`, `remove`뿐이므로 나머지는 실험 화면에서 확인하고 쓴다(DBG-04). 엔진의 연산 이름표도 정확히 이 11가지이고(MOD-23), 두 번째 기준은 `target_control`을 먼저, 없으면 `target`을 읽는다(MOD-24). 이름과 키는 엔진에서 확인되었지만 각 연산의 게임 동작은 아직 실측되지 않았다. `{미검증, 코드}` (출처: NB-01, NB-02, 충돌 C-39)
+- **[MOD-14]** 위키가 문서화한 `operation`은 11가지다: `insert_back`, `insert_front`, `insert_after`, `insert_before`, `move_back`, `move_front`, `move_after`, `move_before`, `swap`, `replace`, `remove`. 기준 항목은 `controls`에서는 `"control_name": "이름"`, `bindings`에서는 `"where": { "binding_name": "#x" }`로 찾고, 두 번째 기준이 필요한 `move_after`·`move_before`·`swap`은 `"target": { … }`을 쓴다. `replace`는 `where`로 찾은 항목을 `value`로 바꾼다. 엔진의 연산 이름표도 정확히 이 11가지이고(MOD-23), 두 번째 기준은 `target_control`을 먼저, 없으면 `target`을 읽는다(MOD-24). Windows 1.26.65.1 실측에서 `insert_after`, `insert_before`, `move_front`, `move_back`, `move_after`, `move_before`, `swap`, `replace`가 모두 동작했다. 같은 경로 파일로 `thanks_for_testing`의 `text_panel` 자식을 옮겨 쟀고, 결과 순서는 [주장 실측](../design/json-ui-claims.mdx)에 있다. `move_before`는 `target`으로, `swap`과 `move_after`는 `target_control`로 동작했고, `insert_back`의 `value`는 객체 하나여도 들어갔다. `{코드, 실측}` (출처: NB-01, NB-02, 충돌 C-39, 2026-11-18 Windows 1.26.65.1)
 - **[MOD-15]** 바닐라 화면에 붙는 지점(진입점)은 **한 곳**으로 모은다. 여러 하위 컨트롤에 각각 `insert`하면 그중 하나의 이름만 바뀌어도 일부가 깨지고, 디버깅할 곳이 늘어난다. 내 컨트롤은 진입점 하나에 넣은 래퍼 패널 안에 둔다. `{추론}` (출처: BW-best, BW-hud)
 - **[MOD-16]** 설정 화면과 인벤토리 화면에는 엔진이 반드시 있다고 가정하는 토글이 있다(설정의 접근성 탭, 인벤토리의 construction·equipment·items·nature 탭 등). 화면을 통째로 바꾸면서 이 토글을 빼면 개발 빌드에서 assert가 난다. 숨기더라도 남겨 둔다(MOD-06). `{미검증}` (출처: BW-doc "HardCoded Toggles")
 
@@ -226,17 +226,17 @@ Cinnabar(`CN`)는 26.30 네이티브 클라이언트의 JSON UI 해석기를 재
 
 Android 1.26.52.3 클라이언트의 네이티브 라이브러리를 분석해 읽은 것이다(`NB`). 재구성이 아닌 실제 컴파일 결과라 `CN`보다 직접적이지만 수준은 `코드`다. 게임 실측과 다르면 실측을 따른다.
 
-- **[MOD-23]** 엔진의 `operation` 이름표는 MOD-14의 11개가 전부다(번호 1~11). 이름은 정확히 같아야 하고, 그 밖의 연산은 없다. 각 연산의 게임 동작은 여전히 실측이 필요하다(MOD-14). `{코드}` (출처: NB-01)
+- **[MOD-23]** 엔진의 `operation` 이름표는 MOD-14의 11개가 전부다(번호 1~11). 이름은 정확히 같아야 하고, 그 밖의 연산은 없다. 11개 모두 게임에서 동작했고, 나머지 8개는 Windows 1.26.65.1에서 쟀다(MOD-14). `{코드, 실측}` (출처: NB-01, 2026-11-18 Windows 1.26.65.1)
 - **[MOD-24]** 연산 항목의 두 번째 기준은 **`target_control`(문자열)을 먼저** 읽고, 없을 때만 `target`을 읽는다. 엔진이 읽는 항목 키는 `array_name`, `control_name`, `operation`, `where`, `target_control`, `target`, `value`다. MOD-03의 "`target_control`은 근거가 없다"는 해석 단계에서는 틀렸다. `{코드}` (출처: NB-02)
-- **[MOD-25]** `array_name`은 고정 목록과 비교하지 않고 정의에서 **같은 이름의 멤버**를 찾아 배열이면 대상으로 쓴다. `array_name`이 비어 있고 `control_name`이 문자열이면 `"controls"`로 채우므로, 컨트롤 연산은 `array_name`을 생략해도 된다. 그래서 해석 단계에서는 `controls`·`bindings` 밖의 배열도 대상이 될 수 있지만, `variables`가 무시됐다는 실측(MOD-03)과 어긋나 효과는 확인되지 않았다. `{코드, 충돌}` (출처: NB-03, 충돌 C-64)
+- **[MOD-25]** `array_name`은 고정 목록과 비교하지 않고 정의에서 **같은 이름의 멤버**를 찾아 배열이면 대상으로 쓴다. `array_name`이 비어 있고 `control_name`이 문자열이면 `"controls"`로 채우므로, 컨트롤 연산은 `array_name`을 생략해도 된다. 그래서 해석 단계에서는 `controls`·`bindings` 밖의 배열도 대상이 될 수 있다. Windows 1.26.65.1 실측에서 자기 `variables` 배열이 없는 정의의 `variables` 수정은 효과가 있어 이 해석과 맞았고, `variables`가 무시됐다는 이전 실측(MOD-03)과는 어긋난다. `{코드, 실측, 충돌}` (출처: NB-03, 충돌 C-64, 2026-11-18 Windows 1.26.65.1)
 
 ## 커뮤니티 보고로 더한 사실 (커뮤니티)
 
 (출처: 비공개 조사) 모두 보고 수준이다.
 
-- 연산은 `insert_back`·`insert_front`·`remove`가 확인되었고, 커뮤니티는 `replace`와 `where` 필터도 쓴다. 같은 컨트롤을 `remove`한 뒤 `replace`하면 실패하는데, 한 번의 `modifications` 안에서 앞 연산이 넣은 원소를 뒤 연산이 다시 고르지 못하는 성질(MOD-17)과 같다.
+- 연산은 `insert_back`·`insert_front`·`remove`가 확인되었고, 커뮤니티는 `replace`와 `where` 필터도 쓴다. 나머지 8가지 연산도 Windows 1.26.65.1 실측에서 동작했다(MOD-14). 같은 컨트롤을 `remove`한 뒤 `replace`하면 실패하는데, 한 번의 `modifications` 안에서 앞 연산이 넣은 원소를 뒤 연산이 다시 고르지 못하는 성질(MOD-17)과 같다.
 - 바닐라 화면에 내용을 덧붙이는 관용: 바닐라 namespace를 그대로 두고 슬롯 변수를 채운다. 예: `"inventory_screen": { "$additional_screen_content": "crafting.custom_panel" }`. 완성되면 `$screen_content`로 화면을 통째로 바꾼다(MOD-11).
-- **D-05 충돌(미해결)**: 같은 바닐라 요소를 여러 팩이 `modifications`하면 위 팩만 이긴다는 보고가 여럿이다. 가이드는 `modifications`가 팩 순서대로 누적된다는 실측(MOD-02)을 따른다. 보고된 사례가 속성 덮어쓰기나 `replace`를 섞은 것인지 재측정이 필요하다.
+- **D-05 충돌(부분 해소)**: 같은 바닐라 요소를 여러 팩이 `modifications`하면 위 팩만 이긴다는 보고가 여럿이다. 가이드는 `modifications`가 팩 순서대로 누적된다는 실측(MOD-02)을 따른다. Windows 1.26.65.1 실측에서 세 팩이 같은 `main_screen_content`에 `insert_back`을 하자 셋 다 들어가 누적이 확인됐다([주장 실측](../design/json-ui-claims.mdx)). 보고된 사례처럼 속성 덮어쓰기나 `replace`를 섞은 경우는 재지 않았다.
 - Marketplace 애드온은 바닐라 UI 파일을 못 고친다(월드 템플릿은 된다, D-23).
 
 ## 반영안(미적용)
@@ -252,14 +252,13 @@ Android 1.26.52.3 클라이언트의 네이티브 라이브러리를 분석해 �
 
 | ID | 주제 | 주장과 근거 | 판정 |
 | --- | --- | --- | --- |
-| C-10 | `modifications` 대상 | MJ 저장소 스펙은 `button_mappings` 배열과 `target_control` 키를 말하고, bedrock-core 실측은 `controls`, `bindings`만 닿고 `variables`는 무시된다고 한다. 엔진은 `target_control`을 실제로 읽고(NB-02) `array_name`을 고정 목록으로 거르지 않는다(NB-03) | 부분 해소: `target_control` 키는 맞다. 배열 범위는 C-64로 넘긴다 |
-| C-39 | `modifications` 연산 | 이 프로젝트 출처는 `insert_back`, `insert_front`, `remove`만 확인, 위키는 11가지와 `control_name`, `target` 키. 바닐라는 `modifications`를 쓰지 않는다. 엔진 이름표가 같은 11가지(NB-01) | 이름은 확정. 나머지 8가지의 게임 동작은 미검증 |
+| C-10 | `modifications` 대상 | MJ 저장소 스펙은 `button_mappings` 배열과 `target_control` 키를 말하고, bedrock-core 실측은 `controls`, `bindings`만 닿고 `variables`는 무시된다고 한다. 엔진은 `target_control`을 실제로 읽고(NB-02) `array_name`을 고정 목록으로 거르지 않는다(NB-03) | 부분 해소: `target_control` 키는 맞다(Windows 1.26.65.1 실측에서 `swap`, `move_after`가 동작). `variables` 무시는 같은 실측에서 재현되지 않았다. 배열 범위는 C-64로 넘긴다 |
+| C-39 | `modifications` 연산 | 이 프로젝트 출처는 `insert_back`, `insert_front`, `remove`만 확인, 위키는 11가지와 `control_name`, `target` 키. 바닐라는 `modifications`를 쓰지 않는다. 엔진 이름표가 같은 11가지(NB-01) | 해소(실측): 이름은 확정. 나머지 8가지도 Windows 1.26.65.1에서 동작했다(MOD-14) |
 | C-46 | 재선언·`modifications`의 범위 | 실측은 경로 단위, Cinnabar는 namespace와 이름만으로 합친다 | 실측 우선: MOD-02 유지 |
 | C-47 | 상속받은 자식 `remove` | 실측은 파일 전체 수정이 조용히 무효, Cinnabar는 진단만 남기고 나머지 적용 | 실측 우선: MOD-05 유지 |
-| C-64 | `modifications`가 닿는 배열 | 실측은 `controls`·`bindings`뿐이고 `variables`는 무시. 엔진 해석은 같은 이름 멤버를 찾으므로 어느 배열이든 해석된다(NB-03). 변수가 그보다 먼저 확정되어 효과가 없을 수 있다 | 미해소: `controls`·`bindings` 밖은 실측 전에 쓰지 않는다 |
+| C-64 | `modifications`가 닿는 배열 | 실측은 `controls`·`bindings`뿐이고 `variables`는 무시. 엔진 해석은 같은 이름 멤버를 찾으므로 어느 배열이든 해석된다(NB-03). 변수가 그보다 먼저 확정되어 효과가 없을 수 있다 | 부분 해소(실측): Windows 1.26.65.1에서 자기 `variables` 배열이 없는 정의의 `variables` 수정은 효과가 있었다. 이전 실측(무시)과 어긋나고, `variables`가 있는 정의와 `button_mappings`는 재지 않았다. 그 밖은 실측 전에 쓰지 않는다 |
 
 ## 실측이 필요한 항목
 
-- `insert_after`, `insert_before`, `move_*`, `swap`, `replace`의 실제 동작(MOD-14, C-39).
-- 여러 팩이 같은 바닐라 요소에 `modifications`를 걸 때 누적되는지(D-05).
-- `button_mappings` 등 `controls`·`bindings` 밖 배열에 효과가 있는지(C-64).
+- 여러 팩의 `modifications`에 속성 덮어쓰기나 `replace`가 섞일 때 어느 것이 남는지(D-05).
+- `button_mappings`, 그리고 자기 `variables` 배열이 있는 정의의 `variables`에 효과가 있는지(C-64).

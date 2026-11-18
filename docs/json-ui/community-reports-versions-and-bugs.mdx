@@ -38,7 +38,7 @@ sources:
 - **1.21.114**: `hud` namespace에서 `initial_uv`가 "unknown property"를 냈다.
 - **1.21.120/121 (GDK, 2025-11)**: 메모리 누수로 Ore UI가 로드되지 않을 수 있다는 보고가 있다. *single report*
 - **1.21.123 stable / 1.21.130.26 preview**: 다중 값 title 위치 지정이 동작함이 확인됐다.
-- **1.21.130 (stable 2025-12-09)**: 문자열 곱셈이 리터럴 `'%.Ns' * #x`로 제한됐다(동적 N, `%X.*Xs`, `%-Xs`, `%Xs` 불가. changelog에 없었고 서버 스튜디오의 크래시 수정 요청 때문이라는 설). `* 1` 숫자 변환이 깨졌다. `%.Ns`의 바이트 경계가 "수정"됐다. aux 텍스처/Chest-UI 아이템 아이콘이 깨졌다(`% 65536` 수정). `resolve_ancestor_scope` view binding이 추가됐다(updatedjsonui changelog). 1.21.13x에 새 자막과 이미지 비율 속성이 생겼다. `/reload all`과 전역 리소스 UI 리로드 버그가 생겼다.
+- **1.21.130 (stable 2025-12-09)**: 문자열 곱셈이 리터럴 `'%.Ns' * #x`로 제한됐다(동적 N, `%X.*Xs`, `%-Xs`, `%Xs` 불가. changelog에 없었고 서버 스튜디오의 크래시 수정 요청 때문이라는 설. Windows 1.26.65.1 실측에서는 동적 N이 동작했고 `%7.4s`, `%-9s`, `%9s` 같은 서식은 입력을 그대로 돌려줬다, [기록](../design/json-ui-claims.mdx#23-ns-자르기)). `* 1` 숫자 변환이 깨졌다. `%.Ns`의 바이트 경계가 "수정"됐다. aux 텍스처/Chest-UI 아이템 아이콘이 깨졌다(`% 65536` 수정). `resolve_ancestor_scope` view binding이 추가됐다(updatedjsonui changelog). 1.21.13x에 새 자막과 이미지 비율 속성이 생겼다. `/reload all`과 전역 리소스 UI 리로드 버그가 생겼다.
 - **1.21.130 / 1.21.132 (Android)**: JSON UI를 덮어써 Android 구조물 내보내기 버튼을 켜던 팩 동작이 1.21.130에서 막혔고, Ore UI로 바뀐 뒤 1.21.132에서 이런 애드온이 깨졌다. 26.60에서는 Ore UI 번들 .js로 "Export world"를 되살린 팩이 나왔다.
 - **2025-12 중순 업데이트**: `(#hud_title_text_string*1)` 진행바가 멈췄고 `+0`으로 고쳤다. 스피어 업데이트 뒤 `live_player_renderer`가 attachable을 숨겼다(layer로 수정).
 - **2026-01 preview**: Ore UI가 서버 treatments로 메뉴/설정을 대체했다. `1 * ('%.1s' * x)`가 깨졌다. stack panel `use_priority`가 생겼다. 명시 aux 아이템 렌더러가 이상해졌다(1.21.13x/preview).
@@ -51,7 +51,7 @@ sources:
 - **26.50**: lang `tile.<id>.tooltip` 아이템 툴팁이 생겼다.
 - **1.26.52.3**: `button.sub_command` 채팅 버튼이 서드파티 서버에서 클라이언트 크래시를 냈다.
 - **1.26.60.28 preview**: DDUI `styleId`가 생겼다(네이티브 모드 필요). 26.70.21에서는 `@minecraft/server-ui` 3.0.0-alpha가 모드 없이 지원한다.
-- **2026-09 (stable, 시점 불명확)**: 변수는 곱할 수 있지만 맨 숫자는 곱할 수 없게 됐다는 보고가 있다. *single report*
+- **2026-09 (stable, 시점 불명확)**: 변수는 곱할 수 있지만 맨 숫자는 곱할 수 없게 됐다는 보고가 있다. 실측: Windows 1.26.65.1에서는 맞지 않았다. `((#v - 0) * 2)`가 4에서 8이었다([기록](../design/json-ui-claims.mdx#24-숫자)).
 - **2026-09-22 preview**: JSON UI content-log 오류가 늘었다. offhand/핫바가 리팩터링됐다. 2026-10-06 preview에서 오류 로깅이 개선됐고, 2026-10-13에 오류 타입이 다시 바뀌었다. preview에서 커스텀 블록 엔티티 `container` `title`과 커스텀 컨테이너 `$container_title`이 생겼다.
 - **2026-10-15 확인**: 조준점이 `ui/hud_crosshair_overlay.json`으로 옮겨졌다.
 - **26.60 stable (2026-10-27)**: Ore UI 로딩이 빨라졌다. `@minecraft/server-ui` stable 2.3.0. 툴팁의 마법, 용도, 공격력 줄이 모두 같은 색이 되고 한국어 줄 간격이 넓다는 보고가 있다. Switch 2는 26.60부터 따로 빌드된 판을 받았다. [보충 2026-10-28]
@@ -111,7 +111,7 @@ sources:
 - **JSON UI 폐기 일정**: JSON UI는 언제 제거되는가? 예전 JSON UI 팩(서버 폼, HUD)은 Ore UI 전환 뒤에도 동작하는가? 명확한 Mojang 일정은 없다.
 - **DDUI 레이아웃/스타일 공개 시점**: 크리에이터가 레이아웃 파일을 쓰고 HUD와 컨테이너를 커스터마이즈할 수 있는 시기는 미정이다.
 - **`resolve_ancestor_scope`의 현재 상태**: 동작한다는 보고와 안 한다는 보고가 섞여 있다.
-- **문자열 `-`의 정확한 의미**: 모든 출현을 지우는가, 첫 출현만 지우는가? `* 1` 변환이 현재 버전에서 어떤 조건에서 동작하는가?
+- **문자열 `-`의 정확한 의미**: 모든 출현을 지우는가, 첫 출현만 지우는가? (Windows 1.26.65.1 실측에서 모든 출현을 지웠다, [기록](../design/json-ui-claims.mdx#22-문자열-빼기와-앞-글자).) `* 1` 변환이 현재 버전에서 어떤 조건에서 동작하는가?
 - **같은 이름 slider 문제**: `collection_index`가 다른 slider가 하나처럼 동작하는 문제와 두 slider 충돌.
 - **ancestor/scope와 `binding_condition`의 정확한 의미**: 특히 `visible`/`always_when_visible`.
 - **mob_effects_renderer Y offset이 안 먹는 이유**: 그리고 title 렌더 때 상태 효과 바가 사라지는 버그.

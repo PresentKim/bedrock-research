@@ -303,7 +303,7 @@ checked_locked_hover_control  unchecked_locked_hover_control
 연구 서버 서버(`DF`)를 만들며 Windows 1.26.52 에서 실측한 것이다. 서버 폼 하나로 여러 화면을 그리는 구조에서 얻었다.
 
 - **[INP-31]** 서버 폼 버튼은 끌 수 없다. 버튼 템플릿의 `$pressed_button_name`을 엔진이 모르는 이름(`button.df_noop`)으로 두면 눌러도 폼에 답하지 않고 호버 툴팁은 그대로 떴다(INP-05를 서버 폼에서 확인). 고른 탭·고른 칸처럼 같은 화면을 다시 보낼 뿐인 버튼에 쓴다. `&#123;실측&#125;` (출처: DF)
-- **[INP-32]** 바닐라 `common.button`·`common.toggle`은 `focus_enabled`가 켜져 있어 휴대폰에서 폼을 열면 첫 버튼이 호버 상태로 그려졌다. 폼의 모든 버튼에 `$focus_enabled: false`, 라디오 토글에 `$toggle_group_default_selected: -1`과 `$toggle_focus_enabled: false`를 준다. 라디오 토글은 형제끼리만 한 그룹이라 칸마다 부모가 다른 격자에서는 배타적이지 않았다(정적 토글에서는 다른 결과, INP-35, C-66). 상자 화면에 둔 `common_buttons.light_content_button`도 포커스를 받아 첫 버튼이 이름 툴팁을 띄운 호버 상태로 열렸고, 같은 `$focus_enabled: false`로 사라졌다. `&#123;실측&#125;` (출처: DF)
+- **[INP-32]** 바닐라 `common.button`·`common.toggle`은 `focus_enabled`가 켜져 있어 휴대폰에서 폼을 열면 첫 버튼이 호버 상태로 그려졌다. 폼의 모든 버튼에 `$focus_enabled: false`, 라디오 토글에 `$toggle_group_default_selected: -1`과 `$toggle_focus_enabled: false`를 준다. 라디오 토글은 형제끼리만 한 그룹이라 칸마다 부모가 다른 격자에서는 배타적이지 않았다(정적 토글에서는 다른 결과, INP-35, C-66). Windows 1.26.65.1에서는 이 결과가 재현되지 않았다: 부모 `stack_panel`이 다른 같은 `toggle_name` 토글도, grid가 만든 토글끼리도 배타적이었다([실측 기록](../design/json-ui-claims.mdx)). 상자 화면에 둔 `common_buttons.light_content_button`도 포커스를 받아 첫 버튼이 이름 툴팁을 띄운 호버 상태로 열렸고, 같은 `$focus_enabled: false`로 사라졌다. `&#123;실측&#125;` (출처: DF)
 
 ## 7.6 엔진 동작 분석으로 더한 규칙
 
@@ -325,7 +325,7 @@ StarLibV2(`jb-starlibv2`, GPL-3.0)는 입력창 글자로 서버 폼 버튼을 �
 
 ### 7.7.1 반영안(미적용)
 
-- **[INP-25 제안]** 입력창의 글자는 바닐라 `common.text_edit_box`의 `property_bag` `"#property_field": "#item_name"`에 따라 그 입력창 컨트롤의 `#item_name`에 들어간다. 다른 컨트롤은 `source_control_name`(입력창 이름 = `$text_box_name`)과 `source_property_name: "#item_name"`으로 읽는다. 액션 폼 버튼을 이 값으로 포함 검사해 숨기면 서버 왕복 없는 검색 필터가 된다. `{바닐라, 작동팩, 미검증}` (출처: VN ui_common.json:1416 외 11회, SLB 6장). 가이드 본문에는 아직 적용되지 않았다.
+- **[INP-25 제안]** 입력창의 글자는 바닐라 `common.text_edit_box`의 `property_bag` `"#property_field": "#item_name"`에 따라 그 입력창 컨트롤의 `#item_name`에 들어간다. 다른 컨트롤은 `source_control_name`(입력창 이름 = `$text_box_name`)과 `source_property_name: "#item_name"`으로 읽는다. 액션 폼 버튼을 이 값으로 포함 검사해 숨기면 서버 왕복 없는 검색 필터가 된다. `{바닐라, 작동팩, 미검증}` (출처: VN ui_common.json:1416 외 11회, SLB 6장). 가이드 본문에는 아직 적용되지 않았다. Windows 1.26.65.1에서 재지 못했다: 측정 도구의 키 입력이 액션 폼 창 안의 `common.text_edit_box`에 들어가지 않았고, 도구 탓인지 화면 탓인지 나누지 못했다([실측 기록](../design/json-ui-claims.mdx)).
 
 **실측 필요**: `common.text_edit_box` 입력 중 다른 컨트롤이 읽은 `#item_name`이 글자마다 갱신되는지, 폼을 다시 열면 비워지는지.
 
@@ -333,7 +333,7 @@ StarLibV2(`jb-starlibv2`, GPL-3.0)는 입력창 글자로 서버 폼 버튼을 �
 
 서버 폼 팩토리·렉 시험 애드온(`FFR`)을 모바일에서 실측한 것이다(2026-11-14). 애드온 구성은 [서버 폼 연구 화면](../design/server-form-research-screen.mdx)에 있다.
 
-- **[INP-35]** 라디오 그룹은 부모가 아니라 `toggle_name`으로 묶였다. 같은 이름의 토글 48개를 가로 스택 6줄에 나눠 두어도 한 번에 하나만 선택됐다. `toggle_group_default_selected: -1`이면 처음에 아무것도 선택되지 않는다. INP-32(DF, 칸마다 부모가 다른 격자에서는 배타적이지 않음)와 다른 결과다(C-66). FFR은 토글을 정의에 정적으로 두었고, DF 격자의 칸이 grid나 팩토리로 만들어졌는지는 확인하지 않았다. `&#123;실측, 충돌&#125;` (출처: FFR)
+- **[INP-35]** 라디오 그룹은 부모가 아니라 `toggle_name`으로 묶였다. 같은 이름의 토글 48개를 가로 스택 6줄에 나눠 두어도 한 번에 하나만 선택됐다. `toggle_group_default_selected: -1`이면 처음에 아무것도 선택되지 않는다. INP-32(DF, 칸마다 부모가 다른 격자에서는 배타적이지 않음)와 다른 결과다(C-66). FFR은 토글을 정의에 정적으로 두었고, DF 격자의 칸이 grid나 팩토리로 만들어졌는지는 확인하지 않았다. Windows 1.26.65.1에서도 같았다: 서로 다른 부모 `stack_panel` 두 곳에 둔 같은 `toggle_name` 토글은 하나를 누르면 다른 부모의 토글이 꺼졌고, grid가 만든 토글끼리도 배타적이었다([실측 기록](../design/json-ui-claims.mdx)). `&#123;실측&#125;` (출처: FFR)
 - **[INP-36]** 서버 폼 안의 탭과 목록 선택은 서버를 거치지 않고 라디오 토글로 바꿀 수 있다. 칸 토글의 `checked` 상태 컨트롤 안에 그 칸의 상세 패널을 두면 칸을 누를 때 상세만 바뀌고 폼은 닫히지 않는다. 서버에 알릴 동작(진행 버튼)만 폼 버튼(`button.form_button_click`)으로 둔다. `toggle_group_default_selected`는 정적 값이라 처음 열 탭마다 레이아웃을 따로 두고 제목으로 고른다. `&#123;실측&#125;` (출처: FFR)
 - **[INP-37]** 상자 화면에서 슬라이더를 끄는 동작 자체는 서버에 닿지 않는다. 슬라이더 옆에 단계마다 숨은 칸 버튼을 두고 `(#slider_value = k)`(`source_control_name`으로 슬라이더에서 읽음)일 때만 보이게 하며, 그 버튼에 `button.menu_select`를 `button.container_auto_place`로 보내는 `global` 매핑(`consume_event: false`)을 주면, 손을 뗄 때 지금 단계 값이 서버로 갔다. global 매핑은 화면 어디서 손을 떼도 눌리므로 서버는 같은 값을 무시한다. 한 화면에 슬라이더가 여럿이면 값이 섞인 적이 있다. 자세한 시도와 원인은 [인벤토리 UI로 슬라이더 구현하기](../design/inventory-ui-ddui/slider.mdx). `&#123;실측&#125;` (출처: IUC)
 - **[INP-38]** 위치로 받는 `pressed` 매핑에 `consume_event: false`를 주어도 겹친 아래 컨트롤은 누름을 받지 못했다(숨은 단계 버튼이 위면 슬라이더가 움직이지 않고, 슬라이더가 위면 버튼이 눌리지 않았다). 슬라이더의 드래그 매핑에 `consume_event: false`를 주면 손을 뗀 자리의 칸 버튼도 눌렸고, 바닐라 매핑 그대로여도 끌기를 마친 손 아래의 탭 칸이 눌렸다. 그래서 끌기 값이 바뀐 틱의 탭 칸 눌림은 서버에서 버린다(*미검증*, 모의만). `&#123;실측&#125;` (출처: IUC)

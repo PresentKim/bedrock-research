@@ -46,38 +46,38 @@ This is the result of matching guide rules and community reports on the same top
 
 | ID | Contents | Strength of community evidence | Related rule |
 | --- | --- | --- | --- |
-| D-13 | **The preserved title (latch) pattern works.** Several people confirmed it as the standard of the HUD data channel through 2026-07 | *confirmed* | BND-18 (`unverified` -> candidate to raise) |
-| D-14 | Hidden grid items also take up space | Several reports | LAY-31 (`unverified` -> candidate to raise) |
-| D-04 | In 1.21.130 (2025-12), dynamic N (`('%.' + #n + 's')`) and formats other than `'%.Ns'` were blocked. Put the format string on the left | *confirmed* (not in the changelog) | EXP-09, EXP-25 |
-| D-01 | The `* 1` conversion stopped in turn around 1.21.130, 2026-01 and 1.26.30 | Several reports | EXP-16, C-04 (supports the version change hypothesis) |
-| D-03 | Put a real number in a JSON variable (`"$k": 0.01`) and multiply. `(#x / 1.0)` crashes | Several reports | EXP-18, EXP-27 |
+| D-13 | **The preserved title (latch) pattern works.** Several people confirmed it as the standard of the HUD data channel through 2026-07. Not measured on Windows 1.26.65.1: in the DLL-injected measurement setup any `ui/hud_screen.json` in the pack crashed the game on world entry | *confirmed* | BND-18 (`unverified` -> candidate to raise) |
+| D-14 | Hidden grid items also take up space. Measured (Windows 1.26.65.1): in a [4,1] grid with item 1 hidden, items 2 and 3 stayed in place ([record](../design/json-ui-claims.mdx)) | Several reports | LAY-31 (confirmed by measurement) |
+| D-04 | In 1.21.130 (2025-12), dynamic N (`('%.' + #n + 's')`) and formats other than `'%.Ns'` were blocked. Put the format string on the left. Measured (Windows 1.26.65.1): dynamic N worked (with `#v` as `3`, `(('%.' + #v + 's') * 'abcdef')` gave `abc`). `%7.4s`, `%-7.4s`, `%9s`, `%-9s`, `%09s` and `%4.2s` returned the input unchanged. Only the part about blocked formats held | *confirmed* (not in the changelog) | EXP-09, EXP-25 |
+| D-01 | The `* 1` conversion stopped in turn around 1.21.130, 2026-01 and 1.26.30. Measured (Windows 1.26.65.1): `('4' * 1)` was an empty string, `(('4' * 1) = 4)` was false and `(('4' - 0) = 4)` was true. As reported, `* 1` does not convert | Several reports | EXP-16, C-04 (supports the version change hypothesis) |
+| D-03 | Put a real number in a JSON variable (`"$k": 0.01`) and multiply. `(#x / 1.0)` crashes. Measured (Windows 1.26.65.1): decimal literals with a leading digit were integers (`0.3` gave 0, `1.5` gave 1, `100.0` gave 100), and `.3` was computed as a decimal (`((10 * .3) = 3)` was true). A real-number result did not show even when concatenated to a string. The `(#x / 1.0)` crash was not tested | Several reports | EXP-18, EXP-27 |
 | D-23 | Marketplace add-ons cannot modify vanilla UI files (world templates can). The `%` assert is a cause of Marketplace certification failure | Several reports | EXP-02, chapter 12 |
 | D-24 | `$container_title` is compared as a copy outside `variables`. In the preview, custom block entity containers also support `title` | Several reports / preview | HOST-19, FILE-28 |
 | D-25 | How to use the renderers `live_player_renderer`, `live_horse_renderer` (`#entity_id` is a string), `3d_structure_renderer` and `gradient_renderer` | Many reports | ANI-05 |
 | D-26 | `/reload all` rereads JSON UI but often fails after 1.21.130 | Several reports | DBG-18 |
-| D-27 | The 32-bit integer limit, big entity IDs as strings | Reports | EXP-30 |
+| D-27 | The 32-bit integer limit, big entity IDs as strings. Measured (Windows 1.26.65.1): `2147483647 + 1` gave `-2147483648` | Reports | EXP-30 |
 | D-28 | The vanilla RP is distributed as `.brarchive` from 26.50 | *confirmed* | Chapter 13 how to compare against vanilla |
 
 ### 16.3 What still differs
 
 | ID | Topic | Guide | Community | Current judgment |
 | --- | --- | --- | --- | --- |
-| D-02 | Number conversion `+ 0` | `(#v + 0)` is concatenation (`'350'`), `(0 + #v)` and `(#v - 0)` convert [EXP-16][EXP-31] | Recommends `(0 + #str)` or `(#str + $zero)` (`"$zero": 0.0`) | Use `(0 + #v)` and `(#v - 0)` with the number on the left. Confirm `(#v + $zero)` in game before use |
-| D-05 | `modifications` of several packs | Accumulates in pack order [MOD-02] (measured) | For the same vanilla element, only the upper pack wins (several reports) | Follow measurement, but re-measure whether the reported cases mixed in property overrides or `replace` |
-| D-06 | The scope of an error in a file | Definitions read up to before the error are loaded [FILE-30] (CN) | The whole file is ignored | Either way, assume the latter part of that file does not exist and fix the error |
-| D-07 | The `%` operator | Do not use. Assert in development builds [EXP-02], silent in release [EXP-46] | Chest-UI's `% 65536` fixed version works as *confirmed*, and it is also a cause of Marketplace certification failure | They are not contradictory. It runs in release but raises an assert. Change to an expression without `%` |
-| D-08 | String `-` | Erases **every** occurrence [EXP-12] | Most say "all", one person says "only the first" | Assume it erases all and do not put the delimiter in the body |
-| D-10 | String `<` and `>` | No rule | Lexicographic comparison (one report) | Check before use |
+| D-02 | Number conversion `+ 0` | `(#v + 0)` is concatenation (`'350'`), `(0 + #v)` and `(#v - 0)` convert [EXP-16][EXP-31] | Recommends `(0 + #str)` or `(#str + $zero)` (`"$zero": 0.0`) | Use `(0 + #v)` and `(#v - 0)` with the number on the left. `(#v + $zero)` (JSON `0.0`) became a number on Windows 1.26.65.1 (`(('4' + $zero) + 1)` gave 5, while `('4' + 1)` gave `41`). But the log warned `Expected variable not found in ancestor tree: '$zero'` ([record](../design/json-ui-claims.mdx)) |
+| D-05 | `modifications` of several packs | Accumulates in pack order [MOD-02] (measured) | For the same vanilla element, only the upper pack wins (several reports) | Follow measurement. On Windows 1.26.65.1 the controls that three packs added with `insert_back` to the same `server_form` `main_screen_content` were all present (accumulated). Cases that mix in property overrides or `replace` were not measured |
+| D-06 | The scope of an error in a file | Definitions read up to before the error are loaded [FILE-30] (CN) | The whole file is ignored | Either way, assume the latter part of that file does not exist and fix the error. Measured (Windows 1.26.65.1): an unknown type in the middle did not stop the following definitions from loading, and a JSON syntax error in the middle did (`UI control reference not found`). The definitions before the error were created, so the guide side held |
+| D-07 | The `%` operator | Do not use. Assert in development builds [EXP-02], silent in release [EXP-46] | Chest-UI's `% 65536` fixed version works as *confirmed*, and it is also a cause of Marketplace certification failure | Change to an expression without `%`. Measured (Windows 1.26.65.1, a label `#text` expression): a `%` expression gave no value and logged `Invalid expression`. The `#item_id_aux` use (EXP-46) was not measured again. `(a - (a / b) * b)` worked (17 mod 5 gave 2, -7 mod 3 gave -1) |
+| D-08 | String `-` | Erases **every** occurrence [EXP-12] | Most say "all", one person says "only the first" | Assume it erases all and do not put the delimiter in the body. Measured (Windows 1.26.65.1): `('xaxbx' - 'x')` gave `ab`, removing every occurrence |
+| D-10 | String `<` and `>` | No rule | Lexicographic comparison (one report) | The report held. Measured (Windows 1.26.65.1): `('b' < 'c')` was true and `('b' > 'c')` was false |
 | D-11 | `binding_condition` on a view binding | `always` and `visible` were effective on a layout `#visible` [BND-31][BND-32] (measured) | A report that it cannot be put on a view binding | Follow measurement |
-| D-12 | `resolve_ancestor_scope` | Do not use [BND-01] | Reports of working and not working are mixed | Do not use |
+| D-12 | `resolve_ancestor_scope` | Do not use [BND-01] | Reports of working and not working are mixed | Do not use. Measured (Windows 1.26.65.1): it was accepted without an error and read the ancestor, but a read without the flag found the same ancestor. `resolve_sibling_scope: true` restricted the search (the sibling was read and the cousin was empty) |
 | D-15 | A static `offset` binding | Does not work [LAY-05] (measured), CN says it works [C-44] | Reports of working and not working are mixed | Use spacer size or `#anchored_offset_value_*` |
 | D-16 | The `#alpha` binding | Only 0 and 1 apply (S12), CN takes the number as is [C-45] | Unstable, for example 0.75 not showing, replaced by `#color` | Make intermediate opacity with animation or color |
 | D-17 | Button focus | Vanilla `common.button` has focus on so the first button is drawn hovered on phones [INP-32] | Raw buttons have `focus_enabled` default false, needed for controller navigation | Both are right. The difference is template versus raw button |
 | D-18 | `$touch` in server forms | A global platform variable [FILE-29] | One report that it cannot be used in server forms | Check when using in a server form |
 | D-19 | Number of NPC dialogue buttons | Both the 6-button limit and extending to 9 with NBT are unconfirmed [HOST-24] | "Up to 6" and "limit lifted by NPC NBT" are both reported | Design with 6 as the default |
-| D-20 | The `data_control` position of the preserved title | No rule | At the root (majority) / as a child of the bar image (one tutorial) | Put it at the root |
-| D-21 | Translation with arguments `translate('key', #a)` | No rule | Reports of working and not working are mixed | Do not use. Assemble lang keys [TXT-09] |
-| D-22 | `#anchored_offset_value_*_absolute` | No rule | Reports of existing and not existing are mixed | Use ratio values |
+| D-20 | The `data_control` position of the preserved title | No rule | At the root (majority) / as a child of the bar image (one tutorial) | Put it at the root. Not measured on Windows 1.26.65.1: in the DLL-injected measurement setup any `ui/hud_screen.json` in the pack crashed the game on world entry |
+| D-21 | Translation with arguments `translate('key', #a)` | No rule | Reports of working and not working are mixed | Do not use. Assemble lang keys [TXT-09]. Measured (Windows 1.26.65.1): `translate('gui.ok', #v)` gave an empty result |
+| D-22 | `#anchored_offset_value_*_absolute` | No rule | Reports of existing and not existing are mixed | Use ratio values. Measured (Windows 1.26.65.1): `#anchored_offset_value_x_absolute` had no effect. `#size_binding_x_absolute` exists (20 gave a width of 20) |
 
 D-09 (string division) was merged into 16.1. No guide rule was changed by this cross-check. The order is to confirm the candidates to raise (D-13, D-14) and the reinforcement candidates once in game and then reflect them in the guide chapter files.
 
