@@ -1,7 +1,7 @@
 ---
 title: "Optimizing: binding expression caching"
 description: Instead of stamping a fixed expression per cell number, keep one expression in the definition and pass only values such as the cell position as variables. The rules for variables inside expressions, and the measured cost of HUDs with 64 to 512 cells.
-sidebar_position: 1.5
+sidebar_position: 3
 sources:
   - repo-guide
   - private-research
@@ -11,7 +11,7 @@ sources:
 
 # Optimizing: binding expression caching
 
-Screens with many cells use almost the same expression in every cell. For example, the expression that takes cell n out of the HUD subtitle differs only in where it cuts. Until now a generator stamped a fixed expression per cell number and `requires` picked one ([HUD item icons](./hud-item-icons.mdx) section 3.3). This page covers a setup that keeps the expression in the definition **once** and passes only values such as the position to each cell instance. Every cell reuses the one expression, so this page calls it "expression caching".
+Screens with many cells use almost the same expression in every cell. For example, the expression that takes cell n out of the HUD subtitle differs only in where it cuts. Until now a generator stamped a fixed expression per cell number and `requires` picked one ([HUD item icons](../hud-item-icons.mdx) section 3.3). This page covers a setup that keeps the expression in the definition **once** and passes only values such as the position to each cell instance. Every cell reuses the one expression, so this page calls it "expression caching".
 
 In short: at 64 cells no difference between the two methods could be seen, but at 256 cells the frame rate was about 22 against 4 to 5, and at 512 cells about 14 against 1 to 2 (section 6, measured). Both methods drew the same result (section 4).
 
@@ -43,7 +43,7 @@ A cell definition with fixed expressions looks like this.
 | Building a binding name from a variable | `('#' + $v)`, `"$v": "hover_text"` | Read `#hover_text` (chest screen) |
 | Binding expression with no `#` property at all | `('§r' + $v)` | "Must define a source property name in the binding!" in the content log, and none of that control's bindings worked |
 
-- The variable's value goes in as **one string**. It is not parsed again as an expression. This matches the record that joining a variable holding an expression in a label `text` with `('§r' + $variable)` attached the expression as plain text instead of computing it ([HUD item icons](./hud-item-icons.mdx) section 4).
+- The variable's value goes in as **one string**. It is not parsed again as an expression. This matches the record that joining a variable holding an expression in a label `text` with `('§r' + $variable)` attached the expression as plain text instead of computing it ([HUD item icons](../hud-item-icons.mdx) section 4).
 - So put values without quotes in variables. In a server form, `(#form_button_text - $df_marker)` with a quoted value like `"$df_marker": "'§0§3§r'"` left the marker buttons hidden (BND-33). The quotes most likely went in as characters and did not match the button text (*inference*). Quoted and unquoted values were not tested side by side.
 - Variables inside binding expressions are also the long-used form of the community preserved title pattern (`(#preserved_text - $update_string)` with the value `"overlay:"`) (BW-title, community reports).
 
@@ -117,7 +117,7 @@ Test pack recording (mobile, 2026-11-16). Fixed expressions at 64, 256 and 512 c
 
 - At 64 cells both methods kept up with a title every tick and no stutter could be seen. A separate recording showed the same.
 - From 256 cells the whole screen with fixed expressions fell to a few frames a second. With one expression the screen frame rate was about 5 times higher at the same cell count.
-- One expression also slows down as cells grow: about 14 frames at 512 cells. Creating and laying out the cells and drawing the icons still cost ([JSON UI optimization](./json-ui-performance/index.mdx) section 1).
+- One expression also slows down as cells grow: about 14 frames at 512 cells. Creating and laying out the cells and drawing the icons still cost ([JSON UI optimization](./index.mdx) section 1).
 - The figures were counted from recordings, on one device in one run. They differ between devices.
 
 ## 7. Guidelines
@@ -144,8 +144,8 @@ Test pack recording (mobile, 2026-11-16). Fixed expressions at 64, 256 and 512 c
 
 | ID | Page | Content |
 | --- | --- | --- |
-| BND-12, BND-33 | [Bindings](../json-ui/bindings.mdx) | Whole expression from a variable, variables inside expressions |
-| COL-14, COL-17 | [Collections and factories](../json-ui/collections-and-factory.mdx) | Redeclaring engine factories, factory variables |
-| ANI-06 | [Images and animation](../json-ui/images-and-animation.mdx) | Item renderer and `#item_id_aux` |
+| BND-12, BND-33 | [Bindings](../../json-ui/bindings.mdx) | Whole expression from a variable, variables inside expressions |
+| COL-14, COL-17 | [Collections and factories](../../json-ui/collections-and-factory.mdx) | Redeclaring engine factories, factory variables |
+| ANI-06 | [Images and animation](../../json-ui/images-and-animation.mdx) | Item renderer and `#item_id_aux` |
 
 Items marked "community reports" come from private research (community conversations). Measurements were made with this wiki's test packs and example add-on.
