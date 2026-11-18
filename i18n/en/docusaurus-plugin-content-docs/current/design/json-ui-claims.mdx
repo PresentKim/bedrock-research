@@ -270,12 +270,52 @@ Measured in a panel inserted into `hud.root_panel` with `insert_front`. In the f
 
 - The minimap expression does not freeze on this build, but it does not give a value either. Adding or subtracting a term that multiplies a comparison and then dividing gives empty, so the negative correction needs another expression. Without the comparison term, `((#v - 0) - 15) / 16` was right.
 - The cause of the window 5 freeze was not separated. The same expression with the same value was normal in window 1, so the expression alone is not the cause. Window 5 also holds other experiments: a 1x1 lazy grid, a global binding that does not exist, `$touch` panels and named views.
-- A world saved with the 12-texture entity could be entered again only after that entity definition was taken out of the pack.
+- A world saved with the 12-texture entity could be entered again only after that entity definition was taken out of the pack. Entering without the definition still left the entity in the world, so putting the definition back froze the next entry again.
+
+### 6.5 Decimal literals, alpha, string division, HUD, rendering queries
+
+2026-11-19, same version. Expression rows were measured in window 7 (`§b§wjc:7`, buttons `50`, `7abc`, `a-b-a`, `abc|UI|def`). Bars are an 80x5 `textures/ui/White` image with `clip_direction: "left"` and a bound `#clip_ratio`. Division expressions did not freeze in this window.
+
+| Item | Setup | Result | Related |
+|---|---|---|---|
+| `100.0` literal | `((#v - 0) / 100.0)` and `(((#v - 0) / 100.0) > 0)` on `50` | `0`, `false` | EXP-27 |
+| `4.5` literal | `(((#v - 0) * 4.5) > 210)` | `false` (multiplied by 4) | EXP-27 |
+| JSON variable `100.0` | `"$hm": 100.0`, `(((#v - 0) / $hm) > 0)` | `true`. The bar `((#v - 0) / $hm)` was half | EXP-27 |
+| Bar ratio | `((#v - 0) / 100.0)`, `* .01`, `* 0.01` | full (0), half, full (0) | ANI-03 |
+| Multiply a cut string by 1, then divide | `((1 * ('%.2s' * #v)) / $hm)` on a bar | half (0.5), no freeze. Rows that concatenated the same value as text or compared it with `= 50` or `> 0` were empty | EXP-49, C-48 |
+| Bound `#alpha`, no declaration | only the view binding target is `#alpha`, no `"alpha"` on the image. Values `.5`, `1.0`, integer 1, `true`, `$half` (0.5) | all invisible | LAY-13 |
+| Bound `#alpha`, declared | `"alpha": "#alpha"` on the image. Values `.2`, `.5`, `.9`, integer 1 | drawn with a different transparency for each value | LAY-13 |
+| `('#if_' + boolean)` lookup | label `property_bag` `{"#if_true": "YES", "#if_false": "NO"}`, `#text` from `('#if_' + ((#v - 0) > 10))` | `YES` for `50 > 10`, `NO` for `50 > 90`. `('R' + ('#if_' + boolean))` gave only `R` | COL-39, EXP-30 |
+| `($bt)` in an expression | `"$bt": "#v"`, `('R' + ($bt))` | `R50` (read as a property) | BND-33 |
+| Variable whose value is an expression | `"$tid": "ab"`, `"$us": "('%' + $tid + '%')"`, `('R' + $us)` | empty | BND-33 |
+| One extra closing parenthesis | `('R' + (#v - 0)))` | `R50` | parentheses |
+| One missing closing parenthesis | `('R' + ((#v - 0) + 1)` | `R51` | parentheses |
+| String starting with a digit | `(#v - 1 + 2)` and `(#v - 0)` on `7abc` | `9`, `7` | EXP-30 |
+| Unquoted `§t§r` | `('R' + (§t§r + #v))` | `R50` | EXP-41 |
+| String / string, binding | `('a-b-a' / 'a')`, `(('abc\|UI\|def' / '\|UI\|') > 0)` | `2`, `true`. No freeze | EXP-32, EXP-49 |
+| String / string, `requires` | `"requires": "($ct / '\|UI\|')"` in `variables`, `$ct` is `abc\|UI\|def` or `abcdef` | true for the first, false for the second. No freeze | EXP-21, EXP-32 |
+| String / string, `ignored` | `"ignored": "($ct / '\|UI\|')"`, the same two values | both created | EXP-32 |
+| `#form_button_length` | a 4-button form after a 30-button form | `4` | COL-34 |
+| `once` title check in `long_form` | both the `#title_text` binding and the view binding `once`, `('%.6s' * #title_text)` | `Marker` from the first open | BND-07 |
+| HUD `#gui_scale` | global binding `#gui_scale` (`always`) read by concatenation and by comparisons (`> 0` and so on) | both lines empty, no log | gui_scale |
+| Title without a latch | a HUD label reads `#hud_title_text_string` directly | the last title stayed 22 seconds after the title disappeared. Empty after re-entering the world | HOST-27 |
+| HUD `render_only_when_topmost: false` | only on `hud_screen`, then a title after opening a server form | the HUD was not drawn (same after re-entering the world) | HOST-44 |
+| Glyph pages 2560, 384, 4096 | `glyph_EB` 2560, `glyph_EC` 384, `glyph_ED` 4096, cell 0 a red square | all three drawn. Size in proportion to the cell pixels | file-formats |
+| `q.client_memory_tier` | render controller `Array.t[q.client_memory_tier]`, 5 elements | index 4 (white) | render-controllers |
+| `q.graphics_mode_is_any` | `Array.g[q.graphics_mode_is_any('deferred') + 2 * q.graphics_mode_is_any('fancy')]` | index 2. With fancy graphics `'fancy'` true, `'deferred'` false | render-controllers |
+| Material `depthFunc: "Greater"` | box entities with a material whose parent is `entity_alphatest`, one on open ground and one behind a stone block | the one on open ground showed only its shadow. The one behind the stone drew only the part overlapping the stone's side face | materials |
+| `q.property` and `query.can_fly` in a particle | a particle emitted by an entity animation takes its size from `q.property('bwiki:size')` and its color from `query.can_fly`. An entity with property 8 and no `can_fly`, and one with property 2 and `minecraft:can_fly` | large red for the first, small blue for the second. The emitting entity's values | particles |
+
+- A bound `#alpha` applied only when the image had `"alpha": "#alpha"`. Without the declaration even the integer 1 was invisible. With it, values between 0 and 1 drew as they are.
+- The result string of `('#if_' + boolean)` starts with `#`, so it was read again as a property name (EXP-30). That is why a `property_bag` key gives a value, and concatenating other text in front gives an empty property.
+- The 9 from `(#v - 1 + 2)` looks like `'7abc' - 1` doing string subtraction (there is no `1` to erase) and leaving `'7abc'`, which is read again as the integer 7 before 2 is added. On a title that starts with a digit, `- 1` is not subtraction.
+- String / string did not freeze in `requires` or in bindings. The EXP-49 freeze came from string / number.
 
 ## 7. Items that could not be measured
 
 - **Live input filter** (INP-25): a `common.text_edit_box` inside the action form window showed the hover border, but the tool's keyboard input (PostMessage, SendInput) did not put text into it. Whether the tool or the screen not forwarding input is the cause was not separated.
 - Bound `#alpha` 0.5 (C-45, needs pixel comparison), expressions that risk a hang such as string division, `#item_id_aux` ranges with custom items, the NPC dialogue button count and a slider-driven `#anchored_offset_value_x` were left out of this list. Particle playback is outside JSON UI and was not covered.
+- Of the candidates received with section 6.5, these were not measured. Attachables (`q.property` without `c.owning_entity`, `q.mark_variant`, the armor stand condition) need a player with properties or a test entity that holds items. Gamepad focus (`#toggle_on_hover`) and `$touch` on a touch device need devices that were not available. `#entity_id` of `live_horse_renderer` needs a runtime entity number. `$container_title` in chest screen `requires`, `flip_book` without `frame_step`, the phase of `q.time_stamp`, glyph warm-up, an `.fsb` holding MP3 data, and path key edits of a user namespace split across two files were also left out this time.
 
 ## 8. Measurement add-on
 
@@ -288,3 +328,4 @@ Measured in a panel inserted into `hud.root_panel` with `insert_front`. In the f
 5. The latch values (`saved`, `now`, `child latch`) show at the top left of the HUD. Send titles containing `JUC`, such as `/title @s title JUC one`, to follow the order in section 6.2. Sending `off` to the action bar hides the parent of `child latch`. The constant `alpha` and the two screen flags change vanilla behaviour, so they are not in the add-on; add them to `ui/hud_screen.json` and `ui/server_form.json` as in the section 6.2 table to check them. The `state` line is the self-referencing state of section 6.3 and changes with titles containing `XON` and `XOFF`. Below it are the glyph pages E9 and EA.
 6. `/summon bwiki:juc_arr1`, `/summon bwiki:juc_arr4` and `/summon bwiki:juc_mat` call the rendering test entities of section 6.3.
 7. The texture count entities of section 6.4 are `bwiki:juc_tex5`, `juc_tex8`, `juc_tex9`, `juc_tex10`, `juc_tex11`, `juc_tex12`, `juc_plain12`, `juc_arr15`, `juc_arr15used1` and `juc_one15`. `juc_tex12`, `juc_plain12` and `juc_arr15` freeze or end the client, so call them only in a world you can throw away. See the particle counter with `/particle bwiki:juc_counter ~ ~1 ~3`.
+8. For the expressions and bars of section 6.5, open window 7 with `/scriptevent bwiki:json_ui_claims x`. The rendering probes are `bwiki:juc_tier`, `juc_gfx`, `juc_greater`, `juc_emit` and `juc_emit_fly`. The HUD shows two `#gui_scale` lines and the glyph pages EB, EC and ED.

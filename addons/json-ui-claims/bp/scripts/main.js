@@ -12,6 +12,8 @@ const EXPRESSION_INPUTS = [
 
 const P5_BUTTONS = ["a", "b", "c", "d", "e", "f", "abcabc", "100"];
 
+const P7_BUTTONS = ["50", "7abc", "a-b-a", "abc|UI|def"];
+
 function buttonsForm(title, body, texts) {
   const form = new ActionFormData().title(title).body(body);
   for (const text of texts) form.button(text);
@@ -58,6 +60,7 @@ const PROBES = [
   { key: "3", label: "P3 files and modifications", build: () => buttonsForm("§b§wjc:3", "P3", []) },
   { key: "4", label: "P4 form controls (44 rows)", build: mixedRowsForm },
   { key: "5", label: "P5 more claims", build: () => buttonsForm("§b§wjc:5", "P5", P5_BUTTONS) },
+  { key: "x", label: "P7 literals and lookups", build: () => buttonsForm("§b§wjc:7", "P7", P7_BUTTONS) },
   { key: "6", label: "Marker: two lines with ~x", build: () => buttonsForm("Marker probe", "first line\nsecond line ~x", ["ok"]) },
   { key: "7", label: "Marker: two lines without marker", build: () => buttonsForm("Marker probe", "first line\nsecond line", ["ok"]) },
   { key: "8", label: "Marker: one line with ~x", build: () => buttonsForm("Marker probe", "one line ~x", ["ok"]) },

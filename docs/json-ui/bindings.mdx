@@ -123,7 +123,7 @@ MS Learn `minecraft:ui_element` 문서의 `bindings` 항목은 `binding_collecti
 - **[BND-04]** **바인딩된 속성은 그 바인딩을 가진 컨트롤의 것이다.** 버튼에 컬렉션 바인딩을 두고 두 단계 아래 라벨에서 `#form_button_text`를 쓰면 빈칸이 된다. 값은 그것을 그리는 컨트롤이 직접 바인딩하거나, view 바인딩으로 복사한다(BND-08). `{실측}` (출처: BC-S7)
 - **[BND-05]** view 바인딩 식에 `#속성`이 하나도 없으면 `Must define a source property name in the binding!` 오류가 나고, 그 컨트롤의 **bindings 배열 전체**가 버려진다. 상수를 쓰려면 `((#v = #v) * 40)`처럼 아무 속성이나 끼운다. Cinnabar 재구성은 그 바인딩 하나만 버리지만 실측을 따른다(충돌 C-43). `{실측}` (출처: BC-S12, 충돌 C-43)
 - **[BND-06]** 한 번만 정해지면 되는 값(토스트 아이콘 표시 여부 등)은 `"binding_condition": "once"`로 비용을 줄인다. 팩토리가 컨트롤을 다시 만들면 다시 평가된다. `{작동팩}` (출처: BA 6장, AP 4.5)
-- **[BND-07]** 팩토리가 만든 셀 안의 바인딩은 너무 일찍 실행되어 빈 값으로 남을 수 있다(포커스를 잃었다 돌아오면 그제야 보임). `binding_condition: "always"`를 주거나, 팩토리 바깥에서 읽고 `source_control_name`으로 복사해 넣는다. 셀 안의 `visible`도 `always`면 즉시 적용된다. 셀은 바깥 컨트롤을 읽을 수 있지만 바깥은 셀을 읽지 못한다(BND-19). `{실측}` (출처: BC-S11, 충돌 C-11, BW-dyn)
+- **[BND-07]** 팩토리가 만든 셀 안의 바인딩은 너무 일찍 실행되어 빈 값으로 남을 수 있다(포커스를 잃었다 돌아오면 그제야 보임). `binding_condition: "always"`를 주거나, 팩토리 바깥에서 읽고 `source_control_name`으로 복사해 넣는다. 셀 안의 `visible`도 `always`면 즉시 적용된다. 셀은 바깥 컨트롤을 읽을 수 있지만 바깥은 셀을 읽지 못한다(BND-19). 서버 폼 `long_form` 안 라벨에서 `#title_text` 바인딩과 view 바인딩을 모두 `once`로 둔 제목 검사는 처음 열 때부터 맞았다([실측 기록](../design/json-ui-claims.mdx#65-소수-리터럴-alpha-문자열-나누기-hud-렌더링-쿼리)). `{실측}` (출처: BC-S11, 충돌 C-11, BW-dyn, 2026-11-19 Windows 1.26.65.1)
 
 ### 4.3 view 바인딩과 다른 컨트롤 읽기
 
@@ -194,7 +194,7 @@ Cinnabar(`CN`)는 26.30 네이티브 클라이언트의 JSON UI 해석기를 재
 
 - **[BND-31]** 제목으로 고르는 레이아웃의 `#visible`은 `binding_condition: "always"`로 둔다. `once`면 폼이 다음 폼으로 바뀌는 사이 잠깐 맞았던 레이아웃이 다음 폼 위에 켜진 채 남았다. `{실측}` (출처: DF)
 - **[BND-32]** `visible: false`로 시작한 레이아웃 안 팩토리의 길이 바인딩(`#form_button_contents` → `#collection_length`)을 `binding_condition: "visible"`로 두면, 제목이 맞지 않아 숨은 레이아웃은 버튼 칸을 만들지 않았다(COL-10의 "생성은 막지 못한다"는 레이아웃 컨트롤 자체의 이야기다). 처음부터 보이는 레이아웃에 쓰면 숨은 레이아웃도 첫 프레임에 칸을 만들었다. 같은 자리에 `always_when_visible`·생략을 쓰면 첫 프레임에 만든 칸의 바인딩이 갱신되지 않아 글자·표식이 비었다. `{실측}` (출처: DF)
-- **[BND-33]** `source_property_name` 식의 **일부**로 끼운 `$변수`는 치환된다. 다만 값은 **글자 하나**로 들어가고 식으로 다시 해석되지 않는다. 따옴표 없는 값(`"$v": "hover_text"`로 `('#' + $v)`, `"$skip": "%.20s"`로 `($skip * #hud_subtitle_text_string)`)은 상자 화면과 HUD에서 동작했다(HXC). 값에 따옴표까지 넣은 `"$m": "'§0§3§r'"`로 `(#form_button_text - $m)`을 쓰자 표식 버튼이 보이지 않았는데(DF), 따옴표가 글자로 들어가 맞지 않았기 때문으로 보인다(*추론*). 그래서 변수에는 따옴표 없는 값만 넣고, `#` 속성이 하나도 없는 식은 쓰지 않는다. 칸마다 같은 식에 쓰는 법은 [바인딩 계산식 캐싱](../design/json-ui-performance/binding-expression-caching.mdx). `{실측}` (출처: HXC, DF, BW-title)
+- **[BND-33]** `source_property_name` 식의 **일부**로 끼운 `$변수`는 치환된다. 다만 값은 **글자 하나**로 들어가고 식으로 다시 해석되지 않는다. 따옴표 없는 값(`"$v": "hover_text"`로 `('#' + $v)`, `"$skip": "%.20s"`로 `($skip * #hud_subtitle_text_string)`)은 상자 화면과 HUD에서 동작했다(HXC). 값에 따옴표까지 넣은 `"$m": "'§0§3§r'"`로 `(#form_button_text - $m)`을 쓰자 표식 버튼이 보이지 않았는데(DF), 따옴표가 글자로 들어가 맞지 않았기 때문으로 보인다(*추론*). 그래서 변수에는 따옴표 없는 값만 넣고, `#` 속성이 하나도 없는 식은 쓰지 않는다. 칸마다 같은 식에 쓰는 법은 [바인딩 계산식 캐싱](../design/json-ui-performance/binding-expression-caching.mdx). 식 안에 `($bt)`로 끼운 `"$bt": "#v"`는 속성 `#v`로 읽혀 값을 냈고, 값이 식인 변수(`"$us": "('%' + $tid + '%')"`)를 식에 쓰면 빈 값이었다([실측 기록](../design/json-ui-claims.mdx#65-소수-리터럴-alpha-문자열-나누기-hud-렌더링-쿼리)). `{실측}` (출처: HXC, DF, BW-title, 2026-11-19 Windows 1.26.65.1)
 - **[BND-34]** `(not ((A - B) = 'z'))`처럼 빼기 결과를 같은 식 안에서 바로 비교하자 참·거짓이 뒤집혔다. 먼저 view 바인딩으로 `#변수`에 담고 `(not (#변수 = 'z'))`로 비교하니 맞았다. EXP-06처럼 단계를 나눈다. `{실측}` (출처: DF)
 
 ### 4.9 엔진 동작 분석으로 더한 규칙
