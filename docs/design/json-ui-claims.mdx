@@ -311,11 +311,39 @@ sources:
 - `(#v - 1 + 2)`의 9는 `'7abc' - 1`이 문자열 빼기(지울 `1`이 없음)로 `'7abc'`를 남기고, 그 결과가 정수 7로 다시 읽힌 뒤 2를 더한 값으로 보인다. 숫자로 시작하는 제목에서 `- 1`은 뺄셈이 아니다.
 - `requires`와 바인딩에서 문자열 / 문자열은 멈추지 않았다. EXP-49의 멈춤은 문자열 / 숫자에서 났다.
 
+### 6.6 블록 UV, 컨트롤러 덮기, 소리, 언어, 애니메이션 가중치
+
+2026-11-19, 같은 버전이다. JSON UI 밖의 팩 파일 주장을 같은 애드온의 블록, 엔티티, 언어, 소리 파일로 쟀다. 게임 언어는 한국어, 화려한 그래픽이었다. 소리는 Windows 오디오 세션 API로 게임 프로세스 세션의 최대 피크를 9초 동안 읽었다.
+
+| 항목 | 구성 | 결과 | 관련 |
+|---|---|---|---|
+| 블록 UV, `texture_width` 1024 | 블록 지오메트리 `texture_width`/`texture_height` 1024, 모든 면 UV `[0, 0]` 크기 `[341.333, 1024]`. 텍스처는 48x18(16px 세로 띠 빨강, 초록, 파랑, 위 9줄 밝고 아래 9줄 어두움) | 빨강 띠 전체(위 밝음, 아래 어두움) | custom-items-and-blocks, models-and-geometry |
+| 같은 텍스처의 일부 | UV `[341.333, 0]` 크기 `[341.333, 512]` | 초록 띠 위 절반 | custom-items-and-blocks |
+| 160x8 텍스처 | UV `[307.2, 0]` 크기 `[102.4, 1024]`, 16px 띠 10개 | 네 번째 띠 | textures-and-atlases |
+| `texture_width` 16에 48x18 텍스처 | UV `[0, 0]` 크기 `[16, 16]` | 한 면에 텍스처 전체(띠 셋, 위아래 두 밝기)가 줄어 들어감 | custom-items-and-blocks |
+| 바닐라 플레이어 컨트롤러 ID 덮기 | RP에 `controller.animation.player.crossbow`만 다시 정의(초기 상태가 바닐라 짧은 이름 `crossbow_hold` 재생), `player.entity.json` 없음. 장전하지 않은 쇠뇌를 들고 3인칭 | 양팔을 든 조준 자세. 이 파일을 빼고 다시 들어가면 바닐라 자세(팔을 내림) | items |
+| 감싸기 없는 `sound_definitions.json` | `format_version`과 `sound_definitions` 없이 `{"juc.flat": {"category": "ui", "sounds": [{"name": "sounds/random/levelup"}]}}` | `/playsound juc.flat` 피크 0.03, 바닐라 `random.levelup`과 같음. 정의 없는 이름은 0 | file-formats, sounds |
+| 영어에만 있는 lang 키 | `en_US.lang`에 키 둘, `ko_KR.lang`에 그중 하나, `/tellraw`의 `translate` | 둘 다 있는 키는 한국어 값, 영어에만 있는 키는 영어 값, 어디에도 없는 키는 키 문자열 그대로 | file-formats |
+| 빈 값 lang | `entity.bwiki:juc_named.name=`를 `en_US`와 `ko_KR`에. 그 엔티티를 가해자로 `/damage @s 100 entity_attack entity ...`, 그리고 `/kill @e[type=!player]` | 사망 메시지 `%entity.bwiki:juc_named.name`, `/kill` 결과도 키 그대로. `ko_KR`에 줄이 없고 `en_US`만 빈 값일 때도 같음 | file-formats |
+| 컨트롤러 가중치 1 초과 | 상태 `animations`에 `{"tilt": "q.property('bwiki:w')"}`, `tilt`는 z축 20도 회전, 속성 0, 1, 2, 3 | 0도, 약 20도, 약 40도, 약 60도. 가중치에 비례 | animations-and-controllers |
+| 정수 속성 하나를 비트로 | `int` 속성 0~16383, 비트 0과 비트 13마다 `play`/`stop` 컨트롤러(`math.mod(math.floor(q.property('bwiki:bits') / 8192), 2) != 0`) | 값 1은 왼쪽 상자만, 2는 둘 다 아님, 8192는 오른쪽만, 8193은 둘 다 올라감 | entities |
+| `pre_animation` 누적 | `v.acc = v.acc + 1;`(`q.delta_time` 없음)로 한 본, `q.life_time * 60`으로 다른 본을 같은 계수로 올림 | 216fps 무렵 누적 쪽이 약 3.5배 빨리 올라감 | animations-and-controllers |
+| `creaking_eyes` 단독 | 상자 엔티티의 유일한 머티리얼을 `creaking_eyes`로. 불투명 빨강 텍스처와 알파 255/170/85/0 띠 텍스처 | 낮과 밤 모두 그림자만 보이고 상자는 그려지지 않음 | materials-and-shaders |
+| `creaking_eyes` 덧그리기 | 흰 상자(`entity_alphatest`)를 그린 뒤 같은 지오메트리를 두 번째 렌더 컨트롤러가 `creaking_eyes`, 띠 텍스처, `ignore_lighting: true`로 다시 그림 | 앞면에만 빨강이 칠해지고 옆면은 흰 본체 그대로. 밤에도 빨강 밝기가 낮과 같음. 알파 띠 넷이 구분 없이 모두 칠해짐 | materials-and-shaders |
+| VV 아닌 화면의 `texture_set` | `pbr` capability 없는 팩, 흰 텍스처에 발광 255 MER | 밤에 같은 흰 상자와 밝기가 같음 | rendering |
+
+- 블록 지오메트리의 UV는 `texture_width`/`texture_height`로 나눈 비율로 실제 텍스처에 대응됐다. 텍스처 크기를 지오메트리 값에 맞출 필요가 없다. 이 애드온의 시험 엔티티들도 64x32 지오메트리에 16x16 텍스처를 써서 정상으로 그려진다.
+- 정사각형이 아닌 48x18, 160x8 지형 텍스처는 `material_instances` 블록에서 그대로 그려졌다. 높이가 너비보다 작아 애니메이션 프레임으로 잘리지 않았다. 먼 거리의 밉맵은 보지 않았다.
+- 빈 값은 키가 없는 것과 같게 취급됐다. 원시 키를 숨기는 데 쓸 수 없다.
+- `creaking_eyes`는 단독으로 보이지 않고, 같은 지오메트리를 덧그렸을 때 본체와 깊이가 맞은 면에만 나왔다. 같은 깊이에만 그리는 머티리얼로 보이지만 머티리얼 정의는 확인하지 않았다. 바닐라 크리킹 렌더 컨트롤러 주석도 이 머티리얼이 다른 텍스처 위에 블렌드된다고 적는다.
+- 창 변수는 게임에서 재지 않고 파일로 확인했다. 바닐라 1.26.50 `player.entity.json`이 `variable.fp_melee_spear_use_attachable_rotation_z`, `tp_melee_spear_use_attachable_rotation_z`, `fp_melee_spear_attack_attachable_rotation_z`, `tp_melee_spear_attack_attachable_position_z`를 `public`으로 선언하고, 바닐라 `spear.animation_controllers.json`이 `c.owning_entity->query.ticks_since_last_kinetic_weapon_hit`를 읽는다.
+
 ## 7. 잴 수 없었던 항목
 
 - **입력창 실시간 필터**(INP-25): 액션 폼 창 안의 `common.text_edit_box`가 마우스를 올린 테두리는 보였지만, 도구의 키 입력(PostMessage, SendInput)으로 글자가 들어가지 않았다. 도구 문제인지 화면이 입력을 넘기지 않는 것인지 나누지 못했다.
 - 화면 픽셀 비교가 필요한 `#alpha` 0.5(C-45), 문자열 나누기처럼 멈춤 위험이 있는 식, 커스텀 아이템에 따른 `#item_id_aux` 범위, NPC 대화 버튼 수, 슬라이더로 움직이는 `#anchored_offset_value_x`는 이번 목록에서 뺐다. 파티클 재생 방식은 JSON UI 밖이라 다루지 않았다.
 - 6.5절 때 함께 받은 후보 중 다음은 재지 않았다. 어태처블(`c.owning_entity` 없는 `q.property`, `q.mark_variant`, 갑옷 거치대 조건)은 속성을 가진 플레이어나 아이템을 드는 시험 엔티티가 필요하다. 게임패드 포커스(`#toggle_on_hover`)와 터치 기기의 `$touch`는 기기가 없다. `live_horse_renderer`의 `#entity_id`는 런타임 엔티티 번호가 필요하다. 상자 화면 `requires`의 `$container_title`, `flip_book`의 `frame_step` 생략, `q.time_stamp` 위상, 글리프 예열, MP3 내용의 `.fsb`, 사용자 이름공간을 두 파일로 나눈 경로 키 편집도 이번에 넣지 않았다.
+- 6.6절 때 함께 받은 후보 중 다음은 재지 않았다. zip 안 한 단계 아래 폴더에 manifest가 있는 팩은 서버가 보내는 경로라서 이 클라이언트 버전에 맞는 로컬 서버가 있어야 한다(가져오기는 다른 경로라 대신하지 않았다). 화려한 그래픽을 끈 모습과 VV는 Ore UI 설정 화면의 오른쪽 목록을 도구의 클릭, 스크롤, 방향키로 움직이지 못해 바꾸지 못했다. 따라서 `pbr` capability 없는 팩의 `texture_set`이 VV에서 쓰이는지도 재지 않았다.
 
 ## 8. 측정 애드온
 
@@ -329,3 +357,4 @@ sources:
 6. `/summon bwiki:juc_arr1`, `/summon bwiki:juc_arr4`, `/summon bwiki:juc_mat`로 6.3절의 렌더링 시험 엔티티를 부른다.
 7. 6.4절의 텍스처 수 엔티티는 `bwiki:juc_tex5`, `juc_tex8`, `juc_tex9`, `juc_tex10`, `juc_tex11`, `juc_tex12`, `juc_plain12`, `juc_arr15`, `juc_arr15used1`, `juc_one15`다. `juc_tex12`, `juc_plain12`, `juc_arr15`는 클라이언트를 멈추거나 끝내므로 버려도 되는 월드에서만 부른다. 파티클 카운터는 `/particle bwiki:juc_counter ~ ~1 ~3`로 본다.
 8. 6.5절의 식과 막대는 `/scriptevent bwiki:json_ui_claims x`로 7번 창을 연다. 렌더링 프로브는 `bwiki:juc_tier`, `juc_gfx`, `juc_greater`, `juc_emit`, `juc_emit_fly`다. HUD에는 `#gui_scale` 두 줄과 글리프 페이지 EB, EC, ED가 보인다.
+9. 6.6절의 블록은 `/setblock ~ ~ ~2 bwiki:juc_uv_a`처럼 `juc_uv_a`부터 `juc_uv_d`까지 놓는다. 엔티티는 `bwiki:juc_weight`(소환 이벤트 `w0`, `w2`, `w3`), `juc_bits`(`b0`, `b1`, `b13`, `b0b13`, `all`), `juc_acc`, `juc_creak`(`m0`, `m2`, `m3`), `juc_creak2`, `juc_named`, `juc_mer`이고 `/summon bwiki:juc_bits ~ ~ ~3 0 0 b13`처럼 부른다. 소리는 `/playsound juc.flat`, 언어는 `/tellraw @s {"rawtext":[{"translate":"juc.fb.en_only"}]}`로 본다. 이 애드온은 바닐라 `controller.animation.player.crossbow`를 덮으므로 켜져 있는 동안 쇠뇌를 들면 늘 조준 자세가 된다.

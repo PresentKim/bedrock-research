@@ -187,7 +187,7 @@ BP 엔티티 파일(`BP/entities/*.json`)은 `minecraft:entity` 아래에 `descr
 
   이벤트 `set_property` 또는 `entity.setProperty`로 설정하고 RP에서 `q.property('ns:x')`로 읽는다(렌더 컨트롤러 `Array.x[query.property('ns:x')]`, geometry 배열도 가능). `client_sync: true`가 없으면 클라이언트가 볼 수 없다. enum 속성에 `default`와 `client_sync`가 없으면 RP 쿼리가 모두 실패한다. `player.json` 속성이 실패한 원인도 이것이었다. (confirmed, 출처: bedrock-wiki entities/entity-properties)
 - 개수 제한은 엔티티당 32개다(`player.json`도 32). 값이 많은 enum/int를 몇 개만 쓰고, 불리언은 비트 압축하거나 한 숫자의 소수 자리에 여러 값을 넣거나 여러 엔티티에 나눠 담는다. float 범위 [0,200]을 200가지 변형 스위치로 쓴 사례도 있다. 픽셀 단위 파티클 스킨처럼 대량 데이터는 속성보다 Molang 변수가 빠르다.
-- 한도는 **conflicting**이다. 엔티티 속성 한도를 30개라고 한 보고가 있고, 큰 팩이 플레이어 속성 한도에 닿은 사례가 있다. int 속성 하나(최대 1,048,575)에 20비트 플래그를 담은 사례도 있다.
+- 한도는 **conflicting**이다. 엔티티 속성 한도를 30개라고 한 보고가 있고, 큰 팩이 플레이어 속성 한도에 닿은 사례가 있다. int 속성 하나(최대 1,048,575)에 20비트 플래그를 담은 사례도 있다. 비트마다 `play`/`stop` 컨트롤러를 두고 `math.mod(math.floor(q.property('ns:bits') / 8192), 2) != 0`처럼 자기 비트를 보게 하면, 0~16383 속성의 비트 0과 비트 13이 서로 따로 켜지고 꺼졌다(값 1, 2, 8192, 8193, [실측 기록](../design/json-ui-claims.mdx#66-블록-uv-컨트롤러-덮기-소리-언어-애니메이션-가중치), 2026-11-19 Windows 1.26.65.1).
 - enum 값은 글자로 시작해야 한다. Molang 불리언은 `q.property(...)`/`!q.property(...)`로 쓰고, `!query.variant == 8` 같은 식은 `!(query.variant == 8)`처럼 괄호로 감싼다.
 - 무작위 변형: int 속성 `default`에 `math.random_integer(0, 100)`을 주면 스폰 스크립트 없이 geometry/텍스처를 무작위로 고를 수 있다. 가중치가 필요하면 스폰 이벤트의 `randomize`를 쓴다. RP만으로 만든 무작위 변형은 언로드 때 사라지고 플레이어마다 다르게 보인다. 아기/어른/변형을 한 `randomize`에 몰면 그룹이 하나도 없는 "죽은" 몹이 생기니 텍스처 변형은 스폰 때 설정한 속성으로 한다.
 - 번식 상속(conflicting): client_sync enum 속성은 상속되고 `skin_id`/`variant`/`mark_variant`는 커스텀 번식에서 넘어가지 않는다는 보고와, 2026-11에 번식 변형 섞기에 variant/mark_variant를 쓴다는 보고가 있다.
