@@ -1,0 +1,140 @@
+---
+title: 구조물 렌더러로 월드 일부를 3D로 보여 주기
+description: 3d_structure_renderer를 구조물 블록 화면 밖(서버 폼)에 두고 월드의 정해진 영역을 3D로 그리는 기획. 렌더러가 읽는 속성 전체와 각 속성의 실측 동작, 영역 지정, 엔티티와 플레이어, 회전, 오른쪽 위 좌표축을 클리핑으로 가리는 방법, 서버 연동 방식, 확인하지 못한 것.
+sidebar_position: 7
+sources:
+  - repo-guide
+  - private-research
+  - bedrock-samples
+---
+
+# 구조물 렌더러로 월드 일부를 3D로 보여 주기
+
+구조물 블록 화면의 미리보기는 `"renderer": "3d_structure_renderer"`인 `custom` 컨트롤이 그린다. 이 렌더러는 구조물 파일이 아니라 **지금 로드된 월드의 한 영역**을 그린다. 이 기획은 서버가 미리 정해 둔 영역에 구조물을 붙여 넣고, 그 영역을 가리키는 서버 폼을 열어 3D 미리보기로 쓰는 것을 목표로 한다.
+
+측정은 Windows 1.26.65.1, 2026-11-18이다. 측정 창과 숫자는 [미검증 JSON UI 주장 실측](./json-ui-claims.mdx#61-3d_structure_renderer)에 있다.
+
+![구조물 렌더러 측정 창. 왼쪽 칸은 엔티티를 켜고 클리핑으로 오른쪽 위 좌표축을 가렸고 금 블록 3x3x3과 다이아몬드, 레드스톤 블록, 갑옷 거치대가 보인다. 가운데 칸은 remove_blocks를 켜 블록 없이 플레이어와 갑옷 거치대만 보인다. 오른쪽 칸은 has_focus를 켠 회전 칸이고 블록만 보이며 오른쪽 위에 좌표축이 있다](/img/design/structure-renderer-flags.png)
+
+## 1. 구성
+
+```json title="최소 구성"
+"preview": {
+  "type": "custom",
+  "renderer": "3d_structure_renderer",
+  "size": [ 120, 120 ],
+  "property_bag": {
+    "#has_focus": false,
+    "#block_position": [ 0, 0, 0 ],
+    "#bottom_left_block": [ 3, -60, 3 ],
+    "#top_right_block": [ 6, -56, 6 ],
+    "#include_entities": false,
+    "#remove_blocks": false,
+    "#include_players": false
+  }
+}
+```
+
+- 구조물 편집기의 바인딩과 컨트롤러 없이 `property_bag` 값만으로 서버 폼 창 안에서 그려졌다.
+- 바닐라(`structure_editor_screen.json`)는 같은 키를 `binding_condition: "visible"` 바인딩으로도 받는다. 서버 폼에서는 그 데이터 출처가 없으므로 `property_bag`이나 `$변수`로 준다.
+
+## 2. 속성 전체
+
+렌더러 코드가 읽는 속성 이름은 8개다. 실행 파일에서 렌더러 코드 영역이 참조하는 문자열을 모두 모은 결과이고, 바닐라 JSON이 쓰는 7개 키에 `#gesture_delta_source`가 더해진 것이 전부였다(`{코드}`, 세부는 저장소 `native-notes/structure-renderer.md`).
+
+| 속성 | 값 | 바닐라 기본값 | 동작 | 수준 |
+| --- | --- | --- | --- | --- |
+| `#bottom_left_block` | `[x, y, z]` | `[0, 0, 0]` | 그릴 영역의 아래쪽 모서리. 월드 절대 좌표이고 포함한다 | 실측 |
+| `#top_right_block` | `[x, y, z]` | `[1, 1, 1]` | 위쪽 모서리. 월드 절대 좌표이고 **포함하지 않는다**. `[3,-60,3]`..`[5,-57,5]`는 2x3x2를 그렸다 | 실측 |
+| `#block_position` | `[x, y, z]` | `[0, 0, 0]` | `[0,0,0]`과 `[40,0,40]`의 그림이 같았다. 모서리를 이 값의 상대 좌표로 읽지도 않았다 | 실측(효과 없음) |
+| `#include_entities` | 불리언 | `false` | 켜면 영역 안 엔티티(갑옷 거치대)를 그린다 | 실측 |
+| `#include_players` | 불리언 | `false` | `#include_entities`와 함께 켜면 영역 안 플레이어도 그린다 | 실측 |
+| `#remove_blocks` | 불리언 | `false` | 켜면 블록을 그리지 않고 엔티티와 플레이어만 그린다 | 실측 |
+| `#has_focus` | 불리언 | `false` | 켜도 멈춘 그림에는 달라진 점이 없었다 | 실측(효과 안 보임) |
+| `#gesture_delta_source` | 입력 패널 값 | 없음 | 회전 입력. 아래 4절 | 실측, 코드 |
+| `#gesture_mouse_delta_x`, `#gesture_mouse_delta_y` | 입력 패널 값 | 없음 | 회전 입력. 렌더러 코드 영역에서는 참조되지 않고 입력 패널 쪽에서 쓰인다(추론). 셋을 모두 넘겼을 때만 돌았다 | 실측 |
+
+- 그 밖의 속성은 일반 컨트롤 속성(`size`, `offset`, `anchor_from`, `layer`, `anims` 등)이다. 렌더러는 칸 크기에 맞춰 영역을 줄이거나 키워 그린다.
+- `#block_position`과 `#has_focus`는 렌더러 코드가 읽지만 이번 측정에서 보이는 효과를 찾지 못했다. 회전 중심이나 키보드 포커스 표시와 관련 있을 수 있으나 확인하지 않았다(추론).
+
+## 3. 영역과 비용
+
+- 그리는 내용은 지금 월드다. 폼이 열린 채 스크립트가 1초마다 블록을 바꾸고 갑옷 거치대를 옮기자 그림도 따라 바뀌었다.
+- 로드되지 않은 곳(x, z 5000)은 아무것도 그리지 않았다. 플레이어에서 17블록 넘게 떨어진 영역은 그렸다. 서버는 미리보기 영역을 늘 로드되는 곳(플레이어 근처나 상시 로드 영역)에 둔다.
+- 64x6x64 영역도 칸에 맞춰 그렸고 F3 패널 60fps(수직 동기 상한)였다. 더 큰 영역의 비용은 재지 않았다.
+
+## 4. 회전
+
+```json title="끌어서 돌리기"
+"turn": {
+  "type": "input_panel",
+  "size": [ 124, 124 ],
+  "focus_enabled": true,
+  "gesture_tracking_button": "button.turn_structure",
+  "button_mappings": [
+    { "from_button_id": "button.menu_select", "to_button_id": "button.turn_structure", "mapping_type": "pressed", "button_up_right_of_first_refusal": true }
+  ],
+  "controls": [
+    {
+      "preview@my.preview": {
+        "bindings": [
+          { "binding_type": "view", "source_control_name": "turn", "source_property_name": "#gesture_delta_source", "target_property_name": "#gesture_delta_source" },
+          { "binding_type": "view", "source_control_name": "turn", "source_property_name": "#gesture_mouse_delta_x", "target_property_name": "#gesture_mouse_delta_x" },
+          { "binding_type": "view", "source_control_name": "turn", "source_property_name": "#gesture_mouse_delta_y", "target_property_name": "#gesture_mouse_delta_y" }
+        ]
+      }
+    }
+  ]
+}
+```
+
+- 같은 감싸기에서 view 바인딩 셋을 빼면 돌지 않았다.
+- 처음 각도를 정하거나 각도를 고정하는 속성은 찾지 못했다(렌더러 코드가 읽는 이름은 2절의 8개뿐이다).
+
+## 5. 오른쪽 위 좌표축 가리기(클리핑)
+
+렌더러는 칸 오른쪽 위에 좌표축(초록 Y, 파랑 X)을 그린다. 이것을 끄는 속성은 없다. 렌더러를 칸보다 크게 두고, 오른쪽 위가 `clips_children`인 부모 밖으로 나가게 하면 보이지 않는다.
+
+```json title="좌표축을 잘라 내는 감싸기"
+"preview_box": {
+  "type": "panel",
+  "size": [ 120, 120 ],
+  "clips_children": true,
+  "controls": [
+    {
+      "preview@my.preview": {
+        "size": [ 160, 160 ],
+        "offset": [ -20, -20 ],
+        "anchor_from": "bottom_left",
+        "anchor_to": "bottom_left"
+      }
+    }
+  ]
+}
+```
+
+- 위 그림 왼쪽 칸이 이 구성이다. 좌표축이 사라졌지만, 렌더러가 커진 만큼 구조물이 크게 그려지고 왼쪽 위로 치우친다.
+- 가운데에 두려면 렌더러를 네 방향으로 같이 키운다(예: 크기 `[160, 160]`, `anchor_from`과 `anchor_to`를 `center`, `offset` 없음). 그러면 네 모서리가 모두 부모 밖으로 나가므로 오른쪽 위 좌표축도 잘릴 것으로 본다. 이 배치는 재지 않았으므로 칸마다 확인한다.
+- 좌표축 크기는 렌더러 크기를 따라 커지는지 재지 않았다. 잘라 낼 여백은 넉넉히 둔다.
+
+## 6. 서버 연동
+
+1. 서버가 늘 로드되는 예약 영역에 구조물을 붙여 넣는다.
+2. 그 영역의 두 모서리를 JSON에 적은 창을 서버 폼 제목으로 연다. 좌표는 창마다 `$변수`로 줄 수 있었다.
+3. 영역을 비우거나 바꾸면 열린 폼의 그림도 바로 바뀐다.
+
+- 서버 글(폼 본문, 버튼 글)로 좌표 배열을 만들어 넣는 방법은 재지 않았다. 커뮤니티는 식으로 배열을 만들 수 없다고 보고했다([커뮤니티 보고](../json-ui/community-reports-screens.mdx)).
+- 예약 영역이 여러 개면 영역마다 창(제목)을 하나씩 둔다.
+
+## 7. 확인하지 못한 것
+
+- HUD와 상자 화면에서 그려지는지.
+- `#block_position`, `#has_focus`의 실제 역할, 회전 중심, 처음 각도.
+- 영역 크기에 따른 비용의 상한.
+- `.mcstructure` 파일을 직접 그리는 방법. 이 렌더러는 월드만 그렸다.
+
+## 8. 측정 애드온
+
+<AddonDownload id="json-ui-claims" />
+
+`/scriptevent bwiki:json_ui_claims 9`는 구조물 렌더러 창을, `/scriptevent bwiki:json_ui_claims r`은 같은 창과 함께 1초마다 움직이는 갑옷 거치대와 바뀌는 블록을 연다. 창의 영역은 (0,-60,0)부터 (10,-55,10)까지이므로 그 안에 블록을 놓고 가까이 선다. 설치 방법은 [미검증 JSON UI 주장 실측](./json-ui-claims.mdx#8-측정-애드온)에 있다.

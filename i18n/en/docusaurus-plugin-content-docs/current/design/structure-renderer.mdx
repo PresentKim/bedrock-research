@@ -1,0 +1,140 @@
+---
+title: Showing part of the world in 3D with the structure renderer
+description: A plan that puts 3d_structure_renderer outside the structure block screen (in a server form) to draw a fixed region of the world in 3D. Every property the renderer reads and its measured behaviour, region selection, entities and players, rotation, hiding the top-right axis by clipping, the server side, and what was not confirmed.
+sidebar_position: 7
+sources:
+  - repo-guide
+  - private-research
+  - bedrock-samples
+---
+
+# Showing part of the world in 3D with the structure renderer
+
+The preview in the structure block screen is drawn by a `custom` control with `"renderer": "3d_structure_renderer"`. This renderer does not draw a structure file; it draws **a region of the currently loaded world**. This plan aims to have the server paste a structure into a reserved region and open a server form that points at that region, as a 3D preview.
+
+Measured on Windows 1.26.65.1, 2026-11-18. The measurement windows and numbers are in [Measuring unverified JSON UI claims](./json-ui-claims.mdx#61-3d_structure_renderer).
+
+![Structure renderer measurement window. The left box has entities on and the top-right axis hidden by clipping, showing 3x3x3 gold blocks, a diamond block, a redstone block and an armor stand. The middle box has remove_blocks on and shows only the player and the armor stand without blocks. The right box is the rotation box with has_focus on, showing only blocks, with the axis at the top right](/img/design/structure-renderer-flags.png)
+
+## 1. Setup
+
+```json title="Minimal setup"
+"preview": {
+  "type": "custom",
+  "renderer": "3d_structure_renderer",
+  "size": [ 120, 120 ],
+  "property_bag": {
+    "#has_focus": false,
+    "#block_position": [ 0, 0, 0 ],
+    "#bottom_left_block": [ 3, -60, 3 ],
+    "#top_right_block": [ 6, -56, 6 ],
+    "#include_entities": false,
+    "#remove_blocks": false,
+    "#include_players": false
+  }
+}
+```
+
+- It drew inside a server form window from `property_bag` values alone, without the structure editor's bindings or controller.
+- Vanilla (`structure_editor_screen.json`) also receives the same keys through bindings with `binding_condition: "visible"`. A server form has no source for that data, so give the values through `property_bag` or `$variables`.
+
+## 2. All properties
+
+The renderer code reads 8 property names. This is every string the renderer code area references in the executable: the 7 keys vanilla JSON uses plus `#gesture_delta_source`, and nothing else (`{code}`, details in the repository's `native-notes/structure-renderer.md`).
+
+| Property | Value | Vanilla default | Behaviour | Level |
+| --- | --- | --- | --- | --- |
+| `#bottom_left_block` | `[x, y, z]` | `[0, 0, 0]` | lower corner of the region. Absolute world coordinates, inclusive | measured |
+| `#top_right_block` | `[x, y, z]` | `[1, 1, 1]` | upper corner. Absolute world coordinates, **exclusive**. `[3,-60,3]`..`[5,-57,5]` drew 2x3x2 | measured |
+| `#block_position` | `[x, y, z]` | `[0, 0, 0]` | `[0,0,0]` and `[40,0,40]` gave the same image. The corners were not read relative to it either | measured (no effect) |
+| `#include_entities` | boolean | `false` | on: entities in the region (an armor stand) are drawn | measured |
+| `#include_players` | boolean | `false` | on together with `#include_entities`: players in the region are drawn too | measured |
+| `#remove_blocks` | boolean | `false` | on: no blocks, only entities and players | measured |
+| `#has_focus` | boolean | `false` | on: no change in the still image | measured (no visible effect) |
+| `#gesture_delta_source` | input panel value | none | rotation input, section 4 | measured, code |
+| `#gesture_mouse_delta_x`, `#gesture_mouse_delta_y` | input panel values | none | rotation input. Not referenced in the renderer code area; used on the input panel side (inferred). It rotated only when all three were passed | measured |
+
+- Everything else is ordinary control properties (`size`, `offset`, `anchor_from`, `layer`, `anims` and so on). The renderer scales the region to fit its box.
+- The renderer code reads `#block_position` and `#has_focus`, but this measurement found no visible effect. They may relate to the rotation center or a keyboard focus indicator, which was not checked (inferred).
+
+## 3. Region and cost
+
+- It draws the current world. With the form open, a script changed a block and moved an armor stand every second, and the image followed.
+- A region that is not loaded (x, z 5000) drew nothing. A region more than 17 blocks from the player was drawn. The server keeps preview regions where they stay loaded (near the player or in an always-loaded area).
+- A 64x6x64 region was drawn scaled to the box at 60 fps in the F3 panel (vsync cap). Larger regions were not measured.
+
+## 4. Rotation
+
+```json title="Drag to rotate"
+"turn": {
+  "type": "input_panel",
+  "size": [ 124, 124 ],
+  "focus_enabled": true,
+  "gesture_tracking_button": "button.turn_structure",
+  "button_mappings": [
+    { "from_button_id": "button.menu_select", "to_button_id": "button.turn_structure", "mapping_type": "pressed", "button_up_right_of_first_refusal": true }
+  ],
+  "controls": [
+    {
+      "preview@my.preview": {
+        "bindings": [
+          { "binding_type": "view", "source_control_name": "turn", "source_property_name": "#gesture_delta_source", "target_property_name": "#gesture_delta_source" },
+          { "binding_type": "view", "source_control_name": "turn", "source_property_name": "#gesture_mouse_delta_x", "target_property_name": "#gesture_mouse_delta_x" },
+          { "binding_type": "view", "source_control_name": "turn", "source_property_name": "#gesture_mouse_delta_y", "target_property_name": "#gesture_mouse_delta_y" }
+        ]
+      }
+    }
+  ]
+}
+```
+
+- The same wrapper without the three view bindings did not rotate.
+- No property sets or locks the starting angle (the renderer code reads only the 8 names in section 2).
+
+## 5. Hiding the top-right axis (clipping)
+
+The renderer draws an axis gizmo (green Y, blue X) in the top-right corner of its box. No property turns it off. Make the renderer larger than its box and push its top right outside a parent with `clips_children`, and the axis is not visible.
+
+```json title="Wrapper that cuts off the axis"
+"preview_box": {
+  "type": "panel",
+  "size": [ 120, 120 ],
+  "clips_children": true,
+  "controls": [
+    {
+      "preview@my.preview": {
+        "size": [ 160, 160 ],
+        "offset": [ -20, -20 ],
+        "anchor_from": "bottom_left",
+        "anchor_to": "bottom_left"
+      }
+    }
+  ]
+}
+```
+
+- The left box in the image above uses this setup. The axis is gone, but the structure is drawn larger and shifted toward the top left because the renderer grew.
+- To keep it centered, grow the renderer on all four sides (for example size `[160, 160]`, `anchor_from` and `anchor_to` `center`, no `offset`). All four corners then lie outside the parent, so the top-right axis should be cut off as well. This layout was not measured; check each box.
+- Whether the axis grows with the renderer size was not measured. Leave a generous margin to cut away.
+
+## 6. Server side
+
+1. The server pastes the structure into a reserved region that stays loaded.
+2. It opens, by server form title, a window whose JSON names the two corners of that region. Coordinates could be given per window through `$variables`.
+3. Clearing or changing the region changes the image in the open form right away.
+
+- Building the coordinate arrays from server text (form body, button text) was not measured. The community reported that expressions cannot build arrays ([community reports](../json-ui/community-reports-screens.mdx)).
+- With several reserved regions, use one window (title) per region.
+
+## 7. Not confirmed
+
+- Whether it draws on the HUD and in the chest screen.
+- The actual role of `#block_position` and `#has_focus`, the rotation center, the starting angle.
+- The upper bound of cost by region size.
+- Drawing a `.mcstructure` file directly. This renderer only drew the world.
+
+## 8. Measurement add-on
+
+<AddonDownload id="json-ui-claims" />
+
+`/scriptevent bwiki:json_ui_claims 9` opens the structure renderer window, and `/scriptevent bwiki:json_ui_claims r` opens the same window with an armor stand that moves and a block that changes every second. The window's region runs from (0,-60,0) to (10,-55,10), so place blocks in it and stand nearby. Installation is described in [Measuring unverified JSON UI claims](./json-ui-claims.mdx#8-measurement-add-on).
