@@ -236,7 +236,7 @@ These were read by analyzing the native library of the Android 1.26.52.3 client 
 
 - `insert_back`, `insert_front` and `remove` were confirmed, and the community also uses `replace` and `where` filters. The other 8 operations also worked in a Windows 1.26.65.1 measurement (MOD-14). If you `replace` after `remove`-ing the same control, it fails, which is the same as the property that within one `modifications` a later operation cannot pick again an element an earlier operation inserted (MOD-17).
 - An idiom for adding content to a vanilla screen: leave the vanilla namespace as is and fill a slot variable. Example: `"inventory_screen": { "$additional_screen_content": "crafting.custom_panel" }`. When complete, replace the whole screen with `$screen_content` (MOD-11).
-- **D-05 conflict (partly resolved)**: several reports say that when several packs `modifications` the same vanilla element, only the upper pack wins. The guide follows the measurement that `modifications` accumulates in pack order (MOD-02). In a Windows 1.26.65.1 measurement, three packs each did an `insert_back` into the same `main_screen_content` and all three went in, which confirms accumulation ([claim measurements](../design/json-ui-claims.mdx)). Cases that mix in property overrides or `replace`, like the reported ones, were not measured.
+- **D-05 conflict (partly resolved)**: several reports say that when several packs `modifications` the same vanilla element, only the upper pack wins. The guide follows the measurement that `modifications` accumulates in pack order (MOD-02). In a Windows 1.26.65.1 measurement, three packs each did an `insert_back` into the same `main_screen_content` and all three went in, which confirms accumulation ([claim measurements](../design/json-ui-claims.mdx)). For a property override the higher pack won: when two packs set `size` of `chat_grid_item/chat_background` to `"50%"` and `"75%"` in the same-path `hud_screen.json`, the 75% of the pack higher in the world pack list remained (FILE-21). The game restored its own pack order, so the reverse order was not measured ([record](../design/json-ui-claims.mdx#63-state-holding-lazy-roots-pack-order-rendering)). Cases that mix in `replace` were not measured.
 - Marketplace add-ons cannot modify vanilla UI files (world templates can, D-23).
 
 ## Proposals (not applied)
@@ -260,5 +260,5 @@ These are proposals from the new survey. They have not yet been merged into the 
 
 ## Items that need measurement
 
-- Which one remains when property overrides or `replace` mix into the `modifications` of several packs (D-05).
+- Which one remains when `replace` mixes into the `modifications` of several packs (D-05).
 - Whether `button_mappings`, and `variables` on a definition with its own `variables` array, have an effect (C-64).

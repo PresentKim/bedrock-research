@@ -236,7 +236,7 @@ Android 1.26.52.3 클라이언트의 네이티브 라이브러리를 분석해 �
 
 - 연산은 `insert_back`·`insert_front`·`remove`가 확인되었고, 커뮤니티는 `replace`와 `where` 필터도 쓴다. 나머지 8가지 연산도 Windows 1.26.65.1 실측에서 동작했다(MOD-14). 같은 컨트롤을 `remove`한 뒤 `replace`하면 실패하는데, 한 번의 `modifications` 안에서 앞 연산이 넣은 원소를 뒤 연산이 다시 고르지 못하는 성질(MOD-17)과 같다.
 - 바닐라 화면에 내용을 덧붙이는 관용: 바닐라 namespace를 그대로 두고 슬롯 변수를 채운다. 예: `"inventory_screen": { "$additional_screen_content": "crafting.custom_panel" }`. 완성되면 `$screen_content`로 화면을 통째로 바꾼다(MOD-11).
-- **D-05 충돌(부분 해소)**: 같은 바닐라 요소를 여러 팩이 `modifications`하면 위 팩만 이긴다는 보고가 여럿이다. 가이드는 `modifications`가 팩 순서대로 누적된다는 실측(MOD-02)을 따른다. Windows 1.26.65.1 실측에서 세 팩이 같은 `main_screen_content`에 `insert_back`을 하자 셋 다 들어가 누적이 확인됐다([주장 실측](../design/json-ui-claims.mdx)). 보고된 사례처럼 속성 덮어쓰기나 `replace`를 섞은 경우는 재지 않았다.
+- **D-05 충돌(부분 해소)**: 같은 바닐라 요소를 여러 팩이 `modifications`하면 위 팩만 이긴다는 보고가 여럿이다. 가이드는 `modifications`가 팩 순서대로 누적된다는 실측(MOD-02)을 따른다. Windows 1.26.65.1 실측에서 세 팩이 같은 `main_screen_content`에 `insert_back`을 하자 셋 다 들어가 누적이 확인됐다([주장 실측](../design/json-ui-claims.mdx)). 속성 덮어쓰기에서는 위 팩이 이겼다: 두 팩이 같은 경로 `hud_screen.json`에서 `chat_grid_item/chat_background`의 `size`를 `"50%"`와 `"75%"`로 주자 월드 팩 목록 위 팩의 75%가 남았다(FILE-21). 게임이 팩 순서를 자기 순서로 되돌려 반대 순서는 재지 못했다([기록](../design/json-ui-claims.mdx#63-상태-유지-지연-루트-팩-순서-렌더링)). `replace`를 섞은 경우는 재지 않았다.
 - Marketplace 애드온은 바닐라 UI 파일을 못 고친다(월드 템플릿은 된다, D-23).
 
 ## 반영안(미적용)
@@ -260,5 +260,5 @@ Android 1.26.52.3 클라이언트의 네이티브 라이브러리를 분석해 �
 
 ## 실측이 필요한 항목
 
-- 여러 팩의 `modifications`에 속성 덮어쓰기나 `replace`가 섞일 때 어느 것이 남는지(D-05).
+- 여러 팩의 `modifications`에 `replace`가 섞일 때 어느 것이 남는지(D-05).
 - `button_mappings`, 그리고 자기 `variables` 배열이 있는 정의의 `variables`에 효과가 있는지(C-64).

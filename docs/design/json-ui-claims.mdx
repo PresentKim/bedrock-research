@@ -229,6 +229,25 @@ sources:
 - 바닐라 타이틀을 남기려면 지우는 애니메이션이 걸린 세 컨트롤의 `alpha`를 모두 덮어야 했다.
 - `long_form`처럼 `controls`를 상속만 받은 정의에 `insert_front`로 넣자 폼 본문이 통째로 사라졌다(MOD-04와 같다). 측정 애드온은 `controls`를 직접 선언한 `long_form_scrolling_content`에 넣는다.
 
+### 6.3 상태 유지, 지연 루트, 팩 순서, 렌더링
+
+2026-11-19, 같은 버전이다. JSON UI 넷과 렌더링 셋이다.
+
+| 항목 | 구성 | 결과 | 관련 |
+|---|---|---|---|
+| 자기 참조 상태 | HUD 크기 0 패널, `property_bag` `#st` 0, view 바인딩 `((#st * (1 - (#on + #off))) + #on)`를 다시 `#st`로. `#on`, `#off`는 타이틀에 `XON`, `XOFF`가 있는지 | 타이틀 `XON a`, `other`, `plain`, `XOFF b`, `other2`, `XON c`, `other3` 순서에 상태 1, 1, 1, 0, 0, 1, 1. 다른 타이틀이 와도 유지됐고 멈춤이나 로그 오류가 없었다 | BND-30 |
+| 서버 폼 안 `$touch` | 서버 폼 창에 `"ignored": "$touch"`와 `"ignored": "(not $touch)"` 패널 | 앞의 것만 만들어짐(Windows에서 `$touch`는 거짓). `Expected variable not found` 로그 없음 | D-18 |
+| 1x1 grid 지연 루트 | 라우터 창 안 grid `[1,1]`, `#maximum_grid_items`를 `once`로 버튼 수, `visible`로 제목 검사 식(`1` 또는 `0`). 칸 안 `stack_panel`에 고정 `collection_index` 0, 4, 5 | 바인딩 기본 조건(없음)인 칸과 `always`인 칸 모두 처음 열 때부터 채워짐(두 번 다시 열어도 같음) | COL-40, COL-47 |
+| 두 팩이 같은 속성 | 같은 경로 `hud_screen.json`에서 `chat_grid_item/chat_background`의 `size`를 이 애드온은 `"50%"`, 도우미 팩은 `"75%"`로. 도우미 팩이 월드 팩 목록 위 | 채팅 배경 폭 570(부모 760의 75%), 위 팩의 값. 이 애드온만 켜면 380(50%) | FILE-21, D-05 |
+| 2의 거듭제곱이 아닌 글리프 페이지 | `font/glyph_E9.png` 1056x1056, `glyph_EA.png` 512x512, 칸 0은 빨간 사각형 | 둘 다 그려짐. E9 글리프가 약 2.06배 크게(132px 대 64px, 칸 픽셀 66 대 32에 비례) | file-formats |
+| 렌더 컨트롤러 텍스처 배열 넷 | `arrays.textures`에 배열 4개, `textures`에 넷 모두 사용 | 크래시 없이 그려짐(첫 배열 값) | render-controllers |
+| 내림 없는 배열 인덱스 | 원소 5개 배열에 `Array.t[query.life_time * 2]` | 다섯 색이 차례로 돌았다(길이를 넘는 인덱스는 처음으로 돌아감) | render-controllers |
+| 머티리얼 파일 주석 | `materials/entity.material`에 `// ...` 줄을 넣고 `juc_mat:entity_alphatest` 정의, 엔티티가 `juc_mat` 사용 | 엔티티가 그려짐. 없는 머티리얼 이름(`juc_missing`)으로 바꾸면 그림자만 남아 안 보였다. 주석이 있어도 파일이 읽혔다 | 머티리얼 |
+
+- 팩 순서는 반대로 재지 못했다. 월드 팩 목록 파일에서 순서를 바꿔도 게임이 들어갈 때 자기 순서로 되돌렸다. 그래서 "위 팩이 이긴다"는 한 순서의 결과다.
+- 자기 참조 상태를 처음 넣은 날 월드에 들어가며 "오류가 발생했습니다(Block)" 화면이 한 번 났다. 같은 패널을 다시 넣고 다시 들어갔을 때는 나지 않아 원인으로 보지 않았다.
+- 도우미 팩은 측정에만 쓰고 애드온에 넣지 않았다. 다시 재려면 같은 경로 `ui/hud_screen.json`에 같은 속성을 다른 값으로 넣은 리소스 팩을 하나 더 켠다.
+
 ## 7. 잴 수 없었던 항목
 
 - **입력창 실시간 필터**(INP-25): 액션 폼 창 안의 `common.text_edit_box`가 마우스를 올린 테두리는 보였지만, 도구의 키 입력(PostMessage, SendInput)으로 글자가 들어가지 않았다. 도구 문제인지 화면이 입력을 넘기지 않는 것인지 나누지 못했다.
@@ -242,4 +261,5 @@ sources:
 2. 크리에이티브 인벤토리에서 "JSON UI Claims Test"를 꺼내 사용하거나 `/scriptevent bwiki:json_ui_claims`를 실행하면 창을 고르는 메뉴가 열린다. `/scriptevent bwiki:json_ui_claims 1`처럼 마지막 글자로 창을 바로 열 수 있다(1 식, 2 배치, 3 파일, 4 폼 컨트롤, 5 추가 항목, 6/7/8 여러 줄 표식, 9 구조물 렌더러, r 구조물 렌더러와 움직이는 갑옷 거치대·바뀌는 블록, h 폼을 연 뒤 3초 뒤 타이틀, s 버튼 3개 폼, a/b/c 제목 게이트, m 메시지 폼). 9번 창은 (3,-60,3)~(5,-57,5)에 블록을 놓고 가까이 있을 때 연다.
 3. 4절의 다른 연산은 `ui/thanks_for_testing_screen.json`의 `modifications`를 바꾸고 UI를 다시 읽어 확인한다. 애드온에는 마지막 판(`variables` 배열에 넣기)이 들어 있어 3번 창 두 번째 줄이 FROM_VARIABLES로 보인다.
 4. `ui/juc_err.json`은 일부러 JSON 문법 오류(뒤따르는 쉼표)를 넣은 파일이다. 3번 창의 `errs` 줄에서 뒤 정의가 빠지는 것을 본다.
-5. HUD 왼쪽 위에 래치 값(`saved`, `now`, `child latch`)이 보인다. `/title @s title JUC one`처럼 `JUC`가 든 타이틀을 보내 6.2절 순서를 따라 한다. 액션바에 `off`를 보내면 `child latch`의 부모가 숨는다. 상수 `alpha`와 두 화면 플래그는 바닐라 동작을 바꾸므로 애드온에 넣지 않았고, 6.2절 표대로 `ui/hud_screen.json`과 `ui/server_form.json`에 직접 넣어 확인한다.
+5. HUD 왼쪽 위에 래치 값(`saved`, `now`, `child latch`)이 보인다. `/title @s title JUC one`처럼 `JUC`가 든 타이틀을 보내 6.2절 순서를 따라 한다. 액션바에 `off`를 보내면 `child latch`의 부모가 숨는다. 상수 `alpha`와 두 화면 플래그는 바닐라 동작을 바꾸므로 애드온에 넣지 않았고, 6.2절 표대로 `ui/hud_screen.json`과 `ui/server_form.json`에 직접 넣어 확인한다. `state` 줄은 6.3절의 자기 참조 상태로, `XON`과 `XOFF`가 든 타이틀로 바뀐다. 그 아래에 글리프 페이지 E9와 EA가 보인다.
+6. `/summon bwiki:juc_arr1`, `/summon bwiki:juc_arr4`, `/summon bwiki:juc_mat`로 6.3절의 렌더링 시험 엔티티를 부른다.

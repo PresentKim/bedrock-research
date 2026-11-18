@@ -229,6 +229,25 @@ Measured in a panel inserted into `hud.root_panel` with `insert_front`. In the f
 - To keep the vanilla title, the `alpha` of all three controls that carry a destroying animation had to be overridden.
 - Inserting with `insert_front` into `long_form`, which only inherits `controls`, removed the whole form body (same as MOD-04). The measurement add-on inserts into `long_form_scrolling_content`, which declares `controls` itself.
 
+### 6.3 State holding, lazy roots, pack order, rendering
+
+2026-11-19, same version. Four JSON UI items and three rendering items.
+
+| Item | Setup | Result | Related |
+|---|---|---|---|
+| Self-referencing state | zero-size HUD panel, `property_bag` `#st` 0, a view binding writing `((#st * (1 - (#on + #off))) + #on)` back into `#st`; `#on` and `#off` are whether the title contains `XON` or `XOFF` | for the titles `XON a`, `other`, `plain`, `XOFF b`, `other2`, `XON c`, `other3` the state was 1, 1, 1, 0, 0, 1, 1. It held through other titles, with no hang and no log error | BND-30 |
+| `$touch` in a server form | panels with `"ignored": "$touch"` and `"ignored": "(not $touch)"` in a server form window | only the first was created (`$touch` is false on Windows). No `Expected variable not found` log | D-18 |
+| 1x1 grid lazy root | grid `[1,1]` in the router window, `#maximum_grid_items` set to the button count with `once` and to a title check expression (`1` or `0`) with `visible`; fixed `collection_index` 0, 4, 5 on a `stack_panel` inside the cell | cells with the default (none) condition and with `always` both filled from the first open (same on a second open) | COL-40, COL-47 |
+| Two packs, same property | in the same-path `hud_screen.json`, `size` of `chat_grid_item/chat_background` is `"50%"` in this add-on and `"75%"` in a helper pack; the helper pack is higher in the world pack list | chat background width 570 (75% of the 760 parent), the higher pack's value. With this add-on alone it was 380 (50%) | FILE-21, D-05 |
+| Glyph page not a power of two | `font/glyph_E9.png` 1056x1056 and `glyph_EA.png` 512x512, cell 0 a red square | both drawn. E9 glyphs about 2.06 times larger (132px against 64px, in proportion to the 66 and 32 pixel cells) | file-formats |
+| Four texture arrays in one render controller | four arrays in `arrays.textures`, all four used in `textures` | drawn without a crash (the first array's value) | render-controllers |
+| Array index without floor | `Array.t[query.life_time * 2]` on a five-element array | the five colors cycled in turn (an index past the length wraps to the start) | render-controllers |
+| Comment in a material file | a `// ...` line in `materials/entity.material` defining `juc_mat:entity_alphatest`, used by an entity as `juc_mat` | the entity was drawn. With a material name that does not exist (`juc_missing`) only the shadow remained. The file was read despite the comment | materials |
+
+- The reverse pack order could not be measured. Reordering the world pack list file was undone by the game on world entry, so "the higher pack wins" is the result of one order.
+- On the day the self-referencing state was first added, entering the world showed an "An error occurred (Block)" screen once. Adding the same panel again and re-entering did not repeat it, so it was not taken as the cause.
+- The helper pack was used only for the measurement and is not in the add-on. To measure again, turn on one more resource pack whose same-path `ui/hud_screen.json` sets the same property to another value.
+
 ## 7. Items that could not be measured
 
 - **Live input filter** (INP-25): a `common.text_edit_box` inside the action form window showed the hover border, but the tool's keyboard input (PostMessage, SendInput) did not put text into it. Whether the tool or the screen not forwarding input is the cause was not separated.
@@ -242,4 +261,5 @@ Measured in a panel inserted into `hud.root_panel` with `insert_front`. In the f
 2. Take "JSON UI Claims Test" from the creative inventory and use it, or run `/scriptevent bwiki:json_ui_claims`, to open the window menu. The last word opens a window directly, as in `/scriptevent bwiki:json_ui_claims 1` (1 expressions, 2 layout, 3 files, 4 form controls, 5 additional items, 6/7/8 multi-line marker, 9 structure renderer, r structure renderer with a moving armor stand and a changing block, h a form with a title 3 seconds after opening, s a 3-button form, a/b/c title gate, m message form). Open window 9 near blocks placed from (3,-60,3) to (5,-57,5).
 3. To check the other operations in section 4, change the `modifications` in `ui/thanks_for_testing_screen.json` and reload the UI. The add-on ships the last variant (an insert into the `variables` array), so the second line of window 3 shows FROM_VARIABLES.
 4. `ui/juc_err.json` has a deliberate JSON syntax error (a trailing comma). Window 3 shows on its `errs` row that the definition after the error is missing.
-5. The latch values (`saved`, `now`, `child latch`) show at the top left of the HUD. Send titles containing `JUC`, such as `/title @s title JUC one`, to follow the order in section 6.2. Sending `off` to the action bar hides the parent of `child latch`. The constant `alpha` and the two screen flags change vanilla behaviour, so they are not in the add-on; add them to `ui/hud_screen.json` and `ui/server_form.json` as in the section 6.2 table to check them.
+5. The latch values (`saved`, `now`, `child latch`) show at the top left of the HUD. Send titles containing `JUC`, such as `/title @s title JUC one`, to follow the order in section 6.2. Sending `off` to the action bar hides the parent of `child latch`. The constant `alpha` and the two screen flags change vanilla behaviour, so they are not in the add-on; add them to `ui/hud_screen.json` and `ui/server_form.json` as in the section 6.2 table to check them. The `state` line is the self-referencing state of section 6.3 and changes with titles containing `XON` and `XOFF`. Below it are the glyph pages E9 and EA.
+6. `/summon bwiki:juc_arr1`, `/summon bwiki:juc_arr4` and `/summon bwiki:juc_mat` call the rendering test entities of section 6.3.
