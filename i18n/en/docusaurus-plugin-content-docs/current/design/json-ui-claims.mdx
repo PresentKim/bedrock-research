@@ -248,6 +248,30 @@ Measured in a panel inserted into `hud.root_panel` with `insert_front`. In the f
 - On the day the self-referencing state was first added, entering the world showed an "An error occurred (Block)" screen once. Adding the same panel again and re-entering did not repeat it, so it was not taken as the cause.
 - The helper pack was used only for the measurement and is not in the add-on. To measure again, turn on one more resource pack whose same-path `ui/hud_screen.json` sets the same property to another value.
 
+### 6.4 Named bindings, empty global length, division, texture count, particle counter
+
+2026-11-19, same version. Expression rows read a button text of window 1 (P1) or window 5 (P5) as `#v`.
+
+| Item | Setup | Result | Related |
+|---|---|---|---|
+| Named view, target without the property | a label in `long_form_scrolling_content` reads `#form_text` through `source_control_name` from a sibling panel without bindings (`juc_src_empty`) | the form body showed | BND-24 |
+| Same, missing control name | `source_control_name: "juc_no_such_control"` | empty | BND-24 |
+| Same, router window | a label of window 5 under `main_screen_content` reads `#form_text` from a panel without bindings (`touch_true`) | empty | BND-24 |
+| `#collection_length` only in `property_bag` | `"#collection_length": ["m"]` on a `collection_panel` `control_ids` factory, `3` on a `stack_panel` `control_name` factory. Each with and without a global binding that does not exist (`#juc_no_such_global` to `#collection_length`) | 0 controls in all four | COL-22 |
+| Fixed front cut with `'@'` | `(('§_' + ('@' + #v)) - ('@' + ('%.3s' * #v)))` on `abcabc` | `abc`. Only the first three characters went. The plain cut `(#v - ('%.3s' * #v))` removed both `abc` and gave empty | EXP-13 |
+| Real literal starting with a dot | `(((#v - 0) * .01) = 1)` and `((#v - 0) * 0.01)` on `100` | true, `0` | EXP-27 |
+| Division | in P1, `((#v - 0) / 5)` (`100`), `((#v - 0) / 16)` (`-37`), and `((x - 0) / 16)` where `x` is `-37` taken out by `('x: ' + #v) - 'x: '` | `20`, `-2`, `-2`. Integers cut toward 0 | EXP-20, EXP-49 |
+| Minimap chunk expression | `((x - ((x < 0) * 15)) / 16)` on the same `x`, for `-37` and `100` | empty for both. No freeze | EXP-49 |
+| Add a comparison product, then divide | `((#v - 0) - (15 * ((#v - 0) < 0))) / 16`, `+ (((#v - 0) < 0) * -15)`, `- ((((#v - 0) < 0) * 15) - 0)` | all empty. `(((#v - 0) < 0) * 15)` alone gave `15`, and `((#v - 0) - 15) / 16` gave `-3` | EXP-19, EXP-49 |
+| Division in window 5 | one of `((#v - 0) / 16)`, `((#v - 0) / 5)`, `((x - 0) / 16)` in a row of the P5 window | the client froze the moment the window opened or the UI was reloaded (not responding, CPU near 0). The same expressions did not freeze in P1 | EXP-49 |
+| Number of render controller `textures` entries | 5, 8, 9, 10, 11, 12 and 15 `textures` entries on one entity (array elements or `Texture.x`) | drawn up to 11. With 12, with or without arrays, the client froze right after the summon and again when re-entering the saved world. 15 (arrays) crashed | render-controllers |
+| Number of render controller arrays | 15 arrays defined with one used in `textures`; one array of 15 elements | both drawn | render-controllers |
+| Particle counter | `v.spawn_counter = 0;` in the `creation_expression` of `emitter_initialization`, `v.size_counter = 0;` in its `per_update_expression`. The `emitter_shape_point.offset` expression raises `v.spawn_counter` by 1 and the billboard `size` expression raises `v.size_counter` by 1, each used as an index. 8 at once | the 8 particles sat 0.6 apart and grew in size one by one. Same sizes 2 seconds later | particles |
+
+- The minimap expression does not freeze on this build, but it does not give a value either. Adding or subtracting a term that multiplies a comparison and then dividing gives empty, so the negative correction needs another expression. Without the comparison term, `((#v - 0) - 15) / 16` was right.
+- The cause of the window 5 freeze was not separated. The same expression with the same value was normal in window 1, so the expression alone is not the cause. Window 5 also holds other experiments: a 1x1 lazy grid, a global binding that does not exist, `$touch` panels and named views.
+- A world saved with the 12-texture entity could be entered again only after that entity definition was taken out of the pack.
+
 ## 7. Items that could not be measured
 
 - **Live input filter** (INP-25): a `common.text_edit_box` inside the action form window showed the hover border, but the tool's keyboard input (PostMessage, SendInput) did not put text into it. Whether the tool or the screen not forwarding input is the cause was not separated.
@@ -263,3 +287,4 @@ Measured in a panel inserted into `hud.root_panel` with `insert_front`. In the f
 4. `ui/juc_err.json` has a deliberate JSON syntax error (a trailing comma). Window 3 shows on its `errs` row that the definition after the error is missing.
 5. The latch values (`saved`, `now`, `child latch`) show at the top left of the HUD. Send titles containing `JUC`, such as `/title @s title JUC one`, to follow the order in section 6.2. Sending `off` to the action bar hides the parent of `child latch`. The constant `alpha` and the two screen flags change vanilla behaviour, so they are not in the add-on; add them to `ui/hud_screen.json` and `ui/server_form.json` as in the section 6.2 table to check them. The `state` line is the self-referencing state of section 6.3 and changes with titles containing `XON` and `XOFF`. Below it are the glyph pages E9 and EA.
 6. `/summon bwiki:juc_arr1`, `/summon bwiki:juc_arr4` and `/summon bwiki:juc_mat` call the rendering test entities of section 6.3.
+7. The texture count entities of section 6.4 are `bwiki:juc_tex5`, `juc_tex8`, `juc_tex9`, `juc_tex10`, `juc_tex11`, `juc_tex12`, `juc_plain12`, `juc_arr15`, `juc_arr15used1` and `juc_one15`. `juc_tex12`, `juc_plain12` and `juc_arr15` freeze or end the client, so call them only in a world you can throw away. See the particle counter with `/particle bwiki:juc_counter ~ ~1 ~3`.

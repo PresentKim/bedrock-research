@@ -7,10 +7,10 @@ const TEST_ITEM = "bwiki:json_ui_claims_test";
 const EXPRESSION_INPUTS = [
   "a-b-a", "abab", "5", " x", "-x", "+x", ":x", "1x", "#x", "/x",
   "Info: a", "nancy", "0x12", "§cAB", "가나다", "😀xy", "abcdef", "17", "-7", "4",
-  "10", "2147483647", "b", "3", "inf", "x", "<x", "xaxbx",
+  "10", "2147483647", "b", "3", "inf", "x", "<x", "xaxbx", "100", "-37",
 ];
 
-const P5_BUTTONS = ["a", "b", "c", "d", "e", "f"];
+const P5_BUTTONS = ["a", "b", "c", "d", "e", "f", "abcabc", "100"];
 
 function buttonsForm(title, body, texts) {
   const form = new ActionFormData().title(title).body(body);

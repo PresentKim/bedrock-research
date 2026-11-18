@@ -308,6 +308,25 @@
             { "binding_type": "view", "binding_condition": "always", "source_property_name": "('head: ' + ('%.5s' * #form_text))", "target_property_name": "#text" }
           ]
         }
+      },
+      { "juc_src_empty": { "type": "panel", "size": [ 1, 1 ] } },
+      {
+        "m3@juc_forms.text_label": {
+          "size": [ 250, 8 ],
+          "bindings": [
+            { "binding_type": "view", "binding_condition": "always", "source_control_name": "juc_src_empty", "source_property_name": "#form_text", "target_property_name": "#v" },
+            { "binding_type": "view", "binding_condition": "always", "source_property_name": "('named, no binding: ' + #v)", "target_property_name": "#text" }
+          ]
+        }
+      },
+      {
+        "m4@juc_forms.text_label": {
+          "size": [ 250, 8 ],
+          "bindings": [
+            { "binding_type": "view", "binding_condition": "always", "source_control_name": "juc_no_such_control", "source_property_name": "#form_text", "target_property_name": "#v" },
+            { "binding_type": "view", "binding_condition": "always", "source_property_name": "('missing name: ' + #v)", "target_property_name": "#text" }
+          ]
+        }
       }
     ]
   },
@@ -444,10 +463,122 @@
                   { "btn_b@juc_forms.probe_button": { "collection_index": 1 } }
                 ]
               }
+            },
+            { "touch_true": { "type": "panel", "size": [ 10, 2 ], "ignored": "$touch" } },
+            { "touch_false": { "type": "panel", "size": [ 10, 2 ], "ignored": "(not $touch)" } },
+            {
+              "lazy_default": {
+                "type": "grid", "size": [ 200, 8 ], "grid_dimensions": [ 1, 1 ], "grid_item_template": "juc_forms.lazy_cell_default",
+                "collection_name": "form_buttons",
+                "bindings": [
+                  { "binding_name": "#form_button_length", "binding_name_override": "#maximum_grid_items", "binding_condition": "once" },
+                  { "binding_name": "#title_text", "binding_condition": "visible" },
+                  { "binding_type": "view", "binding_condition": "visible", "source_property_name": "(1 * (not ((#title_text - 'jc:5') = #title_text)))", "target_property_name": "#maximum_grid_items" }
+                ]
+              }
+            },
+            {
+              "lazy_always": {
+                "type": "grid", "size": [ 200, 8 ], "grid_dimensions": [ 1, 1 ], "grid_item_template": "juc_forms.lazy_cell_always",
+                "collection_name": "form_buttons",
+                "bindings": [
+                  { "binding_name": "#form_button_length", "binding_name_override": "#maximum_grid_items", "binding_condition": "once" },
+                  { "binding_name": "#title_text", "binding_condition": "visible" },
+                  { "binding_type": "view", "binding_condition": "visible", "source_property_name": "(1 * (not ((#title_text - 'jc:5') = #title_text)))", "target_property_name": "#maximum_grid_items" }
+                ]
+              }
+            },
+            {
+              "ghost_route": {
+                "type": "collection_panel", "size": [ 200, 8 ], "collection_name": "form_buttons",
+                "factory": { "name": "juc_ghost", "control_ids": { "m": "@juc_forms.cell" } },
+                "property_bag": { "#collection_length": [ "m" ] },
+                "bindings": [
+                  { "binding_type": "global", "binding_name": "#juc_no_such_global", "binding_name_override": "#collection_length" }
+                ]
+              }
+            },
+            {
+              "ghost_route_bag_only": {
+                "type": "collection_panel", "size": [ 200, 8 ], "collection_name": "form_buttons",
+                "factory": { "name": "juc_ghost_bag", "control_ids": { "m": "@juc_forms.cell" } },
+                "property_bag": { "#collection_length": [ "m" ] }
+              }
+            },
+            {
+              "ghost_len_bag_only": {
+                "type": "stack_panel", "orientation": "horizontal", "size": [ 200, 8 ], "collection_name": "form_buttons",
+                "factory": { "name": "juc_ghost_len_bag", "control_name": "juc_forms.cell" },
+                "property_bag": { "#collection_length": 3 }
+              }
+            },
+            {
+              "ghost_len": {
+                "type": "stack_panel", "orientation": "horizontal", "size": [ 200, 8 ], "collection_name": "form_buttons",
+                "factory": { "name": "juc_ghost_len", "control_name": "juc_forms.cell" },
+                "property_bag": { "#collection_length": 3 },
+                "bindings": [
+                  { "binding_type": "global", "binding_name": "#juc_no_such_global", "binding_name_override": "#collection_length" }
+                ]
+              }
+            },
+            {
+              "named_outside@juc_forms.text_label": {
+                "size": [ 250, 8 ],
+                "bindings": [
+                  { "binding_type": "view", "binding_condition": "always", "source_control_name": "touch_true", "source_property_name": "#form_text", "target_property_name": "#v" },
+                  { "binding_type": "view", "binding_condition": "always", "source_property_name": "('outside named: ' + #v)", "target_property_name": "#text" }
+                ]
+              }
+            },
+            {
+              "anchor_rows": {
+                "type": "stack_panel", "size": [ 200, "100%c" ], "collection_name": "form_buttons",
+                "controls": [
+                  { "at1@juc_expr.row": { "collection_index": 6, "$d": "@ cut 3 of abcabc", "$x": "(('§_' + ('@' + #v)) - ('@' + ('%.3s' * #v)))" } },
+                  { "at2@juc_expr.row": { "collection_index": 6, "$d": "plain cut abc", "$x": "('§_' + (#v - ('%.3s' * #v)))" } },
+                  { "dot01@juc_expr.row": { "collection_index": 7, "$d": "100 * .01 = 1", "$x": "('R' + (((#v - 0) * .01) = 1))" } },
+                  { "dot01b@juc_expr.row": { "collection_index": 7, "$d": "100 * 0.01", "$x": "('R' + ((#v - 0) * 0.01))" } }
+                ]
+              }
             }
           ]
         }
       }
+    ]
+  },
+
+  "lazy_label_default": {
+    "type": "label", "size": [ 60, 8 ], "font_scale_factor": 0.8, "localize": false, "color": [ 1, 1, 0.4 ], "text": "#text",
+    "bindings": [
+      { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text" },
+      { "binding_type": "view", "source_property_name": "('d' + #form_button_text)", "target_property_name": "#text" }
+    ]
+  },
+
+  "lazy_label_always": {
+    "type": "label", "size": [ 60, 8 ], "font_scale_factor": 0.8, "localize": false, "color": [ 1, 1, 0.4 ], "text": "#text",
+    "bindings": [
+      { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text", "binding_condition": "always" },
+      { "binding_type": "view", "binding_condition": "always", "source_property_name": "('a' + #form_button_text)", "target_property_name": "#text" }
+    ]
+  },
+
+  "lazy_cell_default": {
+    "type": "stack_panel", "orientation": "horizontal", "size": [ 200, 8 ], "collection_name": "form_buttons",
+    "controls": [
+      { "f0@juc_forms.lazy_label_default": { "collection_index": 0 } },
+      { "f4@juc_forms.lazy_label_default": { "collection_index": 4 } },
+      { "f5@juc_forms.lazy_label_default": { "collection_index": 5 } }
+    ]
+  },
+
+  "lazy_cell_always": {
+    "type": "stack_panel", "orientation": "horizontal", "size": [ 200, 8 ], "collection_name": "form_buttons",
+    "controls": [
+      { "f0@juc_forms.lazy_label_always": { "collection_index": 0 } },
+      { "f4@juc_forms.lazy_label_always": { "collection_index": 4 } },
+      { "f5@juc_forms.lazy_label_always": { "collection_index": 5 } }
     ]
   }
 }
