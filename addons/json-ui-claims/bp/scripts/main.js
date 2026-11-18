@@ -100,10 +100,34 @@ world.afterEvents.itemUse.subscribe((event) => {
   system.run(() => openMenu(event.source));
 });
 
+const PERF_ICONS = [
+  "textures/items/diamond", "textures/items/apple", "textures/items/iron_ingot", "textures/items/gold_ingot", "textures/items/emerald",
+  "textures/items/coal", "textures/items/redstone_dust", "textures/items/bread", "textures/items/stick", "textures/items/bone",
+];
+
+function perfForm(variant, count) {
+  const form = new ActionFormData().title(`§b§wjc:${variant}`).body(`perf ${variant} ${count}`);
+  for (let i = 0; i < count; i++) {
+    const digit = i % 10;
+    if (variant === "b") form.button(`d${digit}`, PERF_ICONS[digit]);
+    else if (variant === "e" || variant === "f") form.button(`AAAABBBB${String(i).padStart(4, "0")}DDDD`);
+    else form.button(`d${digit}`);
+  }
+  return form;
+}
+
 system.afterEvents.scriptEventReceive.subscribe((event) => {
   if (event.sourceEntity?.typeId !== "minecraft:player") return;
   if (event.id !== "bwiki:json_ui_claims") return;
-  const key = event.message.trim().split(/\s+/).pop();
+  const words = event.message.trim().split(/\s+/);
+  const perfAt = words.indexOf("perf");
+  if (perfAt >= 0) {
+    const variant = words[perfAt + 1];
+    const count = Number(words[perfAt + 2]);
+    openProbe(event.sourceEntity, { label: `perf ${variant} ${count}`, build: () => perfForm(variant, count) });
+    return;
+  }
+  const key = words.pop();
   const probe = PROBES.find((p) => p.key === key);
   if (probe) openProbe(event.sourceEntity, probe);
   else openMenu(event.sourceEntity);

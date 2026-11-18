@@ -283,5 +283,100 @@
       { "title@juc.title": {} },
       { "body@juc_lay.body": { "layer": 2, "size": [ 420, 190 ], "offset": [ 4, 14 ], "anchor_from": "top_left", "anchor_to": "top_left" } }
     ]
-  }
+  },
+
+  "digit_image": {
+    "type": "image",
+    "size": [ "100%", "100%" ],
+    "texture": "$tex",
+    "bindings": [
+      { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text" },
+      { "binding_type": "view", "source_property_name": "$cond", "target_property_name": "#visible" }
+    ]
+  },
+
+  "cell_images": {
+    "type": "panel",
+    "size": [ 4, 4 ],
+    "controls": [
+      { "i0@juc_lay.digit_image": { "$cond": "(('%.2s' * #form_button_text) = 'd0')", "$tex": "textures/items/diamond" } },
+      { "i1@juc_lay.digit_image": { "$cond": "(('%.2s' * #form_button_text) = 'd1')", "$tex": "textures/items/apple" } },
+      { "i2@juc_lay.digit_image": { "$cond": "(('%.2s' * #form_button_text) = 'd2')", "$tex": "textures/items/iron_ingot" } },
+      { "i3@juc_lay.digit_image": { "$cond": "(('%.2s' * #form_button_text) = 'd3')", "$tex": "textures/items/gold_ingot" } },
+      { "i4@juc_lay.digit_image": { "$cond": "(('%.2s' * #form_button_text) = 'd4')", "$tex": "textures/items/emerald" } },
+      { "i5@juc_lay.digit_image": { "$cond": "(('%.2s' * #form_button_text) = 'd5')", "$tex": "textures/items/coal" } },
+      { "i6@juc_lay.digit_image": { "$cond": "(('%.2s' * #form_button_text) = 'd6')", "$tex": "textures/items/redstone_dust" } },
+      { "i7@juc_lay.digit_image": { "$cond": "(('%.2s' * #form_button_text) = 'd7')", "$tex": "textures/items/bread" } },
+      { "i8@juc_lay.digit_image": { "$cond": "(('%.2s' * #form_button_text) = 'd8')", "$tex": "textures/items/stick" } },
+      { "i9@juc_lay.digit_image": { "$cond": "(('%.2s' * #form_button_text) = 'd9')", "$tex": "textures/items/bone" } }
+    ]
+  },
+
+  "cell_texture": {
+    "type": "image",
+    "size": [ 4, 4 ],
+    "bindings": [
+      { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_texture", "binding_name_override": "#texture" }
+    ]
+  },
+
+  "cell_static": {
+    "type": "image",
+    "size": [ 4, 4 ],
+    "texture": "textures/items/diamond"
+  },
+
+  "cell_parse": {
+    "type": "label",
+    "size": [ 4, 4 ],
+    "font_scale_factor": 0.3,
+    "localize": false,
+    "text": "#text",
+    "bindings": [
+      { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text" },
+      { "binding_type": "view", "source_property_name": "('%.4s' * (#form_button_text - ('%.8s' * #form_button_text)))", "target_property_name": "#text" }
+    ]
+  },
+
+  "cell_plain": {
+    "type": "label",
+    "size": [ 4, 4 ],
+    "font_scale_factor": 0.3,
+    "localize": false,
+    "text": "#form_button_text",
+    "bindings": [
+      { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text" }
+    ]
+  },
+
+  "perf_grid": {
+    "type": "grid",
+    "size": [ 120, 80 ],
+    "anchor_from": "top_left",
+    "anchor_to": "top_left",
+    "grid_dimensions": [ 30, 20 ],
+    "grid_item_template": "$cell",
+    "collection_name": "form_buttons"
+  },
+
+  "perf_window": {
+    "type": "panel",
+    "size": [ "100%", "100%" ],
+    "layer": 20,
+    "controls": [
+      { "bg@juc.bg": { "alpha": 1.0 } },
+      { "title@juc.title": {} },
+      { "content": { "type": "panel", "layer": 2, "size": [ 240, 240 ], "offset": [ 230, 12 ], "anchor_from": "top_left", "anchor_to": "top_left", "controls": "$content" } }
+    ]
+  },
+
+  "win_images@juc_lay.perf_window": { "$window_title": "perf: 10 images per cell", "$content": [ { "g@juc_lay.perf_grid": { "$cell": "juc_lay.cell_images" } } ] },
+  "win_texture@juc_lay.perf_window": { "$window_title": "perf: 1 #texture image per cell", "$content": [ { "g@juc_lay.perf_grid": { "$cell": "juc_lay.cell_texture" } } ] },
+  "win_noclip@juc_lay.perf_window": { "$window_title": "perf: static grid, no clip", "$content": [ { "g@juc_lay.perf_grid": { "$cell": "juc_lay.cell_static" } } ] },
+  "win_clip@juc_lay.perf_window": {
+    "$window_title": "perf: static grid in 40x40 clip",
+    "$content": [ { "clip": { "type": "panel", "size": [ 40, 40 ], "anchor_from": "top_left", "anchor_to": "top_left", "clips_children": true, "controls": [ { "g@juc_lay.perf_grid": { "$cell": "juc_lay.cell_static" } } ] } } ]
+  },
+  "win_parse@juc_lay.perf_window": { "$window_title": "perf: fixed-width field slice", "$content": [ { "g@juc_lay.perf_grid": { "$cell": "juc_lay.cell_parse" } } ] },
+  "win_plain@juc_lay.perf_window": { "$window_title": "perf: plain button text", "$content": [ { "g@juc_lay.perf_grid": { "$cell": "juc_lay.cell_plain" } } ] }
 }
