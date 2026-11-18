@@ -67,7 +67,7 @@ sources: [private-research, bedrock-wiki, ms-learn]
 
 ## 파일과 상속의 규칙
 
-- 엔티티 머티리얼은 `RP/materials/<x>.material`이다. 애니메이션 엔티티 텍스처 등에서는 파일 이름이 `entity.material`이어야 하고 `.json` 확장자가 **없어야** 한다. 내장 머티리얼 이름에는 네임스페이스가 없다. 머티리얼이 로드되지 않으면 콘텐츠 로그에 오류가 남는다. `confirmed`
+- 엔티티 머티리얼은 `RP/materials/<x>.material`이다. 애니메이션 엔티티 텍스처 등에서는 파일 이름이 `entity.material`이어야 하고 `.json` 확장자가 **없어야** 한다. 내장 머티리얼 이름에는 네임스페이스가 없다. 머티리얼이 로드되지 않으면 콘텐츠 로그에 오류가 남는다. `confirmed` `materials/entity_1.material`에만 정의한 머티리얼은 읽히지 않아 `Material "..." is referenced ... but not defined.`가 났다([실측 기록](../design/json-ui-claims.mdx#67-파티클-쿼리와-카운터-소리-정의-머티리얼-파일-바이옴), 2026-11-19 Windows 1.26.65.1).
 - `materials/entity.material`에 `//` 주석 줄이 있어도 파일은 읽혔다. 실측(2026-11-19 Windows 1.26.65.1): 주석 줄과 함께 정의한 `juc_mat:entity_alphatest`를 엔티티가 쓰자 그려졌고, 없는 머티리얼 이름(`juc_missing`)으로 바꾸면 그림자만 남고 엔티티는 보이지 않았다([기록](../design/json-ui-claims.mdx#63-상태-유지-지연-루트-팩-순서-렌더링)).
 - 어태처블 `materials`에 키가 올바로 없으면 "Material ... referenced but not defined"가 난다. 이 오류는 manifest의 팩 버전을 올리자 해결된 사례도 있다.
 - Bedrock Wiki에 따르면 1.16부터 바닐라 머티리얼 상속에 문제가 있고, 한 사용자는 바닐라 정의 전체를 복사해야만 동작했다. 반대로 커스텀 `.material` 파일에 바닐라 머티리얼 항목을 넣지 말라는 조언도 있다(nocull을 시도하자 렌더링이 멈췄다). `conflicting`
@@ -178,7 +178,7 @@ Mojang식 아웃라인 예:
 
 ## 깊이: 벽 너머 보이기, 앞에 그리기
 
-- 벽 너머 보이기: 머티리얼의 `"depthFunc": "Always"`로 블록 너머가 보인다. 예: `materials/entity.material`에 `"entity_alphatest_omniscient:entity_alphatest": {"depthFunc":"Always"}`(파일 이름 중요). `DisableDepthTest`나 `DisableDepthWrite`만으로는 다른 엔티티가 앞에 있으면 실패한다. 파티클로는 할 수 없으니 커스텀 머티리얼 엔티티를 쓴다.
+- 벽 너머 보이기: 머티리얼의 `"depthFunc": "Always"`로 블록 너머가 보인다. 예: `materials/entity.material`에 `"entity_alphatest_omniscient:entity_alphatest": {"depthFunc":"Always"}`(파일 이름 중요). `DisableDepthTest`나 `DisableDepthWrite`만으로는 다른 엔티티가 앞에 있으면 실패한다. 둘을 함께 `+states`에 넣은 `entity_alphatest` 파생은 앞에 있는 돌 블록과 다른 엔티티 위에 모두 그려졌다(자기 안쪽 면도 보임, [실측 기록](../design/json-ui-claims.mdx#67-파티클-쿼리와-카운터-소리-정의-머티리얼-파일-바이옴), 2026-11-19 Windows 1.26.65.1). 파티클로는 할 수 없으니 커스텀 머티리얼 엔티티를 쓴다.
 - 블록 뒤에는 그리되 엔티티는 통과하지 않음: `{"+states":["DisableDepthTest","DisableDepthWrite","Blending"],"depthFunc":"Always","blendSrc":"SourceAlpha","blendDst":"OneMinusSrcAlpha"}`가 동작했다(안팎이 뒤집힌 아티팩트 일부).
 - 1인칭 어태처블 위에 엔티티 그리기: 1인칭 지오메트리 전에 깊이 버퍼가 지워지므로 스텐실을 쓴다. 엔티티 머티리얼 `depth_entity:entity_alphatest`에 `+states ["EnableStencilTest","StencilWrite"]`, `depthFunc: Always`, front/backFace `stencilFunc Always`, `stencilFailOp`, `stencilDepthFailOp`, `stencilPassOp` 모두 `Replace`, `stencilRef: 2`. 어태처블 머티리얼 `attachable:entity_alphatest`에 `+states ["EnableStencilTest"]`, `stencilFunc: NotEqual`, `stencilRef: 2`.
 - 긴 발광 빔이 사라짐: 꼭짓점별로 보간되는 fog 때문에 특정 지점을 보지 않으면 사라진다. 빔을 짧게 하거나 10~100개의 쌓인 큐브로 나눈다.

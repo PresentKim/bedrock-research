@@ -1,4 +1,4 @@
-import { system, world } from "@minecraft/server";
+import { MolangVariableMap, system, world } from "@minecraft/server";
 import { ActionFormData, MessageFormData } from "@minecraft/server-ui";
 
 const PACK_VERSION = "v1.0.0";
@@ -119,8 +119,22 @@ function perfForm(variant, count) {
   return form;
 }
 
+function spawnProbeParticle(player, message) {
+  const [effect, name, value] = message.trim().split(/\s+/);
+  const variables = new MolangVariableMap();
+  if (name) variables.setFloat(name, Number(value));
+  const view = player.getViewDirection();
+  const head = player.getHeadLocation();
+  const location = { x: head.x + view.x * 3, y: head.y + view.y * 3, z: head.z + view.z * 3 };
+  player.dimension.spawnParticle(effect, location, variables);
+}
+
 system.afterEvents.scriptEventReceive.subscribe((event) => {
   if (event.sourceEntity?.typeId !== "minecraft:player") return;
+  if (event.id === "bwiki:juc_particle") {
+    spawnProbeParticle(event.sourceEntity, event.message);
+    return;
+  }
   if (event.id !== "bwiki:json_ui_claims") return;
   const words = event.message.trim().split(/\s+/);
   const perfAt = words.indexOf("perf");
