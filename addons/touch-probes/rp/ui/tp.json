@@ -1,0 +1,133 @@
+{
+  "namespace": "tp",
+
+  "bg": { "type": "image", "texture": "textures/ui/Black", "alpha": 0.9, "size": [ "100%", "100%" ] },
+
+  "text": {
+    "type": "label", "layer": 3, "localize": false, "color": [ 1, 1, 1 ], "size": [ "default", 10 ],
+    "anchor_from": "top_left", "anchor_to": "top_left", "text": "$t"
+  },
+
+  "screen_router": {
+    "type": "collection_panel",
+    "size": [ "100%", "100%" ],
+    "factory": {
+      "name": "tp_screen",
+      "control_ids": {
+        "k": "@tp_keys.window_default", "l": "@tp_keys.window_false", "n": "@tp_keys.window_true",
+        "v": "@tp.window_vars", "p": "@tp.window_portrait"
+      }
+    },
+    "property_bag": { "#§b§wtp:k": [ "k" ], "#§b§wtp:l": [ "l" ], "#§b§wtp:n": [ "n" ], "#§b§wtp:v": [ "v" ], "#§b§wtp:p": [ "p" ] },
+    "bindings": [
+      { "binding_name": "#title_text" },
+      { "binding_type": "view", "source_property_name": "('#' + ('%.10s' * #title_text))", "target_property_name": "#collection_length" }
+    ]
+  },
+
+  "flag_row": {
+    "type": "panel", "size": [ 300, 12 ], "anchor_from": "top_left", "anchor_to": "top_left",
+    "controls": [
+      { "name@tp.text": { "$t": "$row_name" } },
+      { "yes@tp.text": { "offset": [ 150, 0 ], "$t": "true", "ignored": "(not $row_var)" } },
+      { "no@tp.text": { "offset": [ 150, 0 ], "$t": "false", "ignored": "$row_var" } }
+    ]
+  },
+
+  "window_vars": {
+    "type": "panel", "size": [ "100%", "100%" ], "layer": 20,
+    "controls": [
+      { "bg@tp.bg": {} },
+      { "title@tp.text": { "offset": [ 6, 4 ], "$t": "Touch variables" } },
+      { "r1@tp.flag_row": { "offset": [ 6, 24 ], "$row_name": "$touch (ignored panels)", "$row_var": "$touch" } },
+      { "r2@tp.flag_row": { "offset": [ 6, 38 ], "$row_name": "$pocket_screen (ignored panels)", "$row_var": "$pocket_screen" } },
+      {
+        "bag@tp.text": {
+          "offset": [ 6, 52 ], "$t": "",
+          "property_bag": { "#touch": "$touch" },
+          "bindings": [ { "binding_type": "view", "source_property_name": "('property_bag #touch: ' + #touch)", "target_property_name": "#text" } ]
+        }
+      },
+      { "plain@tp.text": { "offset": [ 6, 66 ], "$t": "$touch" } },
+      { "hint@tp.text": { "offset": [ 6, 90 ], "$t": "Closes by itself after 20 seconds." } }
+    ]
+  },
+
+  "portrait_cell": {
+    "type": "panel", "size": [ 76, 120 ], "collection_index": "$i",
+    "controls": [
+      { "name@tp.text": { "offset": [ 2, 0 ], "$t": "$label" } },
+      { "frame": { "type": "image", "texture": "textures/ui/White", "color": [ 0.2, 0.2, 0.3 ], "size": [ 70, 100 ], "offset": [ 0, 14 ], "anchor_from": "top_left", "anchor_to": "top_left" } },
+      {
+        "r": {
+          "type": "custom", "renderer": "live_horse_renderer", "layer": 4, "collection_index": "$i",
+          "size": [ 30, 30 ], "offset": [ 20, 60 ], "anchor_from": "top_left", "anchor_to": "top_left",
+          "bindings": [
+            { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text", "binding_condition": "always" },
+            { "binding_type": "view", "binding_condition": "always", "source_property_name": "#form_button_text", "target_property_name": "#entity_id" }
+          ]
+        }
+      }
+    ]
+  },
+
+  "window_portrait": {
+    "type": "panel", "size": [ "100%", "100%" ], "layer": 20,
+    "controls": [
+      { "bg@tp.bg": {} },
+      { "title@tp.text": { "offset": [ 6, 4 ], "$t": "Portrait angle compensation (root bone rotation in UI only)" } },
+      {
+        "row": {
+          "type": "stack_panel", "orientation": "horizontal", "size": [ 400, 130 ], "offset": [ 6, 20 ],
+          "anchor_from": "top_left", "anchor_to": "top_left", "collection_name": "form_buttons",
+          "controls": [
+            { "c0@tp.portrait_cell": { "$i": 0, "$label": "0 none" } },
+            { "c1@tp.portrait_cell": { "$i": 1, "$label": "1 x+16 y+25" } },
+            { "c2@tp.portrait_cell": { "$i": 2, "$label": "2 x+16 y-25" } },
+            { "c3@tp.portrait_cell": { "$i": 3, "$label": "3 x-16 y+25" } },
+            { "c4@tp.portrait_cell": { "$i": 4, "$label": "4 x-16 y-25" } }
+          ]
+        }
+      },
+      { "hint@tp.text": { "offset": [ 6, 156 ], "$t": "Closes by itself after 30 seconds." } }
+    ]
+  },
+
+  "hud_press_anim": { "anim_type": "alpha", "from": 1, "to": 1, "duration": 100000, "play_event": "button.tp_hud_pressed" },
+
+  "hud_state": {
+    "type": "panel", "size": [ "100%", "100%" ],
+    "controls": [
+      { "fill": { "type": "image", "texture": "textures/ui/White", "color": "$c", "size": [ "100%", "100%" ] } },
+      { "label@tp.text": { "layer": 2, "color": [ 0, 0, 0 ], "anchor_from": "center", "anchor_to": "center", "$t": "$t" } }
+    ]
+  },
+
+  "hud_probe": {
+    "type": "panel", "size": [ 80, 34 ], "offset": [ -4, 40 ], "anchor_from": "top_right", "anchor_to": "top_right", "layer": 30,
+    "controls": [
+      {
+        "btn": {
+          "type": "button", "size": [ 80, 20 ], "anchor_from": "top_left", "anchor_to": "top_left",
+          "default_control": "default", "hover_control": "hover", "pressed_control": "pressed",
+          "button_mappings": [
+            { "from_button_id": "button.menu_select", "to_button_id": "button.tp_hud_pressed", "mapping_type": "pressed" },
+            { "from_button_id": "button.menu_ok", "to_button_id": "button.tp_hud_pressed", "mapping_type": "focused" }
+          ],
+          "controls": [
+            { "default@tp.hud_state": { "$c": [ 0.6, 0.6, 0.6 ], "$t": "default" } },
+            { "hover@tp.hud_state": { "$c": [ 1.0, 0.85, 0.2 ], "$t": "hover" } },
+            { "pressed@tp.hud_state": { "$c": [ 0.3, 0.9, 0.3 ], "$t": "pressed" } }
+          ]
+        }
+      },
+      {
+        "seen": {
+          "type": "image", "texture": "textures/ui/White", "color": [ 0.2, 0.6, 1.0 ], "alpha": 0, "size": [ 80, 12 ], "offset": [ 0, 22 ],
+          "anchor_from": "top_left", "anchor_to": "top_left", "anims": [ "@tp.hud_press_anim" ],
+          "controls": [ { "label@tp.text": { "color": [ 0, 0, 0 ], "anchor_from": "center", "anchor_to": "center", "$t": "press received" } } ]
+        }
+      }
+    ]
+  }
+}
