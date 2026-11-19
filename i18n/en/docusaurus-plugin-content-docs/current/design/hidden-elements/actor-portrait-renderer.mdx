@@ -1,6 +1,6 @@
 ---
 title: Drawing entity portraits with actor_portrait_renderer
-description: How to draw a player portrait on the HUD by writing an entity id and size and rotation keys in the property_bag of actor_portrait_renderer. Per-key measurements, why rotation rewinds under the title factory, the limit that the NPC screen overwrites pack keys, a comparison with the live_horse, live_player, hud_player, paper_doll and equipment_preview renderers, and an example add-on.
+description: How to draw entity portraits on the HUD by writing an entity id and size, rotation and offset keys in the property_bag of actor_portrait_renderer. Per-key measurements, the rule that assigns entity ids, the limit that bindings cut integers to 32 bits so actor_id cannot be set at runtime, why rotation rewinds under the title factory, the limit that the NPC screen overwrites pack keys, a comparison with other entity renderers, and an example add-on.
 sidebar_position: 1
 sources:
   - repo-guide
@@ -12,26 +12,27 @@ sources:
 
 ## 1. Summary
 
-- With an integer `actor_id` in a static `property_bag`, it draws that entity. It drew the player of a single player world (`Player.id` is `-4294967295`) on the HUD.
-- `scale_*`, `rotate_x` and `rotate_y` change the size and direction, and `rotate_mode: "auto"` keeps it turning.
-- Only a static integer id works. A value built with an expression drew nothing, so picking other players or entities is hard.
+- With an integer `actor_id` in a static `property_bag`, it draws that entity. The value is the Script API `entity.id` (the unique entity id saved in the world). It drew players, a pig, a horse, a cat and an armor stand, and did not draw a minecart or a boat.
+- `scale_*`, `rotate_*`, `translate_x` and `translate_y` change the size, direction and position, and `rotate_mode: "auto"` keeps it turning. These values can be changed at runtime through bindings.
+- **Limit: `actor_id` cannot be set at runtime.** Entity ids are 64-bit integers beyond the 32-bit range, and bindings keep only the low 32 bits when they read an integer. The renderer does not accept strings or floats. The id has to be written into the resource pack in advance as a JSON integer (section 4).
 - A control made by the title factory is rebuilt each time the title is sent again, and the rotation rewinds.
 - The NPC edit screen writes these keys again for each cell and overwrites what a pack sets.
-- Among the six renderers that draw entities, this is the only one that picks any entity by an integer id and takes free transforms. When only your own look is needed, the player renderers that need no id fit better (section 6).
+- Among the six renderers that draw entities, this is the only one that picks an entity by an integer id and takes free transforms. When only your own look is needed, the player renderers that need no id fit better (section 7).
 
 ## 2. property_bag keys
 
 | Key | Value | Measured |
 | --- | --- | --- |
-| `actor_id` | integer | `-4294967295` drew the player. A value built with an expression like `"(0 + $subtitle_text)"` (the same id) drew nothing |
-| `scale_x`, `scale_y`, `scale_z` | number, default 1 | 0.5 gave half size |
-| `rotate_x`, `rotate_y`, `rotate_z` | number (degrees), default 0 | `rotate_y` 180 showed the back and `rotate_x` 45 tilted it forward. `rotate_z` was not tested |
-| `translate_x`, `translate_y`, `translate_z` | number, default 0 | `translate_x` 0.5 did not move it visibly. The unit is unknown |
-| `rotate_mode` | string | `"auto"` keeps it turning (section 4) |
-| `use_live_animation` | boolean | No visible difference between a cell with `true` and one without |
-| `skin` | string (JSON) | Not tested. Looks like a key that picks a variant with `variant` and `mark_variant` *(code)* |
+| `actor_id` | integer (64-bit) | With an entity's `entity.id` it drew that entity. 0 to 40, -1 to -6, the id cut down by 32-bit units, a JSON string and a float drew nothing (section 4) |
+| `scale_x`, `scale_y`, `scale_z` | number, default 1 | 0.5 gave half size. Shrinking only `scale_y` flattens it vertically |
+| `rotate_x`, `rotate_y`, `rotate_z` | number (degrees), default 0 | `rotate_y` 180 showed the back and `rotate_x` 45 tilted it forward. `rotate_z` turns around the axis into the screen: 45 tilts it and 90 lays it down |
+| `translate_x`, `translate_y` | number, default 0 | 1 is one UI pixel. Positive `translate_x` moves right and positive `translate_y` moves down. With `rotate_y` 90 it still moves in screen space |
+| `translate_z` | number, default 0 | 50 changed nothing |
+| `rotate_mode` | string | `"auto"` keeps it turning (section 5) |
+| `use_live_animation` | boolean | No visible difference among `true`, `false` and no key. With the player looking up (-60) or down (60), all three faced forward |
+| `skin` | string (JSON) | `"{\"variant\":3}"` changed the horse coat and `"{\"variant\":5}"` the cat coat. `"{\"mark_variant\":2}"` added white markings to the horse |
 
-Emote, attack and sneak animations showed in every cell regardless of the keys. No cell followed walking or the view direction.
+Emote, attack and sneak animations showed in every cell regardless of the keys. No cell followed walking or the view direction. The drawn size follows the entity size, so in the same cell a cat is tiny and a horse is about as tall as a player.
 
 ## 3. Drawing your own portrait on the HUD
 
@@ -47,33 +48,119 @@ Emote, attack and sneak animations showed in every cell regardless of the keys. 
 ```
 
 - The size follows the control size. At the size above, the whole player was drawn aligned to the bottom of the cell.
-- `-4294967295` is the player id of a single player world (or the host of that world). Other players have different ids and are not drawn. The example add-on shows your id on the action bar so you can tell whether it matches.
+- The player id differs per world. In the tests on this page it was `-4294967295` and `-8589934591`. By the rule in section 4.1, the first is a player who first joined in the first session that loaded the world, and the second one who first joined in the second session *(inferred)*. With a different id nothing is drawn. The example add-on shows your id on the action bar so you can tell whether it matches.
 - To show it on the HUD, declare `hud_title_text_factory` once more on `root_panel` as in section 3.2 of [HUD item icons](../hud-item-icons.mdx), and pick the panel by the title text.
 
-## 4. Why the rotation rewinds
+## 4. Entity ids and usage limits
+
+### 4.1 How entity ids are assigned
+
+- When a world loads, the game takes `worldStartCount` from `level.dat` (negative when read as 32 bits) as the upper 32 bits for that session, and right away saves the value minus 1 to the file.
+- An entity id is `worldStartCount x 2^32 + the sequence number in that session`, and the sequence starts at 1.
+- Once assigned, an id does not change when the world is entered again.
+
+| Observation | Value |
+| --- | --- |
+| A pig summoned in the session entered while the file held -102 | `-438086664191` = -102 x 2^32 + 1 |
+| A minecart and a boat summoned next in that session | -102 x 2^32 + 2, + 3 |
+| The file right after entering that session | -103 |
+| Pigs summoned in earlier sessions | upper values -98, -99, -101 |
+| The player of the same world | `-8589934591` = -2 x 2^32 + 1 (looks like it first joined in the second session) |
+
+So every entity id, players included, is outside the 32-bit integer range (-2147483648 to 2147483647).
+
+### 4.2 What can change at runtime
+
+The transform keys can be changed at runtime through bindings. When the script changed only the subtitle to 0, 45 and 90 with `updateSubtitle`, the cells that bound the subtitle turned into a number (`(('' + #s) + 0)`) followed along without the title being sent again.
+
+| Key | Result |
+| --- | --- |
+| `rotate_x`, `rotate_y`, `rotate_z` | turned by 45 and 90 |
+| `translate_x`, `translate_y` | moved by the value |
+| `scale_x`, `scale_y`, `scale_z` | with `((('' + #s) + 0) * .01)` and 25 sent, it became 0.25 times |
+
+```json
+"bindings": [
+  { "binding_name": "#hud_subtitle_text_string", "binding_name_override": "#s", "binding_type": "global" },
+  { "binding_type": "view", "source_property_name": "(('' + #s) + 0)", "target_property_name": "rotate_y" }
+]
+```
+
+The binding target has to be the key name without `#` (`rotate_y`). Writing to `#rotate_y` changed nothing.
+
+### 4.3 Why actor_id cannot be set at runtime
+
+The integers bindings handle are 32-bit. When a binding reads an integer it keeps only the low 32 bits, so a 64-bit entity id becomes another value once it passes through a binding.
+
+| Value read by a binding expression | Result |
+| --- | --- |
+| `-8589934591` in `property_bag` | `1` |
+| `2147483648` in `property_bag` | `-2147483648` |
+| `2147483647 + 1` | `-2147483648` |
+| `65536 * 65536` | `0` |
+| literals `2147483648`, `4294967296` | empty |
+| subtitle string `12` turned into a number with `('' + #s)` plus 1 | `13` |
+| subtitle string `-8589934591` turned the same way | empty |
+
+Of the ways tried to fill `actor_id`, only a static integer and a variable holding one drew.
+
+| Way | Result |
+| --- | --- |
+| JSON integer, variable holding a JSON integer (`"$id": -8589934591`) | drew |
+| JSON integer picked with `requires` in `variables` | drew |
+| JSON string `"-8589934591"`, float `-8589934591.0` | empty |
+| string variable (`$subtitle_text`), an expression like `"($subtitle_text * 1)"` | empty |
+| string binding, quoted string binding (`('"' + #s + '"')`) | empty |
+| expressions meant to make a number (`('' + #s)`, `(#s - 0)`, `(#s * 1)`) | empty |
+| moving a 64-bit integer from the same `property_bag` or another control without an expression (`"source_property_name": "#src"`) | empty. Moving 90 to `rotate_z` the same way worked |
+
+The processing read in the client code (Android 1.26.52.3) agrees *(code)*.
+
+- The renderer picks the entity only by `actor_id` in `property_bag`. It checks only that the JSON kind of the value is integer, reads it as 64 bits, and looks up the entity with that id in the level.
+- It draws only when the `ActorTypeComponent` type of the entity found has the mob bit (`0x100`). This matches the measurement that a minecart and a boat were not drawn.
+- The only engine code that writes a 64-bit integer to `actor_id` in `property_bag` is the NPC screen callback (section 6). C++ writes that value directly, without bindings.
+
+`#entity_id` of `live_horse_renderer` takes a string that the engine parses into an integer, so it can be passed through a binding. `actor_portrait_renderer` takes only integers, so the same way does not work.
+
+### 4.4 What works
+
+- **Entities whose id does not change:** entity ids stay the same after the world is entered again. Summon an entity such as an NPC once in a map or on a server, read its `entity.id`, and write that value into the resource pack to keep drawing it.
+- **Picking from candidate ids:** write candidate ids as JSON integers, and pick with `requires` the candidate equal to the id the script sends in the title or subtitle. The title factory rebuilds the control each time a title arrives, so the value picked then goes in.
+
+```json
+"variables": [
+  { "requires": "($subtitle_text = '-4294967295')", "$bag": { "actor_id": -4294967295 } },
+  { "requires": "($subtitle_text = '-8589934591')", "$bag": { "actor_id": -8589934591 } }
+]
+```
+
+- The id of the owner of a single player world has the form `-k x 2^32 + 1`, and the k values seen so far are 1 and 2. A few candidates should therefore cover most owners. The k on first entry into a new world was not measured.
+- In a multiplayer world, a player who joins later has an upper value as large as the number of world loads until then, and a sequence number as large as the entities made before them in that session. Candidates cannot cover them.
+
+## 5. Why the rotation rewinds
 
 The probe pack first sent the title again every second while the item was held, and the `"auto"` cell kept turning and snapping back to the starting angle. When the title arrives again, the title factory rebuilds the control, and the new control starts its rotation from 0 (the same cause as ANI-12). With the title sent only once and a long stay time, it turned without breaks.
 
-Put turning portraits in controls whose content does not change often. If the title has to carry other information often, move the portrait to another factory or a fixed control.
+Put turning portraits in controls whose content does not change often. If the title has to carry other information often, move the portrait to another factory or a fixed control. `updateSubtitle`, which changes only the subtitle, changed the values of the same cells as in section 4.2.
 
-## 5. The NPC screen
+## 6. The NPC screen
 
-The skin list of the NPC edit screen draws each NPC skin with this renderer. Adding `property_bag { "rotate_mode": "auto", "scale_*": 0.6 }` to `npc_interact.skin_model` from a resource pack changed nothing. Instead, only the hovered skin turned, and the portraits turned along when the real NPC turned its head. The screen seems to write the skin transform, `rotate_mode` (`"auto"` only for the hovered cell) and `actor_id` (that NPC) again for each cell *(code)*. The portraits on this screen cannot be changed by a pack. The NPC dialogue screen was not tested.
+The skin list of the NPC edit screen draws each NPC skin with this renderer. Adding `property_bag { "rotate_mode": "auto", "scale_*": 0.6 }` to `npc_interact.skin_model` from a resource pack changed nothing. Instead, only the hovered skin turned, and the portraits turned along when the real NPC turned its head. The screen writes the skin transform, `rotate_mode` (`"auto"` only for the hovered cell) and `actor_id` (that NPC) again for each cell *(code)*. C++ reads these values from the NPC's `NpcComponent` and writes them directly. The portraits on this screen cannot be changed by a pack. The NPC dialogue screen was not tested.
 
-## 6. Differences from other entity renderers
+## 7. Differences from other entity renderers
 
 This compares the other renderers that draw entities or characters. The keys and behavior of each were read from the client code (Android 1.26.52), and apart from the measured `actor_portrait_renderer` row nothing in this section was tested in game *(code)*.
 
 | Renderer | What it draws | How it is picked | Rotation | Vanilla use |
 | --- | --- | --- | --- | --- |
-| `actor_portrait_renderer` | any entity in the world | integer `actor_id` in `property_bag` | size, rotation and offset in `property_bag`, and `rotate_mode: "auto"`. Does not look at the cursor | NPC screen |
+| `actor_portrait_renderer` | a mob in the world | integer `actor_id` in `property_bag` (static values only) | size, rotation and offset in `property_bag` (changeable at runtime through bindings), and `rotate_mode: "auto"`. Does not look at the cursor | NPC screen |
 | `live_horse_renderer` | a mob in the world | `#entity_id` (string only; written as an integer it draws nothing) | always looks at the cursor, with no key to turn it off | horse screen |
 | `live_player_renderer` | the local player | cannot be picked | fixed front view. With `#look_at_cursor: true` the head and body look at the cursor | inventory screen |
 | `hud_player_renderer` | the local player | cannot be picked | fixed at an angle. Drawn only for a few seconds after the player state changes | HUD doll |
 | `paper_doll_renderer` | a model built from a skin, not a world entity | the selected skin, `#skin_idx` with `#pack_id`, `#skin_name`, `#player_uuid` | `rotation` (`auto`, `gesture_x`, `custom_y`), `#custom_rot_y`, `#set_target_rotation`. Animations are picked with `#animation_to_play` | pause screen, skin screens |
 | `equipment_preview_renderer` | the item worn by an armor stand it creates itself | `#item_id_aux`, dye color, armor trim | fixed angle | smithing table |
 
-### 6.1 Keys and conditions per renderer
+### 7.1 Keys and conditions per renderer
 
 **`live_horse_renderer`**
 - Key read: only `#entity_id` in `property_bag`. It must be a string, which the engine parses as a decimal integer. Written as a JSON integer it cannot be read and nothing is drawn. The vanilla horse screen gets this value through a binding.
@@ -101,7 +188,7 @@ This compares the other renderers that draw entities or characters. The keys and
 - Keys read: `#item_id_aux`, `#item_custom_color`, `#armor_trim_pattern`, `#armor_trim_material`.
 - Rotation: a fixed angle. The vanilla smithing table gives `rotation_x` 30 and `rotation_y` -30.
 
-### 6.2 Which to use
+### 7.2 Which to use
 
 | Goal | Renderer |
 | --- | --- |
@@ -111,11 +198,11 @@ This compares the other renderers that draw entities or characters. The keys and
 | Skin preview, drag to rotate or picking animations in menus outside a world | `paper_doll_renderer` |
 | Previewing armor or trim items | `equipment_preview_renderer` |
 
-- `actor_portrait_renderer` is the only one that picks any entity by an integer id and freely changes its size and direction. In exchange the id has to be written into the resource pack in advance.
+- `actor_portrait_renderer` is the only one that picks a mob by an integer id and freely changes its size and direction. In exchange the id has to be written into the resource pack in advance (section 4.3).
 - `live_horse_renderer` takes the id as a string, so a binding might be able to change it. It always looks at the cursor, so it does not suit a HUD portrait.
 - The three renderers that draw the player need no id but have no transform keys.
 
-## 7. Example add-on
+## 8. Example add-on
 
 <AddonDownload id="actor-portrait" />
 
@@ -129,15 +216,17 @@ This compares the other renderers that draw entities or characters. The keys and
 
 ![The example add-on v1.0.0 HUD. At the top left are four cells: Still (front), Auto (turning, seen from the side), Back (half size, back) and Tilt (leaning forward so the top of the head shows), and the action bar reads Actor Portrait v1.0.0 portraits show you](/img/design/actor-portrait.png)
 
-## 8. Measurement record
+## 9. Measurement record
 
 Measured on a touch input device on 2026-11-17 with the research repository probe pack (`ui-key-probe` v1.0.0~v1.0.1, source abbreviation `UKP`). Besides the four cells above, the probe pack also had cells for `translate_x`, `use_live_animation` and an expression id, plus the NPC screen change. The example add-on carries over only the keys whose behavior was confirmed. The example add-on v1.0.0 was also run on the same device, and all four cells were drawn as planned (picture above).
 
+On 2026-11-20, probe packs in a Windows 1.26.65.1 single player world measured the id rule and the injection methods of section 4, `rotate_z`, `translate_*`, `skin`, `use_live_animation` and non-mob entities of section 2, and the runtime transforms of section 4.2. The code content of section 4.3 was read by decompiling the Android 1.26.52.3 client library.
+
 ## What is left
 
-- The unit of `translate_*`, `rotate_z`, variant selection with `skin`, and what `use_live_animation` changes.
-- A way to draw entities other than the player. The id must be written into the resource pack in advance, so check whether there are cases where the id stays fixed (for example an entity reused in the same world).
-- PC, consoles and multiplayer worlds.
+- The owner's id on first entry into a new world (whether k is always 1).
+- What `use_live_animation` changes. The code sets part of the body and head rotation to 0 when it is false, but no difference showed with the head angle.
+- Whether it draws with ids set by a custom server, consoles and mobile, and multiplayer worlds.
 
 ## Related rules
 
