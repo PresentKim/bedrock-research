@@ -210,8 +210,10 @@ This compares the other renderers that draw entities or characters. The keys and
 2. Take "Actor Portrait" (spyglass) from the end of the items category in the creative inventory, or use `/give @s bwiki:actor_portrait_test`.
 3. While it is held, four portraits appear at the top left of the HUD. Still stays as is, Auto keeps turning, Back shows the back at half size and Tilt leans forward. They disappear when you put it away.
 
-- The action bar tells whether your id is `-4294967295`. If not, the portraits are empty.
-- The `apt` text in the middle is the vanilla title. It is not hidden so that other HUD examples can run alongside.
+- v1.1.0 uses the candidate method of section 4.4. The script sends your `entity.id` as the subtitle of the title `apt`, and each cell picks with `requires` the value equal to the subtitle among 32 candidates `-k x 2^32 + 1` (k = 1 to 32) and puts it in `actor_id`. If your id is not among the candidates, the portraits are empty and the action bar says so.
+- When you put the item away, the `title @s clear` command clears the title. Whether it was shown is kept in a player dynamic property, so it is cleared even after the script reloads. v1.0.0 called `clearTitle`, which Script API 2.0.0 does not have, so it errored and the title stayed.
+- The `apt` text in the middle and the id below it are the vanilla title and subtitle. They are not hidden so that other HUD examples can run alongside.
+- v1.1.0 has not been run in game yet. Picking candidates with `requires` and the way of clearing the title were each confirmed with probe packs (sections 4.3 and 9).
 - The on-screen text is in English.
 
 ![The example add-on v1.0.0 HUD. At the top left are four cells: Still (front), Auto (turning, seen from the side), Back (half size, back) and Tilt (leaning forward so the top of the head shows), and the action bar reads Actor Portrait v1.0.0 portraits show you](/img/design/actor-portrait.png)
@@ -220,7 +222,7 @@ This compares the other renderers that draw entities or characters. The keys and
 
 Measured on a touch input device on 2026-11-17 with the research repository probe pack (`ui-key-probe` v1.0.0~v1.0.1, source abbreviation `UKP`). Besides the four cells above, the probe pack also had cells for `translate_x`, `use_live_animation` and an expression id, plus the NPC screen change. The example add-on carries over only the keys whose behavior was confirmed. The example add-on v1.0.0 was also run on the same device, and all four cells were drawn as planned (picture above).
 
-On 2026-11-20, probe packs in a Windows 1.26.65.1 single player world measured the id rule and the injection methods of section 4, `rotate_z`, `translate_*`, `skin`, `use_live_animation` and non-mob entities of section 2, and the runtime transforms of section 4.2. The code content of section 4.3 was read by decompiling the Android 1.26.52.3 client library.
+On 2026-11-20, probe packs in a Windows 1.26.65.1 single player world measured why the v1.0.0 title stayed (the `clearTitle` call errored) and the fix with `title @s clear` (cleared even after `/reload`), the id rule and the injection methods of section 4, `rotate_z`, `translate_*`, `skin`, `use_live_animation` and non-mob entities of section 2, and the runtime transforms of section 4.2. The code content of section 4.3 was read by decompiling the Android 1.26.52.3 client library.
 
 ## What is left
 
