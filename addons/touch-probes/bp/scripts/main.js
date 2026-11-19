@@ -1,4 +1,4 @@
-import { system, world } from "@minecraft/server";
+import { ItemStack, system, world } from "@minecraft/server";
 import { ActionFormData, uiManager } from "@minecraft/server-ui";
 
 const PACK_VERSION = "v1.0.0";
@@ -42,12 +42,32 @@ function openPortrait(player) {
   }, 20);
 }
 
+const BOX = "bwiki:tp_box";
+const BOX_ITEMS = ["minecraft:apple", "minecraft:bread", "minecraft:diamond", "minecraft:stick", "minecraft:arrow"];
+
+function openChestProbe(player) {
+  const dimension = player.dimension;
+  for (const old of dimension.getEntities({ type: BOX })) old.remove();
+  const view = player.getViewDirection();
+  const length = Math.hypot(view.x, view.z) || 1;
+  const base = player.location;
+  const box = dimension.spawnEntity(BOX, { x: base.x + (view.x / length) * 2.5, y: base.y, z: base.z + (view.z / length) * 2.5 });
+  box.nameTag = "§b§wtp:c";
+  const container = box.getComponent("minecraft:inventory").container;
+  BOX_ITEMS.forEach((id, i) => container.setItem(i, new ItemStack(id, 8)));
+  player.sendMessage("Use (right click or tap) the figure in front of you within 60 seconds. It disappears after 60 seconds, which also closes its screen.");
+  system.runTimeout(() => {
+    if (box.isValid) box.remove();
+  }, 1200);
+}
+
 const PROBES = [
   { key: "k", label: "Button mappings, consume_event unset", open: (p) => show(p, keysForm("k"), 400) },
   { key: "l", label: "Button mappings, consume_event false", open: (p) => show(p, keysForm("l"), 400) },
   { key: "n", label: "Button mappings, consume_event true", open: (p) => show(p, keysForm("n"), 400) },
   { key: "v", label: "Touch variables", open: (p) => show(p, new ActionFormData().title("§b§wtp:v").body("vars").button("close"), 400) },
   { key: "p", label: "Portrait angle compensation", open: openPortrait },
+  { key: "c", label: "Chest screen button mappings", open: openChestProbe },
 ];
 
 function openMenu(player) {
