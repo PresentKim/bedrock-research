@@ -1,12 +1,12 @@
 ---
-title: 인벤토리 UI로 슬라이더 구현하기
+title: InvUI로 슬라이더 구현하기
 description: 엔티티 상자 화면에서 슬라이더 값을 서버로 보내려고 시도한 방법과 실측 결과, 실패 원인을 정리한 기록. 탭 슬라이더, 드래그와 Apply, 터치 시작 신호, 겹친 단계 버튼, SliderLab, 드래그 매핑 비교, 서버 거르기, 드래그 분할 경로를 다루고, 최종 구성(손을 떼면 숨은 global 단계 버튼이 값을 보내는 슬라이더)과 예제 애드온을 싣는다.
 sidebar_position: 1
 sources:
   - repo-guide
 ---
 
-# 인벤토리 UI로 슬라이더 구현하기
+# InvUI로 슬라이더 구현하기
 
 이 시험은 서버 폼(DDUI, CustomForm)을 상자 화면으로 대신할 수 있는지 보려는 데서 시작했다. 서버 폼을 매끄럽게 대신하려면 적어도 토글과 슬라이더가 되어야 하므로, 먼저 입력 시험 팩(IIP)으로 상자 화면에서 글 입력, 토글, 슬라이더를 받을 수 있는지 보았고, 이어서 Ore UI 컴포넌트 갤러리(IUC)에서 슬라이더를 계속 시험했다. 화면은 [엔티티 인벤토리로 메뉴 화면 만들기](../entity-inventory-ui.mdx)의 방식(보이지 않는 컨테이너 엔티티의 상자 화면을 리소스 팩으로 다시 그리는 방식)으로 만들었다. 시도한 방법마다 무엇을 했는지, 무엇이 나왔는지, 왜 안 됐는지를 적고, 마지막에 지금 쓰는 구성과 예제 애드온을 둔다.
 
@@ -135,7 +135,7 @@ IUC v1.4.2의 SliderLab 페이지는 다섯 줄을 한 화면에 두었다.
 - 끌기가 끝나고 20틱 동안 칸 변화가 없으면 서버가 칸을 비우고 막대기를 되돌리게 했다(IUC v1.4.6, 모의).
 - 정리하면 드래그 분할은 "지나간 칸을 한 번씩, 지나간 순서대로" 알려 준다. 칸을 비우면 막대기가 바닥나고 다시 채우면 끌기가 끊기므로, 한 번 끄는 동안 같은 칸을 다시 지나는 것은 서버가 알 수 없다(IUC v1.4.9, 실측).
 - 슬라이더는 값을 되돌릴 때 지나간 칸을 다시 지나므로 이 경로로는 만들 수 없다(*추론*).
-- 각 칸을 한 번씩 순서대로 지나는 입력에는 맞는다. 3x3 점을 지나가며 그리는 잠금 패턴(PatternLock)은 저장, "Wrong pattern", "Unlocked"이 맞게 나왔다(IUC v1.4.8, 실측). 이 구성은 [인벤토리 UI로 강화 컴포넌트 구현하기](./enhanced-components.mdx)에서 다룬다.
+- 각 칸을 한 번씩 순서대로 지나는 입력에는 맞는다. 3x3 점을 지나가며 그리는 잠금 패턴(PatternLock)은 저장, "Wrong pattern", "Unlocked"이 맞게 나왔다(IUC v1.4.8, 실측). 이 구성은 [InvUI로 강화 컴포넌트 구현하기](./enhanced-components.mdx)에서 다룬다.
 
 ## 3. 요약
 
@@ -286,25 +286,25 @@ Slider 페이지.
 
 실측(예제 애드온 v1.0.0, 모바일 1.26.63, 2026-11-16): 탭 슬라이더 값 20과 60이 서버에 갔다. 끈 뒤 최종 구성 슬라이더 값 10, 70, 60이 서버에 갔다("Server value").
 
-<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/slider/slider.jpg').default} src={require('@site/static/video/inventory-ui-ddui/slider/slider.webm').default} />
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/invui/ddui/slider/slider.jpg').default} src={require('@site/static/video/invui/ddui/slider/slider.webm').default} />
 
 TextSlider 페이지.
 
 실측(예제 애드온 v1.0.0, 모바일 1.26.63, 2026-11-16): 탭 슬라이더로 Easy와 Peaceful을 골랐다. 날씨 슬라이더를 Rain까지 끌고 손을 떼자 "Server weather: Rain"이 나왔다.
 
-<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/slider/textslider.jpg').default} src={require('@site/static/video/inventory-ui-ddui/slider/textslider.webm').default} />
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/invui/ddui/slider/textslider.jpg').default} src={require('@site/static/video/invui/ddui/slider/textslider.webm').default} />
 
 TwoHandleSlider 페이지.
 
 실측(예제 애드온 v1.0.0, 모바일 1.26.63, 2026-11-16): 탭 막대는 가까운 손잡이를 옮겼다(범위 20~70, 10~70, 10~90). Low를 70으로, High를 30으로 끌자 "Server range 30 to 70, swapped"가 나왔다.
 
-<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/slider/twohandleslider.jpg').default} src={require('@site/static/video/inventory-ui-ddui/slider/twohandleslider.webm').default} />
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/invui/ddui/slider/twohandleslider.jpg').default} src={require('@site/static/video/invui/ddui/slider/twohandleslider.webm').default} />
 
 XYSlider 페이지.
 
 실측(예제 애드온 v1.0.0, 모바일 1.26.63, 2026-11-16): 누른 칸이 X 45 Y 35, X 55 Y 75 같은 X, Y 값이 되었다.
 
-<video controls preload="none" width="100%" poster={require('@site/static/img/design/inventory-ui-ddui/slider/xyslider.jpg').default} src={require('@site/static/video/inventory-ui-ddui/slider/xyslider.webm').default} />
+<video controls preload="none" width="100%" poster={require('@site/static/img/design/invui/ddui/slider/xyslider.jpg').default} src={require('@site/static/video/invui/ddui/slider/xyslider.webm').default} />
 
 - 화면의 글은 영어다.
 - `tools/gen-ui.mjs`가 `rp/ui/ius.json`을 만들고, `tools/check-page.mjs`가 페이지의 UI 버튼과 스크립트 버튼 목록이 같은지 확인한다.
