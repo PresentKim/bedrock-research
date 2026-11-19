@@ -1,0 +1,106 @@
+{
+  "namespace": "tp_focus",
+
+  "text": {
+    "type": "label", "layer": 3, "localize": false, "color": [ 1, 1, 1 ], "size": [ "default", 10 ],
+    "anchor_from": "top_left", "anchor_to": "top_left", "text": "$t"
+  },
+
+  "pressed_anim": { "anim_type": "alpha", "from": 1, "to": 1, "duration": 100000, "play_event": "$press_event" },
+
+  "state": {
+    "type": "panel", "size": [ "100%", "100%" ],
+    "controls": [
+      { "fill": { "type": "image", "texture": "textures/ui/White", "color": "$c", "size": [ "100%", "100%" ] } },
+      { "label@tp_focus.text": { "layer": 2, "color": [ 0, 0, 0 ], "anchor_from": "center", "anchor_to": "center", "$t": "$t" } }
+    ]
+  },
+
+  "probe_button": {
+    "type": "panel", "size": [ 150, 22 ],
+    "$precedence|default": 0,
+    "controls": [
+      {
+        "btn": {
+          "type": "button", "size": [ 110, 20 ], "anchor_from": "left_middle", "anchor_to": "left_middle",
+          "focus_enabled": true, "default_focus_precedence": "$precedence",
+          "default_control": "default", "hover_control": "hover", "pressed_control": "pressed",
+          "button_mappings": [
+            { "from_button_id": "button.menu_select", "to_button_id": "$press_event", "mapping_type": "pressed" },
+            { "from_button_id": "button.menu_ok", "to_button_id": "$press_event", "mapping_type": "focused" }
+          ],
+          "controls": [
+            { "default@tp_focus.state": { "$c": [ 0.6, 0.6, 0.6 ], "$t": "$name" } },
+            { "hover@tp_focus.state": { "$c": [ 1.0, 0.85, 0.2 ], "$t": "$name" } },
+            { "pressed@tp_focus.state": { "$c": [ 0.3, 0.9, 0.3 ], "$t": "$name" } }
+          ]
+        }
+      },
+      {
+        "got": {
+          "type": "image", "texture": "textures/ui/White", "color": [ 0.2, 0.6, 1.0 ], "alpha": 0, "size": [ 36, 20 ],
+          "anchor_from": "right_middle", "anchor_to": "right_middle", "anims": [ "@tp_focus.pressed_anim" ],
+          "controls": [ { "label@tp_focus.text": { "color": [ 0, 0, 0 ], "anchor_from": "center", "anchor_to": "center", "$t": "press" } } ]
+        }
+      }
+    ]
+  },
+
+  "decoy": {
+    "type": "button", "size": [ 2, 2 ], "offset": [ 0, 0 ], "anchor_from": "top_left", "anchor_to": "top_left",
+    "focus_enabled": true, "default_focus_precedence": 100
+  },
+
+  "body": {
+    "type": "panel", "size": [ 200, 120 ], "anchor_from": "center", "anchor_to": "center",
+    "$decoy|default": false,
+    "$p1|default": 0, "$p2|default": 0, "$p3|default": 0,
+    "controls": [
+      { "bg": { "type": "image", "texture": "textures/ui/Black", "alpha": 0.9, "size": [ "100%", "100%" ] } },
+      { "title@tp_focus.text": { "offset": [ 4, 3 ], "$t": "$variant_name" } },
+      {
+        "list": {
+          "type": "stack_panel", "orientation": "vertical", "size": [ 150, 72 ], "offset": [ 4, 18 ],
+          "anchor_from": "top_left", "anchor_to": "top_left",
+          "controls": [
+            { "b1@tp_focus.probe_button": { "$name": "Button A", "$precedence": "$p1", "$press_event": "$ev1" } },
+            { "b2@tp_focus.probe_button": { "$name": "Button B", "$precedence": "$p2", "$press_event": "$ev2" } },
+            { "b3@tp_focus.probe_button": { "$name": "Button C", "$precedence": "$p3", "$press_event": "$ev3" } }
+          ]
+        }
+      },
+      { "decoy@tp_focus.decoy": { "ignored": "(not $decoy)" } },
+      { "hint@tp_focus.text": { "offset": [ 4, 100 ], "$t": "Yellow = hover/focus, blue = press received" } }
+    ]
+  },
+
+  "v0@tp_focus.body": { "$variant_name": "F0 baseline", "$ev1": "button.tpf0_a", "$ev2": "button.tpf0_b", "$ev3": "button.tpf0_c" },
+  "v1@tp_focus.body": { "$variant_name": "F1 all precedence -20", "$p1": -20, "$p2": -20, "$p3": -20, "$ev1": "button.tpf1_a", "$ev2": "button.tpf1_b", "$ev3": "button.tpf1_c" },
+  "v2@tp_focus.body": { "$variant_name": "F2 precedence A 0, B 5, C 10", "$p1": 0, "$p2": 5, "$p3": 10, "$ev1": "button.tpf2_a", "$ev2": "button.tpf2_b", "$ev3": "button.tpf2_c" },
+  "v3@tp_focus.body": { "$variant_name": "F3 hidden decoy, precedence 100", "$decoy": true, "$ev1": "button.tpf3_a", "$ev2": "button.tpf3_b", "$ev3": "button.tpf3_c" },
+
+  "window": {
+    "type": "panel", "size": [ "100%", "100%" ], "layer": 20,
+    "controls": [ { "dim": { "type": "image", "texture": "textures/ui/Black", "alpha": 0.6, "size": [ "100%", "100%" ] } }, { "content@$body": {} } ]
+  },
+
+  "w0@tp_focus.window": { "$body": "tp_focus.v0" },
+  "w1@tp_focus.window": { "$body": "tp_focus.v1" },
+  "w2@tp_focus.window": { "$body": "tp_focus.v2" },
+  "w3@tp_focus.window": { "$body": "tp_focus.v3" },
+
+  "chest_overlay": {
+    "type": "panel", "size": [ "100%", "100%" ], "layer": 50, "$tp_title": "$container_title",
+    "controls": [
+      { "f0@tp_focus.chest_variant": { "ignored": "(not ($tp_title = '§b§wtp:f0'))", "$body": "tp_focus.v0" } },
+      { "f1@tp_focus.chest_variant": { "ignored": "(not ($tp_title = '§b§wtp:f1'))", "$body": "tp_focus.v1" } },
+      { "f2@tp_focus.chest_variant": { "ignored": "(not ($tp_title = '§b§wtp:f2'))", "$body": "tp_focus.v2" } },
+      { "f3@tp_focus.chest_variant": { "ignored": "(not ($tp_title = '§b§wtp:f3'))", "$body": "tp_focus.v3" } }
+    ]
+  },
+
+  "chest_variant": {
+    "type": "panel", "size": [ 200, 120 ], "offset": [ 0, 2 ], "anchor_from": "top_middle", "anchor_to": "top_middle",
+    "controls": [ { "content@$body": {} } ]
+  }
+}
