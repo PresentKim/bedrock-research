@@ -1,0 +1,93 @@
+---
+title: Intercepting user input in InvUI
+description: A plan that measures which keys and touches reach a screen through the from_button_id of button_mappings, and whether intercepting them blocks the original action. A test window with global mappings for 279 button IDs, Windows keyboard and mouse results, mobile touch results, consume_event, and a check of the vanilla key mapping table.
+sidebar_position: 3
+sources:
+  - repo-guide
+---
+
+# Intercepting user input in InvUI
+
+To use input such as keyboard shortcuts, number keys or the back action for menu actions in InvUI (a menu screen made by restyling the chest screen of an invisible container entity with a resource pack, [building menu screens from an entity inventory](./entity-inventory-ui.mdx)) or in a server form screen, you need to know which button ID each input arrives as. This document measures the input that `from_button_id` of `button_mappings` can receive.
+
+All measurements here were made in the server form screen (`third_party_server_screen`). Whether the chest screen (InvUI) gives the same results has not been measured yet (section 4).
+
+## 1. Test window
+
+- 279 button IDs were collected: 277 `button.*` and `key.*` strings pulled from the Windows 1.26.65 executable (some are lang keys or control names, not input), IDs that vanilla UI uses in `from_button_id` but were missing from that list, and `any`.
+- The window has one `input_panel` with a global mapping per ID: `{"from_button_id": <ID>, "to_button_id": "button.juc_k_<number>", "mapping_type": "global"}`. The target ID is one the engine does not know, and in each cell an `alpha` animation that takes that ID as `play_event` covers the gray cell with green. A cell stays green until the window closes.
+- The same window exists in three versions: one with no `consume_event` (k), one with `false` (l), and one with `true` (n).
+- During tests, each window got one action only, and then the screen was captured.
+
+## 2. Windows keyboard and mouse
+
+2026-11-19, Windows 1.26.65.1. Keys were pressed one at a time while the server form window was open.
+
+| Input | IDs turned on |
+|---|---|
+| Mouse left click | `button.menu_select` |
+| Mouse right click | `button.menu_secondary_select` |
+| Shift + left or right click | `button.menu_auto_place` |
+| Enter | `button.chat`, `button.menu_ok`, `button.return` |
+| Esc | `button.menu_cancel` |
+| Arrow keys left, right, up, down | two per direction, `arrow_*` and `menu_*`, as in `button.arrow_left` and `button.menu_left` |
+| Numbers 1 to 9 | `button.slot1` to `button.slot9` |
+| E | `button.menu_inventory_cancel` |
+| Q | `button.menu_inventory_drop` |
+| Ctrl + Q | `button.menu_inventory_drop_all` |
+| T | `button.chat` |
+| Z | `button.mobeffects` |
+| B | `key.emote` |
+| `[`, `]` | `button.menu_tab_left`, `button.menu_tab_right` |
+
+- Other keys (WASD, Space, Shift alone, Tab, F1 and so on) turned on no cell.
+- No key turned on `button.slot0`.
+- IDs named after game controls, such as `button.jump`, `button.sneak`, `button.drop` and `button.inventory`, did not turn on while the screen was open. Inside a screen, the same keys arrive under `menu_*` names.
+- `any` did not turn on for any input.
+
+## 3. Mobile touch
+
+2026-11-19, mobile (measured by the user). The same window was tested with touch. On mobile, the only input possible while the screen was open was tapping the screen and the back action (long press and drag gave no separate input).
+
+| Input | IDs turned on |
+|---|---|
+| One tap on an empty spot | `button.menu_select` |
+| Back | `button.menu_cancel` |
+
+## 4. Whether the original action is blocked
+
+- On Windows, the window with global mappings for every ID did not close with Esc (the version with no `consume_event`). The button to close the window was also hidden, so the game had to be quit. For that reason the test add-on closes the window with a script after 10 seconds.
+- On mobile, the back action did not close the window even in the `consume_event` `true` version.
+- There is no side-by-side comparison of the three `consume_event` versions per key yet. Vanilla UI uses `consume_event: false` in 11 places (for example, where a text input field drops its selection and passes the same press on to another control).
+- Whether the chest screen (InvUI) can block E closing the screen or number keys changing the hotbar needs a chest screen version of the test window.
+
+## 5. Comparison with the vanilla key mapping table
+
+Results compared with the wiki key mapping table ([INP-21](../../json-ui/input-buttons-toggles.mdx)).
+
+| Table | Measured |
+|---|---|
+| `button.menu_select` left click | Correct. A mobile tap is the same |
+| `button.menu_secondary_select` right click | Correct |
+| `button.menu_ok` Enter | Correct. `button.chat` and `button.return` also arrive |
+| `button.menu_cancel`, `button.menu_exit` Esc | `menu_cancel` is correct (the mobile back action is the same). `menu_exit` does not turn on |
+| `button.menu_up/down/left/right` arrow keys | Correct. `arrow_*` also arrives |
+| `button.menu_autocomplete` Tab | Does not turn on |
+| `button.menu_tab_left/right` tab key | Arrives with `[` and `]` |
+| `button.menu_inventory_cancel` inventory key | Correct (E) |
+| `any` | Does not turn on |
+
+## 6. How to use
+
+- Take number key shortcuts with `button.slot1` to `button.slot9`. A shortcut for slot 0 cannot be made with the keyboard.
+- Take tab switching with `button.menu_tab_left/right` (`[`, `]`).
+- Back and Esc are both `button.menu_cancel`. A global mapping for it leaves no way to close the screen, so add a separate close button or let the server close it.
+- On mobile, the only input you can take is `menu_select` (tap) and `menu_cancel` (back), so use keyboard shortcuts only as a supplement to on-screen buttons.
+
+## 7. Measurement add-on
+
+<AddonDownload id="json-ui-claims" />
+
+Entering `/scriptevent bwiki:json_ui_claims k` (or `l`, `n`) opens the test window after 2 seconds and closes it after 10 seconds. The mobile tests used the same window from the `touch-probes` add-on.
+
+<AddonDownload id="touch-probes" />
