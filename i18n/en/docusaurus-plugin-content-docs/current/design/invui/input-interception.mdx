@@ -79,15 +79,37 @@ Results compared with the wiki key mapping table ([INP-21](../../json-ui/input-b
 | `button.menu_inventory_cancel` inventory key | Correct (E) |
 | `any` | Does not turn on |
 
-## 6. How to use
+## 6. Focus when the window opens
+
+This measures how to keep the first button from being drawn as hovered right when the window opens, while keeping arrow key and gamepad movement. `$focus_enabled: false` (INP-32) removes the hover but also removes focus movement.
+
+The test window has three buttons A, B and C (top to bottom) with focus on, in four versions that differ only in the button properties. Measured on 2026-11-19 on Windows 1.26.65.1, opening the window with the mouse outside it and moving with the arrow keys.
+
+| Version | Server form: at open | Server form: down key twice | Chest screen: at open | Chest screen: down key twice |
+|---|---|---|---|---|
+| F0 baseline | No hover | B, C (initial focus is A) | A hovered | B, C |
+| F1 all three `default_focus_precedence: -20` | No hover | Does not move | C hovered | Moves to the chest slots |
+| F2 A 0, B 5, C 10 | No hover | A, B (initial focus is C; up key gives B, A) | C hovered | Moves to the chest slots |
+| F3 invisible 2x2 decoy button with `default_focus_precedence: 100` | No hover | A, B (up key gives C, B) | No hover | First key shows no visible change, second key gives B |
+
+- The initial focus went to the control with the largest `default_focus_precedence` (C in F2). With equal values it went to the top button (F0).
+- In the server form, opening with a PC mouse did not draw the initial focus as hovered. It became visible once an arrow key was pressed. In the chest screen, it was drawn as hovered from the start even on PC.
+- A negative value (F1) blocked arrow key movement in the server form. In the chest screen, C got the initial focus instead.
+- When the decoy (F3) got the initial focus, neither screen had a hover at open, and the arrow keys could still move between the buttons. The decoy has no `button_mappings`, so it does not take presses. In server form F3, the first click on Button A after the window opened went through as a press.
+- Once, the server form F3 window closed on its own right after opening. It stayed open when reopened right away, and the cause was not isolated.
+- There are no phone results yet. The "Focus" entry of the `touch-probes` add-on opens the same versions on a phone.
+- `focus_reset_input_panel` (a string found only in the executable), `use_last_focus` and `focus_navigation_mode_*` were not measured.
+
+## 7. How to use
 
 - Take number key shortcuts with `button.slot1` to `button.slot9`. A shortcut for slot 0 cannot be made with the keyboard. The held hotbar slot still changes when the key is taken, so the server should expect the slot change to happen too.
 - Take tab switching with `button.menu_tab_left/right` (`[`, `]`).
 - Back and Esc are both `button.menu_cancel`. A global mapping for it leaves no way to close the screen, so add a separate close button or let the server close it. A chest screen closes when its entity is removed.
 - In InvUI, global mappings for `button.menu_select`, `button.menu_secondary_select` and `button.menu_auto_place` block slot clicks too, so items cannot be moved. On a screen that uses its slots, map only the keys you need (number keys, E, Q and so on). In turn, mapping only E, Q and the number keys should stop the chest screen from closing, dropping items or moving items with those keys (a version that maps only a few keys was not measured). The hotbar switch by number keys cannot be blocked.
 - On mobile, the only input you can take is `menu_select` (tap) and `menu_cancel` (back), so use keyboard shortcuts only as a supplement to on-screen buttons.
+- To remove the initial hover and keep arrow key movement, leave the buttons as they are and give a small invisible button (no `button_mappings`) a `default_focus_precedence` larger than the buttons (section 6, measured on PC). Giving the buttons a negative value blocked movement in the server form and did not remove the hover in the chest screen.
 
-## 7. Measurement add-on
+## 8. Measurement add-on
 
 <AddonDownload id="json-ui-claims" />
 
