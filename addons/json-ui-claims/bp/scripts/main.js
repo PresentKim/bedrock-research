@@ -1,5 +1,5 @@
 import { MolangVariableMap, system, world } from "@minecraft/server";
-import { ActionFormData, MessageFormData } from "@minecraft/server-ui";
+import { ActionFormData, MessageFormData, uiManager } from "@minecraft/server-ui";
 
 const PACK_VERSION = "v1.0.0";
 const TEST_ITEM = "bwiki:json_ui_claims_test";
@@ -54,6 +54,12 @@ function startLiveChanges(player) {
   }, 20);
 }
 
+function closeKeysLater(player) {
+  system.runTimeout(() => {
+    if (player.isValid) uiManager.closeAllForms(player);
+  }, 200);
+}
+
 const PROBES = [
   { key: "1", label: "P1 expressions", build: () => buttonsForm("§b§wjc:1", "P1 expressions", EXPRESSION_INPUTS) },
   { key: "2", label: "P2 layout", build: () => buttonsForm("§b§wjc:2", "P2 layout", ["show", "hide", "show", "show", ".5", "2", "10", "20"]) },
@@ -61,9 +67,9 @@ const PROBES = [
   { key: "4", label: "P4 form controls (44 rows)", build: mixedRowsForm },
   { key: "5", label: "P5 more claims", build: () => buttonsForm("§b§wjc:5", "P5", P5_BUTTONS) },
   { key: "x", label: "P7 literals and lookups", build: () => buttonsForm("§b§wjc:7", "P7", P7_BUTTONS) },
-  { key: "k", label: "Button mappings (consume_event unset)", build: () => buttonsForm("§b§wjc:k", "keys", ["ok"]) },
-  { key: "l", label: "Button mappings (consume_event false)", build: () => buttonsForm("§b§wjc:l", "keys", ["ok"]) },
-  { key: "n", label: "Button mappings (consume_event true)", build: () => buttonsForm("§b§wjc:n", "keys", ["ok"]) },
+  { key: "k", label: "Button mappings (consume_event unset)", delay: 40, after: closeKeysLater, build: () => buttonsForm("§b§wjc:k", "keys", ["ok"]) },
+  { key: "l", label: "Button mappings (consume_event false)", delay: 40, after: closeKeysLater, build: () => buttonsForm("§b§wjc:l", "keys", ["ok"]) },
+  { key: "n", label: "Button mappings (consume_event true)", delay: 40, after: closeKeysLater, build: () => buttonsForm("§b§wjc:n", "keys", ["ok"]) },
   { key: "6", label: "Marker: two lines with ~x", build: () => buttonsForm("Marker probe", "first line\nsecond line ~x", ["ok"]) },
   { key: "7", label: "Marker: two lines without marker", build: () => buttonsForm("Marker probe", "first line\nsecond line", ["ok"]) },
   { key: "8", label: "Marker: one line with ~x", build: () => buttonsForm("Marker probe", "one line ~x", ["ok"]) },
@@ -149,6 +155,6 @@ system.afterEvents.scriptEventReceive.subscribe((event) => {
   }
   const key = words.pop();
   const probe = PROBES.find((p) => p.key === key);
-  if (probe) openProbe(event.sourceEntity, probe);
+  if (probe) system.runTimeout(() => openProbe(event.sourceEntity, probe), probe.delay ?? 0);
   else openMenu(event.sourceEntity);
 });
