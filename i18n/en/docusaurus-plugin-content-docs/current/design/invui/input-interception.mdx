@@ -10,7 +10,7 @@ sources:
 
 To use input such as keyboard shortcuts, number keys or the back action for menu actions in InvUI (a menu screen made by restyling the chest screen of an invisible container entity with a resource pack, [building menu screens from an entity inventory](./entity-inventory-ui.mdx)) or in a server form screen, you need to know which button ID each input arrives as. This document measures the input that `from_button_id` of `button_mappings` can receive.
 
-All measurements here were made in the server form screen (`third_party_server_screen`). Whether the chest screen (InvUI) gives the same results has not been measured yet (section 4).
+The button ID mapping was measured in the server form screen (`third_party_server_screen`). Whether intercepting blocks the original action was measured in both the server form screen and the chest screen (InvUI) (section 4).
 
 ## 1. Test window
 
@@ -60,7 +60,8 @@ All measurements here were made in the server form screen (`third_party_server_s
 - On mobile, the back action did not close the window even in the `consume_event` `true` version.
 - On Windows, the three versions (unset, `false`, `true`) behaved the same (measured by the user). In all three, Esc did not close the window, and in all three the number keys changed the held hotbar slot. On the server form screen, `consume_event` changed neither whether a global mapping blocks closing the screen nor whether it blocks the game's hotbar switch.
 - Vanilla UI uses `consume_event: false` in 11 places (for example, where a text input field drops its selection and passes the same press on to another control).
-- Whether the chest screen (InvUI) can block E closing the screen or number keys changing the hotbar needs a chest screen version of the test window.
+- In the chest screen (InvUI), every original action was blocked (Windows, measured by the user). An `input_panel` with global mappings for 48 button IDs (no `consume_event`) sat at the top of an entity chest screen, and the vanilla slots stayed visible. E and Esc did not close the screen, and number keys pressed while hovering the apple slot did not move the apple to the hotbar. Q and Ctrl+Q did not drop the item, and Shift+click, left click and right click did not move items either.
+- This differs from the server form screen, where number keys changed the held hotbar slot. In the server form the key also reached the game controls outside the screen, while in the chest screen the in-screen action (moving into a slot) was blocked by the interception.
 
 ## 5. Comparison with the vanilla key mapping table
 
@@ -82,13 +83,14 @@ Results compared with the wiki key mapping table ([INP-21](../../json-ui/input-b
 
 - Take number key shortcuts with `button.slot1` to `button.slot9`. A shortcut for slot 0 cannot be made with the keyboard. The held hotbar slot still changes when the key is taken, so the server should expect the slot change to happen too.
 - Take tab switching with `button.menu_tab_left/right` (`[`, `]`).
-- Back and Esc are both `button.menu_cancel`. A global mapping for it leaves no way to close the screen, so add a separate close button or let the server close it.
+- Back and Esc are both `button.menu_cancel`. A global mapping for it leaves no way to close the screen, so add a separate close button or let the server close it. A chest screen closes when its entity is removed.
+- In InvUI, global mappings for `button.menu_select`, `button.menu_secondary_select` and `button.menu_auto_place` block slot clicks too, so items cannot be moved. On a screen that uses its slots, map only the keys you need (number keys, E, Q and so on). In turn, mapping E, Q and the number keys stops the chest screen from closing, dropping items or moving items with those keys.
 - On mobile, the only input you can take is `menu_select` (tap) and `menu_cancel` (back), so use keyboard shortcuts only as a supplement to on-screen buttons.
 
 ## 7. Measurement add-on
 
 <AddonDownload id="json-ui-claims" />
 
-Entering `/scriptevent bwiki:json_ui_claims k` (or `l`, `n`) opens the test window after 2 seconds and closes it after 10 seconds. The mobile tests used the same window from the `touch-probes` add-on.
+Entering `/scriptevent bwiki:json_ui_claims k` (or `l`, `n`) opens the test window after 2 seconds and closes it after 10 seconds. The mobile tests used the same window from the `touch-probes` add-on. The chest screen test is "Chest screen button mappings" in `touch-probes` (`/scriptevent bwiki:touch_probes c`). Using the figure that appears in front of you opens its chest screen, and the figure disappears after 60 seconds, which closes the screen.
 
 <AddonDownload id="touch-probes" />
