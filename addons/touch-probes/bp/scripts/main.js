@@ -62,12 +62,12 @@ function openChestProbe(player) {
 }
 
 const PROBES = [
+  { key: "c", label: "Chest screen button mappings", open: openChestProbe },
   { key: "k", label: "Button mappings, consume_event unset", open: (p) => show(p, keysForm("k"), 400) },
   { key: "l", label: "Button mappings, consume_event false", open: (p) => show(p, keysForm("l"), 400) },
   { key: "n", label: "Button mappings, consume_event true", open: (p) => show(p, keysForm("n"), 400) },
   { key: "v", label: "Touch variables", open: (p) => show(p, new ActionFormData().title("§b§wtp:v").body("vars").button("close"), 400) },
   { key: "p", label: "Portrait angle compensation", open: openPortrait },
-  { key: "c", label: "Chest screen button mappings", open: openChestProbe },
 ];
 
 function openMenu(player) {
