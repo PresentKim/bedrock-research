@@ -85,10 +85,25 @@ Ore UI 페이지는 전역 `engine` 객체의 이벤트로 게임과 대화한�
 ## 화면 선택과 문자열 `{코드, 추론}`
 
 - `vanilla.screenTechStack`의 대상 화면 열거는 `PlayScreen="/play"`, `EditWorldScreen="/edit-world"`다. 바이너리에 `OreUI_PlayScreen_OptIn`, `OreUI_EditWorldScreen_OptIn`, `OreUI_PlayScreen_Servers_OptIn` 같은 이름이 있다. 서버 "treatment"로 켜고 끄는 것으로 보인다.
-- Windows 1.26.65.1 클라이언트에는 화면 선택기 초기화 객체(`UIScreenTechStackSelectorInitializerAnon`)의 등록 함수가 12개 있다(RTTI 이름 문자열 확인): `registerPlayScreen`, `registerMainMenuScreen`, `registerPreStartScreen`, `registerStartFromTemplateScreen`, `registerEditWorldScreen`, `registerPlayerPermissionsScreen`, `registerSendInvitesScreen`, `registerBedScreen`, `registerSettingsScreen`, `registerSafeZoneScreen`, `registerWishlistScreen`, `registerSearchScreen`. 열거에 적힌 두 화면 말고도 이 12개가 Ore UI 쪽으로 열릴 수 있는 화면 후보다. 각 등록 함수가 기본으로 JSON UI와 Ore UI 중 무엇을 고르는지는 읽지 않았다(미확인) `{코드}`.
+- Windows 1.26.65.1 클라이언트에는 화면 선택기 초기화 객체(`UIScreenTechStackSelectorInitializerAnon`)의 등록 함수가 12개 있다(RTTI 이름 문자열 확인): `registerPlayScreen`, `registerMainMenuScreen`, `registerPreStartScreen`, `registerStartFromTemplateScreen`, `registerEditWorldScreen`, `registerPlayerPermissionsScreen`, `registerSendInvitesScreen`, `registerBedScreen`, `registerSettingsScreen`, `registerSafeZoneScreen`, `registerWishlistScreen`, `registerSearchScreen`. 열거에 적힌 두 화면 말고도 이 화면들이 Ore UI 쪽으로 열릴 수 있는 후보다 `{코드}`.
+- 선택기가 실제로 기록하는 경로는 14개다. 위 12개 이름 가운데 RTTI 이름이 없는 화면(`/create-new-world`, `/gameplay/death`)이 더 있다. 경로마다 조건 함수 A와 B가 있다. 조회 핸들러는 사용자 재정의 옵션이 있고 값이 0이 아니면 그 값이 1일 때 참을 돌려주고, 그 밖에는 `A 그리고 B`를 돌려준다. 옵션 열거에는 `DEV_NEW_*_SCREEN_OVERRIDE` 계열 이름이 있지만 이 클라이언트에는 등록 코드가 없어서 기본 결과는 `A 그리고 B`일 가능성이 크다 `{코드, 추론}`. 참을 Ore UI로 보는 것은 `/create-new-world`, `/gameplay/death`, `/gameplay/bedtime`이 두 조건 모두 상수 참이고 Ore UI 화면으로 알려져 있어서 하는 추정이다 `{추론}`. `p3`, `p4`는 기기나 입력 상태에서 오는 값으로 보이나 무엇인지는 모른다.
+
+| 경로 | A | B | 기본 결과 |
+|---|---|---|---|
+| `/play` | 참 | not(p3 또는 p4) | not(p3 또는 p4) |
+| `/main-menu`, `/pre-start` | 서비스 질의 | not(p3 또는 p4) | 서비스 질의 그리고 not(p3 또는 p4) |
+| `/create-new-world`, `/gameplay/death`, `/gameplay/bedtime` | 참 | 참 | 참 |
+| `/start-from-template`, `/safezone` | 참 | not(p3 또는 p4) | not(p3 또는 p4) |
+| `/edit-world`, `/oreui-marketplace/wishlist` | 참 | not(불리언 하나, p4로 보임) | 같음 |
+| `/player-permissions` | 참 | 서비스 질의의 부정 | 서비스 질의의 부정 |
+| `/send-invites` | 거짓 | 거짓 | 거짓 |
+| `/oreui-marketplace/search` | 서비스 질의(원격 기능 플래그 `mc-oreui-search-screen`일 가능성) | not(불리언 하나, p4로 보임) | 서비스 질의 그리고 not(그 불리언) |
+| `/settings` 계열 | 경로가 `/settings`일 때만 조건이 달라지고 나머지 분기는 읽지 않았다 | | |
+
+서비스 질의는 `mc-` 접두 원격 기능 플래그와 같은 계열의 서비스로 보인다 `{추론}`. 이 조건 함수들은 리소스팩 정보를 읽지 않는다. 팩이 JSON UI 정의를 바꾸는 것과 별개로, 이 선택이 Ore UI로 나온 화면에서는 JSON UI 정의가 쓰이지 않는다는 것이 코드가 말하는 전부다 `{코드}`.
 - 경로 문자열은 `/oreui-settings`, `/oreui-settings/gamma`, `/oreui-marketplace`, `/oreui-marketplace/wishlist`, `/oreui-marketplace/search`, `/oreui-marketplace/redeem`이 있다.
 - 세 opt-in 이름(`OreUI_PlayScreen_OptIn`, `OreUI_PlayScreen_Servers_OptIn`, `OreUI_EditWorldScreen_OptIn`)은 각각 이름 문자열 하나를 만들어 서비스 객체의 가상 함수에 넘긴다. 앞의 둘은 이어서 값 0(Play)과 2(Play 서버)를 처리 함수에 넘기고, 셋째는 인자가 2일 때만 `/edit-world` 경로를 만든다. 이름이 서버 쪽 실험 이름으로 쓰인다는 추정은 이 모양과 맞고, 팩이나 월드가 바꿀 수 있는 값이 아니다 `{코드, 추론}`.
-- 옵션 이름 `mc-oreui-search-screen`, `mc-oreui-entry-flow`와 개발자 옵션 `DEV_ORE_UI_GAMEPLAY_UI`, `options.dev_enableOreUIEditWorldPreviewButton`이 있고, 클라이언트가 켜는 원격 기능 플래그가 `mc-` 접두 이름으로 100개 넘게 한 함수에서 등록된다. 이름만 확인했다.
+- 옵션 이름 `mc-oreui-search-screen`, `mc-oreui-entry-flow`와 개발자 옵션 `DEV_ORE_UI_GAMEPLAY_UI`, `options.dev_enableOreUIEditWorldPreviewButton`이 있다. `options.dev_enableOreUIEditWorldPreviewButton`은 옵션 id 553이 이 문자열을 저장 키 칸에 넣어 등록하고, `DEV_ORE_UI_GAMEPLAY_UI`는 열거 이름만 있고 등록 코드가 없다 `{코드}`. 클라이언트가 켜는 원격 기능 플래그가 `mc-` 접두 이름으로 100개 넘게 한 함수에서 등록된다. 이름만 확인했다.
 - 화면 선택 facet(`vanilla.screenTechStack`)을 등록하는 함수가 `selectTechStackForScreen`, `getTechStackForScreen`, `getPreferredTechStackForScreen` 세 이벤트 핸들러를 건다 `{코드}`.
 - 내장 팩 목록에는 `resource_packs/oreui` 말고도 `script_ui`("DDUI Built-in Pack")와 `platform_gdk_pc`(texts만)가 있다. 이 둘이 팩 스택에서 일반 리소스팩보다 아래인지 위인지는 모른다 `{코드}`.
 - Ore UI 문자열은 내장 `oreui` 팩의 `.lang`에 있다. 엔진이 이 팩을 어디서 여는지는 코드로 찾지 못했다.

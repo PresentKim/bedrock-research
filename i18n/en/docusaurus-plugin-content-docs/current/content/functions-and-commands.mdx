@@ -129,7 +129,7 @@ attacker.spawnParticle("pdi:damage_glyph", pos, vars);
 
 ## 7. Commands registered in the client (Windows 1.26.65.1)
 
-This compares the command registration function in the client code and in-game execution results with the official `mojang-commands.json` (1.26.50.4). The in-game runs were done in a creative world with cheats on, and responses were read from the message keys of CommandOutput packets. The cheats-off state was not measured.
+This compares the command registration function in the client code and in-game execution results with the official `mojang-commands.json` (1.26.50.4). The in-game runs were done in a creative world with cheats on, and responses were read from the message keys of CommandOutput packets. In a cheats-off world only a few commands were tried separately (7.2).
 
 ### 7.1 Permission and flags
 
@@ -142,16 +142,18 @@ The registration function takes a command name, a description key, a permission 
 
 | Flag | Commands | Meaning |
 |---|---|---|
-| `0x80` | `gamerule`, `list`, `packstack`, `kick`, `project`, `party`, `tell`, `tellraw`, `me`, `say`, `op`, `deop`, `permission`, `help` | usable without cheats. Confirmed |
+| `0x80` | `gamerule`, `list`, `packstack`, `kick`, `project`, `party`, `tell`, `tellraw`, `me`, `say`, `op`, `deop`, `permission`, `help` | matches "usable without cheats" for the commands in the official JSON. `party` is not in the official JSON, and that it can be used in a cheats-off world was not confirmed (7.2) |
 | `0x40` | `tell`, `tellraw`, `me`, `say`, `title`, `titleraw` | appears to be a group of chat-message-style commands. Only the common point was confirmed `{inferred}` |
 | `0x10` | `help` | appears to be handled locally `{inferred}` |
 | `0x20` | `script`, `wsserver` | only the common point (debugger and websocket family) was confirmed `{inferred}` |
 | `0x400` | `op`, `deop`, `permission` | if an editor object exists and this bit is on, it goes to the error `commands.generic.disabled.editorLocked` |
-| `0x2`, `0x4`, `0x8` | the hidden family in 7.2 below | origin kind bits: player `0x4`, command block and command block minecart `0x2`, automation player family `0x8`. Whether a set bit hides or allows was not settled |
+| `0x2`, `0x4`, `0x8` | the `0x6` commands in the 7.2 table below, `lesson` (`0x4`), `codebuilder` (`0x4`) | "blocked" bits per command origin kind. If the bit is on in the command record and the origin is of that kind, the command is refused with `commands.generic.error.permissions` whatever the permission level. Player is `0x4`, command block and command block minecart is `0x2`, automation player family is `0x8`. What the code confirms is the kind numbers (0 is `0x4`, 1 and 2 are `0x2`, 5 and 6 are `0x8`); the kind names are `{inferred}` `{code}` |
 
-### 7.2 24 registered commands that are not in the official JSON
+The check just before execution goes in this order `{code}`. If the origin's permission level is lower than the command's permission, it is refused. If the permission is enough, the origin kind is turned into a bit above and the command flags are checked for that bit. If it is on, the command is refused; if it is off, it runs. Kinds 3, 4 and 7 and above have no bit and skip this check. The refusal text on an ordinary client is always `commands.generic.error.permissions`; only a player with an education block list can get `commands.generic.blocked_edu`. Syntax parsing comes before this check, so `/gettopsolidblock` without arguments gives `commands.generic.syntax`. If a global boolean is true at registration time, all three bits are cleared and the command works from any origin. Which setting that boolean is was not read. No bit that hides a command from autocomplete was found `{code}`.
 
-24 registered commands have names that are not in `mojang-commands.json` (the name of `party` was resolved from a data area). The classification below is based on permission, flags and the `commands.*.description` of the vanilla `en_US.lang`. Whether a command is education-only is `{inferred}` from which branch its registration sits in (the condition itself was not read).
+### 7.2 25 registered commands that are not in the official JSON
+
+25 registered commands have names that are not in `mojang-commands.json` (the name of `party` was resolved from a data area; the second registration of `codebuilder` is a separate name, `codebuilder_actorinfo`). The classification below is based on permission, flags and the `commands.*.description` of the vanilla `en_US.lang`. Whether a command is education-only is `{inferred}` from which branch its registration sits in (the condition itself was not read).
 
 | Name | Permission | Flags | Description (vanilla lang) | Classification |
 |---|---|---|---|---|
@@ -163,9 +165,10 @@ The registration function takes a command name, a description key, a permission 
 | `classroommode` | 0 | 0 | Attempt to launch and connect to Classroom Mode. | education, client feature |
 | `code` | 0 | 0 | Launches Code Builder. | education, client feature |
 | `gametips` | 0 | 0 | Enable or disable the game tips on this device | client setting |
-| `party` | 0 | `0x80` | Sends a message in the party chat | generally usable, presumably when the party feature is on |
+| `party` | 0 | `0x80` | Sends a message in the party chat | registered behind a client condition (party service). Absent from a single-player world in the measurement below |
 | `lesson` | 1 | `0x4` | Handle Educational Lesson reporting. | for education reporting, players only |
-| `codebuilder` | 1 and 0 | `0x4` and `0x6` | no lang entry | education automation (registered in two places) |
+| `codebuilder` | 1 | `0x4` | no lang entry | education automation |
+| `codebuilder_actorinfo` | 0 | `0x6` | no lang entry (description key `commands.codebuilder.description`) | education automation. The name of the second `codebuilder` registration |
 | `agent` | 1 | `0x6` | no lang entry | education automation |
 | `closechat` | 0 | `0x6` | Closes the chat window of the local player if it is open. | automation, client |
 | `getlocalplayername` | 0 | `0x6` | Returns the local player name. | automation |
@@ -178,25 +181,105 @@ The registration function takes a command name, a description key, a permission 
 | `globalpause` | 3 | `0x6` | Sets or gets the paused state of the game for all players. | automation, education |
 | `gettopsolidblock` | runtime value | `0x6` | Gets the position of the top non-air block below the specified position | automation |
 | `querytarget` | runtime value | `0x6` | Gets transform, name, and id information about the given target entity or entities. | automation |
-| `listd` | 3 | `0x6` | no lang entry | dedicated server administration |
+| `listd` | 3 | `0x6` | no lang entry | the detailed version of `list`. The success key is the same, `commands.players.list` |
 
 There is no separate "editor only" command; the editor lock is expressed by the `0x400` bit (`op`, `deop`, `permission`). The only ones that can be seen as development and test only are the `0x20` bit commands (`script`, `wsserver`) and `gametest`, and all of them are in the official JSON.
 
 The measurements in an ordinary creative world with cheats on are as follows `{measured}`.
 
 - The command list the server sent had `gettopsolidblock`, `querytarget`, `listd` and `agent`. The other commands in the table above (`closechat`, `closewebsocket`, `enableencryption`, `getchunkdata`, `getchunks`, `getspawnpoint`, `resourceuri`, `takepicture`, `ability`, `codebuilder`, `lesson`, `classroommode`, `worldbuilder`, `immutableworld`) were absent from the names, and running them gave `commands.generic.unknown`. In this world they are not registered or are hidden. `geteduclientinfo`, `getlocalplayername`, `gametips` and `globalpause` could not be told apart by the response (they were not in the list).
-- `/gettopsolidblock` gave `commands.generic.syntax`, and `/gettopsolidblock ~ ~ ~` gave `commands.generic.error.permissions`. `/querytarget @s` and `/listd` also gave `commands.generic.error.permissions`. The three exist as commands and are refused with this world's player permission. Their output could not be measured because of the permission problem. `/agent` gave `commands.generic.syntax` (a syntax hint).
-- Among commands with flag `0x6`, some were in the list and some were not. So in this world `0x6` alone does not seem to decide whether a command appears `{inferred}`.
+- `/gettopsolidblock` gave `commands.generic.syntax`, and `/gettopsolidblock ~ ~ ~` gave `commands.generic.error.permissions`. `/querytarget @s` and `/listd` also gave `commands.generic.error.permissions`. The three exist as commands and are refused in player chat in this world. The reason is not the permission level but the `0x4` bit (player origin blocked) of flag `0x6`. Raising the host permission level does not unblock them in player chat `{code}`. Their output could not be measured because of the refusal. `/agent` gave `commands.generic.syntax` (a syntax hint).
+- Among commands with flag `0x6`, some were in the list and some were not. This flag is read only in the check just before execution, and no place that blocks list transmission was found in the code. Whether a command appears seems to be decided by the server-side registration `{code, inferred}`.
+- The origins that can actually run `gettopsolidblock`, `querytarget` and `listd` are presumed to be those other than player (`0x4`) and command block (`0x2`), that is, automation origins such as a websocket connection. The origin kind names and this assumption were not measured `{inferred}`.
 
-### 7.3 Names that are not separate commands
+The results typed into chat in a cheats-off single-player world (Windows 1.26.65.1) are as follows `{measured}`.
+
+- `/party hello` sent no `CommandRequest` packet and gave only the local message "Cheats cannot be used in this world." (the game's localized text). It is the same result as the nonexistent command `/zzzfoo`, and in autocomplete `/p` offered only `packstack`, `permission`, `deop`, `help` and `op`. In this world `party` is not registered or is hidden. Permission 0 and flag `0x80` alone do not mean it can be used. This matches the code reading that its registration sits behind a party service condition `{code}`.
+- `/listd`, `/gametips`, `/querytarget @s`, `/gettopsolidblock ~ ~ ~`, `/agent`, `/getchunks`, `/getlocalplayername`, `/closechat`, `/closewebsocket` and `/ability @s mayfly true` also all gave the same local message with no packet. Typing `/listd` to the end in the input line showed no autocomplete entry. In this world they are not visible and cannot be used.
+- As a control, `/list` sent a packet and returned `commands.players.list` (parameters `["1","8"]`) and the name list.
+- The reason `listd` and `gametips` were refused with cheats off is not the permission level. `listd` has flag `0x6`, so it is blocked from a player origin. The statement that `listd` is visible in game with `op-permission-level=4` is a remote server condition and was not confirmed by this measurement.
+
+### 7.3 Syntax of the commands not in the official JSON
+
+This pairs the overload registration calls, argument names and argument type objects read from the client's registration functions. When there are two or more arguments, the order and which are optional were not settled. Dumping the AvailableCommands packet the server sends would settle them `{code}`.
+
+| Command | Syntax |
+|---|---|
+| `gettopsolidblock` | `<position: x y z>`. Output keys `position`, `blockName`. Errors `commands.gettopsolidblock.notfound`, `commands.generic.invalidcontext` |
+| `querytarget` | `<target: target>`. Per target it outputs `uniqueId`, `id`, `yRot`, `position`, `dimension`, `details`. Success key `commands.querytarget.success`, no target `commands.generic.noTargetMatch` |
+| `listd` | `[details: ListDetails]`. `ListDetails` is `ids`, `uuids`, `stats`. Output keys `currentPlayerCount`, `maxPlayerCount`, `players`, `details` |
+| `party` | `<message: message>`. It sends only when the party service is on and there is a party. Otherwise `parties.chat.command.unavailable`, and an empty message gives `commands.generic.invalidMessage` |
+| `gametips` | `<status: enable or disable>`. Success keys `commands.gametips.enabled`, `commands.gametips.disabled` |
+| `closechat`, `geteduclientinfo`, `getlocalplayername`, `closewebsocket`, `classroommode`, `code` | no arguments |
+| `worldbuilder` | no arguments. Alias `wb` |
+| `immutableworld` | `<value: Boolean>` |
+| `getspawnpoint` | `<player: target>` |
+| `getchunks` | 1 argument (appears to be a dimension type) |
+| `getchunkdata` | 4 arguments: `dimension`, `chunkX`, `chunkZ`, `height` |
+| `globalpause` | `[isPaused: Boolean]` |
+| `ability` | `<player: target> <ability: Ability> [value: Boolean]` as two overloads (order and the `Ability` values unconfirmed) |
+| `takepicture` | 3 overloads: `targetPlayer` and `targetCamera` (actor selector), `targetPlayer` and `cameraSpawnLocation` (position), `targetPlayer` |
+| `resourceuri` | 4 overloads: no arguments, `clear`, `default <uri>`, `named <name> <uri>` |
+| `enableencryption` | 3 arguments: `publicKey`, `salt`, and the cipher mode (the argument name is misspelled `ciper_mode`; values `cfb8`, `cfb128` and others) |
+| `lesson`, `codebuilder` | several enums and a player selector. `lesson` has 4 overloads. The details were not resolved |
+| `codebuilder_actorinfo` | `CodeBuilderActionInventory` and the actor selector `target` |
+| `agent` | a group of subcommands (move, turn, destroy, place, collect, transfer, teleport and others). The argument names `srcSlotNum`, `dstSlotNum`, `quantity`, `item`, `position`, `y-rot` and `lookAtPosition` appear |
+
+### 7.4 Names that are not separate commands
 
 `spawnParticleEmitter`, `screenshake` and `transferserver` are not separate commands but description key names of `particle`, `camerashake` and `transfer`. Resolving the name values of the registration functions gives `particle`, `camerashake` and `transfer`, and only the description keys are `commands.spawnParticleEmitter.description`, `commands.screenshake.description` and `commands.transferserver.description` `{code}`. So `commands.spawnParticleEmitter.description=Creates a particle emitter` in the vanilla lang is the description of the `particle` command. The permissions are `particle` 1, `camerashake` 1 and `transfer` 4, the same as the official JSON.
 
 In the measurement, `/spawnParticleEmitter`, `/screenshake` and `/transferserver` all gave `commands.generic.unknown`. The success key of `/particle minecraft:villager_happy ~ ~2 ~` was `commands.spawnParticleEmitter.success`, and that of `/camerashake add @s 1 2` was `commands.screenshake.success`. `/transfer KimPresent 127.0.0.1 19999` was refused with `commands.generic.error.permissions` and the player did not leave the world. The arguments of `transfer` are `owner`, `server` and `port` (an integer, optional), and a wrong syntax gives `commands.generic.syntax` `{measured}`.
 
-### 7.4 Game rules
+### 7.5 Game rules
 
-The client's `gamerule` registration creates three enums: `BoolGameRule`, `IntGameRule` and `FloatGameRule`. The official JSON has no `FloatGameRule` (only `BoolGameRule`, `IntGameRule`, `playerwaypointsRule` and `playerwaypointsValues`), and whether a float rule actually exists now was not read. Every rule name readable from the client is inside the official JSON list, and no new name appeared `{code}`. The default values could not be read from the code.
+The client's `gamerule` registration creates three enums: `BoolGameRule`, `IntGameRule` and `FloatGameRule`. The official JSON has no `FloatGameRule` (only `BoolGameRule`, `IntGameRule`, `playerwaypointsRule` and `playerwaypointsValues`). The game rule registry creates 39 rules. There is no float rule at all and only the value read and write code is implemented, so `FloatGameRule` reads as an empty enum (probably no entries in autocomplete, not measured `{inferred}`). All 38 names of the official JSON (1.26.50.4) are present, and the only rule not in the JSON is `locatorbar`. `locatorbar` is the key name of old saves. When world data is read, this key is converted into the initial value of `playerWaypoints` (1 if the key is missing or true, 0 if false). Whether `locatorbar` appears in `/gamerule` autocomplete is likely yes, since the enum registration code does not seem to leave this rule out, but this was not measured `{code, inferred}`.
+
+This is the rule order, name, type, default and cheats requirement read from the client registry. The names are the registry spelling and are exposed in lower case in the command (this matches the check that enum values must be lower case `{code, inferred}`). A rule marked "required" under cheats is blocked by `/gamerule` with `commands.gamerule.type.nocheatsenabled` in a world with cheats off `{code}`.
+
+| No. | Name | Type | Default | Cheats |
+|---|---|---|---|---|
+| 0 | `commandBlockOutput` | boolean | true | required |
+| 1 | `doDayLightCycle` | boolean | true | required |
+| 2 | `doEntityDrops` | boolean | true | required |
+| 3 | `doFireTick` | boolean | true | not required |
+| 4 | `recipesUnlock` | boolean | true | not required |
+| 5 | `doLimitedCrafting` | boolean | false | not required |
+| 6 | `doMobLoot` | boolean | true | not required |
+| 7 | `doMobSpawning` | boolean | true | required |
+| 8 | `doTileDrops` | boolean | true | not required |
+| 9 | `doWeatherCycle` | boolean | true | required |
+| 10 | `drowningDamage` | boolean | true | required |
+| 11 | `fallDamage` | boolean | true | required |
+| 12 | `fireDamage` | boolean | true | required |
+| 13 | `keepInventory` | boolean | false | required |
+| 14 | `mobGriefing` | boolean | true | required |
+| 15 | `pvp` | boolean | true | not required |
+| 16 | `showCoordinates` | boolean | false | not required |
+| 17 | `playerWaypoints` | integer (enum `playerwaypointsRule`, values `everyone`, `off`) | 1 | not required |
+| 18 | `locatorbar` | boolean | true | not required |
+| 19 | `showDaysPlayed` | boolean | false | not required |
+| 20 | `naturalRegeneration` | boolean | true | not required |
+| 21 | `tntExplodes` | boolean | true | not required |
+| 22 | `sendCommandFeedback` | boolean | true | required |
+| 23 | `maxCommandChainLength` | integer | 65535 | required |
+| 24 | `doInsomnia` | boolean | true | required |
+| 25 | `commandBlocksEnabled` | boolean | true | required |
+| 26 | `randomTickSpeed` | integer | 1 | required |
+| 27 | `doImmediateRespawn` | boolean | false | not required |
+| 28 | `showDeathMessages` | boolean | true | not required |
+| 29 | `functionCommandLimit` | integer | 10000 | required |
+| 30 | `spawnRadius` | integer | 10 | not required |
+| 31 | `showTags` | boolean | true | not required |
+| 32 | `freezeDamage` | boolean | true | required |
+| 33 | `respawnBlocksExplode` | boolean | true | not required |
+| 34 | `showBorderEffect` | boolean | true | required |
+| 35 | `showRecipeMessages` | boolean | true | not required |
+| 36 | `playersSleepingPercentage` | integer | 100 | not required |
+| 37 | `projectilesCanBreakBlocks` | boolean | true | not required |
+| 38 | `tntExplosionDropDecay` | boolean | false | not required |
+
+There are 33 booleans (including `locatorbar`) and 6 integers (including `playerWaypoints`) `{code}`. In the registry entries, only `locatorbar` has 0 in the byte that looks like an "active marker", and the meaning of that byte is unknown. The `/gamerule` executor has a branch that handles rule number 43 separately, but the registry size is 39, so that number is not in this array. Whether the branch is dead was not read.
 
 The enums in the official JSON (1.26.50.4) are as follows `{vanilla}`.
 

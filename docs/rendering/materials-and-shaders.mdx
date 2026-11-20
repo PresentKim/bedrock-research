@@ -38,7 +38,7 @@ sources: [private-research, bedrock-wiki, ms-learn]
 
 | 필드 | 뜻 |
 | --- | --- |
-| `states` | 렌더 상태: `DisableDepthTest`, `Blending`, `DisableCulling`, `DisableColorWrite`, `DisableAlphaWrite`, `DisableDepthWrite`, `StencilWrite`, `InvertCulling`, `EnableStencilTest`, `EnableAlphaToCoverage` 10개. `states`는 목록을 바꾸고 `+states`는 더하고 `-states`는 뺀다. 표에 없는 이름(`Wireframe`, `DisableRGBWrite` 등)은 `Trying to use a non-existing render state` 로그를 내고 효과가 없다. `PolygonOffset`은 `is ignored and will have no effect` 로그만 낸다 `{코드}` |
+| `states` | 렌더 상태: `DisableDepthTest`, `Blending`, `DisableCulling`, `DisableColorWrite`, `DisableAlphaWrite`, `DisableDepthWrite`, `StencilWrite`, `InvertCulling`, `EnableStencilTest`, `EnableAlphaToCoverage` 10개. `states`는 목록을 바꾸고 `+states`는 더하고 `-states`는 뺀다. 표에 없는 이름(`Wireframe`, `DisableRGBWrite` 등)은 `Trying to use a non-existing render state` 로그를 내고 효과가 없다. `PolygonOffset`은 `is ignored and will have no effect` 로그만 낸다 `{코드}`. 게임에서도 `PolygonOffset`은 `[Rendering][inform]-Render state PolygonOffset is ignored and will have no effect`, `Wireframe`과 `DisableRGBWrite`는 각각 `[Rendering][error]-Trying to use a non-existing render state Wireframe for this material!`, `... DisableRGBWrite for this material!` 줄이 나왔다 `{실측}` |
 | `defines` | 셰이더 매크로(`ALPHA_TEST`, `USE_EMISSIVE`, `USE_OVERLAY`, `USE_UV_ANIM`, `FANCY`, `ENABLE_FOG`, `ENABLE_LIGHT` 등) |
 | `depthFunc` | 깊이 비교: `Always`, `Equal`, `NotEqual`, `Less`, `Greater`, `GreaterEqual`, `LessEqual`(`Never`는 없다 `{코드}`). Windows 1.26.65.1에서 `entity_alphatest` 자식에 `Greater`를 준 상자 엔티티는 빈 땅에서 그림자만 보였고, 돌 블록 뒤에서는 돌 옆면과 겹친 부분만 그려졌다([기록](../design/json-ui-claims.mdx#65-소수-리터럴-alpha-문자열-나누기-hud-렌더링-쿼리)) |
 | `stencilRef`, `stencilReadMask`, `stencilWriteMask` | 스텐실 기준값과 마스크 |
@@ -47,8 +47,8 @@ sources: [private-research, bedrock-wiki, ms-learn]
 | `samplerStates` | 샘플러별 `textureFilter`, `textureWrap`, `shaderStage`. 값은 아래 열거값 표 |
 | `msaaSupport` | 멀티샘플링 지원: `NonMSAA`, `MSAA`, `Both` `{코드}` |
 | `stencilRefOverride` | 불리언. `stencilRef`를 주면 앞면과 뒷면 기준값에 같은 값이 들어가고 이 플래그도 켜진다 `{코드}` |
-| `depthBias`, `slopeScaledDepthBias` | 실수. 깊이 편향 값. 범위 검사가 없고, 부호를 뒤집은 값이 래스터라이저 상태에 저장된다. 기본값은 모른다 `{코드}`. 값 `5.0`, `-5.0`, `1000000.0`, `-1000000.0`과 `slopeScaledDepthBias` `100000.0`, `-100000.0`을 준 머티리얼은 오류 로그 없이 받아들여졌다. 큐브 11개 중 `5.0`과 `-5.0`을 준 둘만 보이지 않았고 이유는 모른다. 깊이 편향 효과를 재는 겹친 두 면 구성은 만들지 못했다 `{실측}` |
-| `primitiveMode` | 문자열 열거. `None`, `QuadList`, `TriangleList`, `TriangleStrip`, `LineList`, `Line`. 대소문자를 구분하고 모르는 값은 로그 없이 넘어간다 `{코드}` |
+| `depthBias`, `slopeScaledDepthBias` | 실수. 깊이 편향 값. 범위 검사가 없고, 부호를 뒤집은 값이 래스터라이저 상태에 저장된다. 기본값은 모른다 `{코드}`. 값 `5.0`, `-5.0`, `1000000.0`, `-1000000.0`과 `slopeScaledDepthBias` `100000.0`, `-100000.0`을 준 머티리얼은 오류 로그 없이 받아들여졌다. 큐브 11개 중 `5.0`과 `-5.0`을 준 둘만 보이지 않았고 이유는 모른다. 같은 위치에 기본 머티리얼 엔티티(빨강)와 머티리얼을 바꾼 엔티티(파랑)를 겹쳐 소환하고 `depthBias`를 1000, -1000, 50000, -50000, 1000000, -1000000으로, `slopeScaledDepthBias`를 1000, -1000으로 바꿨을 때는 소환 순서를 둘 다 해 봐도 파랑만 보였다. 크기와 부호가 z 순서를 바꾸지 않았고 효과가 보이지 않았다. 바이어스가 안 먹는 것인지 구성이 부족한 것인지는 가르지 못했다 `{실측}` |
+| `primitiveMode` | 문자열 열거. `None`, `QuadList`, `TriangleList`, `TriangleStrip`, `LineList`, `Line`. 대소문자를 구분하고 모르는 값은 로그 없이 넘어간다 `{코드}`. `LineList`와 `Line`을 준 머티리얼은 로드와 소환에서 크래시나 로그 줄이 없었고, 그려진 모양은 엔티티가 땅에 반쯤 묻혀 선인지 가르지 못했다 `{실측}` |
 | `renderTargetFormats` | 배열 안의 배열(렌더 타깃 하나당 문자열 배열). 값 이름 28개는 아래 표. 틀린 항목은 `UNKNOWN_TEXTURE_FORMAT`(0)이 들어간다 `{코드}` |
 | `samplerStates`의 `samplerIndex`, `vertexFields`의 `field` | 샘플러 번호(0에서 7만 받고 8 이상인 항목은 로그 없이 통째로 건너뛴다. 키가 없으면 0), 정점 필드 이름 `{코드}` |
 | `variants` | 스키닝 등 변형 |

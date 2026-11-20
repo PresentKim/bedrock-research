@@ -76,7 +76,7 @@ UUID는 `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` 형식 36자이고 **v4(무작위
 | `world_template` | 월드 템플릿 | |
 | `client_data` | 행동팩 | 옛 클라이언트 스크립팅 잔재. 제거됨, MS 문서에만 남음 |
 
-Windows 1.26.65.1 클라이언트의 모듈 type 열거값은 `invalid`, `resources`, `data`, `script`, `client_script`, `mandatory`, `world_template`, `app_script` 8개다. 이 열거에 `skin_pack`과 `client_data`는 없다. `{코드}`. 모듈 type이 `client_script`, `mandatory`, `app_script`인 행동팩은 오류 없이 월드의 팩 목록에서 빠졌다 `{실측}`.
+Windows 1.26.65.1 클라이언트의 모듈 type 열거값은 `invalid`, `resources`, `data`, `script`, `client_script`, `mandatory`, `world_template`, `app_script` 8개다. 이 열거에 `skin_pack`과 `client_data`는 없다. `{코드}`. 모듈 type이 `client_script`, `mandatory`, `app_script`인 행동팩은 오류 없이 월드의 팩 목록에서 빠졌다 `{실측}`. 모듈 type `client_script`를 가진 리소스팩은 월드의 리소스팩 목록과 팩 스택에 남지만 클라이언트 스크립트 엔진은 시작되지 않았다([서버 네트워크와 관리](../scripting/server-net-and-admin.mdx)) `{실측}`.
 
 한 팩에 `data`와 `resources`를 함께 둘 수는 없다. 모듈 필드는 `type`, `uuid`, `version`, `description`(메모), `language`(`"javascript"`만), `entry`다.
 
@@ -173,7 +173,7 @@ Windows 1.26.65.1 클라이언트의 모듈 type 열거값은 `invalid`, `resour
 - **오류 메시지에 사용 가능한 버전 목록**이 나온다. 일부러 틀린 버전을 넣어 Content Log에서 목록을 확인하는 방법도 쓰인다(2026-07-05 예: server 0.1.0, 1.19.0, 2.8.0, 2.9.0-beta, 3.0.0-alpha / server-ui 0.1.0, 1.3.0, 2.1.0, 2.2.0-beta, 3.0.0-alpha).
 - **의존성 필터 규칙**(Windows 1.26.65.1 클라이언트 코드 `{코드}`, 측정은 `{실측}`):
   - 요청 버전의 접미사가 `beta`이거나 major가 0이면 Beta APIs 실험이 필요하다. 꺼져 있으면 `requesting dependency on beta APIs [...], but the Beta APIs experiment is not enabled.`로 거부된다. `@minecraft/client` `0.1.0`도 같은 문구로 거부됐다 `{실측}`.
-  - 접미사 `alpha`(`3.0.0-alpha`, `2.0.0-alpha`)는 이 필터가 검사하지 않는다. 다른 게이트가 있는지, 실험 없이 로드되는지는 재지 않았다.
+  - 접미사 `alpha`(`3.0.0-alpha`, `2.0.0-alpha`)는 이 필터가 검사하지 않는다. `@minecraft/server` `3.0.0-alpha`는 실험을 모두 끈 월드에서 오류 없이 로드됐고 `Duration` 클래스가 있었다 `{실측}`.
   - 접미사 `internal`은 일반 팩에서 `requesting dependency on internal APIs [...], but does not have permission to access them.`로 거부된다. `@minecraft/server` `2.0.0-internal`이 그랬다 `{실측}`. 코드에는 예외로 보이는 문맥값 하나가 있고 그 뜻은 모른다.
   - UUID로 쓴 의존성은 `dependency by UUID is deprecated and only supports version 0.1.0, use module_name instead` 경고가 난다. 그런데 `@minecraft/server`의 UUID `b26a4d4c-afdf-4690-88f8-931846312678`을 버전 `[1,0,0]`으로 적은 팩도 로드됐다 `{실측}`(그 팩은 모듈을 import하지 않고 의존성만 선언했다).
   - 한 팩에는 스크립트 모듈이 하나만 허용된다. 둘을 적으면 `skipped, only one script module allowed per pack` 경고가 나고 첫 모듈만 로드된다 `{실측}`.

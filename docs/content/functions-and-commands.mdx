@@ -129,7 +129,7 @@ attacker.spawnParticle("pdi:damage_glyph", pos, vars);
 
 ## 7. 클라이언트에 등록된 명령 (Windows 1.26.65.1)
 
-클라이언트 코드의 명령 등록 함수와 게임 안 실행 결과를 공식 `mojang-commands.json`(1.26.50.4)과 비교한 것이다. 게임 안 실행은 치트를 켠 크리에이티브 월드에서 했고 응답은 CommandOutput 패킷의 메시지 키로 읽었다. 치트를 끈 상태는 재지 않았다.
+클라이언트 코드의 명령 등록 함수와 게임 안 실행 결과를 공식 `mojang-commands.json`(1.26.50.4)과 비교한 것이다. 게임 안 실행은 치트를 켠 크리에이티브 월드에서 했고 응답은 CommandOutput 패킷의 메시지 키로 읽었다. 치트를 끈 월드에서는 몇 명령만 따로 쳐 보았다(7.2).
 
 ### 7.1 권한과 플래그
 
@@ -142,16 +142,18 @@ attacker.spawnParticle("pdi:damage_glyph", pos, vars);
 
 | 플래그 | 명령 | 뜻 |
 |---|---|---|
-| `0x80` | `gamerule`, `list`, `packstack`, `kick`, `project`, `party`, `tell`, `tellraw`, `me`, `say`, `op`, `deop`, `permission`, `help` | 치트 없이 사용 가능. 확정 |
+| `0x80` | `gamerule`, `list`, `packstack`, `kick`, `project`, `party`, `tell`, `tellraw`, `me`, `say`, `op`, `deop`, `permission`, `help` | 공식 JSON에 있는 명령에서는 치트 없이 사용 가능과 일치. `party`는 공식 JSON에 없고, 치트를 끈 월드에서 쓸 수 있는 것은 확인하지 못했다(7.2) |
 | `0x40` | `tell`, `tellraw`, `me`, `say`, `title`, `titleraw` | 채팅 메시지 형식 명령 묶음으로 보인다. 공통점만 확인했다 `{추론}` |
 | `0x10` | `help` | 로컬 처리로 보인다 `{추론}` |
 | `0x20` | `script`, `wsserver` | 디버거와 웹소켓 계열이라는 공통점만 확인했다 `{추론}` |
 | `0x400` | `op`, `deop`, `permission` | 편집기 객체가 있고 이 비트가 켜져 있으면 `commands.generic.disabled.editorLocked` 오류로 간다 |
-| `0x2`, `0x4`, `0x8` | 아래 7.3의 숨김 계열 | 실행 주체 종류 비트: 플레이어 `0x4`, 명령 블록과 명령 블록 마인카트 `0x2`, 자동화 플레이어 계열 `0x8`. 비트가 켜졌을 때 숨기는지 허용하는지는 확정하지 못했다 |
+| `0x2`, `0x4`, `0x8` | 아래 7.2 표의 `0x6` 명령, `lesson`(`0x4`), `codebuilder`(`0x4`) | 실행 주체 종류별 "차단" 비트다. 명령 기록에 비트가 켜져 있고 실행 주체가 그 종류이면 권한 수준과 상관없이 `commands.generic.error.permissions`로 거부된다. 플레이어는 `0x4`, 명령 블록과 명령 블록 마인카트는 `0x2`, 자동화 플레이어 계열은 `0x8`이다. 코드로 확정한 것은 종류 숫자(0은 `0x4`, 1과 2는 `0x2`, 5와 6은 `0x8`)이고 종류 이름은 `{추론}`이다 `{코드}` |
 
-### 7.2 공식 JSON에 없는 등록 명령 24개
+실행 직전 검사는 이 순서다 `{코드}`. 실행 주체의 권한 수준이 명령 권한보다 작으면 거부한다. 권한이 충분하면 실행 주체 종류를 위 비트로 바꿔 명령 플래그에 그 비트가 켜져 있는지 본다. 켜져 있으면 거부하고, 꺼져 있으면 실행한다. 종류 3, 4와 7 이상은 비트가 없어 이 검사를 건너뛴다. 거부 문구는 일반 클라이언트에서 항상 `commands.generic.error.permissions`이고, 교육판 차단 목록이 있는 플레이어만 `commands.generic.blocked_edu`가 나올 수 있다. 구문 분석이 이 검사보다 앞서므로 인자 없는 `/gettopsolidblock`은 `commands.generic.syntax`다. 등록 때 전역 불리언이 참이면 세 비트가 모두 지워져 어느 출처에서도 쓸 수 있다. 그 불리언이 어느 설정인지는 읽지 못했다. 자동완성에서 명령을 숨기는 비트는 찾지 못했다 `{코드}`.
 
-이름이 `mojang-commands.json`에 없는 등록 명령은 24개다(`party`의 이름은 데이터 영역에서 풀었다). 아래 분류는 권한, 플래그, 바닐라 `en_US.lang`의 `commands.*.description`을 기준으로 한 것이고, 교육판 전용 여부는 등록 조건이 어느 분기 안에 있는지에서 `{추론}`했다(조건의 정체는 읽지 못했다).
+### 7.2 공식 JSON에 없는 등록 명령 25개
+
+이름이 `mojang-commands.json`에 없는 등록 명령은 25개다(`party`의 이름은 데이터 영역에서 풀었다. `codebuilder`의 두 번째 등록은 `codebuilder_actorinfo`라는 별개 이름이다). 아래 분류는 권한, 플래그, 바닐라 `en_US.lang`의 `commands.*.description`을 기준으로 한 것이고, 교육판 전용 여부는 등록 조건이 어느 분기 안에 있는지에서 `{추론}`했다(조건의 정체는 읽지 못했다).
 
 | 이름 | 권한 | 플래그 | 설명(바닐라 lang) | 분류 |
 |---|---|---|---|---|
@@ -163,9 +165,10 @@ attacker.spawnParticle("pdi:damage_glyph", pos, vars);
 | `classroommode` | 0 | 0 | Attempt to launch and connect to Classroom Mode. | 교육, 클라이언트 기능 |
 | `code` | 0 | 0 | Launches Code Builder. | 교육, 클라이언트 기능 |
 | `gametips` | 0 | 0 | Enable or disable the game tips on this device | 클라이언트 설정 |
-| `party` | 0 | `0x80` | Sends a message in the party chat | 일반 사용 가능, 파티 기능이 켜졌을 때로 추정 |
+| `party` | 0 | `0x80` | Sends a message in the party chat | 클라이언트 조건 뒤에 등록(파티 서비스). 아래 실측에서 단일 플레이어 월드에는 없었다 |
 | `lesson` | 1 | `0x4` | Handle Educational Lesson reporting. | 교육 보고용, 플레이어만 |
-| `codebuilder` | 1과 0 | `0x4`와 `0x6` | lang 없음 | 교육 자동화(등록이 두 곳) |
+| `codebuilder` | 1 | `0x4` | lang 없음 | 교육 자동화 |
+| `codebuilder_actorinfo` | 0 | `0x6` | lang 없음(설명 키는 `commands.codebuilder.description`) | 교육 자동화. `codebuilder`의 두 번째 등록 이름이다 |
 | `agent` | 1 | `0x6` | lang 없음 | 교육 자동화 |
 | `closechat` | 0 | `0x6` | Closes the chat window of the local player if it is open. | 자동화, 클라이언트 |
 | `getlocalplayername` | 0 | `0x6` | Returns the local player name. | 자동화 |
@@ -178,25 +181,105 @@ attacker.spawnParticle("pdi:damage_glyph", pos, vars);
 | `globalpause` | 3 | `0x6` | Sets or gets the paused state of the game for all players. | 자동화, 교육 |
 | `gettopsolidblock` | 런타임 값 | `0x6` | Gets the position of the top non-air block below the specified position | 자동화 |
 | `querytarget` | 런타임 값 | `0x6` | Gets transform, name, and id information about the given target entity or entities. | 자동화 |
-| `listd` | 3 | `0x6` | lang 없음 | 전용 서버 관리 |
+| `listd` | 3 | `0x6` | lang 없음 | `list`의 상세판. 성공 키는 `commands.players.list`로 같다 |
 
 "에디터 전용" 명령은 따로 없고 편집기 잠금은 `0x400` 비트(`op`, `deop`, `permission`)로 표현된다. 개발과 테스트 전용으로 볼 수 있는 것은 `0x20` 비트 명령(`script`, `wsserver`)과 `gametest`뿐이고 모두 공식 JSON에 있다.
 
 치트를 켠 일반 크리에이티브 월드의 실측은 이렇다 `{실측}`.
 
 - 서버가 보낸 명령 목록에 `gettopsolidblock`, `querytarget`, `listd`, `agent`는 있었고, 위 표의 나머지 명령(`closechat`, `closewebsocket`, `enableencryption`, `getchunkdata`, `getchunks`, `getspawnpoint`, `resourceuri`, `takepicture`, `ability`, `codebuilder`, `lesson`, `classroommode`, `worldbuilder`, `immutableworld`)은 이름이 없었고 실행하면 `commands.generic.unknown`이었다. 이 월드에서는 등록되지 않았거나 숨겨진 것이다. `geteduclientinfo`, `getlocalplayername`, `gametips`, `globalpause`는 응답으로 구분하지 못했다(목록에는 없었다).
-- `/gettopsolidblock`은 `commands.generic.syntax`, `/gettopsolidblock ~ ~ ~`는 `commands.generic.error.permissions`였다. `/querytarget @s`와 `/listd`도 `commands.generic.error.permissions`였다. 세 명령은 명령으로 존재하고 이 월드의 플레이어 권한으로는 거부된다. 출력 내용은 권한 문제로 재지 못했다. `/agent`는 `commands.generic.syntax`(구문 안내)였다.
-- 플래그 `0x6`이 붙은 명령 중 어떤 것은 목록에 있고 어떤 것은 없었다. 그래서 이 월드에서는 `0x6`만으로 목록에 나오는지가 정해지지 않는 것으로 보인다 `{추론}`.
+- `/gettopsolidblock`은 `commands.generic.syntax`, `/gettopsolidblock ~ ~ ~`는 `commands.generic.error.permissions`였다. `/querytarget @s`와 `/listd`도 `commands.generic.error.permissions`였다. 세 명령은 명령으로 존재하고 이 월드의 플레이어 채팅으로는 거부된다. 이유는 권한 수준이 아니라 플래그 `0x6`의 `0x4`(플레이어 출처 차단)다. 호스트 권한 수준을 올려도 플레이어 채팅에서는 풀리지 않는다 `{코드}`. 출력 내용은 거부 때문에 재지 못했다. `/agent`는 `commands.generic.syntax`(구문 안내)였다.
+- 플래그 `0x6`이 붙은 명령 중 어떤 것은 목록에 있고 어떤 것은 없었다. 이 플래그는 실행 직전 검사에서만 읽히고 목록 전송을 막는 곳은 코드에서 찾지 못했다. 목록에 나오는지는 서버 쪽 등록이 정하는 것으로 보인다 `{코드, 추론}`.
+- `gettopsolidblock`, `querytarget`, `listd`를 실제로 돌릴 수 있는 출처는 플레이어(`0x4`)와 명령 블록(`0x2`)이 아닌 쪽, 곧 웹소켓 접속 같은 자동화 출처로 추정한다. 출처 종류의 이름과 이 가정은 측정하지 않았다 `{추론}`.
 
-### 7.3 별개 명령이 아닌 이름 정정
+치트를 끈 단일 플레이어 월드(Windows 1.26.65.1)에서 채팅으로 입력한 결과는 이렇다 `{실측}`.
+
+- `/party hello`는 `CommandRequest` 패킷이 나가지 않고 로컬 메시지 "이 세계에서는 치트를 사용할 수 없습니다."만 나왔다. 없는 명령 `/zzzfoo`와 같은 결과이고, 자동완성에서 `/p`는 `packstack`, `permission`, `deop`, `help`, `op`만 나왔다. 이 월드에서는 `party`가 등록되지 않았거나 숨겨져 있다. 권한 0과 플래그 `0x80`만으로는 쓸 수 있다고 할 수 없다. 등록이 파티 서비스 조건 뒤에 있다는 코드 읽기와 맞는다 `{코드}`.
+- `/listd`, `/gametips`, `/querytarget @s`, `/gettopsolidblock ~ ~ ~`, `/agent`, `/getchunks`, `/getlocalplayername`, `/closechat`, `/closewebsocket`, `/ability @s mayfly true`도 모두 패킷 없이 같은 로컬 메시지였다. `/listd`를 입력줄에 끝까지 입력해도 자동완성 항목이 나오지 않았다. 이 월드에서는 보이지 않고 쓸 수 없다.
+- 대조로 `/list`는 패킷이 나가고 `commands.players.list`(파라미터 `["1","8"]`)와 이름 목록이 돌아왔다.
+- 치트를 끈 상태에서 `listd`와 `gametips`가 거부된 원인은 권한 수준이 아니다. `listd`는 플래그 `0x6`이라 플레이어 출처에서는 막힌다. `op-permission-level=4`에서 게임 안에서 `listd`가 보인다는 서술은 원격 서버 조건이고 이 측정에서는 확인되지 않았다.
+
+### 7.3 공식 JSON에 없는 명령의 문법
+
+클라이언트의 등록 함수에서 오버로드 등록 호출과 인자 이름, 인자 형식 객체를 읽어 짝지은 것이다. 인자가 둘 이상이면 순서와 선택 여부를 확정하지 못했다. 서버가 보내는 AvailableCommands 패킷을 덤프하면 확정된다 `{코드}`.
+
+| 명령 | 문법 |
+|---|---|
+| `gettopsolidblock` | `<position: x y z>`. 출력 키 `position`, `blockName`. 오류 `commands.gettopsolidblock.notfound`, `commands.generic.invalidcontext` |
+| `querytarget` | `<target: target>`. 대상마다 `uniqueId`, `id`, `yRot`, `position`, `dimension`, `details`를 낸다. 성공 키 `commands.querytarget.success`, 대상 없음 `commands.generic.noTargetMatch` |
+| `listd` | `[details: ListDetails]`. `ListDetails`는 `ids`, `uuids`, `stats`. 출력 키 `currentPlayerCount`, `maxPlayerCount`, `players`, `details` |
+| `party` | `<message: message>`. 파티 서비스가 켜져 있고 파티가 있을 때만 보낸다. 아니면 `parties.chat.command.unavailable`, 빈 메시지는 `commands.generic.invalidMessage` |
+| `gametips` | `<status: enable or disable>`. 성공 키 `commands.gametips.enabled`, `commands.gametips.disabled` |
+| `closechat`, `geteduclientinfo`, `getlocalplayername`, `closewebsocket`, `classroommode`, `code` | 인자 없음 |
+| `worldbuilder` | 인자 없음. 별칭 `wb` |
+| `immutableworld` | `<value: Boolean>` |
+| `getspawnpoint` | `<player: target>` |
+| `getchunks` | 인자 1개(차원 형식으로 보임) |
+| `getchunkdata` | 인자 4개: `dimension`, `chunkX`, `chunkZ`, `height` |
+| `globalpause` | `[isPaused: Boolean]` |
+| `ability` | `<player: target> <ability: Ability> [value: Boolean]` 두 오버로드(순서와 `Ability` 값은 미확인) |
+| `takepicture` | 오버로드 3개: `targetPlayer`와 `targetCamera`(액터 선택자), `targetPlayer`와 `cameraSpawnLocation`(좌표), `targetPlayer` |
+| `resourceuri` | 오버로드 4개: 인자 없음, `clear`, `default <uri>`, `named <name> <uri>` |
+| `enableencryption` | 인자 3개: `publicKey`, `salt`, 암호 방식(인자 이름이 `ciper_mode`로 철자가 틀린 채 있다. 값은 `cfb8`, `cfb128` 등) |
+| `lesson`, `codebuilder` | 열거형 여러 개와 플레이어 선택자. `lesson`은 오버로드 4개. 세부는 못 풀었다 |
+| `codebuilder_actorinfo` | `CodeBuilderActionInventory`와 액터 선택자 `target` |
+| `agent` | 하위 명령 묶음(이동, 회전, 파기, 설치, 수집, 전달, 텔레포트 등). 인자 이름 `srcSlotNum`, `dstSlotNum`, `quantity`, `item`, `position`, `y-rot`, `lookAtPosition`이 보인다 |
+
+### 7.4 별개 명령이 아닌 이름 정정
 
 `spawnParticleEmitter`, `screenshake`, `transferserver`는 별개 명령이 아니라 `particle`, `camerashake`, `transfer`의 설명 키 이름이다. 등록 함수의 이름 값을 풀면 각각 `particle`, `camerashake`, `transfer`이고 설명 키만 `commands.spawnParticleEmitter.description`, `commands.screenshake.description`, `commands.transferserver.description`이다 `{코드}`. 그래서 바닐라 lang의 `commands.spawnParticleEmitter.description=Creates a particle emitter`는 `particle` 명령의 설명이다. 권한은 `particle` 1, `camerashake` 1, `transfer` 4로 공식 JSON과 같다.
 
 실측에서 `/spawnParticleEmitter`, `/screenshake`, `/transferserver`는 모두 `commands.generic.unknown`이었다. `/particle minecraft:villager_happy ~ ~2 ~`의 성공 키가 `commands.spawnParticleEmitter.success`, `/camerashake add @s 1 2`의 성공 키가 `commands.screenshake.success`였다. `/transfer KimPresent 127.0.0.1 19999`는 `commands.generic.error.permissions`로 거부돼 월드를 떠나지 않았다. `transfer`의 인자는 `owner`, `server`, `port`(정수, 선택)이고 구문이 틀리면 `commands.generic.syntax`다 `{실측}`.
 
-### 7.4 게임규칙
+### 7.5 게임규칙
 
-클라이언트의 `gamerule` 등록은 열거형 `BoolGameRule`, `IntGameRule`, `FloatGameRule` 셋을 만든다. 공식 JSON에는 `FloatGameRule`이 없고(`BoolGameRule`, `IntGameRule`, `playerwaypointsRule`, `playerwaypointsValues`뿐), 지금 실수형 규칙이 실제로 있는지는 읽지 못했다. 클라이언트에서 읽히는 규칙 이름은 모두 공식 JSON 목록 안에 있고 새 이름은 나오지 않았다 `{코드}`. 기본값은 코드에서 읽지 못했다.
+클라이언트의 `gamerule` 등록은 열거형 `BoolGameRule`, `IntGameRule`, `FloatGameRule` 셋을 만든다. 공식 JSON에는 `FloatGameRule`이 없다(`BoolGameRule`, `IntGameRule`, `playerwaypointsRule`, `playerwaypointsValues`뿐). 게임규칙 레지스트리는 규칙 39개를 만든다. 실수형 규칙은 하나도 없고 값 읽기와 쓰기 코드만 구현돼 있어서 `FloatGameRule`은 빈 열거형으로 읽힌다(자동완성에 항목이 없을 것, 측정하지 않았다 `{추론}`). 공식 JSON(1.26.50.4)의 38개 이름은 모두 있고, JSON에 없는 규칙은 `locatorbar` 하나다. `locatorbar`는 예전 세이브의 키 이름이다. 월드 데이터를 읽을 때 이 키가 `playerWaypoints`의 초기값으로 바뀐다(키가 없거나 true이면 1, false이면 0). `locatorbar`가 `/gamerule` 자동완성에 나오는지는 열거형 등록 코드가 이 규칙을 빼지 않는 것으로 보여 나올 가능성이 높지만 측정하지 않았다 `{코드, 추론}`.
+
+규칙 순서와 이름, 형식, 기본값, 치트 필요 여부를 클라이언트 레지스트리에서 읽은 것이다. 이름은 레지스트리의 표기이고 명령에는 소문자로 노출된다(열거형 값은 소문자여야 한다는 검사와 맞는다 `{코드, 추론}`). 치트 필요가 "필요"인 규칙은 치트를 끈 월드에서 `/gamerule`이 `commands.gamerule.type.nocheatsenabled`로 막는다 `{코드}`.
+
+| 번호 | 이름 | 형식 | 기본값 | 치트 |
+|---|---|---|---|---|
+| 0 | `commandBlockOutput` | 불리언 | true | 필요 |
+| 1 | `doDayLightCycle` | 불리언 | true | 필요 |
+| 2 | `doEntityDrops` | 불리언 | true | 필요 |
+| 3 | `doFireTick` | 불리언 | true | 불필요 |
+| 4 | `recipesUnlock` | 불리언 | true | 불필요 |
+| 5 | `doLimitedCrafting` | 불리언 | false | 불필요 |
+| 6 | `doMobLoot` | 불리언 | true | 불필요 |
+| 7 | `doMobSpawning` | 불리언 | true | 필요 |
+| 8 | `doTileDrops` | 불리언 | true | 불필요 |
+| 9 | `doWeatherCycle` | 불리언 | true | 필요 |
+| 10 | `drowningDamage` | 불리언 | true | 필요 |
+| 11 | `fallDamage` | 불리언 | true | 필요 |
+| 12 | `fireDamage` | 불리언 | true | 필요 |
+| 13 | `keepInventory` | 불리언 | false | 필요 |
+| 14 | `mobGriefing` | 불리언 | true | 필요 |
+| 15 | `pvp` | 불리언 | true | 불필요 |
+| 16 | `showCoordinates` | 불리언 | false | 불필요 |
+| 17 | `playerWaypoints` | 정수(열거형 `playerwaypointsRule`, 값 `everyone`, `off`) | 1 | 불필요 |
+| 18 | `locatorbar` | 불리언 | true | 불필요 |
+| 19 | `showDaysPlayed` | 불리언 | false | 불필요 |
+| 20 | `naturalRegeneration` | 불리언 | true | 불필요 |
+| 21 | `tntExplodes` | 불리언 | true | 불필요 |
+| 22 | `sendCommandFeedback` | 불리언 | true | 필요 |
+| 23 | `maxCommandChainLength` | 정수 | 65535 | 필요 |
+| 24 | `doInsomnia` | 불리언 | true | 필요 |
+| 25 | `commandBlocksEnabled` | 불리언 | true | 필요 |
+| 26 | `randomTickSpeed` | 정수 | 1 | 필요 |
+| 27 | `doImmediateRespawn` | 불리언 | false | 불필요 |
+| 28 | `showDeathMessages` | 불리언 | true | 불필요 |
+| 29 | `functionCommandLimit` | 정수 | 10000 | 필요 |
+| 30 | `spawnRadius` | 정수 | 10 | 불필요 |
+| 31 | `showTags` | 불리언 | true | 불필요 |
+| 32 | `freezeDamage` | 불리언 | true | 필요 |
+| 33 | `respawnBlocksExplode` | 불리언 | true | 불필요 |
+| 34 | `showBorderEffect` | 불리언 | true | 필요 |
+| 35 | `showRecipeMessages` | 불리언 | true | 불필요 |
+| 36 | `playersSleepingPercentage` | 정수 | 100 | 불필요 |
+| 37 | `projectilesCanBreakBlocks` | 불리언 | true | 불필요 |
+| 38 | `tntExplosionDropDecay` | 불리언 | false | 불필요 |
+
+불리언 33개(`locatorbar` 포함)와 정수 6개(`playerWaypoints` 포함)다 `{코드}`. 레지스트리 항목에서 `locatorbar`만 "활성 표식"으로 보이는 바이트가 0이고 이 바이트의 뜻은 모른다. `/gamerule` 실행기에는 규칙 번호 43을 따로 다루는 분기가 있으나 레지스트리 크기가 39라 이 배열에는 없는 번호다. 죽은 분기인지는 읽지 못했다.
 
 공식 JSON(1.26.50.4)의 열거형은 이렇다 `{바닐라}`.
 
