@@ -14,4 +14,5 @@ Docusaurus는 `docs/`만 빌드하므로 이 폴더는 사이트에 나오지 �
 | [ore-ui-ddui-server-guide.md](./ore-ui-ddui-server-guide.md) | `docs/ore-ui/ddui-server-guide.mdx` |
 | [block-item-definition-nbt.md](./block-item-definition-nbt.md) | `docs/server/custom-items-and-blocks.mdx` "블록·아이템 정의 NBT에서 실측한 것" |
 | [structure-renderer.md](./structure-renderer.md) | `docs/design/structure-renderer.mdx` "2. 속성 전체" |
+| [client-1-26-65-findings.md](./client-1-26-65-findings.md) | `docs/json-ui/files-and-definitions.mdx` 1.11절, `docs/ore-ui/overview.mdx`, `docs/scripting/versions-and-beta.mdx`, `docs/basics/manifest.mdx`, `docs/content/functions-and-commands.mdx` 7절, `docs/rendering/` 머티리얼과 Molang 절 |
 | [pack-access-strategies.md](./pack-access-strategies.md) | `docs/basics/pack-delivery-and-encryption.mdx`, `docs/ore-ui/modifying-pages.mdx`, ALT-11 |

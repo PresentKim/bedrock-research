@@ -127,6 +127,83 @@ attacker.spawnParticle("pdi:damage_glyph", pos, vars);
 - `math.clamp(value, min, max)` takes 3 arguments. Instead of assigning inside a ternary, use `q.in_range(v, lo, hi)`.
 - An RP alone cannot get the distance between players.
 
-## 7. Full reference
+## 7. Commands registered in the client (Windows 1.26.65.1)
+
+This compares the command registration function in the client code and in-game execution results with the official `mojang-commands.json` (1.26.50.4). The in-game runs were done in a creative world with cheats on, and responses were read from the message keys of CommandOutput packets. The cheats-off state was not measured.
+
+### 7.1 Permission and flags
+
+The registration function takes a command name, a description key, a permission byte and two 16-bit flags. The two flags are ORed into the 16-bit value of the command record `{code}`.
+
+- The `0x80` bit of the flags means no cheats are required. Among the 74 commands whose names were resolved and that are in `mojang-commands.json`, `requires_cheats` matched "this bit is off" in all 74. The permission bytes of the same 74 also all matched `permission_level`, so the numbers 0 to 4 follow the same scheme as the official documentation (0 is `help`, `list`, `me`, `tell`, `packstack`; 2 is `op`, `deop`, `permission`, `place`, `reload`, `script`, `wsserver`; 3 is `setmaxplayers`; 4 is the `allowlist` family, `stop`, `transfer`; most of the rest are 1) `{code}`.
+- `gamerule` is permission 1 with `0x80`. The string `commands.gamerule.type.nocheatsenabled` exists, so the command appears to open without cheats and block per rule whether cheats are needed `{code, inferred}`.
+- Command enum values must be lower case. A keyword that is not registered is rejected with `Keywords in commands need to be lower case. '%s' was not registered.` `{code}`.
+- The path that receives the command list the server sends (AvailableCommands) and registers it uses the same registration function and passes the permission and flags as they are in the packet entry. This means the client-side flags are decided by the server and interpreted the same way `{code}`.
+
+| Flag | Commands | Meaning |
+|---|---|---|
+| `0x80` | `gamerule`, `list`, `packstack`, `kick`, `project`, `party`, `tell`, `tellraw`, `me`, `say`, `op`, `deop`, `permission`, `help` | usable without cheats. Confirmed |
+| `0x40` | `tell`, `tellraw`, `me`, `say`, `title`, `titleraw` | appears to be a group of chat-message-style commands. Only the common point was confirmed `{inferred}` |
+| `0x10` | `help` | appears to be handled locally `{inferred}` |
+| `0x20` | `script`, `wsserver` | only the common point (debugger and websocket family) was confirmed `{inferred}` |
+| `0x400` | `op`, `deop`, `permission` | if an editor object exists and this bit is on, it goes to the error `commands.generic.disabled.editorLocked` |
+| `0x2`, `0x4`, `0x8` | the hidden family in 7.2 below | origin kind bits: player `0x4`, command block and command block minecart `0x2`, automation player family `0x8`. Whether a set bit hides or allows was not settled |
+
+### 7.2 24 registered commands that are not in the official JSON
+
+24 registered commands have names that are not in `mojang-commands.json` (the name of `party` was resolved from a data area). The classification below is based on permission, flags and the `commands.*.description` of the vanilla `en_US.lang`. Whether a command is education-only is `{inferred}` from which branch its registration sits in (the condition itself was not read).
+
+| Name | Permission | Flags | Description (vanilla lang) | Classification |
+|---|---|---|---|---|
+| `ability` | 1 | 0 | Sets a player's ability. | education-conditional, needs cheats |
+| `immutableworld` | 1 | 0 | Sets the immutable state of the world. | education-conditional |
+| `takepicture` | 1 | 0 | no lang entry | education-conditional |
+| `resourceuri` | 1 | 0 | no lang entry | conditional (by name, a resource address lookup) |
+| `worldbuilder` | 1 | 0 | Toggle World Builder status of caller. | education-conditional |
+| `classroommode` | 0 | 0 | Attempt to launch and connect to Classroom Mode. | education, client feature |
+| `code` | 0 | 0 | Launches Code Builder. | education, client feature |
+| `gametips` | 0 | 0 | Enable or disable the game tips on this device | client setting |
+| `party` | 0 | `0x80` | Sends a message in the party chat | generally usable, presumably when the party feature is on |
+| `lesson` | 1 | `0x4` | Handle Educational Lesson reporting. | for education reporting, players only |
+| `codebuilder` | 1 and 0 | `0x4` and `0x6` | no lang entry | education automation (registered in two places) |
+| `agent` | 1 | `0x6` | no lang entry | education automation |
+| `closechat` | 0 | `0x6` | Closes the chat window of the local player if it is open. | automation, client |
+| `getlocalplayername` | 0 | `0x6` | Returns the local player name. | automation |
+| `geteduclientinfo` | 0 | `0x6` | no lang entry | education automation |
+| `closewebsocket` | 0 | `0x6` | Closes websocket connection if there is one. | websocket automation |
+| `enableencryption` | 0 | `0x6` | no lang entry | websocket automation |
+| `getchunkdata` | 3 | `0x6` | Gets pixels for a specific chunk. | automation, map |
+| `getchunks` | 3 | `0x6` | Gets list of chunks that are loaded. | automation, map |
+| `getspawnpoint` | 3 | `0x6` | Gets the spawn position of the specified player(s). | automation |
+| `globalpause` | 3 | `0x6` | Sets or gets the paused state of the game for all players. | automation, education |
+| `gettopsolidblock` | runtime value | `0x6` | Gets the position of the top non-air block below the specified position | automation |
+| `querytarget` | runtime value | `0x6` | Gets transform, name, and id information about the given target entity or entities. | automation |
+| `listd` | 3 | `0x6` | no lang entry | dedicated server administration |
+
+There is no separate "editor only" command; the editor lock is expressed by the `0x400` bit (`op`, `deop`, `permission`). The only ones that can be seen as development and test only are the `0x20` bit commands (`script`, `wsserver`) and `gametest`, and all of them are in the official JSON.
+
+The measurements in an ordinary creative world with cheats on are as follows `{measured}`.
+
+- The command list the server sent had `gettopsolidblock`, `querytarget`, `listd` and `agent`. The other commands in the table above (`closechat`, `closewebsocket`, `enableencryption`, `getchunkdata`, `getchunks`, `getspawnpoint`, `resourceuri`, `takepicture`, `ability`, `codebuilder`, `lesson`, `classroommode`, `worldbuilder`, `immutableworld`) were absent from the names, and running them gave `commands.generic.unknown`. In this world they are not registered or are hidden. `geteduclientinfo`, `getlocalplayername`, `gametips` and `globalpause` could not be told apart by the response (they were not in the list).
+- `/gettopsolidblock` gave `commands.generic.syntax`, and `/gettopsolidblock ~ ~ ~` gave `commands.generic.error.permissions`. `/querytarget @s` and `/listd` also gave `commands.generic.error.permissions`. The three exist as commands and are refused with this world's player permission. Their output could not be measured because of the permission problem. `/agent` gave `commands.generic.syntax` (a syntax hint).
+- Among commands with flag `0x6`, some were in the list and some were not. So in this world `0x6` alone does not seem to decide whether a command appears `{inferred}`.
+
+### 7.3 Names that are not separate commands
+
+`spawnParticleEmitter`, `screenshake` and `transferserver` are not separate commands but description key names of `particle`, `camerashake` and `transfer`. Resolving the name values of the registration functions gives `particle`, `camerashake` and `transfer`, and only the description keys are `commands.spawnParticleEmitter.description`, `commands.screenshake.description` and `commands.transferserver.description` `{code}`. So `commands.spawnParticleEmitter.description=Creates a particle emitter` in the vanilla lang is the description of the `particle` command. The permissions are `particle` 1, `camerashake` 1 and `transfer` 4, the same as the official JSON.
+
+In the measurement, `/spawnParticleEmitter`, `/screenshake` and `/transferserver` all gave `commands.generic.unknown`. The success key of `/particle minecraft:villager_happy ~ ~2 ~` was `commands.spawnParticleEmitter.success`, and that of `/camerashake add @s 1 2` was `commands.screenshake.success`. `/transfer KimPresent 127.0.0.1 19999` was refused with `commands.generic.error.permissions` and the player did not leave the world. The arguments of `transfer` are `owner`, `server` and `port` (an integer, optional), and a wrong syntax gives `commands.generic.syntax` `{measured}`.
+
+### 7.4 Game rules
+
+The client's `gamerule` registration creates three enums: `BoolGameRule`, `IntGameRule` and `FloatGameRule`. The official JSON has no `FloatGameRule` (only `BoolGameRule`, `IntGameRule`, `playerwaypointsRule` and `playerwaypointsValues`), and whether a float rule actually exists now was not read. Every rule name readable from the client is inside the official JSON list, and no new name appeared `{code}`. The default values could not be read from the code.
+
+The enums in the official JSON (1.26.50.4) are as follows `{vanilla}`.
+
+- 32 `BoolGameRule`: `commandblockoutput`, `dodaylightcycle`, `doentitydrops`, `dofiretick`, `recipesunlock`, `dolimitedcrafting`, `domobloot`, `domobspawning`, `dotiledrops`, `doweathercycle`, `drowningdamage`, `falldamage`, `firedamage`, `keepinventory`, `mobgriefing`, `pvp`, `showcoordinates`, `showdaysplayed`, `naturalregeneration`, `tntexplodes`, `sendcommandfeedback`, `doinsomnia`, `commandblocksenabled`, `doimmediaterespawn`, `showdeathmessages`, `showtags`, `freezedamage`, `respawnblocksexplode`, `showbordereffect`, `showrecipemessages`, `projectilescanbreakblocks`, `tntexplosiondropdecay`.
+- 5 `IntGameRule`: `maxcommandchainlength`, `randomtickspeed`, `functioncommandlimit`, `spawnradius`, `playerssleepingpercentage`.
+- The locator bar rule is a separate enum, `playerwaypointsRule` and `playerwaypointsValues`.
+
+## 8. Full reference
 
 The command list and introduction documents are included as MS Learn original excerpts in the [command list](./reference/commands-1.mdx).

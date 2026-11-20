@@ -40,20 +40,54 @@ Most vanilla entity materials descend from `entity_static`. Following one villag
 | --- | --- |
 | `states` | Render states: the 10 names `DisableDepthTest`, `Blending`, `DisableCulling`, `DisableColorWrite`, `DisableAlphaWrite`, `DisableDepthWrite`, `StencilWrite`, `InvertCulling`, `EnableStencilTest`, `EnableAlphaToCoverage`. `states` replaces the list, `+states` adds and `-states` removes. A name not in the table (`Wireframe`, `DisableRGBWrite` and others) logs `Trying to use a non-existing render state` and has no effect. `PolygonOffset` only logs `is ignored and will have no effect` `{code}` |
 | `defines` | Shader macros (`ALPHA_TEST`, `USE_EMISSIVE`, `USE_OVERLAY`, `USE_UV_ANIM`, `FANCY`, `ENABLE_FOG`, `ENABLE_LIGHT` and so on) |
-| `depthFunc` | Depth comparison: `Always`, `Equal`, `NotEqual`, `Less`, `Greater`, `GreaterEqual`, `LessEqual`. On Windows 1.26.65.1, a box entity whose material is a child of `entity_alphatest` with `Greater` showed only its shadow on open ground, and behind a stone block only the part overlapping the stone's side face was drawn ([record](../design/json-ui-claims.mdx#65-decimal-literals-alpha-string-division-hud-rendering-queries)) |
+| `depthFunc` | Depth comparison: `Always`, `Equal`, `NotEqual`, `Less`, `Greater`, `GreaterEqual`, `LessEqual` (there is no `Never` `{code}`). On Windows 1.26.65.1, a box entity whose material is a child of `entity_alphatest` with `Greater` showed only its shadow on open ground, and behind a stone block only the part overlapping the stone's side face was drawn ([record](../design/json-ui-claims.mdx#65-decimal-literals-alpha-string-division-hud-rendering-queries)) |
 | `stencilRef`, `stencilReadMask`, `stencilWriteMask` | Stencil reference value and masks |
-| `frontFace`, `backFace` | `stencilFunc` (the same value set as the depth function), `stencilFailOp`, `stencilDepthFailOp`, `stencilPassOp` (`Keep`, `Replace` and so on) |
+| `frontFace`, `backFace` | `stencilFunc` (the same value set as the depth function), `stencilFailOp`, `stencilDepthFailOp`, `stencilPassOp` (only the two values `Keep` and `Replace` `{code}`) |
 | `blendSrc`, `blendDst`, `alphaSrc`, `alphaDst` | Blend factors: `DestColor`, `SourceColor`, `Zero`, `One`, `OneMinusDestColor`, `OneMinusSrcColor`, `SourceAlpha`, `DestAlpha`, `OneMinusSrcAlpha` |
-| `samplerStates` | Per-sampler `textureFilter`, `textureWrap` |
-| `msaaSupport` | Multisampling support |
+| `samplerStates` | Per-sampler `textureFilter`, `textureWrap`, `shaderStage`. Values are in the enum table below |
+| `msaaSupport` | Multisampling support: `NonMSAA`, `MSAA`, `Both` `{code}` |
 | `stencilRefOverride` | Boolean. Setting `stencilRef` writes the same value to the front and back reference and also turns this flag on `{code}` |
-| `depthBias`, `slopeScaledDepthBias` | Float. Depth bias values. Defaults and effect not measured `{code}` |
+| `depthBias`, `slopeScaledDepthBias` | Float. Depth bias values. There is no range check, and the value with its sign flipped is stored in the rasterizer state. The default is unknown `{code}`. Materials given `5.0`, `-5.0`, `1000000.0`, `-1000000.0` and a `slopeScaledDepthBias` of `100000.0` and `-100000.0` were accepted without an error log. Of 11 cubes, only the two given `5.0` and `-5.0` were not visible, and the reason is unknown. A setup of two overlapping faces to measure the depth bias effect could not be built `{measured}` |
 | `primitiveMode` | String enum: `None`, `QuadList`, `TriangleList`, `TriangleStrip`, `LineList`, `Line`. Case sensitive; an unknown value is skipped without a log `{code}` |
-| `renderTargetFormats` | Array. Value names unknown `{code}` |
-| `samplerIndex` in `samplerStates`, `field` in `vertexFields` | Sampler index, vertex field name `{code}` |
+| `renderTargetFormats` | An array of arrays (one string array per render target). The 28 value names are in the table below. A wrong entry becomes `UNKNOWN_TEXTURE_FORMAT` (0) `{code}` |
+| `samplerIndex` in `samplerStates`, `field` in `vertexFields` | Sampler index (only 0 to 7 are accepted, and an entry with 8 or more is skipped whole without a log; a missing key means 0), vertex field name `{code}` |
 | `variants` | Variants such as skinning |
 
 The test order is the stencil test first and then the depth test. Blending is final RGB = current color x source factor + buffer color x destination factor. The engine defaults are `blendSrc` SourceAlpha, `blendDst` OneMinusSrcAlpha, `alphaSrc` One, `alphaDst` OneMinusSrcAlpha. When you declare `Blending`, you usually also set `blendSrc` and `blendDst`. This field description document partly mixes in NetEase edition features (`NETEASE_SKINNING` and so on).
+
+### All enum values and the `states` bits `{code}`
+
+These are the values the material parser of the Windows 1.26.65.1 client accepts. Names are case sensitive. An unknown key is ignored without a log (the parser looks up only known keys by name), and only an unknown `states` value is logged. A wrong enum string puts the default slot value in without a log.
+
+| Field | Accepted values and internal values |
+|---|---|
+| `depthFunc`, `stencilFunc` | `Equal` 0, `NotEqual` 1, `Always` 2, `Less` 3, `Greater` 4, `GreaterEqual` 5, `LessEqual` 6. There is no `Never` |
+| `blendSrc`, `blendDst`, `alphaSrc`, `alphaDst` | `DestColor` 0, `SourceColor` 1, `Zero` 2, `One` 3, `OneMinusDestColor` 4, `OneMinusSrcColor` 5, `SourceAlpha` 6, `DestAlpha` 7, `OneMinusSrcAlpha` 8. There is no `OneMinusDestAlpha` |
+| `stencilFailOp`, `stencilDepthFailOp`, `stencilPassOp` | `Keep` 1, `Replace` 3 |
+| `primitiveMode` | `None` 0, `QuadList` 1, `TriangleList` 2, `TriangleStrip` 3, `LineList` 4, `Line` 5. `LineStrip` is a name in another table and not a value of this field |
+| `msaaSupport` | `NonMSAA` 1, `MSAA` 2, `Both` 3. If an internal global value is 1, it overrides the value read with `NonMSAA` (what this global means is unknown) |
+| `textureFilter` | `Point` 0, `Bilinear` 1, `Trilinear` 2, `MipMapBilinear` 3, `TexelAA` 4, `PCF` 5 |
+| `textureWrap` | `Repeat`, `Clamp` |
+| `shaderStage` | `Vertex` 1, `Pixel` 2, `Geometry` 4 |
+| `vertexFields[].field` | `Position` 0, `Color` 1, `Normal` 2, `Tangent` 3, `UV0` 4, `UV1` 5, `UV2` 6, `PBRTextureIdx` 7, `BoneId0` 8, `PreviousPosition`, `HummingbirdPosition`, `HummingbirdColor`, `HummingbirdAdditional`, `Mers`, `GeoType` (the values of the last six are unknown) |
+| `renderTargetFormats` | `UNKNOWN_TEXTURE_FORMAT` 0, `R32G32B32A32_FLOAT` 2, `R16G16B16A16_FLOAT` 10, `R16G16B16A16_UNORM` 11, `R32G32_FLOAT` 16, `R10G10B10A2_UNORM` 24, `R8G8B8A8_UNORM` 28, `R8G8B8A8_UNORM_SRGB` 29, `R16G16_UNORM` 35, `R16G16_UINT` 36, `D32_FLOAT` 40, `R32_FLOAT` 41, `R32_UINT` 42, `R24G8_TYPELESS` 44, `D24_UNORM_S8_UINT` 45, `R24_UNORM_X8_TYPELESS` 46, `D16_UNORM` 55, `R8_UNORM` 61, `R8_UINT` 62, `A8_UNORM` 65, `BC3_UNORM` 77, `R5G6B5_UNORM` 85, `R5G5B5A1_UNORM` 86, `B8G8R8A8_UNORM` 87, `B8G8R8A8_UNORM_SRGB` 91, `BC7_UNORM` 98, `R4G4B4A4_UNORM` 115, `R8G8B8_UNORM` 145. The internal values equal the DXGI numbers. The spelling of the names was assembled from string fragments in the code |
+
+The 10 names and bits of `states` are as follows. `states` sets the bits to 0 and then turns the listed ones on, replacing the state; `+states` turns more on and `-states` turns them off.
+
+| Name | Bit | Where it is read |
+|---|---|---|
+| `DisableDepthTest` | `0x1` | when set, the depth test is not used |
+| `Blending` | `0x2` | blending on |
+| `DisableCulling` | `0x4` | no cull mode |
+| `DisableColorWrite` | `0x8` | color write mask 0 |
+| `DisableAlphaWrite` | `0x10` | removes alpha from the mask |
+| `DisableDepthWrite` | `0x20` | no depth write |
+| `StencilWrite` | `0x40` | not read by the state parser (other consumers are unknown) |
+| `InvertCulling` | `0x80` | front-face culling |
+| `EnableStencilTest` | `0x100` | stencil on |
+| `EnableAlphaToCoverage` | `0x200` | adds the `ALPHA_TO_COVERAGE` define |
+
+The cull mode is none if `DisableCulling` is set, front-face culling if `InvertCulling` is set, and the default cull mode otherwise. The color write mask is 0 if `DisableColorWrite` is set; otherwise RGB, with alpha added only when `DisableAlphaWrite` is absent. `PolygonOffset` is an ignored name, so it only logs `Render state ... is ignored and will have no effect`.
 
 ### Example: linking an alpha test entity material to a client entity
 

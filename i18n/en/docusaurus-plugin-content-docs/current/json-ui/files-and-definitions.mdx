@@ -142,7 +142,7 @@ JSON UI consists of JSON files in the resource pack `ui/` folder. One file is on
 - **[FILE-09]** `$name` is a variable. Put it inside a definition as `"$x": value` or pass it at the reference point. `"$x|default": value` is the default used only when it was not passed from above (the reference point). `{vanilla}` (Source: VN `|default` 3,419 uses)
 - **[FILE-10]** Variable substitution in an ordinary property works **only when the whole value is a variable.** `"text": "$title"` works, but in `"text": "Title: $title"` the `$` is printed as is. If you need a combination, use a variable expression (FILE-11). `{measured}` (Source: BC-facts)
 - **[FILE-11]** A variable value can be a parenthesized expression. Vanilla assembles binding names, texture paths and control names with it. Example: `"$toggle_state_binding_name": "('#' + $dropdown_name)"`. `{vanilla, working pack}` (Source: VN ui_common.json:1126, AP 4.3 and 4.9)
-- **[FILE-12]** There are variables the engine puts in beforehand. Examples: `$education_edition`, `$is_ps4`, `$pre_release` (platform and build), `$container_title` of the chest screen, and `$actionbar_text` and `$title_fade_in_time` of controls created by HUD factories. `{vanilla, measured}` (Source: VN top values used in ignored, VN hud_screen.json:2158 and 2170, BC-facts)
+- **[FILE-12]** There are variables the engine puts in beforehand. Examples: `$education_edition`, `$is_ps4`, `$pre_release` (platform and build), `$container_title` of the chest screen, and `$actionbar_text` and `$title_fade_in_time` of controls created by HUD factories. Every screen receives 88 global names, and screen-only names exist separately (section 1.11). `{vanilla, measured, code}` (Source: VN top values used in ignored, VN hud_screen.json:2158 and 2170, BC-facts, 2026-11-20 Windows 1.26.65.1 decompilation)
 - **[FILE-13]** Each item of the `variables` array applies that item's variables when `"requires": "<$variable expression>"` is true. You may also write a **single object** instead of an array. `{vanilla, working pack}` (Source: VN arrays 274 and objects 4 uses, for example realms_settings_screen.json:2557, AP 4.6, BW-doc)
 - **[FILE-14]** A control array can also be passed as a variable: `"controls": "$target_control"`. It is a way to make a "child slot" in a template. `{vanilla, working pack}` (Source: VN 14 uses, for example persona_cast_character_screen.json:14, AP 4.2, BW-intro)
 - **[FILE-15]** With `"child@$variable"` you can mount the definition the variable points to. Vanilla also uses it 413 times with a variable passed from the reference point (for example `content@$button_content`). But there is a measurement that nothing was drawn in one setup of the bedrock-core chest router (referencing a host that declares `$gate|default` twice with different `$gate`). If mounting fails, write the definition name directly. `{vanilla, working pack, conflict}` (Source: VN 413 uses, AP 4.8, BC-facts, conflict C-03, BW-intro)
@@ -189,7 +189,7 @@ These are rules added by comparing the wiki (BW) documents with vanilla 1.26.50.
 - **[FILE-26]** A namespace is said to allow a prefix (`"namespace": "wiki:main"` -> `"x@wiki:main.element"`). It is for reducing the chance of colliding with vanilla namespaces. There is no usage example in vanilla or this project's sources. `{unverified}` (Source: BW-best)
 - **[FILE-27]** If the child that a path key (`"parent/child"`) points to does not exist, a resource pack error is left in the Content Log but the rest of the UI works normally. Path keys are the contact point that breaks first when vanilla is reworked, so if you can override the definition itself, use that. `{unverified, inferred}` (Source: BW-best)
 - **[FILE-28]** When using engine-provided variables (`$actionbar_text`, etc.) in an expression, receive them once as your own variable (`"$atext": "$actionbar_text"`, `"visible": "(not ($atext = 'x'))"`). The wiki says engine variables cannot be compared directly, and AP's `"$title_text|default": ""` declaration appears to have the same effect. `{unverified, inferred}` (Source: BW-intro, AP 4.1)
-- **[FILE-29]** Of the global platform variables the engine sets, those the vanilla 1.26.50 UI actually references: `$pocket_edition`, `$win10_edition`, `$osx_edition`, `$console_edition`, `$education_edition`, `$is_console`, `$is_desktop`, `$is_ios`, `$is_ps4`, `$xbox_one`, `$touch`, `$pocket_screen`, `$desktop_screen`, `$is_pregame` (out-of-game screens), `$is_publish`, `$pre_release`, `$trial`, `$store_disabled`, `$is_holographic`, `$apple_os`, `$google_os`, `$microsoft_os`, `$nx_os` and others, 34 in all. The remaining 21 of the wiki list's 55 (`$game_pad`, `$mouse`, `$fire_tv`, `$gear_vr`, etc.) do not appear in vanilla UI files, so it is unknown whether they are still supplied. `{vanilla}` (Source: BW-doc Global Variables, VN exhaustive search)
+- **[FILE-29]** Of the global platform variables the engine sets, those the vanilla 1.26.50 UI actually references: `$pocket_edition`, `$win10_edition`, `$osx_edition`, `$console_edition`, `$education_edition`, `$is_console`, `$is_desktop`, `$is_ios`, `$is_ps4`, `$xbox_one`, `$touch`, `$pocket_screen`, `$desktop_screen`, `$is_pregame` (out-of-game screens), `$is_publish`, `$pre_release`, `$trial`, `$store_disabled`, `$is_holographic`, `$apple_os`, `$google_os`, `$microsoft_os`, `$nx_os` and others, 34 in all. The remaining 21 of the wiki list's 55 (`$game_pad`, `$mouse`, `$fire_tv`, `$gear_vr`, etc.) do not appear in vanilla UI files. In the Windows 1.26.65.1 client code the four names given as examples are all among the 88 globals. The only input-mode name is `$game_pad`; there is no `$gamepad` (section 1.11). `{vanilla, code}` (Source: BW-doc Global Variables, VN exhaustive search, 2026-11-20 Windows 1.26.65.1 decompilation)
 
 ### 1.8 Rules added from the Cinnabar engine reconstruction
 
@@ -219,6 +219,84 @@ These were measured on Windows 1.26.65.1 on 2026-11-19~2026-11-20. The HUD title
 - **[FILE-45]** `requires` and `ignored` have no binding context, so `#x` evaluates to the text `#x`, not to null. `"requires": "(#x)"` applied the block and `"requires": "(not #x)"` did not. `"ignored": "(#x = '#x')"` left the control not created, and `"ignored": "yes"` left it created (only booleans and integers have an effect in `ignored`, FILE-35 and FILE-43). So `requires` and `ignored` cannot test binding values (FILE-16). `{measured, code}` (Source: 2026-11-20 Windows 1.26.65.1, 2026-11-20 decompilation)
 - **[FILE-46]** **Do not use an undefined `$variable` in the `requires` of `variables`.** On Windows 1.26.65.1, a `requires` with `$nosuch_var`, defined nowhere, piled up more than 340,000 lines of `Expected variable not found in ancestor tree: '$nosuch_var'` in the content log and froze the game, which had to be force quit. Declare every variable that a `requires` reads on that control or an ancestor, at least with `|default`. `{measured}` (Source: 2026-11-20 Windows 1.26.65.1)
 - **[FILE-47]** A `variables` block whose `requires` compares `$subtitle_text` can select a JSON integer to put in the `property_bag`, 64-bit integers included. `$id` selected with `{ "requires": "($subtitle_text = '-8589934591')", "$id": -8589934591 }` and put in `"property_bag": { "actor_id": "$id" }` made `actor_portrait_renderer` draw that entity. A variable holding a JSON integer stays an integer when substituted into the `property_bag`. Bindings cut integers to 32 bits (BND-38), so put 64-bit values in this way. `{measured}` (Source: 2026-11-20 Windows 1.26.65.1)
+
+### 1.11 Variables the engine supplies: 88 globals and screen-only variables `{code}`
+
+This is what was read from the Windows 1.26.65.1 client code. Function addresses are not on the site; they are kept in `native-notes/` in the repository. The vanilla column is how many times the vanilla 1.26.50.4 UI files use the name; 0 means vanilla never uses it.
+
+- The function that fills the global variable map puts in 88 names. It does not read values sent by a server or a pack. Only the input mode and the UI profile come from live values; edition values come from an edition string comparison, platform values from a build platform number comparison, and the rest from service queries or constants.
+- When this map is built (per screen, or once at startup) was not found in the code. The report that it is "evaluated only at load time" could be neither confirmed nor refuted.
+- The input mode is the value looked up by the current controller number; when there is no entry, `$game_pad`, `$mouse` and `$touch` are all false.
+- Constant values are the values of this Windows (GDK) build. Other platform builds may differ. `$build_platform_UWP` is a constant false, so this client is not a UWP build.
+- A "service boolean" is a value queried from a service object. Which service it is was not resolved.
+- A pack that branches on these names does not collide with vanilla. 24 names are never used by vanilla (the rows with 0 in the vanilla column).
+
+| Name | Condition that sets the value | Vanilla |
+| --- | --- | --- |
+| `$game_pad` | the controller's input mode value is 3 | 0 |
+| `$mouse` | input mode value is 1 | 0 |
+| `$touch` | input mode value is 2 | 13 |
+| `$desktop_screen` | UI profile value is 0 | 47 |
+| `$pocket_screen` | UI profile value is not 0 | 51 |
+| `$education_edition` | edition string is `edu`, or the edition service flag is true | 202 |
+| `$store_disabled` | edition string is `edu`, or a service boolean | 11 |
+| `$osx_edition` | edition string is `osx` | 9 |
+| `$pocket_edition` | edition string is one of `ios`, `pocket`, `Android`, `ChromeOS` | 15 |
+| `$is_chromebook` | edition string is `ChromeOS` | 0 |
+| `$console_edition`, `$disable_gamertag_controls` | edition string starts with `xbox_` or `playstation_`, or equals `switch` | 10, 2 |
+| `$xbox_one` | edition string starts with `xbox_` | 3 |
+| `$is_ps5` | edition string starts with `playstation_5` | 1 |
+| `$win10_edition` | constant true | 12 |
+| `$build_platform_UWP` | constant false | 0 |
+| `$is_android` | build platform number is 1 | 7 |
+| `$is_ios` | build platform number is 2 | 17 |
+| `$apple_os` | build platform number is 2 or 3 | 7 |
+| `$google_os` | build platform number is 1 or 4 | 6 |
+| `$nx_os` | build platform number is 12 | 48 |
+| `$is_ps4` | build platform number is 11 | 77 |
+| `$thirdpartyconsole`, `$hide_xbox_live_icon` | build platform number is 11 or 12 | 5, 4 |
+| `$ms_platform`, `$microsoft_os` | build platform number is 8 or 13 | 1, 4 |
+| `$is_console`, `$image_picking_not_supported` | device kind value is 2 `{inferred}` | 8, 0 |
+| `$is_desktop` | device kind value is 0 `{inferred}` | 6 |
+| `$pre_release` | constant false | 27 |
+| `$beta_build`, `$creator_build`, `$is_preview_app` | constant false | 2, 4, 7 |
+| `$is_publish` | constant true | 27 |
+| `$is_holographic` | constant false | 2 |
+| `$supports_hand_controllers`, `$gear_vr`, `$oculus_rift`, `$psvr`, `$is_living_room_mode`, `$is_reality_mode`, `$is_mobile_vr`, `$fire_tv`, `$is_settopbox`, `$is_windows_10_mobile`, `$is_win10_arm` | constant false | all 0 |
+| `$device_must_be_removed_for_xbl_signin`, `$built_with_ore_ui_docs_and_tests` | constant false | 2, 4 |
+| `$supports_add_friend`, `$is_xboxlive_enabled`, `$test_infrastructure_disabled`, `$new_video_settings`, `$is_improve_input_response_platform_supported` | constant true | 4, 6, 9, 15, 2 |
+| `$is_dynamic_textures_platform_supported` | constant true | 0 |
+| `$is_secondary_client`, `$ignore_3rd_party_servers`, `$ignore_add_servers` | the opposite of a service boolean | 7, 7, 5 |
+| `$is_on_3p_server` | checks three fields of the connected server object (details unresolved) | 20 |
+| `$is_creative_enabled`, `$is_multiplayer_enabled`, `$is_packs_enabled`, `$is_server_enabled`, `$is_store_enabled` | flag set query (entries 1, 0, 2, 4, 5) | all 0 |
+| `$is_seeds_enabled` | flag set query (entry 3) | 2 |
+| `$top_vertical_safezone_size`, `$bottom_vertical_safezone_size`, `$left_horizontal_safezone_size`, `$right_horizontal_safezone_size` | safe zone calculation result (value type not identified) | 3, 1, 1, 1 |
+| `$is_editor_mode_enabled` | service boolean (editor mode) | 41 |
+| `$is_editor_playtest_roundtrip` | service query result (details unresolved) | 11 |
+| `$edu_save_to_cloud_on` | queried only when the service boolean exists, otherwise false | 12 |
+| `$edu_save_to_cloud_general_toggle_on` | service boolean | 3 |
+| `$screen_transitions_enabled` | false when a service value is off, otherwise another service boolean | 2 |
+| `$is_pregame`, `$trial` | service boolean (details unresolved) | 53, 24 |
+| `$can_quit`, `$can_splitscreen`, `$requires_xbl_signin_to_play`, `$supports_clipboard_set`, `$supports_share`, `$supports_xbl_achievements`, `$file_picking_supported`, `$use_normalized_font_size`, `$is_low_memory_device`, `$is_realms_enabled` | service boolean | 2, 6, 2, 16, 14, 7, 8, 2, 5, 16 |
+| `$multiplayer_requires_live_gold`, `$vibration_supported` | service boolean | 0, 0 |
+| `$world_archive_support` | service boolean; appears to be the same value as `$file_picking_supported` `{inferred}` | 1 |
+
+- Names likely to be true on this client are `$win10_edition` (constant true), `$is_desktop`, `$ms_platform`, `$microsoft_os`, `$is_publish`, `$is_xboxlive_enabled` and `$new_video_settings` `{inferred}`. They were not measured in game. The constant-false `$pre_release`, `$beta_build` and `$is_preview_app` mean this build is not a preview app; the values on a preview build are unknown.
+- The reading of the build platform numbers (1 Android family, 2 iOS, 3 macOS, 4 Amazon, 8 Win32, 11 Sony, 12 Nintendo, 13 Xbox) comes from names and numbers fitting together `{inferred}`. What the edition string actually is on Windows is unknown.
+
+Outside the global map, some names are put only into the variable map of one screen when the screen or a control factory is created. Of the 431 `$` names extracted from the strings, only 88 are global and the rest are such screen-only names. The groups below were not in the wiki, and many of the screen assignments are inferred from name groups `{code, inferred}`.
+
+| Screen or factory | Names put in | Notes |
+| --- | --- | --- |
+| Pause screen | `$is_big_screen`, `$store_button_text`, `$platform_icons_visible`, `$ignore_edu_pause`, `$has_edu_external_link`, `$unlock_full_game_button_text`, `$achievements_button_focus`, `$feedback_button_focus`, `$profile_button_focus`, `$pause_menu_icon_settings_layout` | `$is_big_screen` is true when the ratio of two screen size values is below 2.0. Whether the two values are width and height is `{inferred}`. It is fixed once, when the screen variables are built |
+| Settings-family screens | `$is_world_create`, `$is_world_edit`, `$is_template_create`, `$is_realms_edit`, `$is_mp_host`, `$is_mp_client`, `$gamepad_supported`, `$keyboard_and_mouse_supported`, `$touch_supported`, `$supports_flite_tts`, `$platform_tts_exists`, 39 `*_forced_index` names for tabs, 73 in all | `$gamepad_supported`, `$touch_supported` and `$keyboard_and_mouse_supported` are values received as screen creation arguments and differ from the global `$touch` |
+| Inventory-family screens | `$survival_index`, `$equipment_index`, `$construction_index`, `$nature_index`, `$items_index`, `$search_index`, `$crafting_index`, `$armor_index`, `$survival_layout_index`, `$recipe_book_layout_index`, `$creative_layout_index`, `$pocket`, `$show_inventory_screen_button` | They look like tab numbers and layout selectors `{inferred}` |
+| HUD title factory | `$title_text`, `$subtitle_text`, `$title_fade_in_time`, `$title_fade_out_time`, `$title_stay_time`, `$title_alpha`, `$wait_duration`, `$show_text_background`, `$item_text_background_alpha`, `$title_shadow`, `$subtitle_initially_visible`, `$show_interact_padding`, `$show_survival_padding`, `$destroy_id`, `$localize` | `$actionbar_text` is put in by a separate function |
+| Chat | `$chat_background_opacity`, `$chat_font_scale_factor`, `$chat_text_color`, `$chat_line_spacing`, `$chat_font_type` | Vanilla `_global_variables.json` also defines a default for `$chat_text_color`. Which one wins, the engine value or the file value, is unknown |
+| Material colors | 11 `$material_*_color` names (quartz, amethyst, lapis, copper, iron, resin, netherite, redstone, diamond, gold, emerald) and `$party_blue_color` | Vanilla `_global_variables.json` defines the same names. The precedence is the same question as for chat, and the answer is unknown |
+| Game tips | 13 names including `$arrow_*`, `$tip_anchor_*`, `$anim_*`, `$game_tip_offset`, `$game_tip_item_lifetime` | |
+| Toasts | `$toast_offset`, `$popup_*`, `$display_time`, `$transition_time` | |
+| Others | `$chest_size`, `$container_size`, `$container_title`, `$use_smithing_table_2_ui`, `$left_tab_index_*` | `$use_smithing_table_2_ui` is the variable community reports use, and it is confirmed to be an engine-supplied value `{code}` |
 
 ## Facts added by community reports (community)
 

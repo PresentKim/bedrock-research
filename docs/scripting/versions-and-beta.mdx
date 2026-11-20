@@ -84,6 +84,76 @@ npm i @minecraft/server@beta @minecraft/server-ui@beta   # beta 타입
 - `minecraft:air` 아이템이 제거됐다(블록으로는 유효하다).
 - `world.afterEvents.worldInitialize`는 `worldLoad`로 이름만 바뀌었고, `world.beforeEvents.worldInitialize`는 `system.beforeEvents.startup`으로 대체됐다.
 
+## 클라이언트 코드가 제공하는 모듈 버전 `{코드}`
+
+Windows 1.26.65.1 클라이언트가 모듈 팩토리마다 등록하는 버전이다. 공식 metadata(1.26.50.4)와 비교했다. 버전 객체는 부팅 때 초기화되는 전역 값이고, 접미사 글자는 길이로 판정했다(`beta`만 글자까지 확인).
+
+| 모듈 | 제공 버전 | metadata와 차이 |
+|---|---|---|
+| `@minecraft/server` | `0.1.0`, `1.0.0`에서 `1.19.0`, `2.0.0`에서 `2.11.0`, `2.12.0-beta`, `2.12.0-internal`, `3.0.0-alpha` | `2.11.0`이 beta 접미사 없이 stable로 등록됐다(metadata는 `2.11.0-beta`). `2.12.0-beta`와 `3.0.0-alpha`는 metadata에 없다 |
+| `@minecraft/server-ui` | `0.1.0`, `1.0.0`에서 `1.3.0`, `2.0.0`에서 `2.3.0`, `2.4.0-beta`, `2.4.0-internal`, `3.0.0-alpha` | `2.3.0`이 stable. `2.4.0-beta`와 `3.0.0-alpha`가 새로 보인다 |
+| `@minecraft/server-gametest` | `0.1.0`, `1.0.0-beta`(그 밖의 `1.0.0-internal`, `2.0.0-alpha`, `3.0.0-alpha`는 값만 읽었고 대응은 추정) | metadata는 `1.0.0-beta`만 |
+| `@minecraft/server-net`, `@minecraft/debug-utilities`, `@minecraft/diagnostics` | 각각 `1.0.0-beta` 하나 | 일치 |
+| `@minecraft/server-graphics` | `1.0.0`, `1.1.0-beta`(`1.1.0-internal` 값도 있음) | 일치(internal만 추가) |
+| `@minecraft/server-admin` | `1.0.0-beta` `{추론}` | 일치 |
+| `@minecraft/common` | `1.0.0`에서 `1.3.0` | 일치 |
+| `@minecraft/client` | `1.2.0-beta` 하나 | metadata 없음. 일반 행동팩 엔진에는 이 모듈이 등록되지 않는다([서버 넷과 관리](./server-net-and-admin.mdx)) |
+| `@minecraft/app-multiplayer-game` | 이 exe에 모듈 팩토리가 없다 | metadata 없음. 이 빌드에서 import할 수 있는 경로는 찾지 못했다 |
+
+- `2.12.0-beta`의 번호는 최신 stable의 minor에 1을 더하고 `beta`를 붙여 시작할 때 계산한다. `2.12.0-internal`은 일반 팩에서 거부된다.
+- `server` 클래스 가운데 `3.0.0-alpha` 값을 읽는 것이 있다. 2.x metadata에 없는 `Duration` 클래스(`constructor`, `value`, `isInfinite`), 효과 지속시간을 받는 `Effect.duration`, `EffectAddBeforeEvent.duration`, `Entity.addEffect`의 duration 인자, `StartupEvent.getSpawnRulesRegistry`다. 그래서 `3.0.0-alpha`가 최신 2.x beta를 그대로 반영한다고 단정하기 어렵다. 타입 모양은 `{추론}`이다.
+- `2.12.0-beta`는 모듈 수준 함수만 읽고 클래스 멤버 추가는 없어 보인다 `{추론}`.
+- 로드 실측: `@minecraft/server` `2.11.0-beta`를 Beta APIs를 켠 월드에서 요청하자 `requested invalid version [2.11.0-beta] of [@minecraft/server].`에 이어 `Current [beta] version is [2.12.0-beta].`와 `Available versions:` 목록(`0.1.0`, `1.19.0`, `2.11.0`, `2.12.0-beta`, `3.0.0-alpha`)이 나왔다. 코드가 등록하는 버전 전부가 아니라 일부만 목록에 나온다 `{실측}`. `@minecraft/server-admin` `2.0.0`은 `requested invalid version [2.0.0]`와 함께 목록에 `1.0.0-beta` 하나만 나왔다 `{실측}`.
+
+## 실험 토글 id 32개 `{코드}`
+
+월드의 실험 토글 id 표를 정적 초기화 코드에서 읽었다. 짧은 이름은 문자열 검색에 잡히지 않아 명령어를 직접 읽었고, 저장 형식은 레벨 설정의 `Experiments` 객체 아래 `Toggles` 배열(항목마다 `Name`, `Enabled`)과 `ExperimentsEverToggled` 불리언이다.
+
+사용자에게 보이는 토글은 7개다. 표시 문구는 바닐라 샘플 `en_US.lang` 기준이고, 연결된 내장 팩은 이름이 같다는 근거의 `{추론}`이다.
+
+| 내부 id | 표시 | 연결된 내장 팩 |
+|---|---|---|
+| `upcoming_creator_features` | Upcoming Creator Features | 없음 |
+| `gametest` | Beta APIs | 없음 |
+| `experimental_creator_cameras` | Experimental Creator Camera Features | `behavior_packs/experimental_creator_cameras` |
+| `villager_trades_rebalance` | Villager Trade Rebalancing | `behavior_packs/experimental_villager_trade` |
+| `voxel_shapes` | Experimental Voxel Shape Features | `behavior_packs/experimental_vanilla_shapes` |
+| `poi` | Points of Interest (POI) | `experimental_poi`(행동팩과 리소스팩) |
+| `y_2026_drop_4` | 샘플 1.26.50.4 lang에 없음 | `experimental_y_2026_drop_4`(행동팩과 리소스팩) |
+
+`gametest`가 "Beta APIs"다. 토글 UI 키(`experimentalGameTest`)와 오류 문구 "requesting dependency on beta APIs ... the Beta APIs experiment is not enabled"가 같은 토글을 가리킨다.
+
+나머지 25개는 id와 4글자 약어 쌍으로 표에 들어 있다. 약어의 용도는 모른다. 총 32개이고 겹치는 id는 없다.
+
+| id | 약어 | id | 약어 |
+|---|---|---|---|
+| `caves_and_cliffs` | `CnC_` | `jigsaw_structures` | `ddjs` |
+| `wild_update` | `wld_` | `camera_aim_assist` | `ecaa` |
+| `spectator_mode` | `spct` | `y_2025_drop_1` | `25d1` |
+| `vanilla_experiments` | `VE__` | `y_2025_drop_2` | `25d2` |
+| `bundles` | `bndl` | `locator_bar` | `lbar` |
+| `data_driven_items` | `ddi_` | `y_2025_drop_3` | `25d3` |
+| `data_driven_biomes` | `biom` | `y_2026_drop_1` | `26d1` |
+| `scripting` | `scpt` | `furnace_recipe_book` | `frbk` |
+| `experimental_molang_features` | `mola` | `custom_projectiles` | `proj` |
+| `next_major_update` | `sttc` | `y_2026_drop_2` | `26d2` |
+| `sniffer` | `snif` | `y_2026_drop_3` | `26d3` |
+| `updateAnnouncedLive2023` | `ul23` | `creator_world_clocks` | `cwcl` |
+| `armadillo` | `arma` | | |
+
+- `holiday_creator_features`는 표에도 없고 바이너리 전체 문자열에도 `holiday`가 없다. Holiday Creator Features가 제거됐다는 설명과 맞는다.
+- 샘플 lang에 UI 이름이 있는 `custom_projectiles`, `creator_world_clocks`의 키 문자열은 이 exe에 없다. 1.26.65.1에서 UI에 나오지 않는지, 키를 조합해서 쓰는지는 모른다.
+- 샘플 lang의 `experimentalDeferredTechnicalPreview`("Render Dragon Features for Creators")는 이 표에 없다.
+
+토글이 막는 기능은 오류 문구에서 읽었다 `{코드}`.
+
+- `upcoming_creator_features`: 트레이트의 수평 방향, 전리품 테이블의 looting 함수, 블록 `minecraft:collision_box`의 `min`/`max` 표기(포맷 1.26.60 이상), "experimental creator features are required" 문구.
+- `voxel_shapes`: `culling_shape`, 충돌 모양.
+- `gametest`: 스크립트 beta 의존성.
+- 오프핸드 관련 인벤토리 트랜잭션 세 곳이 "offhand parity experiment not enabled"로 거부한다. 어느 id인지는 모른다.
+
+켜는 방법은 월드 생성 화면의 토글이고, 월드 생성 뒤에는 끌 수 없다는 UI 문구가 있다(샘플 lang). 기존 월드에서 켜는 경로는 복사본을 만든다는 문구가 붙은 `options.activateExperimentalGameplay`다. 매니페스트(`header`, `modules`, `capabilities`)가 실험을 켜는 코드는 찾지 못했다. 매니페스트 capability 문자열은 `script_eval`, `editorExtension`, `raytraced`가 있고 잘못된 값은 `packdiscoveryerror.invalid_capability_value`를 낸다. 월드 템플릿의 레벨 설정에 실험이 들어 있는지는 모른다. 커뮤니티가 말한 "다른 실험도 켜야 `main.js`가 로드됐다"는 스크립트 로드를 그 실험에 묶는 코드를 찾지 못했다.
+
 ## 커뮤니티 노트가 알려 주는 beta·버전 규칙
 
 아래 두 절은 커뮤니티 조사로 얻은 실전 규칙과 릴리스별 변화 연표다.
@@ -94,13 +164,13 @@ npm i @minecraft/server@beta @minecraft/server-ui@beta   # beta 타입
 #### 모듈 버전과 beta
 
 - **`"version": "beta"`**: `@minecraft/server`, `@minecraft/server-ui` 등에 숫자 없이 `"beta"`를 쓰면 항상 최신 beta로 해석된다. 프리뷰에서 추가돼 2025-10-28경(1.21.120) 안정판에 도달. API가 beta에서 stable로 옮겨가도 계속 동작하지만 쓰는 API가 바뀌면 깨질 수 있다. `"stable"`은 가끔 자동 업그레이드되지만 신뢰할 수 없다. *confirmed*
-- **Beta APIs 실험 토글**: beta 모듈/기능은 월드에서 "Beta APIs" 실험을 켜야 한다. 꺼져 있으면 매니페스트가 요구하므로 스크립트 전체가 로드되지 않고, 스크립트 자체로는 이를 감지할 수 없다(우회: tick.json 함수가 매 틱 점수를 올리고 스크립트가 지움 → 값이 커지면 경고). 일부 경우 "Upcoming creator features", "Experimental creator camera features" 등 다른 실험도 켜야 main.js가 로드됐다. Aternos에서는 servers > world > options에서 Beta APIs를 켠다. 서버용으로 배포되는 스크립트 애드온 묶음은 대부분 Beta APIs를 요구하며, 모바일 사용자에게는 이 설정이 걸림돌이 된다는 보고(*single report*).
+- **Beta APIs 실험 토글**: beta 모듈/기능은 월드에서 "Beta APIs" 실험을 켜야 한다. 꺼져 있으면 매니페스트가 요구하므로 스크립트 전체가 로드되지 않고, 스크립트 자체로는 이를 감지할 수 없다(우회: tick.json 함수가 매 틱 점수를 올리고 스크립트가 지움 → 값이 커지면 경고). 일부 경우 "Upcoming creator features", "Experimental creator camera features" 등 다른 실험도 켜야 main.js가 로드됐다(클라이언트 코드에서 스크립트 로드를 이 실험에 묶는 곳은 찾지 못했다 `{코드}`). Aternos에서는 servers > world > options에서 Beta APIs를 켠다. 서버용으로 배포되는 스크립트 애드온 묶음은 대부분 Beta APIs를 요구하며, 모바일 사용자에게는 이 설정이 걸림돌이 된다는 보고(*single report*).
 - **stable의 호환성 기대**(**conflicting**): stable 스크립트는 업데이트에도 깨지지 않는다는 의견과, 폐기된 API가 제거되면 업데이트 때 깨질 수 있다는 의견이 공존한다. stable API는 실험 토글이 필요 없다.
 - **Marketplace 팩은 실험/beta API 사용 불가**; DDUI처럼 안정화된 API만 사용.
-- **잘못된 버전**(`1.0.0-beta` 등)은 "requested invalid version"과 함께 사용 가능한 버전 목록을 로그에 출력한다(예: server 0.1.0, 1.19.0, 2.6.0, 2.7.0-beta, 3.0.0-alpha). 안 쓰는 모듈(gametest 등)도 버전 충돌을 일으키므로 제거.
+- **잘못된 버전**(`1.0.0-beta` 등)은 "requested invalid version"과 함께 사용 가능한 버전 목록을 로그에 출력한다(예: server 0.1.0, 1.19.0, 2.6.0, 2.7.0-beta, 3.0.0-alpha. Windows 1.26.65.1의 목록은 위 "클라이언트 코드가 제공하는 모듈 버전"에 있다). 안 쓰는 모듈(gametest 등)도 버전 충돌을 일으키므로 제거.
 - **server / server-ui 짝 맞추기**: `[@minecraft/server] 2.1.0 requested by pack vs 1.3.0 requested by server-ui-bindings` 같은 충돌은 호환되지 않는 조합. 예: server 2.1.0 + server-ui 2.0.0, server 2.6.0 + server-ui 1.3.0(동작), server 2.10.0 + server-ui 2.2.0(26.50), server 2.11.0 + server-ui 2.3.0(2026-11 최신 안정). beta 짝은 `2.12.0-beta.1.26.63-stable` + `2.4.0-beta.1.26.63-stable`(2026-11-16 기준, 그 전에는 `1.26.60-stable` 짝). server 2.6.0 + server-ui 1.0.0은 `server-bindings` 충돌.
 - **v1 최고 버전은 1.19.0**, v2는 하위 호환이 깨진다. 1.x에 머무는 팩은 `EntityScaleComponent.value` 쓰기 등 2.x에서 막힌 기능을 쓸 수 있다(→ [엔티티 컴포넌트의 scale 우회](./entities-and-components.mdx)).
-- **`3.0.0-alpha`** 는 최신 2.x beta를 그대로 반영한다. 또한 2.x 버전은 내부적으로 항상 최신으로 승격되므로 타입 자동완성과 런타임 동작이 다를 수 있다(개발자 발언). 26.70.26 프리뷰 무렵 개발자가 `playSound` 동작 변경을 검토 중이며 3.0.0 메이저 버전도 선택지라고 언급했다(*single report*, 일정 없음).
+- **`3.0.0-alpha`** 는 최신 2.x beta를 그대로 반영한다(Windows 1.26.65.1 코드에는 2.x metadata에 없는 `Duration` 등이 있어 "그대로"는 단정하기 어렵다 `{코드}`). 또한 2.x 버전은 내부적으로 항상 최신으로 승격되므로 타입 자동완성과 런타임 동작이 다를 수 있다(개발자 발언). 26.70.26 프리뷰 무렵 개발자가 `playSound` 동작 변경을 검토 중이며 3.0.0 메이저 버전도 선택지라고 언급했다(*single report*, 일정 없음).
 - **Education Edition** 은 몇 버전 뒤처짐(1.21.130 기준 server 2.4.0 stable만 지원, beta 모듈은 업데이트마다 깨짐).
 - 구버전 고정 beta(`server 1.13.0-beta`, `server-ui 1.2.0-beta`)는 현재 버전에서 동작하지 않는다.
 

@@ -94,7 +94,7 @@ The `textures` array overlays from top to bottom. If an upper layer has alpha pi
 ]
 ```
 
-- It accepts wildcard bone names and Molang (`{"Bag*": "query.is_chested"}`, `"*spear*": false`). An unknown query gives "unrecognized token".
+- It accepts wildcard bone names and Molang (`{"Bag*": "query.is_chested"}`, `"*spear*": false`). An unknown query gives not "unrecognized token" but `Failed to resolve query ... Either the query does not exist or it is not supported in this context.` `unrecognized token` is a separate error for text that is not in the token table `{code}`.
 - Per-bone textures and materials are done with several render controllers and `part_visibility`, with the first rule as `"*": false` and prefixes turning bones back on. If you put a per-model prefix on bones, wildcard hiding is easy.
 - If part_visibility seems to have no effect, check whether another render controller on the same entity is still active (hide the original by condition). There is a case where `query.property('x')>0` worked in a second render controller and `==4` did not (unresolved). Using `query.distance_from_camera` in part_visibility did not work.
 - `part_visibility: false` (a non-Molang value) really culls geometry, but a bone hidden by Molang still submits draw calls (only the rasterizer culls).
@@ -128,6 +128,13 @@ The first-person render controller is separate from the third-person one, so def
 ## Queries without an actor
 
 To avoid "has_property doesn't have an actor" in the paper doll and UI, set `v.class = q.is_on_screen ? q.property('prefix:class') : v.fallback;` in the client entity `pre_animation`, put `v.fallback = 0` in `initialize`, and use `v.class` in the render controller. In `player.entity.json` variables as well, `query.property` where there is no actor gives "does not have an actor". For render controller conditions use `context.is_first_person`, not `query.`.
+
+### `query.is_on_screen` `{code}`
+
+`query.is_on_screen` is not in the official query list, but the Windows 1.26.65.1 client registers it as a bool query. It takes no arguments, and its description says it returns 1.0 when called at a time when it is known whether the entity is on screen, and 0.0 otherwise. If the evaluation context has no actor, it returns 0.0 without an error (`query.property` gives an error when there is no actor). So the pattern above works. It is resource pack (client) only.
+
+- The value is a byte flag on the actor. It becomes 1 only when the renderer decides "visible this frame" and calls it. On an entity that is culled off screen but still updated because of the `scripts.should_update_effects_offscreen` or `should_update_bones_and_effects_offscreen` expressions, it is 0. Whether the caller computes that decision from the frustum culling result was not found `{inferred}`. The mapping between the two expressions and this flag is also `{inferred}`.
+- Measurement: while looking at the entity, both the sound subtitle conditioned on `q.is_on_screen` and the always-on subtitle appeared (the true side). The false side, looking away, could not be measured because the subtitle check failed `{measured}`.
 
 ## Per-team player visibility
 

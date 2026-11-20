@@ -113,6 +113,39 @@ There are others such as `ambient.in.water`, `breathe`, `death.in.water`, `eat`,
 }
 ```
 
+### Entity sound variants `variants` and `__molang_version` `{code}`
+
+Vanilla `sounds.json` has about 10 places that put `variants` under `entity_sounds.entities.<id>` (cat, chicken, copper golem, cow and others). It is a feature that is not in the official documentation, and its structure was read from the parser of the Windows 1.26.65.1 client.
+
+- Structure: after reading the entity object's default event map, it reads the entries of `variants.map`. The key of an entry is a string and the value has the same event map shape (`events`, `pitch`, `volume`). `variants.key` is a Molang expression string. The entity object carries an integer `__molang_version`, which is 13 everywhere in vanilla.
+- The `key` expression is parsed with a configuration that allows every operator. `==`, `?:`, string literals and `&&` are all possible. Vanilla examples: `query.is_baby ? 'baby' : query.property('minecraft:sound_variant')` and `query.property('minecraft:oxidation_level')`. The result must be a string to match a `map` key. Whether a numeric result can be a key, and which queries are usable on this path, are unknown.
+- `__molang_version` is an integer, 0 when absent, truncated to a short and used as the Molang parser version. There is no range check. The block definition side resets values outside 0 to 13 to 0, so 13 looks like the current maximum `{inferred}`. Leaving it out puts in 0, and queries whose first version is 0.0.0, such as `query.property` and `query.is_baby`, resolve at version 0 too. Deprecated queries with an end date live longer at lower versions. So omitting it will most likely work, but it was not measured.
+- Errors: `Expected "key" expression for entity with sound variants` if there is no `key` but there are `map` entries, `Expected "map" list for entity with sound variant key` if there is a `key` but the `map` is empty, and `Duplicate sound variant "%s" for entity "%s"` if `map` keys collide.
+- The fallback when the key is not in `map` could not be read from the code. Vanilla states a `default` entry explicitly. The `interactive_sounds` parser has the same `variants`, `key` and `__molang_version` strings (string level; the behavior is unknown).
+
+This is a minimal example in the vanilla shape, and its behavior was not confirmed.
+
+```json
+{
+  "entity_sounds": {
+    "entities": {
+      "wiki:cat2": {
+        "__molang_version": 13,
+        "events": { "ambient": "mob.cat.meow" },
+        "variants": {
+          "key": "query.property('wiki:mood')",
+          "map": {
+            "happy": { "events": { "ambient": "mob.cat.purr" }, "pitch": 1.0, "volume": 1.0 }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Measurement: I put map sounds on the `spawn` and `hurt` events and tried to confirm them with subtitles, but the variant subtitles did not appear. The log had no errors. Whether a variant actually changes the sound could not be measured `{measured}`.
+
 ## Replacing vanilla sounds
 
 Find the vanilla file you want to replace in bedrock-samples, create the same folder structure in the pack, and put a file whose **name before the extension is exactly the same**. The format may differ (`rain1.fsb` can be replaced with `rain1.ogg`). For example, the chest opening sound is `sounds/random/chestopen`. To change an event itself or create a new event, use the two files above. Example: define the event in `sounds.json` as `"individual_event_sounds": {"events": {"chest.open": {"pitch": [0.9, 1.0], "sound": "random.chestopen", "volume": 0.5}}}` (Source: ms-learn, Add Custom Sounds). For audio, any tool that can export `.ogg`, such as Audacity, will do.

@@ -116,7 +116,7 @@ BP 컨트롤러는 `on_entry`와 `on_exit`에 슬래시 명령(`/say hi`), 엔�
 - 타이머가 진행되지 않으면 `q.anim_time` 대신 `q.delta_time`을 쓴다. `/playanimation`은 랜덤 크기에 거의 쓸 수 없으니 클라이언트 엔티티 `animations`와 `scripts.animate`에 정의한다.
 - 숨쉬기 대기: `math.cos(query.life_time * 120) * 10`(속도 120, 진폭 10)을 별도 루프 애니메이션으로 두고 팔다리 애니메이션과 분리한다.
 - 애니메이션 속도: `anim_time_update: "query.anim_time + query.delta_time * 1.05"`(상수 대신 `query.ground_speed`도 가능).
-- Molang에는 `%`가 없다("unrecognized token %"). `math.mod(a, b)`를 쓴다.
+- Molang에는 `%`가 없다("unrecognized token %"). `math.mod(a, b)`를 쓴다. 클라이언트 토크나이저의 토큰 표 109개에 `%`, `^`, 단일 `&`, 단일 `|`, `~`, `**`가 없고 `math.mod`는 있다. 표에 없는 토큰이 `unrecognized token: %s`로 거부된다 `{코드}`. 같은 표에 `loop`, `for_each`, `break`, `continue`, `return`, `this`, `->`, `array.`, `[]`가 있으므로 이들은 클라이언트가 읽는 토큰이다 `{코드}`.
 - 끊김 없는 회전: Y 회전 키프레임 하나에 `math.mod(query.anim_time * 360, 360)`을 쓴다(빠르게 하려면 720). 0에서 360으로 가는 키프레임 루프는 끝과 시작 각도가 달라 튄다.
 - property 기반 부드러운 본 회전: pre-animation에서 `q.bone_orientation_trs(bone)`(`queryable_geometry` 필요, 특수 좌표계)로 `t.old_rotation`을 얻고 `v.rotation = math.lerprotate(t.old_rotation, q.property('pack:rotation_y'), q.delta_time)`로 한다. property 범위는 0~360이다. `q.bone_orientation_trs().r.y`는 -90~90(오일러)으로 제한되므로 완전한 360도 회전에는 z도 바꿔야 한다.
 - 랜덤 `loop_delay`: 랜덤 변수를 쓴 `loop_delay`는 업데이트 후 한 번만 무작위가 된다. 대안은 `override_previous_animation`과 더 긴 `animation_length`, 또는 비헤이비어의 랜덤 루프 타이머로 깜빡임을 일으키는 것이다.
@@ -136,6 +136,7 @@ BP 컨트롤러는 `on_entry`와 `on_exit`에 슬래시 명령(`/say hi`), 엔�
 - `variable.melee_spear_equipped` "unknown variable"은 `"scripts": {"initialize": ["variable.melee_spear_equipped = 0.0;"]}`로 고친다. 창이 없는 플레이어 오류 수정 예: `"v.melee_spear_equipped = query.equipped_item_any_tag('slot.weapon.mainhand', 'minecraft:is_spear');"`.
 - 수정한 바닐라 플레이어 컨트롤러·엔티티가 다른 것과 버전이 맞지 않으면 `first_person_melee_spear_controller`, `swimming.no_right_arm` 누락 오류가 난다. bedrock-samples의 최신 바닐라 `player.json`을 쓴다.
 - `q.above_top_solid`는 월드 생성 컨텍스트에서만 동작하고("Failed to resolve query"), `query.scoreboard`는 리소스 팩에서 쓸 수 없다.
+- 폐기 쿼리의 게이팅 `{코드}`: 공식 목록에서 `last_version`이 있는 `query.dash_cooldown_progress`, `query.is_rising`, `query.block_property`, `query.has_block_property` 같은 쿼리도 클라이언트에는 아직 등록돼 있다. 조회는 팩의 `min_engine_version`이 아니라 파서가 받는 Molang 버전 숫자로 걸린다. 쿼리 한 이름에 버전 구간 항목이 여러 개 있고, 파서 버전이 구간 안에 있고 필요한 실험 토글이 켜진 첫 항목이 쓰인다. 맞는 항목이 없으면 `Failed to resolve query %s. Either the query does not exist or it is not supported in this context.`가 난다. 그래서 없는 쿼리와 구간 밖 쿼리의 오류는 같고, `unrecognized token`은 토큰 표에 없는 글자일 때의 별개 오류다. Molang 버전 숫자가 팩의 `min_engine_version`, 파일의 `format_version`, 다른 값 중 무엇에서 오는지와 게임 버전과의 대응표는 찾지 못했다(미확인). 어느 팩 설정에서 이 쿼리가 막히는지는 확정할 수 없다.
 - `t.` 임시 변수는 플레이어와 어태처블 애니메이션 사이에서 새고 렉에서 리셋된다. `v.x = (v.x == 1) ? 1 : (t.x ?? 0)`처럼 고정하고 누수는 데이터를 보내는 데만 쓴다(MCPE-240457).
 
 ## 회전

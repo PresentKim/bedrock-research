@@ -142,7 +142,7 @@ JSON UI는 리소스팩 `ui/` 폴더의 JSON 파일들로 이루어진다. 파�
 - **[FILE-09]** `$이름`이 변수다. 정의 안에 `"$x": 값`으로 두거나 참조 지점에서 넘긴다. `"$x|default": 값`은 위(참조 지점)에서 넘기지 않았을 때만 쓰는 기본값이다. `{바닐라}` (출처: VN `|default` 3,419회)
 - **[FILE-10]** 일반 속성의 변수 치환은 **값 전체가 변수일 때만** 된다. `"text": "$title"`은 되고 `"text": "제목: $title"`은 `$`가 그대로 찍힌다. 조합이 필요하면 변수 식을 쓴다(FILE-11). `{실측}` (출처: BC-facts)
 - **[FILE-11]** 변수 값에는 괄호 식을 쓸 수 있다. 바닐라는 이것으로 바인딩 이름, 텍스처 경로, 컨트롤 이름을 조립한다. 예: `"$toggle_state_binding_name": "('#' + $dropdown_name)"`. `{바닐라, 작동팩}` (출처: VN ui_common.json:1126, AP 4.3·4.9)
-- **[FILE-12]** 엔진이 미리 넣어 주는 변수가 있다. 예: `$education_edition`, `$is_ps4`, `$pre_release`(플랫폼·빌드), 상자 화면의 `$container_title`, HUD 팩토리가 만드는 컨트롤의 `$actionbar_text`·`$title_fade_in_time`. `{바닐라, 실측}` (출처: VN ignored 사용 상위 값, VN hud_screen.json:2158·2170, BC-facts)
+- **[FILE-12]** 엔진이 미리 넣어 주는 변수가 있다. 예: `$education_edition`, `$is_ps4`, `$pre_release`(플랫폼·빌드), 상자 화면의 `$container_title`, HUD 팩토리가 만드는 컨트롤의 `$actionbar_text`·`$title_fade_in_time`. 모든 화면이 받는 전역 이름은 88개이고 화면 전용 이름이 따로 있다(1.11절). `{바닐라, 실측, 코드}` (출처: VN ignored 사용 상위 값, VN hud_screen.json:2158·2170, BC-facts, 2026-11-20 Windows 1.26.65.1 역컴파일)
 - **[FILE-13]** `variables` 배열의 각 항목은 `"requires": "<$변수 식>"`이 참일 때 그 항목의 변수를 적용한다. 배열 대신 **단일 객체**로 써도 된다. `{바닐라, 작동팩}` (출처: VN 배열 274회·객체 4회 예 realms_settings_screen.json:2557, AP 4.6, BW-doc)
 - **[FILE-14]** 컨트롤 배열도 변수로 넘길 수 있다: `"controls": "$target_control"`. 템플릿에 "자식 슬롯"을 만드는 방법이다. `{바닐라, 작동팩}` (출처: VN 14회 예 persona_cast_character_screen.json:14, AP 4.2, BW-intro)
 - **[FILE-15]** `"자식@$변수"`로 변수가 가리키는 정의를 마운트할 수 있다. 바닐라는 참조 지점에서 넘긴 변수로도 413회 쓴다(예: `content@$button_content`). 단 bedrock-core 상자 라우터의 한 구성(`$gate|default`를 선언한 호스트를 다른 `$gate`로 두 번 참조)에서는 아무것도 안 그려진 실측이 있다. 마운트가 안 되면 정의 이름을 직접 쓴다. `{바닐라, 작동팩, 충돌}` (출처: VN 413회, AP 4.8, BC-facts, 충돌 C-03, BW-intro)
@@ -189,7 +189,7 @@ JSON UI는 리소스팩 `ui/` 폴더의 JSON 파일들로 이루어진다. 파�
 - **[FILE-26]** namespace에는 접두를 붙일 수 있다고 한다(`"namespace": "wiki:main"` → `"x@wiki:main.element"`). 바닐라 namespace와 겹칠 일을 줄이는 용도다. 바닐라와 이 프로젝트 출처에는 용례가 없다. `{미검증}` (출처: BW-best)
 - **[FILE-27]** 경로 키(`"부모/자식"`)가 가리키는 자식이 없으면 Content Log에 리소스팩 오류가 남지만 나머지 UI는 정상 동작한다. 경로 키는 바닐라 개편에 가장 먼저 깨지는 접점이므로 정의 자체를 덮어쓸 수 있으면 그쪽을 쓴다. `{미검증, 추론}` (출처: BW-best)
 - **[FILE-28]** 엔진이 넣어 주는 변수(`$actionbar_text` 등)를 식에서 쓸 때는 자기 변수로 한 번 받아 쓴다(`"$atext": "$actionbar_text"`, `"visible": "(not ($atext = 'x'))"`). 위키는 엔진 변수에 직접 비교할 수 없다고 하고, AP의 `"$title_text|default": ""` 선언도 같은 효과를 내는 것으로 보인다. `{미검증, 추론}` (출처: BW-intro, AP 4.1)
-- **[FILE-29]** 엔진이 정하는 전역 플랫폼 변수 중 바닐라 1.26.50 UI가 실제로 참조하는 것: `$pocket_edition`, `$win10_edition`, `$osx_edition`, `$console_edition`, `$education_edition`, `$is_console`, `$is_desktop`, `$is_ios`, `$is_ps4`, `$xbox_one`, `$touch`, `$pocket_screen`, `$desktop_screen`, `$is_pregame`(게임 밖 화면), `$is_publish`, `$pre_release`, `$trial`, `$store_disabled`, `$is_holographic`, `$apple_os`, `$google_os`, `$microsoft_os`, `$nx_os` 등 34개. 위키 목록 55개 중 나머지 21개(`$game_pad`, `$mouse`, `$fire_tv`, `$gear_vr` 등)는 바닐라 UI 파일에 나오지 않아 지금도 들어오는지 알 수 없다. `{바닐라}` (출처: BW-doc Global Variables, VN 전수 검색)
+- **[FILE-29]** 엔진이 정하는 전역 플랫폼 변수 중 바닐라 1.26.50 UI가 실제로 참조하는 것: `$pocket_edition`, `$win10_edition`, `$osx_edition`, `$console_edition`, `$education_edition`, `$is_console`, `$is_desktop`, `$is_ios`, `$is_ps4`, `$xbox_one`, `$touch`, `$pocket_screen`, `$desktop_screen`, `$is_pregame`(게임 밖 화면), `$is_publish`, `$pre_release`, `$trial`, `$store_disabled`, `$is_holographic`, `$apple_os`, `$google_os`, `$microsoft_os`, `$nx_os` 등 34개. 위키 목록 55개 중 나머지 21개(`$game_pad`, `$mouse`, `$fire_tv`, `$gear_vr` 등)는 바닐라 UI 파일에 나오지 않는다. Windows 1.26.65.1 클라이언트 코드에서는 예로 든 네 이름이 모두 전역 88개 안에 있다. 입력 모드 이름은 `$game_pad`뿐이고 `$gamepad`는 없다(1.11절). `{바닐라, 코드}` (출처: BW-doc Global Variables, VN 전수 검색, 2026-11-20 Windows 1.26.65.1 역컴파일)
 
 ### 1.8 Cinnabar 엔진 재구성으로 더한 규칙
 
@@ -219,6 +219,84 @@ Windows 1.26.65.1에서 2026-11-19~2026-11-20에 실측한 것이다. HUD 제목
 - **[FILE-45]** `requires`와 `ignored`에는 바인딩 문맥이 없어서 `#x`는 null이 아니라 글자 `#x`로 계산된다. `"requires": "(#x)"`는 블록을 적용했고 `"requires": "(not #x)"`는 적용하지 않았다. `"ignored": "(#x = '#x')"`는 컨트롤을 만들지 않았고, `"ignored": "yes"`는 만들었다(`ignored`에서 효과가 있는 값은 불리언과 정수뿐이다, FILE-35, FILE-43). 그래서 `requires`, `ignored`로 바인딩 값을 검사할 수 없다(FILE-16). `{실측, 코드}` (출처: 2026-11-20 Windows 1.26.65.1, 2026-11-20 역컴파일)
 - **[FILE-46]** **`variables`의 `requires`에 정의되지 않은 `$변수`를 쓰지 않는다.** Windows 1.26.65.1에서 `requires`에 어디에도 없는 `$nosuch_var`를 쓰자 콘텐츠 로그에 `Expected variable not found in ancestor tree: '$nosuch_var'`가 34만 줄 넘게 쌓이고 게임이 멈춰 강제 종료해야 했다. `requires`가 읽는 변수는 그 컨트롤이나 조상에 `|default`로라도 선언해 둔다. `{실측}` (출처: 2026-11-20 Windows 1.26.65.1)
 - **[FILE-47]** `requires`가 `$subtitle_text`를 비교하는 `variables` 블록으로 `property_bag`에 넣을 JSON 정수를 고를 수 있고, 64비트 정수도 된다. `{ "requires": "($subtitle_text = '-8589934591')", "$id": -8589934591 }`로 고른 `$id`를 `"property_bag": { "actor_id": "$id" }`에 넣자 `actor_portrait_renderer`가 그 엔티티를 그렸다. JSON 정수를 담은 변수는 `property_bag`에 치환될 때 정수로 남는다. 바인딩은 정수를 32비트로 자르므로(BND-38) 64비트 값은 이 길로 넣는다. `{실측}` (출처: 2026-11-20 Windows 1.26.65.1)
+
+### 1.11 엔진이 넣는 변수: 전역 88개와 화면 전용 변수 `{코드}`
+
+Windows 1.26.65.1 클라이언트 코드를 읽은 결과다. 함수 주소는 사이트에 싣지 않고 저장소의 `native-notes/`에 둔다. 바닐라 열은 바닐라 1.26.50.4 UI 파일이 그 이름을 쓰는 횟수이고 0이면 바닐라가 한 번도 쓰지 않는다.
+
+- 전역 변수 맵을 채우는 함수는 이름 88개를 넣는다. 서버나 팩이 보낸 값은 읽지 않는다. 입력 모드와 UI 프로필만 실시간 값에서 오고, 에디션 값은 에디션 문자열 비교, 플랫폼 값은 빌드 플랫폼 번호 비교, 나머지는 서비스 질의 또는 상수다.
+- 이 맵이 언제 만들어지는지(화면마다인지, 시작 때 한 번인지)는 코드에서 찾지 못했다. "로드 시점에만 평가된다"는 보고는 확인도 반박도 못 했다.
+- 입력 모드는 현재 컨트롤러 번호로 찾은 값이고, 항목이 없으면 `$game_pad`, `$mouse`, `$touch`가 모두 거짓이다.
+- 상수 값은 이 Windows(GDK) 빌드의 값이다. 다른 플랫폼 빌드는 다를 수 있다. `$build_platform_UWP`가 상수 거짓이므로 이 클라이언트는 UWP 빌드가 아니다.
+- "서비스 불리언"은 서비스 객체에 질의한 값이다. 어느 서비스인지는 풀지 못했다.
+- 팩이 이 이름들로 분기해도 바닐라와 충돌하지 않는다. 바닐라가 쓰지 않는 이름은 24개다(표에서 바닐라가 0인 행).
+
+| 이름 | 값을 정하는 조건 | 바닐라 |
+| --- | --- | --- |
+| `$game_pad` | 컨트롤러의 입력 모드 값이 3 | 0 |
+| `$mouse` | 입력 모드 값이 1 | 0 |
+| `$touch` | 입력 모드 값이 2 | 13 |
+| `$desktop_screen` | UI 프로필 값이 0 | 47 |
+| `$pocket_screen` | UI 프로필 값이 0이 아님 | 51 |
+| `$education_edition` | 에디션 문자열이 `edu`이거나 에디션 서비스 플래그가 참 | 202 |
+| `$store_disabled` | 에디션 문자열이 `edu`이거나 서비스 불리언 | 11 |
+| `$osx_edition` | 에디션 문자열이 `osx` | 9 |
+| `$pocket_edition` | 에디션 문자열이 `ios`, `pocket`, `Android`, `ChromeOS` 중 하나 | 15 |
+| `$is_chromebook` | 에디션 문자열이 `ChromeOS` | 0 |
+| `$console_edition`, `$disable_gamertag_controls` | 에디션 문자열이 `xbox_` 또는 `playstation_`로 시작하거나 `switch` | 10, 2 |
+| `$xbox_one` | 에디션 문자열이 `xbox_`로 시작 | 3 |
+| `$is_ps5` | 에디션 문자열이 `playstation_5`로 시작 | 1 |
+| `$win10_edition` | 상수 참 | 12 |
+| `$build_platform_UWP` | 상수 거짓 | 0 |
+| `$is_android` | 빌드 플랫폼 번호가 1 | 7 |
+| `$is_ios` | 빌드 플랫폼 번호가 2 | 17 |
+| `$apple_os` | 빌드 플랫폼 번호가 2 또는 3 | 7 |
+| `$google_os` | 빌드 플랫폼 번호가 1 또는 4 | 6 |
+| `$nx_os` | 빌드 플랫폼 번호가 12 | 48 |
+| `$is_ps4` | 빌드 플랫폼 번호가 11 | 77 |
+| `$thirdpartyconsole`, `$hide_xbox_live_icon` | 빌드 플랫폼 번호가 11 또는 12 | 5, 4 |
+| `$ms_platform`, `$microsoft_os` | 빌드 플랫폼 번호가 8 또는 13 | 1, 4 |
+| `$is_console`, `$image_picking_not_supported` | 기기 종류 값이 2 `{추론}` | 8, 0 |
+| `$is_desktop` | 기기 종류 값이 0 `{추론}` | 6 |
+| `$pre_release` | 상수 거짓 | 27 |
+| `$beta_build`, `$creator_build`, `$is_preview_app` | 상수 거짓 | 2, 4, 7 |
+| `$is_publish` | 상수 참 | 27 |
+| `$is_holographic` | 상수 거짓 | 2 |
+| `$supports_hand_controllers`, `$gear_vr`, `$oculus_rift`, `$psvr`, `$is_living_room_mode`, `$is_reality_mode`, `$is_mobile_vr`, `$fire_tv`, `$is_settopbox`, `$is_windows_10_mobile`, `$is_win10_arm` | 상수 거짓 | 모두 0 |
+| `$device_must_be_removed_for_xbl_signin`, `$built_with_ore_ui_docs_and_tests` | 상수 거짓 | 2, 4 |
+| `$supports_add_friend`, `$is_xboxlive_enabled`, `$test_infrastructure_disabled`, `$new_video_settings`, `$is_improve_input_response_platform_supported` | 상수 참 | 4, 6, 9, 15, 2 |
+| `$is_dynamic_textures_platform_supported` | 상수 참 | 0 |
+| `$is_secondary_client`, `$ignore_3rd_party_servers`, `$ignore_add_servers` | 서비스 불리언의 반대 | 7, 7, 5 |
+| `$is_on_3p_server` | 접속한 서버 객체의 세 필드 검사(세부 미해결) | 20 |
+| `$is_creative_enabled`, `$is_multiplayer_enabled`, `$is_packs_enabled`, `$is_server_enabled`, `$is_store_enabled` | 플래그 집합 질의(항목 1, 0, 2, 4, 5) | 모두 0 |
+| `$is_seeds_enabled` | 플래그 집합 질의(항목 3) | 2 |
+| `$top_vertical_safezone_size`, `$bottom_vertical_safezone_size`, `$left_horizontal_safezone_size`, `$right_horizontal_safezone_size` | 안전 영역 계산 결과(값 형 미확인) | 3, 1, 1, 1 |
+| `$is_editor_mode_enabled` | 서비스 불리언(에디터 모드) | 41 |
+| `$is_editor_playtest_roundtrip` | 서비스 질의 결과(세부 미해결) | 11 |
+| `$edu_save_to_cloud_on` | 서비스 불리언이 있을 때만 질의, 없으면 거짓 | 12 |
+| `$edu_save_to_cloud_general_toggle_on` | 서비스 불리언 | 3 |
+| `$screen_transitions_enabled` | 서비스 값이 꺼짐이면 거짓, 아니면 다른 서비스 불리언 | 2 |
+| `$is_pregame`, `$trial` | 서비스 불리언(세부 미해결) | 53, 24 |
+| `$can_quit`, `$can_splitscreen`, `$requires_xbl_signin_to_play`, `$supports_clipboard_set`, `$supports_share`, `$supports_xbl_achievements`, `$file_picking_supported`, `$use_normalized_font_size`, `$is_low_memory_device`, `$is_realms_enabled` | 서비스 불리언 | 2, 6, 2, 16, 14, 7, 8, 2, 5, 16 |
+| `$multiplayer_requires_live_gold`, `$vibration_supported` | 서비스 불리언 | 0, 0 |
+| `$world_archive_support` | 서비스 불리언. `$file_picking_supported`와 같은 값으로 보인다 `{추론}` | 1 |
+
+- 이 클라이언트에서 참일 가능성이 높은 이름은 `$win10_edition`(상수 참), `$is_desktop`, `$ms_platform`, `$microsoft_os`, `$is_publish`, `$is_xboxlive_enabled`, `$new_video_settings`다 `{추론}`. 게임에서 재어 확인하지 않았다. 상수 거짓인 `$pre_release`, `$beta_build`, `$is_preview_app`은 이 빌드가 프리뷰 앱이 아니라는 뜻이고, 프리뷰 빌드의 값은 모른다.
+- 빌드 플랫폼 번호의 해석(1 안드로이드 계열, 2 iOS, 3 macOS, 4 아마존, 8 Win32, 11 소니, 12 닌텐도, 13 엑스박스)은 이름과 번호가 맞아떨어지는 데서 온 `{추론}`이다. 에디션 문자열이 Windows에서 실제로 무엇인지는 모른다.
+
+전역 맵 밖에서, 화면이나 컨트롤 팩토리를 만들 때 그 화면의 변수 맵에만 넣는 이름도 있다. 문자열에서 뽑은 `$` 이름 431개 중 88개만 전역이고 나머지는 이런 화면 전용이다. 아래는 위키에 없던 묶음이고, 화면 배정은 이름 묶음에서 추정한 것이 많다 `{코드, 추론}`.
+
+| 화면이나 팩토리 | 넣는 이름 | 비고 |
+| --- | --- | --- |
+| 일시정지 화면 | `$is_big_screen`, `$store_button_text`, `$platform_icons_visible`, `$ignore_edu_pause`, `$has_edu_external_link`, `$unlock_full_game_button_text`, `$achievements_button_focus`, `$feedback_button_focus`, `$profile_button_focus`, `$pause_menu_icon_settings_layout` | `$is_big_screen`은 화면 크기 두 값의 비율이 2.0보다 작으면 참이다. 두 값이 너비와 높이인지는 `{추론}`. 화면 변수를 만들 때 한 번 정해진다 |
+| 설정 계열 화면 | `$is_world_create`, `$is_world_edit`, `$is_template_create`, `$is_realms_edit`, `$is_mp_host`, `$is_mp_client`, `$gamepad_supported`, `$keyboard_and_mouse_supported`, `$touch_supported`, `$supports_flite_tts`, `$platform_tts_exists`, 탭용 `*_forced_index` 39개 등 73개 | `$gamepad_supported`, `$touch_supported`, `$keyboard_and_mouse_supported`는 화면 생성 인자로 받는 값이고 전역 `$touch`와 다른 값이다 |
+| 인벤토리 계열 화면 | `$survival_index`, `$equipment_index`, `$construction_index`, `$nature_index`, `$items_index`, `$search_index`, `$crafting_index`, `$armor_index`, `$survival_layout_index`, `$recipe_book_layout_index`, `$creative_layout_index`, `$pocket`, `$show_inventory_screen_button` | 탭 번호와 레이아웃 선택 값으로 보인다 `{추론}` |
+| HUD 제목 팩토리 | `$title_text`, `$subtitle_text`, `$title_fade_in_time`, `$title_fade_out_time`, `$title_stay_time`, `$title_alpha`, `$wait_duration`, `$show_text_background`, `$item_text_background_alpha`, `$title_shadow`, `$subtitle_initially_visible`, `$show_interact_padding`, `$show_survival_padding`, `$destroy_id`, `$localize` | `$actionbar_text`는 별도 함수가 넣는다 |
+| 채팅 | `$chat_background_opacity`, `$chat_font_scale_factor`, `$chat_text_color`, `$chat_line_spacing`, `$chat_font_type` | 바닐라 `_global_variables.json`도 `$chat_text_color` 기본값을 정의한다. 엔진 값과 파일 값 중 무엇이 이기는지는 모른다 |
+| 재료 색 | `$material_*_color` 11개(quartz, amethyst, lapis, copper, iron, resin, netherite, redstone, diamond, gold, emerald)와 `$party_blue_color` | 바닐라 `_global_variables.json`이 같은 이름을 정의한다. 우선순위는 채팅과 같은 질문이고 답을 모른다 |
+| 게임 팁 | `$arrow_*`, `$tip_anchor_*`, `$anim_*`, `$game_tip_offset`, `$game_tip_item_lifetime` 등 13개 | |
+| 토스트 | `$toast_offset`, `$popup_*`, `$display_time`, `$transition_time` | |
+| 그 밖 | `$chest_size`, `$container_size`, `$container_title`, `$use_smithing_table_2_ui`, `$left_tab_index_*` | `$use_smithing_table_2_ui`는 커뮤니티 보고가 쓰는 변수이고 엔진이 넣는 값임이 확인된다 `{코드}` |
 
 ## 커뮤니티 보고로 더한 사실 (커뮤니티)
 

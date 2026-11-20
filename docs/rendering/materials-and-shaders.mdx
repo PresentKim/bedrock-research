@@ -40,20 +40,54 @@ sources: [private-research, bedrock-wiki, ms-learn]
 | --- | --- |
 | `states` | 렌더 상태: `DisableDepthTest`, `Blending`, `DisableCulling`, `DisableColorWrite`, `DisableAlphaWrite`, `DisableDepthWrite`, `StencilWrite`, `InvertCulling`, `EnableStencilTest`, `EnableAlphaToCoverage` 10개. `states`는 목록을 바꾸고 `+states`는 더하고 `-states`는 뺀다. 표에 없는 이름(`Wireframe`, `DisableRGBWrite` 등)은 `Trying to use a non-existing render state` 로그를 내고 효과가 없다. `PolygonOffset`은 `is ignored and will have no effect` 로그만 낸다 `{코드}` |
 | `defines` | 셰이더 매크로(`ALPHA_TEST`, `USE_EMISSIVE`, `USE_OVERLAY`, `USE_UV_ANIM`, `FANCY`, `ENABLE_FOG`, `ENABLE_LIGHT` 등) |
-| `depthFunc` | 깊이 비교: `Always`, `Equal`, `NotEqual`, `Less`, `Greater`, `GreaterEqual`, `LessEqual`. Windows 1.26.65.1에서 `entity_alphatest` 자식에 `Greater`를 준 상자 엔티티는 빈 땅에서 그림자만 보였고, 돌 블록 뒤에서는 돌 옆면과 겹친 부분만 그려졌다([기록](../design/json-ui-claims.mdx#65-소수-리터럴-alpha-문자열-나누기-hud-렌더링-쿼리)) |
+| `depthFunc` | 깊이 비교: `Always`, `Equal`, `NotEqual`, `Less`, `Greater`, `GreaterEqual`, `LessEqual`(`Never`는 없다 `{코드}`). Windows 1.26.65.1에서 `entity_alphatest` 자식에 `Greater`를 준 상자 엔티티는 빈 땅에서 그림자만 보였고, 돌 블록 뒤에서는 돌 옆면과 겹친 부분만 그려졌다([기록](../design/json-ui-claims.mdx#65-소수-리터럴-alpha-문자열-나누기-hud-렌더링-쿼리)) |
 | `stencilRef`, `stencilReadMask`, `stencilWriteMask` | 스텐실 기준값과 마스크 |
-| `frontFace`, `backFace` | `stencilFunc`(깊이 함수와 같은 값 집합), `stencilFailOp`, `stencilDepthFailOp`, `stencilPassOp`(`Keep`, `Replace` 등) |
+| `frontFace`, `backFace` | `stencilFunc`(깊이 함수와 같은 값 집합), `stencilFailOp`, `stencilDepthFailOp`, `stencilPassOp`(`Keep`, `Replace` 두 값뿐이다 `{코드}`) |
 | `blendSrc`, `blendDst`, `alphaSrc`, `alphaDst` | 블렌드 인자: `DestColor`, `SourceColor`, `Zero`, `One`, `OneMinusDestColor`, `OneMinusSrcColor`, `SourceAlpha`, `DestAlpha`, `OneMinusSrcAlpha` |
-| `samplerStates` | 샘플러별 `textureFilter`, `textureWrap` |
-| `msaaSupport` | 멀티샘플링 지원 |
+| `samplerStates` | 샘플러별 `textureFilter`, `textureWrap`, `shaderStage`. 값은 아래 열거값 표 |
+| `msaaSupport` | 멀티샘플링 지원: `NonMSAA`, `MSAA`, `Both` `{코드}` |
 | `stencilRefOverride` | 불리언. `stencilRef`를 주면 앞면과 뒷면 기준값에 같은 값이 들어가고 이 플래그도 켜진다 `{코드}` |
-| `depthBias`, `slopeScaledDepthBias` | 실수. 깊이 편향 값. 기본값과 효과는 미측정 `{코드}` |
+| `depthBias`, `slopeScaledDepthBias` | 실수. 깊이 편향 값. 범위 검사가 없고, 부호를 뒤집은 값이 래스터라이저 상태에 저장된다. 기본값은 모른다 `{코드}`. 값 `5.0`, `-5.0`, `1000000.0`, `-1000000.0`과 `slopeScaledDepthBias` `100000.0`, `-100000.0`을 준 머티리얼은 오류 로그 없이 받아들여졌다. 큐브 11개 중 `5.0`과 `-5.0`을 준 둘만 보이지 않았고 이유는 모른다. 깊이 편향 효과를 재는 겹친 두 면 구성은 만들지 못했다 `{실측}` |
 | `primitiveMode` | 문자열 열거. `None`, `QuadList`, `TriangleList`, `TriangleStrip`, `LineList`, `Line`. 대소문자를 구분하고 모르는 값은 로그 없이 넘어간다 `{코드}` |
-| `renderTargetFormats` | 배열. 값 이름은 미확인 `{코드}` |
-| `samplerStates`의 `samplerIndex`, `vertexFields`의 `field` | 샘플러 번호, 정점 필드 이름 `{코드}` |
+| `renderTargetFormats` | 배열 안의 배열(렌더 타깃 하나당 문자열 배열). 값 이름 28개는 아래 표. 틀린 항목은 `UNKNOWN_TEXTURE_FORMAT`(0)이 들어간다 `{코드}` |
+| `samplerStates`의 `samplerIndex`, `vertexFields`의 `field` | 샘플러 번호(0에서 7만 받고 8 이상인 항목은 로그 없이 통째로 건너뛴다. 키가 없으면 0), 정점 필드 이름 `{코드}` |
 | `variants` | 스키닝 등 변형 |
 
 판정 순서는 스텐실 검사가 먼저, 깊이 검사가 그다음이다. 블렌드는 최종 RGB = 현재색 x 원본 인자 + 버퍼색 x 대상 인자다. 엔진 기본은 `blendSrc` SourceAlpha, `blendDst` OneMinusSrcAlpha, `alphaSrc` One, `alphaDst` OneMinusSrcAlpha다. `Blending`을 선언하면 보통 `blendSrc`와 `blendDst`도 정한다. 이 필드 설명 문서는 일부가 NetEase 판 기능(`NETEASE_SKINNING` 등)을 섞어 담고 있다.
+
+### 열거값 전체와 `states` 비트 `{코드}`
+
+Windows 1.26.65.1 클라이언트의 머티리얼 파서가 받는 값이다. 이름은 대소문자를 구분한다. 모르는 키는 로그 없이 무시되고(파서가 알려진 키만 이름으로 조회한다), 모르는 `states` 값만 로그가 난다. 열거형 문자열이 틀리면 로그 없이 기본 슬롯 값이 들어간다.
+
+| 필드 | 허용 값과 내부 값 |
+|---|---|
+| `depthFunc`, `stencilFunc` | `Equal` 0, `NotEqual` 1, `Always` 2, `Less` 3, `Greater` 4, `GreaterEqual` 5, `LessEqual` 6. `Never`는 없다 |
+| `blendSrc`, `blendDst`, `alphaSrc`, `alphaDst` | `DestColor` 0, `SourceColor` 1, `Zero` 2, `One` 3, `OneMinusDestColor` 4, `OneMinusSrcColor` 5, `SourceAlpha` 6, `DestAlpha` 7, `OneMinusSrcAlpha` 8. `OneMinusDestAlpha`는 없다 |
+| `stencilFailOp`, `stencilDepthFailOp`, `stencilPassOp` | `Keep` 1, `Replace` 3 |
+| `primitiveMode` | `None` 0, `QuadList` 1, `TriangleList` 2, `TriangleStrip` 3, `LineList` 4, `Line` 5. `LineStrip`은 다른 표의 이름이고 이 필드의 값이 아니다 |
+| `msaaSupport` | `NonMSAA` 1, `MSAA` 2, `Both` 3. 내부 전역 값이 1이면 읽은 값과 무관하게 `NonMSAA`로 덮는다(이 전역의 뜻은 모른다) |
+| `textureFilter` | `Point` 0, `Bilinear` 1, `Trilinear` 2, `MipMapBilinear` 3, `TexelAA` 4, `PCF` 5 |
+| `textureWrap` | `Repeat`, `Clamp` |
+| `shaderStage` | `Vertex` 1, `Pixel` 2, `Geometry` 4 |
+| `vertexFields[].field` | `Position` 0, `Color` 1, `Normal` 2, `Tangent` 3, `UV0` 4, `UV1` 5, `UV2` 6, `PBRTextureIdx` 7, `BoneId0` 8, `PreviousPosition`, `HummingbirdPosition`, `HummingbirdColor`, `HummingbirdAdditional`, `Mers`, `GeoType`(뒤 여섯 개의 값은 모른다) |
+| `renderTargetFormats` | `UNKNOWN_TEXTURE_FORMAT` 0, `R32G32B32A32_FLOAT` 2, `R16G16B16A16_FLOAT` 10, `R16G16B16A16_UNORM` 11, `R32G32_FLOAT` 16, `R10G10B10A2_UNORM` 24, `R8G8B8A8_UNORM` 28, `R8G8B8A8_UNORM_SRGB` 29, `R16G16_UNORM` 35, `R16G16_UINT` 36, `D32_FLOAT` 40, `R32_FLOAT` 41, `R32_UINT` 42, `R24G8_TYPELESS` 44, `D24_UNORM_S8_UINT` 45, `R24_UNORM_X8_TYPELESS` 46, `D16_UNORM` 55, `R8_UNORM` 61, `R8_UINT` 62, `A8_UNORM` 65, `BC3_UNORM` 77, `R5G6B5_UNORM` 85, `R5G5B5A1_UNORM` 86, `B8G8R8A8_UNORM` 87, `B8G8R8A8_UNORM_SRGB` 91, `BC7_UNORM` 98, `R4G4B4A4_UNORM` 115, `R8G8B8_UNORM` 145. 내부 값은 DXGI 번호와 같다. 이름 철자는 코드의 문자열 조각을 이어 맞춘 것이다 |
+
+`states`의 10개 이름과 비트는 이렇다. `states`는 비트를 0으로 만든 뒤 목록을 켜서 교체하고, `+states`는 더 켜고, `-states`는 끈다.
+
+| 이름 | 비트 | 읽는 곳 |
+|---|---|---|
+| `DisableDepthTest` | `0x1` | 켜지면 깊이 테스트를 쓰지 않는다 |
+| `Blending` | `0x2` | 블렌드 사용 |
+| `DisableCulling` | `0x4` | 컬 모드 없음 |
+| `DisableColorWrite` | `0x8` | 색 쓰기 마스크 0 |
+| `DisableAlphaWrite` | `0x10` | 마스크에서 알파 제거 |
+| `DisableDepthWrite` | `0x20` | 깊이 쓰기 안 함 |
+| `StencilWrite` | `0x40` | 상태 파서에서는 읽지 않는다(다른 소비처는 모른다) |
+| `InvertCulling` | `0x80` | 앞면 컬 |
+| `EnableStencilTest` | `0x100` | 스텐실 사용 |
+| `EnableAlphaToCoverage` | `0x200` | `ALPHA_TO_COVERAGE` define을 추가한다 |
+
+컬 모드는 `DisableCulling`이 켜져 있으면 없음, 아니면 `InvertCulling`이면 앞면 컬, 아니면 기본 컬 모드다. 색 쓰기 마스크는 `DisableColorWrite`면 0이고, 아니면 RGB에 `DisableAlphaWrite`가 없을 때만 알파를 더한다. `PolygonOffset`은 무시되는 이름이라 `Render state ... is ignored and will have no effect` 로그만 난다.
 
 ### 예제: 알파 테스트 엔티티 머티리얼을 클라이언트 엔티티에 연결
 

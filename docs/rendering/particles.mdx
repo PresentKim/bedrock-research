@@ -88,6 +88,7 @@ sources: [private-research, bedrock-wiki, ms-learn, particle-jester, bedrock-sam
 - 빌보드 `size`는 **반 크기**다. `[0.5, 0.5]`가 한 블록이다. 텍스처 안의 투명 여백까지 생각해야 눈에 보이는 크기가 맞는다. `emitter_shape_box`의 크기도 반 크기라 `[12,7,12]`는 24x14x24 블록이다.
 - 모델 로케이터는 모델 단위(16이 1블록), 파티클은 블록·초 단위, Molang 삼각함수는 도 단위다.
 - 원판 위 균일 분포는 반지름에 `R * math.sqrt(random)`, 구 표면 균일 방향은 `y=2u-1, rho=sqrt(1-y*y)`처럼 무작위 값을 변환해 쓴다. 갱신 식에서 `math.random`을 매번 부르면 떨리므로 입자마다 고정되는 `variable.particle_random_1`~`4`를 쓴다.
+- 파티클 내장 변수 13개는 `emitter_random_1`~`4`, `emitter_lifetime`, `emitter_age`, `entity_scale`, `particle_lifetime`, `particle_age`, `particle_random_1`~`4`다 `{코드}`. `emitter_lifetime`과 `emitter_age`는 초 단위다. `variable.entity_scale`은 공식 Molang 문서와 바닐라 파티클에 없다. 이미터가 갱신될 때마다 채워지고, 소유 엔티티가 있고 그 엔티티의 특정 컴포넌트를 읽을 수 있으면 그 첫 실수, 아니면 1.0이다. 엔티티 없이 `/particle`이나 Script API로 띄운 파티클에서는 1.0이다 `{코드}`. 그 컴포넌트가 엔티티 스케일이라는 것은 `{추론}`이다. 측정: 스케일 기본 엔티티가 방출한 파티클에서 빨강 채널을 `clamp(variable.entity_scale / 4)`로 준 색이 어두운 붉은색(약 r 0.25)이어서 값 0이 아니라 1로 채워졌다고 판단했다. `minecraft:scale` 3인 엔티티는 파티클이 가려 보지 못했다 `{실측}`.
 - UV의 `texture_width`와 `texture_height`는 좌표계일 뿐 PNG 픽셀 수와 같을 필요가 없다. 픽셀로 바꿀 때 가로는 `PNG 너비 / 선언 너비`, 세로는 `PNG 높이 / 선언 높이`를 곱한다.
 - 직선 `step_UV`는 다음 줄로 넘어가지 않는다. 격자 아틀라스는 식으로 칸을 고르거나 띠를 여러 개 쓴다. 칸 번호 `i`에서 `u = (i % 열수) * 칸너비`, `v = floor(i / 열수) * 칸높이`다.
 - 틴트는 텍스처 RGB에 곱해진다. 빨간 그림에 파란 틴트를 주면 거의 검게 된다. 색을 바꿔 쓸 텍스처는 흰색으로 그린다.
