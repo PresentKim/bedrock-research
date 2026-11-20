@@ -79,6 +79,7 @@ sources:
 - **완전 밝은 블록**: 빛을 내지 않고 음영 없는 블록은 `face_dimming` false + `ambient_occlusion` 0으로 만든다(https://wiki.bedrock.dev/blocks/block-visuals-intro#shading). 어두운 애니메이션 아이템 블록이나 바닐라보다 어두운 가마솥도 이렇게 고쳤다. 너무 밝으면 `minecraft:light_dampening`을 조정한다. 퍼뮤테이션으로 AO/디밍을 토글할 수 있다.
 - **벽에 붙은 검은 면**: 평면을 더하거나 면을 0.1 앞으로 옮기거나 커스텀 컬링을 쓴다(또는 감수한다). 머리 그림자는 바닥 위 0.125에 위쪽 UV 평면을 하나 더 둔다. 작물 밑 그림자는 모델을 위로 올려 줄인다.
 - **조명 아티팩트**: 커스텀 반블록/계단의 조명 아티팩트는 `minecraft:light_dampening`과 지오메트리 컬링 규칙으로 줄인다. `light_dampening`이 1 이상이면 그 아래 몹이 햇빛에 타지 않고, 15면 빛 번짐도 막는다. 풀블록에는 빛이 새지 않게 넣는다. dampening이 높으면 아래 잔디가 흙으로 바뀌고 길 블록이 되돌아간다(고체성과 연관, dampening을 낮추는 것 외엔 방법 없음).
+- **움직이는 블록의 조명**: 피스톤에 밀려 움직이는 커스텀 블록의 조명이 어색하게 보인다. 게임 버그로 추정되고 엔티티로 대신해도 나아지지 않았다. (single report)
 - **26.0 / VV 문제**: 26.0에서 일부 커스텀 블록이 핫픽스 전까지 검게 나왔다. VV의 밝기 불일치는 MER/subsurface scattering 경로를 점검해 고쳤다. VV에서만 텍스처 레이어링이 깨진다. VV는 엔티티의 face dimming을 끄지만 블록은 끄지 않는다. VV의 블록 동적 아틀라스 합성(MCPE-237912)은 수정됐지만 아이템은 아직이다. 들고 있는 블록의 자동 attachable은 MER을 무시한다(MCPE-237517). `blend`와 반사 MER의 조합은 미해결이다.
 - **PBR/MER**: `*.texture_set.json` + `_mer`와 팩 capability "pbr"로 동작한다. 한 사용자의 실패 원인은 terrain_texture 경로의 `.png`뿐이었다. Blockbench Bedrock 블록 프로젝트의 "create material" 버튼으로 만든 파일을 텍스처 옆에 두면 texture-set 없이도 적용된다는 보고와 `.texture_set` 파일을 함께 설정하라는 답이 **conflicting**이다. 커스텀 블록의 발광 부분은 Vibrant Visuals에서만 된다.
 - **그림자와 인벤토리 표시**: 바닥으로 파고든 모델 옆면의 그림자는 1.26.10에서 수정됐다. random offset이나 이웃 칸으로 튀어나온 지오메트리는 어둡게 그려진다. 26.50 뒤 인벤토리에서만 안 보이는 블록은 재설치나 Vibrant Visuals 밝기 100%로 해결됐다(MCPE-241108).
@@ -175,7 +176,7 @@ sources:
   "minecraft:transformation": {"rotation": [0,180,0]},
   "minecraft:redstone_producer": {"power": 15, "connected_faces": ["east","south"], "strongly_powered_face": "east", "transform_relative": true}
   ```
-- **producer 버그**: 퍼뮤테이션이 바뀌어도 출력 방향이 갱신되지 않고(MCPE-242205), 인접 가루를 제대로 향하지 않는다(MCPE-242204). 강한 출력 요구 조건(MCPE-234635)과 방출 갱신(MCPE-234647)은 2026-03 프리뷰에서 수정됐다. 퍼뮤테이션에서 신호 세기를 바꿔도 적용되지 않는다는 보고가 있었다.
+- **producer 버그**: 퍼뮤테이션이 바뀌어도 출력 방향이 갱신되지 않고(MCPE-242205), 인접 가루를 제대로 향하지 않는다(MCPE-242204). 강한 출력 요구 조건(MCPE-234635)과 방출 갱신(MCPE-234647)은 2026-03 프리뷰에서 수정됐다. 퍼뮤테이션에서 신호 세기를 바꿔도 적용되지 않는다는 보고가 있었다. `strongly_powered_face`의 설치와 회전 버그는 `connected_faces`와 달리 새로 놓고 부술 때도 생기며 버그 트래커에 올라간 것은 알려지지 않았다. (single report)
 - **`minecraft:redstone_consumer`**: `min_power`, `propagates_power`. format 1.26.0+와 `onRedstoneUpdate`(`e.powerLevel`) 커스텀 컴포넌트를 함께 쓰며, 매 틱 검사보다 싸다(26.0 안정). `propagates_power`를 켜지 않으면 꽉 찬 지오메트리여도 전도하지 않는다(`redstone_conductor`로 기본값이 바뀌지 않음, MCPE-232715 의도된 동작). 측면 가루가 연결되려면 `redstone_conductivity.redstone_conductor`가 필요하다. consumer는 방향성이 없어 리피터를 만들 수 없고, 가루를 꺾거나 끌어당길 수 없다. 옆에 놓인 레드스톤 횃불로도 켜진다(바닐라 레드스톤 램프와 다름). consumer이기도 한 블록은 비교기 출력을 낼 수 없다.
 - **onRedstoneUpdate 주의**: 첫 설치와 청크 로드에도 발생하므로 문/뚜껑문 같은 토글 블록은 변화를 감지할 별도의 전원 상태가 필요하다. 베타의 `firstUpdate` boolean이 초기 로드 이벤트를 거른다(2026-07에도 베타). `previousPowerLevel`은 consumer의 `min_power`보다 작을 수 있고(문서 오류), 청크가 틱을 시작할 때 첫 업데이트에서는 0이다. 레드스톤 동작에 onTick을 쓰지 않는다.
 - **전원 상실과 전도**: 전원 상실 감지는 consumer `min_power` 0으로 한다. 레드스톤 업데이트는 전원 변화 외에도 발생한다(https://wiki.bedrock.dev/blocks/block-events#redstone-update). 전도하지 않는 커스텀 블록은 반대편 버튼 신호를 막는다(redstone-conductivity 문서). conductor 설정이 전도를 보장하지 않는다는 불만도 있다.
