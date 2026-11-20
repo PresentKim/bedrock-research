@@ -14,7 +14,8 @@ sources:
 
 - With an integer `actor_id` in a static `property_bag`, it draws that entity. The value is the Script API `entity.id` (the unique entity id saved in the world). It drew players, a pig, a horse, a cat and an armor stand, and did not draw a minecart or a boat.
 - `scale_*`, `rotate_*`, `translate_x` and `translate_y` change the size, direction and position, and `rotate_mode: "auto"` keeps it turning. These values can be changed at runtime through bindings.
-- **Limit: `actor_id` cannot be set at runtime.** Entity ids are 64-bit integers beyond the 32-bit range, and bindings keep only the low 32 bits when they read an integer. The renderer does not accept strings or floats. The id has to be written into the resource pack in advance as a JSON integer (section 4).
+- **Limit: hard to use dynamically from an add-on.** JSON UI expressions handle only 32-bit integers, and this renderer needs a 64-bit integer id. Entity ids are always outside the 32-bit range, and only the low 32 bits survive a binding or an expression. The renderer does not accept strings or floats (section 4).
+- **What works: a static id.** Where the entity id can be controlled, as in private server software, write a given entity's id into the resource pack's `property_bag` in advance as a JSON integer and use that id for the entity; the renderer then draws it.
 - A control made by the title factory is rebuilt each time the title is sent again, and the rotation rewinds.
 - The NPC edit screen writes these keys again for each cell and overwrites what a pack sets.
 - Among the six renderers that draw entities, this is the only one that picks an entity by an integer id and takes free transforms. When only your own look is needed, the player renderers that need no id fit better (section 7).
@@ -23,7 +24,7 @@ sources:
 
 | Key | Value | Measured |
 | --- | --- | --- |
-| `actor_id` | integer (64-bit) | With an entity's `entity.id` it drew that entity. 0 to 40, -1 to -6, the id cut down by 32-bit units, a JSON string and a float drew nothing (section 4) |
+| `actor_id` | JSON integer (64-bit) | Writing the number in the `entity.id` string as a JSON integer drew that entity. The renderer does not accept the same number as a JSON string or a float. Passing it through a binding or an expression also drew nothing: expressions handle only 32-bit integers and cannot hold a 64-bit id (section 4) |
 | `scale_x`, `scale_y`, `scale_z` | number, default 1 | 0.5 gave half size. Shrinking only `scale_y` flattens it vertically |
 | `rotate_x`, `rotate_y`, `rotate_z` | number (degrees), default 0 | `rotate_y` 180 showed the back and `rotate_x` 45 tilted it forward. `rotate_z` turns around the axis into the screen: 45 tilts it and 90 lays it down |
 | `translate_x`, `translate_y` | number, default 0 | 1 is one UI pixel. Positive `translate_x` moves right and positive `translate_y` moves down. With `rotate_y` 90 it still moves in screen space |
