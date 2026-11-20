@@ -46,6 +46,11 @@ sources: [private-research, bedrock-wiki, ms-learn]
 | `blendSrc`, `blendDst`, `alphaSrc`, `alphaDst` | 블렌드 인자: `DestColor`, `SourceColor`, `Zero`, `One`, `OneMinusDestColor`, `OneMinusSrcColor`, `SourceAlpha`, `DestAlpha`, `OneMinusSrcAlpha` |
 | `samplerStates` | 샘플러별 `textureFilter`, `textureWrap` |
 | `msaaSupport` | 멀티샘플링 지원 |
+| `stencilRefOverride` | 불리언. `stencilRef`를 주면 앞면과 뒷면 기준값에 같은 값이 들어가고 이 플래그도 켜진다 `{코드}` |
+| `depthBias`, `slopeScaledDepthBias` | 실수. 깊이 편향 값. 기본값과 효과는 미측정 `{코드}` |
+| `primitiveMode` | 문자열 열거. `LineList`, `LineStrip`을 확인했고 나머지 값은 미확인 `{코드}` |
+| `renderTargetFormats` | 배열. 값 이름은 미확인 `{코드}` |
+| `samplerStates`의 `samplerIndex`, `vertexFields`의 `field` | 샘플러 번호, 정점 필드 이름 `{코드}` |
 | `variants` | 스키닝 등 변형 |
 
 판정 순서는 스텐실 검사가 먼저, 깊이 검사가 그다음이다. 블렌드는 최종 RGB = 현재색 x 원본 인자 + 버퍼색 x 대상 인자다. 엔진 기본은 `blendSrc` SourceAlpha, `blendDst` OneMinusSrcAlpha, `alphaSrc` One, `alphaDst` OneMinusSrcAlpha다. `Blending`을 선언하면 보통 `blendSrc`와 `blendDst`도 정한다. 이 필드 설명 문서는 일부가 NetEase 판 기능(`NETEASE_SKINNING` 등)을 섞어 담고 있다.
@@ -152,6 +157,7 @@ Mojang식 아웃라인 예:
 }
 ```
 
+- 이 예제의 `stencilReadMark`는 오타다. 클라이언트가 읽는 이름은 `stencilReadMask`이고, `stencilReadMark`는 읽는 곳이 없어 무시된다 `{코드}`.
 - 다른 변형: (1) `outline_main:outline_base`에 `depthFunc Always`, `-defines [lighting, ENABLE_LIGHTING]`, `+states [DisableDepthWrite, DisableCulling]`, 스텐실 `NotEqual`/`Keep`. `-defines FANCY`를 빼자 깜빡임이 줄었다(2026-08-18). (2) outline_base는 EnableStencilTest, StencilWrite, DisableCulling, stencilRef 6이고 outline_main은 depthFunc Always, stencilFunc Greater다. 1인칭 변형은 z-fighting을 막으려 DisableDepthWrite를 더하지만 VV 하늘에서 실패한다. (3) 기본 머티리얼(`InvertCulling`, `DisableDepthWrite`, `EnableStencilTest`, `depthFunc LessEqual`, stencilFunc `NotEqual`)이 기본 엔티티가 쓴 곳을 건너뛴다. 기본에는 Blending을 쓸 수 없어서 기본은 불투명(`entity` 상속)으로, 아웃라인은 `entity_alphatest`로 하고 기본에 `DisableColorWrite`와 `DisableAlphaWrite`를 더해 숨긴다. (4) 전역 아웃라인 시도에서는 아웃라인이 모델 위에 그려지는 문제가 미해결이었다. `entity_glow_base`와 `entity_glow_outline` 스타일로 렌더 컨트롤러 2개를 쓰는 구성도 있다.
 - 아웃라인이 블록과 엔티티를 뚫고 보이면 `depthFunc: Always`를 끈다. 블록만 뚫고 엔티티는 뚫지 않는 아웃라인은 모든 엔티티에 커스텀 머티리얼을 주지 않는 한 불가능하다. 클라이언트 엔티티 구성 예: materials `outline_base`와 `outline`, 아웃라인 텍스처 `textures/ui/White`, 지오메트리 2개, `controller.render.default`와 아웃라인 컨트롤러.
 - 트레이드오프: 교차하는 여러 엔티티를 처리하는 아웃라인은 투명할 수 없고, 투명 아웃라인은 겹침을 처리하지 못한다. 둘 다 원하면 기본·아웃라인 엔티티를 따로 둔다. 1인칭에서는 스텐실 버퍼가 다음 프레임에 리셋되지 않고, 3인칭에서는 투명 처리 전에 지워진다.

@@ -46,6 +46,11 @@ Most vanilla entity materials descend from `entity_static`. Following one villag
 | `blendSrc`, `blendDst`, `alphaSrc`, `alphaDst` | Blend factors: `DestColor`, `SourceColor`, `Zero`, `One`, `OneMinusDestColor`, `OneMinusSrcColor`, `SourceAlpha`, `DestAlpha`, `OneMinusSrcAlpha` |
 | `samplerStates` | Per-sampler `textureFilter`, `textureWrap` |
 | `msaaSupport` | Multisampling support |
+| `stencilRefOverride` | Boolean. Setting `stencilRef` writes the same value to the front and back reference and also turns this flag on `{code}` |
+| `depthBias`, `slopeScaledDepthBias` | Float. Depth bias values. Defaults and effect not measured `{code}` |
+| `primitiveMode` | String enum. `LineList` and `LineStrip` confirmed, other values unknown `{code}` |
+| `renderTargetFormats` | Array. Value names unknown `{code}` |
+| `samplerIndex` in `samplerStates`, `field` in `vertexFields` | Sampler index, vertex field name `{code}` |
 | `variants` | Variants such as skinning |
 
 The test order is the stencil test first and then the depth test. Blending is final RGB = current color x source factor + buffer color x destination factor. The engine defaults are `blendSrc` SourceAlpha, `blendDst` OneMinusSrcAlpha, `alphaSrc` One, `alphaDst` OneMinusSrcAlpha. When you declare `Blending`, you usually also set `blendSrc` and `blendDst`. This field description document partly mixes in NetEase edition features (`NETEASE_SKINNING` and so on).
@@ -152,6 +157,7 @@ A Mojang-style outline example:
 }
 ```
 
+- `stencilReadMark` in this example is a typo. The client reads `stencilReadMask`; nothing reads `stencilReadMark`, so it is ignored `{code}`.
 - Other variants: (1) `outline_main:outline_base` with `depthFunc Always`, `-defines [lighting, ENABLE_LIGHTING]`, `+states [DisableDepthWrite, DisableCulling]`, stencil `NotEqual`/`Keep`. Removing `-defines FANCY` reduced flicker (2026-08-18). (2) outline_base is EnableStencilTest, StencilWrite, DisableCulling, stencilRef 6, and outline_main is depthFunc Always, stencilFunc Greater. The first-person variant adds DisableDepthWrite to prevent z-fighting but fails against the VV sky. (3) The base material (`InvertCulling`, `DisableDepthWrite`, `EnableStencilTest`, `depthFunc LessEqual`, stencilFunc `NotEqual`) skips where the base entity was drawn. Blending cannot be used on the base, so make the base opaque (inheriting `entity`), the outline `entity_alphatest`, and hide the base by adding `DisableColorWrite` and `DisableAlphaWrite` to it. (4) In a global outline attempt, the problem of the outline being drawn over the model was unresolved. There is also a setup using 2 render controllers in the `entity_glow_base` and `entity_glow_outline` style.
 - If the outline shows through blocks and entities, turn off `depthFunc: Always`. An outline that goes through blocks but not entities is impossible unless you give a custom material to every entity. An example client entity setup: materials `outline_base` and `outline`, outline texture `textures/ui/White`, 2 geometries, `controller.render.default` and an outline controller.
 - Trade-off: An outline that handles several crossing entities cannot be transparent, and a transparent outline cannot handle overlap. If you want both, keep separate base and outline entities. In first person the stencil buffer is not reset on the next frame, and in third person it is cleared before transparency processing.
