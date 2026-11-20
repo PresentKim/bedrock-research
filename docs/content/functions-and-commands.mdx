@@ -147,9 +147,13 @@ attacker.spawnParticle("pdi:damage_glyph", pos, vars);
 | `0x10` | `help` | 로컬 처리로 보인다 `{추론}` |
 | `0x20` | `script`, `wsserver` | 디버거와 웹소켓 계열이라는 공통점만 확인했다 `{추론}` |
 | `0x400` | `op`, `deop`, `permission` | 편집기 객체가 있고 이 비트가 켜져 있으면 `commands.generic.disabled.editorLocked` 오류로 간다 |
-| `0x2`, `0x4`, `0x8` | 아래 7.2 표의 `0x6` 명령, `lesson`(`0x4`), `codebuilder`(`0x4`) | 실행 주체 종류별 "차단" 비트다. 명령 기록에 비트가 켜져 있고 실행 주체가 그 종류이면 권한 수준과 상관없이 `commands.generic.error.permissions`로 거부된다. 플레이어는 `0x4`, 명령 블록과 명령 블록 마인카트는 `0x2`, 자동화 플레이어 계열은 `0x8`이다. 코드로 확정한 것은 종류 숫자(0은 `0x4`, 1과 2는 `0x2`, 5와 6은 `0x8`)이고 종류 이름은 `{추론}`이다 `{코드}` |
+| `0x2`, `0x4`, `0x8` | 아래 7.2 표의 `0x6` 명령, `lesson`(`0x4`), `codebuilder`(`0x4`) | 실행 주체 종류별 "차단" 비트다. 명령 기록에 비트가 켜져 있고 실행 주체가 그 종류이면 권한 수준과 상관없이 `commands.generic.error.permissions`로 거부된다. 플레이어는 `0x4`, 명령 블록과 명령 블록 마인카트는 `0x2`, 자동화 플레이어 계열은 `0x8`이다. 코드로 확정한 것은 종류 숫자(0은 `0x4`, 1과 2는 `0x2`, 5와 6은 `0x8`)이고 종류 이름은 `{추론}`이다 `{코드}`. 같은 비트가 자동완성 이름 목록과 `/help` 목록에서도 그 출처에게 명령을 뺀다 |
 
-실행 직전 검사는 이 순서다 `{코드}`. 실행 주체의 권한 수준이 명령 권한보다 작으면 거부한다. 권한이 충분하면 실행 주체 종류를 위 비트로 바꿔 명령 플래그에 그 비트가 켜져 있는지 본다. 켜져 있으면 거부하고, 꺼져 있으면 실행한다. 종류 3, 4와 7 이상은 비트가 없어 이 검사를 건너뛴다. 거부 문구는 일반 클라이언트에서 항상 `commands.generic.error.permissions`이고, 교육판 차단 목록이 있는 플레이어만 `commands.generic.blocked_edu`가 나올 수 있다. 구문 분석이 이 검사보다 앞서므로 인자 없는 `/gettopsolidblock`은 `commands.generic.syntax`다. 등록 때 전역 불리언이 참이면 세 비트가 모두 지워져 어느 출처에서도 쓸 수 있다. 그 불리언이 어느 설정인지는 읽지 못했다. 자동완성에서 명령을 숨기는 비트는 찾지 못했다 `{코드}`.
+실행 직전 검사는 이 순서다 `{코드}`. 실행 주체의 권한 수준이 명령 권한보다 작으면 거부한다. 권한이 충분하면 실행 주체 종류를 위 비트로 바꿔 명령 플래그에 그 비트가 켜져 있는지 본다. 켜져 있으면 거부하고, 꺼져 있으면 실행한다. 종류 3, 4와 7 이상은 비트가 없어 이 검사를 건너뛴다. 거부 문구는 일반 클라이언트에서 항상 `commands.generic.error.permissions`이고, 교육판 차단 목록이 있는 플레이어만 `commands.generic.blocked_edu`가 나올 수 있다. 구문 분석이 이 검사보다 앞서므로 인자 없는 `/gettopsolidblock`은 `commands.generic.syntax`다. 등록 때 전역 불리언이 참이면 세 비트가 모두 지워져 어느 출처에서도 쓸 수 있다 `{코드}`. 이 불리언은 디버그 기능 토글 `dev_expose_hidden_commands`(표시 문구 "Expose all hidden commands (requires level restart)")로 읽힌다. 토글 번호 4와 이름의 짝은 호출 인자 순서에서 읽은 것이라 `{추론}`이고, 토글을 켜는 경로와 저장 여부는 확인하지 못했다.
+
+자동완성과 `/help`에서도 같은 비트가 쓰인다. 자동완성 이름 목록과 `/help` 목록은 같은 판정 함수를 불러, 권한 수준이 모자라거나 실행 주체 종류의 비트(`0x2`, `0x4`, `0x8`)가 명령 플래그에 켜져 있으면 그 명령을 뺀다 `{코드}`. 목록은 클라이언트 로컬 명령 등록 맵을 돌고 서버가 보낸 AvailableCommands 항목도 같은 맵에 들어간다. 따라서 `0x6` 명령은 플레이어 채팅과 명령 블록 출처에는 보이지 않고 자동화 출처(`0x8`이 없음)에는 보인다.
+
+25개 비공식 명령은 플레이어 출처 기준으로 16개가 플래그로 가려진다. `0x6`인 14개(`gettopsolidblock`, `querytarget`, `listd`, `closechat`, `getlocalplayername`, `geteduclientinfo`, `closewebsocket`, `enableencryption`, `getchunkdata`, `getchunks`, `getspawnpoint`, `globalpause`, `codebuilder_actorinfo`, `agent`)와 `0x4`인 2개(`lesson`, `codebuilder`)다. 나머지 9개(`ability`, `immutableworld`, `takepicture`, `resourceuri`, `worldbuilder`, `classroommode`, `code`, `gametips`, `party`)는 플래그로는 가려지지 않고, 등록 조건과 권한 수준을 통과해야 보인다. `0x8`을 가진 비공식 명령은 없다 `{코드}`.
 
 ### 7.2 공식 JSON에 없는 등록 명령 25개
 
@@ -187,17 +191,18 @@ attacker.spawnParticle("pdi:damage_glyph", pos, vars);
 
 치트를 켠 일반 크리에이티브 월드의 실측은 이렇다 `{실측}`.
 
-- 서버가 보낸 명령 목록에 `gettopsolidblock`, `querytarget`, `listd`, `agent`는 있었고, 위 표의 나머지 명령(`closechat`, `closewebsocket`, `enableencryption`, `getchunkdata`, `getchunks`, `getspawnpoint`, `resourceuri`, `takepicture`, `ability`, `codebuilder`, `lesson`, `classroommode`, `worldbuilder`, `immutableworld`)은 이름이 없었고 실행하면 `commands.generic.unknown`이었다. 이 월드에서는 등록되지 않았거나 숨겨진 것이다. `geteduclientinfo`, `getlocalplayername`, `gametips`, `globalpause`는 응답으로 구분하지 못했다(목록에는 없었다).
+- 서버가 보낸 명령 목록에 `gettopsolidblock`, `querytarget`, `listd`, `agent`는 있었고, 위 표의 나머지 명령(`closechat`, `closewebsocket`, `enableencryption`, `getchunkdata`, `getchunks`, `getspawnpoint`, `resourceuri`, `takepicture`, `ability`, `codebuilder`, `lesson`, `classroommode`, `worldbuilder`, `immutableworld`)은 이름이 없었고 실행하면 `commands.generic.unknown`이었다. 이 월드에서는 등록되지 않았거나 숨겨진 것이다. `geteduclientinfo`, `getlocalplayername`, `gametips`, `globalpause`는 응답으로 구분하지 못했다(목록에는 없었다. 아래 후속 실측에서 구분했다).
 - `/gettopsolidblock`은 `commands.generic.syntax`, `/gettopsolidblock ~ ~ ~`는 `commands.generic.error.permissions`였다. `/querytarget @s`와 `/listd`도 `commands.generic.error.permissions`였다. 세 명령은 명령으로 존재하고 이 월드의 플레이어 채팅으로는 거부된다. 이유는 권한 수준이 아니라 플래그 `0x6`의 `0x4`(플레이어 출처 차단)다. 호스트 권한 수준을 올려도 플레이어 채팅에서는 풀리지 않는다 `{코드}`. 출력 내용은 거부 때문에 재지 못했다. `/agent`는 `commands.generic.syntax`(구문 안내)였다.
-- 플래그 `0x6`이 붙은 명령 중 어떤 것은 목록에 있고 어떤 것은 없었다. 이 플래그는 실행 직전 검사에서만 읽히고 목록 전송을 막는 곳은 코드에서 찾지 못했다. 목록에 나오는지는 서버 쪽 등록이 정하는 것으로 보인다 `{코드, 추론}`.
+- 플래그 `0x6`이 붙은 명령 중 어떤 것은 목록에 있고 어떤 것은 없었다. 이 플래그는 실행 직전 검사와 자동완성, `/help` 목록 판정에서 읽히지만 서버의 목록 전송이나 AvailableCommands 수신을 막는 곳은 코드에서 찾지 못했다. 목록에 나오는지는 서버 쪽 등록이 정하는 것으로 보인다 `{코드, 추론}`.
 - `gettopsolidblock`, `querytarget`, `listd`를 실제로 돌릴 수 있는 출처는 플레이어(`0x4`)와 명령 블록(`0x2`)이 아닌 쪽, 곧 웹소켓 접속 같은 자동화 출처로 추정한다. 출처 종류의 이름과 이 가정은 측정하지 않았다 `{추론}`.
+- 후속 실측(치트를 켠 월드, 플레이어 채팅, Windows 1.26.65.1, 2026-11-20): `/party hello`는 패킷이 나가고 서버가 `commands.generic.unknown`(파라미터 `["party"]`)으로 답했다. `/gametips enable`과 `/gametips disable`은 패킷 없이 클라이언트가 처리해 채팅에 `게임 팁 활성화됨`과 `게임 팁 비활성화됨`을 내고 옵션 `game_tips_enabled`를 1과 0으로 바꿨다. 인자가 없거나 `maybe`이면 로컬 구문 오류다. `/getlocalplayername`, `/geteduclientinfo`, `/closechat`, `/closewebsocket`은 패킷 없이 권한 수준 오류(`0x4` 차단과 일치)였고 치트를 켜도 같았다. `/enableencryption`은 인자 없이 로컬 구문 오류라 로컬 등록은 확인했고 인자가 있는 실행은 하지 않았다. 나머지(`getchunks`, `getchunkdata`, `getspawnpoint`, `globalpause`, `ability`, `takepicture`, `resourceuri`, `immutableworld`, `lesson`, `codebuilder`, `classroommode`, `code`, `worldbuilder`, `wb`)는 서버가 `commands.generic.unknown`으로 답했다. `/agent`는 `commands.generic.syntax`로 서버에 있었다 `{실측}`. 앞의 "클라이언트 조건 뒤에 등록(파티 서비스)"은 코드 읽기이고, 이 세션에서 `party`가 서버에 없는 이유(등록 조건)는 가르지 못했다.
 
 치트를 끈 단일 플레이어 월드(Windows 1.26.65.1)에서 채팅으로 입력한 결과는 이렇다 `{실측}`.
 
 - `/party hello`는 `CommandRequest` 패킷이 나가지 않고 로컬 메시지 "이 세계에서는 치트를 사용할 수 없습니다."만 나왔다. 없는 명령 `/zzzfoo`와 같은 결과이고, 자동완성에서 `/p`는 `packstack`, `permission`, `deop`, `help`, `op`만 나왔다. 이 월드에서는 `party`가 등록되지 않았거나 숨겨져 있다. 권한 0과 플래그 `0x80`만으로는 쓸 수 있다고 할 수 없다. 등록이 파티 서비스 조건 뒤에 있다는 코드 읽기와 맞는다 `{코드}`.
 - `/listd`, `/gametips`, `/querytarget @s`, `/gettopsolidblock ~ ~ ~`, `/agent`, `/getchunks`, `/getlocalplayername`, `/closechat`, `/closewebsocket`, `/ability @s mayfly true`도 모두 패킷 없이 같은 로컬 메시지였다. `/listd`를 입력줄에 끝까지 입력해도 자동완성 항목이 나오지 않았다. 이 월드에서는 보이지 않고 쓸 수 없다.
 - 대조로 `/list`는 패킷이 나가고 `commands.players.list`(파라미터 `["1","8"]`)와 이름 목록이 돌아왔다.
-- 치트를 끈 상태에서 `listd`와 `gametips`가 거부된 원인은 권한 수준이 아니다. `listd`는 플래그 `0x6`이라 플레이어 출처에서는 막힌다. `op-permission-level=4`에서 게임 안에서 `listd`가 보인다는 서술은 원격 서버 조건이고 이 측정에서는 확인되지 않았다.
+- 치트를 끈 상태에서 `listd`가 거부되고 자동완성에 나오지 않은 것은 권한 수준(서명 권한 3)과 플래그 `0x6`의 `0x4`가 모두 가리는 경우라 이 측정은 둘을 가르지 못한다. 치트를 켜고 권한이 충분해도 `0x4` 때문에 플레이어 채팅 자동완성에는 나오지 않을 것이다 `{코드}`(미측정). `op-permission-level=4`에서 게임 안에서 `listd`가 보인다는 서술은 원격 서버 조건이고 이 측정에서는 확인되지 않았다.
 
 ### 7.3 공식 JSON에 없는 명령의 문법
 

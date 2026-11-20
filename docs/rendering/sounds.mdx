@@ -119,9 +119,9 @@ RP/sounds.json
 
 - 구조: 엔티티 객체의 기본 이벤트 맵을 읽은 뒤 `variants.map`의 항목을 읽는다. 항목의 키는 문자열이고 값은 같은 이벤트 맵 형식(`events`, `pitch`, `volume`)이다. `variants.key`는 Molang 식 문자열이다. 엔티티 객체에 정수 `__molang_version`이 붙고 바닐라는 전부 13이다.
 - `key` 식은 연산자를 전부 허용하는 설정으로 파싱된다. `==`, `?:`, 문자열 리터럴, `&&`가 모두 가능하다. 바닐라 예: `query.is_baby ? 'baby' : query.property('minecraft:sound_variant')`, `query.property('minecraft:oxidation_level')`. 결과가 문자열이어야 `map` 키와 맞는다. 숫자 결과를 키로 쓸 수 있는지, 이 경로에서 쓸 수 있는 쿼리의 범위는 모른다.
-- `__molang_version`은 정수이고 없으면 0이며 값은 short로 잘려 Molang 파서의 버전이 된다. 범위 검사는 없다. 블록 정의 쪽은 0에서 13 밖이면 0으로 되돌려서 13이 현재 최댓값으로 보인다 `{추론}`. 값을 빼면 0이 들어가는데, `query.property`, `query.is_baby`처럼 첫 버전이 0.0.0인 쿼리는 버전 0에서도 해석된다. 기한이 있는 폐기 쿼리는 낮은 버전에서 더 오래 살아 있다. 그래서 생략해도 대부분 동작할 가능성이 높지만 재지 않았다.
+- `__molang_version`은 정수이고 없으면 0이며 값은 short로 잘려 Molang 파서의 버전이 된다. 범위 검사는 없다. 블록 정의 쪽은 0에서 13 밖이면 0으로 되돌려서 13이 현재 최댓값으로 보인다 `{추론}`. 값을 빼면 0이 들어가는데, `query.property`, `query.is_baby`처럼 첫 버전이 0.0.0인 쿼리는 버전 0에서도 해석된다. 기한이 있는 폐기 쿼리는 낮은 버전에서 더 오래 살아 있다. 측정에서 `__molang_version`이 13일 때, 없을 때, 1일 때 `key`/`map` 선택 결과에 차이가 없었다 `{실측}`.
 - 오류: `key`가 없는데 `map` 항목이 있으면 `Expected "key" expression for entity with sound variants`, `key`는 있는데 `map`이 비어 있으면 `Expected "map" list for entity with sound variant key`, `map`의 키가 겹치면 `Duplicate sound variant "%s" for entity "%s"`다.
-- 키가 `map`에 없을 때의 대체 동작은 코드에서 읽지 못했다. 바닐라는 `default` 항목을 명시해 둔다. `interactive_sounds` 파서에도 같은 `variants`, `key`, `__molang_version` 문자열이 있다(문자열 수준, 동작은 모른다).
+- 키가 `map`에 없으면 오류 없이 엔티티의 기본 `events`로 떨어진다. 키 `'other'`가 맵에 없을 때 기본 `events`의 소리 자막이 나왔다 `{실측}`. 바닐라는 `default` 항목을 명시해 둔다. `interactive_sounds` 파서에도 같은 `variants`, `key`, `__molang_version` 문자열이 있다(문자열 수준, 동작은 모른다).
 
 바닐라 형태 그대로 만든 최소 예이고 동작은 확인하지 못했다.
 

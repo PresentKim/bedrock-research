@@ -44,3 +44,23 @@ sources:
 - **Blockception `.mcattributes`** 파일로 검증 오류를 무시할 수 있다.
 - **JSON 함정**: 끝의 쉼표, 닫는 괄호 과다, 곡선 따옴표(“ ”)가 파일 전체를 깨뜨린다. `//` 주석은 게임에서는 대체로 동작한다(에디터는 경고).
 - **챗봇이 만든 애드온 파일은 자주 틀린다**. MS 문서, bedrock.dev, wiki.bedrock.dev를 기준으로 삼는다.
+
+### 개발 옵션과 options.txt
+
+Windows 1.26.65.1 클라이언트 코드와 실제 `options.txt` 두 개(사용자 폴더, Shared 폴더)를 대조한 결과다(주소는 `native-notes`).
+
+- `dev_logtimestamp`, `dev_logarea`, `dev_show_display_logged_error` 같은 `dev_*` 옵션 58개는 `options.txt`에 줄을 적어도 소용없다. 옵션 객체를 만든 직후 등록 코드가 저장 키 문자열을 비우고, 파일을 쓰는 함수와 읽는 함수가 키 길이가 0인 옵션을 건너뛰기 때문이다. 빌드 플래그나 `dev_` 접두 필터는 없고 옵션마다 명시적으로 키를 비운다. 두 파일에는 이 58개가 하나도 없다 `{코드}`.
+- 저장 키를 처음부터 빈 문자열로 만드는 옵션도 37개 있다(`ENABLE_CLIENT_SCRIPT`, `DEBUG_DISABLE_RENDER_*`, `RENDER_BOUNDING_BOXES` 등). 이 옵션들도 값이 메모리에서만 살고 파일로 설정할 수 없다 `{코드}`.
+- 키가 남아 파일로 설정할 수 있는 개발 옵션은 `키:값` 한 줄 형식이다 `{코드}`.
+
+| 키 | 기본 | 효과 |
+|---|---|---|
+| `dev_file_watcher` | 켜짐 | 값 변경 관찰 함수의 호출 슬롯이 빈 함수라 리테일에서 하는 일이 없다 `{코드}` |
+| `dev_enable_texture_hot_reloader` | 꺼짐 | 값이 참이고 두 객체가 있을 때 두 함수를 부른다. RTTI의 `_hotReloadTextureAtlases`와 이어져 텍스처 아틀라스 재읽기 쪽으로 보인다 `{코드, 추론}`. JSON UI나 팩 일반 재읽기와의 연결은 못 찾았다 |
+| `dev_debug_hud` | 0 | 설정 화면 디버그 섹션의 디버그 HUD 드롭다운과 같은 옵션이다. 엔진에 선택지 이름 17개(`off`, `basic`, `camera`, `profiler`, `audio`, `renderchunks` 등)가 있으나 값과의 대응은 못 읽었다. 파일에 값 2가 있으면 로드 뒤 0으로 바뀐다 `{코드, 문자열}` |
+| `dev_marketplace_toggle_all_skins_rotate`, `dev_marketplace_rotation_speed_multiplier` | 꺼짐, 0 | 마켓플레이스 스킨 회전 표시 설정으로 보인다. 소비 코드는 읽지 않았다 `{추론}` |
+| `switch_coin_debug` | 꺼짐 | 설정 UI 토글이 있다. 값을 읽는 곳은 못 찾았다 |
+
+- 이름에 `dev`가 없어도 개발과 검증에 쓰이는 키가 파일에 있다(`gfx_debug_trace`, `gpu_validation_enabled`, `load_renderdocdll`, `deep_dark_debug_render`, `game_tips_enabled_for_debug`, `frame_pacing_enabled`, `startup_statistics`, `content_log_file` 등). 효과는 이름에서 읽은 `{추론}`이다.
+- 바닐라 `ui/settings_sections/general_section.json`에 개발자 설정 패널이 있고 진입 버튼은 `$debug_settings`가 참일 때만 나온다. 이 변수는 엔진이 넣는 값이고 출처는 읽지 못했다 `{코드, JSON}`.
+- 디버그 섹션의 기능 토글 60개(`dev_expose_hidden_commands`, `ore_ui_debugging`, `enable_packet_profile` 등)는 옵션 열거와 다른 등록이다. 이 토글이 `feature_options.txt`에 저장되는지와 사용자가 켜는 경로는 확인하지 못했고, 이 머신에는 그 파일이 없었다 `{코드}`.

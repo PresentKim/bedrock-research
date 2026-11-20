@@ -44,3 +44,23 @@ A pack that "does not load" almost always comes down to one of four causes: (1) 
 - **A Blockception `.mcattributes`** file can silence validation errors.
 - **JSON pitfalls**: a trailing comma, too many closing brackets or curly (typographic) quotation marks break the whole file. `//` comments mostly work in the game (the editor warns).
 - **Add-on files made by chatbots are often wrong**. Use the MS docs, bedrock.dev and wiki.bedrock.dev as the standard.
+
+### Development options and options.txt
+
+This compares the Windows 1.26.65.1 client code with two real `options.txt` files (user folder and Shared folder); addresses are in `native-notes`.
+
+- Writing a line in `options.txt` does nothing for the 58 `dev_*` options such as `dev_logtimestamp`, `dev_logarea` and `dev_show_display_logged_error`. Right after creating each option object, the registration code clears its storage key string, and both the function that writes the file and the one that reads it skip options whose key length is 0. There is no build flag or `dev_` prefix filter; each option has its key cleared explicitly. None of the 58 appears in either file `{code}`.
+- Another 37 options are created with an empty string as the storage key from the start (`ENABLE_CLIENT_SCRIPT`, `DEBUG_DISABLE_RENDER_*`, `RENDER_BOUNDING_BOXES` and others). Their values live only in memory and cannot be set from a file `{code}`.
+- Development options whose key remains can be set from the file, in the one-line `key:value` format `{code}`.
+
+| Key | Default | Effect |
+|---|---|---|
+| `dev_file_watcher` | on | The call slot of its change observer is an empty function, so it does nothing in retail `{code}` |
+| `dev_enable_texture_hot_reloader` | off | When the value is true and two objects exist, it calls two functions. It connects to the RTTI `_hotReloadTextureAtlases` and appears to be about texture atlas rereading `{code, inferred}`. A link to JSON UI or general pack rereading was not found |
+| `dev_debug_hud` | 0 | The same option as the debug HUD dropdown in the settings screen debug section. The engine has 17 choice names (`off`, `basic`, `camera`, `profiler`, `audio`, `renderchunks` and others), but the mapping between values and choices was not read. A value of 2 in the file becomes 0 after loading `{code, string}` |
+| `dev_marketplace_toggle_all_skins_rotate`, `dev_marketplace_rotation_speed_multiplier` | off, 0 | They look like marketplace skin rotation display settings. The consuming code was not read `{inferred}` |
+| `switch_coin_debug` | off | A settings UI toggle exists. Where the value is read was not found |
+
+- Keys without `dev` in the name are also in the file and serve development and validation (`gfx_debug_trace`, `gpu_validation_enabled`, `load_renderdocdll`, `deep_dark_debug_render`, `game_tips_enabled_for_debug`, `frame_pacing_enabled`, `startup_statistics`, `content_log_file` and others). Their effects are read from the names `{inferred}`.
+- The vanilla `ui/settings_sections/general_section.json` has a developer settings panel, and its entry button appears only when `$debug_settings` is true. That variable is injected by the engine and its source was not read `{code, JSON}`.
+- The 60 feature toggles in the debug section (`dev_expose_hidden_commands`, `ore_ui_debugging`, `enable_packet_profile` and others) are a separate registration from the option enumeration. Whether they are saved to `feature_options.txt` and how a user turns them on were not confirmed, and that file did not exist on this machine `{code}`.
