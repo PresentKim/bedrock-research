@@ -77,6 +77,8 @@ const PROBES = [
   { key: "r", label: "P6 with moving entity and changing block", build: () => buttonsForm("§b§wjc:6", "P6 live", ["ok"]), after: startLiveChanges },
   { key: "h", label: "HUD under form (title after 3 s)", build: () => buttonsForm("plain", "HUD test", ["ok"]), after: (player) => system.runTimeout(() => player.onScreenDisplay.setTitle("JUC during form"), 60) },
   { key: "s", label: "Small form (3 buttons)", build: () => buttonsForm("§b§wjc:4", "3 buttons", ["s0", "s1", "s2"]) },
+  { key: "t", label: "Tester measurements", build: () => buttonsForm("§b§wjc:t", "tester", ["ok"]) },
+  { key: "w", label: "Wheel: 40 buttons", build: () => buttonsForm("wheel probe", "wheel", Array.from({ length: 40 }, (_, i) => `w${i}`)) },
   { key: "a", label: "Title formA:x", build: () => buttonsForm("formA:x", "gate test", ["ok"]) },
   { key: "b", label: "Title formB:y", build: () => buttonsForm("formB:y", "gate test", ["ok"]) },
   { key: "c", label: "Title plain", build: () => buttonsForm("plain", "gate test", ["ok"]) },
