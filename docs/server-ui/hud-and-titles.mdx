@@ -12,7 +12,7 @@ HUD는 게임 중 대부분의 시간 동안 보이는 화면이다. 서버 폼�
 | 채널 | Script API | 팩이 읽는 바인딩 | 특징 |
 | --- | --- | --- | --- |
 | 타이틀 | `player.onScreenDisplay.setTitle(title, options?)` | `#hud_title_text_string` | 가운데에 크게 뜨는 글. 한 번에 하나, 다른 기능과 공유 |
-| 부제목 | `setTitle`의 `options.subtitle`, 이후 `updateSubtitle(text)` | 제목 팩토리가 주는 변수 `$var_subtitle_text`, 바인딩 `#hud_subtitle_text_string` | 타이틀 아래 글 |
+| 부제목 | `setTitle`의 `options.subtitle`, 이후 `updateSubtitle(text)` | 제목 팩토리가 주는 변수 `$subtitle_text`, 바인딩 `#hud_subtitle_text_string` | 타이틀 아래 글 |
 | 액션바 | `setActionBar(text)` | 액션바 글 바인딩 | 타이틀 아래, 핫바 위 글 |
 | 스코어보드 사이드바 | `/scoreboard objectives setdisplay sidebar` | `scoreboard_players` 컬렉션 | 줄은 바꾸기 전까지 남는다 |
 
@@ -191,7 +191,7 @@ HUD 화면(`hud_screen.json`)에 요소를 넣는 기본은 `root_panel`에 `mod
 
 - 제목에 긴 접두어를 붙여 패널용 제목을 가리고, 이름과 정보 줄을 그 뒤에 싣는다. 팩의 위치 자르기(`'%.Ns' * $var_title_text`)는 접두어 길이에 맞춘다. `'%.Ns'`는 바이트로 자르므로, 위치로 자르는 앞쪽 칸은 ASCII로 두고 한글은 맨 뒤에 둔다.
 - 아이콘은 부제목에 고정 폭 칸으로 싣는다. 칸마다 아이템 런타임 ID x 65536을 글자로 채워 넣고(빈 자리는 `x` 같은 글자로 채움), 앞뒤에 글자를 붙여 문자열 형태를 지킨다. 숫자만 보내면 팩이 부제목을 문자열로 다루는 블록 상태 검사가 깨진다(회색 칸, "expected a string" 경고).
-- 팩은 제목 팩토리가 주는 **변수** `$var_subtitle_text`에서 칸을 잘라 채움 글자를 지우고 `property_bag`의 `#item_id_aux`에 넣는다. 패널 글자도 모두 이 변수로 그린다.
+- 팩은 제목 팩토리가 주는 **변수** `$subtitle_text`를 자기 변수 `$var_subtitle_text`로 옮겨 받고(`"$var_subtitle_text": "$subtitle_text"`), 거기서 칸을 잘라 채움 글자를 지우고 `property_bag`의 `#item_id_aux`에 넣는다. 패널 글자도 모두 이 변수로 그린다.
 - 부제목을 제목보다 먼저 보낸다. 일반 제목(레벨 업 등)을 보낼 때는 그 제목이 끝날 때까지 패널을 멈춘다.
 - 시선 추적은 움직이거나 돌 때(최대 0.1초에 한 번)와 0.2초마다 눈에서 6블록까지 광선 검사(공기·액체 제외)로 한다. 작물은 단계에 따라 높이가 (단계 + 1) / 8 블록인 상자로 판정하므로 낮은 작물 위를 보면 뒤 블록이 맞는다. 충돌 상자 없는 블록(꽃 등)은 칸 전체로 판정하면 클라이언트 조준선과 맞는다. 바뀐 것만 보내고 가끔 다시 보낸다.
 - 진행 중인 작업의 원형 게이지는 커스텀 글꼴 글리프로 그릴 수 있다. 글리프 페이지 `glyph_E1`의 둘째 줄(U+E110~U+E11A)에 11프레임을 두고, 패널의 아이템 줄 안에 약 10px(칸의 60%) 크기로 진행도에 맞는 글자를 싣는다.
@@ -221,7 +221,7 @@ HUD 화면(`hud_screen.json`)에 요소를 넣는 기본은 `root_panel`에 `mod
 
 ## 8. HUD 부제목으로 아이템 그리기 `{기록}`
 
-타이틀의 부제목에 아이템 런타임 ID × 65536을 실어 아이콘을 그릴 때, 제목 팩토리가 주는 변수 `$var_subtitle_text`에서 `'%.11s'`로 잘라 `property_bag`의 `#item_id_aux`에 넣으면 그려졌다. 부제목을 숫자만으로 보내면 바닐라의 블록 상태 칸 검사가 깨져 "expected a string" 경고가 난다 (출처: 비공개 조사). 처음 구성에서는 바인딩 `#hud_subtitle_text_string`에서 칸을 꺼낸 아이콘이 비었다. 이 위키의 시험에서는 `property_bag`에 `#item_id_aux: 0`을 두고 `binding_condition: "always"`로 `#hud_subtitle_text_string`의 view 바인딩을 `#item_id_aux`에 걸자 그려졌다(실측, [바인딩 계산식 캐싱](../design/json-ui-performance/binding-expression-caching.mdx) 3절). 두 구성의 차이는 확인하지 않았다(*미검증*).
+타이틀의 부제목에 아이템 런타임 ID × 65536을 실어 아이콘을 그릴 때, 제목 팩토리가 주는 변수 `$subtitle_text`(팩에서는 별칭 `$var_subtitle_text`)에서 `'%.11s'`로 잘라 `property_bag`의 `#item_id_aux`에 넣으면 그려졌다. 부제목을 숫자만으로 보내면 바닐라의 블록 상태 칸 검사가 깨져 "expected a string" 경고가 난다 (출처: 비공개 조사). 처음 구성에서는 바인딩 `#hud_subtitle_text_string`에서 칸을 꺼낸 아이콘이 비었다. 이 위키의 시험에서는 `property_bag`에 `#item_id_aux: 0`을 두고 `binding_condition: "always"`로 `#hud_subtitle_text_string`의 view 바인딩을 `#item_id_aux`에 걸자 그려졌다(실측, [바인딩 계산식 캐싱](../design/json-ui-performance/binding-expression-caching.mdx) 3절). 두 구성의 차이는 확인하지 않았다(*미검증*).
 
 ## 9. 규칙 요약
 
@@ -229,5 +229,5 @@ HUD 화면(`hud_screen.json`)에 요소를 넣는 기본은 `root_panel`에 `mod
 2. 타이틀 채널은 공유 자원이다. 길고 고유한 표식(`CUSTOMHUD:...`)을 붙이고, 자기 표식일 때만 바닐라 타이틀을 숨기고, 다른 기능이 덮어쓸 수 있다고 가정한다.
 3. 늘 떠 있어야 하는 글은 타이틀이 아니라 사이드바 스코어보드나 액션바에 싣는다.
 4. 같은 글의 스코어보드 줄은 합쳐지므로 `§r` 같은 보이지 않는 꼬리로 구분한다.
-5. 부제목에서 값을 꺼낼 때는 `$var_subtitle_text` 변수를 쓰거나, 바인딩이면 `property_bag` 기본값과 `binding_condition: "always"`를 둔다. 숫자 한 글자 플래그는 글자로 쓴다.
+5. 부제목에서 값을 꺼낼 때는 `$subtitle_text` 변수를 쓰거나, 바인딩이면 `property_bag` 기본값과 `binding_condition: "always"`를 둔다. 숫자 한 글자 플래그는 글자로 쓴다.
 6. `SetHud`로 바닐라 HUD를 숨겨도 팩이 더한 요소는 남는다.

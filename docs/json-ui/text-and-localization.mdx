@@ -1,6 +1,6 @@
 ---
 title: 텍스트와 현지화
-description: 라벨 속성, lang 파일, 번역 키 조립, 색 코드, 글꼴, 서버 폼 문자열의 성질(TXT-01~24).
+description: 라벨 속성, lang 파일, 번역 키 조립, 색 코드, 글꼴, 서버 폼 문자열의 성질(TXT-01~29).
 sidebar_position: 8
 sources:
   - repo-guide
@@ -57,12 +57,12 @@ MS Learn `ui_element` 참조(`ms-learn` a9fd1c0)와 Bedrock Wiki JSON UI Documen
 | `color` | `[r, g, b]` (0.0~1.0) | 글자 색. 기본 `[1, 1, 1]` |
 | `locked_color`, `locked_alpha` | 색, 실수 | 부모가 `enabled: false`일 때의 색과 투명도 |
 | `shadow` | 불리언 | 글자 그림자 |
-| `font_size` | `small`, `normal`, `large`, `extra_large` | 글자 크기. 기본 `normal` |
-| `font_scale_factor` | 실수 | 글자 배율. 기본 1.0. MS Learn 표는 타입을 불리언으로 잘못 적었다 |
+| `font_size` | `small`, `normal`, `large`, `extra_large` | 글자 크기. 기본 `normal`. 배율은 차례로 0.5, 1, 2, 4이고 `medium`은 `normal`로 그린다(TXT-05) |
+| `font_scale_factor` | 실수 | 글자 배율. 기본 1.0. `font_size` 배율에 곱한다(TXT-26). MS Learn 표는 타입을 불리언으로 잘못 적었다 |
 | `font_type` | `default`, `rune`, `unicode`, `smooth`, `MinecraftTen` 또는 커스텀 글꼴 | 글꼴 |
 | `backup_font_type` | 글꼴 | `font_type`이 안 될 때 쓰는 글꼴 |
 | `localize` | 불리언 | `text`를 번역할지 |
-| `line_padding` | 숫자 | 줄 간격 |
+| `line_padding` | 숫자 | 줄 간격. 줄마다 더해진다(TXT-27) |
 | `hide_hyphen` | 불리언 | 단어 줄바꿈 때 생기는 하이픈을 숨김 |
 | `enable_profanity_filter` | 불리언 | 욕설 필터 |
 | `text_alignment` | `left`, `center`, `right` | 정렬. 지정하지 않으면 `anchor_from`·`anchor_to`에 따라 자동 |
@@ -77,7 +77,7 @@ MS Learn `ui_element` 참조(`ms-learn` a9fd1c0)와 Bedrock Wiki JSON UI Documen
 - **[TXT-02]** 라벨의 주요 속성: `text`(리터럴, `#바인딩`, `$변수`), `color`, `font_type`, `font_size`, `font_scale_factor`, `text_alignment`(`left`, `center`, `right`), `shadow`, `enable_profanity_filter`, `localize`. `&#123;바닐라&#125;` (출처: VN hud_screen.json:2287-2310, 부록B)
 - **[TXT-03]** `font_type` 값은 `default`, `smooth`, `rune`, `unicode`, `MinecraftTen`이다. 바닐라는 `smooth`(193)와 `MinecraftTen`(21)을 주로 쓴다. `MinecraftSeven` 같은 내부 글꼴 이름을 쓰면 오류 없이 **아무것도 그리지 않는다.** `&#123;실측, 바닐라&#125;` (출처: BC 6.6-6, BC-S7, VN)
 - **[TXT-04]** `#font_type`은 엔진 예약 속성이라 쓰는 즉시 검증된다. 잘못된 별칭은 `NonAssertErrorLog`에 줄마다 남고 마켓플레이스 제출이 막힌다. `&#123;코드&#125;` (출처: BC 6.6-7)
-- **[TXT-05]** `font_size`는 `small`, `normal`, `large`, `extra_large`이고 바닐라는 공식 enum에 없는 `medium`도 4회 쓴다. `&#123;바닐라&#125;` (출처: VN, 부록B)
+- **[TXT-05]** `font_size`는 `small`, `normal`, `large`, `extra_large` 네 값이고 배율은 차례로 0.5, 1, 2, 4다. Windows 1.26.65.1에서 "Ab"는 small 6x5, normal 12x10, large 24x20, extra_large 48x40으로 그려졌다. `medium`은 크기 값이 아니라 `normal`로 그려진다. 엔진의 `font_size` 표에 `medium`이 없고 모르는 값은 `normal`로 읽는다. 그래서 바닐라가 4회 쓰는 `medium`은 `normal`과 같다(부록A C-25). `&#123;실측, 코드, 바닐라&#125;` (출처: VN, 부록B, 2026-11-20 Windows 1.26.65.1 실측과 역컴파일)
 - **[TXT-06]** 라벨은 **숫자 바인딩을 그대로 그리지 못한다.** 문자열과 이어 붙여 `text`에 바인딩한다: `('n=' + #raw)`. 정수만 이어 붙여지고 **문자열 + float은 float 부분이 비어 문자열만 남는다**(`('D ' + 실수)`는 `'D '`, EXP-22). Windows 1.26.65.1에서도 숫자나 참거짓 하나만 `#text`에 넣으면 아무것도 나오지 않았고, `'R' +` 정수는 숫자가 보였고, `'R' +` 실수는 `R`만 남았다([실측 기록](../design/json-ui-claims.mdx#24-숫자)). `&#123;실측&#125;` (출처: BC-facts, BC 6.6-5, BW-type)
 - **[TXT-07]** 빈 라벨이나 `§r`만 든 `default` 크기 라벨도 높이는 한 줄이다. 0으로 접히지 않으므로 행을 없애려면 `#visible`로 숨긴다. `&#123;실측&#125;` (출처: BC-S10)
 - **[TXT-08]** `§` 색 코드는 바인딩된 텍스트에서도 유지된다. 바닐라 `_global_variables.json`에 `§0`~`§f` 16색이 `$0_color_format` … `$f_color_format`으로 정의되어 있어 `"color": "$f_color_format"`처럼 쓸 수 있다. `§g`~`§w`의 색까지 합하면 색 코드 변수는 29개이고, `§w`의 색은 `$party_blue_color`다(TXT-24). `&#123;실측, 바닐라, 작동팩&#125;` (출처: BC-S7, VN _global_variables.json:247, AP 4.9)
@@ -120,6 +120,15 @@ Android 1.26.52.3 클라이언트의 네이티브 라이브러리를 분석해 �
 
 - **[TXT-24]** `§` 색 코드의 실제 색은 `ui/_global_variables.json`의 변수 29개에서 만든다: `$0_color_format`~`$f_color_format`, `$coin_color`(`§g`), `$material_quartz_color`·`iron`·`netherite`·`redstone`·`copper`·`gold`·`emerald`·`diamond`·`lapis`·`amethyst`·`resin`(`§h`~`§v`), `$party_blue_color`(`§w`). 그래서 `§w` 색을 라벨 `color`에 쓰려면 `$party_blue_color`를 쓴다. 팩에서 이 변수를 바꾸면 `§` 색도 바뀔 것으로 보이지만 게임에서는 확인하지 않았다. 변수와 코드의 대응은 순서와 바닐라 주석으로 판단했다. `&#123;코드, 추론&#125;` (출처: NB-11, VN _global_variables.json:238-312)
 - **[TXT-25]** 엔진은 칸의 `#inventory_stack_count`를 미리 글자로 만들어 넣는다: 수량 0(빈 칸)과 1은 빈 글자, 2~99는 그 숫자, 100 이상은 `99+`다. 그래서 수량 1과 빈 칸은 이 값으로 가릴 수 없으므로 `#item_id_aux` 같은 다른 바인딩으로 빈 칸인지 따로 본다(TXT-12, EXP-17). Windows 1.26.63 클라이언트를 읽은 것이고 게임에서 따로 재지 않았다. `&#123;코드&#125;` (출처: NB)
+
+## 8.7 2026-11-20 역컴파일과 실측으로 더한 규칙
+
+네이티브 클라이언트(Windows 1.26.65.1, 일부는 Android 1.26.52.3)를 역컴파일해 읽은 코드를 Windows 1.26.65.1 게임에서 확인한 것이다(2026-11-20). 시험 창은 애드온 `addons/json-ui-claims`의 `juc_tester.json`이다. 크기는 `ui_tree`의 사각형(GUI 단위)으로, 글자 모양은 스크린숏으로 판정했다.
+
+- **[TXT-26]** `font_scale_factor`는 `font_size` 배율에 곱해진다. `font_scale_factor: 2`인 라벨은 `normal`의 두 배 크기로 그려졌다. `&#123;실측, 코드&#125;` (출처: 2026-11-20 Windows 1.26.65.1 실측과 역컴파일)
+- **[TXT-27]** `line_padding`은 줄마다 더해진다. `"a\nb"`를 든 `normal` 라벨의 높이는 `line_padding`이 없을 때 20이고 `line_padding: 4`일 때 28이었다. `&#123;실측, 코드&#125;` (출처: 2026-11-20 Windows 1.26.65.1 실측과 역컴파일)
+- **[TXT-28]** 라벨 폭이 글보다 좁으면 글이 잘리고 끝에 말줄임이 붙는다. 폭 30인 라벨은 `abcd...`를 그렸다. `&#123;실측&#125;` (출처: 2026-11-20 Windows 1.26.65.1)
+- **[TXT-29]** 색 코드(`§a`)는 굵게(`§l`)를 끄지 않는다. 굵게는 `§r`로만 풀린다. 대문자 코드(`§C`)는 효과 없이 사라진다. 형식 코드를 쓴 글에도 그림자는 그려졌다. `&#123;실측&#125;` (출처: 2026-11-20 Windows 1.26.65.1)
 
 ## 근거 표기와 출처 약어
 

@@ -1,6 +1,6 @@
 ---
 title: Images and animation
-description: image properties, progress bars, custom renderers, anim_type and easing, Aseprite flipbooks, the paper doll and NetEase differences, and the entity portrait and progress bar property_bag (ANI-01~43).
+description: image properties, progress bars, custom renderers, anim_type and easing, Aseprite flipbooks, the paper doll and NetEase differences, and the entity portrait and progress bar property_bag (ANI-01~49).
 sidebar_position: 9
 sources:
   - repo-guide
@@ -57,8 +57,8 @@ This is organized from the Sprite table of the Bedrock Wiki JSON UI Documentatio
 | `texture_file_system` | string | Where to read the texture from. `InUserPackage` (default), `InAppPackage`, `RawPath`, `RawPersistent`, `InSettingsDir`, `InExternalDir`, etc. |
 | `nineslice_size` | integer or `[x0, y0, x1, y1]` | 9-slice. Corners fixed, the rest stretches |
 | `tiled` | `true`/`false`/`"x"`/`"y"` | Repeats if the control is bigger than the texture. `tiled_scale` is the scale of the repeat unit |
-| `clip_direction`, `clip_ratio` | `left`/`right`/`up`/`down`, 0.0~1.0 | The side clipping starts from and the ratio. The wiki says to bind a `#*_ratio` binding to `#clip_ratio` with the `always` condition, and that the furnace progress arrow and fuel image work this way |
-| `clip_pixelperfect` | boolean | Clips exactly pixel by pixel where possible |
+| `clip_direction`, `clip_ratio` | `left`/`right`/`up`/`down`/`center`, 0.0~1.0 | The side clipping starts from and the ratio. Without `clip_direction` nothing is clipped, and the default `clip_ratio` is 1.0 (ANI-48). The wiki says to bind a `#*_ratio` binding to `#clip_ratio` with the `always` condition, and that the furnace progress arrow and fuel image work this way |
+| `clip_pixelperfect` | boolean | Clips exactly pixel by pixel where possible. Default `true`, rounding the clip down to texels (ANI-49) |
 | `keep_ratio` | boolean | Keeps the ratio when resizing. Default `true` |
 | `bilinear` | boolean | Bilinear interpolation when resizing. Default `false` |
 | `fill` | boolean | Stretches to the control size. Default `false` |
@@ -277,6 +277,15 @@ These were measured on Windows with a test pack (`UII`) that puts an address tex
 
 - **[ANI-44]** An item whose trim material (`Trim.Material`) holds any text (for example `URL:https://.../x.png`) kept that text when loaded from a `.mcstructure` chest with `/structure load`. A sword, which is not armor, was the same. In chest, inventory and hotbar slots (the HUD hotbar included), the collection binding `#armor_trim_material` returned that raw text. For an item picked up in the chest screen, the global `#inventory_selected_armor_trim_material` returned the same text, but the HUD has no such global value, so a view expression using it produced not even empty text. Armor with an unregistered material drew no vanilla icon, while the sword was drawn. `&#123;measured&#125;` (Source: UII)
 - **[ANI-45]** Giving the text `{"type":7,"url":"<address>"}` to `#profile_image_options` of a `custom` control with `renderer: "profile_image_renderer"` drew the image at that address (GitHub raw PNG, Wikimedia JPEG and PNG). PNG transparency was kept. A GIF did not animate and was drawn as a still image. An address with no response drew nothing. Feeding the part after the marker (`URL:`) of the ANI-44 slot value into this text draws a different image per item over the slot icon without putting the images in the pack. `&#123;measured&#125;` (Source: UII)
+
+## 9.12 Rules added from decompilation and measurement on 2026-11-20
+
+These are code read by decompiling the native client (Windows 1.26.65.1, partly Android 1.26.52.3) and checked in the Windows 1.26.65.1 game (2026-11-20). The test window is `juc_tester.json` in the add-on `addons/json-ui-claims`. 1 GUI was 4 client pixels.
+
+- **[ANI-46]** A control with a `type` the engine does not know is not created, and neither are its children. The content log records `Type 'no_such_type' not recognized for control: <control name>`. The type name must match including case, so `Label` gave the same error. `carousel_label`, which appears once in vanilla, is also missing from the engine's type table and was rejected with the same error. `&#123;measured, code&#125;` (Source: 2026-11-20 Windows 1.26.65.1 measurement and decompilation)
+- **[ANI-47]** If the `renderer` of a `custom` control is a name the engine does not know, the content log records `Unrecognized renderer: 'foo_renderer'` and no renderer is attached. Unlike an unknown `type` (ANI-46), the control itself is created. `&#123;measured, code&#125;` (Source: 2026-11-20 Windows 1.26.65.1 measurement and decompilation)
+- **[ANI-48]** `clip_ratio` clips only when `clip_direction` is present. An image with `clip_ratio: 0.5` and no `clip_direction` was not clipped. An image with only `clip_direction: "left"` and `clip_ratio` omitted drew nothing, because the default is 1.0. `clip_direction` takes `left`, `right`, `up`, `down` and `center`. With `clip_pixelperfect: false`, `left` 0.25 showed the left 75%, `down` 0.5 the lower half and `center` 0.5 the middle 50%. So the part that remains is on the `clip_direction` side. `&#123;measured, code&#125;` (Source: 2026-11-20 Windows 1.26.65.1 measurement and decompilation)
+- **[ANI-49]** `clip_pixelperfect` defaults to `true` and rounds the clip edge down to texels of the texture. With texture `textures/ui/White`, the ANI-48 images without `clip_pixelperfect` showed only a 1 GUI wide strip on the left for `left` 0.25, only a 1 GUI row at the bottom for `down` 0.5, and nothing for `center` 0.5. For a bar that shows a ratio by stretching a small texture, give `clip_pixelperfect: false` (Example 3). `&#123;measured, code&#125;` (Source: 2026-11-20 Windows 1.26.65.1 measurement and decompilation)
 
 ## How evidence is marked and source abbreviations
 

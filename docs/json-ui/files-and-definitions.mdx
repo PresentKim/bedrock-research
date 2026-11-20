@@ -1,6 +1,6 @@
 ---
 title: "파일과 정의"
-description: "UI 파일 등록, namespace, 상속과 변수, ignored, 경로 키, property_bag 규칙(FILE-01~FILE-43)과 반영안"
+description: "UI 파일 등록, namespace, 상속과 변수, ignored, 경로 키, property_bag 규칙(FILE-01~FILE-47)과 반영안"
 sidebar_position: 2
 sources:
   - repo-guide
@@ -157,9 +157,9 @@ JSON UI는 리소스팩 `ui/` 폴더의 JSON 파일들로 이루어진다. 파�
 ### 1.4 생성 여부 정하기: `ignored`
 
 - **[FILE-16]** `"ignored": "<$변수 식>"`이 참이면 그 컨트롤은 **아예 생성되지 않는다**(바인딩과 레이아웃 비용도 없음). 식에는 `$변수`만 쓰고 `#바인딩`은 쓸 수 없다. `ignored`는 그 컨트롤 자신의 `$` 선언이 아니라 바깥(부모) 스코프에서 평가된다(FILE-34). `{바닐라, 실측, 코드}` (출처: VN 958회, BC-S8, BW-best, NB-10)
-- **[FILE-17]** `ignored`는 컨트롤이 **생성되는 시점에 한 번** 평가된다. 그래서 런타임 데이터로 생성을 가르려면 데이터가 변수로 들어오는 경로가 필요하다. HUD 타이틀 팩토리가 만든 컨트롤은 `$title_text`로 타이틀 문자열을 받으므로 `ignored`로 거를 수 있다. 일반 서버 폼 화면 안에는 그런 경로가 없어 생성 단위 분기에 팩토리 길이를 쓴다(컬렉션과 팩토리 장). 팩토리가 주는 변수는 만들어진 컨트롤의 바깥 스코프로 들어가므로 그 컨트롤의 최상위 `ignored`가 읽을 수 있다(FILE-34). `{작동팩, 실측, 코드, 추론}` (출처: AP 4.1, BC-S8·S11, 충돌 C-17, CN)
+- **[FILE-17]** `ignored`는 컨트롤이 **생성되는 시점에 한 번** 평가된다. 그래서 런타임 데이터로 생성을 가르려면 데이터가 변수로 들어오는 경로가 필요하다. HUD 타이틀 팩토리(`hud_title_text_factory`)가 만든 컨트롤은 `$title_text`로 타이틀 문자열을, `$subtitle_text`로 부제목 문자열을 받으므로 `ignored`나 `variables`의 `requires`로 거를 수 있다. Windows 1.26.65.1에서 `requires`가 `$subtitle_text`를 비교해 블록을 골랐다(FILE-47). 일반 서버 폼 화면 안에는 그런 경로가 없어 생성 단위 분기에 팩토리 길이를 쓴다(컬렉션과 팩토리 장). 팩토리가 주는 변수는 만들어진 컨트롤의 바깥 스코프로 들어가므로 그 컨트롤의 최상위 `ignored`가 읽을 수 있다(FILE-34). `{작동팩, 실측, 코드, 추론}` (출처: AP 4.1, BC-S8·S11, 충돌 C-17, CN, 2026-11-20 Windows 1.26.65.1)
 - **[FILE-18]** `button_mappings`의 항목 하나처럼 **배열 원소**에도 `ignored`를 붙일 수 있다. `{바닐라, 작동팩}` (출처: VN gameplay_common.json:272, AP 4.3)
-- **[FILE-19]** `ignored`/`requires`의 변수 식에서 `$v > 'a'`는 문자열인지, `$v > 0`은 숫자인지 판별하는 데 쓰였다. `ignored`는 자기 `$` 선언과 참조 지점에서 받은 값을 보지 못하므로(FILE-34), 변수를 받는 컨트롤의 **자식**에 단다. 아래 예시가 AP 원본의 형태다. `{작동팩, 코드}` (출처: AP 4.7, CN, AP-samples _screen.r4ui:321)
+- **[FILE-19]** `ignored`/`requires`의 변수 식에서 `$v > 'a'`는 문자열인지 판별하는 데 쓰였다. `$v > 0`은 숫자를 판별하지 못한다: 한쪽만 문자열인 `>`는 왼쪽이 참으로 읽히고 오른쪽이 거짓으로 읽히면 참이라, 비어 있지 않은 문자열도 참이다(Windows 1.26.65.1에서 `'abc' > 0`이 참). 그래서 아래 AP 원본의 `item_icon`은 `$icon`이 텍스처 경로여도 만들어진다. 숫자 쪽 칸은 `($icon > 'a')`가 참일 때 거른다(코드). `ignored`는 자기 `$` 선언과 참조 지점에서 받은 값을 보지 못하므로(FILE-34), 변수를 받는 컨트롤의 **자식**에 단다. 아래 예시가 AP 원본의 형태다. `{작동팩, 코드, 실측}` (출처: AP 4.7, CN, AP-samples _screen.r4ui:321, 2026-11-20 Windows 1.26.65.1)
 
 ```jsonc
 // 참조 지점: { "icon@my_ns.icon_slot": { "$icon": "textures/items/stick" } }
@@ -210,6 +210,15 @@ Cinnabar(`CN`)는 26.30 네이티브 클라이언트의 JSON UI 해석기를 재
 Android 1.26.52.3 클라이언트의 네이티브 라이브러리를 분석해 읽은 것이다(`NB`). 수준은 `코드`다.
 
 - **[FILE-43]** 엔진은 컨트롤마다 **`ignored`를 가장 먼저** 평가하고, 참이면 그 컨트롤의 `variables` 적용을 포함한 나머지 처리를 하지 않는다. 그래서 자기 `variables`(조건부 변수 포함)로 정한 값은 자기 `ignored`에 닿지 않는다(FILE-34). `ignored`에 실수·배열·객체를 넣으면 `An invalid value was provided for "ignored" field.` 오류다. `variables`는 객체 하나 또는 객체 배열을 받고, 배열 안 객체가 아닌 항목은 건너뛴다. `{코드}` (출처: NB-10)
+
+### 1.10 2026-11-20 역컴파일과 실측으로 더한 규칙
+
+Windows 1.26.65.1에서 2026-11-19~2026-11-20에 실측한 것이다. HUD 제목 팩토리 시험은 [actor_portrait_renderer 4절](../design/hidden-elements/actor-portrait-renderer.mdx#4-엔티티-id와-사용의-한계)에 기록이 있고, 나머지는 측정 애드온 `json-ui-claims`의 시험 창 `juc_tester.json`([측정 애드온](../design/json-ui-claims.mdx#8-측정-애드온))에서 쟀다. 코드 근거는 Android 1.26.52.3과 Windows 1.26.65.1 역컴파일이다.
+
+- **[FILE-44]** `requires`가 없는 `variables` 블록은 적용되지 않는다. 엔진은 없는 `requires`를 null로 보고 그 블록을 건너뛴다. 늘 쓸 값은 `variables` 밖에 `$` 키로 둔다. `{실측, 코드}` (출처: 2026-11-20 Windows 1.26.65.1, 2026-11-20 역컴파일)
+- **[FILE-45]** `requires`와 `ignored`에는 바인딩 문맥이 없어서 `#x`는 null이 아니라 글자 `#x`로 계산된다. `"requires": "(#x)"`는 블록을 적용했고 `"requires": "(not #x)"`는 적용하지 않았다. `"ignored": "(#x = '#x')"`는 컨트롤을 만들지 않았고, `"ignored": "yes"`는 만들었다(`ignored`에서 효과가 있는 값은 불리언과 정수뿐이다, FILE-35, FILE-43). 그래서 `requires`, `ignored`로 바인딩 값을 검사할 수 없다(FILE-16). `{실측, 코드}` (출처: 2026-11-20 Windows 1.26.65.1, 2026-11-20 역컴파일)
+- **[FILE-46]** **`variables`의 `requires`에 정의되지 않은 `$변수`를 쓰지 않는다.** Windows 1.26.65.1에서 `requires`에 어디에도 없는 `$nosuch_var`를 쓰자 콘텐츠 로그에 `Expected variable not found in ancestor tree: '$nosuch_var'`가 34만 줄 넘게 쌓이고 게임이 멈춰 강제 종료해야 했다. `requires`가 읽는 변수는 그 컨트롤이나 조상에 `|default`로라도 선언해 둔다. `{실측}` (출처: 2026-11-20 Windows 1.26.65.1)
+- **[FILE-47]** `requires`가 `$subtitle_text`를 비교하는 `variables` 블록으로 `property_bag`에 넣을 JSON 정수를 고를 수 있고, 64비트 정수도 된다. `{ "requires": "($subtitle_text = '-8589934591')", "$id": -8589934591 }`로 고른 `$id`를 `"property_bag": { "actor_id": "$id" }`에 넣자 `actor_portrait_renderer`가 그 엔티티를 그렸다. JSON 정수를 담은 변수는 `property_bag`에 치환될 때 정수로 남는다. 바인딩은 정수를 32비트로 자르므로(BND-38) 64비트 값은 이 길로 넣는다. `{실측}` (출처: 2026-11-20 Windows 1.26.65.1)
 
 ## 커뮤니티 보고로 더한 사실 (커뮤니티)
 

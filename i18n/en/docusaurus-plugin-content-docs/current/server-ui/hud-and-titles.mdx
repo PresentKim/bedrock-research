@@ -12,7 +12,7 @@ The HUD is the screen visible most of the time during play. Unlike server forms,
 | Channel | Script API | Binding the pack reads | Characteristics |
 | --- | --- | --- | --- |
 | Title | `player.onScreenDisplay.setTitle(title, options?)` | `#hud_title_text_string` | Large text in the center. One at a time, shared with other features |
-| Subtitle | `options.subtitle` of `setTitle`, then `updateSubtitle(text)` | The variable `$var_subtitle_text` that the title factory provides, binding `#hud_subtitle_text_string` | Text under the title |
+| Subtitle | `options.subtitle` of `setTitle`, then `updateSubtitle(text)` | The variable `$subtitle_text` that the title factory provides, binding `#hud_subtitle_text_string` | Text under the title |
 | Action bar | `setActionBar(text)` | Action bar text binding | Text under the title and above the hotbar |
 | Scoreboard sidebar | `/scoreboard objectives setdisplay sidebar` | `scoreboard_players` collection | Lines remain until changed |
 
@@ -191,7 +191,7 @@ This is a HUD panel that shows the name, icon and information of the block you l
 
 - Put a long prefix on the title to hide the panel's title, and load the name and info lines after it. The pack's position cut (`'%.Ns' * $var_title_text`) matches the prefix length. `'%.Ns'` cuts by bytes, so keep the front slots that are cut by position in ASCII and put non-ASCII text such as Korean at the very end.
 - Load icons into the subtitle in fixed-width slots. Fill each slot with the item runtime ID x 65536 as text (fill empty positions with a letter such as `x`), and attach letters before and after to preserve the string form. If you send only digits, the block state check, in which the pack treats the subtitle as a string, breaks (gray slot, an "expected a string" warning).
-- The pack cuts slots from the **variable** `$var_subtitle_text` that the title factory provides, erases the filler letters, and puts the result in `#item_id_aux` of `property_bag`. The panel text is also all drawn with this variable.
+- The pack takes the **variable** `$subtitle_text` that the title factory provides into its own variable `$var_subtitle_text` (`"$var_subtitle_text": "$subtitle_text"`), cuts slots from it, erases the filler letters, and puts the result in `#item_id_aux` of `property_bag`. The panel text is also all drawn with this variable.
 - Send the subtitle before the title. When sending a regular title (level up and so on), pause the panel until that title ends.
 - Line-of-sight tracing runs when moving or turning (at most once per 0.1 s) and every 0.2 s, with a ray check (excluding air and liquid) up to 6 blocks from the eyes. Crops are judged as a box (stage + 1) / 8 of a block high, so looking over a short crop hits the block behind it. Blocks without a collision box (flowers and so on) are judged as the whole cell, which matches the client crosshair. Send only what changed and occasionally resend.
 - A circular gauge for work in progress can be drawn with custom font glyphs. Put 11 frames in the second row of the glyph page `glyph_E1` (U+E110 to U+E11A), and place the character for the current progress in the panel's item line at about 10 px (60% of a slot).
@@ -221,7 +221,7 @@ A setup without redefining that panel also exists `{code}` (not yet checked in g
 
 ## 8. Drawing items with the HUD subtitle `{record}`
 
-When carrying item runtime ID x 65536 in the title's subtitle to draw an icon, the icon was drawn when cut with `'%.11s'` from the variable `$var_subtitle_text` that the title factory provides and put into `#item_id_aux` of `property_bag`. Sending the subtitle as digits only breaks the vanilla block state slot check and gives an "expected a string" warning (Source: private research). In the earlier setup, an icon that took the slot from the binding `#hud_subtitle_text_string` stayed empty. In this wiki's test, with `#item_id_aux: 0` in `property_bag` and a view binding from `#hud_subtitle_text_string` to `#item_id_aux` with `binding_condition: "always"`, the icon was drawn (measured, section 3 of [Binding expression caching](../design/json-ui-performance/binding-expression-caching.mdx)). The difference between the two setups was not checked (*unverified*).
+When carrying item runtime ID x 65536 in the title's subtitle to draw an icon, the icon was drawn when cut with `'%.11s'` from the variable `$subtitle_text` that the title factory provides (the pack's alias `$var_subtitle_text`) and put into `#item_id_aux` of `property_bag`. Sending the subtitle as digits only breaks the vanilla block state slot check and gives an "expected a string" warning (Source: private research). In the earlier setup, an icon that took the slot from the binding `#hud_subtitle_text_string` stayed empty. In this wiki's test, with `#item_id_aux: 0` in `property_bag` and a view binding from `#hud_subtitle_text_string` to `#item_id_aux` with `binding_condition: "always"`, the icon was drawn (measured, section 3 of [Binding expression caching](../design/json-ui-performance/binding-expression-caching.mdx)). The difference between the two setups was not checked (*unverified*).
 
 ## 9. Rule summary
 
@@ -229,5 +229,5 @@ When carrying item runtime ID x 65536 in the title's subtitle to draw an icon, t
 2. The title channel is a shared resource. Attach a long unique marker (`CUSTOMHUD:...`), hide the vanilla title only when it is your own marker, and assume other features can overwrite it.
 3. Put text that must always be shown on the sidebar scoreboard or the action bar, not the title.
 4. Scoreboard lines with the same text are merged, so tell them apart with an invisible tail such as `§r`.
-5. When taking a value out of the subtitle, use the `$var_subtitle_text` variable, or, for a binding, give it a `property_bag` default and `binding_condition: "always"`. Write one-digit numeric flags as letters.
+5. When taking a value out of the subtitle, use the `$subtitle_text` variable, or, for a binding, give it a `property_bag` default and `binding_condition: "always"`. Write one-digit numeric flags as letters.
 6. Even if you hide the vanilla HUD with `SetHud`, elements the pack added remain.

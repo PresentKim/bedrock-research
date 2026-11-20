@@ -1,6 +1,6 @@
 ---
 title: Text and localization
-description: Label properties, lang files, assembling translation keys, color codes, fonts, and properties of server form strings (TXT-01~24).
+description: Label properties, lang files, assembling translation keys, color codes, fonts, and properties of server form strings (TXT-01~29).
 sidebar_position: 8
 sources:
   - repo-guide
@@ -57,12 +57,12 @@ This combines the Text tables of the MS Learn `ui_element` reference (`ms-learn`
 | `color` | `[r, g, b]` (0.0~1.0) | Text color. Default `[1, 1, 1]` |
 | `locked_color`, `locked_alpha` | color, real number | The color and opacity when the parent is `enabled: false` |
 | `shadow` | boolean | Text shadow |
-| `font_size` | `small`, `normal`, `large`, `extra_large` | Text size. Default `normal` |
-| `font_scale_factor` | real number | Text scale. Default 1.0. The MS Learn table wrongly lists the type as boolean |
+| `font_size` | `small`, `normal`, `large`, `extra_large` | Text size. Default `normal`. The scales are 0.5, 1, 2 and 4 in that order, and `medium` draws as `normal` (TXT-05) |
+| `font_scale_factor` | real number | Text scale. Default 1.0. Multiplies the `font_size` scale (TXT-26). The MS Learn table wrongly lists the type as boolean |
 | `font_type` | `default`, `rune`, `unicode`, `smooth`, `MinecraftTen` or a custom font | Font |
 | `backup_font_type` | font | The font to use when `font_type` does not work |
 | `localize` | boolean | Whether to translate `text` |
-| `line_padding` | number | Line spacing |
+| `line_padding` | number | Line spacing. Added to every line (TXT-27) |
 | `hide_hyphen` | boolean | Hides the hyphen produced when wrapping a word |
 | `enable_profanity_filter` | boolean | Profanity filter |
 | `text_alignment` | `left`, `center`, `right` | Alignment. If not specified, automatic according to `anchor_from` and `anchor_to` |
@@ -77,7 +77,7 @@ This combines the Text tables of the MS Learn `ui_element` reference (`ms-learn`
 - **[TXT-02]** Main label properties: `text` (literal, `#binding`, `$variable`), `color`, `font_type`, `font_size`, `font_scale_factor`, `text_alignment` (`left`, `center`, `right`), `shadow`, `enable_profanity_filter`, `localize`. `&#123;vanilla&#125;` (Source: VN hud_screen.json:2287-2310, Appendix B)
 - **[TXT-03]** The `font_type` values are `default`, `smooth`, `rune`, `unicode` and `MinecraftTen`. Vanilla mainly uses `smooth` (193) and `MinecraftTen` (21). Using an internal font name such as `MinecraftSeven` **draws nothing** with no error. `&#123;measured, vanilla&#125;` (Source: BC 6.6-6, BC-S7, VN)
 - **[TXT-04]** `#font_type` is an engine-reserved property, so it is validated the moment it is used. A wrong alias is logged line by line in `NonAssertErrorLog` and blocks marketplace submission. `&#123;code&#125;` (Source: BC 6.6-7)
-- **[TXT-05]** `font_size` is `small`, `normal`, `large` and `extra_large`, and vanilla also uses `medium`, which is not in the official enum, 4 times. `&#123;vanilla&#125;` (Source: VN, Appendix B)
+- **[TXT-05]** `font_size` has four values, `small`, `normal`, `large` and `extra_large`, with scales 0.5, 1, 2 and 4 in that order. On Windows 1.26.65.1 "Ab" drew as small 6x5, normal 12x10, large 24x20 and extra_large 48x40. `medium` is not a size value and draws as `normal`. The engine's `font_size` table has no `medium` and reads an unknown value as `normal`. So the `medium` that vanilla uses 4 times is the same as `normal` (Appendix A C-25). `&#123;measured, code, vanilla&#125;` (Source: VN, Appendix B, 2026-11-20 Windows 1.26.65.1 measurement and decompilation)
 - **[TXT-06]** A label **cannot draw a numeric binding as is.** Join it to a string and bind it to `text`: `('n=' + #raw)`. Only integers join, and **in string + float the float part is empty and only the string is left** (`('D ' + float)` gives `'D '`, EXP-22). On Windows 1.26.65.1 too, a number or boolean alone in `#text` showed nothing, `'R' +` an integer showed the digits, and `'R' +` a float left only `R` ([measurement record](../design/json-ui-claims.mdx#24-numbers)). `&#123;measured&#125;` (Source: BC-facts, BC 6.6-5, BW-type)
 - **[TXT-07]** An empty label, or a `default` size label containing only `§r`, still has a height of one line. It does not collapse to 0, so to remove a row, hide it with `#visible`. `&#123;measured&#125;` (Source: BC-S10)
 - **[TXT-08]** `§` color codes are kept in bound text too. Vanilla `_global_variables.json` defines the 16 colors `§0` to `§f` as `$0_color_format` … `$f_color_format`, so you can write `"color": "$f_color_format"`. Counting the colors of `§g` to `§w`, there are 29 color code variables, and the color of `§w` is `$party_blue_color` (TXT-24). `&#123;measured, vanilla, working pack&#125;` (Source: BC-S7, VN _global_variables.json:247, AP 4.9)
@@ -120,6 +120,15 @@ These were read by analyzing the native library of the Android 1.26.52.3 client 
 
 - **[TXT-24]** The actual colors of `§` color codes are built from 29 variables in `ui/_global_variables.json`: `$0_color_format` to `$f_color_format`, `$coin_color` (`§g`), `$material_quartz_color`, `iron`, `netherite`, `redstone`, `copper`, `gold`, `emerald`, `diamond`, `lapis`, `amethyst` and `resin` (`§h` to `§v`), and `$party_blue_color` (`§w`). So to use the `§w` color in a label `color`, use `$party_blue_color`. If a pack changes these variables, the `§` colors appear to change too, but this was not checked in game. The mapping between variables and codes was judged from the order and vanilla comments. `&#123;code, inferred&#125;` (Source: NB-11, VN _global_variables.json:238-312)
 - **[TXT-25]** The engine builds a slot's `#inventory_stack_count` as text in advance: count 0 (empty slot) and 1 are empty text, 2 to 99 are the number, and 100 or more is `99+`. So this value cannot tell count 1 from an empty slot; check emptiness separately with another binding such as `#item_id_aux` (TXT-12, EXP-17). This was read from the Windows 1.26.63 client and not measured separately in game. `&#123;code&#125;` (Source: NB)
+
+## 8.7 Rules added from decompilation and measurement on 2026-11-20
+
+These are code read by decompiling the native client (Windows 1.26.65.1, partly Android 1.26.52.3) and checked in the Windows 1.26.65.1 game (2026-11-20). The test window is `juc_tester.json` in the add-on `addons/json-ui-claims`. Sizes were judged from the `ui_tree` rectangles (GUI units) and the look of the text from screenshots.
+
+- **[TXT-26]** `font_scale_factor` multiplies the `font_size` scale. A label with `font_scale_factor: 2` drew at twice the `normal` size. `&#123;measured, code&#125;` (Source: 2026-11-20 Windows 1.26.65.1 measurement and decompilation)
+- **[TXT-27]** `line_padding` is added to every line. A `normal` label holding `"a\nb"` was 20 high without `line_padding` and 28 high with `line_padding: 4`. `&#123;measured, code&#125;` (Source: 2026-11-20 Windows 1.26.65.1 measurement and decompilation)
+- **[TXT-28]** A label narrower than its text cuts the text and ends it with an ellipsis. A label 30 wide drew `abcd...`. `&#123;measured&#125;` (Source: 2026-11-20 Windows 1.26.65.1)
+- **[TXT-29]** A color code (`§a`) does not turn off bold (`§l`). Bold is reset only by `§r`. An uppercase code (`§C`) has no effect and disappears. The shadow was still drawn on text with format codes. `&#123;measured&#125;` (Source: 2026-11-20 Windows 1.26.65.1)
 
 ## How evidence is marked and source abbreviations
 
