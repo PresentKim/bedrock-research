@@ -278,6 +278,7 @@ BP 엔티티 파일(`BP/entities/*.json`)은 `minecraft:entity` 아래에 `descr
 ### 공격 모드와 특수 공격
 
 - 근접/원거리 모드 전환은 `minecraft:target_nearby_sensor`(`inside_range`, `outside_range`, `on_inside_range`/`on_outside_range` 이벤트)로 `melee_mode`/`ranged_mode` 그룹을 바꾼다(blaze, breeze, drowned 참고). 공격 도중 바뀌지 않도록 가드를 둔다.
+- 대상과 거리를 유지하는 전용 컴포넌트는 없다. 같은 `minecraft:target_nearby_sensor`와 컴포넌트 그룹 교체로 이동 값을 바꾼다. 플레이어에게 너무 붙어 공격이 빗나가는 몹은 스크립트가 대상 거리와 시야를 확인해 범위 안이면 작은 넉백이나 `applyImpulse`로 밀어내서 고쳤다. (single report)
 - 공격 여러 개는 공격마다 그룹 하나를 두고 전환 시 다른 그룹을 제거한다. `randomize`로 고르고 순찰 모드 전환에 `entity_sensor`를 반복해서 쓰지 않는다(다른 모드가 초기화됨).
 - `delayed_attack`와 `melee_attack`을 한 몹에 같이 쓰지 않는다. `behavior.delayed_attack`의 `on_attack` 이벤트는 발동하지 않는다(버그)이니 타이머 컴포넌트를 쓴다.
 - 시야 없이 쏘기(Breeze식)는 `behavior.ranged_attack` 대신 `behavior.fire_at_target`(`pre_shoot_delay`, `post_shoot_delay`, `attack_cooldown`, `attack_range`, `projectile_def`, `owner_anchor`/`owner_offset`, `target_anchor`/`target_offset`, `ranged_fov`)을 쓴다. `burst_shots`가 없으니 `minecraft:timer`와 그룹 추가 이벤트로 연사한다. wither의 사격은 하드코딩이다.
@@ -612,6 +613,7 @@ proj.shoot({ x: v.x * 1.5, y: v.y * 1.5, z: v.z * 1.5 });
 - 플레이어에 렌더 컨트롤러를 추가하려면 `player.entity.json`을 덮어써야 한다(대안은 플레이어에 탄 BP 엔티티). `controller.render.player.third_person`에 추가 컨트롤러를 두고 `part_visibility`(`rightArm`, `rightSleeve`, `leftArm`, `leftSleeve`, `head`, `hat`)로 팔다리를 숨긴다. 바닐라 플레이어를 숨기려면 모든 뼈를 숨기는 `controller.render.default` 사본을 앞에 둔다(루트를 0으로 스케일하면 커스텀 팔과 아이템도 사라진다).
 - paper doll(일시정지 화면) 오류 `query.property/has_property does not have an actor`는 `!variable.is_paperdoll`/`!query.is_in_ui`로 막는다. paper doll이 보이는 동안 `/playanimation`과 파티클을 쓰면 복사본이 생긴다. 1인칭 추가 렌더 컨트롤러 조건 예: `!variable.is_paperdoll && !variable.map_face_icon && !query.is_spectator && query.property('addon:extra') != 'x'`.
 - 보이지 않는 플레이어는 유효하지 않은 렌더 컨트롤러 참조가 원인이다. `friendly name 'geometry.default' not found`는 geometry 짧은 이름과 렌더 컨트롤러 참조가 맞지 않거나 오타일 때 난다. 기본 모델은 교체할 수 없고 하나를 추가하고 기본을 숨긴다.
+- 커스텀 플레이어 모델은 `player.entity.json`의 `geometries`에 모델을 추가하고 커스텀 렌더 컨트롤러로 1인칭과 3인칭을 모두 덮어쓴다. `geometry.humanoid.custom`을 쓰는 임포트 커스텀 스킨 팩은 이 방식과 함께 동작하고, 자체 모델을 가진 Marketplace 스킨 팩은 깨진다는 보고가 있다. (single report)
 - 커스텀 플레이어 모델과 아이템 위치는 `leftItem`/`rightItem` 피벗을 기본 플레이어 geo와 같게 둔다(leftItem pivot [6,15,1] 부모 leftArm, rightItem pivot [-6,15,1] 로케이터 `lead_hold`). 뼈를 옮기지 말고 애니메이션으로 위치를 옮긴다. 뼈를 추가하면 아이템 배치가 깨진다. Blockbench용 플레이어 geometry는 bedrock-samples `resource_pack/models/mobs.json`의 `humanoid.custom:geometry.humanoid`다.
 - 플레이어 애니메이션: 걷기는 `animation.player.move.arms` + `animation.player.move.legs`(NPC는 합친 `animation.humanoid.move`)다. 바닐라 휘두르기는 하드코딩이고 `v.attack_speed`/`v.attack`로 구동되며 Molang에서 읽기 전용이다. 1인칭 공격은 `animation.player.first_person.attack_rotation`이다. 채굴 속도는 haste/mining_fatigue로 바꾸고 팔은 휘두르지 않는다.
 - 1인칭에서 RP 애니메이션을 재생/중지할 때 깜빡이면 덮어쓰는 애니메이션을 player.animation.json 맨 끝에 두고 간격을 줄인다. 1인칭/3인칭은 애니메이션 상태는 따로지만 Molang 변수는 공유한다. 차단/비공개 Molang 변수를 읽는 커스텀 플레이어 컨트롤러는 타격 애니메이션과 3인칭 활을 깨뜨린다.
