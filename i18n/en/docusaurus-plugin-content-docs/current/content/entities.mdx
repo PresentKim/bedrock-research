@@ -89,12 +89,12 @@ The responses an event can give are as follows (Source: bedrock-wiki, entity-eve
 
 ### format_version and schema errors
 
-- `found in the input, but is not present in the Schema` mostly means the entity `format_version` is low compared to the component. It was reported for `minecraft:is_sheared`, `rotation_locked_to_vehicle`, `remove_in_peaceful`, `swing` in interact and `deals_damage` of `damage_sensor`. Raise to 1.21.100 or higher. Putting an event or a listener such as `minecraft:on_death` in the wrong place gives the same warning. Events must be inside `"events"`.
+- `found in the input, but is not present in the Schema` mostly means the entity `format_version` is low compared to the component. It was reported for `minecraft:is_sheared`, `rotation_locked_to_vehicle`, `remove_in_peaceful`, `swing` in interact and `deals_damage` of `damage_sensor`. Raise to 1.21.100 or higher. `remove_in_peaceful` is the exception: raising the format does not fix it (below). Putting an event or a listener such as `minecraft:on_death` in the wrong place gives the same warning. Events must be inside `"events"`.
 - The latest format is roughly the same as the latest game version (entity 1.26.40, game 26.44 as of 2026-08-20). bridge. does not support format 1.26.20 or higher, so VS Code is recommended.
 - If an entity disappears after raising the format, the cause is an old form such as `"minecraft:fire_immune": true` (content log: `expected an object`). The Blockception VSCode plugin flags old components.
 - As a counter case, there is a report that a mob that did not chase was fixed by adding the `attack` component and changing the format from 1.26 to 1.16. (single report)
 - Change `run_command` to `queue_command`. If a component exists only in format 1.16.0, replace it with the Script API.
-- `minecraft:remove_in_peaceful` was added in 1.21.90.20 and dropped from the example in 1.21.90.25 with no changelog entry and gives a schema error. Together with `is_sheared` it is uncertain whether it really exists. (unverified)
+- `minecraft:remove_in_peaceful` was added in 1.21.90.20 and dropped from the example in 1.21.90.25 with no changelog entry and gives a schema error. On Windows 1.26.65.1 it was rejected in a format 1.21.90 entity with `this component was found in the input, but is not present in the Schema`, and the name is not in the client code either `{measured, code}`. Whether `is_sheared` really exists is uncertain. (unverified)
 - Molang cannot be used in most component values. They accept only constants, strings are parsed as 0.0, and putting `query.scoreboard` in `minecraft:health.max` kills the entity. To change values, use component groups. Molang expressions cannot be used in filter `value` either.
 - `minecraft:scale` is an object: `{ "value": 0.5 }`.
 - Wrongly writing a component that should be an object, such as `"minecraft:burns_in_daylight": true`, can make the entity disappear with no content log error (no spawn egg and cannot be summoned). It was fixed by changing to `{}`. (single report)
@@ -128,6 +128,7 @@ The responses an event can give are as follows (Source: bedrock-wiki, entity-eve
 ### Entity version upgrade system
 
 - In format 1.26.20 and `use_beta_features: true`, use `description.entity_version.upgrades: [{"upgrade_to": 1, "name": "x"}]` and the top-level `"upgrades": {"x": {"add": {"component_groups": ["ww"]}}}`. It applies automatically and is better than the old way. As of 2026-04 no vanilla mob uses it. (single report)
+- The rules for the `upgrades` array reject the entity when broken: `upgrade_to` 0 is reserved, `name` must not be empty, the same version number cannot be used twice, and versions must start at 1 with no gap `{code, measured}` ([section 17](#property-and-description-validation)). The top-level `upgrades` exists from v1_26_30 in the code's document struct `{code}`.
 - The old way was, like the vanilla wolf, to put a bool property `minecraft:was_upgraded_to_1_21_100` (`client_sync` false), fire an event that adds a group with a `bool_property != true` filter, and then do `set_property` true.
 - Atomic client entities appeared in Preview 1.26.70.21. Animations must be duplicated per piece and are not shared. (unverified)
 
@@ -187,7 +188,7 @@ The responses an event can give are as follows (Source: bedrock-wiki, entity-eve
 
   Set it with the event `set_property` or `entity.setProperty` and read it in the RP with `q.property('ns:x')` (render controller `Array.x[query.property('ns:x')]`, geometry arrays also work). Without `client_sync: true` the client cannot see it. If an enum property has no `default` and `client_sync`, every RP query fails. This was also the cause of a `player.json` property failing. (confirmed, Source: bedrock-wiki entities/entity-properties)
 - The limit is 32 per entity (`player.json` is also 32). Use only a few enum/int with many values, and for booleans use bit packing, put several values in the decimal places of one number, or split them across several entities. There is also a case that used a float range [0,200] as a 200-way variant switch. For bulk data such as pixel-level particle skins, Molang variables are faster than properties.
-- The limit is **conflicting**. There is a report that put the entity property limit at 30, and a case where a large pack hit the player property limit. There is also a case that packed 20-bit flags into one int property (max 1,048,575). With a `play`/`stop` controller per bit, each checking its own bit as in `math.mod(math.floor(q.property('ns:bits') / 8192), 2) != 0`, bit 0 and bit 13 of a 0 to 16383 property turned on and off independently (values 1, 2, 8192, 8193, [measurement record](../design/json-ui-claims.mdx#66-block-uv-controller-override-sounds-languages-animation-weight), 2026-11-19 Windows 1.26.65.1).
+- The limit was **conflicting**, but measured on Windows 1.26.65.1 a 33rd property is rejected with `Too many properties on the definition (Limit is 32)` and 32 pass `{measured}`. There is a report that put the entity property limit at 30, and a case where a large pack hit the player property limit. There is also a case that packed 20-bit flags into one int property (max 1,048,575). With a `play`/`stop` controller per bit, each checking its own bit as in `math.mod(math.floor(q.property('ns:bits') / 8192), 2) != 0`, bit 0 and bit 13 of a 0 to 16383 property turned on and off independently (values 1, 2, 8192, 8193, [measurement record](../design/json-ui-claims.mdx#66-block-uv-controller-override-sounds-languages-animation-weight), 2026-11-19 Windows 1.26.65.1).
 - An enum value must start with a letter. Write Molang booleans as `q.property(...)`/`!q.property(...)`, and wrap an expression such as `!query.variant == 8` in parentheses like `!(query.variant == 8)`.
 - Random variants: giving `math.random_integer(0, 100)` to the int property `default` lets you pick geometry/textures at random without a spawn script. If you need weights, use `randomize` in the spawn event. A random variant made with only an RP disappears on unload and looks different per player. Packing baby/adult/variant into one `randomize` creates "dead" mobs with no group at all, so use a property set at spawn for texture variants.
 - Breeding inheritance (conflicting): there is a report that client_sync enum properties are inherited while `skin_id`/`variant`/`mark_variant` are not passed on in custom breeding, and a 2026-11 report that variant/mark_variant is used for mixing breeding variants.
@@ -358,6 +359,7 @@ The responses an event can give are as follows (Source: bedrock-wiki, entity-eve
 - To put a mob on a horse, it needs a family that matches the horse's `family_types`, otherwise "riders that did not meet ride conditions" appears. A reference hoglin seat position is `[0, 1.35, -0.2]`.
 - You cannot dismount with an event, so use `/ride ... stop_riding`. Grabbing is done with `/ride ... start_riding ... teleport_rider`. To keep entities out of boats, detect riding with a controller and teleport. There is no filter for minecart pulling, so block wide mobs with `passenger_max_width`.
 - `on_rider_enter_event`/`on_rider_exit_event` go on the `minecraft:rideable` component itself, not inside a `seats` entry (needs about 1.21.100).
+- A seat's `third_person_camera_radius` (1 to 64, the third-person camera distance) and `camera_relax_distance_smoothing` were confirmed to work on Windows 1.26.65.1. An out-of-range value rejects the entity in format 1.26.60 and is silently ignored in 1.26.50 ([section 17](#new-members)) `{measured}`.
 - If a multi-seat mount does not move, set `controlling_seat` in `minecraft:rideable` (whoever sits first becomes the driver).
 - To make a rider control the mount, copy the Chicken Jockey code and lock the rider rotation. With `body_rotation_always_follows_head` the mount turns with the rider's gaze. Controlling by a non-player rider is unresolved.
 - A custom mount's rotation jumps when it passes a certain angle (`lock_rider_rotation`/`minecraft:rotation_locked_to_vehicle` also jump or are slow). No fix was found.
@@ -450,6 +452,7 @@ proj.shoot({ x: v.x * 1.5, y: v.y * 1.5, z: v.z * 1.5 });
 ### Spawn rules
 
 - Natural spawning needs a `spawn_rules` file (without it, only by egg). The spawn rule format is 1.8.0 or 1.13.0, the `brightness_filter` light is 0~15, `minecraft:spawns_on_block_filter` is an array, and when testing use a weight of about 200 (1 is rare). (Source: bedrock-wiki entities/spawn-rules)
+- The client code that reads spawn rules has two formats: the condition component style (`minecraft:weight`, `minecraft:herd`, `minecraft:permute_type` and 25 kinds in all) and the simple format of the official sample schema 1.21.60 (`placement`, and `herds[]` and `permute_types[]` inside `conditions[]`). The guaranteed count member of `permute_type` is `guaranteed_count` in the old parser and `min_guaranteed` in the simple format schema, and they differ `{code}`. Files with `guaranteed_count` and `min_guaranteed` (format 1.8.0) and a simple format file (format 1.21.60) loaded without log lines, but the actual spawn behavior was not measured `{measured}`. The reference has no `placement`.
 - Without a biome filter it does not spawn. Join several biomes with `any_of` + `has_biome_tag`, and the `overworld` tag is not needed separately. The higher the weight, the more common.
 - What spawn rules cannot do: fire by events or scoreboards, X/Z coordinate filters, elapsed day conditions, variants by placed block, and spawning in the air. If one mob has several rule files, the later one seems to override.
 - Spawning inside villages: use `player_in_village_filter` and `density_limit` or put a temporary sensor that despawns if there are no villagers. A filter based on a bell block failed, and a village is judged by a collection of villagers.
@@ -644,3 +647,63 @@ proj.shoot({ x: v.x * 1.5, y: v.y * 1.5, z: v.z * 1.5 });
 - Per-player screen filter: put a hidden entity above each player's head, tag it with the player ID, and find it with `dim.getEntities({location, maxDistance: 12, families: ['xfiltersdemo:filter'], tags: [...]})`, so each player has their own filter (applies only to the gameplay screen).
 - Auction house pattern: put item stacks in a chest entity and save it as a structure (`structureManager.createFromWorld(id, dim, loc, loc, {saveMode: StructureSaveMode.World, includeBlocks:false, includeEntities:true})`), and keep display info for the UI separately.
 - A weeping angel entity can use the `look` component of the creaking instead of a script FOV check. Dynamic lighting made with light blocks is unstable and there is no component for it. To make a sulfur cube accept a custom block, use the block/item tag `minecraft:sulfur_cube_archetype_bouncy`.
+
+## 17. Component members and validation rules (Windows 1.26.65.1 code and measurements)
+
+This is the result of reading the Windows 1.26.65.1 client code (member names and validation sentences of the component structs) and loading format_version 1.26.60 and 1.26.50 entities in a world on the same build and reading the Content Log (2026-11-23). Function addresses are in `native-notes/`. The [component reference](./reference/entity-components-1.mdx) and the [AI goal reference](./reference/entity-goals-1.mdx) keep the MS Learn text as it is, so corrections are collected in this section. Log sentences are written only after `<entity> | minecraft:entity |`. Where measurement and code disagree, the measured behavior is written and the code reading is labeled as such.
+
+- A format 1.26.60 entity rejects an unknown member with `this member was found in the input, but is not present in the Schema` and an unknown component with `this component was found in the input, but is not present in the Schema`, and the entity does not load. It is an error, not an ignore `{measured}`.
+- The old parser of format 1.26.50 behaves differently. A bogus key in a rideable seat gave the error `child 're8_bogus' not valid here.`, while in panic and dweller of the same format a bogus key was silently ignored. So a key accepted by the old parser cannot be taken as a real member `{measured}`.
+
+### New members
+
+- A rideable seat (`seats[]` entry) with `third_person_camera_radius` (20) and `camera_relax_distance_smoothing` (2) was accepted without a log line in both format 1.26.60 and 1.26.50. Riding with `/ride @s start_riding` and looking in third person (F5), the camera moved far away from the player, and after dismounting it returned to the default distance `{measured}`.
+- A `third_person_camera_radius` of 0, -5 or 100 rejects the entity in format 1.26.60 with `components -> minecraft:rideable -> seats[0] -> third_person_camera_radius: the input is outside of the accepted range [1, 64]`. The code reading found no range sentence, but the measured range is 1 to 64. In format 1.26.50 a value of 100 gave no log and the camera stayed at the default distance (neither rejected nor clamped to 64, the value just has no effect) `{measured}`.
+- `camera_relax_distance_smoothing` gave no range error at -1, 0 and 100 `{measured}`.
+- `pulls_in_entities` of rideable is rejected. The real key is `pull_in_entities` `{measured, code}`.
+- `panic_sound` of `minecraft:behavior.panic` is accepted. `sound_interval` was accepted as an object `{"min": 1, "max": 2}`; the number `2` gave `expected an object`, and `{"range_min", "range_max"}` and `{"value": 2}` gave errors that the member is not in the schema. Panic in format 1.26.50 accepted the same values and even a bogus key without a log line `{measured}`.
+- `replaceable_blocks`, `radius` and `force_replace_matched_blocks` of `minecraft:trail` (format 1.26.60) were accepted without a log line together with `spawn_offset` and `block_type`. Their format and defaults could not be read from the code. The block placement looked like this: when an entity with `spawn_offset: [0, -1, 0]`, a replaceable pool of grass and air, `radius: 1` and `force_replace_matched_blocks: true` was teleported one block at a time by a script, 42 stones were laid under it (on the grass block positions) in 3 rows x 14 positions, so `radius: 1` looked like a width of 3. With the same method an entity without `spawn_offset` added only 3 stones, and an entity walking by its own AI placed no blocks. Whether the cause is `spawn_offset` or the way of moving could not be separated `{measured}`.
+- `result_item` and `effects` of the food entry of `minecraft:healable` were confirmed by name in the code only `{code}`.
+
+### Names in the reference that were rejected
+
+In format 1.26.60 every name below was rejected with a not-in-the-schema error and the entity did not load `{measured}`. The code reading in parentheses agrees.
+
+| Name in the reference | Correction |
+| --- | --- |
+| `extent`, `shape`, `placement_checks`, `place_only_on_block_position_change` of `minecraft:trail` | All 4 rejected. The trail members in the code are only the 6 `spawn_filter`, `block_type`, `spawn_offset`, `replaceable_blocks`, `radius`, `force_replace_matched_blocks`, and the reference's `offset`, `placement_conditions` and `placement_filter` too (7 in all) are not in the code `{code}` |
+| `can_teleport_into_liquid`, `on_teleport_sound`, `target_teleport_distance`, `target_teleport_offset` of `minecraft:teleport` | All 4 rejected. The code has 10 teleport members, and its 6 numeric and 2 boolean defaults equal the reference `{code}` |
+| `speed_when_turning`, `start_speed` of `minecraft:movement.fly` | Rejected. These two are members of `movement.glide`, and the only member of fly is `max_turn` `{code}` |
+| `broadcast_anger`, `broadcast_anger_on_attack`, `calm_event`, `duration_delta` of `minecraft:anger_level` | Rejected. The code members are the 9 `anger_decrement_interval`, `angry_boost`, `angry_threshold`, `default_annoyingness`, `default_projectile_annoyingness`, `max_anger`, `nuisance_filter`, `on_increase_sounds`, `remove_targets_below_angry_threshold` `{code}` |
+| `owner_launch_immunity_ticks` of `minecraft:projectile` | Rejected |
+| `minecraft:dash` | Rejected. The real name is `minecraft:dash_action`, which is accepted |
+| `minecraft:movement.sound_distance_offset` | Rejected. The real name is `minecraft:movement_sound_distance_offset` (underscore), which is accepted |
+| `minecraft:body_rotation_locked_to_vehicle` | Rejected. The real name is `minecraft:rotation_locked_to_vehicle` |
+| `minecraft:remove_in_peaceful` (format 1.21.90) | Rejected. The name is not in the client code either `{code}` |
+| `hurt_by_target_event` of `minecraft:behavior.hold_ground`, `float_offset` of `minecraft:behavior.float_wander` | Rejected. The code reading saw these names near the old goal parser and guessed them to be members of those two goals, which was wrong. The goal they belong to is unknown |
+
+`dwelling_role` of `minecraft:dweller` could not be decided. In the tested format a bogus key was silently ignored too, so existence cannot be told apart this way. The name string is not in the code `{code}`.
+
+### Brain components that exist only in the code
+
+The client code registers 25 names `minecraft:memory_behavior.*` and `minecraft:memory_sensor.*`. The official samples have only 5 (`in_range_of_entity`, `follow_target`, `flee_threat`, `move_to_position`, `game_event`) and the reference has none `{code}`. In format 1.26.30, 1.26.50 and 1.26.60 entities, the code-only names (`memory_behavior.wait` and `.wait.test`, `memory_sensor.random_land_position` and `.test`, `memory_behavior.look_at_entity.test`, `memory_sensor.find_nearest_block.test`) were all rejected with `this component was found in the input, but is not present in the Schema`. `memory_behavior.move_to_position.test`, which is in the samples, was accepted. A name in the code is not usable from a pack in normal settings. Whether an experiment toggle or a beta format accepts them was not measured `{measured}`.
+
+### Property and description validation
+
+The validation sentences for `description.properties` and `entity_version` all appeared in the log as they are when the world loaded `{code, measured}`.
+
+- An enum has 2 to 16 values (17 and 1 gave `string enum must have more than 1 and no more than 16 elements`, 16 passed). A value name is at most 32 characters (33 gave `has too long of a name (maximum is 32)`, 32 passed), starts with a letter (`1a` is rejected) and otherwise uses letters, digits or underscores, and a duplicate value is rejected with `duplicate value`.
+- The `range` of an int or float needs a maximum greater than the minimum. `[5, 4]`, `[5, 5]` and a float `[1.0, 1.0]` were all rejected with `range max is less than range min`. Equal values are rejected too.
+- A `default` outside the range (99 with `[0, 10]`) logs `default 99 is not between 0 and 10, clamping to nearest value` at error level and the entity loads.
+- A `range` on a bool gives `'bool' type was specified but a range field was still provided`, and a name without a namespace gives `must have valid characters and include a namespace`.
+- An entity has at most 32 properties. 33 were rejected with `Too many properties on the definition (Limit is 32)` and 32 passed. The earlier "limit 30" report does not match the measurement on this build.
+- An int `default` given as the string `"1+1"` gave no log line (accepted). Whether the value was computed as 2 was not confirmed. The code has a path that interprets `default` and `range` element strings as Molang `{code, inferred}`.
+- `description.aliases` gave only the warning `Deprecated field: Aliases.` both as an object `{"re8:q": "re8:p"}` and with an empty value `{"re8:q": ""}`. The `Cannot map alias` sentence found in the code did not appear.
+- `entity_version.upgrades` rejects the entity for `upgrade_to` 0 (`reserved for versionless entities`), an empty `name`, the same version twice (`multiple upgrade entries for version 1`), starting from 2 (`does not start at 1`), and only 1 and 3 (`non-contiguous version between 1 and 3`). 1 and 2 passed.
+- The code has a check that gives `Two versions of the same component found` when the old key and the new key of the same component are both in one `components` object. Which pairs it covers was not read `{code}`.
+
+### Defaults and ranges (code only)
+
+- The default of `can_be_stolen` in `minecraft:leashable` is true in both the code and the official sample documentation, and the reference says false. It was not measured in the game (the test entity put `soft_distance` and others outside the preset and got the error `child 'soft_distance' not valid here.`; these values go inside the preset) `{code}`.
+- The code has sentences that clamp `base_buoyancy` and `big_wave_probability` of `minecraft:buoyant` to 0 to 1 and `drag_down_on_buoyancy_removed` to 0 or more. Spawned in the air with `base_buoyancy: 2` and others, there was no log line. It was not put in water, so this is not confirmed `{code}`.
+- The numeric and boolean defaults read from the code for teleport, buoyant, `dash_action`, strength, timer and others equal the reference tables `{code}`.

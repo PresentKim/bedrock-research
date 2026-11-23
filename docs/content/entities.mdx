@@ -89,12 +89,12 @@ BP 엔티티 파일(`BP/entities/*.json`)은 `minecraft:entity` 아래에 `descr
 
 ### format_version과 스키마 오류
 
-- `found in the input, but is not present in the Schema`는 컴포넌트에 비해 엔티티 `format_version`이 낮다는 뜻인 경우가 대부분이다. `minecraft:is_sheared`, `rotation_locked_to_vehicle`, `remove_in_peaceful`, interact의 `swing`, `damage_sensor`의 `deals_damage`에서 보고됐다. 1.21.100 이상으로 올린다. 이벤트나 `minecraft:on_death` 같은 리스너를 엉뚱한 위치에 둬도 같은 경고가 난다. 이벤트는 `"events"` 안에 있어야 한다.
+- `found in the input, but is not present in the Schema`는 컴포넌트에 비해 엔티티 `format_version`이 낮다는 뜻인 경우가 대부분이다. `minecraft:is_sheared`, `rotation_locked_to_vehicle`, `remove_in_peaceful`, interact의 `swing`, `damage_sensor`의 `deals_damage`에서 보고됐다. 1.21.100 이상으로 올린다. 다만 `remove_in_peaceful`은 format을 올려도 풀리지 않는다(아래). 이벤트나 `minecraft:on_death` 같은 리스너를 엉뚱한 위치에 둬도 같은 경고가 난다. 이벤트는 `"events"` 안에 있어야 한다.
 - 최신 format은 대략 최신 게임 버전과 같다(2026-08-20 기준 엔티티 1.26.40, 게임 26.44). bridge.는 format 1.26.20 이상을 지원하지 않으므로 VS Code를 권한다.
 - format을 올린 뒤 엔티티가 사라지면 `"minecraft:fire_immune": true` 같은 옛 형식이 원인이다(content log: `expected an object`). Blockception VSCode 플러그인이 오래된 컴포넌트를 표시한다.
 - 반대 사례로, 쫓아오지 않던 몹이 `attack` 컴포넌트 추가와 format 1.26→1.16 변경으로 고쳐졌다는 보고가 있다. (single report)
 - `run_command`는 `queue_command`로 바꾼다. 컴포넌트가 format 1.16.0에만 있다면 Script API로 대신한다.
-- `minecraft:remove_in_peaceful`은 1.21.90.20에 추가됐다가 1.21.90.25에서 변경 기록 없이 예제에서 빠졌고 스키마 오류를 낸다. `is_sheared`와 함께 실제로 존재하는지 불확실하다. (unverified)
+- `minecraft:remove_in_peaceful`은 1.21.90.20에 추가됐다가 1.21.90.25에서 변경 기록 없이 예제에서 빠졌고 스키마 오류를 낸다. Windows 1.26.65.1에서 format 1.21.90 엔티티에 넣자 `this component was found in the input, but is not present in the Schema`로 거부됐고 클라이언트 코드에도 이름이 없다 `{실측, 코드}`. `is_sheared`가 실제로 존재하는지는 불확실하다. (unverified)
 - Molang은 대부분의 컴포넌트 값에 쓸 수 없다. 상수만 받고, 문자열은 0.0으로 파싱되며, `minecraft:health.max`에 `query.scoreboard`를 넣으면 엔티티가 죽는다. 값을 바꾸려면 컴포넌트 그룹을 쓴다. 필터 `value`에도 Molang 식을 쓸 수 없다.
 - `minecraft:scale`은 객체다: `{ "value": 0.5 }`.
 - `"minecraft:burns_in_daylight": true`처럼 객체여야 할 컴포넌트를 잘못 쓰면 content log 오류 없이 엔티티가 사라질 수 있다(스폰 알도 없고 소환도 안 됨). `{}`로 고쳐 해결했다. (single report)
@@ -128,6 +128,7 @@ BP 엔티티 파일(`BP/entities/*.json`)은 `minecraft:entity` 아래에 `descr
 ### 엔티티 버전 업그레이드 시스템
 
 - format 1.26.20과 `use_beta_features: true`에서 `description.entity_version.upgrades: [{"upgrade_to": 1, "name": "x"}]`와 최상위 `"upgrades": {"x": {"add": {"component_groups": ["ww"]}}}`를 쓴다. 자동으로 적용되며 예전 방식보다 낫다. 2026-04 기준 이를 쓰는 바닐라 몹은 없다. (single report)
+- `upgrades` 배열의 규칙은 어기면 엔티티가 거부된다: `upgrade_to` 0은 예약값이고, `name`은 비면 안 되며, 같은 버전 번호를 두 번 쓸 수 없고, 버전은 1에서 시작해 중간이 비면 안 된다 `{코드, 실측}`([17절](#속성과-description-검증)). 최상위 `upgrades`는 코드의 문서 구조체에서 v1_26_30부터 있다 `{코드}`.
 - 예전 방식은 바닐라 wolf처럼 bool 속성 `minecraft:was_upgraded_to_1_21_100`(`client_sync` false)을 두고, `bool_property != true` 필터로 그룹을 추가하는 이벤트를 발동한 뒤 `set_property` true를 하는 것이었다.
 - 아토믹 클라이언트 엔티티가 프리뷰 1.26.70.21에 등장했다. 애니메이션은 조각마다 복제해야 하고 공유되지 않는다. (unverified)
 
@@ -187,7 +188,7 @@ BP 엔티티 파일(`BP/entities/*.json`)은 `minecraft:entity` 아래에 `descr
 
   이벤트 `set_property` 또는 `entity.setProperty`로 설정하고 RP에서 `q.property('ns:x')`로 읽는다(렌더 컨트롤러 `Array.x[query.property('ns:x')]`, geometry 배열도 가능). `client_sync: true`가 없으면 클라이언트가 볼 수 없다. enum 속성에 `default`와 `client_sync`가 없으면 RP 쿼리가 모두 실패한다. `player.json` 속성이 실패한 원인도 이것이었다. (confirmed, 출처: bedrock-wiki entities/entity-properties)
 - 개수 제한은 엔티티당 32개다(`player.json`도 32). 값이 많은 enum/int를 몇 개만 쓰고, 불리언은 비트 압축하거나 한 숫자의 소수 자리에 여러 값을 넣거나 여러 엔티티에 나눠 담는다. float 범위 [0,200]을 200가지 변형 스위치로 쓴 사례도 있다. 픽셀 단위 파티클 스킨처럼 대량 데이터는 속성보다 Molang 변수가 빠르다.
-- 한도는 **conflicting**이다. 엔티티 속성 한도를 30개라고 한 보고가 있고, 큰 팩이 플레이어 속성 한도에 닿은 사례가 있다. int 속성 하나(최대 1,048,575)에 20비트 플래그를 담은 사례도 있다. 비트마다 `play`/`stop` 컨트롤러를 두고 `math.mod(math.floor(q.property('ns:bits') / 8192), 2) != 0`처럼 자기 비트를 보게 하면, 0~16383 속성의 비트 0과 비트 13이 서로 따로 켜지고 꺼졌다(값 1, 2, 8192, 8193, [실측 기록](../design/json-ui-claims.mdx#66-블록-uv-컨트롤러-덮기-소리-언어-애니메이션-가중치), 2026-11-19 Windows 1.26.65.1).
+- 한도는 **conflicting**이었으나 Windows 1.26.65.1에서 재면 33개는 `Too many properties on the definition (Limit is 32)`로 거부되고 32개는 통과한다 `{실측}`. 엔티티 속성 한도를 30개라고 한 보고가 있고, 큰 팩이 플레이어 속성 한도에 닿은 사례가 있다. int 속성 하나(최대 1,048,575)에 20비트 플래그를 담은 사례도 있다. 비트마다 `play`/`stop` 컨트롤러를 두고 `math.mod(math.floor(q.property('ns:bits') / 8192), 2) != 0`처럼 자기 비트를 보게 하면, 0~16383 속성의 비트 0과 비트 13이 서로 따로 켜지고 꺼졌다(값 1, 2, 8192, 8193, [실측 기록](../design/json-ui-claims.mdx#66-블록-uv-컨트롤러-덮기-소리-언어-애니메이션-가중치), 2026-11-19 Windows 1.26.65.1).
 - enum 값은 글자로 시작해야 한다. Molang 불리언은 `q.property(...)`/`!q.property(...)`로 쓰고, `!query.variant == 8` 같은 식은 `!(query.variant == 8)`처럼 괄호로 감싼다.
 - 무작위 변형: int 속성 `default`에 `math.random_integer(0, 100)`을 주면 스폰 스크립트 없이 geometry/텍스처를 무작위로 고를 수 있다. 가중치가 필요하면 스폰 이벤트의 `randomize`를 쓴다. RP만으로 만든 무작위 변형은 언로드 때 사라지고 플레이어마다 다르게 보인다. 아기/어른/변형을 한 `randomize`에 몰면 그룹이 하나도 없는 "죽은" 몹이 생기니 텍스처 변형은 스폰 때 설정한 속성으로 한다.
 - 번식 상속(conflicting): client_sync enum 속성은 상속되고 `skin_id`/`variant`/`mark_variant`는 커스텀 번식에서 넘어가지 않는다는 보고와, 2026-11에 번식 변형 섞기에 variant/mark_variant를 쓴다는 보고가 있다.
@@ -358,6 +359,7 @@ BP 엔티티 파일(`BP/entities/*.json`)은 `minecraft:entity` 아래에 `descr
 - 몹을 말에 태우려면 말의 `family_types`에 맞는 family가 있어야 하며, 없으면 "riders that did not meet ride conditions"가 난다. hoglin 좌석 위치 참고값은 `[0, 1.35, -0.2]`다.
 - 이벤트로 하차시킬 수는 없으니 `/ride ... stop_riding`을 쓴다. 붙잡기는 `/ride ... start_riding ... teleport_rider`로 한다. 보트에 타지 못하게 하려면 컨트롤러로 탑승을 감지해 텔레포트한다. 광산 수레 끌어당김에는 필터가 없으니 `passenger_max_width`로 넓은 몹을 막는다.
 - `on_rider_enter_event`/`on_rider_exit_event`는 `seats` 항목 안이 아니라 `minecraft:rideable` 컴포넌트 자체에 둔다(약 1.21.100 필요).
+- 좌석의 `third_person_camera_radius`(1 이상 64 이하, 3인칭 카메라 거리)와 `camera_relax_distance_smoothing`은 Windows 1.26.65.1에서 동작을 확인했다. 범위 밖 값은 format 1.26.60에서 엔티티를 거부하고 1.26.50에서는 조용히 무시된다([17절](#새-멤버)) `{실측}`.
 - 여러 좌석 탈것이 움직이지 않으면 `minecraft:rideable`에 `controlling_seat`를 설정한다(먼저 앉은 사람이 운전자가 된다).
 - 탑승자가 탈것을 조종하게 하려면 Chicken Jockey 코드를 복사하고 탑승자 회전을 잠근다. `body_rotation_always_follows_head`로 탈것이 탑승자 시선을 따라 돈다. 비 플레이어 탑승자의 조종은 해결되지 않았다.
 - 커스텀 탈것이 일정 각도를 넘으면 회전이 튄다(`lock_rider_rotation`/`minecraft:rotation_locked_to_vehicle`도 튀거나 느림). 해결책을 찾지 못했다.
@@ -450,6 +452,7 @@ proj.shoot({ x: v.x * 1.5, y: v.y * 1.5, z: v.z * 1.5 });
 ### 스폰 규칙
 
 - 자연 스폰에는 `spawn_rules` 파일이 필요하다(없으면 알로만 스폰). 스폰 규칙 format은 1.8.0 또는 1.13.0, `brightness_filter` light는 0~15, `minecraft:spawns_on_block_filter`는 배열이며, 시험할 때는 weight 약 200을 쓴다(1은 드묾). (출처: bedrock-wiki entities/spawn-rules)
+- 스폰 규칙을 읽는 클라이언트 코드는 두 형식을 가진다. 조건 구성요소 방식(`minecraft:weight`, `minecraft:herd`, `minecraft:permute_type` 등 25종)과, 공식 샘플 스키마 1.21.60의 단순 형식(`placement`, `conditions[]` 안의 `herds[]`, `permute_types[]`)이다. `permute_type`의 확정 개수 멤버는 구 파서에서 `guaranteed_count`, 단순 형식 스키마에서 `min_guaranteed`이고 서로 다르다 `{코드}`. `guaranteed_count`와 `min_guaranteed`(format 1.8.0), 단순 형식(format 1.21.60) 파일은 로드 때 로그가 없었으나 실제 스폰 동작은 재지 못했다 `{실측}`. 레퍼런스에는 `placement`가 없다.
 - 바이옴 필터가 없으면 스폰하지 않는다. 여러 바이옴은 `any_of` + `has_biome_tag`로 묶고 `overworld` 태그는 따로 필요 없다. weight가 높을수록 흔하다.
 - 스폰 규칙으로 할 수 없는 것: 이벤트나 점수판으로 발동, X/Z 좌표 필터, 경과 일수 조건, 놓인 블록별 변형, 공중 스폰. 같은 몹에 규칙 파일이 여럿이면 나중 것이 덮어쓰는 것으로 보인다.
 - 마을 안 스폰: `player_in_village_filter`와 `density_limit`을 쓰거나 주민이 없으면 디스폰하는 임시 센서를 둔다. 종 블록을 기준으로 한 필터는 실패했고 마을은 주민 모음으로 판정된다.
@@ -644,3 +647,63 @@ proj.shoot({ x: v.x * 1.5, y: v.y * 1.5, z: v.z * 1.5 });
 - 플레이어별 화면 필터: 플레이어마다 머리 위에 숨은 엔티티를 두고 플레이어 ID로 태그를 붙인 뒤 `dim.getEntities({location, maxDistance: 12, families: ['xfiltersdemo:filter'], tags: [...]})`로 찾으면 각 플레이어가 자기 필터를 가진다(게임플레이 화면에만 적용).
 - 경매장 패턴: 아이템 스택을 상자 엔티티에 넣어 구조물로 저장하고(`structureManager.createFromWorld(id, dim, loc, loc, {saveMode: StructureSaveMode.World, includeBlocks:false, includeEntities:true})`), UI용 표시 정보는 따로 보관한다.
 - 우는 천사 엔티티는 스크립트 FOV 검사 대신 creaking의 `look` 컴포넌트를 쓸 수 있다. 조명은 빛 블록으로 만드는 동적 조명이 불안정하고 컴포넌트는 없다. 유황 큐브가 커스텀 블록을 받아들이게 하려면 블록/아이템 태그 `minecraft:sulfur_cube_archetype_bouncy`를 쓴다.
+
+## 17. 컴포넌트 멤버와 검증 규칙 (Windows 1.26.65.1 코드와 실측)
+
+Windows 1.26.65.1 클라이언트 코드(컴포넌트 구조체의 멤버 이름과 검증 문장)를 읽고, 같은 빌드에서 `format_version` 1.26.60과 1.26.50 엔티티를 월드 로드 때 읽혀 Content Log를 본 결과다(2026-11-23). 함수 주소는 `native-notes/`에 있다. [컴포넌트 레퍼런스](./reference/entity-components-1.mdx)와 [AI 목표 레퍼런스](./reference/entity-goals-1.mdx)는 MS Learn 원문 그대로 두므로 정정은 이 절에 모은다. 로그 문장은 `<엔티티> | minecraft:entity |` 뒤만 적는다. 코드와 실측이 어긋나면 실측을 적고 코드 읽기를 그렇게 표시한다.
+
+- format 1.26.60 엔티티는 알 수 없는 멤버를 `this member was found in the input, but is not present in the Schema`로, 알 수 없는 컴포넌트를 `this component was found in the input, but is not present in the Schema`로 거부하고 엔티티가 로드되지 않는다. 오류이지 무시가 아니다 `{실측}`.
+- format 1.26.50의 구 파서는 다르게 군다. rideable 좌석의 가짜 키는 `child 're8_bogus' not valid here.` 오류였고, 같은 format의 panic과 dweller에서는 가짜 키가 로그 없이 무시됐다. 그래서 구 파서가 받은 키가 실제 멤버라고 볼 수 없다 `{실측}`.
+
+### 새 멤버
+
+- rideable 좌석(`seats[]` 항목)의 `third_person_camera_radius`(20)와 `camera_relax_distance_smoothing`(2)은 format 1.26.60과 1.26.50 모두 로그 없이 받아졌다. `/ride @s start_riding`으로 타고 F5 3인칭을 보면 카메라가 플레이어에서 크게 멀어졌고, 내리면 기본 거리로 돌아왔다 `{실측}`.
+- `third_person_camera_radius`가 0, -5, 100이면 format 1.26.60에서 `components -> minecraft:rideable -> seats[0] -> third_person_camera_radius: the input is outside of the accepted range [1, 64]`로 엔티티가 거부된다. 코드에서는 범위 문장을 찾지 못했으나 측정 범위는 1 이상 64 이하다. format 1.26.50에서는 100을 줘도 로그가 없고 카메라가 기본 거리 그대로였다(거부도 64로 자르기도 아니고 효과만 없다) `{실측}`.
+- `camera_relax_distance_smoothing`은 -1, 0, 100에서 범위 오류가 없었다 `{실측}`.
+- rideable의 `pulls_in_entities`는 거부된다. 실제 키는 `pull_in_entities`다 `{실측, 코드}`.
+- `minecraft:behavior.panic`의 `panic_sound`는 받아진다. `sound_interval`은 `{"min": 1, "max": 2}` 객체로 받아졌고, 숫자 `2`는 `expected an object`, `{"range_min", "range_max"}`와 `{"value": 2}`는 해당 멤버가 스키마에 없다는 오류였다. format 1.26.50의 panic은 같은 값과 가짜 키까지 로그 없이 받았다 `{실측}`.
+- `minecraft:trail`(format 1.26.60)의 `replaceable_blocks`, `radius`, `force_replace_matched_blocks`는 `spawn_offset`, `block_type`과 함께 로그 없이 받아졌다. 형식과 기본값은 코드에서 읽지 못했다. 블록 배치는 이렇게 보였다: `spawn_offset: [0, -1, 0]`, 교체 가능 블록 풀과 공기, `radius: 1`, `force_replace_matched_blocks: true` 엔티티를 스크립트로 한 칸씩 순간이동시키자 발밑(풀 블록 자리)에 돌 42개가 가로 3줄 x 14칸으로 깔려 `radius: 1`이 폭 3으로 보였다. 같은 방법으로 `spawn_offset` 없는 엔티티는 돌이 3개 늘었을 뿐이고, AI로 스스로 걷는 엔티티는 블록을 놓지 않았다. 원인이 `spawn_offset`인지 이동 방식인지 가르지 못했다 `{실측}`.
+- `minecraft:healable`의 먹이 항목 `result_item`과 `effects`는 이름만 코드로 확인했다 `{코드}`.
+
+### 레퍼런스에는 있으나 거부된 이름
+
+format 1.26.60에서 아래 이름은 모두 스키마에 없다는 오류로 엔티티가 거부됐다 `{실측}`. 괄호의 코드 읽기와 일치한다.
+
+| 레퍼런스의 이름 | 정정 |
+| --- | --- |
+| `minecraft:trail`의 `extent`, `shape`, `placement_checks`, `place_only_on_block_position_change` | 4개 모두 거부. 코드의 trail 멤버는 `spawn_filter`, `block_type`, `spawn_offset`, `replaceable_blocks`, `radius`, `force_replace_matched_blocks` 6개뿐이고, 레퍼런스의 `offset`, `placement_conditions`, `placement_filter`까지 7개가 코드에 없다 `{코드}` |
+| `minecraft:teleport`의 `can_teleport_into_liquid`, `on_teleport_sound`, `target_teleport_distance`, `target_teleport_offset` | 4개 모두 거부. 코드의 teleport 멤버는 10개이고 기본값 6개 숫자와 2개 불리언이 레퍼런스와 같다 `{코드}` |
+| `minecraft:movement.fly`의 `speed_when_turning`, `start_speed` | 거부. 이 둘은 `movement.glide`의 멤버이고 fly의 멤버는 `max_turn`뿐이다 `{코드}` |
+| `minecraft:anger_level`의 `broadcast_anger`, `broadcast_anger_on_attack`, `calm_event`, `duration_delta` | 거부. 코드의 멤버는 `anger_decrement_interval`, `angry_boost`, `angry_threshold`, `default_annoyingness`, `default_projectile_annoyingness`, `max_anger`, `nuisance_filter`, `on_increase_sounds`, `remove_targets_below_angry_threshold` 9개다 `{코드}` |
+| `minecraft:projectile`의 `owner_launch_immunity_ticks` | 거부 |
+| `minecraft:dash` | 거부. 실제 이름은 `minecraft:dash_action`이고 받아진다 |
+| `minecraft:movement.sound_distance_offset` | 거부. 실제 이름은 `minecraft:movement_sound_distance_offset`(밑줄)이고 받아진다 |
+| `minecraft:body_rotation_locked_to_vehicle` | 거부. 실제 이름은 `minecraft:rotation_locked_to_vehicle`이다 |
+| `minecraft:remove_in_peaceful`(format 1.21.90) | 거부. 클라이언트 코드에도 이름이 없다 `{코드}` |
+| `minecraft:behavior.hold_ground`의 `hurt_by_target_event`, `minecraft:behavior.float_wander`의 `float_offset` | 거부. 코드 읽기가 이 이름을 구 목표 파서 근처에서 보고 두 목표의 멤버로 추정했으나 틀렸다. 소속 목표는 모른다 |
+
+`minecraft:dweller`의 `dwelling_role`은 판정하지 못했다. 테스트한 format에서 가짜 키도 로그 없이 무시돼 이 방법으로 존재 여부를 가릴 수 없다. 코드에는 이 이름 문자열이 없다 `{코드}`.
+
+### 코드에만 있는 brain 컴포넌트
+
+클라이언트 코드는 `minecraft:memory_behavior.*`와 `minecraft:memory_sensor.*` 이름 25개를 등록한다. 공식 샘플에는 5개(`in_range_of_entity`, `follow_target`, `flee_threat`, `move_to_position`, `game_event`)만 있고 레퍼런스에는 하나도 없다 `{코드}`. format 1.26.30, 1.26.50, 1.26.60 엔티티에서 코드에만 있는 이름(`memory_behavior.wait`와 `.wait.test`, `memory_sensor.random_land_position`과 `.test`, `memory_behavior.look_at_entity.test`, `memory_sensor.find_nearest_block.test`)은 모두 `this component was found in the input, but is not present in the Schema`로 거부됐다. 샘플에 있는 `memory_behavior.move_to_position.test`는 받아졌다. 코드에 이름이 있어도 일반 설정의 팩에서는 쓸 수 없다. 실험 토글이나 베타 format이 받아주는지는 재지 않았다 `{실측}`.
+
+### 속성과 description 검증
+
+`description.properties`와 `entity_version`의 검증 문장은 모두 월드 로드 때 로그에 그대로 나왔다 `{코드, 실측}`.
+
+- enum 값은 2개 이상 16개 이하다(17개와 1개는 `string enum must have more than 1 and no more than 16 elements`, 16개는 통과). 값 이름은 32자 이하(33자는 `has too long of a name (maximum is 32)`, 32자는 통과), 첫 글자는 영문자(`1a`는 거부)이고 나머지는 영숫자나 밑줄이며, 중복 값은 `duplicate value`로 거부된다.
+- int와 float의 `range`는 최댓값이 최솟값보다 커야 한다. `[5, 4]`와 `[5, 5]`, float `[1.0, 1.0]` 모두 `range max is less than range min`으로 거부된다. 같은 값도 거부된다.
+- `default`가 범위 밖이면(99와 `[0, 10]`) `default 99 is not between 0 and 10, clamping to nearest value`가 오류 등급으로 찍히고 엔티티는 로드된다.
+- bool에 `range`를 주면 `'bool' type was specified but a range field was still provided`, 이름공간 없는 이름은 `must have valid characters and include a namespace`다.
+- 엔티티당 속성은 32개까지다. 33개는 `Too many properties on the definition (Limit is 32)`로 거부되고 32개는 통과했다. 앞의 "한도 30개" 보고는 이 빌드의 측정과 맞지 않는다.
+- int `default`에 문자열 `"1+1"`을 줘도 로그가 없었다(받아짐). 값이 2로 계산됐는지는 확인하지 못했다. 코드에는 `default`와 `range` 원소 문자열을 Molang으로 해석하는 경로가 있다 `{코드, 추론}`.
+- `description.aliases`는 객체 `{"re8:q": "re8:p"}`와 빈 값 `{"re8:q": ""}` 모두 `Deprecated field: Aliases.` 경고만 나왔다. 코드에 있던 `Cannot map alias` 문장은 나오지 않았다.
+- `entity_version.upgrades`는 `upgrade_to` 0(`reserved for versionless entities`), 빈 `name`, 같은 버전 두 번(`multiple upgrade entries for version 1`), 2부터 시작(`does not start at 1`), 1과 3만 있음(`non-contiguous version between 1 and 3`)이 모두 엔티티를 거부한다. 1, 2는 통과했다.
+- 같은 `components` 안에 같은 컴포넌트의 옛 키와 새 키가 함께 있으면 `Two versions of the same component found`를 내는 검사가 코드에 있다. 어떤 쌍인지는 읽지 못했다 `{코드}`.
+
+### 기본값과 범위 (코드만)
+
+- `minecraft:leashable`의 `can_be_stolen` 기본값은 코드와 공식 샘플 문서 모두 true이고 레퍼런스는 false다. 게임에서 재지 못했다(시험 엔티티가 `soft_distance` 등을 프리셋 밖에 둬서 `child 'soft_distance' not valid here.` 오류가 났다. 이 값들은 프리셋 안에 둔다) `{코드}`.
+- `minecraft:buoyant`의 `base_buoyancy`와 `big_wave_probability`를 0에서 1로, `drag_down_on_buoyancy_removed`를 0 이상으로 고쳐 읽는 문장이 코드에 있다. 공중 소환에서는 `base_buoyancy: 2` 등을 줘도 로그가 없었다. 물에 넣어 보지 않아 확인하지 못했다 `{코드}`.
+- 코드에서 읽은 teleport, buoyant, `dash_action`, strength, timer 등의 숫자와 불리언 기본값은 레퍼런스 표와 일치했다 `{코드}`.

@@ -144,9 +144,9 @@ The structure is `tiers[]` -> (`groups[]` -> `trades[]`) or directly `trades[]`.
 - To call another loot table, write the full path including `.json` in the `name` of an entry with `"type": "loot_table"` (`"loot_tables/chests/abandoned_mineshaft.json"`). Custom tables go in `BP/loot_tables/<folder>/<name>.json`, and entity loot goes in `loot_tables/entities/`.
 - Entry `weight` is relative. With 30, 20 and 1, the probability of the first entry is 30/51. An explanation is in the [MS Learn introduction to loot tables](https://learn.microsoft.com/en-us/minecraft/creator/documents/introductiontoloottables?view=minecraft-bedrock-stable).
 - A block dropping itself needs no loot table. Chest loot is seed-based. Banner pattern functions are in [Bedrock Wiki item-functions](https://wiki.bedrock.dev/loot/item-functions#banner-type).
-- `random_chance` is a ratio from 0 to 1 (`0.01` = 1%, `5.0` is always). Pools are rolled independently, so a guaranteed drop pool does not block a rare pool. To always drop, put that item alone in a separate pool. There is a single report that the `minecraft:random_chance` filter was always true in tests.
+- `random_chance` is a ratio from 0 to 1 (`0.01` = 1%, `5.0` is always). Pools are rolled independently, so a guaranteed drop pool does not block a rare pool. To always drop, put that item alone in a separate pool. There is a single report that the `minecraft:random_chance` filter was always true in tests. A condition name with a `minecraft:` prefix is an unknown condition that is dropped without an error and always drops (section 5) `{measured}`.
 - Fortune emulation (nested pools): there is no `apply_bonus`/`alternatives`. Any entry can have its own `pools` (with conditions) nested without limit, and they fire only when the parent entry dropped. Coal Fortune 3 (1 item 40%, 2~4 items 20% each) is built as 1 + 0.6 chance of (1 + 0.667 chance of (1 + 0.5 chance of 1)).
-- Functions: `set_enchants`/`specific_enchants`, `enchant_with_levels` (`treasure`), `set_data` (goat horn), setting book text, lang reference `%key`, `carry_over_block_entity_data` (26.40 experimental). The vanilla trial vault tables use functions such as `set_ominous_bottle`. The loot condition list was extracted from vanilla files and is not all in the MS docs.
+- Functions: `set_enchants`/`specific_enchants`, `enchant_with_levels` (`treasure`), `set_data` (goat horn), setting book text, lang reference `%key`, `carry_over_block_entity_data` (26.40 experimental). The vanilla trial vault tables use the function `set_ominous_bottle_amplifier` (the name is not `set_ominous_bottle`) `{code, measured}`. The loot condition list was extracted from vanilla files and is not all in the MS docs.
 - Exploration maps: a `loot_table` entry points to `loot_tables/maps/<name>.json`. Jigsaw structures can be located (they also show in `/locate`), and structure_template_feature structures may not. `decoration` decides the map icon. `destination`, `decoration` and `search_radius` of `exploration_map` are supported, but `zoom` has no effect, so a trade cannot set the map zoom level.
 - Putting loot into a chest with `/loot` fills it consecutively. Vanilla-like scattering is done by NBT editing or a loot processor list.
 - Script custom drops are not visible to the `loot` command and `LootTableManager` (they see only `minecraft:loot`). Make custom drops from scripts with `dimension.runCommand('loot spawn ...')` or the loot API. A loot table cannot summon mobs (one case handled an item named `<typeId> <amount> <nameTag>` with a `minecraft:item` `entitySpawn` listener). For a husk to drop sand without a zombie, use a husk-only `minecraft:loot` table.
@@ -171,4 +171,52 @@ The structure is `tiers[]` -> (`groups[]` -> `trades[]`) or directly `trades[]`.
 
 ## 4. Full reference
 
-The full list of functions and conditions and the full trade table documents are included as MS Learn original excerpts in the [loot table reference](./reference/loot-tables-1.mdx) and the [trade table reference](./reference/trade-tables.mdx).
+The full list of functions and conditions and the full trade table documents are included as MS Learn original excerpts in the [loot table reference](./reference/loot-tables-1.mdx) and the [trade table reference](./reference/trade-tables.mdx). These excerpt pages keep the original text, so the next section holds the corrections and additions.
+
+## 5. Client code and measurements (Windows 1.26.65.1)
+
+This is the result of reading the client code (the loot function registry, the condition parser, the recipe and trade parsers) and, on the same build, repeating `/loot spawn` on custom loot tables and summing the counts or reading the Content Log at load (2026-11-23). Function addresses are in `native-notes/`. Where the code and the measurement disagree, the measurement is written. Things read only at the parser level, such as the defaults of the trade parser, are marked so.
+
+### 26 functions and 20 conditions
+
+- The client registers 26 loot functions: `set_count`, `set_data`, `random_aux_value`, `set_damage`, `looting_enchant`, `enchant_with_levels`, `enchant_book_for_trading`, `enchant_randomly`, `furnace_smelt`, `set_data_from_color_index`, `enchant_random_gear`, `random_block_state`, `random_dye`, `exploration_map`, `set_banner_details`, `explosion_decay`, `set_name`, `set_lore`, `specific_enchants`, `fill_container`, `set_actor_id`, `set_book_contents`, `set_stew_effect`, `set_ominous_bottle_amplifier`, `set_armor_trim`, `set_potion`. A separate table holds one more, `carry_over_block_entity_data`. The reference's `trader_material_type` is not in this registry and appears only in the trade table conversion code `{code}`.
+- The reference's `set_nbt` logs `Unsupported looting function: set_nbt` at load and is not in the code either `{measured, code}`. `set_enchants` is not in the code either and the name is `specific_enchants` (an `enchants` array or a single entry with `id` and `level`) `{code}`.
+- There are 20 registered loot conditions: `killed_by_player`, `killed_by_player_or_pets`, `killed_by_entity`, `damaged_by_entity`, `passenger_of_entity`, `entity_killed`, `random_chance`, `random_difficulty_chance`, `random_chance_with_looting`, `random_regional_difficulty_chance`, `has_mark_variant`, `has_variant`, `match_tool`, `is_baby`, `has_property`, `bool_property`, `int_property`, `float_property`, `enum_property`, `biome_has_tag`. 9 are not introduced in the reference `{code}`.
+
+| Condition | Members read |
+| --- | --- |
+| `damaged_by_entity`, `passenger_of_entity` | `entity_type` |
+| `is_baby` | none |
+| `biome_has_tag` | `tag` (used by a vanilla chest table) |
+| `has_property` | `domain` (an entity property name) |
+| `bool_property`, `int_property`, `float_property`, `enum_property` | `domain`, `value` |
+
+  Which entity's value a property condition looks at was not read. The reference's `entity_properties` condition has no name in the code `{code}`.
+
+### Condition operator and unknown names
+
+- Every condition takes an `operator`. `"=="` and `"equals"` (default) leave it as is, and `"!="` and `"not"` invert the condition. `"!="` on `random_chance` 0.0 dropped in all 20 runs and `"!="` on 1.0 gave 0 items. `"=="` and `"equals"` gave 0 items and `"not"` gave 20. Any other value (`"xx"`) logs `Invalid loot condition operator "xx". Expected "==", "equals", "!=", or "not".` and the condition is dropped, so it always dropped `{measured}`. The vanilla `abandoned_camp_common_chest.json` uses `"operator": "!="` on `biome_has_tag` `{code}`.
+- An unknown condition name (`minecraft:random_chance`, `re8_nonexistent`) always dropped without a log line, as if the condition were absent. Since a typo is not reported, copy condition names from the list without a prefix `{measured}`.
+- An unknown function name logs `Unsupported looting function: set_countx` and only that function is dropped (count 1). A function name is cut at the `:`, so `foo:set_count` worked as `set_count` (count 5 over 10 runs gave 50) `{measured}`.
+- A decimal `count` in `set_count` gave 1 in all 100 runs for 1.5, and `{min: 0.5, max: 2.5}` summed to 101 over 100 runs. It looks like truncation, but only the distribution was seen and individual values were not checked `{measured}`.
+
+### Individual functions
+
+- `random_aux_value` has the same implementation as `set_data`. Its members are `data` (fixed) or `values` (random from a `{min, max}` range), and with neither the log gets `Invalid json keyname for specifying the data range for set_data function. Only 'data' and 'values' are supported.`. `data: 5` on a potion gave the same potion in all 5 items and `values: {min: 1, max: 20}` mixed 8 kinds. `set_data` with `data: 5` was the same `{measured, code}`. This differs from the reference's explanation that it is similar to `random_block_state`.
+- `set_stew_effect` accepts `effects` as a single object or an array (no log line). It reads only `id` (integer) of an entry and does not read `duration` `{code}`. The effect content was not checked.
+- `amplifier` of `set_ominous_bottle_amplifier` was accepted without a log line both as a number and as `{min, max}`. The amplifier value was not read `{measured}`.
+- Only `carry_over_block_entity_data` is behind the experiment gate. In a world with `upcoming_creator_features` off, `Unsupported looting function outside of Upcoming Creator Features Experiment: carry_over_block_entity_data` was logged, only the function was dropped, and the item dropped normally `{measured}`. The other 26 are independent of the experiment `{code}`.
+- `enchant_book_for_trading` reads, besides `base_cost` (default 2), `per_level_cost` (3), `base_random_cost` (5) and `per_level_random_cost` (10), an array `enchantments: [{name, min, max}]`. It is a member the reference lacks and it was not measured in the game `{code}`.
+- `exploration_map` reads only the `destination` string in the code. The report above that `decoration` and `search_radius` are supported was not found in the code. Whether they are read elsewhere is unknown `{code}`.
+
+### Recipes
+
+- There are 8 recipe kinds: `recipe_shaped`, `recipe_shapeless`, `recipe_furnace`, `recipe_brewing_mix`, `recipe_brewing_container`, `recipe_material_reduction`, `recipe_smithing_transform`, `recipe_smithing_trim`. `recipe_material_reduction` (`input`, `output[]`) is described in [Recipes](./recipes.mdx).
+- When two furnace recipes have the same `input` and different `output`, the one read later was dropped with `Skipping duplicate furnace recipe.`. Changing `priority` to 5 and 1, 1 and 9, and 9 and 1 gave the same result, so the one read first in file name order won. `priority` had no effect on resolving duplicates `{measured}`.
+
+### Trade tables
+
+- A trade without `max_uses` was blocked after 7 trades (red X). The reference default of 12 does not match this build and the parser default is 7 `{measured, code}`.
+- A trade without the item `price_multiplier` kept the same price after 7 trades. This differs from the reference default of 0.05 and goes the same way as the parser default of 0. The effect of a given value was not measured `{measured, code}`.
+- The trade `weight` (integer, 1 or more, default 1) has no effect when there is no `groups` or `num_to_select` is -1. At load the warning `"weight" key used for a trade without using "groups" key or with "num_to_select" set to -1. Weight value will have no effect as every trade will be chosen.` appeared and both trades were shown. A `num_to_select` of -1 selects every trade of the group. A `num_to_select` greater than the number of trades in the group is an error `{measured, code}`.
+- A trade item reads `filters` (a filter group) and `functions` (the same parser as the loot function parser). The vanilla `cartographer_trades.json` and `fisherman_trades.json` use `filters` (`in_overworld`, `is_mark_variant`). This was not measured in the game `{code}`.

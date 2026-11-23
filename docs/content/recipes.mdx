@@ -52,13 +52,15 @@ sources:
 |---|---|---|
 | shaped | `minecraft:recipe_shaped` | tags, pattern, key, priority, result, assume_symmetry |
 | shapeless | `minecraft:recipe_shapeless` | tags, ingredients(위치 무관), priority, result |
-| 화로 | `minecraft:recipe_furnace` | tags, input, output |
+| 화로 | `minecraft:recipe_furnace` | tags, input, output, priority |
+| 재료 감소 | `minecraft:recipe_material_reduction` | tags, input, output(배열) |
 | 양조 | `minecraft:recipe_brewing_container`, `minecraft:recipe_brewing_mix` | tags, input, reagent, output |
 | 스미딩 변환 | `minecraft:recipe_smithing_transform` | tags, template, base, addition, result |
 | 스미딩 트림 | `minecraft:recipe_smithing_trim` | base, addition, template |
 
 - `priority`는 낮은 숫자가 높은 우선순위다. `assume_symmetry`(기본 true)를 false로 하면 좌우 반전 레시피를 따로 정의해 다른 결과를 줄 수 있다.
 - 화로 레시피의 `output`은 `{ "item": ... }`가 아니라 문자열 `"ns:item"`이다.
+- 클라이언트 코드의 레시피 종류는 8개이고 `minecraft:recipe_material_reduction`(`input` 재료 하나, `output` 재료 배열)과 화로의 `priority`(정수, 기본 0)가 위키 표에 없었다. 재료 감소는 `input` 문자열과 `output` 문자열 배열, `input` 객체와 `output` 객체 배열(`count` 3) 모두 로그 없이 받아졌으나 `CraftingData`에 들어갔는지는 확인하지 못했다 `{코드, 실측}`. 같은 `input`에 `output`이 다른 화로 레시피 둘이 있으면 파일 이름 순서로 먼저 읽힌 쪽이 이기고 뒤의 것은 `Skipping duplicate furnace recipe.`로 버려진다. `priority`는 이를 바꾸지 못했다 `{실측}`. 자세한 내용은 [루트 테이블과 거래 테이블 5절](./loot-and-trading.mdx#5-클라이언트-코드와-실측-windows-126651).
 - 아이템 서술자는 문자열(`"minecraft:planks"`, 데이터 접미사 `"minecraft:planks:2"`)이거나 객체(`{"item": "minecraft:planks", "data": 2, "count": 3}`)다. 객체의 `count`는 제작과 화로 결과에서만 동작하고 쌓이지 않는 아이템에 1보다 큰 값을 주면 오류다. 서술자에는 함수를 쓸 수 없다. 스폰 알의 데이터는 Molang도 된다(`"data": "q.get_actor_info_id('minecraft:chicken')"`). 기본 물약은 문자열에만 `minecraft:potion_type:strength` 형식 식별자를 쓴다(water, awkward, mundane, thick, healing, regeneration, swiftness, strength, harming, poison, slowness, weakness, water_breathing, fire_resistance, nightvision, invisibility, leaping, slow_falling). 투척/잔류 물약 변형은 없다.
 
 ### 레시피 해금
@@ -84,7 +86,7 @@ sources:
 
 ## 4. 스미딩
 
-- 업그레이드 레시피는 `minecraft:recipe_smithing_transform`(`tags:["smithing_table"]`, template/base/addition/result)이다. base 아이템에 태그 `minecraft:transformable_items`(다이아→네더라이트), 커스텀 템플릿 태그 `minecraft:transform_template`를 쓴다. `addition`은 `minecraft:netherite_ingot`이어야 하고(하드코딩) `{"tag": ...}` 형태는 동작하지 않는다(format 1.26.50 시험). 다만 26.40부터 커스텀 템플릿을 쓴 변환이 지원되고 `addition`이 태그 `minecraft:transform_materials`를 받는다는 2026-08-27 보고가 있어 **conflicting**이다. 2026-01-09에는 커스텀 base 아이템 스미딩이 동작하지 않았다. 바닐라 아이템에는 태그를 붙일 수 없다. 아이템 파일이 없는 블록에는 아이템 태그가 없다. 예전 커스텀 스미딩 레시피는 두 번째 슬롯에 `<ns>:netherite_ingot`이 필요했고 이것은 1.18.30 이후 동작하지 않는다.
+- 업그레이드 레시피는 `minecraft:recipe_smithing_transform`(`tags:["smithing_table"]`, template/base/addition/result)이다. base 아이템에 태그 `minecraft:transformable_items`(다이아→네더라이트), 커스텀 템플릿 태그 `minecraft:transform_template`를 쓴다. `addition`은 `minecraft:netherite_ingot`이어야 하고(하드코딩) `{"tag": ...}` 형태는 동작하지 않는다(format 1.26.50 시험). 다만 26.40부터 커스텀 템플릿을 쓴 변환이 지원되고 `addition`이 태그 `minecraft:transform_materials`를 받는다는 2026-08-27 보고가 있어 **conflicting**이었다. Windows 1.26.65.1에서 `addition`에 태그 `minecraft:transform_materials`를 준 커스텀 아이템은 로그 없이 받아졌고, 태그 없는 커스텀 아이템과 막대기는 `Smithing Transform Recipe: <id> addition item must have the 'minecraft:transform_materials' tag.`로 거부됐다 `{실측}`. 코드는 `addition`이 `minecraft:netherite_ingot`이어야 한다는 하드코딩 대신 이 태그를 검사하고 `{코드}`, 변환 결과를 게임에서 확인하지는 않았다. 코드에 있는 태그 문자열은 `minecraft:transformable_items`, `minecraft:transform_materials`, `minecraft:transform_templates`(복수형)이고 위의 단수 `minecraft:transform_template`은 코드에 없다. 템플릿 태그는 재지 않았다 `{코드}`. 2026-01-09에는 커스텀 base 아이템 스미딩이 동작하지 않았다. 바닐라 아이템에는 태그를 붙일 수 없다. 아이템 파일이 없는 블록에는 아이템 태그가 없다. 예전 커스텀 스미딩 레시피는 두 번째 슬롯에 `<ns>:netherite_ingot`이 필요했고 이것은 1.18.30 이후 동작하지 않는다.
 - 1.26.40의 base 아이템 제한: base가 방어구/장비가 아니면 `base item is not a piece of armor or equipment`가 나고 `minecraft:durability`가 없는 아이템은 실패한다(MCPE-242206, 2026-08-30 등록). 우회:
 
 ```json

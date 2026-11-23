@@ -133,3 +133,40 @@
 
 - Level 가상 `0xac8`(슬롯 345)은 가상 표 `0x14f0c59a0`, `0x14f1370e0`, `0x14f2d0770`에서 같은 함수 `0x14232fe10`이다. 이 함수는 레벨 데이터 객체(`0x14232c340`이 돌려줌)의 정수 필드 `+0x3e8`이 1인지 비교하고, 슬롯 346(`0xad0`, `0x14232fe40`)은 2인지 비교한다. 필드는 레벨 데이터 생성자 `0x1410683a0`이 `LevelSettings` `+0x6c`에서 복사한다. StartGame 설정 직렬화 `0x1444fc760`의 "Education Edition Offer"와 같은 자리로 보인다(추론).
 - 매니저는 옵션 `0x27e`가 참이 되는 콜백 `0x1465ea960`에서만 만들어지고 생성자 `0x142806440`의 호출자는 이 하나다. 옵션 `0x27e`를 읽는 곳은 `0x14280668a`, `0x1408aba8c`, `0x14658d83f`다. `onClientCreatedLevel` `0x142806600`이 세 조건을 `0x1428066b8` 이하에서 본다.
+
+## 엔티티 컴포넌트 멤버와 description 검증
+
+짝: `docs/content/entities.mdx`의 17절.
+
+- 컴포넌트 구조체는 구조체 이름의 FNV-1a 32 해시를 즉시값으로 가진 함수에서 찾고, 멤버 이름 문자열을 LEA하는 작은 함수가 멤버 정의 함수다. 같은 이름을 LEA하는 큰 함수가 스키마 문서 생성 함수이고 숫자와 불리언 기본값을 읽을 수 있다. 이름이 8바이트 이하면 즉시값으로 쪼개져 문자열 검색에 안 잡힌다.
+- 버전별 컴포넌트 등록 함수: 1.21.100 `0x145f5b310`, 1.21.110 `0x148d6fe40`, 1.21.120 `0x14915bdd0`, 1.26.0 `0x149edf260`, 1.26.10 `0x14963cea0`, 1.26.20 `0x14ad87240`, 1.26.30 `0x14ae7e3a0`, 1.26.40 `0x149726cb0`, 1.26.50 `0x148e09f00`, 1.26.60 `0x148fe3810`, 구버전 `0x141dc6ac0`. 버전은 구조체 이름 투표로 정한 추정이다.
+- 멤버 정의 함수: `minecraft:behavior.panic` `0x149503950`, `minecraft:rideable` `0x149503e70`(생성 `0x14aff8e60`), `minecraft:teleport` `0x14950c680`(생성 `0x14b00dcc0`), `minecraft:trail` `0x14950d0f0`, `movement.fly` `0x149502ce0`, `movement.glide` `0x149503560`, `minecraft:healable` `0x1494ff540`, `dash_action` 생성 `0x14af98940`, `buoyant` 생성 `0x146aaf560`, `economy_trade_table` `0x1494fb240`(생성 `0x14af9a770`), `shareables` `0x14950c020`, `timer` `0x14950cc70`, `transformation` `0x14950ece0`, `AngerLevel`(1.26.50) 등록 `0x148e09f00`, `Projectile`(1.26.50) `0x148fc6bb0`. `leashable` 기본값 `0x143c8d020`. 구버전 목표 읽기 `0x147c0dd00`(키 조회 `0x14e933ea0`).
+- buoyant 고쳐 읽기 문장 위치 `0x14f818975`, `0x14f816025`(함수 `0x146abca30`), `0x14f818f53`, `0x14f815d41`(`0x146abcb80`), `0x14f818f93`(`0x146abcbf0`).
+- Brain 컴포넌트 25개는 위 등록 함수들의 `memory_behavior.*`, `memory_sensor.*` 이름이다. 센서 항목 구조체는 `SharedTypes::v1_26_xx::Brain::MemorySensors::*SensorEntryDefinition`이다.
+- 같은 컴포넌트 두 버전 충돌 문장 `0x14f7e8b0f`, 검사 함수 `0x1417149e0`, `0x141714ba0`, 생성자 `0x141714750`. 베타 format 문장 `0x14f81026a`, `0x14f7f4640`. 문서 구조체 `Beta::ActorDefinitions` `0x14925cdc0`, `Beta::ActorDocument` `0x1492479b0`. 최상위 `upgrades`는 v1_26_30 문서 구조체 `0x14aea5e70`에 있고 v1_26_20 `0x14ada0630`에는 없다.
+- description 읽기 구간은 함수 경계 정보가 없는 `0x1436cb000`에서 `0x1436d1800`이다. `spawn_category` `0x1436cfa60`, `entity_version` 이름 `0x1436cfded`, `aliases` 이름 `0x1436cd160`, 별칭 문장 `0x14f516179`, 업그레이드 문장 `0x1436d0695`에서 `0x1436d1974`.
+- 속성 읽기 `0x142be75b0`. 이름 검사 문장 `0x14f5eac68`, `missing a 'default'` `0x14f5c0378`, 형 일치 `0x14f83bffc`, `type` 값 `0x14f81f72e`, `client_sync` `0x14f82214e`(함수 `0x142be6ad0`), 범위 밖 `default` `0x14f5bfebf`(정수 `0x142be91b0`, 실수 `0x142be93b0`), Molang 문자열 경로 `0x142be8cf0`, enum 개수 `0x142be9b90`, enum 값 문장 `0x14f54ca9a`. 측정에서 개수 한도 32가 나왔으나 개수를 검사하는 코드는 이 함수 안에서 찾지 못했다.
+
+## 루트 테이블, 레시피, 거래, 스폰 규칙, 피처, 차원
+
+짝: `docs/content/loot-and-trading.mdx`의 5절, `docs/content/recipes.mdx`, `docs/content/biomes-and-dimensions.mdx`, `docs/content/worldgen-and-features.mdx`.
+
+- 루트 함수 레지스트리 `0x1455597b0`(정적 표 `0x1529c9c60`, `0x1529c9ca0`). 함수 목록 파서 `0x1455541f0`(실험 게이트와 네임스페이스 자르기), 풀과 엔트리 파서 `0x14554d2f0`, 테이블 로더 `0x145548830`. 함수 팩토리는 `set_count` `0x145555380`, `set_data`와 `random_aux_value` `0x145555410`, `enchant_book_for_trading` `0x145555770`, `exploration_map` `0x145556cb0`, `set_stew_effect` `0x145557770`, `set_ominous_bottle_amplifier` `0x145557800`, `carry_over_block_entity_data` `0x1455579b0`.
+- 루트 조건 파서 `0x14bc52ef0`(`operator`), 목록 `0x14bc54b00`. 조건 팩토리는 `damaged_by_entity` `0x147bd2b70`, `passenger_of_entity` `0x147bd59b0`, `is_baby` `0x147bd33c0`, `has_property` `0x147bd30e0`, `bool_property` `0x147bd6570`, `int_property` `0x147bd5f20`, `float_property` `0x147bd6270`, `enum_property` `0x147bd6870`, `biome_has_tag` `0x14bc52bf0`, `random_chance` `0x147bd6cd0`, `match_tool` `0x147bd4250`.
+- 레시피 종류 이름 표 `0x14f1a7b70`이 있는 함수 `0x1436468e0`, 스미딩 변환과 재료 감소 `0x143689b10`, 재료 서술자 `0x143686fa0`, 해금 `0x143688e80`, 모양 레시피 추가 `0x143690970`. `minecraft:transform_materials` 정적 변수 `0x1528c6e88`(초기화 `0x1402ef5a0`), 태그 레지스트리 `0x1447447e0`.
+- 거래 테이블 파서 `0x1432a6fc0`(테이블), `0x1432a5b70`(거래), `0x1432e0c70`(거래 아이템), `0x1432dfe20`(`choice`), `0x1432ddcc0`(`filters`, `functions`), 변환 `0x1432e27d0`, `0x1432e0f40`, `0x1432e2e00`, `0x1432e3e20`.
+- 스폰 규칙 레거시 파서 `0x142d9e820`, 조건 구성요소 `0x142da78c0`과 `0x142c49e00`, 단순 형식 스키마 `0x14980cb40`, 레거시 형식 스키마 `0x149c6cd40`, `placement` 검증 `0x142f24e70`.
+- 피처 규칙 스키마 `0x1492d87f0`, 검증 `0x14a2ab710`. 사용 불가로 적힌 네 피처의 코드: `conditional_list_feature` 배치 `0x14a2b90e0`와 스키마 `0x14a2b9740`, scan_surface `0x14a257a00`, rect_layout `0x14a252380`, beards_and_shavers `0x14a2b35d0`. 피처 이름 표 후보 `0x14721e4d0`(약 256KB, 디컴파일 시간 초과).
+- 바이옴 경고 `0x1471afe10`(multinoise), `0x1471b0a30`(overworld), 호출 `0x1471b0000`. `replace_biomes` 스키마 `0x14962d150`, 검사 `0x1471b1320`.
+- 차원 스키마 `0x148fd8fd0`(옛 스키마 `0x149809260`), 검증 `0x142957ef0`, 높이 서식 `0x142958710`. 측정에서는 스키마 범위 [16, 1024]가 먼저 걸렸고 `min_y` 16의 배수 검사와 `minecraft` 네임스페이스 거부 문장이 나왔다.
+
+## 화면 전용 변수와 바인딩 이름
+
+짝: `docs/json-ui/files-and-definitions.mdx`의 1.11절, `docs/json-ui/bindings.mdx`의 4.11절.
+
+- 화면 변수 맵 함수: 일시정지 `0x1428a9190`, 컨테이너 계열 `0x1450099e0`(가상 함수 표 13곳), 데이터 구동 컨테이너 추정 `0x147475750`, 상자 `0x14708e8b0`와 `0x1470ad490`, 인벤토리 `0x145027c50`와 `0x147085cb0`, 거래 `0x145249960`와 `0x145244ea0`, 대장장이 `0x147099840`, 베틀과 석재 절단기 `0x147093580`와 `0x14709caf0`, 채팅 화면 `0x144ff5490`, 책 `0x144ce6000`, 표지판 `0x144f0b100`, 칠판 `0x144fe7e20`, 모달 `0x145250e80`, 사진첩 `0x1428cbad0`, 진행 화면 `0x1428d2670`와 `0x1450b3410`, 서버 추가 `0x144ce00f0`, 월드 템플릿 `0x145282f00`, HUD 폭 `0x144b5b130`, 스크린샷 번쩍임 `0x1450d7fe0`, 팝업 `0x145240580`.
+- HUD 팩토리 변수 함수: 제목, 부제목, 아이템 이름 `0x144b5eb40`, 액션바 `0x144b6ed20`, 채팅 항목 `0x140682580`, 자막 `0x144b75030`, 자막 위치 `0x144b63a70`, 콘텐츠 로그 `0x145010e20`, 게임 팁 `0x1451c2820`, 토스트 `0x145240840`와 `0x145028360`, 분할 화면 참가 `0x14523fe40`. 변경 알림 `0x141c9dea0`. JSON 값 생성자: 정수 `0x14e932570`, 불리언 `0x14e932780`, 문자열 `0x14e9326a0`, 객체 `0x14e932460`. `$container_title` 객체와 같은 모양을 만드는 함수 `0x1400f3d10`.
+- 서버 폼 컨트롤러 생성자 `0x1450dd6b0`(바인딩 12개 등록), 커스텀 폼 `0x145497a00`, NPC `0x142896b80`. 서버 폼 가상 함수 표 `0x14f22d1b0`, 채팅 `0x14f21c860`.
+- 바인딩 응답: 기반 전역 `0x144b49880`, 기반 컬렉션 `0x144b692f0`, HUD 전역 `0x144b69300`, HUD 컬렉션 `0x144b648a0`, 게임 이벤트 `0x144b6ea20`. 값 저장 함수: 불리언 `0x14050aba0`, 정수 `0x1405b3c00`, 실수 `0x1405b3d70`, 문자열 `0x1405b38c0`. 컨트롤 속성 대상 `0x141919fb0`.
+- 이름 해시는 FNV-1a 32(오프셋 `0x811C9DC5`, 소수 `0x01000193`)이고 `#`를 포함해 계산한다. 풀린 숨은 이름의 해시: `#vr` `0x4538cf3a`, `#is_riding` `0x7263217a`, `#show_cursor` `0x23e4d0da`, `#inventory_button_enabled` `0x45d6c675`, `#shield_is_active` `0x1b88726f`, `#show_item_pickup` `0x61003c94`, `#editor_chat_visible` `0x01d9c3db`, `#editor_chat_offset` `0x5933e5ac`, `#editor_chat_layout_active` `0x8930bce0`, `#is_realm_level` `0x0ac12133`. 풀지 못한 해시는 HUD 전역 9개, HUD 컬렉션 이름 4개, 기반 2개다.
+- 설치본 바닐라 UI는 `data\resource_packs\vanilla\__brarchive\ui.brarchive`(183개 파일)이다.

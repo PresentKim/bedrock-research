@@ -142,7 +142,7 @@ JSON UI는 리소스팩 `ui/` 폴더의 JSON 파일들로 이루어진다. 파�
 - **[FILE-09]** `$이름`이 변수다. 정의 안에 `"$x": 값`으로 두거나 참조 지점에서 넘긴다. `"$x|default": 값`은 위(참조 지점)에서 넘기지 않았을 때만 쓰는 기본값이다. `{바닐라}` (출처: VN `|default` 3,419회)
 - **[FILE-10]** 일반 속성의 변수 치환은 **값 전체가 변수일 때만** 된다. `"text": "$title"`은 되고 `"text": "제목: $title"`은 `$`가 그대로 찍힌다. 조합이 필요하면 변수 식을 쓴다(FILE-11). `{실측}` (출처: BC-facts)
 - **[FILE-11]** 변수 값에는 괄호 식을 쓸 수 있다. 바닐라는 이것으로 바인딩 이름, 텍스처 경로, 컨트롤 이름을 조립한다. 예: `"$toggle_state_binding_name": "('#' + $dropdown_name)"`. `{바닐라, 작동팩}` (출처: VN ui_common.json:1126, AP 4.3·4.9)
-- **[FILE-12]** 엔진이 미리 넣어 주는 변수가 있다. 예: `$education_edition`, `$is_ps4`, `$pre_release`(플랫폼·빌드), 상자 화면의 `$container_title`, HUD 팩토리가 만드는 컨트롤의 `$actionbar_text`·`$title_fade_in_time`. 모든 화면이 받는 전역 이름은 88개이고 화면 전용 이름이 따로 있다(1.11절). `{바닐라, 실측, 코드}` (출처: VN ignored 사용 상위 값, VN hud_screen.json:2158·2170, BC-facts, 2026-11-20 Windows 1.26.65.1 역컴파일)
+- **[FILE-12]** 엔진이 미리 넣어 주는 변수가 있다. 예: `$education_edition`, `$is_ps4`, `$pre_release`(플랫폼·빌드), 상자 화면의 `$container_title`, HUD 팩토리가 만드는 컨트롤의 `$actionbar_text`·`$title_fade_in_time`. 모든 화면이 받는 전역 이름은 88개이고 화면 전용 이름이 따로 있다. 서버 폼과 NPC 화면은 전역 88개만 받고 화면 전용 이름이 없다(1.11절). `{바닐라, 실측, 코드}` (출처: VN ignored 사용 상위 값, VN hud_screen.json:2158·2170, BC-facts, 2026-11-20 Windows 1.26.65.1 역컴파일)
 - **[FILE-13]** `variables` 배열의 각 항목은 `"requires": "<$변수 식>"`이 참일 때 그 항목의 변수를 적용한다. 배열 대신 **단일 객체**로 써도 된다. `{바닐라, 작동팩}` (출처: VN 배열 274회·객체 4회 예 realms_settings_screen.json:2557, AP 4.6, BW-doc)
 - **[FILE-14]** 컨트롤 배열도 변수로 넘길 수 있다: `"controls": "$target_control"`. 템플릿에 "자식 슬롯"을 만드는 방법이다. `{바닐라, 작동팩}` (출처: VN 14회 예 persona_cast_character_screen.json:14, AP 4.2, BW-intro)
 - **[FILE-15]** `"자식@$변수"`로 변수가 가리키는 정의를 마운트할 수 있다. 바닐라는 참조 지점에서 넘긴 변수로도 413회 쓴다(예: `content@$button_content`). 단 bedrock-core 상자 라우터의 한 구성(`$gate|default`를 선언한 호스트를 다른 `$gate`로 두 번 참조)에서는 아무것도 안 그려진 실측이 있다. 마운트가 안 되면 정의 이름을 직접 쓴다. `{바닐라, 작동팩, 충돌}` (출처: VN 413회, AP 4.8, BC-facts, 충돌 C-03, BW-intro)
@@ -188,7 +188,7 @@ JSON UI는 리소스팩 `ui/` 폴더의 JSON 파일들로 이루어진다. 파�
 - **[FILE-25]** `_ui_defs.json`의 경로는 리소스팩 루트부터 확장자까지 쓴 전체 경로다. 위키는 `ui/` 밖 폴더(`my_ui/main_menu.json`)도 된다고 한다. 바닐라와 이 프로젝트의 작동팩은 모두 `ui/` 아래만 쓰므로 `ui/` 밖은 확인하고 쓴다. `{미검증}` (출처: BW-intro)
 - **[FILE-26]** namespace에는 접두를 붙일 수 있다고 한다(`"namespace": "wiki:main"` → `"x@wiki:main.element"`). 바닐라 namespace와 겹칠 일을 줄이는 용도다. 바닐라와 이 프로젝트 출처에는 용례가 없다. `{미검증}` (출처: BW-best)
 - **[FILE-27]** 경로 키(`"부모/자식"`)가 가리키는 자식이 없으면 Content Log에 리소스팩 오류가 남지만 나머지 UI는 정상 동작한다. 경로 키는 바닐라 개편에 가장 먼저 깨지는 접점이므로 정의 자체를 덮어쓸 수 있으면 그쪽을 쓴다. `{미검증, 추론}` (출처: BW-best)
-- **[FILE-28]** 엔진이 넣어 주는 변수(`$actionbar_text` 등)를 식에서 쓸 때는 자기 변수로 한 번 받아 쓴다(`"$atext": "$actionbar_text"`, `"visible": "(not ($atext = 'x'))"`). 위키는 엔진 변수에 직접 비교할 수 없다고 하고, AP의 `"$title_text|default": ""` 선언도 같은 효과를 내는 것으로 보인다. `{미검증, 추론}` (출처: BW-intro, AP 4.1)
+- **[FILE-28]** 엔진이 넣어 주는 변수(`$actionbar_text` 등)를 식에서 쓸 때는 자기 변수로 한 번 받아 쓴다(`"$atext": "$actionbar_text"`, `"visible": "(not ($atext = 'x'))"`). 이름 없는 상자에서 `visible: "($container_title = 'container.chest')"` 라벨은 숨고 `"not"`을 붙인 라벨은 보였으며(직접 비교가 거짓), `"$copy": "$container_title"`로 받은 `($copy = 'container.chest')` 라벨은 보였다(참). 코드에서 `$container_title`과 `$actionbar_text`는 문자열이 아니라 `__string`, `__rawtext`, `value` 키를 가진 객체이고 `$title_text`, `$subtitle_text`는 평범한 문자열이다. `$actionbar_text`는 직접 재지 않았고, 복사하면 비교되는 이유도 읽지 못했다. AP의 `"$title_text|default": ""` 선언도 같은 효과를 내는 것으로 보인다. `{실측, 코드, 추론}` (출처: BW-intro, AP 4.1, 2026-11-23 Windows 1.26.65.1)
 - **[FILE-29]** 엔진이 정하는 전역 플랫폼 변수 중 바닐라 1.26.50 UI가 실제로 참조하는 것: `$pocket_edition`, `$win10_edition`, `$osx_edition`, `$console_edition`, `$education_edition`, `$is_console`, `$is_desktop`, `$is_ios`, `$is_ps4`, `$xbox_one`, `$touch`, `$pocket_screen`, `$desktop_screen`, `$is_pregame`(게임 밖 화면), `$is_publish`, `$pre_release`, `$trial`, `$store_disabled`, `$is_holographic`, `$apple_os`, `$google_os`, `$microsoft_os`, `$nx_os` 등 34개. 위키 목록 55개 중 나머지 21개(`$game_pad`, `$mouse`, `$fire_tv`, `$gear_vr` 등)는 바닐라 UI 파일에 나오지 않는다. Windows 1.26.65.1 클라이언트 코드에서는 예로 든 네 이름이 모두 전역 88개 안에 있다. 입력 모드 이름은 `$game_pad`뿐이고 `$gamepad`는 없다(1.11절). HUD에서 잰 값은 코드와 같았고, 팩 `_global_variables.json`은 엔진이 넣는 같은 이름을 덮어쓰지 못한다. `{바닐라, 코드, 실측}` (출처: BW-doc Global Variables, VN 전수 검색, 2026-11-20 Windows 1.26.65.1 역컴파일)
 
 ### 1.8 Cinnabar 엔진 재구성으로 더한 규칙
@@ -291,12 +291,46 @@ Windows 1.26.65.1 클라이언트 코드를 읽은 결과다. 함수 주소는 �
 | 일시정지 화면 | `$is_big_screen`, `$store_button_text`, `$platform_icons_visible`, `$ignore_edu_pause`, `$has_edu_external_link`, `$unlock_full_game_button_text`, `$achievements_button_focus`, `$feedback_button_focus`, `$profile_button_focus`, `$pause_menu_icon_settings_layout` | `$is_big_screen`은 화면 크기 두 값의 비율이 2.0보다 작으면 참이다. 두 값이 너비와 높이인지는 `{추론}`. 화면 변수를 만들 때 한 번 정해진다. 일시정지 화면에서는 값이 있고 1920x1009(비율 1.9)에서 참이었으며 HUD에서는 값이 없었다. 거짓 쪽은 창 비율을 바꾸지 못해 재지 못했다 `{실측}` |
 | 설정 계열 화면 | `$is_world_create`, `$is_world_edit`, `$is_template_create`, `$is_realms_edit`, `$is_mp_host`, `$is_mp_client`, `$gamepad_supported`, `$keyboard_and_mouse_supported`, `$touch_supported`, `$supports_flite_tts`, `$platform_tts_exists`, 탭용 `*_forced_index` 39개 등 73개 | `$gamepad_supported`, `$touch_supported`, `$keyboard_and_mouse_supported`는 화면 생성 인자로 받는 값이고 전역 `$touch`와 다른 값이다 |
 | 인벤토리 계열 화면 | `$survival_index`, `$equipment_index`, `$construction_index`, `$nature_index`, `$items_index`, `$search_index`, `$crafting_index`, `$armor_index`, `$survival_layout_index`, `$recipe_book_layout_index`, `$creative_layout_index`, `$pocket`, `$show_inventory_screen_button` | 탭 번호와 레이아웃 선택 값으로 보인다 `{추론}` |
-| HUD 제목 팩토리 | `$title_text`, `$subtitle_text`, `$title_fade_in_time`, `$title_fade_out_time`, `$title_stay_time`, `$title_alpha`, `$wait_duration`, `$show_text_background`, `$item_text_background_alpha`, `$title_shadow`, `$subtitle_initially_visible`, `$show_interact_padding`, `$show_survival_padding`, `$destroy_id`, `$localize` | `$actionbar_text`는 별도 함수가 넣는다 |
-| 채팅 | `$chat_background_opacity`, `$chat_font_scale_factor`, `$chat_text_color`, `$chat_line_spacing`, `$chat_font_type` | 바닐라 `_global_variables.json`도 `$chat_text_color` 기본값을 정의한다. 전역 이름에서는 엔진 값이 팩 파일 값을 이긴다(위 실측). 화면 전용 이름에서 같은지는 재지 않았다 |
+| HUD 제목 팩토리(`hud_title_text_factory`) | `$title_text`, `$subtitle_text`, `$title_fade_in_time`, `$title_stay_time`, `$title_fade_out_time`, `$subtitle_initially_visible`, `$title_alpha`, `$title_shadow` | `$title_text`, `$subtitle_text`는 평범한 문자열이다. `$actionbar_text`는 별도 함수가 넣는다 |
+| 아이템 이름 팩토리(`item_text_factory`, `popup_jukebox_text`), 팁 팩토리 | `$destroy_id`, `$localize`, `$show_interact_padding`, `$show_survival_padding`, `$show_text_background`, `$wait_duration`, `$item_text_background_alpha` | 제목 팩토리가 아니라 이 팩토리들이 받는다 `{코드}` |
+| 채팅 | `$chat_background_opacity`, `$chat_font_scale_factor`, `$chat_text_color`, `$chat_line_spacing`, `$chat_font_type`, `$chat_item_lifetime` | 바닐라 `_global_variables.json`도 `$chat_text_color` 기본값을 정의한다. 전역 이름에서는 엔진 값이 팩 파일 값을 이긴다(위 실측). 화면 전용 이름에서 같은지는 재지 않았다. 색, 배경 투명도, 글자 크기, 줄 간격은 사용자 옵션 값이라 애드온이 정하는 값이 아니다 `{코드, 추론}` |
 | 재료 색 | `$material_*_color` 11개(quartz, amethyst, lapis, copper, iron, resin, netherite, redstone, diamond, gold, emerald)와 `$party_blue_color` | 바닐라 `_global_variables.json`이 같은 이름을 정의한다. 화면 전용 이름의 우선순위는 채팅과 같은 질문이고 재지 않았다 |
 | 게임 팁 | `$arrow_*`, `$tip_anchor_*`, `$anim_*`, `$game_tip_offset`, `$game_tip_item_lifetime` 등 13개 | |
 | 토스트 | `$toast_offset`, `$popup_*`, `$display_time`, `$transition_time` | |
 | 그 밖 | `$chest_size`, `$container_size`, `$container_title`, `$use_smithing_table_2_ui`, `$left_tab_index_*` | `$use_smithing_table_2_ui`는 커뮤니티 보고가 쓰는 변수이고 엔진이 넣는 값임이 확인된다 `{코드}` |
+
+#### 화면 전용 변수의 값 형과 조건 `{코드}`
+
+위 표의 이름이 어떤 형의 값을 어떤 조건으로 받는지다(Windows 1.26.65.1 코드). 화면 컨트롤러가 변수 맵을 만들 때 한 번 정해지고(다시 도는지는 읽지 못했다), HUD 팩토리의 변수는 팩토리가 불릴 때마다 새로 계산되며 값이 바뀌면 변경 알림이 간다. 바닐라 열은 생략했다.
+
+| 화면이나 팩토리 | 변수 | 형과 값 |
+| --- | --- | --- |
+| HUD 제목 | `$title_text`, `$subtitle_text` | 문자열 |
+|  | `$title_fade_in_time`, `$title_stay_time`, `$title_fade_out_time` | 실수. 제목 틱 수를 20으로 나눈 초 |
+|  | `$subtitle_initially_visible` | 불리언. 부제목 문자열이 있으면 참 |
+|  | `$title_alpha`, `$title_shadow` | 실수는 사용자 옵션 값(`gfx_hud_text_background_opacity`로 보임 `{추론}`), 불리언은 그 값이 0.5 미만일 때 참 |
+| HUD 아이템 이름 | `$destroy_id`, `$wait_duration` | 문자열(아이템 이름), 실수(이름 글자 수 x 0.04로 보임 `{추론}`) |
+|  | `$localize`, `$show_text_background`, `$show_interact_padding`, `$show_survival_padding` | 불리언. 앞의 둘은 상수 거짓과 참, 뒤의 둘은 HUD 상태 |
+|  | `$item_text_background_alpha` | 실수. 사용자 옵션 값 |
+| HUD 액션바 | `$actionbar_text`, `$actionbar_text_background_alpha` | 객체 `{"__string": true, "__rawtext": true, "value": "<글>"}`, 실수(사용자 옵션 `gfx_actionbar_text_background_opacity`로 보임 `{추론}`) |
+| HUD 자막, 로그 | `$subtitle_direction_left`, `$subtitle_direction_right`, `$subtitle_anchor`, `$subtitle_panel_anchor`, `$subtitle_offset`, `$content_log_item_lifetime` | 불리언, 문자열, 배열, 실수(상수 5.0) |
+| 컨테이너 계열 | `$container_title` | 객체(위 액션바와 같은 모양). 액터 컨테이너면 액터 이름, 블록 컨테이너면 블록 쪽 이름, 그 밖은 빈 문자열 |
+|  | `$localize_title` | 불리언. 블록 컨테이너가 사용자 지정 이름을 가지면 거짓으로 보임 `{추론}`, 그 밖은 참 |
+| 데이터 구동 컨테이너, 상자 | `$container_size`, `$chest_size` | 정수. 컨테이너 모델의 칸 수 |
+|  | `$container_rows_1` ~ `$container_rows_6` | 불리언 6개. 줄 수가 그 값이면 참. 줄 수는 칸 수가 1 미만이면 1, 55 미만이면 (칸 수 + 8)을 9로 나눈 몫, 그 이상이면 6 |
+| 인벤토리 | `$survival_index`, `$crafting_index`, `$items_index` 등 | 정수 상수(탭 번호) |
+| 거래 | `$villager_name`, `$second_item_slot_ignored`, `$left_tab_index_inventory` | 문자열(거래 주민 이름), 불리언, 정수 |
+| 일시정지 | `$is_big_screen` 외 9개 | `$is_big_screen`은 화면 크기 두 값의 비율이 2.0 미만이면 참. `$store_button_text`, `$unlock_full_game_button_text`는 문자열, 나머지는 불리언 |
+| 채팅 화면 | `$max_messages` 100, `$max_text_edit_length` 512 | 정수. 입력줄 한도는 컨트롤러 필드가 참이면 32768이다(조건 이름은 모름) |
+| 책 | `$max_page_length` 256, `$max_title_length` 16, `$screenshot_file_system`, `$screenshot_frame_texture` | 정수, 문자열 |
+| 표지판 | `$sign_text_multiline`, `$sign_texture` | 문자열. 앞의 것은 컨트롤 정의 이름(`sign.regular_sign_text_multiline` 또는 `sign.hanging_sign_text_multiline`), 뒤의 것은 나무 종류별 텍스처 경로 |
+| 칠판, 모달 | `$max_input_length` 2000, `$modal_dialog_popup_size`, `$no_buttons_visible`, `$single_button_visible`, `$two_buttons_visible`, `$three_buttons_visible` | 정수, 문자열, 버튼 수에 따른 불리언 |
+| 그 밖 | `$compress_hud_width`(상수 거짓), `$screenshot_flash_anim_duration`(1.5), `$edit_mode`, `$default_tab`, `$popup_size` | 불리언, 실수, 정수, 배열 |
+
+- 서버 폼 화면(`server_form.third_party_server_screen`)과 NPC 화면(`npc_interact.npc_screen`)에는 화면 전용 변수를 넣는 함수가 없다. 두 화면은 전역 88개만 받는다. FILE-17이 말한 "일반 서버 폼 화면 안에는 변수가 들어오는 경로가 없다"가 코드로 확인된다 `{코드}`.
+- 팩이 정할 수 있는 화면 전용 값은 간접적이다. 컨테이너 이름(엔티티 이름표, 블록 사용자 지정 이름)과 거래 주민 이름, 제목과 액션바와 채팅 글이다. 채팅 색, 투명도, 글자 크기와 `$*_alpha`는 사용자 옵션이다.
+- 이름 없는 상자를 열고 잰 값(Windows 1.26.65.1): `text: "$container_title"` 라벨은 "상자"로 보였다. `visible: "$container_rows_3"` 라벨은 3줄 상자에서, `visible: "($container_size > 26)"` 라벨은 27칸 상자에서 보였다. `$container_title`을 직접 비교하는 `visible`은 거짓이었고 복사 변수로 비교하는 `visible`은 참이었다(FILE-28) `{실측}`. `chest_screen.json`의 새 정의는 `modifications`나 `ui_reload`만으로는 반영되지 않았고, 정의를 `small_chest_panel_top_half`째 다시 쓰고 월드를 다시 열자 나왔다 `{실측}`.
+- 재지 않은 것: `$actionbar_text`, 이름 붙은 상자와 엔티티 컨테이너의 `$container_title`, 서버 폼 화면의 값, `$title_alpha` 계열과 `$max_messages` 계열, 표지판과 책 변수.
 
 ## 커뮤니티 보고로 더한 사실 (커뮤니티)
 

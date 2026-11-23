@@ -144,9 +144,9 @@ sources:
 - 다른 루트 테이블을 부르려면 엔트리 `"type": "loot_table"`의 `name`에 `.json`까지 포함한 전체 경로를 쓴다(`"loot_tables/chests/abandoned_mineshaft.json"`). 커스텀 테이블은 `BP/loot_tables/<folder>/<name>.json`, 엔티티 루트는 `loot_tables/entities/`에 둔다.
 - 엔트리 `weight`는 상대값이다. 30, 20, 1이면 첫 엔트리의 확률은 30/51이다. 설명은 [MS Learn 루트 테이블 소개](https://learn.microsoft.com/en-us/minecraft/creator/documents/introductiontoloottables?view=minecraft-bedrock-stable)에 있다.
 - 블록이 자기 자신을 드롭하는 데는 루트 테이블이 필요 없다. 상자 루트는 시드 기반이다. 깃발 패턴 함수는 [Bedrock Wiki item-functions](https://wiki.bedrock.dev/loot/item-functions#banner-type)에 있다.
-- `random_chance`는 0~1 비율이다(`0.01` = 1%, `5.0`은 항상). 풀은 독립적으로 굴려지므로 확정 드롭 풀이 희귀 풀을 막지 않는다. 항상 드롭시키려면 그 아이템만 있는 풀을 따로 둔다. `minecraft:random_chance` 필터가 테스트에서 항상 참이었다는 단일 보고가 있다.
+- `random_chance`는 0~1 비율이다(`0.01` = 1%, `5.0`은 항상). 풀은 독립적으로 굴려지므로 확정 드롭 풀이 희귀 풀을 막지 않는다. 항상 드롭시키려면 그 아이템만 있는 풀을 따로 둔다. `minecraft:random_chance` 필터가 테스트에서 항상 참이었다는 단일 보고가 있다. 이름 앞에 `minecraft:`를 붙인 조건 이름은 알 수 없는 조건으로 오류 없이 버려져 항상 드롭됐다(5절) `{실측}`.
 - Fortune 에뮬레이션(중첩 풀): `apply_bonus`/`alternatives`는 없다. 어떤 엔트리든 자기 `pools`를 가질 수 있고(조건 포함) 무한 중첩되며 부모 엔트리가 드롭됐을 때만 발동한다. 석탄 Fortune 3(1개 40%, 2~4개 각 20%)은 1 + 0.6 확률로 (1 + 0.667 확률로 (1 + 0.5 확률로 1))로 만든다.
-- 함수: `set_enchants`/`specific_enchants`, `enchant_with_levels`(`treasure`), `set_data`(염소 뿔), 책 텍스트 설정, lang 참조 `%key`, `carry_over_block_entity_data`(26.40 실험적). 바닐라 시련 금고 테이블은 `set_ominous_bottle` 같은 함수를 쓴다. 루트 조건 목록은 바닐라 파일에서 추출한 것으로 MS 문서에 다 있지는 않다.
+- 함수: `set_enchants`/`specific_enchants`, `enchant_with_levels`(`treasure`), `set_data`(염소 뿔), 책 텍스트 설정, lang 참조 `%key`, `carry_over_block_entity_data`(26.40 실험적). 바닐라 시련 금고 테이블은 `set_ominous_bottle_amplifier` 함수를 쓴다(이름이 `set_ominous_bottle`이 아니다) `{코드, 실측}`. 루트 조건 목록은 바닐라 파일에서 추출한 것으로 MS 문서에 다 있지는 않다.
 - 탐험 지도: `loot_table` 엔트리가 `loot_tables/maps/<name>.json`을 가리킨다. 지그소 구조물은 위치 지정이 가능하고(`/locate`에도 표시) structure_template_feature 구조물은 불가할 수 있다. `decoration`으로 지도 아이콘을 정한다. `exploration_map`의 `destination`, `decoration`, `search_radius`는 지원되지만 `zoom`은 효과가 없어 거래로 지도 줌 레벨을 정할 수 없다.
 - `/loot`으로 상자에 넣으면 연속으로 채워진다. 바닐라 같은 분산은 NBT 편집이나 루트 프로세서 리스트로 한다.
 - 스크립트 커스텀 드롭은 `loot` 명령과 `LootTableManager`에 보이지 않는다(이들은 `minecraft:loot`만 본다). 스크립트에서 `dimension.runCommand('loot spawn ...')`나 loot API로 커스텀 드롭을 만든다. 루트 테이블로 몹을 소환할 수는 없다(`<typeId> <amount> <nameTag>` 이름의 아이템을 `minecraft:item` `entitySpawn` 리스너로 처리한 사례). 허스크가 좀비 없이 모래를 드롭하려면 허스크 전용 `minecraft:loot` 테이블을 쓴다.
@@ -171,4 +171,52 @@ sources:
 
 ## 4. 전체 레퍼런스
 
-함수와 조건의 전체 목록과 거래 테이블 전체 문서는 [루트 테이블 레퍼런스](./reference/loot-tables-1.mdx)와 [거래 테이블 레퍼런스](./reference/trade-tables.mdx)에 MS Learn 원문 발췌로 실었다.
+함수와 조건의 전체 목록과 거래 테이블 전체 문서는 [루트 테이블 레퍼런스](./reference/loot-tables-1.mdx)와 [거래 테이블 레퍼런스](./reference/trade-tables.mdx)에 MS Learn 원문 발췌로 실었다. 이 발췌 페이지는 원문 그대로 두므로 다음 절이 정정과 보충이다.
+
+## 5. 클라이언트 코드와 실측 (Windows 1.26.65.1)
+
+클라이언트 코드(루트 함수 레지스트리, 조건 파서, 레시피와 거래 파서)를 읽고 같은 빌드에서 커스텀 루트 테이블을 `/loot spawn`으로 반복해 개수를 합산하거나 로드 때 Content Log를 읽은 결과다(2026-11-23). 함수 주소는 `native-notes/`에 있다. 코드와 실측이 어긋나면 실측을 적는다. 거래 파서의 기본값처럼 파서 수준만 읽은 것은 그렇게 적었다.
+
+### 함수 26개와 조건 20개
+
+- 클라이언트가 등록한 루트 함수는 26개다: `set_count`, `set_data`, `random_aux_value`, `set_damage`, `looting_enchant`, `enchant_with_levels`, `enchant_book_for_trading`, `enchant_randomly`, `furnace_smelt`, `set_data_from_color_index`, `enchant_random_gear`, `random_block_state`, `random_dye`, `exploration_map`, `set_banner_details`, `explosion_decay`, `set_name`, `set_lore`, `specific_enchants`, `fill_container`, `set_actor_id`, `set_book_contents`, `set_stew_effect`, `set_ominous_bottle_amplifier`, `set_armor_trim`, `set_potion`. 별도 표에 `carry_over_block_entity_data`가 하나 더 있다. 레퍼런스의 `trader_material_type`은 이 레지스트리에 없고 거래 테이블 변환 코드에서만 나온다 `{코드}`.
+- 레퍼런스의 `set_nbt`는 로드 때 `Unsupported looting function: set_nbt`가 찍히고 코드에도 없다 `{실측, 코드}`. `set_enchants`도 코드에 없고 이름이 `specific_enchants`다(`enchants` 배열 또는 단일 항목의 `id`와 `level`) `{코드}`.
+- 등록된 루트 조건은 20개다: `killed_by_player`, `killed_by_player_or_pets`, `killed_by_entity`, `damaged_by_entity`, `passenger_of_entity`, `entity_killed`, `random_chance`, `random_difficulty_chance`, `random_chance_with_looting`, `random_regional_difficulty_chance`, `has_mark_variant`, `has_variant`, `match_tool`, `is_baby`, `has_property`, `bool_property`, `int_property`, `float_property`, `enum_property`, `biome_has_tag`. 레퍼런스가 소개하지 않은 것은 9개다 `{코드}`.
+
+| 조건 | 읽는 멤버 |
+| --- | --- |
+| `damaged_by_entity`, `passenger_of_entity` | `entity_type` |
+| `is_baby` | 없음 |
+| `biome_has_tag` | `tag`(바닐라 상자 테이블이 사용) |
+| `has_property` | `domain`(엔티티 프로퍼티 이름) |
+| `bool_property`, `int_property`, `float_property`, `enum_property` | `domain`, `value` |
+
+  프로퍼티 조건이 어느 엔티티의 값을 보는지는 읽지 못했다. 레퍼런스의 `entity_properties` 조건은 이름이 코드에 없다 `{코드}`.
+
+### 조건 operator, 알 수 없는 이름
+
+- 모든 조건이 `operator`를 받는다. `"=="`와 `"equals"`(기본)는 그대로, `"!="`와 `"not"`은 조건을 뒤집는다. `random_chance` 0.0에 `"!="`를 주면 20번 모두 드롭됐고 1.0에 `"!="`면 0개였다. `"=="`, `"equals"`는 0개였고 `"not"`은 20개였다. 그 밖의 값(`"xx"`)은 `Invalid loot condition operator "xx". Expected "==", "equals", "!=", or "not".`을 로그에 남기고 조건이 버려져 항상 드롭됐다 `{실측}`. 바닐라 `abandoned_camp_common_chest.json`이 `biome_has_tag`에 `"operator": "!="`를 쓴다 `{코드}`.
+- 알 수 없는 조건 이름(`minecraft:random_chance`, `re8_nonexistent`)은 로그 없이 조건이 없는 것처럼 항상 드롭됐다. 오타를 알려 주지 않으므로 조건 이름은 접두 없이 목록에서 복사한다 `{실측}`.
+- 알 수 없는 함수 이름은 `Unsupported looting function: set_countx`를 로그에 남기고 그 함수만 버려진다(개수 1). 함수 이름은 `:` 앞을 잘라내서 `foo:set_count`도 `set_count`로 동작했다(count 5로 10번 50개) `{실측}`.
+- `set_count`의 소수 `count`는 1.5가 100번 모두 1이었고 `{min: 0.5, max: 2.5}`는 100번 합이 101이었다. 버림으로 보이나 분포만 봤고 개별 값은 확인하지 않았다 `{실측}`.
+
+### 개별 함수
+
+- `random_aux_value`는 `set_data`와 같은 구현이다. 멤버는 `data`(고정) 또는 `values`(`{min, max}` 범위에서 임의)이고 둘 다 없으면 `Invalid json keyname for specifying the data range for set_data function. Only 'data' and 'values' are supported.`가 로그에 남는다. 포션에 `data: 5`는 5개 모두 같은 포션이었고 `values: {min: 1, max: 20}`은 8종이 섞였다. `set_data` `data: 5`도 같았다 `{실측, 코드}`. 레퍼런스의 "random_block_state와 비슷하다"는 설명과 다르다.
+- `set_stew_effect`는 `effects`를 객체 하나로도 배열로도 받는다(로그 없음). 항목은 `id`(정수)만 읽고 `duration`은 읽지 않는다 `{코드}`. 효과 내용은 확인하지 못했다.
+- `set_ominous_bottle_amplifier`의 `amplifier`는 숫자와 `{min, max}` 모두 로그 없이 받아졌다. 진폭 값은 읽지 못했다 `{실측}`.
+- `carry_over_block_entity_data`만 실험 게이트에 걸린다. `upcoming_creator_features`가 꺼진 월드에서 `Unsupported looting function outside of Upcoming Creator Features Experiment: carry_over_block_entity_data`가 로그에 남고 함수만 버려지며 아이템은 정상으로 떨어졌다 `{실측}`. 나머지 26개는 실험과 무관하다 `{코드}`.
+- `enchant_book_for_trading`은 `base_cost`(기본 2), `per_level_cost`(3), `base_random_cost`(5), `per_level_random_cost`(10) 외에 `enchantments: [{name, min, max}]` 배열을 읽는다. 레퍼런스에 없는 멤버이고 게임에서 재지 않았다 `{코드}`.
+- `exploration_map`은 코드에서 `destination` 문자열 하나만 읽는다. 위의 `decoration`, `search_radius` 지원 보고는 코드에서 찾지 못했다. 다른 곳에서 읽는지는 모른다 `{코드}`.
+
+### 레시피
+
+- 레시피 종류는 8개다: `recipe_shaped`, `recipe_shapeless`, `recipe_furnace`, `recipe_brewing_mix`, `recipe_brewing_container`, `recipe_material_reduction`, `recipe_smithing_transform`, `recipe_smithing_trim`. `recipe_material_reduction`(`input`, `output[]`)은 [레시피](./recipes.mdx)에 따로 적는다.
+- 같은 `input`에 `output`이 다른 화로 레시피가 둘이면 뒤에 읽힌 쪽이 `Skipping duplicate furnace recipe.`로 버려졌다. `priority`를 5와 1, 1과 9, 9와 1로 바꿔도 같아서 파일 이름 순서로 먼저 읽힌 쪽이 이겼다. `priority`는 중복 해소에 영향이 없었다 `{실측}`.
+
+### 거래 테이블
+
+- `max_uses`를 뺀 거래는 7번 거래하자 막혔다(붉은 X). 레퍼런스의 기본값 12는 이 빌드에서 맞지 않고 파서 기본값 7과 같다 `{실측, 코드}`.
+- 거래 아이템 `price_multiplier`를 뺀 거래는 7번 거래한 뒤에도 가격이 그대로였다. 레퍼런스의 기본값 0.05와 다르고 파서 기본값 0과 같은 방향이다. 지정한 값의 효과는 재지 않았다 `{실측, 코드}`.
+- 거래의 `weight`(정수, 1 이상, 기본 1)는 `groups`가 없거나 `num_to_select`가 -1이면 효과가 없다. 로드 때 `"weight" key used for a trade without using "groups" key or with "num_to_select" set to -1. Weight value will have no effect as every trade will be chosen.` 경고가 나오고 두 거래가 모두 보였다. `num_to_select`가 -1이면 그룹의 거래를 전부 고른다. `num_to_select`가 그룹의 거래 수보다 크면 오류다 `{실측, 코드}`.
+- 거래 아이템은 `filters`(필터 그룹)와 `functions`(루트 함수 파서와 같은 파서)를 읽는다. 바닐라 `cartographer_trades.json`과 `fisherman_trades.json`이 `filters`(`in_overworld`, `is_mark_variant`)를 쓴다. 게임에서는 재지 않았다 `{코드}`.
