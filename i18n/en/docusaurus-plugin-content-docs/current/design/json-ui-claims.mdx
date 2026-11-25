@@ -422,8 +422,61 @@ HUD binding existence was told apart with three labels in one row. `F` has `prop
 - `#clip_ratio` is the ratio of the clipped side (0.25 leaves 75%). The cause of the ratio 0 square is unknown. The "full (0)" of section 6.5 was with `textures/ui/White`, and this time the `White` bar could not be read because of the overlay, so a texture dependence was not settled.
 - `"$max": 20.0` stayed a float, and `((20.0 - 15) / $max)` was 0.25 (between 0.2 and 0.3). The literal `20.0` is the integer 20 but did not affect the result.
 - Integer division truncates toward 0, so `(#v - ((#v / 5) * 5))` is the remainder, negative for negative values (-7 gives -2).
-- `$title_alpha` was between 0.55 and 0.7, matching the option 0.6, and `$title_shadow` was false at 0.6. Whether they follow a changed option was not measured.
+- `$title_alpha` was between 0.55 and 0.7, matching the option 0.6, and `$title_shadow` was false at 0.6. Whether they follow a changed option was measured in section 6.9.
 - The game shut down 10 seconds after injection on the first launch, and the measurement was done on the second launch. The world used was a copy of the test world, and no game options were changed.
+
+### 6.9 Container variables, wheel step, screen variables, server form bindings, same-name siblings, offset
+
+2026-11-25, the same version. Measured with the same probe pack `addons/re9-probes` and the same F/T/V pair as section 6.8. The probes were put into the two top_half definitions of `chest_screen.json`, under `horse_label` of `horse_screen.json`, into `chat_screen.json`, `book_screen.json` and `sign_screen.json`, before `long_form_scrolling_content` of `server_form.json`, and into a new column at the top right of the HUD. Number variables were read as `(#z + $var)` with a prefix such as `"#z": "CS"` in `property_bag` (BND-42). The named chest was opened by placing a chest the script had named with `nameTag`, and the chest boat was opened with the inventory key after riding it with `/ride`. The donkey was tamed and given a chest with `minecraft:on_tame` and `minecraft:on_chest` through `/event entity`, then ridden. Pixels are client pixels (GUI scale 4, client 1920x1009).
+
+| Container | `text: $container_title` | Direct comparison | `$copy` comparison | `$copy` text | `('T' + #t)` | `$localize_title` |
+|---|---|---|---|---|---|---|
+| Named chest `RE9Box` | `RE9Box` | false | true | `RE9Box` | `TRE9Box` | false |
+| Unnamed chest | `container.chest` | - | true (`'container.chest'`) | `container.chest` | `Tcontainer.chest` | true |
+| Unnamed large chest | `container.chestDouble` | - | true (`'container.chestDouble'`) | `container.chestDouble` | `Tcontainer.chestDouble` | true |
+| Chest named `(1 + 2)` | `(1 + 2)` | false | - | empty, `expected a string` | `T(1 + 2)` | false |
+| Named chest boat `RE9Boat` | `RE9Boat` | false | true | `RE9Boat` | `TRE9Boat` | true |
+| Named donkey `RE9Donkey` | `RE9Donkey` | false | true | `RE9Donkey` | `TRE9Donkey` | true |
+
+| Screen | `$container_size` | `$container_rows_*` | `$chest_size` |
+|---|---|---|---|
+| Small chest (with or without a name, and the chest boat) | 27 (`CS27`) | only `$container_rows_3` true | missing (`Expected variable not found in ancestor tree: '$chest_size'`) |
+| Large chest | 54 (`CS54`) | only `$container_rows_6` true | missing |
+| Donkey (`horse_screen`) | missing | all six missing | 15 (`CH15`) |
+
+| Item | Setup | Result | Related |
+|---|---|---|---|
+| Wheel step | vanilla chat `messages_scrolling_panel`, 60 lines (content 5646 px, viewport 810 px), y of `scrolling_content` | +56, +57 per step (about 14 GUI), -56 for a step down. +56, +57 again after merging `vertical_scroll_delta: 40` into `chat_screen` and reopening | LAY-71 |
+| Chat variables | `(#z + $max_messages)`, `(#z + $max_text_edit_length)` | `MM100`, `ML512`. `text: "$max_messages"` was empty with `expected a string` | FILE-49 |
+| Book variables | writable book, `(#z + $max_page_length)`, `(#z + $max_title_length)` | `PL256`, `TL16`. `text` was empty | FILE-49 |
+| Sign variables | newly placed oak sign | `$sign_texture` `textures/ui/sign`, `$sign_text_multiline` `sign.regular_sign_text_multiline`. `visible: "$sign_text_multiline"` was shown | files-and-definitions section 1.11 |
+| Server form bindings | F/T/V pair, screen `third_party_server_screen` | `#is_using_gamepad`, `#tts_enabled` and `#gamepad_helper_visible` were both hidden, `Vfalse` (exists, false). `#safezone_inner_top` was `Vfalse` too. The calibration `#re9_nonexistent_binding` showed only `T`, `VM` | bindings section 4.11 |
+| Static `visible: false` | no binding. Then the nonexistent global binding `#re9_nonexistent_binding` -> `#visible` | hidden. Shown | BND-09 |
+| Integer 0 and `#visible` | `#z` 0, view `(#z * 1)`, then `(#z = 1)` | shown. Hidden | BND-27 |
+| `__rawtext` object | `"$raw": {"__string": true, "__rawtext": true, "value": "(1 + 2)"}`, `text: "$raw"`. `__rawtext` removed from the same object | `(1 + 2)`. Empty with `u5_noraw \| JSON UI parse failure - expected a string.` | FILE-48 |
+| `#is_not_riding`, `#is_riding` | F/T/V pair. Standing, then riding a boat | `Vtrue`, `Vfalse` while standing. `Vfalse`, `Vtrue` in the boat | bindings section 4.11 |
+| `#descend_description` | `text: "#descend_description"` with that binding. `"#probe": "M"` with `('D' + #probe)`. On the ground, then crouched down onto scaffolding after `/setblock ~ ~-1 ~ scaffolding` | empty. `DM` in both places | bindings section 4.11 |
+| Same-name siblings and `default_control` | two siblings with the `default_control` name on a button (`CD_A`, `CD_B` in that order in chat) with hover and pressed controls. HUD and chat | no input: both shown. Mouse over: only `CD_A` hidden and hover shown, `CD_B` stays shown. Mouse away: `CD_A` shown again | FILE-39 |
+| `#offset` | reference (no offset). Static `[30, 0]` + `property_bag` `{"#offset": [10, 20]}` (no binding). Static `[70, 0]` + `{"#o": [10, 20]}` + view `#o` -> `#offset` | reference x 1304, y 562. The second x 1424, y 562 (+30, 0 GUI, the static value). The third x 1344, y 642 (+10, +20 GUI) | LAY-05, C-44 |
+
+With the options `gfx_hud_text_background_opacity` (HUD) and `gfx_actionbar_text_background_opacity` (actionbar) changed, the variables of the HUD title (`/title @s title`), the held item name and the actionbar (`/title @s actionbar xyz`) were read with `visible` comparisons.
+
+| Variable | HUD 0.6, actionbar 0.6 | HUD 0.3, actionbar 0.6 | HUD 0.3, actionbar 0.3 |
+|---|---|---|---|
+| `$title_alpha` | `> .55` true, `> .7` false | `> .1` true, `> .3` false | - |
+| `$title_shadow` | false | true | - |
+| `$item_text_background_alpha` | `> .55` true, `> .7` false | `> .1` true, `> .3` false | - |
+| `$actionbar_text_background_alpha` | `> .55` true, `> .7` false | `> .55` true | even `> .45` false |
+
+- The direct comparison of `$container_title` was false with or without a name, and the `$copy` comparison was true. The `#t` of `property_bag` compared true with `'container.chest'` on the unnamed chest and with `'RE9Box'` on the named chest (HOST-19).
+- The `$copy` text of the chest named `(1 + 2)` and the object with `__rawtext` removed were not the `3` the code predicted but empty. A string starting with `(` looks computed as an expression into a non-string value (FILE-48), and whether the result is 3 cannot be seen with this method.
+- `$localize_title` was false on a block chest with a name and true without one, and entity containers (chest boat, donkey) were true even with a name. The vanilla title showed the name as is in either case.
+- On the horse screen, labels using `$container_rows_*` in `visible` were all shown because the unresolved text is not an empty string. A number screen variable put directly into `text` was empty (FILE-49).
+- One wheel step was about 56.5 px (about 14 GUI), which does not match 15 x 20 = 300. Whether the unit is 14 GUI or 15 with another scale applied is unknown. One `amount 3` call of the measuring tool gave +60, and whether that was one wheel event or three was not confirmed. Only the tool's SendInput method delivered wheel input.
+- Nothing changed after the `vertical_scroll_delta: 40` merge, but there was no way to confirm that the merge reached the actual screen control (no related log line).
+- `#descend_description` did not resolve in the HUD. But on the screen where a flying player crouched down onto scaffolding the vanilla descend hint did not show either, so it is not certain that the "standing on scaffolding" condition held.
+- `$title_shadow` was false at 0.6 and true at 0.3, the same direction as the code's "true below 0.5". The boundary was not measured. `$actionbar_text_background_alpha` followed the actionbar option, not the HUD option. 0.3 was false in the `> .3` comparison (the same value).
+- Both options were set back to 0.6 after the measurement (both the in-game value and `options.txt`). Only the world `re9World` was opened.
 
 ## 7. Items that could not be measured
 
@@ -432,7 +485,8 @@ HUD binding existence was told apart with three labels in one row. `F` has `prop
 - Of the candidates received with section 6.5, these were not measured. Attachables (`q.property` without `c.owning_entity`, `q.mark_variant`, the armor stand condition) need a player with properties or a test entity that holds items. Gamepad focus (`#toggle_on_hover`) and `$touch` on a touch device need devices that were not available. `#entity_id` of `live_horse_renderer` needs a runtime entity number. `$container_title` in chest screen `requires`, `flip_book` without `frame_step`, the phase of `q.time_stamp`, glyph warm-up, an `.fsb` holding MP3 data, and path key edits of a user namespace split across two files were also left out this time.
 - Of the candidates received with section 6.6, these were not measured. A pack whose manifest is in a folder one level down inside the zip is a path the server sends, so it needs a local server that matches this client version (importing is a different path and was not used in its place). The look with fancy graphics off and VV was measured in section 6.7 by changing the game options directly.
 - Of the candidates received with section 6.7, these were not measured. A stencil mask that needs VV, `pbr` declaration combinations across several packs and a `minecraft:default_lighting` override were left out this time because the deferred mode was found late. Subpack selection for a pack sent by a server needs a local server, like the zip subfolder case. The tagged item crossbow pose needs the whole vanilla `controller.animation.player.root` to be overridden, so it was left out this time, along with `texture_meshes`, server entity data (`trade_tier` and others), `geometry.invisible` in armor slots, a `should_update_bones_and_effects_offscreen` expression, a `scripts.scale` string, an empty `on_fire_color` object, a `light_color_multiplier` expression, a root material without a colon, a 253-element array, the `q.is_alive` guard of the paper doll, reverse rotation of the UI preview, lang keys overlapping between packs, `servertab.*` and the fog stack limit.
-- Of the section 6.8 items, these could not be measured. Right after reloading the UI the game left the world for the world list (no reason in the log), and after that the client kept retrying a local server connection without input, so game control was stopped. They are `$container_title` of a named chest, a chest boat and a donkey, `$container_size`, `$container_rows_*` and `$chest_size` of a large chest and a donkey inventory, the pixels of one wheel step in chat scrolling (LAY-71), `$title_alpha`, `$title_shadow`, `$item_text_background_alpha` and `$actionbar_text_background_alpha` with the option changed to 0.4, chat `$max_messages` and `$max_text_edit_length`, book `$max_page_length` and `$max_title_length`, sign `$sign_texture` and `$sign_text_multiline`, and `#is_using_gamepad`, `#safezone_inner_top`, `#tts_enabled` and `#gamepad_helper_visible` inside a server form. The probes are in `addons/re9-probes`. Expressions such as `('PL' + $max_page_length)` in the book and chat probes have no `#` property and will be dropped, so when measuring again add `#z` or change them to a `visible` comparison (the `text: "$max_messages"` line can be used as is). Also left: whether the ratio 0 square depends on the texture (`White`), why `#safezone_inner_top` concatenates as `false`, same-name siblings with a button `default_control`, `#offset` in the `property_bag` of a static control, and a screen `vertical_scroll_delta: 40`.
+- Of the section 6.8 items, these could not be measured. Right after reloading the UI the game left the world for the world list (no reason in the log), and after that the client kept retrying a local server connection without input, so game control was stopped. The container variables, the wheel step, the HUD text background variables with changed options, the chat, book and sign variables, the base bindings inside a server form, `default_control` with same-name siblings and `#offset` of a static control left at that time were measured in section 6.9. Whether the ratio 0 square depends on the texture (`White`) and why `#safezone_inner_top` concatenates as `false` remain.
+- Of the section 6.9 items, these were not measured. There was no way to confirm that the `vertical_scroll_delta: 40` merge reached the actual `chat_screen` control, and overriding the whole vanilla screen definition, placing a scroll view directly on a probe screen, sharing `scroll_speed` between two scroll views, and comparing with a scroll view of a different `scroll_speed` were not tried. So the unit of one wheel step is unknown. For `#descend_description` the state of standing on scaffolding could not be made for certain, and gamepad and touch input were not measured. The exact boundary of `$title_shadow` (near 0.5), why the direct comparison of `$container_title` is false and whether `(1 + 2)` computes to the integer 3, and forms such as `requires: "$container_title"` were not measured either.
 
 ## 8. Measurement add-on
 

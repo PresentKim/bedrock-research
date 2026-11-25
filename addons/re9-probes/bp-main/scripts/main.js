@@ -12,9 +12,9 @@ function aheadOf(player, distance) {
 }
 
 const handlers = {
-  "re9:chest": (player) => {
+  "re9:chest": (player, message) => {
     const item = new ItemStack("minecraft:chest", 2);
-    item.nameTag = "RE9Box";
+    item.nameTag = message || "RE9Box";
     player.getComponent("minecraft:inventory").container.addItem(item);
     return "named chest given";
   },
