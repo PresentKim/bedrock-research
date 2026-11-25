@@ -261,6 +261,7 @@ system.beforeEvents.startup.subscribe(({ itemComponentRegistry }) => {
 
 - 트림 가능하게 하려면 태그 `minecraft:trimmable_armors`(그리고 `minecraft:is_armor`)를 붙인다. 커스텀 트림 패턴/재료는 만들 수 없다. `minecraft:trim_templates`나 `trim_materials` 태그는 Trim Pattern Registry 오류를 내고 materials 태그는 트림을 깨뜨린다는 보고가 있다. 바닐라 트림을 쓰는 커스텀 흉갑 예는 MS Learn의 addcustomitems 문서에 있다(출처: ms-learn).
 - 트림과 염색을 같이 쓸 수 있으나 염색 + 트림 레이어에서 트림이 염료 아래에 그려진다. 트림마다 방어구 어태처블 코드에 항목이 필요하다(예: `"bolt_trim": "textures/trims/custom"`). 커스텀 geometry에 `wild_trim`, `diamond_palette` 같은 트림 팔레트를 쓰는 것은 올바른 레이어가 없으면 실패한다.
+- 트림은 방어구 모델을 따라 그려지므로 커스텀 모델 방어구는 모든 부위가 같은 모델을 공유해야 한다. 투구 하나만 모델을 바꾸면 트림이 깨진다. (single report)
 
 ### 염색
 
@@ -302,6 +303,7 @@ system.beforeEvents.startup.subscribe(({ itemComponentRegistry }) => {
 - 쇠뇌의 1인칭 당기기 애니메이션은 아이템 식별자가 정확히 `crossbow`일 때만 동작한다. 한 템플릿에서는 `ae_cb:crossbow`가 동작했지만 다른 이름이나 끝에 숫자를 붙이면 깨졌다. 쇠뇌마다 네임스페이스를 달리하거나 스크립트로 커스텀 애니메이션을 만든다. 비슷한 식별자 하드코딩이 다른 곳에도 있다(예전 커스텀 스미딩 레시피에는 `<ns>:netherite_ingot`이 필요했다).
 - 창은 바닐라 창 아이템을 쓴다. 바닐라 창 JSON은 bedrock-samples(`behavior_pack/items/*_spear.json`)에 있지만 바닐라 창 어태처블은 실제 바닐라 RP에만 있고 샘플에는 없다. 새 창은 플레이어 애니메이션을 덮어쓰는 팩의 1인칭/주먹 애니메이션도 바꿨다. 공격 사거리 커스텀용 컴포넌트는 `minecraft:piercing_weapon`(reach/creative_reach/hitbox_margin), `minecraft:swing_sounds`, `minecraft:swing_duration`, `minecraft:use_animation: spear`, `use_modifiers`이고 MS Learn에는 `kinetic_weapon`, `durability_sensor`도 있다. 바닐라 같은 창 애니메이션을 쓰려면 태그 `minecraft:is_spear`와 플레이어의 창 애니메이션 세트가 필요하다. 커스텀 삼지창 템플릿은 Script API 1.19까지 동작했고 물 밖 Riptide는 확인되지 않았다.
 - `iron_spear.json`을 복사할 때 필요한 것은 `minecraft:cooldown`(category "spear", type "attack"), `minecraft:piercing_weapon`, `minecraft:swing_duration`, `minecraft:swing_sounds`, 태그 `minecraft:is_spear`, `minecraft:use_modifiers`다. 허공을 쳐도 쿨다운이 걸리는 것은 type attack과 piercing_weapon 때문이다. `kinetic_weapon`에는 format 1.21.100이 필요하다. 창 텍스처는 `textures/entity/spear`에 덮어쓴다. 바닐라 창은 쿨다운 중 공격 후 상호작용을 누르고 있으면 이상한 애니메이션이 나온다.
+- 예전 방식의 창 어태처블은 삼지창 애니메이션(`animation.trident.wield_first_person`, `_raise`, `_raise_shake`, `_riptide`, `animation.trident.wield_third_person`, `_raise`)을 재사용하고 `pre_animation`에서 `query.main_hand_item_max_duration`과 `query.main_hand_item_use_duration`으로 `variable.charge_amount`를 계산하며, 머티리얼 `entity_alphatest`와 렌더 컨트롤러 `controller.render.item_default`를 쓴다. 바닐라 창은 하드코딩이 아니므로 프리뷰의 바닐라 창 어태처블과 비교하는 편이 낫다. bridge. v2는 `kinetic_weapon`과 piercing 컴포넌트를 자동 완성하지 않는다. (single report)
 - 던진 삼지창 모델은 대부분 하드코딩이라 geometry ID와 텍스처만 바뀐다(텍스처 메시는 무시되어 불투명). 바꾸려면 바닐라 삼지창 어태처블에 자기 geometry와 텍스처를 넣는다.
 - 철퇴형 아이템은 철퇴 JSON을 복사하고 모든 참조 이름을 바꾼다. 커스텀 철퇴 템플릿(스크립트 2.4.0, 실험 기능 없음)은 철퇴 인챈트를 받으려고 `slot: "all"` enchantable과 manager.js 화이트리스트를 쓰고, 타격 후 텔레포트로 낙하 피해를 취소하며, 내려찍기는 `playerSwingStart`와 범위 6, `!attacker.isOnGround`를 확인한다. 윈드 버스트 `applyImpulse`는 일관되지 않다. 돌진에는 베타 휘두르기 감지나 `variable.attack_time` 기반 `player.json` 애니메이션 컨트롤러가 필요하다.
 - 방패는 하드코딩이다. 웅크렸을 때 `player.json` damage_sensor나 스크립트로 흉내 낸다. 커스텀 방패 템플릿(Alien-Edds/Shield)은 스크립트 기반이며 1.26.10에서 @minecraft/server 2.6.0으로 정식이 됐다(막기가 안 되면 manifest의 스크립트 버전을 올린다). 방패를 더 만들려면 아이템, 블록, 어태처블, terrain texture 정의가 필요하다. 피해 감소는 매개변수화되지 않았다. 도끼, 워든, 파괴수의 기절이 동작한다. 투명 슬롯 문제는 해결되지 않았다. `shield_patterns` 커스텀 텍스처는 되지만 1.21.130에서 1인칭에 일반 방패가 계속 보인다는 버그가 신고됐다. 전리품 함수 `set_banner_details`는 문서와 달리 방패에도 동작한다. 바닐라 방패의 화살 튕기기는 재현할 수 없다. 커스텀 방패 템플릿은 바닐라 방패가 아닌 자체 시스템이라 모바일의 방패 버튼을 보일 수 없다. (single report)
@@ -483,6 +485,7 @@ geometry 루트 뼈에는 `"binding": "q.item_slot_to_bone_name(c.item_slot)"`�
 | 제작대 염색 없음(Java 기능) | `minecraft:dyeable`은 가마솥, 색이 고정된 변형은 색마다 레시피 |
 | 번들 `storage_weight_modifier` 무시 | 스크립트 컨테이너(중첩은 렉) |
 | 커스텀 인챈트 불가 | 오프핸드 책 같은 아이템 + 스크립트, `minecraft:glint` |
+| 아이템 컴포넌트를 묻는 Molang 쿼리 없음 | 아이템에 `minecraft:tags`(예: `custom:comp`)를 주고 `query.equipped_item_any_tag('slot.weapon.mainhand', 'custom:comp')` |
 
 ## 15. 버전별 변화
 
