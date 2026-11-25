@@ -374,6 +374,57 @@ Measured in a panel inserted into `hud.root_panel` with `insert_front`. In the f
 - Language and graphics mode were changed through the game options with the bedrock MCP `options_get`/`options_set` tools instead of the Ore UI settings screen, and set back to the original values (`graphics_mode` 1, `game_language` `ko_KR`) after the measurement. The language applied only after re-entering the world.
 - `graphics_mode` 2 made the deferred query true even in a world with a pack that has no `pbr` capability. The option was written directly, so this result does not tell whether the VV choice on the settings screen is blocked. In this state the `texture_set` emission of that pack did not show.
 
+### 6.8 Binding existence, clip_ratio, alpha, size expressions, variable expressions, font size
+
+2026-11-24, the same version. This section was measured with a separate probe pack `addons/re9-probes` (resource pack `rp-main`, behavior pack `bp-main`), and the main definitions are in `rp-main/ui/re9.json`. The probes were put into `root_panel`, `hud_actionbar_text` and `hud_title_text` of `hud_screen.json` with `insert_back`. Pixel values are client pixels (GUI scale 4). The green outlines in the first captures were drawn by the measuring tool's overlay, so the drawing after turning the overlay off was read, and in the captures before that only the center pixels of cells that did not overlap the overlay were used.
+
+HUD binding existence was told apart with three labels in one row. `F` has `property_bag` `{"#probe": false}` and `T` has `{"#probe": true}`; both take a global binding with `binding_name_override: "#probe"` and then put `#probe` into `#visible` with a view binding. `V` has `{"#probe": "M"}` with the same global binding and puts `('V' + #probe)` into `#text`. Both hidden means it exists (false), both shown means it exists (true), and only `T` shown with `VM` means it does not exist.
+
+| Binding | F | T | V text | Verdict |
+|---|---|---|---|---|
+| `#is_using_gamepad` (calibration) | hidden | hidden | `Vfalse` | exists, false (keyboard) |
+| `#is_riding` (calibration, standing) | hidden | hidden | `Vfalse` | exists, false |
+| `#re9_nonexistent_binding` (calibration) | hidden | shown | `VM` | does not exist. The property default stays |
+| `#vr` | hidden | hidden | `Vfalse` | exists, false |
+| `#show_cursor` | shown | shown | `Vtrue` | exists, true (in the world, standing) |
+| `#inventory_button_enabled` | shown | shown | `Vtrue` | exists, true |
+| `#focus_wrap_enabled` | hidden | shown | `VM` | does not exist on the HUD |
+| `#tts_enabled` | hidden | hidden | `Vfalse` | exists, false |
+| `#safezone_inner_top` | hidden | hidden | `Vfalse` | resolves, but the value is not a number and concatenates as `false` |
+| `#hud_visible_centered` | shown | shown | `Vtrue` | exists, true |
+
+| Item | Setup | Result | Related |
+|---|---|---|---|
+| `$actionbar_text` comparison | A label inside the actionbar factory after `/title @s actionbar xyz` | `text: "$actionbar_text"` gave `xyz`. `($actionbar_text = 'xyz')` was hidden and its `not` shown. After `"$copy": "$actionbar_text"`, `($copy = 'xyz')` was shown and its `not` hidden | FILE-28, HOST-48 |
+| Intermediate `#clip_ratio` | `textures/blocks/emerald_block` 80x5, `clip_direction: "left"` (full bar 320 px). `(#v * .01)` and `((#v - 0) * .01)`, `#v` 50 | both 160 px (half) | ANI-50, ANI-03 |
+| Ratio from a JSON float variable | `(((20.0 - 15) / $max) + #z)`, `"$max": 20.0`, `#z` 0 | 240 px. The same as a static `"clip_ratio": 0.25` and 0.25 from `property_bag` (`#v`) | ANI-50, C-53 |
+| Ratio 0 | static `"clip_ratio": 0.0`, `(#v * 0)` (`#v` 1) | both drew a 20x20 px square at the center (the whole texture) instead of the bar | ANI-50 |
+| Ratio expressions without a `#` property | `(.25)`, and `((20.0 - 15) / $max)` passed as a variable | The first gave `Must define a source property name in the binding!`, the second `Expected variable not found in ancestor tree: '$max'` followed by the same error. Both drew the same square as 0 | BND-05 |
+| Bound `#alpha` 0.5 | white 20x20 over a black 130x22 image (`textures/ui/White`), `"alpha": "#alpha"`, `property_bag` `{"#a": 0.5}` into `#alpha` with a view binding | center pixel (128,128,128) | LAY-13, C-45 |
+| Static `alpha` | the same drawing with `"alpha"` 0.5, 1.0 and 0.0 | (128,128,128), (255,255,255), (0,0,0) | LAY-13 |
+| Constant `#alpha` expression | view `(1 * .5)` into `#alpha` | dropped with `Must define a source property name`, (255,255,255) | LAY-13, BND-05 |
+| `"100c%"`, `"50c%"` | 210-wide parent, panel `["100c%", 10]` (child 30x10), `["50c%", 4]` (child 30x4) | 210x10, 105x4. Parent-based `%` | LAY-36 |
+| `"50%cm"` | `["50%cm", 10]`, children 30 and 50 wide, then 30 and 90 | 50x10, 90x10. The largest child, 50 ignored | LAY-37 |
+| `"50%cm"` height | `[10, "50%cm"]`, children 10 and 30 high | 10x30 | LAY-37 |
+| Plain panel `%c` and `%cm` | `["100%c", "100%c"]` with children 30x10 and 50x20. `["100%cm", "100%cm"]` with children 30x10 and 40x20 | 80x30 (sum), 40x20 (maximum) | LAY-59, LAY-37 |
+| Constant expression in a variable value | `"$cut": "('%.3s' * 'abcdef')"`, `text: "$cut"` | `abc`. The view `('R' + $cut)` was empty with `Must define a source property name`, and `(#z + $cut)` with `#z` `R` gave `Rabc` | C-42, EXP-10 |
+| `* 1` on a cut string | `#s` `abcdef` with `('A' + ('%.3s' * #s))`, `(('%.3s' * #s) * 1)`, `('B' + (('%.3s' * #s) * 1))` | `Aabc`, empty, `B` | C-04, EXP-31 |
+| JSON float variable comparison | `"$max": 20.0`, `visible: "(((20.0 - 15) / $max) > .2)"`, `< .3`, `> 0`. A view expression with `#z` added | all three shown. The view expression gave `Gtruetrue`. Three view expressions using only `$max` without a `#` property gave `Must define a source property name` | C-53 |
+| Remainder expression | `('M' + (#v - ((#v / 5) * 5)))`, `#v` 13, -7, the string `"13"` (`- 0`), 20. `('N' + (#v / 5))`, 13 | `M3`, `O-2`, `P3`, `Q0`, `N2` | EXP-20 |
+| Same-name siblings | two `re9dup@re9.tl` in `controls` | both created and shown (two 160x36). No related line in the log | FILE-39 |
+| `variables` without `requires` | `"$vt\|default": "DEF"` with `variables: [{"$vt": "NOREQ"}]`. Only `variables: [{"$vo": "ONLY"}]`. `requires` true and false | `DEF`. `$vo` was the text as is with `Expected variable not found in ancestor tree: '$vo'`. True gave `REQ`, false the label's default (`DEF3`) | FILE-13, C-64 |
+| `font_size` | label `Hg` in a horizontal `stack_panel`, size `default` | small 6x5, normal 12x10, large 24x20, extra_large 48x40 (GUI). Glyphs in the same ratio | TXT-05 |
+| `$title_alpha`, `$title_shadow` | inside `hud_title_text`, `"$a": "$title_alpha"`, six steps from `visible: "($a > .1)"` to `.9`. `/title @s title re9t` with option `gfx_hud_text_background_opacity` 0.6 | shown up to `> .55`, hidden from `> .7`. `$title_shadow` was false | screen-hosts-and-data |
+
+- An unresolved global binding writes nothing to the target property, so the `property_bag` default stayed. So two sets of defaults (false, true) tell "does not exist" from "true". Why `#safezone_inner_top` concatenates as `false` is unknown.
+- When the `source_property_name` of a view binding was an expression of only constants and `$` variables without a `#` property, the binding was dropped at load with `JSON UI parse failure: Must define a source property name in the binding!` (`(.25)`, `(1 * .5)`, `('R' + $cut)`). Adding one `#` property (`+ #z`) made it work. The section 6.5 row "a variable whose value is an expression is empty" may be the same error, but the log of that row was not checked.
+- A label text (`text`, `$cname`) holding a string that starts with `(` was evaluated as an expression, gave the warning `JSON UI parse failure - expected a string.` and the text was empty.
+- `#clip_ratio` is the ratio of the clipped side (0.25 leaves 75%). The cause of the ratio 0 square is unknown. The "full (0)" of section 6.5 was with `textures/ui/White`, and this time the `White` bar could not be read because of the overlay, so a texture dependence was not settled.
+- `"$max": 20.0` stayed a float, and `((20.0 - 15) / $max)` was 0.25 (between 0.2 and 0.3). The literal `20.0` is the integer 20 but did not affect the result.
+- Integer division truncates toward 0, so `(#v - ((#v / 5) * 5))` is the remainder, negative for negative values (-7 gives -2).
+- `$title_alpha` was between 0.55 and 0.7, matching the option 0.6, and `$title_shadow` was false at 0.6. Whether they follow a changed option was not measured.
+- The game shut down 10 seconds after injection on the first launch, and the measurement was done on the second launch. The world used was a copy of the test world, and no game options were changed.
+
 ## 7. Items that could not be measured
 
 - **Live input filter** (INP-25): a `common.text_edit_box` inside the action form window showed the hover border, but the tool's keyboard input (PostMessage, SendInput) did not put text into it. Whether the tool or the screen not forwarding input is the cause was not separated.
@@ -381,6 +432,7 @@ Measured in a panel inserted into `hud.root_panel` with `insert_front`. In the f
 - Of the candidates received with section 6.5, these were not measured. Attachables (`q.property` without `c.owning_entity`, `q.mark_variant`, the armor stand condition) need a player with properties or a test entity that holds items. Gamepad focus (`#toggle_on_hover`) and `$touch` on a touch device need devices that were not available. `#entity_id` of `live_horse_renderer` needs a runtime entity number. `$container_title` in chest screen `requires`, `flip_book` without `frame_step`, the phase of `q.time_stamp`, glyph warm-up, an `.fsb` holding MP3 data, and path key edits of a user namespace split across two files were also left out this time.
 - Of the candidates received with section 6.6, these were not measured. A pack whose manifest is in a folder one level down inside the zip is a path the server sends, so it needs a local server that matches this client version (importing is a different path and was not used in its place). The look with fancy graphics off and VV was measured in section 6.7 by changing the game options directly.
 - Of the candidates received with section 6.7, these were not measured. A stencil mask that needs VV, `pbr` declaration combinations across several packs and a `minecraft:default_lighting` override were left out this time because the deferred mode was found late. Subpack selection for a pack sent by a server needs a local server, like the zip subfolder case. The tagged item crossbow pose needs the whole vanilla `controller.animation.player.root` to be overridden, so it was left out this time, along with `texture_meshes`, server entity data (`trade_tier` and others), `geometry.invisible` in armor slots, a `should_update_bones_and_effects_offscreen` expression, a `scripts.scale` string, an empty `on_fire_color` object, a `light_color_multiplier` expression, a root material without a colon, a 253-element array, the `q.is_alive` guard of the paper doll, reverse rotation of the UI preview, lang keys overlapping between packs, `servertab.*` and the fog stack limit.
+- Of the section 6.8 items, these could not be measured. Right after reloading the UI the game left the world for the world list (no reason in the log), and after that the client kept retrying a local server connection without input, so game control was stopped. They are `$container_title` of a named chest, a chest boat and a donkey, `$container_size`, `$container_rows_*` and `$chest_size` of a large chest and a donkey inventory, the pixels of one wheel step in chat scrolling (LAY-71), `$title_alpha`, `$title_shadow`, `$item_text_background_alpha` and `$actionbar_text_background_alpha` with the option changed to 0.4, chat `$max_messages` and `$max_text_edit_length`, book `$max_page_length` and `$max_title_length`, sign `$sign_texture` and `$sign_text_multiline`, and `#is_using_gamepad`, `#safezone_inner_top`, `#tts_enabled` and `#gamepad_helper_visible` inside a server form. The probes are in `addons/re9-probes`. Expressions such as `('PL' + $max_page_length)` in the book and chat probes have no `#` property and will be dropped, so when measuring again add `#z` or change them to a `visible` comparison (the `text: "$max_messages"` line can be used as is). Also left: whether the ratio 0 square depends on the texture (`White`), why `#safezone_inner_top` concatenates as `false`, same-name siblings with a button `default_control`, `#offset` in the `property_bag` of a static control, and a screen `vertical_scroll_delta: 40`.
 
 ## 8. Measurement add-on
 

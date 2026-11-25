@@ -1,6 +1,6 @@
 ---
 title: Input, buttons and toggles
-description: button_mappings, button IDs, the 8 toggle states, radio tabs, focus, chest input, and the hyperlink allow list (INP-01~36).
+description: button_mappings, button IDs, the 8 toggle states, radio tabs, focus, chest input, and the hyperlink allow list (INP-01~40).
 sidebar_position: 7
 sources:
   - repo-guide
@@ -338,6 +338,12 @@ These were measured on mobile with the server form factory and lag test add-on (
 - **[INP-37]** In the chest screen, dragging a slider does not reach the server by itself. Put one hidden slot button per step next to the slider, visible only when `(#slider_value = k)` (read from the slider with `source_control_name`), and give it a `global` mapping from `button.menu_select` to `button.container_auto_place` (`consume_event: false`). The current step then reached the server when the finger was released. A global mapping fires on a release anywhere on the screen, so the server ignores a repeated value. With several sliders on one screen the values mixed at times. The attempts and causes are in [Building sliders with InvUI](../design/invui/ddui/slider.mdx). `&#123;measured&#125;` (Source: IUC)
 - **[INP-38]** `consume_event: false` on a position based `pressed` mapping did not let a control underneath receive the press (with the hidden step buttons on top the slider did not move, with the slider on top the buttons were not pressed). With `consume_event: false` on the slider drag mapping, the slot button under the released finger was pressed as well, and even with the vanilla mapping the tap cell under the finger that ended a drag was pressed. The server therefore drops a tap cell press in the tick where the drag value changed (*unverified*, mock only). `&#123;measured&#125;` (Source: IUC)
 - **[INP-39]** In chest slots with the vanilla slot mappings (including `button.shape_drawing`), tapping an item slot on a phone and then dragging across other slots split the items into each slot crossed, and the server read each newly crossed slot almost every tick in order. Pressing and dragging in one move placed nothing, and crossing a slot again changed nothing. When the server emptied crossed slots, the rest was split into large piles and ran out quickly; refilling the source slot mid drag ended the drag. Use it for input that takes each slot once in first crossed order (a lock pattern). The setup is in [Building enhanced components with InvUI](../design/invui/ddui/enhanced-components.mdx). `&#123;measured&#125;` (Source: IUC)
+
+## 7.9 Rules added from the 2026-11-24 decompilation
+
+These are read from a decompilation of the Windows 1.26.65.1 client (2026-11-24). They were not measured in game.
+
+- **[INP-40]** `always_listen_to_input` is a boolean read by types that take an input component (`button`, `toggle`, `input_panel`, `screen`, `scroll_view` and others) and defaults to false. When true, the control goes into a separate list when it registers in the screen's input lists, and button input is delivered to the focused control, the normal list and then this list, in that order. The position check of a `pressed` mapping passes when the pointer is inside the control's rectangle even without hover. So even when another control takes the hover (`consume_hover_events`), this control gets clicks inside its rectangle. Measurement candidate: overlap a panel with `consume_hover_events` true on a button with this key on, and see whether the button is pressed (prediction: pressed). `&#123;code&#125;` (Source: 2026-11-24 Windows 1.26.65.1 decompilation)
 
 ## How evidence is marked and source abbreviations
 
