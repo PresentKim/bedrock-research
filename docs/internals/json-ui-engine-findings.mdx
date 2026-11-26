@@ -25,7 +25,7 @@ JSON UI 엔진은 리소스팩의 `ui/*.json`을 읽어 화면을 만든다. 공
 
 | 규칙 | 이전 수준 | 바이너리에서 본 것 | 판정 |
 | --- | --- | --- | --- |
-| MOD-14 | 미검증, 코드 | 연산 이름표가 정확히 11개(번호 1~11): `insert_back`, `insert_front`, `insert_after`, `insert_before`, `move_back`, `move_front`, `move_after`, `move_before`, `swap`, `remove`, `replace` (NB-01) | 이름 목록은 확정. 각 연산의 게임 동작은 여전히 실측 필요 |
+| MOD-14 | 미검증, 코드 | 연산 이름표가 정확히 11개(번호 1~11): `insert_back`, `insert_front`, `insert_after`, `insert_before`, `move_back`, `move_front`, `move_after`, `move_before`, `swap`, `remove`, `replace` (NB-01) | 이름 목록은 확정. 11개 연산 모두 게임에서 동작했다(나머지 8개는 Windows 1.26.65.1 실측, MOD-14, C-39) |
 | MOD-03 | 실측, 미검증 | `target_control`(문자열)을 읽고, 없을 때만 `target`을 읽는다(NB-02). `array_name`은 고정 목록이 아니라 정의의 같은 이름 멤버를 찾는다(NB-03) | `target_control` 부분은 반박. 배열 범위는 충돌(부록A C-64) |
 | COL-15 | 바닐라, 코드, 추론 | `factory_variables`는 문자열 배열이고, 각 이름을 팩토리를 선언한 스코프에서 찾아 값을 넘긴다(NB-04) | 추론이 맞았다 |
 | COL-25 | 미검증, 바닐라 | `type: factory` 컨트롤은 팩토리 이름을 따로 읽지 않는다. `factory` 객체일 때만 `name`을 읽는다(NB-05) | 확인 |
@@ -255,7 +255,7 @@ JSON UI는 아니지만 같은 바이너리로 확인했다. 질문은 "장비 �
 
 | # | 주장 | 누가 | 리버싱 결과 | 결과 | NB | 가이드 |
 | --- | --- | --- | --- | --- | --- | --- |
-| C-01 | `modifications` 연산은 11가지 | 위키(미검증), CN. 커뮤니티 목록은 `swap`이 빠진 10가지 | 엔진 이름표가 정확히 11개(번호 1~11). `swap`도 있다 | 이름 확정. 8가지의 게임 동작은 여전히 실측 필요 | NB-01 | MOD-01, MOD-14, MOD-23 |
+| C-01 | `modifications` 연산은 11가지 | 위키(미검증), CN. 커뮤니티 목록은 `swap`이 빠진 10가지 | 엔진 이름표가 정확히 11개(번호 1~11). `swap`도 있다 | 이름 확정. 나머지 8가지도 Windows 1.26.65.1에서 동작했다(C-39) | NB-01 | MOD-01, MOD-14, MOD-23 |
 | C-02 | `target_control` 키가 있다 | MJ 사전(가이드는 "근거 없음"으로 판정했었다) | 엔진이 읽고, `target`보다 먼저다 | **가이드 판정을 바로잡음.** MJ 쪽이 맞았다 | NB-02 | MOD-03, MOD-24, 부록A C-10 |
 | C-03 | `modifications`는 `controls`·`bindings`·`button_mappings`·`variables` 배열에 쓸 수 있다 | 커뮤니티, MJ(`button_mappings`). 반대로 BC-facts 실측은 "`variables`는 무시" | `array_name`은 고정 목록이 아니라 정의의 같은 이름 멤버를 찾는다. 해석은 어느 배열이든 된다 | 해석 단계는 커뮤니티 쪽. 효과는 실측과 충돌로 남음 | NB-03 | MOD-25, 부록A C-64 |
 | C-04 | `#hyperlink`는 약 30개 도메인만 연다 | 위키 | 정확히 일치하는 URL 116개(R-01) | **바로잡음.** "커스텀 URL은 안 열린다"는 결론은 맞다 | NB-08 | INP-24 |
@@ -266,9 +266,6 @@ JSON UI는 아니지만 같은 바이너리로 확인했다. 질문은 "장비 �
 | C-09 | `collection_index`는 컬렉션 부모의 직속 자식에서만 먹는다 | DF·BC-facts 실측 | 컬렉션 이름이 있는 부모의 직속 자식만 컬렉션 항목이 되고, `collection_index`도 그때만 읽는다 | 실측 결과의 원인을 엔진 구조로 설명 | NB-07 | COL-02, COL-38, COL-44 |
 | C-10 | `ignored`는 자기 `$` 선언을 보지 않는다 | CN, CN-run | 엔진은 컨트롤마다 `ignored`를 가장 먼저 평가하고, 참이면 `variables` 적용을 하지 않는다 | 자기 `variables` 부분 확정. `$x|default`가 들어가는 단계는 미확인 | NB-10 | FILE-34, FILE-43 |
 | C-11 | 종이 인형에는 커스텀 지오메트리를 쓸 수 없다 | 커뮤니티 | 국제판에 NetEase 골격 모델 코드가 없다(R-10) | 뒷받침 | NB-12 | ANI-35, ANI-36 |
-
-
-표의 마지막 칸 `MOD-24`, `BND-35`, `INP-33`, `DBG-34` 같은 가이드 ID 중 일부는 병합 단계에서 붙은 번호라 가이드 본문에 아직 없을 수 있다(survey 반영 기록 기준 반영안, 미적용).
 
 
 ## 11. 남은 것

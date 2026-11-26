@@ -142,9 +142,9 @@ third_party_server_screen@common.base_screen   ($screen_content = server_form.ma
 - **[HOST-32]** 위키의 HUD 표준 방식은 `hud_screen.json`의 `root_panel`에 `insert_front`로 래퍼 패널 하나를 넣는 것이다. 래퍼에 `size`를 주지 않으면 부모(화면) 크기를 받아 자식의 앵커·퍼센트가 화면 기준으로 동작한다. 바닐라 HUD를 숨겨도(F1, `root_panel` 숨김) 남아야 하는 레이어라면 HOST-26의 `$screen_bg_content`에 둔다. `{미검증, 작동팩}` (출처: BW-hud, BW-best, AP)
 - **[HOST-33]** 여러 커스텀 폼 제목을 한 번에 제외하려면 빼기를 이어 쓴다: `((#title_text - 'formA:' - 'formB:') = #title_text)`가 참이면 바닐라 폼을 보인다. Windows 1.26.65.1에서 이 식은 제목 `formA:x`, `formB:y`에서 거짓, `plain`에서 참이었다([실측 기록](../design/json-ui-claims.mdx)). `{실측}` (출처: BW-form)
 
-## 10.9 연구 서버 서버 실측으로 더한 규칙
+## 10.9 연구 서버 실측으로 더한 규칙
 
-연구 서버 서버(`DF`, Dragonfly로 만든 Go 서버)를 만들며 Windows 1.26.52 에서 실측한 것이다. 서버 폼 하나로 여러 화면을 그리는 구조에서 얻었다.
+연구 서버(`DF`, Dragonfly로 만든 Go 서버)를 만들며 Windows 1.26.52 에서 실측한 것이다. 서버 폼 하나로 여러 화면을 그리는 구조에서 얻었다.
 
 - **[HOST-43]** `third_party_server_screen`에 `"$screen_animations": []`, `"$background_animations": []`를 주면 폼이 애니메이션 없이 바로 나타난다. 창이 움직이는 동안 다음 폼이 오면 두 창이 겹쳐 보였고, 닫고 다시 여는 메뉴가 깜빡였다. `{실측}` (출처: DF)
 - **[HOST-44]** 서버 폼 뒤에 화면 틀을 그리려면 `third_party_server_screen`의 `$screen_bg_content`(안전 영역 밖, 화면 전환 때 밀리지 않음)를 바꾼다. 폼이 열려 있는 동안 HUD는 그려지지 않으므로 HUD의 틀을 폼 위에서도 보이려면 여기에도 그린다. 이 자리의 `#title_text` 바인딩은 `once`로 두면 폼 내용이 오기 전에 평가돼 안 보였다. HUD를 폼과 함께 그리려면 `third_party_server_screen`에 `"force_render_below": true`를 둔다. 그러면 HUD가 폼 뒤에 그려지고 폼이 열린 동안 온 타이틀과 래치도 갱신됐다. 여기에 `hud_screen`의 `"screen_draws_last": true`를 더하면 HUD가 폼 위에 그려졌다. `screen_draws_last`만 두면 그려지지 않았다([실측 기록](../design/json-ui-claims.mdx#62-hud-타이틀)). `{실측}` (출처: DF, 2026-11-18 Windows 1.26.65.1)
