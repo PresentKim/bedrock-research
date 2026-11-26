@@ -17,7 +17,7 @@ Chest-UI는 스크립트 API의 `ActionFormData`를 리소스팩으로 재스킨
 
 manifest는 RP·BP 모두 `min_engine_version [1, 21, 0]`, 버전 1.5.0이고 BP는 `@minecraft/server` 1.18.0, `@minecraft/server-ui` 1.3.0을 쓴다. 실제 대상 버전은 `min_engine_version`이 아니라 커밋 메시지의 버전(26.40)이다. 숫자 ID 표가 버전마다 다르기 때문이다.
 
-파일: `RP/ui/server_form.json`, `chest_server_form.json`, `chest_inventory_system.json`, `furnace_server_form.json`, `_global_variables.json`, `BP/scripts/extensions/forms.js`(폼 빌더), `typeIds.js`(아이템 → 숫자 ID 표 2,364개 + 데이터 값 표), `constants.js`.
+파일: `RP/ui/server_form.json`, `chest_server_form.json`, `chest_inventory_system.json`, `furnace_server_form.json`, `_global_variables.json`, `BP/scripts/extensions/forms.js`(폼 빌더), `typeIds.js`(아이템을 숫자 ID로 바꾸는 표 2,364개 + 데이터 값 표), `constants.js`.
 
 동작 순서는 다음과 같다 `{확인}`.
 
@@ -27,7 +27,7 @@ manifest는 RP·BP 모두 `min_engine_version [1, 21, 0]`, 버전 1.5.0이고 BP
 4. 상자 칸은 `grid`(`grid_dimensions: "$grid_size"`, `collection_name: form_buttons`)가 만들고, 인벤토리·핫바는 `collection_name: form_buttons`인 스택 패널 안에 `collection_index`가 고정된 자식 36개로 만든다(COL-06).
 5. 칸 하나는 `#form_button_texture`를 받아, 앞 8바이트가 `textures`면 이미지, 아니면 아이템 렌더러(`beacon.item_renderer`)에 `#item_id_aux`를 넣어 그린다(PAT-11). hover 상태에는 `hover_text_renderer` 툴팁, 하이라이트, 포커스 테두리가 붙는다.
 
-상자형 폼의 레시피(PAT-13)는 이렇게 요약된다: 제목 플래그로 크기 선택 → 크기별 템플릿은 `ignored`로 쓰는 것만 생성 → `grid` + `collection_name: form_buttons` → 칸마다 `'%.8s' = 'textures'`로 이미지와 아이템 렌더러 분기 → 버튼 글 고정 폭 머리말로 수량·내구도 → hover에 툴팁. 숫자 ID는 `(#v - 0)`으로 넣는다. 이 기법들의 JSON 조각은 [서버 폼 재스킨](./reskinning-server-forms.mdx)의 10절에 있다.
+상자형 폼의 레시피(PAT-13)는 이렇게 요약된다: 제목 플래그로 크기를 고르고, 크기별 템플릿은 `ignored`로 쓰는 것만 만들고, `grid` + `collection_name: form_buttons`를 두고, 칸마다 `'%.8s' = 'textures'`로 이미지와 아이템 렌더러를 나누고, 버튼 글 고정 폭 머리말로 수량·내구도를 싣고, hover에 툴팁을 단다. 숫자 ID는 `(#v - 0)`으로 넣는다. 이 기법들의 JSON 조각은 [서버 폼 재스킨](./reskinning-server-forms.mdx)의 10절에 있다.
 
 ### 1.2 스크립트 쪽 예
 
@@ -85,7 +85,7 @@ Cinnabar 평가기(26.30 네이티브 클라이언트를 재구성한 코드 근
 | `((#t - (#t % 65536)) / 65536)` | `Int(20054016)` | ID(306)가 아니라 원래 값 전체. 바깥 `/ 65536`이 적용되지 않았다 |
 | 인챈트 값에 같은 식 | `Int(20086784)` | 인챈트 비트(32768)도 그대로 남는다 |
 | `(#t % 65536)` | `Json(Null)` | `%`는 연산자가 아니다(EXP-02) |
-| `(#t - (#t % 65536))` | `Int(20054016)` | 문자열 − null → 원래 값이 숫자로 재해석 |
+| `(#t - (#t % 65536))` | `Int(20054016)` | 문자열 − null: 원래 값이 숫자로 재해석 |
 | `((#t - (#t % 65536)) / 2)` | `Int(20054016)` | 나누는 수와 무관하게 바깥 연산이 사라진다 |
 | `(((#t - (#t % 65536)) / 65536) + 1)` | `Int(20054017)` | `+ 1`은 적용, `/ 65536`만 빠진다 |
 | `((#t - #missing) / 65536)` | `Int(306)` | 비교: 없는 속성(null)을 빼면 나눗셈은 정상 |

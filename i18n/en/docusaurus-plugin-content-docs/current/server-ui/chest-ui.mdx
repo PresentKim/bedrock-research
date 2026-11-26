@@ -17,7 +17,7 @@ The fork Aex66/Chest-UI (`7dbfd13`, 2026-01-06) is a subset of the original with
 
 The manifests of both RP and BP have `min_engine_version [1, 21, 0]` and version 1.5.0, and the BP uses `@minecraft/server` 1.18.0 and `@minecraft/server-ui` 1.3.0. The actual target version is not `min_engine_version` but the version in the commit message (26.40), because the numeric ID table differs per version.
 
-Files: `RP/ui/server_form.json`, `chest_server_form.json`, `chest_inventory_system.json`, `furnace_server_form.json`, `_global_variables.json`, `BP/scripts/extensions/forms.js` (form builder), `typeIds.js` (item -> numeric ID table with 2,364 entries + data value table), `constants.js`.
+Files: `RP/ui/server_form.json`, `chest_server_form.json`, `chest_inventory_system.json`, `furnace_server_form.json`, `_global_variables.json`, `BP/scripts/extensions/forms.js` (form builder), `typeIds.js` (a table of 2,364 entries that maps items to numeric IDs + data value table), `constants.js`.
 
 The order of operation is as follows `{verified}`.
 
@@ -27,7 +27,7 @@ The order of operation is as follows `{verified}`.
 4. The chest slots are built by a `grid` (`grid_dimensions: "$grid_size"`, `collection_name: form_buttons`), and the inventory and hotbar are built from 36 children with fixed `collection_index` inside a stack panel with `collection_name: form_buttons` (COL-06).
 5. A slot takes `#form_button_texture`, and if the first 8 bytes are `textures` it draws an image, otherwise it puts `#item_id_aux` into the item renderer (`beacon.item_renderer`) and draws it (PAT-11). The hover state gets a `hover_text_renderer` tooltip, a highlight and a focus border.
 
-The recipe for chest-style forms (PAT-13) is summarized like this: choose the size by the title flag -> build only the templates in use per size with `ignored` -> `grid` + `collection_name: form_buttons` -> branch image and item renderer per slot with `'%.8s' = 'textures'` -> quantity and durability from a fixed-width prefix in the button text -> tooltip on hover. The numeric ID is put in with `(#v - 0)`. The JSON snippets for these techniques are in section 10 of [Reskinning server forms](./reskinning-server-forms.mdx).
+The recipe for chest-style forms (PAT-13) is summarized like this: choose the size by the title flag, build only the templates in use per size with `ignored`, use `grid` + `collection_name: form_buttons`, branch image and item renderer per slot with `'%.8s' = 'textures'`, carry quantity and durability in a fixed-width prefix in the button text, and put a tooltip on hover. The numeric ID is put in with `(#v - 0)`. The JSON snippets for these techniques are in section 10 of [Reskinning server forms](./reskinning-server-forms.mdx).
 
 ### 1.2 Script-side example
 
@@ -85,7 +85,7 @@ These are the results from running the Cinnabar evaluator (code evidence reconst
 | `((#t - (#t % 65536)) / 65536)` | `Int(20054016)` | The whole original value, not the ID (306). The outer `/ 65536` was not applied |
 | The same expression on the enchanted value | `Int(20086784)` | The enchant bit (32768) also stays as it is |
 | `(#t % 65536)` | `Json(Null)` | `%` is not an operator (EXP-02) |
-| `(#t - (#t % 65536))` | `Int(20054016)` | string - null -> the original value is reinterpreted as a number |
+| `(#t - (#t % 65536))` | `Int(20054016)` | string - null: the original value is reinterpreted as a number |
 | `((#t - (#t % 65536)) / 2)` | `Int(20054016)` | The outer operation disappears regardless of the divisor |
 | `(((#t - (#t % 65536)) / 65536) + 1)` | `Int(20054017)` | `+ 1` is applied, only `/ 65536` is missing |
 | `((#t - #missing) / 65536)` | `Int(306)` | Comparison: subtracting a missing property (null) leaves the division normal |

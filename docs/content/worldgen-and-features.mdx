@@ -117,8 +117,8 @@ sources:
 
 ### 지형
 
-- 지형은 애드온으로 바꿀 수 없다. 지형은 먼저 하드코딩으로 만들어지고 바이옴 `noise_type`은 표면만 바꾼다. 변형은 공기/돌을 놓는 피처로 한다. 높은 산은 기존 고지대에 블록을 더하는 룰이나 산 태그 바이옴(cherry_grove, frozen_peaks, grove, jagged_peaks, meadow, snowy_slopes, stony_peaks)에서 scatter → weighted_random → structure_template_feature로 mcstructure 봉우리를 놓는다. 큰 수역은 바이옴 피처 전에 표면이 약 y=62까지 물로 채워지므로 보정이 느리다. 해수면(63) 변경은 noise 파라미터로 안 됐다. 체크리스트: 3D noise 없음, 바닐라를 직접 지움, 시드는 오프셋으로만 사용.
-- 처음부터 지형 만들기: 청크 단위 scatter(fixed_grid x/z 0..15, iterations Molang이 `return 256;`으로 끝남) → 열 단위 scatter(Y fixed_grid [0, terrain_height-1], iterations가 정규화된 다중 옥타브 `q.noise` 높이를 반환). 3x3 청크만 조회할 수 있어 바이옴과의 블렌딩은 어렵다.
+- 지형은 애드온으로 바꿀 수 없다. 지형은 먼저 하드코딩으로 만들어지고 바이옴 `noise_type`은 표면만 바꾼다. 변형은 공기/돌을 놓는 피처로 한다. 높은 산은 기존 고지대에 블록을 더하는 룰이나 산 태그 바이옴(cherry_grove, frozen_peaks, grove, jagged_peaks, meadow, snowy_slopes, stony_peaks)에서 scatter, weighted_random, structure_template_feature를 차례로 거쳐 mcstructure 봉우리를 놓는다. 큰 수역은 바이옴 피처 전에 표면이 약 y=62까지 물로 채워지므로 보정이 느리다. 해수면(63) 변경은 noise 파라미터로 안 됐다. 체크리스트: 3D noise 없음, 바닐라를 직접 지움, 시드는 오프셋으로만 사용.
+- 처음부터 지형 만들기: 청크 단위 scatter(fixed_grid x/z 0..15, iterations Molang이 `return 256;`으로 끝남) 다음에 열 단위 scatter(Y fixed_grid [0, terrain_height-1], iterations가 정규화된 다중 옥타브 `q.noise` 높이를 반환). 3x3 청크만 조회할 수 있어 바이옴과의 블렌딩은 어렵다.
 - 더 깊은 바다는 scatter + single_block_replace로 만든다. 문서의 `sea_floor_depth`는 효과가 없고 표면 레이어 두께만 바꾼다. 2블록 깊이 바다는 바이옴만으로 불가능하니 바이옴 필터 룰로 지형을 상수 Y까지 깎고 물 2칸을 놓는다.
 
 ```text
@@ -126,7 +126,7 @@ sources:
 ```
 
 - 물 제거: 바닐라 수중 동굴 carver 룰(`overworld_underwater_cave_carver_feature` / `underground_underwater_cave_carver_feature`)을 커스텀 carver로 덮으면 지하 물이 많이 사라진다. carver는 덮을 수 있지만 aquifer는 안 된다.
-- 돌을 네더랙으로 바꾸려면 16x16 청크 fixed_grid scatter → 열 피처 256개 → single block 피처, 광석은 나중 패스로 한다. 엔드 비우기는 청크마다 single block으로 공기를 놓는 룰이다. 섬과 코러스 같은 일부 바닐라 블록은 애드온 룰 뒤에 놓이므로 스크립트로 나중에 지운다.
+- 돌을 네더랙으로 바꾸려면 16x16 청크 fixed_grid scatter, 열 피처 256개, single block 피처 순으로 쓰고, 광석은 나중 패스로 한다. 엔드 비우기는 청크마다 single block으로 공기를 놓는 룰이다. 섬과 코러스 같은 일부 바닐라 블록은 애드온 룰 뒤에 놓이므로 스크립트로 나중에 지운다.
 - 커스텀 엔드 "바이옴"은 엔드가 바이옴 하나라 커스텀 바이옴이 동작하지 않으므로 관련 룰이 모두 같은 저주파 noise 범위를 검사하게 한다.
 
 ```text
@@ -162,7 +162,7 @@ sources:
 
 ### structure_template_feature
 
-format 1.13.0이며 `structure_name`(예 `mystructure:abc/def/ghi/oaktree` → `BP/structures/abc/def/ghi/oaktree.mcstructure`), `adjustment_radius`(8-16으로 올리면 자리를 찾음), `facing_direction`(random 가능), `constraints`(`grounded`, `unburied`, `block_intersection.block_allowlist`)를 쓴다. 블랙리스트는 없다. 공기만 허용하면 공기 아닌 블록이 하나라도 있을 때 실패한다. 조건은 `any_of`와 `==`(오타 `=`는 깨짐)가 필요하다.
+format 1.13.0이며 `structure_name`(예 `mystructure:abc/def/ghi/oaktree`는 `BP/structures/abc/def/ghi/oaktree.mcstructure`를 가리킨다), `adjustment_radius`(8-16으로 올리면 자리를 찾음), `facing_direction`(random 가능), `constraints`(`grounded`, `unburied`, `block_intersection.block_allowlist`)를 쓴다. 블랙리스트는 없다. 공기만 허용하면 공기 아닌 블록이 하나라도 있을 때 실패한다. 조건은 `any_of`와 `==`(오타 `=`는 깨짐)가 필요하다.
 
 ```json
 "constraints": {

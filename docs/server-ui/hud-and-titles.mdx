@@ -178,7 +178,7 @@ HUD 화면(`hud_screen.json`)에 요소를 넣는 기본은 `root_panel`에 `mod
 
 - `toast_factory`는 `hud_title_text_factory`를 하나 더 만들어 `toast_notification`을 생성한다. 타이틀이 올 때마다 컨트롤이 새로 만들어지므로 **애니메이션이 매번 처음부터 재생된다**.
 - 데이터는 `"CUSTOMHUD:ba_toast:" + category(20) + title(200) + icon(200)`이고 `$`로 채운다. 헤더는 `('ba.toast.' + #toast_category)`를 `localize: true` 라벨로 번역한다(lang: `ba.toast.task=§eAdvancement Made!` 등).
-- 애니메이션 체인: `toast_slide_in`(offset, out_back, 0.5초) → `toast_wait`(4.5초) → `toast_slide_out`(in_back, 0.5초). `from: ["100%c + 40px", 20]`처럼 화면 밖에서 들어온다.
+- 애니메이션 체인: `toast_slide_in`(offset, out_back, 0.5초), 다음 `toast_wait`(4.5초), 다음 `toast_slide_out`(in_back, 0.5초). `from: ["100%c + 40px", 20]`처럼 화면 밖에서 들어온다.
 - 형제 스코프 바인딩: 자식 라벨이 `source_control_name: "toast_notification"` + `resolve_sibling_scope: true`로 부모가 계산한 `#toast_title_key` 등을 받는다. 파싱은 부모에서 한 번만 하고 자식은 결과만 참조한다. 아이콘 `#visible`은 `binding_condition: "once"`로 한 번만 평가한다.
 - 스크립트: 플레이어별 큐, 110틱(애니메이션 5.5초) 간격, `setTitle` 후 사운드 재생, 끝날 때 다음 토스트를 보낸다.
 - **한계**: 바닐라 숨김을 `title_frame`에만 걸어 가운데에 텍스트가 잠깐 번쩍이는 문제가 있었고(2.0.5에서 수정됨), 타이틀 채널이 하나뿐이라 다른 애드온이 `setTitle`을 부르면 토스트가 사라진다. 수정 방법은 2.0.5 원본이 없어 확인하지 못했다. 타이틀 채널은 다른 기능과 공유하므로 덮어쓰기를 전제로 설계한다.
@@ -208,7 +208,7 @@ HUD 화면(`hud_screen.json`)에 요소를 넣는 기본은 `root_panel`에 `mod
 제목(title)은 한 번에 하나만 담겨서, 블록 정보 패널처럼 제목을 쓰는 기능과 늘 떠 있어야 하는 글자를 같이 실으면 서로 덮는다. 사이드바 스코어보드 한 장을 HUD 부분으로 나눠 그리면 겹치지 않는다 (출처: 비공개 조사).
 
 - **서버**: 목표(objective) 이름에 표식(`§d§h§u§d`)을, 줄마다 부분 표식을 앞에 붙인다. 예: `§d§1` 왼쪽 위, `§d§2` 오른쪽 위, `§d§3` 퀘스트 제목, `§d§4` 퀘스트 줄. 줄 순서는 부분 안에서 그대로다. Dragonfly의 앞 공백(padding)은 끈다. **같은 글자 줄은 클라이언트가 합치므로** 뒤에 `§r`을 붙여 구분한다(최대 15줄).
-- **팩**: `scoreboards.json`이 바닐라 `scoreboard.scoreboard_sidebar`를 화면 전체 패널로 바꾸고, 목표 이름에 표식이 있으면 HUD 틀, 없으면 단순한 상자(다른 보드용)를 보인다. 부분마다 `scoreboard_players` 컬렉션 스택(`#scoreboard_sidebar_size` → `#collection_length`)을 두고, 줄 라벨은 `#player_name_sidebar`에 그 표식이 있을 때만 보이며 표식을 뺀 글자를 쓴다. 라벨은 `localize: false`(번역을 거치면 `%`가 사라진다).
+- **팩**: `scoreboards.json`이 바닐라 `scoreboard.scoreboard_sidebar`를 화면 전체 패널로 바꾸고, 목표 이름에 표식이 있으면 HUD 틀, 없으면 단순한 상자(다른 보드용)를 보인다. 부분마다 `scoreboard_players` 컬렉션 스택(`#scoreboard_sidebar_size`를 `#collection_length`로)을 두고, 줄 라벨은 `#player_name_sidebar`에 그 표식이 있을 때만 보이며 표식을 뺀 글자를 쓴다. 라벨은 `localize: false`(번역을 거치면 `%`가 사라진다).
 - 숨겨진 줄은 스택에서 자리를 차지하지 않는다.
 - 터치 화면(`$touch`)은 채팅을 왼쪽 위에, 점프·웅크리기 버튼을 오른쪽 가운데에 그리므로 왼쪽 위 줄을 오른쪽 위(오른쪽 맞춤)에 그리고 퀘스트 창을 그 아래에 둔다. 경험치 바는 바닐라 그대로다.
 - 폼이 열려 있는 동안 HUD는 그려지지 않으므로, 폼 뒤에도 같은 틀을 보이려면 폼 배경에도 그린다([재스킨](./reskinning-server-forms.mdx)의 8절).

@@ -17,7 +17,7 @@ sources:
 - **회전 각도**: transformation 회전은 90도 배수만 된다. 45도는 돌린 뼈를 복제해 상태로 켜고 끈다.
 - **잘못된 지오메트리의 파급**: 서브청크 하나에 잘못된 지오메트리 블록이 있으면 그 서브청크의 지오메트리 기반 블록 전부(거미줄 포함)가 렌더링되지 않는다("A block must have baked material data in order to tessellate"). 콘텐츠 로그에서 원인(너무 큰 모델, 16x16이 아닌 텍스처 등)을 찾는다.
 - **z-fighting 오프셋(conflicting)**: 0.001 정도 옮기라는 답과, 블록 inflate는 0.05 미만이면 z-fighting이 남는다는 답이 엇갈린다. 수련잎식 평면은 Y로 0.1~0.2 띄우고, 방향별 z-fighting은 방향별 지오메트리로 피한다.
-- **소수점**: 좌표는 소수 첫째 자리로 반올림된다(15.98/7.99 → 반올림). z-fighting은 7.9나 `inflate`로 고친다. 둘째 자리를 쓰면 틈과 렌더 오류가 생긴다.
+- **소수점**: 좌표는 소수 첫째 자리로 반올림된다(15.98/7.99는 반올림된다). z-fighting은 7.9나 `inflate`로 고친다. 둘째 자리를 쓰면 틈과 렌더 오류가 생긴다.
 - **UV**: Bedrock은 명시적 UV가 없는 면을 버린다. Blockbench에서는 멀쩡한데 게임에서 구멍이 나면 박스 UV `[0,0]` 대신 면별 UV(`north/south/east/west/up/down`에 `uv`, `uv_size`)를 쓴다. 안 보일 면은 구석에 몰지 말고 끈다(https://wiki.bedrock.dev/blocks/block-models#removing-faces). 두께 0인 평면도 지원된다. 패딩을 없앤 프리뷰 이후 텍스처 밖 UV가 이웃 아틀라스 타일로 번지며 경고는 없다(크기가 너무 크거나 0인 UV를 지우는 스크립트로 우회).
 - **한 모델엔 한 PNG**: 한 모델에 PNG 여러 장을 쓰면 실패했다.
 - **스케일 상한(옛 형식)**: 새 버전에서 지오메트리 `scale`이 약 [2,1,2]로 묶이자 format 1.20.80으로 내려 `onBreak`와 큰 scale을 되살린 사례가 있다(옛 방식, 비권장). (single report)
@@ -200,7 +200,7 @@ sources:
 - **inside_block_notifier**: 엔티티의 `minecraft:inside_block_notifier`는 커스텀 블록 상태를 조건으로 쓸 수 없다.
 - **몹 스폰**: 오래된 형식의 커스텀 풀블록 위에는 몹(커스텀 포함)이 스폰되지 않았지만 format 1.21.90+에서 고쳐졌다(한 사용자는 1.26.0 필요). 블록이 고체/불투명이어야 한다. 한 보고자는 커스텀 블록을 바이옴 `top_material`로 쓰면 엔티티가 스폰되지 않는다고 했다(2026-06).
 - **trial spawner**: 자연 몹 스폰 규칙이 켜져 있어야 스폰한다. 우회법은 BP spawn_rules로 자연 적대 몹 스폰을 막는 것이다(format 1.8.0 `minecraft:spawns_on_block_filter: ["minecraft:deny"]` / weight 0). 볼트의 ominous setblock과 루트는 위치로 시드가 정해진다.
-- **컴포넌트 정리 순서(ciosciaa 제안)**: METADATA(display name, loot, transformation, random offset, tags) → PRESENTATION(geometry, material instances, item visuals, embedded visuals, destruction particles, map color) → PHYSICS(selection/collision box, friction, light dampening/emission, precipitation, destructible by mining/explosion, liquid detection, flammable, movable) → RELATIONS(placement filter, replaceable, support, connection rule) → FEATURES(redstone, crafting table, leashable, flower pottable) → EVENTS(tick, fall-on).
+- **컴포넌트 정리 순서(ciosciaa 제안)**: METADATA(display name, loot, transformation, random offset, tags), PRESENTATION(geometry, material instances, item visuals, embedded visuals, destruction particles, map color), PHYSICS(selection/collision box, friction, light dampening/emission, precipitation, destructible by mining/explosion, liquid detection, flammable, movable), RELATIONS(placement filter, replaceable, support, connection rule), FEATURES(redstone, crafting table, leashable, flower pottable), EVENTS(tick, fall-on) 순.
 
 ### 블록으로 만드는 패턴(문, 반블록, 계단, 울타리, 작물 등)
 
@@ -217,7 +217,7 @@ sources:
 - **묘목**: 피처는 묘목 위에 놓이므로 묘목이 피처의 `may_replace`에 있거나 먼저 지워져야 한다. `dimension.placeFeature`를 쓴다. 바닐라 묘목 복제는 새 API로 가능해졌다.
 - **통나무 벗기기**: 주손에 도끼가 있으면 `onPlayerInteract`에서 `block.setType(stripped)`를 하고, 내구도는 `item.getComponent("minecraft:durability").damage++` 후 `slot.setItem(item)`로 깎는다(`ItemStack.damage()`는 없음).
 - **지연 교체와 2칸 블록**: 지연 후 블록 교체는 `system.runTimeout`으로 한다. 2칸 블록은 `beforeOnPlayerPlace`에서 `permutationToPlace`로 위 블록을 놓고 `minecraft:cardinal_direction`을 복사한다(미리보기에 1틱 지연). 주사위는 설치 시 무작위 상태 + 회전 퍼뮤테이션으로 만든다.
-- **바닐라식 기타**: 쌓이는 블록(바다 피클식) https://scriptlabsmc.vercel.app/templates/stackable-block, 거북알/양초식 숫자 상태 템플릿은 커뮤니티 스레드 1434287459591782442. 탄력 블록은 `onEntityFallOn` 낙하 거리 → `applyImpulse`(착지 1틱 뒤 튐), 낙하 피해는 before entity hurt에서 원인 fall과 아래 블록을 확인해 취소한다. 기어오르기는 onTick + impulse로만 된다. 선인장 피해는 블록별 틱 대신 `system.runInterval`을 쓴다. 불 감지는 주변의 `minecraft:fire`를 확인하는 틱 컴포넌트로 한다. 포털은 커스텀 지오메트리, 충돌, 애니메이션 텍스처, 축 상태를 가진 일반 블록으로 만든다(1x2 벽 포털은 미해결).
+- **바닐라식 기타**: 쌓이는 블록(바다 피클식) https://scriptlabsmc.vercel.app/templates/stackable-block, 거북알/양초식 숫자 상태 템플릿은 커뮤니티 스레드 1434287459591782442. 탄력 블록은 `onEntityFallOn` 낙하 거리로 `applyImpulse`를 하고(착지 1틱 뒤 튐), 낙하 피해는 before entity hurt에서 원인 fall과 아래 블록을 확인해 취소한다. 기어오르기는 onTick + impulse로만 된다. 선인장 피해는 블록별 틱 대신 `system.runInterval`을 쓴다. 불 감지는 주변의 `minecraft:fire`를 확인하는 틱 컴포넌트로 한다. 포털은 커스텀 지오메트리, 충돌, 애니메이션 텍스처, 축 상태를 가진 일반 블록으로 만든다(1x2 벽 포털은 미해결).
 - **구조 공허(structure void)식 블록**: 손에 들 때만 보이는 투명 블록은 `minecraft:geometry.full_block`, `minecraft:collision_box: false`, `"*": {texture:"invisible", render_method:"blend"}`, `minecraft:selection_box: true`, `minecraft:tick` interval [1,1] 반복, 그리고 플레이어가 아이템을 들면 `minecraft:shulker_bullet` 파티클을 내는 onTick으로 만든다(format 1.21.90). `player.spawnParticle`을 쓰면 그 플레이어만 본다. 방벽(barrier) 가시성은 하드코딩이다.
 - **블록에서 엔티티 소환**: `complete` 불리언 상태를 두고 complete=false 퍼뮤테이션의 tick이 엔티티를 소환한 뒤 complete를 true로 바꾼다. 구조물 속 엔티티도 같은 "틱하는 블록이 소환하고 자신을 지움" 방식을 쓴다.
 - **동적 조명**: 동적 조명 애드온은 모두 플레이어 위치에 `light_block`을 놓거나 옮긴다.

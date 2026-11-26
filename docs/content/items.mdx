@@ -122,7 +122,7 @@ block_placer 아이템은 `minecraft:icon`을 생략하면 블록의 3D 아이�
 
 ## 4. 크리에이티브 메뉴와 아이템 카탈로그
 
-- 커스텀 그룹은 `item_catalog/crafting_item_catalog.json`에 만든다. 구조는 `minecraft:crafting_items_catalog` → `categories[].category_name`(construction/equipment/items/nature) → `groups[].group_identifier {name, icon}` → `items[]`다. `icon`은 아이템 식별자여야 하고 `menu_category`와 섞지 않는다. 카탈로그 파일은 하나만 허용된다. 확장형 그룹 설명은 위키 item-catalog 문서와 MS Learn의 `craftingitemcatalogdocumentation`에 있다.
+- 커스텀 그룹은 `item_catalog/crafting_item_catalog.json`에 만든다. 구조는 `minecraft:crafting_items_catalog` 안에 `categories[].category_name`(construction/equipment/items/nature), 그 안에 `groups[].group_identifier {name, icon}`, 그 안에 `items[]`가 있는 형태다. `icon`은 아이템 식별자여야 하고 `menu_category`와 섞지 않는다. 카탈로그 파일은 하나만 허용된다. 확장형 그룹 설명은 위키 item-catalog 문서와 MS Learn의 `craftingitemcatalogdocumentation`에 있다.
 - `menu_category.group`에는 네임스페이스가 필요하다. 바닐라는 `minecraft:itemGroup.name.sword`, `minecraft:itemGroup.name.slab`이다. 없으면 `string must be prefixed with a namespace`가 난다. `minecraft:` 그룹 형식은 1.21.60부터다. `menu_category`와 `item_catalog`를 함께 쓰면 충돌 경고가 난다. 바닐라 아이템을 카탈로그 그룹 아이콘으로 쓸 수는 있다.
 - 제한: 새 탭이나 커스텀 카테고리는 없다. 바닐라 아이템을 커스텀 그룹에 넣을 수 없다. 커스텀 아이템은 바닐라 뒤에 정렬되고 순서는 파일 이름을 따른다는 보고가 있다. 스폰 알은 스폰 알 그룹을 벗어날 수 없으니 커스텀 `minecraft:entity_placer` 아이템을 쓴다. `created with category 'none', now set to items` 로그가 나면 category를 items로 한다. 하위 팩의 아이템을 카탈로그 그룹 아이콘으로 쓰면 카탈로그 전체가 깨지고(MCPE-235816), 298자 이상의 그룹 이름은 게임을 크래시시킨다(MCPE-240721). 바닐라 아이템 그룹 문서에는 1.13 이후 추가된 아이템이 대부분 빠져 있다.
 - 크리에이티브에서 숨기기(conflicting): `menu_category` category `none`이 1.26.0에서 동작했다는 보고(엔티티 전용 장비 아이템)가 있지만, 2026-05~06과 2026-07-17에는 동작하는 방법이 없다는 답이 나왔다.
@@ -415,7 +415,7 @@ geometry 루트 뼈에는 `"binding": "q.item_slot_to_bone_name(c.item_slot)"`�
 - 빛나는 아이템: 블록 아이템은 `light_emission`으로 빛날 수 있다. 진짜 아이템이나 어태처블을 추가하면 빛이 사라진다. 커스텀 블록 모델은 인챈트 반짝임을 보일 수 없다(NBT 인챈트만). Vibrant Visuals에서는 다른 광원 아래에 서면 빛이 덮인다. 반짝임 색은 바꿀 수 없지만(하드코딩) 반짝임 텍스처는 바꿀 수 있다. 연료 컴포넌트는 블록에 없지만 `minecraft:fuel`은 아이템 컴포넌트이므로 `BP/items/<id>.json`에 `minecraft:block_placer`(`block`, `aligned_placement`, `replace_block_item`)와 함께 두면 된다는 답이 있다(2026-05). 블록 `components`의 `tag:minecraft:wool`은 블록 태그이고 아이템 태그는 아이템의 `minecraft:tags`에 둔다.
 - `replaceitem`으로 오프핸드에 넣은 블록은 기본으로 아주 작게 렌더링된다. 블록으로 렌더링되는 블록 아이템은 손 위치를 제어하기 쉽다. 3D 모델 아이콘은 Blockbench에서 Angle을 true isometric으로 두고 스크린샷을 찍어 만든다.
 - 블록 아이템 버그: `minecraft:liquid_clipped`는 수면 높이에 설치하고 `use_liquid_clipping`은 고장 났다(MCPE-236319). 문서는 액체 안에서 상호작용한다고 하지만 block_placer는 실제로 위에 설치한다.
-- 바닐라 블록의 인벤토리 아이콘과 설치 텍스처를 다르게(묘목) 하려면 `blocks.json`의 `carried_textures` + `terrain_texture.json` 항목을 쓴다. 옛 geometry와 새 아이템 geometry가 같을 때(2D↔2D)만 된다. `blocks.json` 키는 블록 ID(`oak_sapling`), `terrain_texture.json` 짧은 이름은 `sapling_oak`이며 블록과 carried 텍스처를 둘 다 거기에 정의한다.
+- 바닐라 블록의 인벤토리 아이콘과 설치 텍스처를 다르게(묘목) 하려면 `blocks.json`의 `carried_textures` + `terrain_texture.json` 항목을 쓴다. 옛 geometry와 새 아이템 geometry가 같을 때(2D에서 2D로)만 된다. `blocks.json` 키는 블록 ID(`oak_sapling`), `terrain_texture.json` 짧은 이름은 `sapling_oak`이며 블록과 carried 텍스처를 둘 다 거기에 정의한다.
 
 ### 아이템 크기와 텍스처
 
@@ -490,7 +490,7 @@ geometry 루트 뼈에는 `"binding": "q.item_slot_to_bone_name(c.item_slot)"`�
 ## 15. 버전별 변화
 
 - 1.20.0: 아이템 `minecraft:knockback_resistance` 제거. 1.20.30: digger `use_efficiency`. 1.20.40: `can_always_eat` 우회용 음식 format. 1.20.50: 아이템 태그 최소 format(`1.20.5`는 유효하지 않음).
-- 1.21.90: 아이템 커스텀 컴포넌트 V2(`"ns:comp": {}`), `minecraft:custom_components` 폐기, `description.category` 제거(→ `menu_category`).
+- 1.21.90: 아이템 커스텀 컴포넌트 V2(`"ns:comp": {}`), `minecraft:custom_components` 폐기, `description.category` 제거(대신 `menu_category`).
 - 1.21.60: `menu_category`의 `minecraft:` 그룹 형식. 1.21.100: `kinetic_weapon`에 필요한 format.
 - 1.21.110: DurabilityManager 템플릿이 요구하는 format, `fire_resistant`가 된다는 보고. 1.21.120: `fire_resistant`, `enchantable`(`/enchant`), 커스텀 컴포넌트 권장 format, 용암 아이템 소실 수정, `type` 공격 쿨다운 허용. 1.21.12x: `minecraft:copper_horse_armor`.
 - 1.21.130: 창 쿨다운/사거리, `shield_patterns` 1인칭 버그.

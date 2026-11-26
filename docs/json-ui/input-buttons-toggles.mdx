@@ -298,7 +298,7 @@ checked_locked_hover_control  unchecked_locked_hover_control
 ## HUD 위의 입력, 상자에서의 입력
 
 - **[INP-16]** HUD에 그린 버튼이 호버와 스크롤을 받으려면 `hud_screen`에 `always_accepts_input: true`가 필요하다. 마우스에서만 확인되었고 터치·컨트롤러에서 호버가 되는지는 확인되지 않았다. 모바일에서는 `always_accepts_input: true`를 준 HUD의 버튼이 터치되지 않았다(2026-11-19, 사용자 실측, [InvUI에서 사용자 입력 가로채기](../design/invui/input-interception.mdx)). `{작동팩, 실측}` ([출처](../reference/source-abbreviations.mdx): AP 3.1)
-- **[INP-17]** 상자 화면의 셀을 버튼처럼 쓰려면 모든 입력(클릭, 우클릭, 시프트클릭, Q, 더블클릭, 게임패드)을 `button.drop_one`으로 매핑한다. 누를 때마다 정확히 한 개가 떨어지고 커서는 변하지 않으며, 같은 틱에 `entitySpawn` → `entityItemDrop`(플레이어 포함) 순으로 이벤트가 온다. `{실측}` ([출처](../reference/source-abbreviations.mdx): BC-S14)
+- **[INP-17]** 상자 화면의 셀을 버튼처럼 쓰려면 모든 입력(클릭, 우클릭, 시프트클릭, Q, 더블클릭, 게임패드)을 `button.drop_one`으로 매핑한다. 누를 때마다 정확히 한 개가 떨어지고 커서는 변하지 않으며, 같은 틱에 `entitySpawn`, `entityItemDrop`(플레이어 포함) 순으로 이벤트가 온다. `{실측}` ([출처](../reference/source-abbreviations.mdx): BC-S14)
 - **[INP-18]** 상자에서 커서로 아이템을 집게 하는 방식은 쓰지 않는다. 인벤토리가 가득 차면 눌림이 사라지고, 커서에 든 아이템은 엔진이 직접 그려 JSON UI로 숨길 수 없다. `{실측}` ([출처](../reference/source-abbreviations.mdx): BC-S13, BC 4.3-(4))
 - **[INP-37]** 상자 화면에서 슬라이더를 끄는 동작 자체는 서버에 닿지 않는다. 슬라이더 옆에 단계마다 숨은 칸 버튼을 두고 `(#slider_value = k)`(`source_control_name`으로 슬라이더에서 읽음)일 때만 보이게 하며, 그 버튼에 `button.menu_select`를 `button.container_auto_place`로 보내는 `global` 매핑(`consume_event: false`)을 주면, 손을 뗄 때 지금 단계 값이 서버로 갔다. global 매핑은 화면 어디서 손을 떼도 눌리므로 서버는 같은 값을 무시한다. 한 화면에 슬라이더가 여럿이면 값이 섞인 적이 있다. 자세한 시도와 원인은 [InvUI로 슬라이더 구현하기](../design/invui/ddui/slider.mdx). `{실측}` ([출처](../reference/source-abbreviations.mdx): IUC)
 - **[INP-38]** 위치로 받는 `pressed` 매핑에 `consume_event: false`를 주어도 겹친 아래 컨트롤은 누름을 받지 못했다(숨은 단계 버튼이 위면 슬라이더가 움직이지 않고, 슬라이더가 위면 버튼이 눌리지 않았다). 슬라이더의 드래그 매핑에 `consume_event: false`를 주면 손을 뗀 자리의 칸 버튼도 눌렸고, 바닐라 매핑 그대로여도 끌기를 마친 손 아래의 탭 칸이 눌렸다. 그래서 끌기 값이 바뀐 틱의 탭 칸 눌림은 서버에서 버린다(*미검증*, 모의만). `{실측}` ([출처](../reference/source-abbreviations.mdx): IUC)
@@ -311,7 +311,7 @@ StarLibV2(`jb-starlibv2`, GPL-3.0)는 입력창 글자로 서버 폼 버튼을 �
 #### SLB 6. 클라이언트 검색 필터 [확인(구조), 미검증(동작)]
 
 - 검색창: 바닐라 `common.text_edit_box`를 상속하고 `$text_box_name`과 `$text_edit_text_control`을 같은 이름(기본 `search_field`)으로 준다. 바닐라 텍스트 입력 템플릿은 `property_bag`에 `"#property_field": "#item_name"`을 두어 입력 글자를 자기 `#item_name`에 쓴다(바닐라 11회, 예: `ui_common.json:1416`).
-- 버튼 쪽: view 바인딩 `source_control_name: "search_field"`, `source_property_name: "#item_name"` → `#search`. `(#search = '')`이거나 `#form_button_text`(또는 5장 범위 조각)가 `#search`를 포함하면 보인다.
+- 버튼 쪽: view 바인딩 `source_control_name: "search_field"`, `source_property_name: "#item_name"`을 `#search`로. `(#search = '')`이거나 `#form_button_text`(또는 5장 범위 조각)가 `#search`를 포함하면 보인다.
 - 초기값: `property_bag`에 `#default_search`를 두고 `binding_condition: "once"` view로 `#search`에 한 번 복사한다. 그러면 처음에는 그 기본 단어를 가진 버튼만 보이고, 사용자가 입력하면 입력어로 바뀐다 [추론].
 - 숨은 항목은 세로 스택에서 공간을 내주므로(LAY-04) 목록이 실제로 줄어든다. 그리드 템플릿을 쓰면 빈칸이 남는다(LAY-31).
 

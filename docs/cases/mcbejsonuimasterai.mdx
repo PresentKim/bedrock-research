@@ -14,12 +14,12 @@ mcbejsonuimasterAI는 GitHub `boredape874` 1인이 2026-04-25~2026-10-04에 만�
 
 ## 구성
 
-두 층으로 나뉜다. **지식층**(스킬 28개, 문서 87개, 속성 사전 `data/jsonui-spec.json`, 참조 자료)은 "무엇이 맞는 이름인가, 어떤 패턴이 있는가"를 찾는 곳이고, **도구층**(63개 CLI)은 레이아웃을 YAML IR로 쓰면 solver가 좌표를 풀고 compiler가 JSON UI를 뽑으며 검사기·미리보기로 확인한다. 바인딩·애니메이션은 사람이 생성물 위에 손으로 덧붙이라고 한다. 모든 스킬에 "Evidence first, skill second" 블록이 있다: 대상 팩과 Content Log → 고정 바닐라(`vanilla-name-check`) → 등록된 외부 출처 → 그래도 없을 때만 스킬 내용(이때는 "inferred"로 표시). 이 원칙은 우리 가이드의 수준 표기와 방향이 같다.
+두 층으로 나뉜다. **지식층**(스킬 28개, 문서 87개, 속성 사전 `data/jsonui-spec.json`, 참조 자료)은 "무엇이 맞는 이름인가, 어떤 패턴이 있는가"를 찾는 곳이고, **도구층**(63개 CLI)은 레이아웃을 YAML IR로 쓰면 solver가 좌표를 풀고 compiler가 JSON UI를 뽑으며 검사기·미리보기로 확인한다. 바인딩·애니메이션은 사람이 생성물 위에 손으로 덧붙이라고 한다. 모든 스킬에 "Evidence first, skill second" 블록이 있다: 대상 팩과 Content Log, 다음으로 고정 바닐라(`vanilla-name-check`), 다음으로 등록된 외부 출처를 보고 그래도 없을 때만 스킬 내용(이때는 "inferred"로 표시). 이 원칙은 우리 가이드의 수준 표기와 방향이 같다.
 
 ## 가치 있는 것
 
-- 바닐라 1.26.10.4 → 1.26.50.4 변경 문서(`docs/83`)가 가장 가치 있다. 표본 점검이 모두 맞았다: `server_form.json` `custom_form` 팩토리에 `multiselect` 추가, HUD 자막이 `subtitle_container_factory`로 변경, HUD 루트의 `curor_rend@cursor_renderer` 제거, 인벤토리 닫기 버튼 id가 `button.menu_inventory_exit`로, 탭 factory가 `#*_tab_visible` 전역 바인딩으로, 채팅 라벨 폭 `100% - 3px`. 특히 `multiselect` 컨트롤은 RP에 생겼지만 공개 Script API(`@minecraft/server-ui` 2.2.0~2.4.0-beta)에 보내는 메서드가 없다.
-- 서버 폼 계약 추적 체크리스트(제목 → 팩토리 → 컬렉션 → 인덱스 → 응답)와 `ModalForm` 하나에서 드롭다운으로 페이지를 바꾸는 패턴(미검증)이 있다. 숨긴 dropdown을 필드 0에 두고 `('%.4s' * #dropdown_option_text)`로 view 키를 읽어 상주 gate 패널이 내용을 켜고 끈다.
+- 바닐라 1.26.10.4에서 1.26.50.4로의 변경 문서(`docs/83`)가 가장 가치 있다. 표본 점검이 모두 맞았다: `server_form.json` `custom_form` 팩토리에 `multiselect` 추가, HUD 자막이 `subtitle_container_factory`로 변경, HUD 루트의 `curor_rend@cursor_renderer` 제거, 인벤토리 닫기 버튼 id가 `button.menu_inventory_exit`로, 탭 factory가 `#*_tab_visible` 전역 바인딩으로, 채팅 라벨 폭 `100% - 3px`. 특히 `multiselect` 컨트롤은 RP에 생겼지만 공개 Script API(`@minecraft/server-ui` 2.2.0~2.4.0-beta)에 보내는 메서드가 없다.
+- 서버 폼 계약 추적 체크리스트(제목, 팩토리, 컬렉션, 인덱스, 응답)와 `ModalForm` 하나에서 드롭다운으로 페이지를 바꾸는 패턴(미검증)이 있다. 숨긴 dropdown을 필드 0에 두고 `('%.4s' * #dropdown_option_text)`로 view 키를 읽어 상주 gate 패널이 내용을 켜고 끈다.
 - 이름 대조 도구 `vanilla-name-check`는 실제 이름(`common.close_button`, `#title_text`)은 찾고 지어낸 이름·오타(`common.close_buton`)는 거부한다. 단 15개 파일만 색인해 `start_screen` 같은 실제 이름도 NOT FOUND로 낸다.
 
 ## 틀렸거나 근거 없는 것
@@ -45,7 +45,7 @@ mcbejsonuimasterAI는 GitHub `boredape874` 1인이 2026-04-25~2026-10-04에 만�
 ## 도구를 돌려 본 결과
 
 - `npm run check`는 68개 테스트 중 64개 통과(2개는 PowerShell 필요, 2개는 Linux 글꼴로 이미지 비교 허용 오차 초과). Studio 테스트는 27/27이다.
-- IR → solve → compile → validate는 성공하지만 생성 `ui.json`은 모든 요소가 평평한 최상위 정의 + 절대 px이고 `$변수`·바인딩·템플릿·modifications가 없으며 어떤 바닐라 화면에도 연결되지 않아 그대로는 게임에 안 뜬다.
+- IR, solve, compile, validate는 성공하지만 생성 `ui.json`은 모든 요소가 평평한 최상위 정의 + 절대 px이고 `$변수`·바인딩·템플릿·modifications가 없으며 어떤 바닐라 화면에도 연결되지 않아 그대로는 게임에 안 뜬다.
 - `validate-pack`은 AdvancementPack에 8개 파일의 "namespace 없음" 오류를 냈지만 바닐라 파일 병합용 파일의 오탐이다(FILE-05). `_global_variables.json` 미등록 경고도 오탐(자동 로드, FILE-04). `.r4ui`는 존재만 확인하고 내용을 검사하지 않는다. 레이어 119~201이 높다는 경고는 소음이다(LAY-21).
 - 미리보기와 `final-rp:render`는 와이어프레임이거나 회색 이미지로 "배드락처럼 보이는지" 판단용이 아니다.
 
@@ -56,7 +56,7 @@ mcbejsonuimasterAI는 GitHub `boredape874` 1인이 2026-04-25~2026-10-04에 만�
 | | bedrock-core | BedrockAdvancements | AdvancementPack | 이 저장소 |
 | --- | --- | --- | --- | --- |
 | 엔진 규칙 근거 | 게임 내 실측 | 동작하는 팩 | 동작하는 팩 | 정적 대조, 실측 거의 없음 |
-| 버전 추적 | 코드 기준 | — | — | v1.26.50.4 고정과 변경표(유일) |
+| 버전 추적 | 코드 기준 | 해당 없음 | 해당 없음 | v1.26.50.4 고정과 변경표(유일) |
 
 NPC 대화 호스트와 관련해 이 저장소의 NewUI 예제는 대화 파일의 장면 버튼 6개 제한을 NPC `.mcstructure`의 NBT `Actions`로 피해 버튼 9개를 공급한다고 적는다(미검증, D-19).
 
@@ -69,4 +69,4 @@ NPC 대화 호스트와 관련해 이 저장소의 NewUI 예제는 대화 파일
 | EXP-02, EXP-16, EXP-25 | `%`, `* 1`, 패딩 서식 주장 |
 | FILE-04, FILE-05 | 검사기 오탐 사례 |
 
-규칙으로 가져올 것(바닐라로 재확인): 1.26.50 변경 주의 목록, 바닐라가 바인딩 이름을 변수 식으로 만든다는 사실(`"$toggle_state_binding_name": "('#' + $dropdown_name)"`), 스펙 사전의 양방향 대조, 근거 단계 표시(대상 팩 → 고정 바닐라 → 외부 출처 → 추론). 가져오지 말 것: 스펙을 유효 속성 목록으로 쓰는 것, `scroll_box` 타입, `grid_fill_direction` 네 값, `resolve_ancestor_scope`, `%` 예제, `* 1` 변환, 패딩 서식, IR/solver 출력을 완성 예제로 싣는 것.
+규칙으로 가져올 것(바닐라로 재확인): 1.26.50 변경 주의 목록, 바닐라가 바인딩 이름을 변수 식으로 만든다는 사실(`"$toggle_state_binding_name": "('#' + $dropdown_name)"`), 스펙 사전의 양방향 대조, 근거 단계 표시(대상 팩, 고정 바닐라, 외부 출처, 추론). 가져오지 말 것: 스펙을 유효 속성 목록으로 쓰는 것, `scroll_box` 타입, `grid_fill_direction` 네 값, `resolve_ancestor_scope`, `%` 예제, `* 1` 변환, 패딩 서식, IR/solver 출력을 완성 예제로 싣는 것.

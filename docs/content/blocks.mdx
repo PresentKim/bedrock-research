@@ -20,7 +20,7 @@ sources:
 2. 커스텀 컴포넌트는 `system.beforeEvents.startup`의 `blockComponentRegistry.registerCustomComponent("ns:id", {...})`로 등록하고 블록 `components`에 `"ns:id": {}`로 직접 쓴다. `minecraft:custom_components` 배열과 `world.beforeEvents.worldInitialize`는 폐기됐다.
 3. 퍼뮤테이션에 커스텀 컴포넌트를 두면 base `components`의 커스텀 컴포넌트가 사라진다(MCPE-234714, 미해결). 모든 퍼뮤테이션에 다시 정의한다.
 4. 블록 모델은 축마다 약 30px(블록 밖으로 최대 14px), 큐브만 허용된다. 너무 크거나 잘못된 지오메트리는 그 서브청크의 모든 커스텀 블록을 보이지 않게 만든다.
-5. `minecraft:collision_box`는 여러 박스 배열을 받는다(1.21.130 실험 → 26.0 안정). 선택 박스는 하나뿐이다.
+5. `minecraft:collision_box`는 여러 박스 배열을 받는다(1.21.130에서 실험, 26.0에서 안정). 선택 박스는 하나뿐이다.
 6. 바닐라 블록의 JSON, 루트 테이블, 동작은 애드온으로 수정할 수 없다. 실크터치와 포춘은 하드코딩이라 스크립트로 처리한다.
 7. 월드젠으로 놓인 커스텀 블록은 `onTick`/`onPlace`가 실행되지 않는 경우가 많다.
 
@@ -74,7 +74,7 @@ tile.wiki:glow_block.name=Glow Block
 
 ### 레거시 이름 변경
 
-`minecraft:entity_collision` → `minecraft:collision_box`, `minecraft:block_light_dampening` → `minecraft:light_dampening`, `minecraft:pick_collision` → `minecraft:selection_box`, `minecraft:block_light_emission` → `minecraft:light_emission`, `minecraft:destroy_time` → `minecraft:destructible_by_mining.seconds_to_destroy`, `minecraft:rotation` → `minecraft:transformation`, `minecraft:block_property` 쿼리 → `q.block_state`, `properties` → `states`(1.20.30). `minecraft:ticking`은 없고 `minecraft:tick`이다. 블록 이벤트(`events`, `minecraft:on_placed`, `set_block_state`)는 2024년경 제거됐으니 스크립트를 쓴다.
+`minecraft:entity_collision`은 `minecraft:collision_box`로, `minecraft:block_light_dampening`은 `minecraft:light_dampening`으로, `minecraft:pick_collision`은 `minecraft:selection_box`로, `minecraft:block_light_emission`은 `minecraft:light_emission`으로, `minecraft:destroy_time`은 `minecraft:destructible_by_mining.seconds_to_destroy`로, `minecraft:rotation`은 `minecraft:transformation`으로, `minecraft:block_property` 쿼리는 `q.block_state`로, `properties`는 `states`로 바뀌었다(1.20.30). `minecraft:ticking`은 없고 `minecraft:tick`이다. 블록 이벤트(`events`, `minecraft:on_placed`, `set_block_state`)는 2024년경 제거됐으니 스크립트를 쓴다.
 
 ### 파일 위치와 이름
 
@@ -436,7 +436,7 @@ blocks.json의 `sound`는 여전히 유효하다. `default`는 음높이만 다�
 - 태그(conflicting): 이전 형식은 블록 태그를 `"tag:ns:name": {}` 컴포넌트로 쓴다. format 1.26.20부터는 `"minecraft:tags": ["ns:tag"]` 배열이 대체한다고 하지만 1.26.20 무렵 배열이 로드되지 않고 `tag:` 형식이 필요했다는 보고가 있다. 2026-08~09의 더 최근 보고는 1.26.20 이상에서 배열이 맞고 옛 `tag:` 키는 스키마 오류라고 확인한다. `query.block_neighbor_has_any_tag`/`block_has_any_tag`는 더 쓸 수 없다.
 - 몹 스폰: 오래된 형식의 커스텀 풀블록 위에는 몹이 스폰되지 않았지만 format 1.21.90 이상에서 고쳐졌다(한 사용자는 1.26.0 필요). 블록이 고체/불투명이어야 한다. 커스텀 블록을 바이옴 `top_material`로 쓰면 엔티티가 스폰되지 않는다는 보고가 있다.
 - trial spawner는 자연 몹 스폰 규칙이 켜져 있어야 스폰한다. 우회법은 BP spawn_rules로 자연 적대 몹 스폰을 막는 것이다(format 1.8.0 `minecraft:spawns_on_block_filter: ["minecraft:deny"]` 또는 weight 0).
-- 컴포넌트 정리 순서(ciosciaa 제안): METADATA(display name, loot, transformation, random offset, tags) → PRESENTATION(geometry, material instances, item visuals, embedded visuals, destruction particles, map color) → PHYSICS(selection/collision box, friction, light dampening/emission, precipitation, destructible by mining/explosion, liquid detection, flammable, movable) → RELATIONS(placement filter, replaceable, support, connection rule) → FEATURES(redstone, crafting table, leashable, flower pottable) → EVENTS(tick, fall-on).
+- 컴포넌트 정리 순서(ciosciaa 제안): METADATA(display name, loot, transformation, random offset, tags), PRESENTATION(geometry, material instances, item visuals, embedded visuals, destruction particles, map color), PHYSICS(selection/collision box, friction, light dampening/emission, precipitation, destructible by mining/explosion, liquid detection, flammable, movable), RELATIONS(placement filter, replaceable, support, connection rule), FEATURES(redstone, crafting table, leashable, flower pottable), EVENTS(tick, fall-on) 순.
 
 ## 15. 블록으로 만드는 패턴
 
@@ -448,7 +448,7 @@ blocks.json의 `sound`는 여전히 유효하다. `default`는 음높이만 다�
 - 작물과 덩굴: `minecraft:tick`(또는 더 싼 `onRandomTick`) + `permutation.withState(state, value+1)`로 키우고 다 자란 단계는 퍼뮤테이션 조건 컴포넌트로 처리한다. 농지가 아래 있으면 slow_falling을 줘서 짓밟힘을 막는다. 덩굴은 `onRandomTick`이 끝을 몸통으로 바꾸고 아래에 새 끝을 놓는다. 뼛가루는 `playerInteractWithBlock`에서 `cancel = true` 후 `system.run`으로 처리하고 생존 모드 소모는 `getEquipmentSlot(EquipmentSlot.Mainhand)`로 `stack.amount--; slot.setItem(stack)`을 하며 `GameMode.Creative`에서는 건너뛴다. 바닐라 식물은 커스텀 블록 위에 놓을 수 없고 사탕수수식 지지는 sand 태그로 되지 않았다.
 - 묘목: 피처는 묘목 위에 놓이므로 묘목이 피처의 `may_replace`에 있거나 먼저 지워져야 한다. `dimension.placeFeature`를 쓴다.
 - 통나무 벗기기는 주손에 도끼가 있으면 `onPlayerInteract`에서 `block.setType(stripped)`를 하고 내구도는 `item.getComponent("minecraft:durability").damage++` 후 `slot.setItem(item)`로 깎는다. 지연 후 블록 교체는 `system.runTimeout`, 2칸 블록은 `beforeOnPlayerPlace`에서 `permutationToPlace`로 위 블록을 놓고 `minecraft:cardinal_direction`을 복사한다.
-- 탄력 블록은 `onEntityFallOn` 낙하 거리 → `applyImpulse`, 낙하 피해는 before entity hurt에서 원인 fall과 아래 블록을 확인해 취소한다. 선인장 피해는 블록별 틱 대신 `system.runInterval`을 쓴다. 불 감지는 주변의 `minecraft:fire`를 확인하는 틱 컴포넌트로 한다. 포털은 커스텀 지오메트리, 충돌, 애니메이션 텍스처, 축 상태를 가진 일반 블록으로 만든다.
+- 탄력 블록은 `onEntityFallOn` 낙하 거리로 `applyImpulse`를 하고, 낙하 피해는 before entity hurt에서 원인 fall과 아래 블록을 확인해 취소한다. 선인장 피해는 블록별 틱 대신 `system.runInterval`을 쓴다. 불 감지는 주변의 `minecraft:fire`를 확인하는 틱 컴포넌트로 한다. 포털은 커스텀 지오메트리, 충돌, 애니메이션 텍스처, 축 상태를 가진 일반 블록으로 만든다.
 - 구조 공허식 블록(손에 들 때만 보이는 투명 블록): `minecraft:geometry.full_block`, `minecraft:collision_box: false`, `"*": {texture:"invisible", render_method:"blend"}`, `minecraft:selection_box: true`, `minecraft:tick` interval [1,1], 플레이어가 아이템을 들면 `minecraft:shulker_bullet` 파티클을 내는 onTick(format 1.21.90). `player.spawnParticle`을 쓰면 그 플레이어만 본다. 방벽 가시성은 하드코딩이다.
 - 블록에서 엔티티 소환은 `complete` 불리언 상태를 두고 complete=false 퍼뮤테이션의 tick이 엔티티를 소환한 뒤 complete를 true로 바꾼다. 동적 조명은 모두 플레이어 위치에 `light_block`을 놓거나 옮긴다.
 - 다중 블록 구조물 갱신은 BFS 큐와 `x,y,z` 키 visited Set으로 이웃을 훑으며 typeId와 `minecraft:cardinal_direction`을 비교한다(visited 없는 재귀는 무한 루프). `Block` 객체는 접근할 때마다 새로 만들어지니 위치 + 퍼뮤테이션을 쓰는 편이 빠를 수 있다. 스크립트에서 블록을 부수려면 runCommand로 `/setblock ... destroy`를 쓴다.

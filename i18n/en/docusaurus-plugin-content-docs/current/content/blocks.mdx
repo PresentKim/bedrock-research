@@ -20,7 +20,7 @@ This page collects how to make custom blocks and the known limits. The evidence 
 2. Register custom components with `blockComponentRegistry.registerCustomComponent("ns:id", {...})` in `system.beforeEvents.startup`, and write `"ns:id": {}` directly in the block `components`. The `minecraft:custom_components` array and `world.beforeEvents.worldInitialize` are dropped.
 3. Putting a custom component in a permutation makes the custom components in the base `components` disappear (MCPE-234714, unresolved). Define them again in every permutation.
 4. A block model is about 30px per axis (at most 14px outside the block), and only cubes are allowed. Geometry that is too large or invalid makes all custom blocks in that subchunk invisible.
-5. `minecraft:collision_box` accepts an array of several boxes (1.21.130 experiment -> 26.0 stable). There is only one selection box.
+5. `minecraft:collision_box` accepts an array of several boxes (experimental in 1.21.130, stable in 26.0). There is only one selection box.
 6. The JSON, loot tables and behavior of vanilla blocks cannot be modified by add-ons. Silk Touch and Fortune are hardcoded, so handle them with scripts.
 7. For custom blocks placed by worldgen, `onTick`/`onPlace` often do not run.
 
@@ -74,7 +74,7 @@ The spelling is `light_dampening` (not damping). A block that uses geometry must
 
 ### Legacy renames
 
-`minecraft:entity_collision` -> `minecraft:collision_box`, `minecraft:block_light_dampening` -> `minecraft:light_dampening`, `minecraft:pick_collision` -> `minecraft:selection_box`, `minecraft:block_light_emission` -> `minecraft:light_emission`, `minecraft:destroy_time` -> `minecraft:destructible_by_mining.seconds_to_destroy`, `minecraft:rotation` -> `minecraft:transformation`, the `minecraft:block_property` query -> `q.block_state`, `properties` -> `states` (1.20.30). `minecraft:ticking` does not exist and is `minecraft:tick`. Block events (`events`, `minecraft:on_placed`, `set_block_state`) were removed around 2024, so use scripts.
+`minecraft:entity_collision` became `minecraft:collision_box`, `minecraft:block_light_dampening` became `minecraft:light_dampening`, `minecraft:pick_collision` became `minecraft:selection_box`, `minecraft:block_light_emission` became `minecraft:light_emission`, `minecraft:destroy_time` became `minecraft:destructible_by_mining.seconds_to_destroy`, `minecraft:rotation` became `minecraft:transformation`, the `minecraft:block_property` query became `q.block_state`, and `properties` became `states` (1.20.30). `minecraft:ticking` does not exist and is `minecraft:tick`. Block events (`events`, `minecraft:on_placed`, `set_block_state`) were removed around 2024, so use scripts.
 
 ### File locations and names
 
@@ -436,7 +436,7 @@ For `explosion_resistance` of `minecraft:destructible_by_explosion` use the blas
 - Tags (conflicting): the older format writes block tags as `"tag:ns:name": {}` components. From format 1.26.20 a `"minecraft:tags": ["ns:tag"]` array is said to replace it, but there is a report that around 1.26.20 the array did not load and the `tag:` form was needed. More recent 2026-08~09 reports confirm that in 1.26.20 and above the array is correct and the old `tag:` key is a schema error. `query.block_neighbor_has_any_tag`/`block_has_any_tag` can no longer be used.
 - Mob spawning: mobs did not spawn on custom full blocks of an old format, but this was fixed in format 1.21.90 or higher (one user needed 1.26.0). The block must be solid/opaque. There is a report that entities do not spawn if a custom block is used as the biome `top_material`.
 - A trial spawner spawns only when natural mob spawning rules are on. A workaround is to block natural hostile mob spawning with BP spawn_rules (format 1.8.0 `minecraft:spawns_on_block_filter: ["minecraft:deny"]` or weight 0).
-- Component ordering (ciosciaa's suggestion): METADATA (display name, loot, transformation, random offset, tags) -> PRESENTATION (geometry, material instances, item visuals, embedded visuals, destruction particles, map color) -> PHYSICS (selection/collision box, friction, light dampening/emission, precipitation, destructible by mining/explosion, liquid detection, flammable, movable) -> RELATIONS (placement filter, replaceable, support, connection rule) -> FEATURES (redstone, crafting table, leashable, flower pottable) -> EVENTS (tick, fall-on).
+- Component ordering (ciosciaa's suggestion): METADATA (display name, loot, transformation, random offset, tags), then PRESENTATION (geometry, material instances, item visuals, embedded visuals, destruction particles, map color), PHYSICS (selection/collision box, friction, light dampening/emission, precipitation, destructible by mining/explosion, liquid detection, flammable, movable), RELATIONS (placement filter, replaceable, support, connection rule), FEATURES (redstone, crafting table, leashable, flower pottable) and EVENTS (tick, fall-on).
 
 ## 15. Patterns made with blocks
 

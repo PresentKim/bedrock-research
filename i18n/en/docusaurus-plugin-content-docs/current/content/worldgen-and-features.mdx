@@ -117,8 +117,8 @@ A feature decides "what is placed and how", and a feature rule decides "where an
 
 ### Terrain
 
-- Terrain cannot be changed by add-ons. Terrain is made first by hardcoding, and the biome `noise_type` changes only the surface. Changes are done with features that place air/stone. For tall mountains, use a rule that adds blocks to existing highlands, or in mountain-tag biomes (cherry_grove, frozen_peaks, grove, jagged_peaks, meadow, snowy_slopes, stony_peaks) place mcstructure peaks with scatter -> weighted_random -> structure_template_feature. A large body of water is filled with water up to about y=62 on the surface before biome features, so correction is slow. Changing sea level (63) did not work with noise parameters. Checklist: no 3D noise, erase vanilla directly, use the seed only as an offset.
-- Building terrain from scratch: chunk-level scatter (fixed_grid x/z 0..15, iterations Molang ending in `return 256;`) -> column-level scatter (Y fixed_grid [0, terrain_height-1], iterations returns a normalized multi-octave `q.noise` height). Only 3x3 chunks can be queried, so blending with biomes is hard.
+- Terrain cannot be changed by add-ons. Terrain is made first by hardcoding, and the biome `noise_type` changes only the surface. Changes are done with features that place air/stone. For tall mountains, use a rule that adds blocks to existing highlands, or in mountain-tag biomes (cherry_grove, frozen_peaks, grove, jagged_peaks, meadow, snowy_slopes, stony_peaks) place mcstructure peaks with scatter, then weighted_random, then structure_template_feature. A large body of water is filled with water up to about y=62 on the surface before biome features, so correction is slow. Changing sea level (63) did not work with noise parameters. Checklist: no 3D noise, erase vanilla directly, use the seed only as an offset.
+- Building terrain from scratch: chunk-level scatter (fixed_grid x/z 0..15, iterations Molang ending in `return 256;`) followed by column-level scatter (Y fixed_grid [0, terrain_height-1], iterations returns a normalized multi-octave `q.noise` height). Only 3x3 chunks can be queried, so blending with biomes is hard.
 - Deeper oceans are made with scatter + single_block_replace. The documented `sea_floor_depth` has no effect and changes only the surface layer thickness. A 2-block-deep ocean is impossible with biomes alone, so use a biome filter rule to cut the terrain down to a constant Y and place 2 blocks of water.
 
 ```text
@@ -126,7 +126,7 @@ A feature decides "what is placed and how", and a feature rule decides "where an
 ```
 
 - Removing water: overriding the vanilla underwater cave carver rules (`overworld_underwater_cave_carver_feature` / `underground_underwater_cave_carver_feature`) with a custom carver removes a lot of underground water. A carver can be overridden but an aquifer cannot.
-- To turn stone into netherrack, use 16x16 chunk fixed_grid scatter -> 256 column features -> a single block feature, and put ore in a later pass. Emptying the End is a rule that places air with a single block per chunk. Some vanilla blocks such as islands and chorus are placed after add-on rules, so erase them later with scripts.
+- To turn stone into netherrack, use 16x16 chunk fixed_grid scatter, then 256 column features, then a single block feature, and put ore in a later pass. Emptying the End is a rule that places air with a single block per chunk. Some vanilla blocks such as islands and chorus are placed after add-on rules, so erase them later with scripts.
 - A custom End "biome": the End is one biome so custom biomes do not work, so make all related rules check the same low-frequency noise range.
 
 ```text
@@ -162,7 +162,7 @@ A feature decides "what is placed and how", and a feature rule decides "where an
 
 ### structure_template_feature
 
-It is format 1.13.0 and uses `structure_name` (for example `mystructure:abc/def/ghi/oaktree` -> `BP/structures/abc/def/ghi/oaktree.mcstructure`), `adjustment_radius` (raising to 8-16 finds a spot), `facing_direction` (random is possible) and `constraints` (`grounded`, `unburied`, `block_intersection.block_allowlist`). There is no blocklist. If only air is allowed, it fails when even one non-air block exists. The condition needs `any_of` and `==` (the typo `=` breaks it).
+It is format 1.13.0 and uses `structure_name` (for example `mystructure:abc/def/ghi/oaktree` refers to `BP/structures/abc/def/ghi/oaktree.mcstructure`), `adjustment_radius` (raising to 8-16 finds a spot), `facing_direction` (random is possible) and `constraints` (`grounded`, `unburied`, `block_intersection.block_allowlist`). There is no blocklist. If only air is allowed, it fails when even one non-air block exists. The condition needs `any_of` and `==` (the typo `=` breaks it).
 
 ```json
 "constraints": {

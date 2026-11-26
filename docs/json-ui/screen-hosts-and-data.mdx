@@ -55,10 +55,10 @@ new ActionFormData().title("wiki_form:main").body("본문").button("확인").sho
 
 | 호스트 | 여는 방법(스크립트) | 데이터 채널 | 열린 뒤 값 변경 | 입력 | 사례 |
 | --- | --- | --- | --- | --- | --- |
-| 액션 폼 `long_form` | `ActionFormData` | 제목 `#title_text`, 본문 `#form_text`, 엔트리 문자열·텍스처(`form_buttons`) | 불가(다시 열어야 함) | 엔트리 누름 → `selection` | BC, BA |
+| 액션 폼 `long_form` | `ActionFormData` | 제목 `#title_text`, 본문 `#form_text`, 엔트리 문자열·텍스처(`form_buttons`) | 불가(다시 열어야 함) | 엔트리를 누르면 `selection` | BC, BA |
 | 모달 폼 `custom_form` | `ModalFormData` | 제목, 행 레이블·기본값(`custom_form`) | 불가 | 네이티브 필드, 제출 시 `formValues` | BC |
 | 상자 화면 | 커스텀 엔티티/블록 인벤토리 | 슬롯의 **숫자**(아이템 ID, 수량, 내구도, 색), 제목은 nameTag | **가능**(슬롯을 바꾸면 즉시) | 슬롯 조작, `button.drop_one` | BC |
-| NPC 대화 | `dialogue open` 명령 | 대화문 `#dialogtext`, 버튼 이름(`student_buttons_collection`) | 불가 | 대화 버튼 → 명령 | AP |
+| NPC 대화 | `dialogue open` 명령 | 대화문 `#dialogtext`, 버튼 이름(`student_buttons_collection`) | 불가 | 대화 버튼이 명령 실행 | AP |
 | HUD 타이틀 | `setTitle` | `#hud_title_text_string`, 생성 컨트롤의 `$title_text` | 가능(새로 보내면 다시 생성) | `always_accepts_input` 시 마우스 호버·스크롤 | BA, AP |
 | HUD 액션바 | `setActionBar` | `$actionbar_text` | 가능 | 없음 | VN |
 | HUD 채팅 | `sendMessage` | `#chat_text`(`chat_text_grid`) | 가능, 메시지마다 컨트롤 생성 | 없음 | AP |
@@ -95,7 +95,7 @@ third_party_server_screen@common.base_screen   ($screen_content = server_form.ma
 - **[HOST-08]** **고정 폭 레코드.** 엔트리 하나에 여러 필드를 싣는다면 `[종류 4][탭 2][프레임 24]…`처럼 바이트 폭을 고정하고, 스펙 파일 하나를 인코더(스크립트)와 UI 생성기가 함께 읽는다. 패딩 문자(`$`)와 예약 문자는 본문에서 제거하고, 숫자 필드는 글자 접두(EXP-15)를 붙인다. `{작동팩}` ([출처](../reference/source-abbreviations.mdx): BA 3장)
 - **[HOST-09]** **위치 무관 토큰.** 불리언 여러 개는 `~` + 대문자 그룹 + 소문자 비트(`~Fo`, `~Xa`)로 문자열 어디에나 넣고 포함 검사(EXP-07)로 읽는다. `{작동팩}` ([출처](../reference/source-abbreviations.mdx): BA 3.3)
 - `#form_text`는 `main_screen_content` 아래에 넣은 컨트롤에서는 읽히지 않았고(`text: "#form_text"` 라벨이 비었다) `long_form` 안에서는 읽혔다. `long_form` 안에서 본문 표식 검사(EXP-07)는 여러 줄 본문에서도 동작했다. 본문 `first line` 줄바꿈 `second line ~x`에서 `((#form_text - '~x') = #form_text)`는 false(표식 찾음)였고, 표식 없는 두 줄은 true, 표식 있는 한 줄은 false였다(Windows 1.26.65.1, [실측 기록](../design/json-ui-claims.mdx#6-추가-항목)). `{실측}`
-- **[HOST-10]** 폼을 다시 열면 스크롤이 맨 위로 돌아가고 위치를 정할 방법이 없다. 탭 전환·아코디언은 "폼 제출 → 해당 상태로 다시 열기"로 만들고, 열린 섹션을 목록 맨 앞에 두어 스크롤 문제를 피한다. 다른 화면(채팅 등) 때문에 `UserBusy`로 취소되면 몇 틱 간격으로 재시도한다. `{작동팩}` ([출처](../reference/source-abbreviations.mdx): BA 4장·7장)
+- **[HOST-10]** 폼을 다시 열면 스크롤이 맨 위로 돌아가고 위치를 정할 방법이 없다. 탭 전환·아코디언은 "폼 제출 후 해당 상태로 다시 열기"로 만들고, 열린 섹션을 목록 맨 앞에 두어 스크롤 문제를 피한다. 다른 화면(채팅 등) 때문에 `UserBusy`로 취소되면 몇 틱 간격으로 재시도한다. `{작동팩}` ([출처](../reference/source-abbreviations.mdx): BA 4장·7장)
 
 ## 모달 폼
 
@@ -120,7 +120,7 @@ third_party_server_screen@common.base_screen   ($screen_content = server_form.ma
 ## NPC 대화 화면 (`npc_interact_screen.json`)
 
 - **[HOST-21]** **대화문이 화면 ID다.** `#dialogtext`(전역 바인딩)를 비교해 내 화면과 바닐라 `npc_screen_contents`를 가시성으로 전환한다. 바닐라 내용을 감싸 두면 일반 NPC 대화는 계속 동작한다. 대화 파일의 `scene_tag`(명령이 여는 이름)와 `text`(UI가 보는 값)는 달라도 된다. `{작동팩}` ([출처](../reference/source-abbreviations.mdx): AP 4.2)
-- **[HOST-22]** 대화 버튼(`student_buttons_collection`)을 탭·메뉴로 쓴다. 인덱스가 아니라 **버튼 이름**(`#student_button_text`)으로 모양을 고르면 대화 파일의 버튼 순서를 바꿔도 UI가 깨지지 않는다. 누르면 `button.student_button` → 대화의 명령(`/scriptevent` 등)이 실행된다. `{작동팩, 바닐라}` ([출처](../reference/source-abbreviations.mdx): AP 4.3, VN npc_interact_screen.json:1180-1261)
+- **[HOST-22]** 대화 버튼(`student_buttons_collection`)을 탭·메뉴로 쓴다. 인덱스가 아니라 **버튼 이름**(`#student_button_text`)으로 모양을 고르면 대화 파일의 버튼 순서를 바꿔도 UI가 깨지지 않는다. 누르면 `button.student_button`을 거쳐 대화의 명령(`/scriptevent` 등)이 실행된다. `{작동팩, 바닐라}` ([출처](../reference/source-abbreviations.mdx): AP 4.3, VN npc_interact_screen.json:1180-1261)
 - **[HOST-23]** "탭 전환으로 닫힘"과 "사용자가 닫음"은 대화의 `on_close_commands`와 태그로 구분한다(탭 버튼이 태그를 붙이고, 닫힘 명령은 태그가 없을 때만 정리). `{작동팩}` ([출처](../reference/source-abbreviations.mdx): AP 4.3)
 - **[HOST-24]** 대화를 열 NPC는 보이지 않는 엔티티(scale 0, 무적)를 플레이어 근처에 두고 `dialogue open @e[...] @s <scene>`으로 연다. 대화 파일의 장면 버튼은 6개 제한이 있다는 주장과, NPC 구조물 NBT로 9개까지 늘린다는 주장은 확인되지 않았다. `{작동팩, 미검증}` ([출처](../reference/source-abbreviations.mdx): AP 4.2, MJ 7장)
 
@@ -145,7 +145,7 @@ third_party_server_screen@common.base_screen   ($screen_content = server_form.ma
 
 - **[HOST-43]** `third_party_server_screen`에 `"$screen_animations": []`, `"$background_animations": []`를 주면 폼이 애니메이션 없이 바로 나타난다. 창이 움직이는 동안 다음 폼이 오면 두 창이 겹쳐 보였고, 닫고 다시 여는 메뉴가 깜빡였다. `{실측}` ([출처](../reference/source-abbreviations.mdx): DF)
 - **[HOST-44]** 서버 폼 뒤에 화면 틀을 그리려면 `third_party_server_screen`의 `$screen_bg_content`(안전 영역 밖, 화면 전환 때 밀리지 않음)를 바꾼다. 폼이 열려 있는 동안 HUD는 그려지지 않으므로 HUD의 틀을 폼 위에서도 보이려면 여기에도 그린다. 이 자리의 `#title_text` 바인딩은 `once`로 두면 폼 내용이 오기 전에 평가돼 안 보였다. HUD를 폼과 함께 그리려면 `third_party_server_screen`에 `"force_render_below": true`를 둔다. 그러면 HUD가 폼 뒤에 그려지고 폼이 열린 동안 온 타이틀과 래치도 갱신됐다. 여기에 `hud_screen`의 `"screen_draws_last": true`를 더하면 HUD가 폼 위에 그려졌다. `screen_draws_last`만 두면 그려지지 않았다([실측 기록](../design/json-ui-claims.mdx#62-hud-타이틀)). `{실측}` ([출처](../reference/source-abbreviations.mdx): DF, 2026-11-18 Windows 1.26.65.1)
-- **[HOST-45]** 사이드바 스코어보드는 타이틀과 겹치지 않는 HUD 채널이다: 목표 이름에 표식, 줄마다 부분 표식을 붙이고 `scoreboard.scoreboard_sidebar`를 화면 전체 패널로 바꿔 부분마다 `scoreboard_players` 컬렉션 스택(`#scoreboard_sidebar_size` → `#collection_length`)으로 다른 자리에 그린다. 같은 글자 줄은 클라이언트가 합치므로 뒤에 `§r`을 붙여 구분하고, 15줄까지다. `{실측}` ([출처](../reference/source-abbreviations.mdx): DF)
+- **[HOST-45]** 사이드바 스코어보드는 타이틀과 겹치지 않는 HUD 채널이다: 목표 이름에 표식, 줄마다 부분 표식을 붙이고 `scoreboard.scoreboard_sidebar`를 화면 전체 패널로 바꿔 부분마다 `scoreboard_players` 컬렉션 스택(`#scoreboard_sidebar_size`를 `#collection_length`로)으로 다른 자리에 그린다. 같은 글자 줄은 클라이언트가 합치므로 뒤에 `§r`을 붙여 구분하고, 15줄까지다. `{실측}` ([출처](../reference/source-abbreviations.mdx): DF)
 
 ## 모달 폼 `multiselect` 행
 

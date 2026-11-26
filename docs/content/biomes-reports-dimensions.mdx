@@ -35,7 +35,7 @@ sources:
 ### 커스텀 차원
 
 - **등록과 상태**: 스크립트 `system.beforeEvents.startup`에서 `event.dimensionRegistry.registerCustomDimension(id)`로 등록한다(startup 전용, `/reload`로 재실행 불가). 튜토리얼: https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/custom-dimension-api-tutorial?view=minecraft-bedrock-stable. 26.30에 실험에서 나왔고 2026-06-23에는 안정판/릴리스에 있었다(초기엔 불안정하고 렉).
-- **생성**: `void` 생성기("generator_type": "void")뿐이고 기본 바이옴은 `minecraft:ocean`이다(바다 몹이 스폰된다). 오버월드 지형/바이옴을 상속하지 않고, 오버월드 메커니즘을 가진 공허일 뿐이다. 구조물 세트와 피처 룰은 자연적으로 돌지 않는다. ocean 바이옴 태그 룰도 놓이지 않았다. 명령/스크립트로만 배치하며(지그소 + 스크립트 월드젠, 작은 추가물은 피처), 지형은 스크립트로 흉내 낸다. 이는 느리다: QuickJS noise와 큰 볼륨의 `Dimension.fillBlocks`가 병목이니 볼륨을 나누고 `system.runJob`으로 스케줄하며 네이티브 호출을 묶는다. 차원 바이옴은 런타임에 바꿀 수 없다(Editor 모드, 오프라인 Amulet API, Java→Bedrock Chunker 사용). 커스텀 바이옴으로 바꾸려다 게임 오류가 났다.
+- **생성**: `void` 생성기("generator_type": "void")뿐이고 기본 바이옴은 `minecraft:ocean`이다(바다 몹이 스폰된다). 오버월드 지형/바이옴을 상속하지 않고, 오버월드 메커니즘을 가진 공허일 뿐이다. 구조물 세트와 피처 룰은 자연적으로 돌지 않는다. ocean 바이옴 태그 룰도 놓이지 않았다. 명령/스크립트로만 배치하며(지그소 + 스크립트 월드젠, 작은 추가물은 피처), 지형은 스크립트로 흉내 낸다. 이는 느리다: QuickJS noise와 큰 볼륨의 `Dimension.fillBlocks`가 병목이니 볼륨을 나누고 `system.runJob`으로 스케줄하며 네이티브 호출을 묶는다. 차원 바이옴은 런타임에 바꿀 수 없다(Editor 모드, 오프라인 Amulet API, Java에서 Bedrock으로 바꾸는 Chunker 사용). 커스텀 바이옴으로 바꾸려다 게임 오류가 났다.
 - **JSON 차원 정의(26.50+)**: 프리뷰 26.50.25에 `BP/dimensions/<name>.json`이 추가됐다. 스크립트와 JSON 등록이 모두 동작하며 JSON이 스크립트 등록을 덮는다. 높이 범위와 기본 바이옴을 정하려면 JSON이 낫다. 스크립트 등록은 "당분간" 유지된다. 차원 경계가 오버월드 -64..320으로 묶이던 버그(MCPE-241528)는 고쳐져 -512..512가 돌아왔다(2026-08-18 체인지로그). 컴포넌트는 min_y/max_y 대신 `minecraft:dimension_height {min_y, height_range}`(Java 대응, 커뮤니티는 min/max 선호)로 바뀌었다. `minecraft:default_biome {biome}`는 확장을 위한 객체다. 26.45에서는 높이 한도를 설정할 수 없었다. `minecraft:default_biome`은 26.50에 나왔고 JSON 차원 전용이며 커스텀 바이옴도 된다. 공허 차원에서도 바이옴이 안개/몹/색을 바꾸고 오버월드 낮밤과 동기화된다. format 1.26.50 예는 dimension_height -32/224, default_biome warm_ocean을 썼다. 1.26.60 동작 예(스키마에서 도출, 스키마 검증기가 format_version을 잘못 표시할 수 있음):
   ```json
   {"format_version":"1.26.60","minecraft:dimension":{"description":{"identifier":"ns:dimension"},"components":{"minecraft:clouds":{"height":-64},"minecraft:dimension_height":{"min_y":-512,"height_range":1024},"minecraft:generation":{"generator_type":"void"},"minecraft:default_biome":{"biome":"minecraft:forest"}}}}
@@ -49,31 +49,31 @@ sources:
 
 ### 알려진 제한과 우회법
 
-- **onPlayerInteract가 설치를 막음** → `world.beforeEvents.playerInteractWithBlock` + `system.run`.
-- **월드젠으로 놓인 블록이 틱하지 않음** → x/z를 0..15(음수 extent 없이)로, `final_pass`, search + feature, 또는 플레이어 근처를 스크립트로 검사.
-- **블록 크기 30px 초과** → 멀티블록, 여러 블록, 엔티티.
-- **선택 박스 하나뿐** → 멀티블록 + voxel shape(예정), 엔티티.
-- **얇은 블록에서 onStepOn 미발생** → 4px 바닥 큐브, `onEntityFallOn`, 플레이어 틱 검사.
-- **실크터치/포춘/바닐라 루트 하드코딩** → 파괴 이벤트 취소 + 스크립트 드롭.
-- **커스텀 도구 내구도와 digger 정확도** → 스크립트로 내구도 감소.
-- **`use_liquid_clipping` 미동작, 계단 뒤 물 비침** → 지오메트리 ~0.001 inflate.
-- **겹반블록 자동 병합 없음** → 상호작용 스크립트나 아이템 대체 방식(위 반블록 절).
-- **블록에 텍스처 변경 API 없음** → 상태 + 퍼뮤테이션별 material_instances(https://wiki.bedrock.dev/blocks/block-permutations).
-- **AO로 어둡게 보임** → `ambient_occlusion` 0, `face_dimming` false, 면을 0.1 앞으로.
-- **큰 아틀라스 텍스처의 거대한 균열/파티클** → 면별 16x16 텍스처.
-- **커스텀 잔디에 식물 안 남** → 바닐라 배치 피처의 블록 목록을 복사해 추가.
-- **피처 3x3 청크 잘림** → 구조물을 청크 중앙에, 16x16 이하, 음수 extent, `rotate_around_center` + 8,8 오프셋, 아니면 지그소.
-- **피처 구조물의 엔티티 미생성** → 지그소 사용, 또는 틱하는 소환 블록.
-- **지그소 개수/방향 강제 불가** → 필수 방을 시작 조각으로 만든다.
-- **구조물끼리 겹침** → 같은 structure_set에 둔다.
-- **지그소 길이 집을 덮음** → 길 조각을 Y 25로 저장.
-- **피처가 지그소 안에 생성** → 피처에 `block_allowlist`, grass/dirt 태그 없는 바닥, structure void.
-- **시드 기반 noise 없음** → 좌표 오프셋 salt.
-- **지형 수정 불가** → 피처로 공기/돌/물 배치, Molang noise 지형.
-- **커스텀 차원에서 피처 룰 미동작** → 스크립트 배치(`runJob`으로 분할), Chunker로 미리 지은 청크 삽입.
-- **커스텀 바이옴이 바닐라 구조물을 잃음** → 대체된 바이옴의 태그를 커스텀 바이옴에 추가.
-- **엔드 커스텀 바이옴 불가** → 저주파 noise 구역을 모든 관련 룰에서 공유.
-- **스크립트로 동적 블록 데이터 유지(26.50 이전)** → 월드 동적 속성(위치 키).
+- **onPlayerInteract가 설치를 막음**: `world.beforeEvents.playerInteractWithBlock` + `system.run`.
+- **월드젠으로 놓인 블록이 틱하지 않음**: x/z를 0..15(음수 extent 없이)로, `final_pass`, search + feature, 또는 플레이어 근처를 스크립트로 검사.
+- **블록 크기 30px 초과**: 멀티블록, 여러 블록, 엔티티.
+- **선택 박스 하나뿐**: 멀티블록 + voxel shape(예정), 엔티티.
+- **얇은 블록에서 onStepOn 미발생**: 4px 바닥 큐브, `onEntityFallOn`, 플레이어 틱 검사.
+- **실크터치/포춘/바닐라 루트 하드코딩**: 파괴 이벤트 취소 + 스크립트 드롭.
+- **커스텀 도구 내구도와 digger 정확도**: 스크립트로 내구도 감소.
+- **`use_liquid_clipping` 미동작, 계단 뒤 물 비침**: 지오메트리 ~0.001 inflate.
+- **겹반블록 자동 병합 없음**: 상호작용 스크립트나 아이템 대체 방식(위 반블록 절).
+- **블록에 텍스처 변경 API 없음**: 상태 + 퍼뮤테이션별 material_instances(https://wiki.bedrock.dev/blocks/block-permutations).
+- **AO로 어둡게 보임**: `ambient_occlusion` 0, `face_dimming` false, 면을 0.1 앞으로.
+- **큰 아틀라스 텍스처의 거대한 균열/파티클**: 면별 16x16 텍스처.
+- **커스텀 잔디에 식물 안 남**: 바닐라 배치 피처의 블록 목록을 복사해 추가.
+- **피처 3x3 청크 잘림**: 구조물을 청크 중앙에, 16x16 이하, 음수 extent, `rotate_around_center` + 8,8 오프셋, 아니면 지그소.
+- **피처 구조물의 엔티티 미생성**: 지그소 사용, 또는 틱하는 소환 블록.
+- **지그소 개수/방향 강제 불가**: 필수 방을 시작 조각으로 만든다.
+- **구조물끼리 겹침**: 같은 structure_set에 둔다.
+- **지그소 길이 집을 덮음**: 길 조각을 Y 25로 저장.
+- **피처가 지그소 안에 생성**: 피처에 `block_allowlist`, grass/dirt 태그 없는 바닥, structure void.
+- **시드 기반 noise 없음**: 좌표 오프셋 salt.
+- **지형 수정 불가**: 피처로 공기/돌/물 배치, Molang noise 지형.
+- **커스텀 차원에서 피처 룰 미동작**: 스크립트 배치(`runJob`으로 분할), Chunker로 미리 지은 청크 삽입.
+- **커스텀 바이옴이 바닐라 구조물을 잃음**: 대체된 바이옴의 태그를 커스텀 바이옴에 추가.
+- **엔드 커스텀 바이옴 불가**: 저주파 noise 구역을 모든 관련 룰에서 공유.
+- **스크립트로 동적 블록 데이터 유지(26.50 이전)**: 월드 동적 속성(위치 키).
 - **1.26 이후 텍스처 사이 선/빠진 면**: 2의 거듭제곱 크기로 바꾸고 UV를 맞춘다.
 - **바닐라 마을/구조물 빈도**: structure set을 덮어 spacing/separation을 바꾸거나 마을을 교체한다.
 - **커스텀 블록 위 눈 레이어**: 고체 블록 아래에 두거나 추운 바이옴을 피한다(final_pass 무효).
@@ -109,7 +109,7 @@ sources:
 - **26.50 (2026-08/09)**: 멀티블록(수직, 수평) 안정. block_entity 동적 속성 안정(컨테이너는 실험). 일부 바닐라 블록이 데이터 드리븐이 됨(루트 변경 가능). JSON 차원 정의(프리뷰 26.50.25), `minecraft:dimension_height`, `minecraft:default_biome`, 경계 -512..512 복원. 인벤토리에서만 안 보이는 블록(MCPE-241108), 멀티블록 비루트 부품 컨테이너 파손, BDS 피처 파일의 `.brarchive` 묶음.
 - **2026-08-30**: Custom Biomes가 실험 토글이 아님을 확인.
 - **2026-09-15**: conditional list 피처 안정.
-- **26.60**: `minecraft:clouds` 컴포넌트. n_way_visual_rotation 호스트→클라이언트 동기화(26.60.28/29, Realms 문제 보고는 계속). 블록 컨테이너는 안정판과 프리뷰 모두 여전히 실험.
+- **26.60**: `minecraft:clouds` 컴포넌트. n_way_visual_rotation 호스트에서 클라이언트로 동기화(26.60.28/29, Realms 문제 보고는 계속). 블록 컨테이너는 안정판과 프리뷰 모두 여전히 실험.
 - **26.70 프리뷰 / 2026-10**: Preview에서 내보낸 .mcstructure v2(새 압축, 안정판에서 로드 안 됨). 26.70에서는 멀티블록 비루트 컨테이너 파손이 없음.
 
 #### 문서

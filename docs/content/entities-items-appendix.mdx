@@ -27,7 +27,7 @@ sources:
 - **1.21.50.25**: `minecraft:cannot_be_attacked` 추가.
 - **1.21.60**: `menu_category`의 `minecraft:` 그룹 형식. "minecraft:weapon ... 1.21.60" 오류(`minecraft:weapon`을 쓸 수 없음).
 - **1.21.60~1.21.80(~1.21.131)**: 플레이어 넉백이 가벼워졌다는 체감 보고.
-- **1.21.90**: 기후 변형 몹이 `minecraft:climate_variant` 속성을 쓴다. 아이템 커스텀 컴포넌트 V2(`"ns:comp": {}`), `minecraft:custom_components` 폐기, `description.category` 제거(→ `menu_category`). `remove_in_peaceful`은 1.21.90.20에서 추가됐다가 .25에서 빠졌다.
+- **1.21.90**: 기후 변형 몹이 `minecraft:climate_variant` 속성을 쓴다. 아이템 커스텀 컴포넌트 V2(`"ns:comp": {}`), `minecraft:custom_components` 폐기, `description.category` 제거(대신 `menu_category`). `remove_in_peaceful`은 1.21.90.20에서 추가됐다가 .25에서 빠졌다.
 - **1.21.100**: `minecraft:rideable`에 `on_rider_enter_event`/`on_rider_exit_event`. 스키마 경고를 피하려면 이 이상으로 올린다. wolf의 `was_upgraded_to_1_21_100` 업그레이드 패턴.
 - **1.21.100**: `kinetic_weapon` 아이템 컴포넌트에 필요한 format.
 - **1.21.110**: DurabilityManager 템플릿이 요구하는 아이템 format. `fire_resistant`가 이 format부터 된다는 보고.
@@ -49,7 +49,7 @@ sources:
 - **2026-05-07**: 착용 아이템 스택 크기 버그(MCPE-236344) 수정.
 - **1.26.30**: 공 물리 컴포넌트(`bounciness`, `friction_modifier`, `air_drag_modifier`, `buoyant`, `pushable_by_entity`). `deals_damage: "no"`가 실패하고 `false`가 동작. move_to_block 태그 형식 변화 없음. `interact_button` onUse 버그 지속. 26.30.28부터 `record` 커스텀 소리(Beta APIs, `format_version: "beta"`).
 - **1.26.40 (2026-08, 게임 26.44)**: 최신 엔티티 format. `recipe_smithing_transform` base가 장비여야 하고 `durability`가 필요하다(MCPE-242206).
-- **2026-08 정식 패치**: 투사체 피해가 속도에 비례(power 50 초과 시 6 → 100 이상).
+- **2026-08 정식 패치**: 투사체 피해가 속도에 비례(power 50 초과 시 6에서 100 이상으로).
 - **2026-08-11 무렵**: 커스텀 음반 재생 시간과 꺼내기 수정(설명은 여전히 깨짐).
 - **26.x "tiny takeover"**: 옛 체력 표시 팩과 함께 쓰면 새끼 동물이 거대하게 보인다.
 - **26.40**: 커스텀 템플릿 스미딩과 `minecraft:transform_materials` 태그 addition이 된다는 보고(conflicting), 결과 `transformable_items`에 durability/enchantable/wearable 중 하나가 필요.
@@ -297,7 +297,7 @@ sources:
 
 - **등록**: `system.beforeEvents.startup.subscribe(({itemComponentRegistry}) => itemComponentRegistry.registerCustomComponent("ns:name", { onUse, onUseOn, onHitEntity, onMineBlock, onConsume, onCompleteUse, onBeforeDurabilityDamage }))`. 예전 `world.beforeEvents.worldInitialize` 패턴은 낡았다. `onUse(event){}` 메서드 축약과 `onUse: (event)=>{}` 둘 다 유효하다. 내구도 훅 이름을 한 보고자는 `beforeOnDurabilityDamage`로 적었는데, 한 보고자의 등록 목록에는 `onBeforeDurabilityDamage`로 있다.
 - **`onHitEntity` 이벤트**: attackingEntity, hadEffect, hitEntity, itemStack(stirante.com/script/server/2.3.0/classes/ItemComponentHitEntityEvent.html). 특정 아이템으로 때림을 감지하려면 스크립트 `entityHitEntity` 후 `triggerEvent`를 쓰거나, 엔티티 `damage_sensor` + `has_equipment` 필터를 쓴다(특정 엔티티만).
-- **스크립트 함정**: `source.dimension.runCommand('spreadplayers ~ ~ 10 50 @s')`는 @s가 차원이 되어 실패하니 `source.runCommand`나 `system.run(...)`으로 감싼다. `runcommand`처럼 소문자로 쓰면 "Not a function" TypeError. 레이캐스트는 `player.getBlockFromViewDirection()`, `getHeadLocation()`/`getViewDirection()`. 5x5 불 예: `afterEvents.itemUse` → `getBlockFromViewDirection()?.block.location` → -2..2 루프 → `dimension.getTopmostBlock({x,z})` → `setBlockType(top.above().location,"minecraft:fire")`. Realms에서는 제거된 `runCommandAsync` 대신 `runCommand`.
+- **스크립트 함정**: `source.dimension.runCommand('spreadplayers ~ ~ 10 50 @s')`는 @s가 차원이 되어 실패하니 `source.runCommand`나 `system.run(...)`으로 감싼다. `runcommand`처럼 소문자로 쓰면 "Not a function" TypeError. 레이캐스트는 `player.getBlockFromViewDirection()`, `getHeadLocation()`/`getViewDirection()`. 5x5 불 예: `afterEvents.itemUse`에서 `getBlockFromViewDirection()?.block.location`을 얻고, -2..2 루프로 `dimension.getTopmostBlock({x,z})`를 찾아 `setBlockType(top.above().location,"minecraft:fire")`를 부른다. Realms에서는 제거된 `runCommandAsync` 대신 `runCommand`.
 - **아이템 NBT는 스크립트에 노출되지 않는다**: 셜커 상자 아이템 내용, 불길한 병 효과 레벨, 염소 뿔 소리. 셜커는 디스펜서/블록 설치로 놓고 블록 `minecraft:inventory`를 읽거나, 아이템 엔티티를 태워 내용물을 떨군다. 내용을 바꾸려면 블록으로 놓아야 한다. `hasitem` 선택자의 `data`로 일부 값을 검사할 수 있고, 데이터/aux는 `testfor @s[hasitem={item=...,location=slot.weapon.mainhand,data=N}]` 루프로 찾는다.
 
 ### 20. 도구, 내구도, 채굴, 인챈트
