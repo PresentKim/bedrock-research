@@ -2,6 +2,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadRegistry, checkPage, walk, missingTranslations } from './lib.mjs';
+import { loadRuleData, validateRuleData, plan, stale, REPO } from './gen-rules.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const docs = path.resolve(here, '../docs');
@@ -12,6 +13,10 @@ const args = process.argv.slice(2);
 if (args.length === 0) {
   args.push(docs, enDocs);
   for (const rel of missingTranslations(docs, enDocs)) lines.push(`ERR ${rel}: missing English translation`);
+  const chapters = loadRuleData();
+  const planned = plan(chapters);
+  for (const e of [...validateRuleData(chapters), ...planned.errors]) lines.push(`ERR rules: ${e}`);
+  for (const f of stale(planned)) lines.push(`ERR ${path.relative(REPO, f)}: out of date, run npm run gen-rules`);
 }
 let n = 0;
 for (const a of args) {

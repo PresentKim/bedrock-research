@@ -1,0 +1,380 @@
+{
+  "prefix": "MOD",
+  "slug": "modifying-vanilla",
+  "page": "json-ui/modifying-vanilla",
+  "title": {
+    "ko": "바닐라 화면 수정",
+    "en": "Modifying vanilla screens"
+  },
+  "rules": [
+    {
+      "id": "MOD-01",
+      "level": [
+        "pack",
+        "code",
+        "vanilla",
+        "measured"
+      ],
+      "ko": {
+        "text": "`modifications`는 `array_name`, `operation`, `value`(넣을 항목 배열), `where`(지울 항목을 찾는 조건)로 쓴다. 이 프로젝트 출처에서 확인된 `operation`은 `insert_back`, `insert_front`, `remove`다. 바닐라 자신은 `modifications`를 한 번도 쓰지 않는다(팩 전용 기능). 엔진의 연산 이름표는 11가지이고(MOD-23), 나머지 8가지도 Windows 1.26.65.1 실측에서 동작했다(MOD-14).",
+        "sources": "AP-samples hud_screen.json, BA 2장, BC 4.1, VN 0회, NB-01, 2026-11-18 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "`modifications` is written with `array_name`, `operation`, `value` (the array of items to insert) and `where` (the condition that finds the item to delete). The `operation`s confirmed in this project's sources are `insert_back`, `insert_front` and `remove`. Vanilla itself never uses `modifications` (a pack-only feature). The engine's operation name table has 11 kinds (MOD-23), and the other 8 also worked in a Windows 1.26.65.1 measurement (MOD-14).",
+        "sources": "AP-samples hud_screen.json, BA chapter 2, BC 4.1, VN 0 uses, NB-01, 2026-11-18 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "MOD-02",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "`modifications`는 **파일 경로 단위**로 해석된다. 바닐라 파일과 같은 경로의 사본에 쓴 것만 바닐라 정의에 적용되고, 여러 팩의 것이 팩 순서대로 쌓인다. 다른 경로 파일에 쓰면, 팩 자신의 namespace 정의는 새 정의로 읽혀 원래 정의를 대체하고(`Type not specified`, `Unknown property [modifications]`), 바닐라 정의는 조용히 무시된다(FILE-22). Cinnabar 재구성은 이 구분 없이 namespace와 이름만으로 합치지만, 실측을 따른다(충돌 C-46).",
+        "sources": "BC-facts, 충돌 C-46"
+      },
+      "en": {
+        "text": "`modifications` is interpreted **per file path.** Only what is written in a copy at the same path as a vanilla file applies to vanilla definitions, and those of several packs stack in pack order. If written in a file at a different path, the pack's own namespace definition is read as a new definition and replaces the original definition (`Type not specified`, `Unknown property [modifications]`), and a vanilla definition is silently ignored (FILE-22). The Cinnabar reconstruction merges by namespace and name only without this distinction, but measurement is followed (conflict C-46).",
+        "sources": "BC-facts, conflict C-46"
+      }
+    },
+    {
+      "id": "MOD-03",
+      "level": [
+        "measured",
+        "code",
+        "conflict"
+      ],
+      "ko": {
+        "text": "게임에서 `modifications`가 닿은 배열은 `controls`와 `bindings`이고, `variables`를 지정하면 무시되었다(BC-facts). 그런데 Windows 1.26.65.1 실측에서는 자기 `variables` 배열이 없는 `thanks_for_testing`의 `text_panel`에 `array_name: \"variables\"`로 `insert_back`을 하자 `$description_text_line_2`가 `FROM_VARIABLES`로 바뀌었다([주장 실측](../design/json-ui-claims.mdx)). 두 실측이 어긋나고, 자기 `variables` 배열이 있는 정의는 재지 않았다. 엔진은 `array_name`을 고정 목록으로 거르지 않으므로(MOD-25) `button_mappings` 같은 다른 배열도 해석은 되지만 효과는 실측되지 않았다(충돌 C-64). `target_control` 키는 엔진이 실제로 읽는다(MOD-24).",
+        "sources": "BC-facts, NB-02, NB-03, 충돌 C-10, 충돌 C-64, 2026-11-18 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "In game, the arrays `modifications` reached were `controls` and `bindings`, and when `variables` was specified it was ignored (BC-facts). But in a Windows 1.26.65.1 measurement, an `insert_back` with `array_name: \"variables\"` on `text_panel` of `thanks_for_testing`, which has no `variables` array of its own, changed `$description_text_line_2` to `FROM_VARIABLES` ([claim measurements](../design/json-ui-claims.mdx)). The two measurements disagree, and a definition with its own `variables` array was not measured. The engine does not filter `array_name` by a fixed list (MOD-25), so other arrays such as `button_mappings` are also resolved but their effect was not measured (conflict C-64). The engine actually reads the `target_control` key (MOD-24).",
+        "sources": "BC-facts, NB-02, NB-03, conflict C-10, conflict C-64, 2026-11-18 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "MOD-04",
+      "level": [
+        "measured",
+        "pack"
+      ],
+      "ko": {
+        "text": "대상이 **직접 선언하지 않고 상속만 받은 배열**에 insert하면 새 배열이 생겨 상속받은 내용을 가린다(바닐라 내용이 통째로 사라짐). 그래서 배열을 직접 선언한 정의에 넣는다. 상속받은 배열이 원래 없는 정의(예: 바인딩이 없는 `hud_title_text`의 `bindings`)에 넣는 것은 문제없다. Windows 1.26.65.1에서도 `controls`를 상속만 받은 `server_form`의 `long_form`에 `insert_front`하자 폼 본문이 통째로 사라졌고, `controls`를 직접 선언한 `long_form_scrolling_content`에 넣자 남았다([실측 기록](../design/json-ui-claims.mdx#62-hud-타이틀)).",
+        "sources": "BC-facts, AP-samples hud_screen.json, 2026-11-18 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "If you insert into an **array the target does not declare directly but only inherits**, a new array is created and hides the inherited content (the vanilla content disappears wholesale). So put it into a definition that declares the array directly. Putting into a definition where the inherited array originally does not exist (for example `bindings` of `hud_title_text`, which has no bindings) is no problem. On Windows 1.26.65.1, `insert_front` into `long_form` of `server_form`, which only inherits `controls`, also removed the whole form body, while inserting into `long_form_scrolling_content`, which declares `controls` itself, kept it ([measurement record](../design/json-ui-claims.mdx#62-hud-title)).",
+        "sources": "BC-facts, AP-samples hud_screen.json, 2026-11-18 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "MOD-05",
+      "level": [
+        "measured",
+        "pack"
+      ],
+      "ko": {
+        "text": "파생 정의에서 **상속받은 자식 컨트롤**을 `remove`하면 로그도 없이 그 파일의 수정 전체가 적용되지 않는다. 반면 정의가 직접 가진 **바인딩 항목**을 `where`로 지정해 `remove`하는 것은 동작한다. 설정·인벤토리 화면에는 지우면 안 되는 필수 토글도 있다(MOD-16). Cinnabar 재구성은 진단만 남기고 나머지를 적용하지만, 실측을 따른다(충돌 C-47).",
+        "sources": "BC-facts, AP 4.4, BW-doc, 충돌 C-47"
+      },
+      "en": {
+        "text": "If you `remove` an **inherited child control** in a derived definition, with no log, all modifications of that file do not apply. On the other hand, `remove` of a **binding item** the definition itself has, specified with `where`, works. The settings and inventory screens also have required toggles that must not be deleted (MOD-16). The Cinnabar reconstruction leaves only a diagnostic and applies the rest, but measurement is followed (conflict C-47).",
+        "sources": "BC-facts, AP 4.4, BW-doc, conflict C-47"
+      }
+    },
+    {
+      "id": "MOD-06",
+      "level": [
+        "measured",
+        "pack"
+      ],
+      "ko": {
+        "text": "바닐라 컨트롤은 지우지 말고 **바인딩으로 숨긴다.** 숨김 조건을 `#visible` view 바인딩으로 덧붙이거나, 감싼 패널의 가시성으로 가린다. 설정·인벤토리 화면의 필수 토글은 빼면 개발 빌드에서 assert가 나므로 숨기더라도 남긴다(MOD-16).",
+        "sources": "BC 6.3-7, BA 2장, AP 4.4, BW-doc"
+      },
+      "en": {
+        "text": "Do not delete vanilla controls; **hide them with a binding.** Add the hide condition as a `#visible` view binding, or hide with the visibility of a wrapping panel. Required toggles on the settings and inventory screens raise an assert in development builds if removed, so keep them even if hidden (MOD-16).",
+        "sources": "BC 6.3-7, BA chapter 2, AP 4.4, BW-doc"
+      }
+    },
+    {
+      "id": "MOD-07",
+      "level": [
+        "pack"
+      ],
+      "ko": {
+        "text": "바닐라 `#visible` 바인딩을 내 조건과 AND로 묶으려면 원래 바인딩을 `remove`(`where`로 지정)한 뒤 `insert_front`로 원래 값과 내 값을 다시 읽어 합친다.",
+        "sources": "AP 4.4, AP-samples chat_screen.json"
+      },
+      "en": {
+        "text": "To AND the vanilla `#visible` binding with my condition, `remove` the original binding (specified with `where`) and then `insert_front` to read the original value and my value again and combine them.",
+        "sources": "AP 4.4, AP-samples chat_screen.json"
+      }
+    },
+    {
+      "id": "MOD-08",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "원래 `#visible` 바인딩이 없는 정의라면 `insert_back`으로 view 바인딩만 덧붙여도 숨길 수 있다(바닐라 `long_form`·`custom_form`에 제목 접두사 검사를 붙이는 방식).",
+        "sources": "BC 4.1-(1), BW-form, BW-intro"
+      },
+      "en": {
+        "text": "For a definition that originally has no `#visible` binding, you can hide with just a view binding appended with `insert_back` (the approach of attaching a title prefix check to vanilla `long_form` and `custom_form`).",
+        "sources": "BC 4.1-(1), BW-form, BW-intro"
+      }
+    },
+    {
+      "id": "MOD-09",
+      "level": [
+        "pack"
+      ],
+      "ko": {
+        "text": "바닐라 정의를 직접 고치지 않고 **감싼다.** `\"래퍼\": { \"controls\": [ { \"long_form@server_form.long_form\": {} } ] }`는 다른 UI 팩이 `long_form`을 통째로 바꿔도 최종 병합 결과를 참조하므로, 래퍼에 건 가시성 조건이 살아남는다. BA는 2.0.2에서 이 구조로 \"UI 팩과 함께 쓰면 화면이 뒤섞이는\" 문제를 팩 순서와 무관하게 고쳤다.",
+        "sources": "BA 2장"
+      },
+      "en": {
+        "text": "Do not modify the vanilla definition directly; **wrap it.** `\"wrapper\": { \"controls\": [ { \"long_form@server_form.long_form\": {} } ] }` references the final merge result even if another UI pack replaces `long_form` wholesale, so the visibility condition put on the wrapper survives. In 2.0.2, BA used this structure to fix the problem of \"screens getting mixed up when used with UI packs\" regardless of pack order.",
+        "sources": "BA chapter 2"
+      }
+    },
+    {
+      "id": "MOD-10",
+      "level": [
+        "pack"
+      ],
+      "ko": {
+        "text": "바닐라 템플릿에 기능을 더할 때는 **기본값이 꺼진 슬롯**으로 넣는다. 예: `common_buttons.focus_border`에 `\"$show_hover_content|default\": false`와 `ignored`로 감싼 자식을 추가하면, 그 변수를 켠 버튼에만 영향이 간다.",
+        "sources": "AP 4.8"
+      },
+      "en": {
+        "text": "When adding a feature to a vanilla template, put it in as a **slot that is off by default.** Example: if you add `\"$show_hover_content|default\": false` and a child wrapped with `ignored` to `common_buttons.focus_border`, only buttons that turn that variable on are affected.",
+        "sources": "AP 4.8"
+      }
+    },
+    {
+      "id": "MOD-11",
+      "level": [
+        "vanilla",
+        "measured"
+      ],
+      "ko": {
+        "text": "화면의 내용을 통째로 바꾸려면 화면 정의를 같은 경로 파일에서 재선언해 `$screen_content`를 바꾼다. 바닐라도 `shulker_box_screen@chest.small_chest_screen`, `barrel_screen@chest.small_chest_screen`처럼 같은 방식으로 화면을 만든다.",
+        "sources": "VN chest_screen.json:240·258, BC 4.3-(2), BC-facts"
+      },
+      "en": {
+        "text": "To replace the content of a screen wholesale, redeclare the screen definition in a same-path file and change `$screen_content`. Vanilla also makes screens the same way, like `shulker_box_screen@chest.small_chest_screen` and `barrel_screen@chest.small_chest_screen`.",
+        "sources": "VN chest_screen.json:240 and 258, BC 4.3-(2), BC-facts"
+      }
+    },
+    {
+      "id": "MOD-12",
+      "level": [
+        "pack",
+        "inferred"
+      ],
+      "ko": {
+        "text": "화면 정의를 재선언하면 같은 화면을 재선언하는 다른 팩과는 한쪽만 남는다. 일반 NPC 대화 같은 바닐라 기능도 재선언한 속성(`render_game_behind` 등)을 함께 받는다. 꼭 필요할 때만 쓰고, 바닐라 내용을 감싸 두어 원래 기능이 계속 동작하게 한다.",
+        "sources": "AP 4.2"
+      },
+      "en": {
+        "text": "If you redeclare a screen definition, only one side remains against other packs that redeclare the same screen. Vanilla features such as the ordinary NPC dialogue also receive the redeclared properties (`render_game_behind`, etc.). Use it only when truly necessary, and wrap the vanilla content so the original features keep working.",
+        "sources": "AP 4.2"
+      }
+    },
+    {
+      "id": "MOD-13",
+      "level": [
+        "measured",
+        "inferred"
+      ],
+      "ko": {
+        "text": "여러 애드온이 같은 바닐라 화면에 붙어야 하면 **아무 정의도 하지 않는 `modifications`만** 쓴다. 바닐라 파일에 정의(속성 덮어쓰기 포함)를 쓰면 다른 팩의 같은 정의와 덮어쓰기 경쟁을 한다. Windows 1.26.65.1 실측에서 세 팩이 같은 `main_screen_content`에 건 `insert_back`은 셋 다 들어갔다([주장 실측](../design/json-ui-claims.mdx)).",
+        "sources": "BC 6.3-9, BC-facts, BW-best, 2026-11-18 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "If several add-ons must attach to the same vanilla screen, use **only `modifications` that define nothing.** If you write definitions in a vanilla file (including property overrides), you compete in overriding with the same definitions of other packs. In a Windows 1.26.65.1 measurement, the `insert_back`s of three packs on the same `main_screen_content` all went in ([claim measurements](../design/json-ui-claims.mdx)).",
+        "sources": "BC 6.3-9, BC-facts, BW-best, 2026-11-18 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "MOD-14",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "위키가 문서화한 `operation`은 11가지다: `insert_back`, `insert_front`, `insert_after`, `insert_before`, `move_back`, `move_front`, `move_after`, `move_before`, `swap`, `replace`, `remove`. 기준 항목은 `controls`에서는 `\"control_name\": \"이름\"`, `bindings`에서는 `\"where\": { \"binding_name\": \"#x\" }`로 찾고, 두 번째 기준이 필요한 `move_after`·`move_before`·`swap`은 `\"target\": { … }`을 쓴다. `replace`는 `where`로 찾은 항목을 `value`로 바꾼다. 엔진의 연산 이름표도 정확히 이 11가지이고(MOD-23), 두 번째 기준은 `target_control`을 먼저, 없으면 `target`을 읽는다(MOD-24). Windows 1.26.65.1 실측에서 `insert_after`, `insert_before`, `move_front`, `move_back`, `move_after`, `move_before`, `swap`, `replace`가 모두 동작했다. 같은 경로 파일로 `thanks_for_testing`의 `text_panel` 자식을 옮겨 쟀고, 결과 순서는 [주장 실측](../design/json-ui-claims.mdx)에 있다. `move_before`는 `target`으로, `swap`과 `move_after`는 `target_control`로 동작했고, `insert_back`의 `value`는 객체 하나여도 들어갔다.",
+        "sources": "NB-01, NB-02, 충돌 C-39, 2026-11-18 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "The wiki documents 11 `operation`s: `insert_back`, `insert_front`, `insert_after`, `insert_before`, `move_back`, `move_front`, `move_after`, `move_before`, `swap`, `replace` and `remove`. The reference item is found with `\"control_name\": \"name\"` in `controls` and with `\"where\": { \"binding_name\": \"#x\" }` in `bindings`, and `move_after`, `move_before` and `swap`, which need a second reference, use `\"target\": { … }`. `replace` swaps the item found with `where` for `value`. The engine's operation name table also has exactly these 11 (MOD-23), and for the second reference it reads `target_control` first and `target` if absent (MOD-24). In a Windows 1.26.65.1 measurement, `insert_after`, `insert_before`, `move_front`, `move_back`, `move_after`, `move_before`, `swap` and `replace` all worked. They were measured by moving the children of `text_panel` of `thanks_for_testing` from a same-path file, and the resulting orders are in [claim measurements](../design/json-ui-claims.mdx). `move_before` worked with `target`, `swap` and `move_after` with `target_control`, and an `insert_back` whose `value` was a single object also went in.",
+        "sources": "NB-01, NB-02, conflict C-39, 2026-11-18 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "MOD-15",
+      "level": [
+        "inferred"
+      ],
+      "ko": {
+        "text": "바닐라 화면에 붙는 지점(진입점)은 **한 곳**으로 모은다. 여러 하위 컨트롤에 각각 `insert`하면 그중 하나의 이름만 바뀌어도 일부가 깨지고, 디버깅할 곳이 늘어난다. 내 컨트롤은 진입점 하나에 넣은 래퍼 패널 안에 둔다.",
+        "sources": "BW-best, BW-hud"
+      },
+      "en": {
+        "text": "Gather the points that attach to a vanilla screen (entry points) into **one place.** If you `insert` into several child controls separately, even if the name of just one changes part of it breaks, and there are more places to debug. Put your controls inside a wrapper panel placed at a single entry point.",
+        "sources": "BW-best, BW-hud"
+      }
+    },
+    {
+      "id": "MOD-16",
+      "level": [
+        "unverified"
+      ],
+      "ko": {
+        "text": "설정 화면과 인벤토리 화면에는 엔진이 반드시 있다고 가정하는 토글이 있다(설정의 접근성 탭, 인벤토리의 construction·equipment·items·nature 탭 등). 화면을 통째로 바꾸면서 이 토글을 빼면 개발 빌드에서 assert가 난다. 숨기더라도 남겨 둔다(MOD-06).",
+        "sources": "BW-doc \"HardCoded Toggles\""
+      },
+      "en": {
+        "text": "The settings screen and the inventory screen have toggles the engine assumes always exist (the accessibility tab in settings, the construction, equipment, items and nature tabs in the inventory, etc.). If you replace a screen wholesale and leave these toggles out, an assert occurs in development builds. Keep them even if hidden (MOD-06).",
+        "sources": "BW-doc \"HardCoded Toggles\""
+      }
+    },
+    {
+      "id": "MOD-17",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "`modifications`는 같은 항목의 일반 속성 병합이 끝난 **뒤에** 적용된다. 한 번의 `modifications` 안에서 뒤 연산은 원래 원소만 고를 수 있어, 앞에서 넣은 원소를 같은 목록에서 다시 옮기거나 지울 수 없다.",
+        "sources": "CN"
+      },
+      "en": {
+        "text": "`modifications` is applied **after** the ordinary property merge of the same item is finished. Within one `modifications`, later operations can pick only original elements, so you cannot move or delete in the same list an element inserted earlier.",
+        "sources": "CN"
+      }
+    },
+    {
+      "id": "MOD-18",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "`where`가 객체면 **멤버 하나라도 같은** 첫 원소를 고른다(전부 같을 필요 없음). `where: {}`는 아무것도 고르지 않고, 조건이 없으면 첫 원소를 고른다. 지울 바인딩은 고유한 멤버(`binding_name`)로 지정한다.",
+        "sources": "CN"
+      },
+      "en": {
+        "text": "If `where` is an object, it picks the first element where **even one member** is equal (they need not all be equal). `where: {}` picks nothing, and with no condition it picks the first element. Specify the binding to delete by a unique member (`binding_name`).",
+        "sources": "CN"
+      }
+    },
+    {
+      "id": "MOD-19",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "같은 경로 재선언에서 기존과 **다른 `@base`**를 적으면 기존 정의(타입, 팩토리, 바인딩)가 버려지고 새 정의가 된다. 바닐라 정의의 속성만 바꿀 때는 `@`를 적지 않는다.",
+        "sources": "CN"
+      },
+      "en": {
+        "text": "If a redeclaration at the same path writes a **different `@base`** from the existing one, the existing definition (type, factory, bindings) is discarded and it becomes a new definition. Do not write `@` when only changing properties of a vanilla definition.",
+        "sources": "CN"
+      }
+    },
+    {
+      "id": "MOD-23",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "엔진의 `operation` 이름표는 MOD-14의 11개가 전부다(번호 1~11). 이름은 정확히 같아야 하고, 그 밖의 연산은 없다. 11개 모두 게임에서 동작했고, 나머지 8개는 Windows 1.26.65.1에서 쟀다(MOD-14).",
+        "sources": "NB-01, 2026-11-18 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "The engine's `operation` name table is exactly the 11 of MOD-14 (numbers 1~11). Names must match exactly and there are no other operations. All 11 worked in game, and the other 8 were measured on Windows 1.26.65.1 (MOD-14).",
+        "sources": "NB-01, 2026-11-18 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "MOD-24",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "연산 항목의 두 번째 기준은 **`target_control`(문자열)을 먼저** 읽고, 없을 때만 `target`을 읽는다. 엔진이 읽는 항목 키는 `array_name`, `control_name`, `operation`, `where`, `target_control`, `target`, `value`다.",
+        "sources": "NB-02"
+      },
+      "en": {
+        "text": "For the second reference of an operation item, **`target_control` (a string) is read first** and `target` only when it is absent. The item keys the engine reads are `array_name`, `control_name`, `operation`, `where`, `target_control`, `target` and `value`.",
+        "sources": "NB-02"
+      }
+    },
+    {
+      "id": "MOD-25",
+      "level": [
+        "code",
+        "measured",
+        "conflict"
+      ],
+      "ko": {
+        "text": "`array_name`은 고정 목록과 비교하지 않고 정의에서 **같은 이름의 멤버**를 찾아 배열이면 대상으로 쓴다. `array_name`이 비어 있고 `control_name`이 문자열이면 `\"controls\"`로 채우므로, 컨트롤 연산은 `array_name`을 생략해도 된다. 그래서 해석 단계에서는 `controls`·`bindings` 밖의 배열도 대상이 될 수 있다. Windows 1.26.65.1 실측에서 자기 `variables` 배열이 없는 정의의 `variables` 수정은 효과가 있어 이 해석과 맞았고, `variables`가 무시됐다는 이전 실측(MOD-03)과는 어긋난다.",
+        "sources": "NB-03, 충돌 C-64, 2026-11-18 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "`array_name` is not compared against a fixed list; it finds the **same-named member** in the definition and uses it as the target if it is an array. If `array_name` is empty and `control_name` is a string it is filled with `\"controls\"`, so control operations may omit `array_name`. So at the resolution stage arrays outside `controls` and `bindings` can also be targets. In a Windows 1.26.65.1 measurement, modifying `variables` on a definition without its own `variables` array had an effect, which matches this reading and disagrees with the earlier measurement that `variables` was ignored (MOD-03).",
+        "sources": "NB-03, conflict C-64, 2026-11-18 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "MOD-20",
+      "status": "proposed",
+      "level": [
+        "inferred"
+      ],
+      "ko": {
+        "text": "Marketplace 협력형 애드온 공식 지침은 `ui/`와 `font/` 파일 덮어쓰기를 금지한다(여러 애드온이 같은 자산을 함께 고칠 수 없어서). 협력형으로 낼 팩은 MOD-13의 `modifications`조차 피하고 JSON UI 밖의 우회를 먼저 고른다. 실측이 아니라 정책 문서이므로 실제 심사에서 `modifications`만 쓴 팩도 거부되는지는 확인이 필요하다.",
+        "sources": "ms-learn, Guidelines for Building Cooperative Add-Ons"
+      },
+      "en": {
+        "text": "The official guideline for Marketplace cooperative add-ons forbids overriding `ui/` and `font/` files (because several add-ons cannot modify the same asset together). A pack to be released as cooperative should avoid even the `modifications` of MOD-13 and first choose a workaround outside JSON UI. It is a policy document, not a measurement, so whether a pack using only `modifications` is also rejected in actual review needs to be checked.",
+        "sources": "ms-learn, Guidelines for Building Cooperative Add-Ons"
+      }
+    },
+    {
+      "id": "MOD-21",
+      "status": "proposed",
+      "level": [
+        "pack",
+        "inferred"
+      ],
+      "ko": {
+        "text": "같은 경로에서 `server_form.long_form`의 `controls`를 바꾸는 서버 폼 팩(Chest-UI, upgrader)은 서로 공존하지 못한다. 두 팩 모두 `long_form`을 같은 경로에서 `@` 없이 재선언하고(`type: panel`, `controls` 두 개) 제목 접두사 검사식으로 바닐라 모양과 자기 화면을 가른다. 팩 순서상 나중 것의 `controls`만 남는다(FILE-21). 공존이 필요하면 MOD-09 감싸기나 MOD-13 `modifications`만 쓰기로 바꾼다.",
+        "sources": "jua-chest-ui, jua-upgrader"
+      },
+      "en": {
+        "text": "Server form packs that change the `controls` of `server_form.long_form` at the same path (Chest-UI, upgrader) cannot coexist with each other. Both packs redeclare `long_form` at the same path without `@` (`type: panel`, two `controls`) and split the vanilla look and their own screen with a title prefix check expression. Only the `controls` of the later pack in pack order remain (FILE-21). If coexistence is needed, switch to MOD-09 wrapping or MOD-13 `modifications` only.",
+        "sources": "jua-chest-ui, jua-upgrader"
+      }
+    },
+    {
+      "id": "MOD-22",
+      "status": "proposed",
+      "level": [
+        "pack"
+      ],
+      "ko": {
+        "text": "여러 바닐라 컨트롤이 함께 쓰는 텍스처를 교체할 때는 원본을 `_original` 같은 다른 이름으로 복사하고, 바꾸지 않을 컨트롤은 같은 경로 UI 파일의 경로 키(`\"부모/자식\": {\"texture\": \"…_original\"}`)로 사본에 다시 연결한다.",
+        "sources": "jua-small-packs"
+      },
+      "en": {
+        "text": "When replacing a texture shared by several vanilla controls, copy the original under another name such as `_original`, and relink the controls you will not change to the copy with path keys in a same-path UI file (`\"parent/child\": {\"texture\": \"…_original\"}`).",
+        "sources": "jua-small-packs"
+      }
+    }
+  ]
+}

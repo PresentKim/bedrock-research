@@ -1,0 +1,373 @@
+{
+  "prefix": "TXT",
+  "slug": "text-and-localization",
+  "page": "json-ui/text-and-localization",
+  "title": {
+    "ko": "텍스트와 현지화",
+    "en": "Text and localization"
+  },
+  "rules": [
+    {
+      "id": "TXT-01",
+      "level": [
+        "measured",
+        "vanilla"
+      ],
+      "ko": {
+        "text": "라벨은 **기본으로 현지화**된다. 텍스트를 먼저 번역 키로 찾아보고, 없으면 그대로 찍는다. 리터럴로 찍어야 하는 텍스트(사용자 입력, 채팅, 타이틀 등)는 `\"localize\": false`를 준다. 바닐라는 `localize`를 쓸 때 거의 항상 `false`로 쓴다(31 대 1). 위키 속성표의 기본값 `false`는 오기다(부록A C-32).",
+        "sources": "BC-facts, VN, BW-doc"
+      },
+      "en": {
+        "text": "A label is **localized by default**. It looks up the text as a translation key first and prints it as is if there is none. For text that must be printed as a literal (user input, chat, titles, etc.), give `\"localize\": false`. When vanilla uses `localize` it almost always uses `false` (31 to 1). The default `false` in the wiki property table is a typo (Appendix A C-32).",
+        "sources": "BC-facts, VN, BW-doc"
+      }
+    },
+    {
+      "id": "TXT-02",
+      "level": [
+        "vanilla"
+      ],
+      "ko": {
+        "text": "라벨의 주요 속성: `text`(리터럴, `#바인딩`, `$변수`), `color`, `font_type`, `font_size`, `font_scale_factor`, `text_alignment`(`left`, `center`, `right`), `shadow`, `enable_profanity_filter`, `localize`.",
+        "sources": "VN hud_screen.json:2287-2310, 부록B"
+      },
+      "en": {
+        "text": "Main label properties: `text` (literal, `#binding`, `$variable`), `color`, `font_type`, `font_size`, `font_scale_factor`, `text_alignment` (`left`, `center`, `right`), `shadow`, `enable_profanity_filter`, `localize`.",
+        "sources": "VN hud_screen.json:2287-2310, Appendix B"
+      }
+    },
+    {
+      "id": "TXT-03",
+      "level": [
+        "measured",
+        "vanilla"
+      ],
+      "ko": {
+        "text": "`font_type` 값은 `default`, `smooth`, `rune`, `unicode`, `MinecraftTen`이다. 바닐라는 `smooth`(193)와 `MinecraftTen`(21)을 주로 쓴다. `MinecraftSeven` 같은 내부 글꼴 이름을 쓰면 오류 없이 **아무것도 그리지 않는다.**",
+        "sources": "BC 6.6-6, BC-S7, VN"
+      },
+      "en": {
+        "text": "The `font_type` values are `default`, `smooth`, `rune`, `unicode` and `MinecraftTen`. Vanilla mainly uses `smooth` (193) and `MinecraftTen` (21). Using an internal font name such as `MinecraftSeven` **draws nothing** with no error.",
+        "sources": "BC 6.6-6, BC-S7, VN"
+      }
+    },
+    {
+      "id": "TXT-04",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "`#font_type`은 엔진 예약 속성이라 쓰는 즉시 검증된다. 잘못된 별칭은 `NonAssertErrorLog`에 줄마다 남고 마켓플레이스 제출이 막힌다.",
+        "sources": "BC 6.6-7"
+      },
+      "en": {
+        "text": "`#font_type` is an engine-reserved property, so it is validated the moment it is used. A wrong alias is logged line by line in `NonAssertErrorLog` and blocks marketplace submission.",
+        "sources": "BC 6.6-7"
+      }
+    },
+    {
+      "id": "TXT-05",
+      "level": [
+        "measured",
+        "code",
+        "vanilla"
+      ],
+      "ko": {
+        "text": "`font_size`는 `small`, `normal`, `large`, `extra_large` 네 값이고 배율은 차례로 0.5, 1, 2, 4다. Windows 1.26.65.1에서 \"Ab\"는 small 6x5, normal 12x10, large 24x20, extra_large 48x40으로 그려졌고, 2026-11-24에 \"Hg\" 라벨로 다시 재도 라벨 상자가 같았으며 글리프도 같은 비율로 커졌다. 코드에서 그리기 요청의 글 크기는 이 표 값 x `font_scale_factor`이고, 글을 그릴 때 변환 행렬을 이 크기 x 글꼴 배율로 늘리므로 표 값이 글리프 크기에 바로 곱해진다. `medium`은 크기 값이 아니라 `normal`로 그려진다. 엔진의 `font_size` 표에 `medium`이 없고 모르는 값은 `normal`로 읽는다. 그래서 바닐라가 4회 쓰는 `medium`은 `normal`과 같다(부록A C-25).",
+        "sources": "VN, 부록B, 2026-11-20 Windows 1.26.65.1 실측과 역컴파일, 2026-11-24 Windows 1.26.65.1 실측과 역컴파일"
+      },
+      "en": {
+        "text": "`font_size` has four values, `small`, `normal`, `large` and `extra_large`, with scales 0.5, 1, 2 and 4 in that order. On Windows 1.26.65.1 \"Ab\" drew as small 6x5, normal 12x10, large 24x20 and extra_large 48x40, and on 2026-11-24 a \"Hg\" label gave the same label boxes with glyphs growing in the same ratio. In the code the text size of a draw request is this table value x `font_scale_factor`, and drawing scales the transform matrix by this size x the font scale, so the table value multiplies the glyph size directly. `medium` is not a size value and draws as `normal`. The engine's `font_size` table has no `medium` and reads an unknown value as `normal`. So the `medium` that vanilla uses 4 times is the same as `normal` (Appendix A C-25).",
+        "sources": "VN, Appendix B, 2026-11-20 Windows 1.26.65.1 measurement and decompilation, 2026-11-24 Windows 1.26.65.1 measurement and decompilation"
+      }
+    },
+    {
+      "id": "TXT-06",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "라벨은 **숫자 바인딩을 그대로 그리지 못한다.** 문자열과 이어 붙여 `text`에 바인딩한다: `('n=' + #raw)`. 정수만 이어 붙여지고 **문자열 + float은 float 부분이 비어 문자열만 남는다**(`('D ' + 실수)`는 `'D '`, EXP-22). Windows 1.26.65.1에서도 숫자나 참거짓 하나만 `#text`에 넣으면 아무것도 나오지 않았고, `'R' +` 정수는 숫자가 보였고, `'R' +` 실수는 `R`만 남았다([실측 기록](../design/json-ui-claims.mdx#24-숫자)).",
+        "sources": "BC-facts, BC 6.6-5, BW-type"
+      },
+      "en": {
+        "text": "A label **cannot draw a numeric binding as is.** Join it to a string and bind it to `text`: `('n=' + #raw)`. Only integers join, and **in string + float the float part is empty and only the string is left** (`('D ' + float)` gives `'D '`, EXP-22). On Windows 1.26.65.1 too, a number or boolean alone in `#text` showed nothing, `'R' +` an integer showed the digits, and `'R' +` a float left only `R` ([measurement record](../design/json-ui-claims.mdx#24-numbers)).",
+        "sources": "BC-facts, BC 6.6-5, BW-type"
+      }
+    },
+    {
+      "id": "TXT-07",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "빈 라벨이나 `§r`만 든 `default` 크기 라벨도 높이는 한 줄이다. 0으로 접히지 않으므로 행을 없애려면 `#visible`로 숨긴다.",
+        "sources": "BC-S10"
+      },
+      "en": {
+        "text": "An empty label, or a `default` size label containing only `§r`, still has a height of one line. It does not collapse to 0, so to remove a row, hide it with `#visible`.",
+        "sources": "BC-S10"
+      }
+    },
+    {
+      "id": "TXT-08",
+      "level": [
+        "measured",
+        "vanilla",
+        "pack"
+      ],
+      "ko": {
+        "text": "`§` 색 코드는 바인딩된 텍스트에서도 유지된다. 바닐라 `_global_variables.json`에 `§0`~`§f` 16색이 `$0_color_format` … `$f_color_format`으로 정의되어 있어 `\"color\": \"$f_color_format\"`처럼 쓸 수 있다. `§g`~`§w`의 색까지 합하면 색 코드 변수는 29개이고, `§w`의 색은 `$party_blue_color`다(TXT-24).",
+        "sources": "BC-S7, VN _global_variables.json:247, AP 4.9"
+      },
+      "en": {
+        "text": "`§` color codes are kept in bound text too. Vanilla `_global_variables.json` defines the 16 colors `§0` to `§f` as `$0_color_format` … `$f_color_format`, so you can write `\"color\": \"$f_color_format\"`. Counting the colors of `§g` to `§w`, there are 29 color code variables, and the color of `§w` is `$party_blue_color` (TXT-24).",
+        "sources": "BC-S7, VN _global_variables.json:247, AP 4.9"
+      }
+    },
+    {
+      "id": "TXT-09",
+      "level": [
+        "pack"
+      ],
+      "ko": {
+        "text": "**번호만 보내고 번역은 RP가 한다.** 데이터 문자열에서 잘라 낸 조각에 키 접두를 붙여 `localize: true` 라벨에 넣는다: `('myui.toast.' + #category)`. 스크립트는 고정 폭 번호(0으로 채움)만 보낸다. 언어 28개를 지원하는 AP가 이 방식이다.",
+        "sources": "AP 4.5, BA 6장"
+      },
+      "en": {
+        "text": "**Send only a number and let the RP do the translation.** Attach a key prefix to a piece cut out of the data string and put it in a `localize: true` label: `('myui.toast.' + #category)`. The script sends only fixed-width numbers (padded with 0). AP, which supports 28 languages, works this way.",
+        "sources": "AP 4.5, BA chapter 6"
+      }
+    },
+    {
+      "id": "TXT-10",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "lang 값 규칙: 키가 비어 있으면(`key=`) 키 자체가 찍힌다. 어떤 언어 파일에 키가 없으면 en_US 값이 찍힌다. 값이 `§r`뿐이면 아무것도 그리지 않고 폭도 0이다. 값 앞뒤 공백은 유지된다. 단 **값 전체가 공백 하나**면 파서가 지워서 정의되지 않은 키가 된다. 공백 한 글자가 필요하면 `§r §r`로 감싼다.",
+        "sources": "BC-S10, BC-facts"
+      },
+      "en": {
+        "text": "lang value rules: if the value is empty (`key=`), the key itself is printed. If a language file lacks the key, the en_US value is printed. If the value is only `§r`, nothing is drawn and the width is also 0. Spaces around a value are kept. But if **the whole value is a single space**, the parser erases it and it becomes an undefined key. If you need a single space, wrap it as `§r §r`.",
+        "sources": "BC-S10, BC-facts"
+      }
+    },
+    {
+      "id": "TXT-11",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "서버 폼 엔트리 문자열의 성질: `§` 색 코드 유지, 숫자로 시작해도 문제없음, 200자도 됨, **bare 번역 키 문자열은 엔진이 번역하지 않음**, **RawMessage(`{ rawtext: [...] }`)는 클라이언트가 플레이어 언어로 번역해 바인딩에 넣어 줌**. 그래서 여러 번역 키를 합친 문장도 엔트리 하나로 보낼 수 있다.",
+        "sources": "BC-S7, BC 4.1-(4)"
+      },
+      "en": {
+        "text": "Properties of server form entry strings: the `§` color codes are kept, starting with a digit is no problem, even 200 characters work, **a bare translation key string is not translated by the engine**, and **a RawMessage (`{ rawtext: [...] }`) is translated into the player's language by the client and put into the binding**. So a sentence made of several translation keys can also be sent as one entry.",
+        "sources": "BC-S7, BC 4.1-(4)"
+      }
+    },
+    {
+      "id": "TXT-12",
+      "level": [
+        "measured",
+        "code"
+      ],
+      "ko": {
+        "text": "텍스트를 직접 못 다루는 표면(상자 슬롯)에 글자를 쓰려면 **숫자 → lang 키 → 글자**로 바꾼다. 슬롯 스택 수량 n을 `('core.ui.c.' + #count)` 키로 만들고 `.lang`에 `core.ui.c.<n>=<글자>`를 둔다. 수량 1은 `#inventory_stack_count`가 비어 있으므로 공백 글자로 정한다.",
+        "sources": "BC 4.3-(3), BC-facts"
+      },
+      "en": {
+        "text": "To write text on a surface that cannot handle text directly (a chest slot), convert **number -> lang key -> character**. Make the slot stack count n into the key `('core.ui.c.' + #count)` and put `core.ui.c.<n>=<character>` in `.lang`. A count of 1 leaves `#inventory_stack_count` empty, so set it to a space character.",
+        "sources": "BC 4.3-(3), BC-facts"
+      }
+    },
+    {
+      "id": "TXT-13",
+      "level": [
+        "measured",
+        "code"
+      ],
+      "ko": {
+        "text": "`'%.Ns'`는 바이트 단위라 한글 필드를 중간에서 자르면 글자가 깨진다(EXP-09). 한글이 들어가는 고정 폭 필드는 인코더가 UTF-8 바이트로 패딩한다. 색 코드 `§`는 2바이트, 이모지는 대부분 4바이트다(EXP-24). Windows 1.26.65.1에서 `§` 2바이트, 한글 3바이트, 이모지 4바이트로 잘렸고, 글자 중간에서 자르면 바로 뒤에 이어 붙인 글자까지 사라졌다([실측 기록](../design/json-ui-claims.mdx#23-ns-자르기)).",
+        "sources": "BA 3.1, BW-intro"
+      },
+      "en": {
+        "text": "`'%.Ns'` is in bytes, so cutting a Hangul field in the middle breaks the character (EXP-09). Fixed-width fields that contain Hangul are padded by the encoder with UTF-8 bytes. The color code `§` is 2 bytes and most emoji are 4 bytes (EXP-24). On Windows 1.26.65.1 `§` was cut as 2 bytes, Hangul as 3 and emoji as 4, and a cut in the middle of a character also dropped the character concatenated right after it ([measurement record](../design/json-ui-claims.mdx#23-ns-cuts)).",
+        "sources": "BA 3.1, BW-intro"
+      }
+    },
+    {
+      "id": "TXT-14",
+      "level": [
+        "pack",
+        "inferred"
+      ],
+      "ko": {
+        "text": "빈 화면 문구처럼 lang 키를 하드코딩할 때 키 이름 오타는 키 자체가 화면에 찍히는 것으로만 드러난다(AP v4.2의 `_r4ui:ancements.empty`). lang 파일과 키 목록을 기계적으로 대조한다.",
+        "sources": "AP 5장"
+      },
+      "en": {
+        "text": "When hardcoding a lang key, such as for an empty-screen message, a typo in the key name shows up only as the key itself printed on the screen (`_r4ui:ancements.empty` in AP v4.2). Compare the lang file and the key list mechanically.",
+        "sources": "AP chapter 5"
+      }
+    },
+    {
+      "id": "TXT-15",
+      "level": [
+        "unverified"
+      ],
+      "ko": {
+        "text": "바닐라 `common.hover_text`에 `property_bag`의 `#hover_text`로 넣은 문자열은 현지화되지 않는다. 번역이 필요하면 툴팁 라벨을 직접 만든다.",
+        "sources": "BW-btn"
+      },
+      "en": {
+        "text": "A string put into vanilla `common.hover_text` through `#hover_text` of `property_bag` is not localized. If translation is needed, make the tooltip label yourself.",
+        "sources": "BW-btn"
+      }
+    },
+    {
+      "id": "TXT-16",
+      "level": [
+        "vanilla"
+      ],
+      "ko": {
+        "text": "라벨 보조 속성: `line_padding`(줄 간격, 바닐라 14), `backup_font_type`(4), `hide_hyphen`(3), `locked_color`·`locked_alpha`(부모가 `enabled: false`일 때, 4·17), `notify_on_ellipses`(말줄임이 생기거나 사라지면 지정한 컨트롤의 `#using_ellipses`가 바뀜, 4).",
+        "sources": "BW-doc Text 표, VN"
+      },
+      "en": {
+        "text": "Label helper properties: `line_padding` (line spacing, vanilla 14), `backup_font_type` (4), `hide_hyphen` (3), `locked_color` and `locked_alpha` (when the parent is `enabled: false`, 4 and 17), `notify_on_ellipses` (when an ellipsis appears or disappears, `#using_ellipses` of the specified control changes, 4).",
+        "sources": "BW-doc Text table, VN"
+      }
+    },
+    {
+      "id": "TXT-17",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "현지화 라벨의 텍스트에 `%`가 있으면 `%토큰`(영문·숫자·`-`·`.`·`_`)마다 따로 번역하고, 없는 토큰은 글자 그대로 둔다. 그래서 `\"50%\"` 같은 글자의 `%`는 사라진다. `%`를 보여야 하면 `localize: false`.",
+        "sources": "CN"
+      },
+      "en": {
+        "text": "If the text of a localized label has `%`, each `%token` (letters, digits, `-`, `.`, `_`) is translated separately, and a token that does not exist is left as literal text. So the `%` in text like `\"50%\"` disappears. To show `%`, use `localize: false`.",
+        "sources": "CN"
+      }
+    },
+    {
+      "id": "TXT-22",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "칸 옆에 직접 그린 호버 상자는 스크롤 창에 잘렸다. 바닐라 `common.hover_text`(`hover_text_renderer`)를 버튼의 호버 상태 자식으로 두고 `#hover_text`에 버튼 글을 넣으면 포인터 옆에 잘리지 않고 뜬다. `$hover_text_max_width`가 0이면 글의 `\\n`에서만 줄을 바꾸고, 150이면 한글이 다섯 글자쯤에서 꺾였다.",
+        "sources": "DF"
+      },
+      "en": {
+        "text": "A hover box drawn directly next to a cell was clipped by the scroll window. If you put vanilla `common.hover_text` (`hover_text_renderer`) as a child of the button's hover state and put the button text in `#hover_text`, it appears next to the pointer without being clipped. With `$hover_text_max_width` at 0, lines break only at `\\n` in the text, and at 150 Hangul broke at about five characters.",
+        "sources": "DF"
+      }
+    },
+    {
+      "id": "TXT-23",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "스코어보드 줄 라벨이 번역을 거치면 `%`가 사라졌다(TXT-17을 게임에서 확인). `localize: false`.",
+        "sources": "DF"
+      },
+      "en": {
+        "text": "When a scoreboard line label went through translation, `%` disappeared (TXT-17 confirmed in game). `localize: false`.",
+        "sources": "DF"
+      }
+    },
+    {
+      "id": "TXT-24",
+      "level": [
+        "code",
+        "inferred"
+      ],
+      "ko": {
+        "text": "`§` 색 코드의 실제 색은 `ui/_global_variables.json`의 변수 29개에서 만든다: `$0_color_format`~`$f_color_format`, `$coin_color`(`§g`), `$material_quartz_color`·`iron`·`netherite`·`redstone`·`copper`·`gold`·`emerald`·`diamond`·`lapis`·`amethyst`·`resin`(`§h`~`§v`), `$party_blue_color`(`§w`). 그래서 `§w` 색을 라벨 `color`에 쓰려면 `$party_blue_color`를 쓴다. 팩에서 이 변수를 바꾸면 `§` 색도 바뀔 것으로 보이지만 게임에서는 확인하지 않았다. 변수와 코드의 대응은 순서와 바닐라 주석으로 판단했다.",
+        "sources": "NB-11, VN _global_variables.json:238-312"
+      },
+      "en": {
+        "text": "The actual colors of `§` color codes are built from 29 variables in `ui/_global_variables.json`: `$0_color_format` to `$f_color_format`, `$coin_color` (`§g`), `$material_quartz_color`, `iron`, `netherite`, `redstone`, `copper`, `gold`, `emerald`, `diamond`, `lapis`, `amethyst` and `resin` (`§h` to `§v`), and `$party_blue_color` (`§w`). So to use the `§w` color in a label `color`, use `$party_blue_color`. If a pack changes these variables, the `§` colors appear to change too, but this was not checked in game. The mapping between variables and codes was judged from the order and vanilla comments.",
+        "sources": "NB-11, VN _global_variables.json:238-312"
+      }
+    },
+    {
+      "id": "TXT-25",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "엔진은 칸의 `#inventory_stack_count`를 미리 글자로 만들어 넣는다: 수량 0(빈 칸)과 1은 빈 글자, 2~99는 그 숫자, 100 이상은 `99+`다. 그래서 수량 1과 빈 칸은 이 값으로 가릴 수 없으므로 `#item_id_aux` 같은 다른 바인딩으로 빈 칸인지 따로 본다(TXT-12, EXP-17). Windows 1.26.63 클라이언트를 읽은 것이고 게임에서 따로 재지 않았다.",
+        "sources": "NB"
+      },
+      "en": {
+        "text": "The engine builds a slot's `#inventory_stack_count` as text in advance: count 0 (empty slot) and 1 are empty text, 2 to 99 are the number, and 100 or more is `99+`. So this value cannot tell count 1 from an empty slot; check emptiness separately with another binding such as `#item_id_aux` (TXT-12, EXP-17). This was read from the Windows 1.26.63 client and not measured separately in game.",
+        "sources": "NB"
+      }
+    },
+    {
+      "id": "TXT-26",
+      "level": [
+        "measured",
+        "code"
+      ],
+      "ko": {
+        "text": "`font_scale_factor`는 `font_size` 배율에 곱해진다. `font_scale_factor: 2`인 라벨은 `normal`의 두 배 크기로 그려졌다.",
+        "sources": "2026-11-20 Windows 1.26.65.1 실측과 역컴파일"
+      },
+      "en": {
+        "text": "`font_scale_factor` multiplies the `font_size` scale. A label with `font_scale_factor: 2` drew at twice the `normal` size.",
+        "sources": "2026-11-20 Windows 1.26.65.1 measurement and decompilation"
+      }
+    },
+    {
+      "id": "TXT-27",
+      "level": [
+        "measured",
+        "code"
+      ],
+      "ko": {
+        "text": "`line_padding`은 줄마다 더해진다. `\"a\\nb\"`를 든 `normal` 라벨의 높이는 `line_padding`이 없을 때 20이고 `line_padding: 4`일 때 28이었다.",
+        "sources": "2026-11-20 Windows 1.26.65.1 실측과 역컴파일"
+      },
+      "en": {
+        "text": "`line_padding` is added to every line. A `normal` label holding `\"a\\nb\"` was 20 high without `line_padding` and 28 high with `line_padding: 4`.",
+        "sources": "2026-11-20 Windows 1.26.65.1 measurement and decompilation"
+      }
+    },
+    {
+      "id": "TXT-28",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "라벨 폭이 글보다 좁으면 글이 잘리고 끝에 말줄임이 붙는다. 폭 30인 라벨은 `abcd...`를 그렸다.",
+        "sources": "2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "A label narrower than its text cuts the text and ends it with an ellipsis. A label 30 wide drew `abcd...`.",
+        "sources": "2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "TXT-29",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "색 코드(`§a`)는 굵게(`§l`)를 끄지 않는다. 굵게는 `§r`로만 풀린다. 대문자 코드(`§C`)는 효과 없이 사라진다. 형식 코드를 쓴 글에도 그림자는 그려졌다.",
+        "sources": "2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "A color code (`§a`) does not turn off bold (`§l`). Bold is reset only by `§r`. An uppercase code (`§C`) has no effect and disappears. The shadow was still drawn on text with format codes.",
+        "sources": "2026-11-20 Windows 1.26.65.1"
+      }
+    }
+  ]
+}

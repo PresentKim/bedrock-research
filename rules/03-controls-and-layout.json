@@ -1,0 +1,1059 @@
+{
+  "prefix": "LAY",
+  "slug": "controls-and-layout",
+  "page": "json-ui/controls-and-layout",
+  "title": {
+    "ko": "컨트롤과 레이아웃",
+    "en": "Controls and layout"
+  },
+  "rules": [
+    {
+      "id": "LAY-01",
+      "level": [
+        "vanilla",
+        "measured"
+      ],
+      "ko": {
+        "text": "유효한 타입 목록은 공식 enum이 아니라 바닐라 사용 실적으로 판단한다. 공식 enum에는 `factory`, `collection_panel`, `tooltip_trigger`, `scroll_track` 등 바닐라가 쓰는 타입이 빠져 있다. 위키 타입표의 `scrollbar_track`은 오기이고(바닐라는 `scroll_track`, 충돌 C-34), 레거시 타입 `tab`, `grid_item`, `scrollbar`는 바닐라에 한 번도 없다. 위키가 레거시로 분류한 `carousel_label`은 바닐라에 1회 남아 있지만, Windows 1.26.65.1 엔진은 이 타입을 모르는 타입으로 거부해 만들지 않는다(ANI-46).",
+        "sources": "VN, BC-facts 공식 스키마 절, BW-doc, 2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "Judge the list of valid types by vanilla usage, not by the official enum. The official enum is missing types vanilla uses, such as `factory`, `collection_panel`, `tooltip_trigger` and `scroll_track`. `scrollbar_track` in the wiki type table is a typo (vanilla has `scroll_track`, conflict C-34), and the legacy types `tab`, `grid_item` and `scrollbar` never appear in vanilla. `carousel_label`, which the wiki classifies as legacy, remains once in vanilla, but the Windows 1.26.65.1 engine rejects it as an unknown type and does not create it (ANI-46).",
+        "sources": "VN, BC-facts official schema section, BW-doc, 2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-02",
+      "level": [
+        "vanilla",
+        "pack"
+      ],
+      "ko": {
+        "text": "`scroll_box`는 타입이 아니라 `ui_common.json`의 **컨트롤 이름**이다. 스크롤은 직접 조립하지 말고 `common.scrolling_panel` 템플릿을 `$scrolling_content` 등의 변수로 재사용한다.",
+        "sources": "VN server_form.json `scrolling_panel@common.scrolling_panel`, BA 5장, AP, MJ 4.2-2"
+      },
+      "en": {
+        "text": "`scroll_box` is not a type but a **control name** in `ui_common.json`. Do not assemble scrolling by hand; reuse the `common.scrolling_panel` template with variables such as `$scrolling_content`.",
+        "sources": "VN server_form.json `scrolling_panel@common.scrolling_panel`, BA chapter 5, AP, MJ 4.2-2"
+      }
+    },
+    {
+      "id": "LAY-03",
+      "level": [
+        "vanilla",
+        "code",
+        "inferred",
+        "measured"
+      ],
+      "ko": {
+        "text": "크기 키워드는 위 표의 것을 쓴다. `%x`/`%y`의 \"다른 축 기준\"이라는 뜻은 바닐라 주석(`25%x * 56.25%`)과 용례로 판단한 것이다. `\"default\"`는 크기를 생략한 것과 같았고 타입마다 다르다. Windows 1.26.65.1 실측에서 패널은 부모 100%, 라벨은 텍스트 크기(`Hello` 24x10), 세로 스택 패널은 폭이 부모 100%이고 높이가 자식 합, 그리드는 자식 범위(10x10 칸 2x2는 20x20)였다([주장 실측](../design/json-ui-claims.mdx), 충돌 C-36). 코드에서 그리드의 이 크기는 자식 범위가 아니라 차원 x 템플릿 크기라서, 값은 같지만 항목 수가 차원보다 적어도 차원으로 잰다(2026-11-24 역컴파일). Cinnabar 재구성에서 생략한 크기는 스택 패널의 진행 축이면 `100%c`, 비율 이미지면 텍스처 비율, 나머지는 부모 크기다(LAY-38). 크기 식은 `%c` 등을 `%` 뒤에 쓴다(LAY-36).",
+        "sources": "VN store_search_screen.json:64 주석, VN 전수 검색, BW-doc, CN, 2026-11-18 Windows 1.26.65.1, 2026-11-24 Windows 1.26.65.1 역컴파일"
+      },
+      "en": {
+        "text": "Use the size keywords in the table above. The meaning \"based on the other axis\" for `%x`/`%y` was judged from a vanilla comment (`25%x * 56.25%`) and usage. `\"default\"` was the same as an omitted size and differs by type. Measured on Windows 1.26.65.1, a panel was 100% of the parent, a label the text size (`Hello` 24x10), a vertical stack panel 100% of the parent wide and the sum of its children high, and a grid the extent of its children (a 2x2 grid of 10x10 cells was 20x20) ([claim measurements](../design/json-ui-claims.mdx), conflict C-36). In the code this grid size is not the extent of the children but dimensions x template size, so the value is the same but it is measured by the dimensions even when there are fewer items than the dimensions (2026-11-24 decompilation). In the Cinnabar reconstruction, an omitted size is `100%c` if it is the main axis of a stack panel, the texture ratio for a ratio image, and the parent size otherwise (LAY-38). In size expressions `%c` and the like are written after `%` (LAY-36).",
+        "sources": "VN store_search_screen.json:64 comment, VN exhaustive search, BW-doc, CN, 2026-11-18 Windows 1.26.65.1, 2026-11-24 Windows 1.26.65.1 decompilation"
+      }
+    },
+    {
+      "id": "LAY-04",
+      "level": [
+        "pack",
+        "measured"
+      ],
+      "ko": {
+        "text": "**스택 패널은 숨은(`#visible` false) 자식에게 공간을 주지 않는다.** 조건부 행을 접으면 아래가 올라오고, 2의 거듭제곱 크기 spacer를 켜고 끄면 합이 곧 좌표가 된다(패턴 레시피 6).",
+        "sources": "BA 4장, BC-S12"
+      },
+      "en": {
+        "text": "**A stack panel gives no space to hidden (`#visible` false) children.** Collapsing a conditional row pulls what is below up, and turning power-of-two spacers on and off makes the sum the coordinate (pattern recipe 6).",
+        "sources": "BA chapter 4, BC-S12"
+      }
+    },
+    {
+      "id": "LAY-05",
+      "level": [
+        "measured",
+        "pack",
+        "code"
+      ],
+      "ko": {
+        "text": "정적 컨트롤의 위치(`offset`)는 **배열을 담은 `property_bag` 키를 view 바인딩으로 `#offset`에 옮기면** 바뀐다. Windows 1.26.65.1 HUD에서 정적 `\"offset\": [70, 0]`인 라벨에 `\"property_bag\": {\"#o\": [10, 20]}`와 view 바인딩 `#o` -> `#offset`을 두자 라벨이 (10, 20) GUI 자리로 옮겨졌다(정적 offset을 대신함). `property_bag`에 `\"#offset\": [10, 20]`만 두고 바인딩을 걸지 않은 라벨은 정적 `[30, 0]` 자리에 그대로 있었다. Cinnabar 재구성도 `#offset`에 `[x, y]` 바인딩을 받는다. 코드도 같다: `#offset` 주머니 키에 **배열**이 들어오면 [0], [1]을 실수로 읽어 offset을 픽셀 항 둘로 바꾸고 다시 배치한다. 배열이 아니면 (0, 0)을 쓰고, 지금 식과 같으면 아무 일도 없다. 바인딩 식의 결과는 불리언, 정수, 실수, 문자열뿐이라 식으로 배열을 계산하지는 못한다. \"바인딩할 수 없다\"는 BC-S12 실측은 식 결과를 넘긴 경우였을 수 있다(추론). 값에 따라 바뀌는 위치는 **앞에 둔 spacer의 크기**를 바인딩해 스택이 다음 자식을 밀게 한다(충돌 C-44).",
+        "sources": "BC-S12, BA 4장, 충돌 C-44, 2026-11-24 Windows 1.26.65.1 역컴파일, 2026-11-25 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "The position (`offset`) of a static control changes **when a view binding copies a `property_bag` key that holds an array to `#offset`.** In the Windows 1.26.65.1 HUD, a label with a static `\"offset\": [70, 0]`, `\"property_bag\": {\"#o\": [10, 20]}` and a view binding `#o` -> `#offset` moved to the (10, 20) GUI position (it replaced the static offset). A label with only `\"#offset\": [10, 20]` in `property_bag` and no binding stayed at its static `[30, 0]` position. The Cinnabar reconstruction also accepts an `[x, y]` binding on `#offset`. The code is the same: when the `#offset` property bag key holds an **array**, [0] and [1] are read as floats, the offset becomes two pixel terms and layout is redone. If it is not an array, (0, 0) is used, and nothing happens when that equals the current expression. A binding expression only yields a boolean, integer, float or string, so an expression cannot compute an array. The BC-S12 measurement that it \"cannot be bound\" may have passed an expression result (inferred). For a position that changes with a value, bind **the size of a spacer placed before it** so the stack pushes the next child (conflict C-44).",
+        "sources": "BC-S12, BA chapter 4, conflict C-44, 2026-11-24 Windows 1.26.65.1 decompilation, 2026-11-25 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-06",
+      "level": [
+        "pack",
+        "vanilla"
+      ],
+      "ko": {
+        "text": "`max_size`, `min_size`로 반응형을 만든다. 예: `\"size\": [314, \"100% - 64px\"]`, `\"max_size\": [314, 236]`이면 작은 화면에서 창 높이가 줄어든다.",
+        "sources": "BA 5장, VN max_size 204회"
+      },
+      "en": {
+        "text": "Make responsiveness with `max_size` and `min_size`. Example: with `\"size\": [314, \"100% - 64px\"]` and `\"max_size\": [314, 236]`, the window height shrinks on small screens.",
+        "sources": "BA chapter 5, VN max_size 204 uses"
+      }
+    },
+    {
+      "id": "LAY-07",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "`\"100%cm\"` 상자 안에 배경을 `\"100%sm\"`으로 두면, 안의 행이 숨을 때 상자와 배경이 함께 줄어 아래가 따라 올라온다.",
+        "sources": "BC-S12"
+      },
+      "en": {
+        "text": "If you put a background as `\"100%sm\"` inside a `\"100%cm\"` box, when a row inside hides, the box and background shrink together and what is below follows up.",
+        "sources": "BC-S12"
+      }
+    },
+    {
+      "id": "LAY-08",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "`\"100%cm\"` 패널 안에 라벨과 `\"100%sm\"` 버튼을 두면 버튼 히트박스가 언어마다 글자 크기에 정확히 맞는다. 같은 자리에 `\"100%c\"`를 쓰면 버튼이 라벨 아래로 떨어진다.",
+        "sources": "BC-S10"
+      },
+      "en": {
+        "text": "If you put a label and a `\"100%sm\"` button inside a `\"100%cm\"` panel, the button hitbox fits the text size exactly in each language. Using `\"100%c\"` in the same place makes the button fall below the label.",
+        "sources": "BC-S10"
+      }
+    },
+    {
+      "id": "LAY-09",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "높이가 자식으로 정해지는 행에 아이콘 전용 버튼을 넣을 때는 명시적인 정사각 크기를 준다. 퍼센트 높이로는 행 높이가 정해지지 않는다.",
+        "sources": "BC-rules"
+      },
+      "en": {
+        "text": "When putting an icon-only button in a row whose height is set by its children, give an explicit square size. A percentage height does not decide the row height.",
+        "sources": "BC-rules"
+      }
+    },
+    {
+      "id": "LAY-10",
+      "level": [
+        "measured",
+        "code"
+      ],
+      "ko": {
+        "text": "크기 바인딩은 `#size_binding_x`, `#size_binding_y`에 값을 쓴다. 값은 픽셀이 아니라 **부모 크기의 배수**다. Windows 1.26.65.1 실측에서 폭 100 부모 안의 선언 10x10 자식에 .5를 주자 폭 50, 2를 주자 부모를 넘어 200이었고, `#size_binding_x_absolute` 20은 20이었다([주장 실측](../design/json-ui-claims.mdx)). 선언 크기에 곱한다는 S12의 해석은 틀렸고, Cinnabar 재구성(값 v를 `v×100%`로 바꾸고, `_absolute`는 픽셀)과 같다(충돌 C-14). `[1, 1]` 크기 프레임 안에 두면 값이 곧 픽셀이 된다는 S12 관측도 이와 맞다. 선언은 `[\"100%\", \"100%\"]`로 둔다. 범위를 벗어난 값이 아무것도 안 그린다는 이전 기록은 `[0, 0]` 선언 때문이었을 가능성이 높다. 바닐라의 유일한 크기 바인딩(`resizing_xp_bar_with_hotbar`)은 `use_anchored_offset: true`와 함께 쓰고, 위키도 이 속성이 필요하다고 적지만, 정적 컨트롤에서는 그것 없이도 같은 50이었다(Windows 1.26.65.1 실측, 충돌 C-37). 크기 바인딩 + `use_anchored_offset` + 컬렉션 셀 조합은 피한다(LAY-14). 오프셋 바인딩 `#anchored_offset_value_x`(`use_anchored_offset: true`)는 게임에서 **부모 폭의 배수**였다: `[1, 1]` 틀의 50과 폭 100 틀의 0.5가 모두 50px이었고, 폭 100 틀의 50은 틀 밖으로 나갔다. 부모 크기 해석과 맞고, 픽셀로 옮기려면 `[1, 1]` 틀 안에 둔다.",
+        "sources": "BC-S6, BC-S12, 충돌 C-14, BW-doc, VN hud_screen.json:319, CN, CPR, 2026-11-18 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "A size binding writes values to `#size_binding_x` and `#size_binding_y`. The value is a **multiple of the parent size**, not pixels. Measured on Windows 1.26.65.1, a declared 10x10 child in a 100-wide parent got width 50 for .5 and width 200 for 2, past the parent, and `#size_binding_x_absolute` 20 gave 20 ([claim measurements](../design/json-ui-claims.mdx)). The S12 interpretation that it multiplies the declared size is wrong, and the result matches the Cinnabar reconstruction (value v becomes `v x 100%`, `_absolute` is pixels) (conflict C-14). The S12 observation that the value becomes pixels inside a `[1, 1]` size frame also matches this. Keep the declaration as `[\"100%\", \"100%\"]`. The earlier record that an out-of-range value draws nothing was most likely caused by a `[0, 0]` declaration. Vanilla's only size binding (`resizing_xp_bar_with_hotbar`) is used with `use_anchored_offset: true`, and the wiki also says this property is needed, but on a static control the result was the same 50 without it (measured on Windows 1.26.65.1, conflict C-37). Avoid the combination of a size binding + `use_anchored_offset` + a collection cell (LAY-14). The offset binding `#anchored_offset_value_x` (`use_anchored_offset: true`) was a **multiple of the parent width** in game: 50 in a `[1, 1]` frame and 0.5 in a 100-wide frame both landed at 50px, and 50 in a 100-wide frame went outside the frame. This matches the parent size reading; to move by pixels, put the control in a `[1, 1]` frame.",
+        "sources": "BC-S6, BC-S12, conflict C-14, BW-doc, VN hud_screen.json:319, CN, CPR, 2026-11-18 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-11",
+      "level": [
+        "measured",
+        "code"
+      ],
+      "ko": {
+        "text": "크기 바인딩은 **두 축을 모두** 바인딩한다. 한 축만 하면 다른 축이 0이 되어 바인딩이 안 된 것처럼 보인다. Cinnabar 재구성에서 바인딩하지 않은 축은 선언값을 유지하므로, 선언이 `[0, 0]`이면 그 축이 0으로 남는 것과 같은 현상이다(충돌 C-14).",
+        "sources": "BC-S12, CN"
+      },
+      "en": {
+        "text": "A size binding binds **both axes.** If only one axis is bound, the other axis becomes 0 and it looks as if the binding failed. In the Cinnabar reconstruction an unbound axis keeps its declared value, so if the declaration is `[0, 0]` that axis stays 0, the same phenomenon (conflict C-14).",
+        "sources": "BC-S12, CN"
+      }
+    },
+    {
+      "id": "LAY-12",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "어디서 무엇을 바인딩할 수 있는지는 컨트롤이 어디서 생겼는지에 따라 다르다. 정적 컨트롤의 크기 바인딩에는 `use_anchored_offset`이 필요 없었다(Windows 1.26.65.1 [실측](../design/json-ui-claims.mdx), 충돌 C-37).",
+        "sources": "BC-S12, BW-doc, 2026-11-18 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "What can be bound where depends on where the control was created. A size binding on a static control did not need `use_anchored_offset` (Windows 1.26.65.1 [measurement](../design/json-ui-claims.mdx), conflict C-37).",
+        "sources": "BC-S12, BW-doc, 2026-11-18 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-13",
+      "level": [
+        "measured",
+        "code"
+      ],
+      "ko": {
+        "text": "바인딩한 `alpha`는 실수 그대로 적용된다. Windows 1.26.65.1에서 검정 이미지 위 흰 이미지에 `\"alpha\": \"#alpha\"`를 적고 `property_bag`의 0.5를 view 바인딩으로 넣자 가운데 픽셀이 (128,128,128)이었고, 정적 `\"alpha\": 0.5`도 (128,128,128)로 같았다. `.2`, `.5`, `.9`도 각각 다른 투명도로 그려졌다. 코드에서 `#alpha`는 실수로 읽어 자르지 않고 저장한다. 정수와 실수는 그 값, 불리언은 1.0과 0.0, 문자열(숫자 문자열 포함), 배열, 객체, 없는 키는 1.0이다. 그래서 \"0과 1만 적용된다\"는 BC-S12 기록은 맞지 않는다(충돌 C-45). 선언 없이 view 바인딩 대상만 `#alpha`로 두면 정수 1도 보이지 않았다([실측 기록](../design/json-ui-claims.mdx#65-소수-리터럴-alpha-문자열-나누기-hud-렌더링-쿼리)). 상수만 든 식(`(1 * .5)`)은 `#` 속성이 없어 바인딩이 버려지고 alpha가 1로 남았으므로 값은 `#` 속성으로 넘긴다(BND-05).",
+        "sources": "BC-S12, CN, 충돌 C-45, 2026-11-19 Windows 1.26.65.1, 2026-11-24 Windows 1.26.65.1 실측과 역컴파일"
+      },
+      "en": {
+        "text": "A bound `alpha` applies as the float it is. On Windows 1.26.65.1, a white image over a black image with `\"alpha\": \"#alpha\"` and 0.5 from `property_bag` passed through a view binding had a center pixel of (128,128,128), and a static `\"alpha\": 0.5` was also (128,128,128). `.2`, `.5` and `.9` also each drew with a different transparency. In the code `#alpha` is read as a float and stored without clamping. Integers and floats give their value, booleans give 1.0 and 0.0, and strings (including numeric strings), arrays, objects and a missing key give 1.0. So the BC-S12 record \"only 0 and 1 apply\" does not hold (conflict C-45). With only the view binding target set to `#alpha` and no declaration, even the integer 1 was invisible ([measurement record](../design/json-ui-claims.mdx#65-decimal-literals-alpha-string-division-hud-rendering-queries)). An expression of constants only (`(1 * .5)`) has no `#` property, so the binding is dropped and alpha stayed 1; pass the value through a `#` property (BND-05).",
+        "sources": "BC-S12, CN, conflict C-45, 2026-11-19 Windows 1.26.65.1, 2026-11-24 Windows 1.26.65.1 measurement and decompilation"
+      }
+    },
+    {
+      "id": "LAY-14",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "크기 바인딩 + `use_anchored_offset` + 컬렉션 셀 조합은 상자 화면에서 클라이언트를 두 번 크래시시켰다. 이 조합은 피한다.",
+        "sources": "BC-S6"
+      },
+      "en": {
+        "text": "The combination of a size binding + `use_anchored_offset` + a collection cell crashed the client twice on a chest screen. Avoid this combination.",
+        "sources": "BC-S6"
+      }
+    },
+    {
+      "id": "LAY-15",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "화면이 열려 있는 동안 크기 바인딩 값이 바뀌면 다시 레이아웃된다. 코드에서 `#size_binding_*` 값으로 크기 식이 달라지면 크기 노드를 더럽혀 다시 계산하고, 식이 같으면 아무 일도 없다. 게임에서는 재지 않았다.",
+        "sources": "BC-S6, BC 8장, 2026-11-24 Windows 1.26.65.1 역컴파일"
+      },
+      "en": {
+        "text": "When the size binding value changes while the screen is open, layout is redone. In the code, when a `#size_binding_*` value changes the size expression, the size node is marked dirty and recomputed; if the expression is the same, nothing happens. This was not measured in game.",
+        "sources": "BC-S6, BC chapter 8, 2026-11-24 Windows 1.26.65.1 decompilation"
+      }
+    },
+    {
+      "id": "LAY-16",
+      "level": [
+        "vanilla"
+      ],
+      "ko": {
+        "text": "`anchor_from`은 부모의 기준점, `anchor_to`는 자기 기준점이다. 값은 `top_left`, `top_middle`, `top_right`, `left_middle`, `center`, `right_middle`, `bottom_left`, `bottom_middle`, `bottom_right` 9가지다.",
+        "sources": "VN 9종 모두 사용, 값 사전"
+      },
+      "en": {
+        "text": "`anchor_from` is the parent's reference point and `anchor_to` is its own reference point. The values are 9: `top_left`, `top_middle`, `top_right`, `left_middle`, `center`, `right_middle`, `bottom_left`, `bottom_middle` and `bottom_right`.",
+        "sources": "VN all 9 used, value dictionary"
+      }
+    },
+    {
+      "id": "LAY-17",
+      "level": [
+        "vanilla"
+      ],
+      "ko": {
+        "text": "`offset`은 앵커 기준의 이동이며 크기와 같은 단위(픽셀, `%`, 식)를 쓴다. 예: `\"offset\": [0, \"50%-68px\"]`.",
+        "sources": "VN hud_screen.json:2146"
+      },
+      "en": {
+        "text": "`offset` is movement relative to the anchor and uses the same units as size (pixels, `%`, expressions). Example: `\"offset\": [0, \"50%-68px\"]`.",
+        "sources": "VN hud_screen.json:2146"
+      }
+    },
+    {
+      "id": "LAY-18",
+      "level": [
+        "measured",
+        "code"
+      ],
+      "ko": {
+        "text": "`layer`는 부모에 대한 **상대값**이다. 겹치는 두 컨트롤의 앞뒤는 조상 체인 전체의 레이어를 비교해야 안다. 코드에서 절대 레이어는 부모의 절대 레이어 + 자기 값(정수)이다.",
+        "sources": "BC-rules, 2026-11-24 Windows 1.26.65.1 역컴파일"
+      },
+      "en": {
+        "text": "`layer` is a **relative value** to the parent. To know which of two overlapping controls is in front, you must compare the layers of the whole ancestor chain. In the code the absolute layer is the parent's absolute layer + its own value (integer).",
+        "sources": "BC-rules, 2026-11-24 Windows 1.26.65.1 decompilation"
+      }
+    },
+    {
+      "id": "LAY-19",
+      "level": [
+        "measured",
+        "code"
+      ],
+      "ko": {
+        "text": "같은 레이어의 형제는 **배열 순서가 그리기 순서를 보장하지 않는다**는 실측 기록이 있다. 코드에서는 그리기 항목을 절대 레이어 오름차순으로 안정 정렬하고, 같은 값이면 트리 전위 순서(배열 순서)를 유지한다. 그러므로 절대 레이어가 같은 형제는 배열 순서대로 그려져 뒤 형제가 위에 온다고 예측된다. 보장되지 않아 보인 실측은 조상 레이어 합이 달랐을 가능성이 있다(추론). 같은 절대 레이어 형제의 순서는 게임에서 따로 재지 않았으므로 앞뒤가 중요하면 레이어를 다르게 준다.",
+        "sources": "BC-rules, MJ 4.2-10, 2026-11-24 Windows 1.26.65.1 역컴파일"
+      },
+      "en": {
+        "text": "There is a measurement record that for siblings on the same layer, **array order does not guarantee draw order.** In the code, draw items are stable-sorted by absolute layer in ascending order, and equal values keep tree preorder (array order). So siblings with the same absolute layer are predicted to draw in array order, with the later sibling on top. The measurement that looked unordered may have had different ancestor layer sums (inferred). The order of siblings with the same absolute layer was not measured separately in game, so if front and back matter, give different layers.",
+        "sources": "BC-rules, MJ 4.2-10, 2026-11-24 Windows 1.26.65.1 decompilation"
+      }
+    },
+    {
+      "id": "LAY-20",
+      "level": [
+        "pack"
+      ],
+      "ko": {
+        "text": "같은 데이터를 \"모든 외곽선 → 모든 선 → 모든 노드 → 호버\" 순으로 그려야 하면 한 아이템 안에서 레이어를 올리는 것으로는 부족하다(다음 아이템의 외곽선이 앞 아이템을 덮는다). 같은 컬렉션을 레이어가 다른 팩토리로 여러 번 그린다.",
+        "sources": "BA 5장"
+      },
+      "en": {
+        "text": "If the same data must be drawn in the order \"all outlines -> all lines -> all nodes -> hover\", raising layers within one item is not enough (the next item's outline covers the previous item). Draw the same collection several times with factories on different layers.",
+        "sources": "BA chapter 5"
+      }
+    },
+    {
+      "id": "LAY-21",
+      "level": [
+        "vanilla",
+        "inferred"
+      ],
+      "ko": {
+        "text": "50 이상의 레이어는 바닐라에서도 흔하다. 레이어가 높다는 경고는 무시해도 된다. 2026-11-24 역컴파일에서 레이어 상한이나 경고를 내는 코드는 찾지 못했고, 레이어는 정수 합 그대로 쓰였다.",
+        "sources": "MJ 5장, 2026-11-24 Windows 1.26.65.1 역컴파일"
+      },
+      "en": {
+        "text": "Layers of 50 or more are common in vanilla too. A warning that the layer is high can be ignored. The 2026-11-24 decompilation found no code for a layer limit or a warning, and the layer was used as the integer sum.",
+        "sources": "MJ chapter 5, 2026-11-24 Windows 1.26.65.1 decompilation"
+      }
+    },
+    {
+      "id": "LAY-22",
+      "level": [
+        "vanilla",
+        "pack"
+      ],
+      "ko": {
+        "text": "`clips_children: true`는 자식을 자기 영역으로 자른다. 자식에 `allow_clipping: false`를 주면 조상의 클리핑을 벗어나 그린다(스크롤 영역 밖으로 나가는 툴팁).",
+        "sources": "VN clips_children 27회·allow_clipping 7회, BA 5장, AP 4.8"
+      },
+      "en": {
+        "text": "`clips_children: true` clips children to its own area. Giving a child `allow_clipping: false` draws it outside the ancestor's clipping (a tooltip that goes out of a scroll area).",
+        "sources": "VN clips_children 27 uses and allow_clipping 7 uses, BA chapter 5, AP 4.8"
+      }
+    },
+    {
+      "id": "LAY-23",
+      "level": [
+        "pack"
+      ],
+      "ko": {
+        "text": "툴팁이 뜰 때 주변을 어둡게 하려면 아주 큰 반투명 검정 이미지(BA 4000×4000 alpha 0.3, AP 500×500 alpha 0.225)를 툴팁 뒤에 두고 `allow_clipping: false`를 준다.",
+        "sources": "BA 5장, AP 4.8"
+      },
+      "en": {
+        "text": "To darken the surroundings when a tooltip shows, put a very large translucent black image (BA 4000x4000 alpha 0.3, AP 500x500 alpha 0.225) behind the tooltip and give it `allow_clipping: false`.",
+        "sources": "BA chapter 5, AP 4.8"
+      }
+    },
+    {
+      "id": "LAY-24",
+      "level": [
+        "pack"
+      ],
+      "ko": {
+        "text": "텍스트 폭에 맞춘 배경이 필요하면 `alpha: 0`인 측정용 라벨로 부모를 `\"100%c\"`/`\"100%cm\"`로 키우고, 보이는 라벨은 그 위에 따로 그린다.",
+        "sources": "BA 5장"
+      },
+      "en": {
+        "text": "If you need a background fitted to the text width, grow the parent to `\"100%c\"`/`\"100%cm\"` with a measuring label of `alpha: 0`, and draw the visible label separately on top.",
+        "sources": "BA chapter 5"
+      }
+    },
+    {
+      "id": "LAY-25",
+      "level": [
+        "vanilla"
+      ],
+      "ko": {
+        "text": "그리드는 `grid_dimensions`(고정 크기) 또는 `grid_dimension_binding`(바인딩 크기), `grid_item_template`, `maximum_grid_items`로 만든다.",
+        "sources": "VN 속성 키 기준 37·79·117·11회"
+      },
+      "en": {
+        "text": "A grid is made with `grid_dimensions` (fixed size) or `grid_dimension_binding` (bound size), `grid_item_template` and `maximum_grid_items`.",
+        "sources": "VN by property key 37, 79, 117 and 11 uses"
+      }
+    },
+    {
+      "id": "LAY-26",
+      "level": [
+        "vanilla",
+        "measured"
+      ],
+      "ko": {
+        "text": "`grid_fill_direction`은 바닐라에서 `vertical`만 쓴다. `left_to_right` 같은 값은 근거가 없다. `grid_rescaling_type`은 바닐라에서 `horizontal`(21), `vertical`(1)만 쓰고, 공식 enum의 `none`은 쓰지 않는다. 위키가 적은 `grid_fill_direction` 3값(`vertical`, `horizontal`, `none`)도 `vertical` 외에는 바닐라 근거가 없다. `grid_rescaling_type: \"vertical\"`은 크래시 경고가 있다(LAY-32). 상자 칸을 읽는 컬렉션 격자(`grid_dimensions: [3, 2]`, `maximum_grid_items: 6`)에 `horizontal`을 주자 윗줄 세 칸만, `vertical`을 주자 첫 칸과 격자 오른쪽 밖 한 칸만 그려졌다. 열 우선 채우기로는 쓸 수 없다.",
+        "sources": "VN, MJ 4.2-3·4, BW-doc, BW-dyn, CPR"
+      },
+      "en": {
+        "text": "`grid_fill_direction` uses only `vertical` in vanilla. Values like `left_to_right` have no basis. `grid_rescaling_type` uses only `horizontal` (21) and `vertical` (1) in vanilla and does not use `none` of the official enum. Of the 3 values of `grid_fill_direction` the wiki lists (`vertical`, `horizontal`, `none`), only `vertical` has vanilla evidence. `grid_rescaling_type: \"vertical\"` has a crash warning (LAY-32). On a collection grid reading chest slots (`grid_dimensions: [3, 2]`, `maximum_grid_items: 6`), `horizontal` drew only the three cells of the top row and `vertical` drew only the first cell and one cell outside the right edge of the grid. It cannot be used for column-first filling.",
+        "sources": "VN, MJ 4.2-3 and 4, BW-doc, BW-dyn, CPR"
+      }
+    },
+    {
+      "id": "LAY-27",
+      "level": [
+        "pack",
+        "vanilla"
+      ],
+      "ko": {
+        "text": "9-slice는 텍스처 파일 옆에 같은 이름의 `.json`을 두고 `nineslice_size`(`[왼, 위, 오른, 아래]` 또는 한 값)와 `base_size`를 적는다. 바닐라 UI JSON은 `nineslice_size`를 리터럴 속성으로 쓰지 않고, 바인딩(`#banner_nineslice_size` → `#nineslice_size`)으로 1회 쓴다.",
+        "sources": "BA 5장, AP 4.9, VN start_screen.json:1639"
+      },
+      "en": {
+        "text": "For 9-slice, put a `.json` of the same name next to the texture file and write `nineslice_size` (`[left, top, right, bottom]` or one value) and `base_size`. Vanilla UI JSON does not use `nineslice_size` as a literal property and uses it once through a binding (`#banner_nineslice_size` -> `#nineslice_size`).",
+        "sources": "BA chapter 5, AP 4.9, VN start_screen.json:1639"
+      }
+    },
+    {
+      "id": "LAY-28",
+      "level": [
+        "vanilla",
+        "pack"
+      ],
+      "ko": {
+        "text": "반복 배경은 image에 `\"tiled\": true`를 준다.",
+        "sources": "VN 44회, AP 4.9, BA 5장"
+      },
+      "en": {
+        "text": "For a repeating background, give the image `\"tiled\": true`.",
+        "sources": "VN 44 uses, AP 4.9, BA chapter 5"
+      }
+    },
+    {
+      "id": "LAY-29",
+      "level": [
+        "vanilla",
+        "measured"
+      ],
+      "ko": {
+        "text": "그리드 칸에 정적 자식을 직접 놓으려면 자식에 `\"grid_position\": [열, 행]`을 준다(0부터). `grid_dimensions [4, 2]` 격자에서 `[3, 0]`은 오른쪽 위, `[0, 1]`은 왼쪽 아래에 놓였다(실측, 모바일, 2026-11-16, C-48). 바닐라도 71회 쓰고, 엔진이 만든 그리드의 특정 칸을 덮어쓰는 데도 쓴다.",
+        "sources": "VN, HXC, BW-dyn 스크린샷"
+      },
+      "en": {
+        "text": "To place a static child directly in a grid cell, give the child `\"grid_position\": [column, row]` (from 0). In a `grid_dimensions [4, 2]` grid, `[3, 0]` landed at the top right and `[0, 1]` at the bottom left (measured, mobile, 2026-11-16, C-48). Vanilla also uses it 71 times, and it is also used to overwrite a specific cell of an engine-made grid.",
+        "sources": "VN, HXC, BW-dyn screenshot"
+      }
+    },
+    {
+      "id": "LAY-30",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "개수가 바인딩으로 정해지는 그리드는 `grid_rescaling_type: \"horizontal\"`과 고정 폭을 주고 `#maximum_grid_items`(또는 `maximum_grid_items`)로 개수를 정한다. 열 수는 `floor(그리드 폭 / 템플릿 폭)`이다(160px ÷ 32px = 5열, 개수 15 → 3행). 높이는 `\"100%c\"`로 둔다.",
+        "sources": "BW-dyn 스크린샷"
+      },
+      "en": {
+        "text": "For a grid whose count is decided by a binding, give `grid_rescaling_type: \"horizontal\"` and a fixed width and set the count with `#maximum_grid_items` (or `maximum_grid_items`). The column count is `floor(grid width / template width)` (160px / 32px = 5 columns, count 15 -> 3 rows). Set the height to `\"100%c\"`.",
+        "sources": "BW-dyn screenshot"
+      }
+    },
+    {
+      "id": "LAY-31",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "**그리드는 숨은(`visible` false) 항목에도 자리를 준다.** 스택 패널(LAY-04)과 반대라서, 조건부 항목을 그리드에 두면 빈칸이 생긴다. 접혀야 하는 목록은 스택 패널로 만든다. Cinnabar 재구성에서도 그리드 칸 위치가 인덱스로 정해져 숨은 칸이 자리를 차지한다. Windows 1.26.65.1 실측에서 grid [4,1]의 1번 칸을 숨기자 2, 3번 칸이 x 40, 60에 그대로 있었고, 같은 칸을 가로 스택 패널에 두자 2번 칸이 x 20으로 당겨졌다([주장 실측](../design/json-ui-claims.mdx)).",
+        "sources": "BW-dyn \"Useful Information\", CN, 2026-11-18 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "**A grid gives space to hidden (`visible` false) items too.** This is the opposite of a stack panel (LAY-04), so putting conditional items in a grid leaves empty cells. Make lists that must collapse with a stack panel. In the Cinnabar reconstruction too, grid cell positions are decided by index, so hidden cells take up space. Measured on Windows 1.26.65.1, hiding item 1 of a grid [4,1] left items 2 and 3 at x 40 and 60, and the same items in a horizontal stack panel pulled item 2 to x 20 ([claim measurements](../design/json-ui-claims.mdx)).",
+        "sources": "BW-dyn \"Useful Information\", CN, 2026-11-18 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-32",
+      "level": [
+        "unverified",
+        "vanilla"
+      ],
+      "ko": {
+        "text": "`grid_rescaling_type: \"vertical\"`은 게임을 크래시시킬 수 있다는 경고가 있다. 바닐라는 1회(`store_item_list_screen.json`) 쓴다. 새로 만들 때는 `horizontal`을 쓴다. 2026-11-24 역컴파일에서 세로 재조정은 행 수 = max(1, floor(높이 / 칸 높이))인 식이었고 크래시로 이어지는 경로는 찾지 못했다.",
+        "sources": "BW-dyn, VN, 2026-11-24 Windows 1.26.65.1 역컴파일"
+      },
+      "en": {
+        "text": "There is a warning that `grid_rescaling_type: \"vertical\"` can crash the game. Vanilla uses it once (`store_item_list_screen.json`). When making something new, use `horizontal`. In the 2026-11-24 decompilation, vertical rescaling was the formula rows = max(1, floor(height / cell height)), and no path leading to a crash was found.",
+        "sources": "BW-dyn, VN, 2026-11-24 Windows 1.26.65.1 decompilation"
+      }
+    },
+    {
+      "id": "LAY-33",
+      "level": [
+        "code",
+        "vanilla"
+      ],
+      "ko": {
+        "text": "`alpha`는 그 컨트롤만 투명하게 하고 자식에는 전파되지 않는다. 자식까지 함께 투명하게 하려면 `propagate_alpha: true`를 준다(BND-15). `layer`는 음수도 되며 부모보다 아래에 그린다. 코드에서도 같다.",
+        "sources": "BW-doc Control 표, 2026-11-24 Windows 1.26.65.1 역컴파일"
+      },
+      "en": {
+        "text": "`alpha` makes only that control transparent and is not propagated to children. To make children transparent too, give `propagate_alpha: true` (BND-15). `layer` may be negative and then draws below the parent. The code agrees.",
+        "sources": "BW-doc Control table, 2026-11-24 Windows 1.26.65.1 decompilation"
+      }
+    },
+    {
+      "id": "LAY-34",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "크기 키워드 `\"fill\"`, `\"default\"`는 소문자 그대로일 때만 키워드다. 단위 없는 숫자 문자열(`\"10\"`)은 0이 된다. 숫자로 쓰거나 `\"10px\"`로 쓴다. 공백은 구분자가 아니고 항을 만든 뒤에도 마지막 숫자가 남는다(LAY-63).",
+        "sources": "CN-run"
+      },
+      "en": {
+        "text": "The size keywords `\"fill\"` and `\"default\"` are keywords only when exactly in lowercase. A unitless numeric string (`\"10\"`) becomes 0. Write it as a number or as `\"10px\"`. A space is not a separator, and the last number remains after a term is made (LAY-63).",
+        "sources": "CN-run"
+      }
+    },
+    {
+      "id": "LAY-35",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "크기 식의 부호는 다음 부호까지 이어진다: `\"100% - 10px 5px\"`는 100% − 15px. 항마다 부호를 쓴다.",
+        "sources": "CN-run"
+      },
+      "en": {
+        "text": "The sign in a size expression carries on to the next sign: `\"100% - 10px 5px\"` is 100% - 15px. Write a sign on every term.",
+        "sources": "CN-run"
+      }
+    },
+    {
+      "id": "LAY-36",
+      "level": [
+        "vanilla",
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "`%c`, `%cm`, `%sm`은 `%` **뒤에** 쓴다. 바닐라 progress_screen.json의 `\"100c%\"`, `\"50c%\"`는 부모 기준 `%`로 읽힌다. Windows 1.26.65.1에서 폭 210 부모 안의 `[\"100c%\", 10]` 패널(자식 30x10)은 210x10, `[\"50c%\", 4]` 패널은 105x4였다. 코드에서 파서는 `%` 다음 토큰만 수식자로 보고, 따로 떨어진 `c`는 무시한다.",
+        "sources": "VN progress_screen.json:21·31·48, CN-run, 2026-11-24 Windows 1.26.65.1 실측과 역컴파일"
+      },
+      "en": {
+        "text": "`%c`, `%cm` and `%sm` are written **after** `%`. `\"100c%\"` and `\"50c%\"` in vanilla progress_screen.json are read as parent-based `%`. On Windows 1.26.65.1, inside a 210-wide parent, a `[\"100c%\", 10]` panel (child 30x10) was 210x10 and a `[\"50c%\", 4]` panel was 105x4. In the code the parser treats only the token after `%` as a modifier and ignores a separate `c`.",
+        "sources": "VN progress_screen.json:21, 31 and 48, CN-run, 2026-11-24 Windows 1.26.65.1 measurement and decompilation"
+      }
+    },
+    {
+      "id": "LAY-37",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "`%cm`과 `%sm`은 계수를 무시하고 최대값 자체다. `\"50%cm\"`도 가장 큰 자식 크기다. Windows 1.26.65.1에서 `[\"50%cm\", 10]` 패널은 자식 폭 30과 90에서 90이었고(절반 45, 합의 절반 60, 고정 50 모두 아님), `[10, \"50%cm\"]`은 자식 높이 10과 30에서 30이었다. `[\"100%cm\", \"100%cm\"]`은 자식 30x10과 40x20에서 40x20이었다. 코드에서 `%cm` 항은 계수와 부호를 저장하지 않고 자식 크기의 최대(시작값 0)다. 절반이 필요하면 감싼 패널에서 다시 `%`로 줄인다.",
+        "sources": "CN-run, CN 테스트 G06·G07, 2026-11-24 Windows 1.26.65.1 실측과 역컴파일"
+      },
+      "en": {
+        "text": "`%cm` and `%sm` ignore the coefficient and are the maximum value itself. `\"50%cm\"` is also the largest child size. On Windows 1.26.65.1, a `[\"50%cm\", 10]` panel was 90 wide with children 30 and 90 wide (not half 45, not half the sum 60, not a fixed 50), and `[10, \"50%cm\"]` was 30 high with children 10 and 30 high. `[\"100%cm\", \"100%cm\"]` was 40x20 with children 30x10 and 40x20. In the code a `%cm` term stores no coefficient or sign and is the maximum of the child sizes (starting at 0). If you need half, shrink again with `%` in a wrapping panel.",
+        "sources": "CN-run, CN tests G06 and G07, 2026-11-24 Windows 1.26.65.1 measurement and decompilation"
+      }
+    },
+    {
+      "id": "LAY-38",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "스택 패널의 자식은 `offset`을 무시하고, `use_child_anchors: true`가 없으면 앵커도 무시한다. 생략한 스택 패널의 진행 축 크기는 `100%c`다.",
+        "sources": "CN 테스트 S04, CN"
+      },
+      "en": {
+        "text": "Children of a stack panel ignore `offset`, and ignore anchors too unless `use_child_anchors: true`. The main axis size of an omitted stack panel is `100%c`.",
+        "sources": "CN test S04, CN"
+      }
+    },
+    {
+      "id": "LAY-39",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "최소·최대는 값이 최대보다 크면 최대로, 아니면 값과 최소 중 큰 쪽으로 정한다. 그래서 최소·최대가 충돌하면(`min > max`) 최대보다 큰 값은 최대로 잘리고, 최대 이하인 값에는 최소가 적용된다. Windows 1.26.65.1에서 크기 10, 최소 50, 최대 30은 50이었다. 스택 진행 축 밖의 `fill`은 0이다.",
+        "sources": "CN, NB, 2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "Minimum and maximum are applied as: the maximum if the value is above it, otherwise the larger of the value and the minimum. So if minimum and maximum conflict (`min > max`), a value above the maximum is clipped to the maximum, and a value at or below the maximum gets the minimum. On Windows 1.26.65.1, size 10 with minimum 50 and maximum 30 gave 50. `fill` outside the stack's main axis is 0.",
+        "sources": "CN, NB, 2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-40",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "스택 `use_priority: true`는 자식 합이 넘칠 때 `priority`가 낮은 자식부터 남기고(0 이하는 항상 남김) 들어가지 않는 자식을 숨긴다.",
+        "sources": "CN 테스트 S05"
+      },
+      "en": {
+        "text": "With a stack's `use_priority: true`, when the sum of children overflows, children with the lowest `priority` are kept first (0 or lower always kept) and children that do not fit are hidden.",
+        "sources": "CN test S05"
+      }
+    },
+    {
+      "id": "LAY-41",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "그리드 칸은 자기 `anchor`·`offset`을 무시한다. 템플릿 그리드는 행 우선 생성 순서로 칸을 채우고 용량을 넘는 칸은 만들지 않는다. 게임에서 폭 100, `grid_dimensions: [5, 1]` 격자의 칸은 20px이었고, 12px 템플릿은 칸 왼쪽 위에 붙어 마지막 항목과 오른쪽 끝 사이에 8px이 남았다. 템플릿 크기 `[\"100%\", \"100%\"]`는 격자 전체 크기로 풀려 항목이 한 줄에 하나씩 세로로 쌓이며 격자 밖으로 넘쳤다. 항목을 고르게 놓으려면 칸 크기의 고정 템플릿(여기서는 `[20, 14]`)을 두고 그 안에서 가운데로 앵커한다.",
+        "sources": "CN 테스트 D01·D08, CPR"
+      },
+      "en": {
+        "text": "A grid cell ignores its own `anchor` and `offset`. A template grid fills cells in row-first creation order and does not create cells beyond capacity. In game, the cells of a 100-wide grid with `grid_dimensions: [5, 1]` were 20px, and a 12px template stuck to the top left of its cell, leaving 8px between the last item and the right edge. A template size of `[\"100%\", \"100%\"]` resolved to the whole grid size, so items stacked one per row downward and overflowed the grid. To spread items evenly, use a fixed template the size of a cell (here `[20, 14]`) and anchor the item to its center.",
+        "sources": "CN tests D01 and D08, CPR"
+      }
+    },
+    {
+      "id": "LAY-42",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "스크롤 뷰는 역할 컨트롤(뷰포트, 내용, 트랙, 박스, 바 패널)을 이름으로 너비 우선 검색하므로 트리 안 위치는 자유지만, 넷 중 하나라도 없으면 스크롤하지 않는다. 박스 길이는 올림(트랙 길이 x 뷰포트 / 내용)이다. Windows 1.26.65.1에서 내용 5161, 뷰포트 666인 스크롤의 박스는 84 px로 이 식과 같았다. Cinnabar는 박스를 트랙의 10% 이상으로 두지만, 이 측정은 비율이 약 13%라 하한을 시험하지 않았다. Windows 1.26.65.1 코드에서 하한 0.1은 확인했다. \"넷 중 하나라도 없으면 스크롤하지 않는다\"는 박스가 없을 때만 코드로 확인했다(스크롤 축을 박스의 `draggable`로 정한다). 내용이 들어맞으면 바 패널이 숨는다.",
+        "sources": "CN 테스트 V02·V07·V06, 2026-11-20 Windows 1.26.65.1, 2026-11-24 Windows 1.26.65.1 역컴파일"
+      },
+      "en": {
+        "text": "A scroll view searches for the role controls (viewport, content, track, box, bar panel) breadth-first by name, so their position in the tree is free, but if any one of the four is missing it does not scroll. The box length is ceil(track length x viewport / content). On Windows 1.26.65.1, a scroll with content 5161 and viewport 666 had an 84 px box, matching this formula. Cinnabar keeps the box at 10% of the track or more, but this measurement had a ratio of about 13%, so it did not test that minimum. The Windows 1.26.65.1 code confirms the minimum of 0.1. \"If any one of the four is missing it does not scroll\" was confirmed in the code only for a missing box (the scroll axis comes from the box's `draggable`). The bar panel hides when the content fits.",
+        "sources": "CN tests V02, V07 and V06, 2026-11-20 Windows 1.26.65.1, 2026-11-24 Windows 1.26.65.1 decompilation"
+      }
+    },
+    {
+      "id": "LAY-43",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "앵커 값은 9개 이름(LAY-16) 중 하나와 대소문자까지 정확히 같을 때만 읽고, 그 밖의 문자열은 `center`다. Windows 1.26.65.1에서 `left`, `top`, `middle_left`, `Top_Left`는 모두 가운데에 놓였다. 이름에 `left`·`right`·`top`·`bottom`이 들어 있는지로 판정하는 Cinnabar 재구성은 게임과 다르다.",
+        "sources": "NB, CN, 2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "An anchor value is read only when it equals one of the 9 names (LAY-16) exactly, including case; any other string is `center`. On Windows 1.26.65.1, `left`, `top`, `middle_left` and `Top_Left` all landed at the center. The Cinnabar reconstruction, which decides by whether the name contains `left`, `right`, `top` or `bottom`, differs from the game.",
+        "sources": "NB, CN, 2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-51",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "두 열을 가로 `stack_panel`에 세로 스택 둘로 넣으면 높이가 0이 됐다. `panel`(높이 `100%cm`) 안에 왼쪽 위·오른쪽 위로 붙인 세로 스택 둘을 둔다.",
+        "sources": "DF"
+      },
+      "en": {
+        "text": "Putting two columns as two vertical stacks in a horizontal `stack_panel` gave height 0. Put two vertical stacks attached to the top left and top right inside a `panel` (height `100%cm`).",
+        "sources": "DF"
+      }
+    },
+    {
+      "id": "LAY-52",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "왼쪽 판과 오른쪽 상세를 가로 스택에 두면 `100%c`는 두 높이를 더했고 `100%cm`은 오른쪽 상세를 접었다. 판들을 `panel` 안에 왼쪽 위 기준과 `offset`으로 두고 그 `panel`의 높이는 `100%cm`(가장 큰 자식)으로 둔다(LAY-51). 일반 `panel`의 `100%c`도 보이는 자식의 합이라 두 높이를 더한다(LAY-59).",
+        "sources": "DF, 2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "With a left panel and a right detail in a horizontal stack, `100%c` added the two heights and `100%cm` collapsed the right detail. Put the panels inside a `panel` with a top-left reference and `offset`, and give that `panel` a height of `100%cm` (the largest child) (LAY-51). The `100%c` of a plain `panel` is also the sum of visible children, so it adds the two heights (LAY-59).",
+        "sources": "DF, 2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-53",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "창 높이를 `100%c`로 내용에 맞추면 창과 내용이 서로를 참조해 무너졌다(버튼이 창 밖으로). 서버 폼 창은 고정 픽셀 크기로 두고, 넘치는 내용은 안쪽 `scrolling_panel`이나 서버의 쪽 나누기로 처리한다. 휴대폰은 UI를 크게 그리므로 바닐라 인벤토리(326×166)보다 큰 창은 화면에 들어가지 않는다.",
+        "sources": "DF"
+      },
+      "en": {
+        "text": "Fitting the window height to the content with `100%c` made the window and content refer to each other and collapse (buttons went outside the window). Keep a server form window at a fixed pixel size and handle overflowing content with an inner `scrolling_panel` or server-side paging. Phones draw the UI large, so a window bigger than the vanilla inventory (326x166) does not fit on screen.",
+        "sources": "DF"
+      }
+    },
+    {
+      "id": "LAY-54",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "목록 칸을 내용 높이(`100%c + 8px`)로 두면 빈 목록은 얇은 막대가 되고 긴 목록은 창 밖으로 나갔다. 목록 칸은 창 높이로 고정하고 그 안에 `common.scrolling_panel`을 둔다. 버튼 칸을 고정 높이로 두면 위에 본문이 붙을 때 스크롤바가 생기므로 `stack_panel` `100%c`로 버튼만큼만 차지하게 한다.",
+        "sources": "DF"
+      },
+      "en": {
+        "text": "Making a list cell the content height (`100%c + 8px`) made an empty list a thin bar and let a long list go outside the window. Fix the list cell to the window height and put `common.scrolling_panel` inside it. If you fix a button cell at a fixed height, a scrollbar appears when a body is attached above it, so use a `stack_panel` `100%c` so that it takes only as much as the buttons.",
+        "sources": "DF"
+      }
+    },
+    {
+      "id": "LAY-55",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "스크롤 영역 안에서 팩토리나 grid가 만든 칸의 라벨을 배경 이미지와 같은 레이어(기본 0)에 두면, 아이콘과 진행 막대는 바로 보이는데 글자는 무언가를 건드리기 전까지 비었다(건드린 칸만 나타나기도 했다). 라벨을 배경보다 높은 레이어(아이콘 2, 라벨 3)에 두자 열자마자 모두 보였다. 바닐라 버튼 라벨도 `layer: 2`다. `binding_condition`, 식 유무, 팩토리 유무, 자르기, 스크롤 갱신은 이 증상과 관계없었다.",
+        "sources": "FFR"
+      },
+      "en": {
+        "text": "When the label of a cell created by a factory or grid inside a scroll area was put on the same layer as the background image (default 0), icons and progress bars showed immediately but text was empty until something touched it (sometimes only the touched cell appeared). Putting the label on a layer higher than the background (icon 2, label 3) made everything visible as soon as it opened. Vanilla button labels are also `layer: 2`. `binding_condition`, having an expression or not, having a factory or not, clipping and scroll refresh had nothing to do with this symptom.",
+        "sources": "FFR"
+      }
+    },
+    {
+      "id": "LAY-56",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "`stack_panel` 자식에 준 `offset`은 스택이 정한 위치를 옮기지 않았다. 가로 스택에 칸 48개를 두고 줄마다 `offset`으로 접으려 하자 한 줄로 이어져 창 밖까지 나갔다. 2차원 배치는 세로 스택 안에 가로 스택 줄을 둔다.",
+        "sources": "FFR"
+      },
+      "en": {
+        "text": "The `offset` given to `stack_panel` children did not move the position the stack decided. When 48 cells were put in a horizontal stack and folded per row with `offset`, they ran in one line out of the window. For 2D layout, put horizontal stack rows inside a vertical stack.",
+        "sources": "FFR"
+      }
+    },
+    {
+      "id": "LAY-57",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "화면 전체를 덮는 스크롤 영역(`common.scrolling_panel`)은 내용이 비어 있어도 그 영역의 터치를 가져갔다. `$screen_content`에 늘 두자 다른 폼의 바닐라 버튼과 닫기 버튼이 눌리지 않고 스크롤만 됐다. 스크롤 영역은 그것을 쓰는 폼에서만 만들거나 보이게 한다.",
+        "sources": "FFR"
+      },
+      "en": {
+        "text": "A scroll area covering the whole screen (`common.scrolling_panel`) took over touches of that area even when its content was empty. When it was always placed in `$screen_content`, the vanilla buttons and close button of other forms could not be pressed and only scrolling worked. Create or show a scroll area only in the form that uses it.",
+        "sources": "FFR"
+      }
+    },
+    {
+      "id": "LAY-58",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "글자와 그 아래 바탕의 조상 레이어 합이 같으면 바탕이 글자를 덮을 수 있다. 상자 화면 갤러리에서 PlayerList 이름(합 14), Badge 숫자(합 38), NumberInput 값이 보이지 않았고, 모두 레이어 합이 같은 바탕 위에 있었다. 글자 레이어를 올리자 보였다. 같은 합이면 늘 덮는지는 따로 떼어 시험하지 않았다(*추론*). 글자는 바탕보다 합이 크게 둔다. 구성은 [InvUI로 기본 컴포넌트 구현하기](../design/invui/ddui/basic-components.mdx).",
+        "sources": "IUC"
+      },
+      "en": {
+        "text": "When a label and the fill under it have the same ancestor layer sum, the fill can cover the label. In the chest screen gallery the PlayerList names (sum 14), the Badge counts (sum 38) and the NumberInput value did not show, and each sat on a fill with the same layer sum. Raising the label layer made them show. Whether an equal sum always covers was not tested on its own (*inference*). Give text a larger sum than its fill. The setup is in [Building basic components with InvUI](../design/invui/ddui/basic-components.mdx).",
+        "sources": "IUC"
+      }
+    },
+    {
+      "id": "LAY-59",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "일반 `panel`의 `100%c`도 보이는 자식 크기의 합이다. 자식 30x10, 50x20과 숨긴 40x40을 둔 패널은 80x30이었다. 자식이 겹쳐 놓여도 범위가 아니라 합이므로, 가장 큰 자식에 맞추려면 `100%cm`을 쓴다(LAY-52). 2026-11-24에 자식 30x10, 50x20을 둔 `[\"100%c\", \"100%c\"]` 패널도 80x30이었다. Windows 1.26.65.1 코드에서 그리드가 아닌 모든 타입의 `%c`는 자식마다 \"계수 x 자식 크기\" 항을 더하고(그리드는 차원 x 템플릿 크기), 숨은 자식(JSON `visible` 거짓, 바인딩으로 숨김)은 크기 노드가 0이라 합에서 빠진다.",
+        "sources": "NB, 2026-11-20 Windows 1.26.65.1, 2026-11-24 Windows 1.26.65.1 실측과 역컴파일"
+      },
+      "en": {
+        "text": "The `100%c` of a plain `panel` is also the sum of the sizes of its visible children. A panel with children of 30x10 and 50x20 and a hidden 40x40 was 80x30. Even when children overlap it is a sum, not an extent, so use `100%cm` to fit the largest child (LAY-52). On 2026-11-24 a `[\"100%c\", \"100%c\"]` panel with children 30x10 and 50x20 was also 80x30. In the Windows 1.26.65.1 code, `%c` of every non-grid type adds a \"coefficient x child size\" term per child (a grid uses dimensions x template size), and hidden children (JSON `visible` false, hidden by a binding) have a size node of 0 and drop out of the sum.",
+        "sources": "NB, 2026-11-20 Windows 1.26.65.1, 2026-11-24 Windows 1.26.65.1 measurement and decompilation"
+      }
+    },
+    {
+      "id": "LAY-60",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "`anchor_to`를 생략하면 `center`다. `anchor_from: \"bottom_right\"`만 준 컨트롤은 자기 가운데가 부모의 오른쪽 아래 점에 놓였다. 모서리에 붙이려면 `anchor_to`도 같은 이름으로 적는다(LAY-45).",
+        "sources": "NB, 2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "An omitted `anchor_to` is `center`. A control given only `anchor_from: \"bottom_right\"` had its own center on the parent's bottom right point. To attach a corner, write `anchor_to` with the same name too (LAY-45).",
+        "sources": "NB, 2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-61",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "크기 값은 배열이어야 한다. `\"size\": 20`처럼 배열이 아닌 값은 두 축 모두 `default`가 되어 패널이 부모 100%였다. 두 축을 같은 값으로 두려면 `[20, 20]`으로 쓴다.",
+        "sources": "NB, 2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "A size value must be an array. A non-array value such as `\"size\": 20` makes both axes `default`, and the panel was 100% of the parent. To give both axes the same value, write `[20, 20]`.",
+        "sources": "NB, 2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-62",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "`min_size`와 `max_size`에도 `%c` 같은 자식 기준 항을 쓸 수 있다. `\"min_size\": [\"100%c\", 0]`인 컨트롤에 폭 30 자식을 두자 폭이 30이었다.",
+        "sources": "NB, 2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "`min_size` and `max_size` also accept child-based terms such as `%c`. A control with `\"min_size\": [\"100%c\", 0]` and a 30-wide child was 30 wide.",
+        "sources": "NB, 2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-63",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "크기 문자열에서 공백은 구분자가 아니고, 항을 만든 뒤에도 마지막 숫자가 남아 다음 단위에 다시 쓰인다. 폭 100 부모 안에서 `\"50px%\"`와 `\"50px %\"`는 둘 다 50px + 50%인 100이었고, `\"10px px\"`는 20이었다. 단위마다 숫자를 적는다(LAY-34, LAY-35).",
+        "sources": "NB, 2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "In a size string a space is not a separator, and the last number remains after a term is made and is reused by the next unit. In a 100-wide parent, `\"50px%\"` and `\"50px %\"` were both 50px + 50%, which is 100, and `\"10px px\"` was 20. Write a number for every unit (LAY-34, LAY-35).",
+        "sources": "NB, 2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-64",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "`%cm`은 계수(LAY-37)와 함께 부호도 무시한다. 폭 20 자식을 둔 `\"50px - 100%cm\"`은 70이었다. `%cm` 항은 앞에 `-`를 붙여도 더해진다.",
+        "sources": "NB, 2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "`%cm` ignores the sign as well as the coefficient (LAY-37). `\"50px - 100%cm\"` with a 20-wide child was 70. A `%cm` term is added even with a `-` in front of it.",
+        "sources": "NB, 2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-65",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "스택 진행 축에 `fill` 자식이 여럿이면 남은 공간을 똑같이 나눈다. 폭 100 가로 스택에 고정 20 자식과 `fill` 자식 둘을 두자 `fill` 자식은 40, 40이었다.",
+        "sources": "CN, 2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "Several `fill` children on a stack's main axis split the remaining space equally. In a 100-wide horizontal stack with a fixed 20 child and two `fill` children, the `fill` children were 40 and 40.",
+        "sources": "CN, 2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-66",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "스택 `orientation`은 소문자 `horizontal`, `vertical`만 읽는다. `\"Horizontal\"`처럼 대소문자가 다르거나 모르는 값이면 세로로 쌓였다.",
+        "sources": "NB, 2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "A stack's `orientation` reads only the lowercase `horizontal` and `vertical`. A value with different case such as `\"Horizontal\"`, or an unknown value, stacked vertically.",
+        "sources": "NB, 2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-67",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "`layer`는 정수로만 읽는다. `\"layer\": \"5\"`처럼 문자열로 쓰면 레이어 0이 된다.",
+        "sources": "NB, 2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "`layer` is read only as an integer. Writing it as a string such as `\"layer\": \"5\"` gives layer 0.",
+        "sources": "NB, 2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-68",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "`allow_clipping`을 생략하면 부모의 값을 물려받는다(부모가 없으면 true). 그래서 `allow_clipping: false`인 컨트롤은 부모의 `clips_children` 밖으로 그려지고, 그 자식도 따로 적지 않으면 함께 밖으로 그려졌다. 코드에서는 명시한 값을 따르므로 자손을 다시 자르려면 그 자손에 `allow_clipping: true`를 적는다(LAY-22).",
+        "sources": "NB, 2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "An omitted `allow_clipping` inherits the parent's value (true without a parent). So a control with `allow_clipping: false` draws outside the parent's `clips_children`, and its children, unless they set it themselves, drew outside too. The code follows an explicit value, so to clip a descendant again, write `allow_clipping: true` on that descendant (LAY-22).",
+        "sources": "NB, 2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-69",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "`inherit_max_sibling_width: true`인 컨트롤은 너비를 계산한 뒤, 자기 너비와 부모의 모든 자식(자기 포함) 중 레이아웃이 있는 것의 너비 가운데 가장 큰 값으로 바뀐다. `inherit_max_sibling_height`는 높이 축에서 같다. 둘 다 모든 컨트롤이 읽는 불리언이고 기본은 거짓이다. 보이기 검사는 없지만 숨은 형제는 크기 노드가 0이라 영향이 없다. 결과에 `min_size`/`max_size`를 다시 거는지, 형제 둘이 모두 켰을 때 몇 번 도는지는 모른다.",
+        "sources": "2026-11-24 Windows 1.26.65.1 역컴파일"
+      },
+      "en": {
+        "text": "A control with `inherit_max_sibling_width: true` computes its width and then takes the largest of its own width and the widths of all the parent's children (itself included) that have a layout. `inherit_max_sibling_height` does the same on the height axis. Both are booleans read by every control and default to false. There is no visibility check, but a hidden sibling has a size node of 0 and has no effect. Whether `min_size`/`max_size` is applied again to the result, and how many passes run when two siblings both turn it on, is unknown.",
+        "sources": "2026-11-24 Windows 1.26.65.1 decompilation"
+      }
+    },
+    {
+      "id": "LAY-70",
+      "level": [
+        "code",
+        "inferred"
+      ],
+      "ko": {
+        "text": "`screen_not_flushable`은 `type: screen` 컨트롤만 읽는 불리언이고 기본은 거짓이다. 값은 화면 컴포넌트의 비트로 저장되고 화면의 getter가 그 비트를 돌려주지만, 그 getter를 부르는 화면 스택 쪽 코드는 찾지 못했다. 이름으로 보아 화면 스택을 한꺼번에 비울 때(flush) 이 화면을 남기는 표시로 보이나, 효과는 추론이다.",
+        "sources": "2026-11-24 Windows 1.26.65.1 역컴파일"
+      },
+      "en": {
+        "text": "`screen_not_flushable` is a boolean read only by `type: screen` controls and defaults to false. The value is stored as a bit of the screen component and a screen getter returns that bit, but the screen stack code that calls the getter was not found. From the name it looks like a mark that keeps this screen when the screen stack is flushed all at once, but the effect is inferred.",
+        "sources": "2026-11-24 Windows 1.26.65.1 decompilation"
+      }
+    },
+    {
+      "id": "LAY-71",
+      "level": [
+        "measured",
+        "code",
+        "inferred"
+      ],
+      "ko": {
+        "text": "마우스 휠 한 칸에 스크롤 뷰가 움직이는 거리는 뷰 크기와 무관한 상수다. 코드에서 스크롤 뷰는 휠 이벤트를 받으면 새 위치 = 현재 위치 + (-`scroll_speed` x y)를 [0, 내용 - 뷰포트]로 잘라 애니메이션 없이 바로 옮기고, 이 이벤트를 만드는 곳에는 뷰 크기를 곱하는 항이 없다. `scroll_speed`는 함수의 정적 변수에 처음 한 번만 저장되므로, 처음 휠을 받은 스크롤 뷰의 값이 그 뒤 모든 스크롤 뷰에 쓰인다. y는 화면의 `vertical_scroll_delta`(숫자가 아니면 20, 정수로 자름)로 보여 한 칸 = `scroll_speed` x `vertical_scroll_delta`라고 추론했다. 바닐라 `common.scrolling_panel`의 `scroll_speed` 15(`ui_common.json:4435`)에 기본 20을 곱하면 300이고, 이는 측정 조건이 기록되지 않은 값 \"약 300 px\"과 맞는다. 그러나 Windows 1.26.65.1 실측과는 맞지 않는다: 바닐라 채팅의 `messages_scrolling_panel`(내용 5646 px, 뷰포트 810 px, GUI 배율 4)에서 휠 한 칸에 내용이 56 ~ 57 클라이언트 px(GUI 약 14)씩 움직였고 아래로 한 칸은 -56이었다. 그래서 15 x 20 = 300이라는 추론은 이 실측으로 뒷받침되지 않고, 한 칸 값의 단위(GUI 14인지, 다른 배율이 곱해진 15인지)는 모른다. 화면 `chat_screen`에 `vertical_scroll_delta: 40`을 병합하고 다시 열어도 한 칸 거리는 같았지만, 그 병합이 실제 화면 컨트롤에 들어갔는지는 확인하지 못했다(로그에 관련 줄 없음). 휠 입력에서 이 이벤트까지의 호출 경로는 찾지 못했다.",
+        "sources": "2026-11-24 Windows 1.26.65.1 역컴파일, VN ui_common.json:4435, 2026-11-25 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "The distance a scroll view moves for one mouse wheel step is a constant independent of the view size. In the code, a scroll view that gets a wheel event clamps new position = current position + (-`scroll_speed` x y) to [0, content - viewport] and moves there at once without animation, and the place that creates this event has no term that multiplies by the view size. `scroll_speed` is stored only once in a static variable of the function, so the value of the first scroll view that gets a wheel event is used for every scroll view after that. y looks like the screen's `vertical_scroll_delta` (20 if not a number, truncated to an integer), so one step = `scroll_speed` x `vertical_scroll_delta` was inferred. The vanilla `common.scrolling_panel` `scroll_speed` of 15 (`ui_common.json:4435`) times the default 20 gives 300, which matches the figure \"about 300 px\" whose measurement conditions are not recorded. It does not match the Windows 1.26.65.1 measurement: in the vanilla chat `messages_scrolling_panel` (content 5646 px, viewport 810 px, GUI scale 4) one wheel step moved the content by 56 to 57 client px (about 14 GUI), and one step down was -56. So the 15 x 20 = 300 inference is not supported by this measurement, and the unit of the step value (14 GUI, or 15 with another scale applied) is unknown. After merging `vertical_scroll_delta: 40` into the screen `chat_screen` and reopening it, the step distance was the same, but whether the merge reached the actual screen control was not confirmed (no related log line). The call path from wheel input to this event was not found.",
+        "sources": "2026-11-24 Windows 1.26.65.1 decompilation, VN ui_common.json:4435, 2026-11-25 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-44",
+      "status": "proposed",
+      "level": [
+        "vanilla"
+      ],
+      "ko": {
+        "text": "크기·위치 식에는 `+`와 `-`만 쓴다. 바닐라 크기 문자열 551종(12,806회, 재집계 원소 12,712개)에 `*`, `/`는 한 번도 없고, Mojang은 비율 계산을 주석으로 해 둔 뒤 결과 계수를 적는다(`store_common.json:5870`의 `\"34.628%x + 2px\"`, `store_search_screen.json:64` 주석). 소수 계수(`56.25%x`, `1.1249px`)와 음수 항(`\"-50% + 10px\"`)은 쓴다. 실측 과제: 크기 식에 `*`를 쓰면(`\"50% * 2\"`) 무시되는지 오류인지.",
+        "sources": "jua-jsonui-schemas, bedrock-samples"
+      },
+      "en": {
+        "text": "Use only `+` and `-` in size and position expressions. The 551 kinds of vanilla size strings (12,806 uses, 12,712 elements on recount) never have `*` or `/`, and Mojang does ratio calculations in a comment and then writes the resulting coefficient (`\"34.628%x + 2px\"` in `store_common.json:5870`, a comment in `store_search_screen.json:64`). Decimal coefficients (`56.25%x`, `1.1249px`) and negative terms (`\"-50% + 10px\"`) are used. Measurement task: whether using `*` in a size expression (`\"50% * 2\"`) is ignored or an error.",
+        "sources": "jua-jsonui-schemas, bedrock-samples"
+      }
+    },
+    {
+      "id": "LAY-45",
+      "status": "proposed",
+      "level": [
+        "vanilla",
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "`anchor_from`과 `anchor_to`는 함께 적는다. 바닐라는 2,997곳 중 2,985곳(99.6%)에서 둘 다 적고 그중 106곳은 서로 다르다(하나만 적은 곳 12곳, 각 6). 생략한 쪽은 `center`다(LAY-60, Windows 1.26.65.1 실측). JsonForge·Cinnabar의 `center` 가정이 게임과 같고, `anchor_to`가 `anchor_from`과 같다고 보는 w1zardz 편집기의 가정은 게임과 다르다.",
+        "sources": "jua-jsonforge, jua-bedrock-json-ui-editor, jua-cinnabar, bedrock-samples, 2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "Write `anchor_from` and `anchor_to` together. Vanilla writes both in 2,985 of 2,997 places (99.6%), and in 106 of those they differ from each other (12 places write only one, 6 each). An omitted side is `center` (LAY-60, measured on Windows 1.26.65.1). The `center` assumption of JsonForge and Cinnabar matches the game, and the w1zardz editor's assumption that `anchor_to` equals `anchor_from` differs from the game.",
+        "sources": "jua-jsonforge, jua-bedrock-json-ui-editor, jua-cinnabar, bedrock-samples, 2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-46",
+      "status": "proposed",
+      "level": ["vanilla", "measured", "unverified"],
+      "ko": {
+        "text": "`\"100%c\"` 부모 안의 자식에 같은 축 `%` 크기를 주지 않는다. 자식 크기가 부모를, 부모 크기가 자식을 정하는 순환이 되어 아무것도 그려지지 않는다는 도구 저자의 기록이 있다. Windows 1.26.65.1 실측에서는 부모 폭과 `\"50%\"` 자식 폭이 0이 됐지만 고정 크기 형제(40x10)는 그대로 그려졌다. \"아무것도 그려지지 않는다\"는 고정 크기 자식에는 틀리다([주장 실측](../design/json-ui-claims.mdx)). 내용 패널의 자식은 픽셀이나 `default`로 준다. 병합 기록은 근거를 엔진 코드가 아니라 편집기 저자의 주석으로 보고 수준을 `바닐라, 미검증`(바닐라 0/1,972 집계가 근거)으로 낮췄다. 같은 병합에서 LAY-17에 \"오른쪽·아래 앵커여도 축은 뒤집히지 않는다\"는 보강(C-49 해소)이 함께 제안되었다: 바닐라 206개 파일 분포에서 오른쪽 앵커 x는 음수 104 대 양수 37, 아래 앵커 y는 음수 190 대 양수 45이고 `common.close_button`이 `top_right` 앵커에 `[-2, 2]`를 쓴다(`ui_common.json:3239-3246`).",
+        "sources": "jua-jsonforge, bedrock-samples"
+      },
+      "en": {
+        "text": "Do not give a child inside a `\"100%c\"` parent a `%` size on the same axis. The child size decides the parent and the parent size decides the child, making a cycle where nothing is drawn, according to a record by a tool author. Measured on Windows 1.26.65.1, the parent width and the `\"50%\"` child width became 0, but a fixed-size sibling (40x10) was still drawn. \"Nothing is drawn\" is wrong for fixed-size children ([claim measurements](../design/json-ui-claims.mdx)). Give children of a content panel pixels or `default`. The merge record treated the evidence as a comment by the editor author, not engine code, and lowered the level to `vanilla, unverified` (the basis is the vanilla 0/1,972 tally). In the same merge, a reinforcement to LAY-17, \"the axis is not flipped even for right and bottom anchors\" (C-49 resolved), was proposed together: in the distribution over 206 vanilla files, right-anchor x is negative 104 to positive 37 and bottom-anchor y is negative 190 to positive 45, and `common.close_button` uses `[-2, 2]` with a `top_right` anchor (`ui_common.json:3239-3246`).",
+        "sources": "jua-jsonforge, bedrock-samples"
+      }
+    },
+    {
+      "id": "LAY-47",
+      "status": "proposed",
+      "level": [
+        "vanilla",
+        "unverified"
+      ],
+      "ko": {
+        "text": "화면의 UI 픽셀 크기는 고정값이 아니다. 창 크기와 GUI 배율에 따라 달라지고 시각 편집기들도 서로 다른 값을 가정한다(w1zardz 427×240·520×240·320×240, JsonForge 384×216). 고정 px는 정수 배율을 곱해 그려지고, 바닐라 레이아웃은 최소 가상 화면을 포켓 320×210, 데스크톱 376×250으로 가정한다(`ui_common.json:6380`, `6430` 주석). 최상위 창을 이 크기 안에 두면 어떤 해상도에서도 잘리지 않는다. 화면 가장자리에 붙는 요소는 해당 모서리 앵커와 작은 픽셀 offset으로 놓는다. 단 1.26.0에서 배율 체계가 바뀌어(최소 배율은 최대의 절반, 휴대 기기는 DPI 기반) 배율 계산식 자체는 1.26.50에서 다시 확인해야 한다(MS Learn Update1.26.0).",
+        "sources": "jua-netease-docs, ms-learn, jua-bedrock-json-ui-editor, jua-jsonforge"
+      },
+      "en": {
+        "text": "The UI pixel size of a screen is not a fixed value. It varies with window size and GUI scale, and visual editors also assume different values (w1zardz 427x240, 520x240, 320x240, JsonForge 384x216). Fixed px are drawn multiplied by an integer scale, and vanilla layouts assume minimum virtual screens of pocket 320x210 and desktop 376x250 (comments at `ui_common.json:6380` and `6430`). If you keep the top-level window within this size it is not cut off at any resolution. Elements attached to the screen edge are placed with the corresponding corner anchor and a small pixel offset. But the scale system changed in 1.26.0 (the minimum scale is half the maximum, and handheld devices are DPI based), so the scale calculation itself must be rechecked in 1.26.50 (MS Learn Update1.26.0).",
+        "sources": "jua-netease-docs, ms-learn, jua-bedrock-json-ui-editor, jua-jsonforge"
+      }
+    },
+    {
+      "id": "LAY-48",
+      "status": "proposed",
+      "level": [
+        "vanilla"
+      ],
+      "ko": {
+        "text": "`common.scrolling_panel`은 `$touch`에 따라 `scroll_touch`(터치)와 `scroll_mouse`(마우스) 하위 트리 중 하나만 만든다(`ui_common.json:4718-4750`). 스크롤 내용까지의 경로와 크기 변수(`_touch` 짝)가 입력 모드마다 다르므로, 경로 키나 `source_control_name`으로 스크롤 안을 가리키면 두 경로를 다 고려하거나 인스턴스에 `\"$touch\": true`를 넘겨 한쪽으로 고정한다(`resource_packs_screen.json:2685`도 그렇게 한다).",
+        "sources": "jua-netease-docs, bedrock-samples"
+      },
+      "en": {
+        "text": "`common.scrolling_panel` creates only one of the `scroll_touch` (touch) and `scroll_mouse` (mouse) subtrees depending on `$touch` (`ui_common.json:4718-4750`). The path to the scroll content and the size variables (the `_touch` pair) differ per input mode, so when pointing inside a scroll with path keys or `source_control_name`, consider both paths or pin one side by passing `\"$touch\": true` to the instance (`resource_packs_screen.json:2685` does the same).",
+        "sources": "jua-netease-docs, bedrock-samples"
+      }
+    },
+    {
+      "id": "LAY-49",
+      "status": "proposed",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "`#anchored_offset_value_x/y`는 `use_anchored_offset: true`인 컨트롤에서 값 곱하기 부모 크기만큼 앵커 방향으로 민다. `anchor_from`이 `center`면 효과가 없다. 정적 컨트롤에서 쓰려면 모서리·가장자리 앵커를 준다. Windows 1.26.65.1 실측에서 폭 100 부모 안 정적 패널에 `top_left`로 10을 주자 x가 1000 이동했고, `bottom_left`로 .1을 주자 10 이동했다. `center`와 `use_anchored_offset` 없음은 움직이지 않았다([주장 실측](../design/json-ui-claims.mdx)). 가장자리 앵커는 재지 않았다. 충돌 C-61.",
+        "sources": "jua-cinnabar, jua-json-ui-examples, jua-bedrock-core, 2026-11-18 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "`#anchored_offset_value_x/y` pushes in the anchor direction by value times the parent size on a control with `use_anchored_offset: true`. It has no effect if `anchor_from` is `center`. To use it on a static control, give a corner or edge anchor. Measured on Windows 1.26.65.1, a static panel in a 100-wide parent moved x by 1000 with `top_left` and 10, and by 10 with `bottom_left` and .1. `center` and no `use_anchored_offset` did not move it ([claim measurements](../design/json-ui-claims.mdx)). Edge anchors were not measured. Conflict C-61.",
+        "sources": "jua-cinnabar, jua-json-ui-examples, jua-bedrock-core, 2026-11-18 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "LAY-50",
+      "status": "proposed",
+      "level": [
+        "code",
+        "unverified",
+        "conflict"
+      ],
+      "ko": {
+        "text": "엔진 컬렉션 그리드(`hotbar_items` 등)를 다른 모양으로 그릴 때는 바닐라 정의를 복사하면서 `grid_dimension_binding` 속성 자체를 지우고 `grid_dimensions`를 고정한다. `bindings`만 비우면 Cinnabar 모델에서는 차원 바인딩이 자동으로 다시 붙는다. 충돌 C-62.",
+        "sources": "jua-cinnabar, jua-json-ui-examples, bedrock-samples"
+      },
+      "en": {
+        "text": "When drawing an engine collection grid (`hotbar_items`, etc.) in another shape, copy the vanilla definition while removing the `grid_dimension_binding` property itself and fixing `grid_dimensions`. Just emptying `bindings` makes the dimension binding automatically reattach in the Cinnabar model. Conflict C-62.",
+        "sources": "jua-cinnabar, jua-json-ui-examples, bedrock-samples"
+      }
+    }
+  ]
+}

@@ -1,0 +1,740 @@
+{
+  "prefix": "FILE",
+  "slug": "files-and-definitions",
+  "page": "json-ui/files-and-definitions",
+  "title": {
+    "ko": "파일과 정의",
+    "en": "Files and definitions"
+  },
+  "rules": [
+    {
+      "id": "FILE-01",
+      "level": [
+        "vanilla",
+        "pack"
+      ],
+      "ko": {
+        "text": "새 UI 파일은 `ui/_ui_defs.json`의 `ui_defs` 배열에 경로를 등록해야 로드된다. 바닐라와 같은 경로의 파일(`ui/hud_screen.json` 등)은 바닐라가 이미 등록했으므로 다시 등록하지 않는다.",
+        "sources": "VN _ui_defs.json, AP-samples _ui_defs.json, BA, BW-intro"
+      },
+      "en": {
+        "text": "A new UI file is loaded only when its path is registered in the `ui_defs` array of `ui/_ui_defs.json`. Files at the same path as vanilla (`ui/hud_screen.json`, etc.) are already registered by vanilla, so they are not registered again.",
+        "sources": "VN _ui_defs.json, AP-samples _ui_defs.json, BA, BW-intro"
+      }
+    },
+    {
+      "id": "FILE-02",
+      "level": [
+        "pack"
+      ],
+      "ko": {
+        "text": "등록한 파일의 확장자는 `.json`이 아니어도 로드된다(예: `ui/adv/_screen.r4ui`).",
+        "sources": "AP 4.9, BW-intro"
+      },
+      "en": {
+        "text": "A registered file is loaded even if its extension is not `.json` (for example `ui/adv/_screen.r4ui`).",
+        "sources": "AP 4.9, BW-intro"
+      }
+    },
+    {
+      "id": "FILE-03",
+      "level": [
+        "vanilla",
+        "pack"
+      ],
+      "ko": {
+        "text": "UI 파일은 `//`, `/* */` 주석을 허용하는 JSON이다.",
+        "sources": "VN 모든 파일 머리 주석, AP-samples"
+      },
+      "en": {
+        "text": "A UI file is JSON that allows `//` and `/* */` comments.",
+        "sources": "VN header comments of all files, AP-samples"
+      }
+    },
+    {
+      "id": "FILE-04",
+      "level": [
+        "vanilla",
+        "pack"
+      ],
+      "ko": {
+        "text": "`ui/_global_variables.json`은 등록 없이 자동으로 로드되고, 여기 정의한 `$변수`는 모든 파일에서 쓸 수 있다. 바닐라도 `_ui_defs.json`에 이 파일을 등록하지 않는다.",
+        "sources": "VN _ui_defs.json·_global_variables.json, AP, MJ 5장, BW-intro"
+      },
+      "en": {
+        "text": "`ui/_global_variables.json` is loaded automatically without registration, and `$variables` defined there can be used in all files. Vanilla also does not register this file in `_ui_defs.json`.",
+        "sources": "VN _ui_defs.json and _global_variables.json, AP, MJ chapter 5, BW-intro"
+      }
+    },
+    {
+      "id": "FILE-05",
+      "level": [
+        "pack",
+        "inferred"
+      ],
+      "ko": {
+        "text": "새 파일은 `\"namespace\": \"이름\"`을 하나 가진다. 바닐라와 같은 경로의 병합용 파일은 namespace를 생략해도 바닐라의 namespace로 동작한다. 검사 도구가 이를 오류로 잡는 것은 오탐이다.",
+        "sources": "AP-samples hud_screen.json, MJ 5장"
+      },
+      "en": {
+        "text": "A new file has one `\"namespace\": \"name\"`. A merging file at the same path as vanilla works with vanilla's namespace even if the namespace is omitted. A checking tool flagging this as an error is a false positive.",
+        "sources": "AP-samples hud_screen.json, MJ chapter 5"
+      }
+    },
+    {
+      "id": "FILE-06",
+      "level": [
+        "vanilla"
+      ],
+      "ko": {
+        "text": "`\"이름@namespace.기반\": { … }`은 `기반`을 상속해 새 정의를 만들고 속성을 덮어쓴다. 같은 파일 안의 정의는 namespace 없이 `@기반`으로도 참조한다.",
+        "sources": "VN 전반"
+      },
+      "en": {
+        "text": "`\"name@namespace.base\": { … }` inherits `base` to make a new definition and overrides properties. A definition in the same file can also be referenced as `@base` without a namespace.",
+        "sources": "VN throughout"
+      }
+    },
+    {
+      "id": "FILE-07",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "다른 파일의 정의는 `namespace.이름`으로 참조한다. 정의 위치는 그 정의를 소유한 **파일**로 정해지므로, 같은 namespace라도 다른 파일에 같은 이름을 쓰면 다른 정의로 취급된다.",
+        "sources": "BC-facts"
+      },
+      "en": {
+        "text": "A definition in another file is referenced as `namespace.name`. The location of a definition is decided by the **file** that owns it, so writing the same name in another file is treated as a different definition even in the same namespace.",
+        "sources": "BC-facts"
+      }
+    },
+    {
+      "id": "FILE-08",
+      "level": [
+        "vanilla",
+        "measured"
+      ],
+      "ko": {
+        "text": "컨트롤 배열 안의 항목 `{ \"자식이름@ns.정의\": { …덮어쓸 속성… } }`이 **인스턴스화 지점**이다. `collection_index`처럼 인스턴스화 지점에서만 받는 속성이 있다(컬렉션과 팩토리 장).",
+        "sources": "VN, BC-facts"
+      },
+      "en": {
+        "text": "An item `{ \"childname@ns.definition\": { …properties to override… } }` inside a control array is the **instantiation point.** There are properties received only at the instantiation point, like `collection_index` (collections and factories chapter).",
+        "sources": "VN, BC-facts"
+      }
+    },
+    {
+      "id": "FILE-09",
+      "level": [
+        "vanilla"
+      ],
+      "ko": {
+        "text": "`$이름`이 변수다. 정의 안에 `\"$x\": 값`으로 두거나 참조 지점에서 넘긴다. `\"$x|default\": 값`은 위(참조 지점)에서 넘기지 않았을 때만 쓰는 기본값이다.",
+        "sources": "VN `|default` 3,419회"
+      },
+      "en": {
+        "text": "`$name` is a variable. Put it inside a definition as `\"$x\": value` or pass it at the reference point. `\"$x|default\": value` is the default used only when it was not passed from above (the reference point).",
+        "sources": "VN `|default` 3,419 uses"
+      }
+    },
+    {
+      "id": "FILE-10",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "일반 속성의 변수 치환은 **값 전체가 변수일 때만** 된다. `\"text\": \"$title\"`은 되고 `\"text\": \"제목: $title\"`은 `$`가 그대로 찍힌다. 조합이 필요하면 변수 식을 쓴다(FILE-11).",
+        "sources": "BC-facts"
+      },
+      "en": {
+        "text": "Variable substitution in an ordinary property works **only when the whole value is a variable.** `\"text\": \"$title\"` works, but in `\"text\": \"Title: $title\"` the `$` is printed as is. If you need a combination, use a variable expression (FILE-11).",
+        "sources": "BC-facts"
+      }
+    },
+    {
+      "id": "FILE-11",
+      "level": [
+        "vanilla",
+        "pack"
+      ],
+      "ko": {
+        "text": "변수 값에는 괄호 식을 쓸 수 있다. 바닐라는 이것으로 바인딩 이름, 텍스처 경로, 컨트롤 이름을 조립한다. 예: `\"$toggle_state_binding_name\": \"('#' + $dropdown_name)\"`.",
+        "sources": "VN ui_common.json:1126, AP 4.3·4.9"
+      },
+      "en": {
+        "text": "A variable value can be a parenthesized expression. Vanilla assembles binding names, texture paths and control names with it. Example: `\"$toggle_state_binding_name\": \"('#' + $dropdown_name)\"`.",
+        "sources": "VN ui_common.json:1126, AP 4.3 and 4.9"
+      }
+    },
+    {
+      "id": "FILE-12",
+      "level": [
+        "vanilla",
+        "measured",
+        "code"
+      ],
+      "ko": {
+        "text": "엔진이 미리 넣어 주는 변수가 있다. 예: `$education_edition`, `$is_ps4`, `$pre_release`(플랫폼·빌드), 상자 화면의 `$container_title`, HUD 팩토리가 만드는 컨트롤의 `$actionbar_text`·`$title_fade_in_time`. 모든 화면이 받는 전역 이름은 88개이고 화면 전용 이름이 따로 있다. 서버 폼과 NPC 화면은 전역 88개만 받고 화면 전용 이름이 없다(1.11절).",
+        "sources": "VN ignored 사용 상위 값, VN hud_screen.json:2158·2170, BC-facts, 2026-11-20 Windows 1.26.65.1 역컴파일"
+      },
+      "en": {
+        "text": "There are variables the engine puts in beforehand. Examples: `$education_edition`, `$is_ps4`, `$pre_release` (platform and build), `$container_title` of the chest screen, and `$actionbar_text` and `$title_fade_in_time` of controls created by HUD factories. Every screen receives 88 global names, and screen-only names exist separately. The server form and NPC screens receive only the 88 global names and have no screen-only names (section 1.11).",
+        "sources": "VN top values used in ignored, VN hud_screen.json:2158 and 2170, BC-facts, 2026-11-20 Windows 1.26.65.1 decompilation"
+      }
+    },
+    {
+      "id": "FILE-13",
+      "level": [
+        "vanilla",
+        "pack"
+      ],
+      "ko": {
+        "text": "`variables` 배열의 각 항목은 `\"requires\": \"<$변수 식>\"`이 참일 때 그 항목의 변수를 적용한다. 배열 대신 **단일 객체**로 써도 된다.",
+        "sources": "VN 배열 274회·객체 4회 예 realms_settings_screen.json:2557, AP 4.6, BW-doc"
+      },
+      "en": {
+        "text": "Each item of the `variables` array applies that item's variables when `\"requires\": \"<$variable expression>\"` is true. You may also write a **single object** instead of an array.",
+        "sources": "VN arrays 274 and objects 4 uses, for example realms_settings_screen.json:2557, AP 4.6, BW-doc"
+      }
+    },
+    {
+      "id": "FILE-14",
+      "level": [
+        "vanilla",
+        "pack"
+      ],
+      "ko": {
+        "text": "컨트롤 배열도 변수로 넘길 수 있다: `\"controls\": \"$target_control\"`. 템플릿에 \"자식 슬롯\"을 만드는 방법이다.",
+        "sources": "VN 14회 예 persona_cast_character_screen.json:14, AP 4.2, BW-intro"
+      },
+      "en": {
+        "text": "A control array can also be passed as a variable: `\"controls\": \"$target_control\"`. It is a way to make a \"child slot\" in a template.",
+        "sources": "VN 14 uses, for example persona_cast_character_screen.json:14, AP 4.2, BW-intro"
+      }
+    },
+    {
+      "id": "FILE-15",
+      "level": [
+        "vanilla",
+        "pack",
+        "conflict"
+      ],
+      "ko": {
+        "text": "`\"자식@$변수\"`로 변수가 가리키는 정의를 마운트할 수 있다. 바닐라는 참조 지점에서 넘긴 변수로도 413회 쓴다(예: `content@$button_content`). 단 bedrock-core 상자 라우터의 한 구성(`$gate|default`를 선언한 호스트를 다른 `$gate`로 두 번 참조)에서는 아무것도 안 그려진 실측이 있다. 마운트가 안 되면 정의 이름을 직접 쓴다.",
+        "sources": "VN 413회, AP 4.8, BC-facts, 충돌 C-03, BW-intro"
+      },
+      "en": {
+        "text": "With `\"child@$variable\"` you can mount the definition the variable points to. Vanilla also uses it 413 times with a variable passed from the reference point (for example `content@$button_content`). But there is a measurement that nothing was drawn in one setup of the bedrock-core chest router (referencing a host that declares `$gate|default` twice with different `$gate`). If mounting fails, write the definition name directly.",
+        "sources": "VN 413 uses, AP 4.8, BC-facts, conflict C-03, BW-intro"
+      }
+    },
+    {
+      "id": "FILE-16",
+      "level": [
+        "vanilla",
+        "measured",
+        "code"
+      ],
+      "ko": {
+        "text": "`\"ignored\": \"<$변수 식>\"`이 참이면 그 컨트롤은 **아예 생성되지 않는다**(바인딩과 레이아웃 비용도 없음). 식에는 `$변수`만 쓰고 `#바인딩`은 쓸 수 없다. `ignored`는 그 컨트롤 자신의 `$` 선언이 아니라 바깥(부모) 스코프에서 평가된다(FILE-34).",
+        "sources": "VN 958회, BC-S8, BW-best, NB-10"
+      },
+      "en": {
+        "text": "If `\"ignored\": \"<$variable expression>\"` is true, that control is **not created at all** (there is no binding or layout cost either). Use only `$variables` in the expression, and `#binding`s cannot be used. `ignored` is evaluated in the outer (parent) scope, not in that control's own `$` declarations (FILE-34).",
+        "sources": "VN 958 uses, BC-S8, BW-best, NB-10"
+      }
+    },
+    {
+      "id": "FILE-17",
+      "level": [
+        "pack",
+        "measured",
+        "code",
+        "inferred"
+      ],
+      "ko": {
+        "text": "`ignored`는 컨트롤이 **생성되는 시점에 한 번** 평가된다. 그래서 런타임 데이터로 생성을 가르려면 데이터가 변수로 들어오는 경로가 필요하다. HUD 타이틀 팩토리(`hud_title_text_factory`)가 만든 컨트롤은 `$title_text`로 타이틀 문자열을, `$subtitle_text`로 부제목 문자열을 받으므로 `ignored`나 `variables`의 `requires`로 거를 수 있다. Windows 1.26.65.1에서 `requires`가 `$subtitle_text`를 비교해 블록을 골랐다(FILE-47). 일반 서버 폼 화면 안에는 그런 경로가 없어 생성 단위 분기에 팩토리 길이를 쓴다(컬렉션과 팩토리 장). 팩토리가 주는 변수는 만들어진 컨트롤의 바깥 스코프로 들어가므로 그 컨트롤의 최상위 `ignored`가 읽을 수 있다(FILE-34).",
+        "sources": "AP 4.1, BC-S8·S11, 충돌 C-17, CN, 2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "`ignored` is evaluated **once at the time the control is created.** So to split creation by runtime data, a route for the data to come in as a variable is needed. A control created by the HUD title factory (`hud_title_text_factory`) receives the title string as `$title_text` and the subtitle string as `$subtitle_text`, so it can be filtered with `ignored` or with the `requires` of `variables`. On Windows 1.26.65.1 a `requires` comparing `$subtitle_text` selected a block (FILE-47). Inside an ordinary server form screen there is no such route, so a factory length is used to branch at creation (collections and factories chapter). Variables the factory gives enter the outer scope of the created control, so the top-level `ignored` of that control can read them (FILE-34).",
+        "sources": "AP 4.1, BC-S8 and S11, conflict C-17, CN, 2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "FILE-18",
+      "level": [
+        "vanilla",
+        "pack"
+      ],
+      "ko": {
+        "text": "`button_mappings`의 항목 하나처럼 **배열 원소**에도 `ignored`를 붙일 수 있다.",
+        "sources": "VN gameplay_common.json:272, AP 4.3"
+      },
+      "en": {
+        "text": "`ignored` can also be attached to an **array element**, like one item of `button_mappings`.",
+        "sources": "VN gameplay_common.json:272, AP 4.3"
+      }
+    },
+    {
+      "id": "FILE-19",
+      "level": [
+        "pack",
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "`ignored`/`requires`의 변수 식에서 `$v > 'a'`는 문자열인지 판별하는 데 쓰였다. `$v > 0`은 숫자를 판별하지 못한다: 한쪽만 문자열인 `>`는 왼쪽이 참으로 읽히고 오른쪽이 거짓으로 읽히면 참이라, 비어 있지 않은 문자열도 참이다(Windows 1.26.65.1에서 `'abc' > 0`이 참). 그래서 아래 AP 원본의 `item_icon`은 `$icon`이 텍스처 경로여도 만들어진다. 숫자 쪽 칸은 `($icon > 'a')`가 참일 때 거른다(코드). `ignored`는 자기 `$` 선언과 참조 지점에서 받은 값을 보지 못하므로(FILE-34), 변수를 받는 컨트롤의 **자식**에 단다. 아래 예시가 AP 원본의 형태다.",
+        "sources": "AP 4.7, CN, AP-samples _screen.r4ui:321, 2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "In the variable expressions of `ignored`/`requires`, `$v > 'a'` was used to tell whether it is a string. `$v > 0` does not tell whether it is a number: a `>` with a string on only one side is true when the left reads as true and the right reads as false, so a non-empty string is also true (on Windows 1.26.65.1 `'abc' > 0` was true). So the `item_icon` of the AP original below is created even when `$icon` is a texture path. Filter the number-side cell when `($icon > 'a')` is true (code). `ignored` cannot see its own `$` declarations and values received at the reference point (FILE-34), so attach it to a **child** of the control that receives the variable. The example below is the form of the AP original.",
+        "sources": "AP 4.7, CN, AP-samples _screen.r4ui:321, 2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "FILE-20",
+      "level": [
+        "pack"
+      ],
+      "ko": {
+        "text": "바닐라와 같은 경로 파일에 `\"부모/자식/손자\": { … }`처럼 **경로 키**를 쓰면 바닐라의 깊은 컨트롤 속성만 덮어쓴다. 바닐라 자신은 이 문법을 쓰지 않는다(0회).",
+        "sources": "BA 2장 `main_screen_content/server_form_factory`, AP 4.9 `recipe_unlocked_popup/input_panel/label_panel/horizontal_padding_1`, BW-intro, BW-best"
+      },
+      "en": {
+        "text": "If you use a **path key** like `\"parent/child/grandchild\": { … }` in a file at the same path as vanilla, it overrides only the properties of a deep vanilla control. Vanilla itself does not use this syntax (0 uses).",
+        "sources": "BA chapter 2 `main_screen_content/server_form_factory`, AP 4.9 `recipe_unlocked_popup/input_panel/label_panel/horizontal_padding_1`, BW-intro, BW-best"
+      }
+    },
+    {
+      "id": "FILE-21",
+      "level": [
+        "pack",
+        "measured"
+      ],
+      "ko": {
+        "text": "바닐라와 같은 경로 파일에 바닐라와 같은 이름의 정의를 쓰면 **속성 단위로 합쳐진다**(적은 속성만 바뀐다). 예: `in_bed_screen`에 `force_render_below`, `screen_draws_last` 두 속성만 지정. 여러 팩이 같은 속성을 쓰면 팩 순서상 나중 것이 이긴다. Windows 1.26.65.1 실측에서 세 팩이 각자의 같은 경로 파일로 `server_form`의 `main_screen_content`에 `insert_back`을 하자 세 라우터가 모두 있었다(`modifications`는 쌓인다, [주장 실측](../design/json-ui-claims.mdx)). 같은 속성은 월드 팩 목록에서 위에 있는 팩이 이겼다: 두 팩이 같은 경로 `hud_screen.json`에서 `chat_grid_item/chat_background`의 `size`를 `\"50%\"`(아래 팩)와 `\"75%\"`(위 팩)로 주자 채팅 배경 폭이 570(부모 760의 75%)이었다. 게임이 들어갈 때 팩 순서를 자기 순서로 되돌려 반대 순서는 재지 못했다([기록](../design/json-ui-claims.mdx#63-상태-유지-지연-루트-팩-순서-렌더링)).",
+        "sources": "AP-samples in_bed_screen.json·toast_screen.json, BC 6.3-9, BW-best, 2026-11-18·2026-11-19 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "If you write a definition with the same name as vanilla in a same-path file, it is **merged per property** (only the properties written change). Example: specify only the two properties `force_render_below` and `screen_draws_last` on `in_bed_screen`. If several packs write the same property, the later one in pack order wins. Measured on Windows 1.26.65.1, three packs each did an `insert_back` into `main_screen_content` of `server_form` from their own same-path file, and all three routers existed (`modifications` accumulate, [claim measurements](../design/json-ui-claims.mdx)). On the same property the pack higher in the world pack list won: when two packs set `size` of `chat_grid_item/chat_background` to `\"50%\"` (lower pack) and `\"75%\"` (higher pack) in the same-path `hud_screen.json`, the chat background width was 570 (75% of the 760 parent). The game restored its own pack order on world entry, so the reverse order was not measured ([record](../design/json-ui-claims.mdx#63-state-holding-lazy-roots-pack-order-rendering)).",
+        "sources": "AP-samples in_bed_screen.json and toast_screen.json, BC 6.3-9, BW-best, 2026-11-18 and 2026-11-19 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "FILE-22",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "바닐라 정의를 다른 이름의 파일에서 재선언하면 무시된다. 재선언은 바닐라가 소유한 경로의 파일에서만 유효하다.",
+        "sources": "BC-facts"
+      },
+      "en": {
+        "text": "If you redeclare a vanilla definition in a file with a different name, it is ignored. A redeclaration is valid only in a file at a path vanilla owns.",
+        "sources": "BC-facts"
+      }
+    },
+    {
+      "id": "FILE-23",
+      "level": [
+        "vanilla",
+        "pack"
+      ],
+      "ko": {
+        "text": "`property_bag`은 `#속성`의 초기값을 넣어 둔다. 바인딩이 아직 값을 쓰지 않은 상태의 기본값, 렌더러 입력(`#item_id_aux`), 라우팅 사전(화면 호스트와 데이터 채널 장) 등에 쓴다.",
+        "sources": "VN 240회, AP 4.7, BC 4.1"
+      },
+      "en": {
+        "text": "`property_bag` holds initial values of `#property`. It is used for defaults before a binding has written a value, for renderer input (`#item_id_aux`), and for routing dictionaries (screen hosts and data channels chapter).",
+        "sources": "VN 240 uses, AP 4.7, BC 4.1"
+      }
+    },
+    {
+      "id": "FILE-24",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "`property_bag`에 넣은 `size`, `offset`, `alpha` 값은 적용되지 않는다. 이 셋은 바인딩만이 바꿀 수 있다.",
+        "sources": "BC-S12"
+      },
+      "en": {
+        "text": "The `size`, `offset` and `alpha` values put in `property_bag` are not applied. Only a binding can change these three.",
+        "sources": "BC-S12"
+      }
+    },
+    {
+      "id": "FILE-25",
+      "level": [
+        "unverified"
+      ],
+      "ko": {
+        "text": "`_ui_defs.json`의 경로는 리소스팩 루트부터 확장자까지 쓴 전체 경로다. 위키는 `ui/` 밖 폴더(`my_ui/main_menu.json`)도 된다고 한다. 바닐라와 이 프로젝트의 작동팩은 모두 `ui/` 아래만 쓰므로 `ui/` 밖은 확인하고 쓴다.",
+        "sources": "BW-intro"
+      },
+      "en": {
+        "text": "The path in `_ui_defs.json` is the full path from the resource pack root to the extension. The wiki says folders outside `ui/` (`my_ui/main_menu.json`) also work. Vanilla and this project's working packs all use only below `ui/`, so check before using anything outside `ui/`.",
+        "sources": "BW-intro"
+      }
+    },
+    {
+      "id": "FILE-26",
+      "level": [
+        "unverified"
+      ],
+      "ko": {
+        "text": "namespace에는 접두를 붙일 수 있다고 한다(`\"namespace\": \"wiki:main\"` → `\"x@wiki:main.element\"`). 바닐라 namespace와 겹칠 일을 줄이는 용도다. 바닐라와 이 프로젝트 출처에는 용례가 없다.",
+        "sources": "BW-best"
+      },
+      "en": {
+        "text": "A namespace is said to allow a prefix (`\"namespace\": \"wiki:main\"` -> `\"x@wiki:main.element\"`). It is for reducing the chance of colliding with vanilla namespaces. There is no usage example in vanilla or this project's sources.",
+        "sources": "BW-best"
+      }
+    },
+    {
+      "id": "FILE-27",
+      "level": [
+        "unverified",
+        "inferred"
+      ],
+      "ko": {
+        "text": "경로 키(`\"부모/자식\"`)가 가리키는 자식이 없으면 Content Log에 리소스팩 오류가 남지만 나머지 UI는 정상 동작한다. 경로 키는 바닐라 개편에 가장 먼저 깨지는 접점이므로 정의 자체를 덮어쓸 수 있으면 그쪽을 쓴다.",
+        "sources": "BW-best"
+      },
+      "en": {
+        "text": "If the child that a path key (`\"parent/child\"`) points to does not exist, a resource pack error is left in the Content Log but the rest of the UI works normally. Path keys are the contact point that breaks first when vanilla is reworked, so if you can override the definition itself, use that.",
+        "sources": "BW-best"
+      }
+    },
+    {
+      "id": "FILE-28",
+      "level": [
+        "measured",
+        "code",
+        "inferred"
+      ],
+      "ko": {
+        "text": "엔진이 넣어 주는 변수(`$actionbar_text` 등)를 식에서 쓸 때는 자기 변수로 한 번 받아 쓴다(`\"$atext\": \"$actionbar_text\"`, `\"visible\": \"(not ($atext = 'x'))\"`). 이름 없는 상자에서 `visible: \"($container_title = 'container.chest')\"` 라벨은 숨고 `\"not\"`을 붙인 라벨은 보였으며(직접 비교가 거짓), `\"$copy\": \"$container_title\"`로 받은 `($copy = 'container.chest')` 라벨은 보였다(참). 코드에서 `$container_title`과 `$actionbar_text`는 문자열이 아니라 `__string`, `__rawtext`, `value` 키를 가진 객체이고 `$title_text`, `$subtitle_text`는 평범한 문자열이다. `$actionbar_text`도 같게 나왔다: `/title @s actionbar xyz` 뒤 `($actionbar_text = 'xyz')` 라벨은 숨고 `(not ...)` 라벨은 보였으며, `\"$copy\": \"$actionbar_text\"`로 받은 `($copy = 'xyz')` 라벨은 보였다. 이유는 코드에 있다: 객체를 `value` 문자열로 푸는 곳은 속성값 해석 함수 하나이고 속성값 전체가 `$이름` 하나일 때만 푼다. 식 안의 `$이름`은 식 파서가 객체 그대로 조회하므로 직접 비교는 늘 거짓이다(EXP-34). 정의의 `$` 키와 `variables` 값은 그 해석 함수를 거쳐 지역 스코프에 들어가므로 복사본은 풀린 문자열이다(HOST-19, HOST-48). AP의 `\"$title_text|default\": \"\"` 선언도 같은 효과를 내는 것으로 보인다.",
+        "sources": "BW-intro, AP 4.1, 2026-11-23 Windows 1.26.65.1, 2026-11-24 Windows 1.26.65.1, 2026-11-24 역컴파일"
+      },
+      "en": {
+        "text": "When using engine-provided variables (`$actionbar_text`, etc.) in an expression, receive them once as your own variable (`\"$atext\": \"$actionbar_text\"`, `\"visible\": \"(not ($atext = 'x'))\"`). In an unnamed chest, a label with `visible: \"($container_title = 'container.chest')\"` was hidden and the label with `\"not\"` added was shown (the direct comparison is false), and a label with `($copy = 'container.chest')` received through `\"$copy\": \"$container_title\"` was shown (true). In the code `$container_title` and `$actionbar_text` are not strings but objects with the keys `__string`, `__rawtext` and `value`, while `$title_text` and `$subtitle_text` are plain strings. `$actionbar_text` came out the same: after `/title @s actionbar xyz`, a `($actionbar_text = 'xyz')` label was hidden and the `(not ...)` label was shown, and a `($copy = 'xyz')` label received through `\"$copy\": \"$actionbar_text\"` was shown. The reason is in the code: the only place that unwraps the object into its `value` string is the property value resolver, and it unwraps only when the whole property value is a single `$name`. A `$name` inside an expression is looked up by the expression parser as the object itself, so a direct comparison is always false (EXP-34). The `$` keys of a definition and `variables` values go through that resolver into the local scope, so the copy is the unwrapped string (HOST-19, HOST-48). AP's `\"$title_text|default\": \"\"` declaration appears to have the same effect.",
+        "sources": "BW-intro, AP 4.1, 2026-11-23 Windows 1.26.65.1, 2026-11-24 Windows 1.26.65.1, 2026-11-24 decompilation"
+      }
+    },
+    {
+      "id": "FILE-29",
+      "level": [
+        "vanilla",
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "엔진이 정하는 전역 플랫폼 변수 중 바닐라 1.26.50 UI가 실제로 참조하는 것: `$pocket_edition`, `$win10_edition`, `$osx_edition`, `$console_edition`, `$education_edition`, `$is_console`, `$is_desktop`, `$is_ios`, `$is_ps4`, `$xbox_one`, `$touch`, `$pocket_screen`, `$desktop_screen`, `$is_pregame`(게임 밖 화면), `$is_publish`, `$pre_release`, `$trial`, `$store_disabled`, `$is_holographic`, `$apple_os`, `$google_os`, `$microsoft_os`, `$nx_os` 등 34개. 위키 목록 55개 중 나머지 21개(`$game_pad`, `$mouse`, `$fire_tv`, `$gear_vr` 등)는 바닐라 UI 파일에 나오지 않는다. Windows 1.26.65.1 클라이언트 코드에서는 예로 든 네 이름이 모두 전역 88개 안에 있다. 입력 모드 이름은 `$game_pad`뿐이고 `$gamepad`는 없다(1.11절). HUD에서 잰 값은 코드와 같았고, 팩 `_global_variables.json`은 엔진이 넣는 같은 이름을 덮어쓰지 못한다.",
+        "sources": "BW-doc Global Variables, VN 전수 검색, 2026-11-20 Windows 1.26.65.1 역컴파일"
+      },
+      "en": {
+        "text": "Of the global platform variables the engine sets, those the vanilla 1.26.50 UI actually references: `$pocket_edition`, `$win10_edition`, `$osx_edition`, `$console_edition`, `$education_edition`, `$is_console`, `$is_desktop`, `$is_ios`, `$is_ps4`, `$xbox_one`, `$touch`, `$pocket_screen`, `$desktop_screen`, `$is_pregame` (out-of-game screens), `$is_publish`, `$pre_release`, `$trial`, `$store_disabled`, `$is_holographic`, `$apple_os`, `$google_os`, `$microsoft_os`, `$nx_os` and others, 34 in all. The remaining 21 of the wiki list's 55 (`$game_pad`, `$mouse`, `$fire_tv`, `$gear_vr`, etc.) do not appear in vanilla UI files. In the Windows 1.26.65.1 client code the four names given as examples are all among the 88 globals. The only input-mode name is `$game_pad`; there is no `$gamepad` (section 1.11). Values measured on the HUD matched the code, and a pack `_global_variables.json` cannot override the same name the engine sets.",
+        "sources": "BW-doc Global Variables, VN exhaustive search, 2026-11-20 Windows 1.26.65.1 decompilation"
+      }
+    },
+    {
+      "id": "FILE-30",
+      "level": [
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "UI 파일은 jsoncpp 규칙으로 읽는다. 주석과 앞자리 0은 되지만 **뒤따르는 쉼표와 따옴표 없는 키는 오류**다. 오류가 나면 그 앞까지 읽은 정의만 로드되고 뒤는 조용히 빠진다. 같은 경로의 첫 파일이 실패하면 뒤 팩의 덮어쓰기도 받지 않는다. Windows 1.26.65.1 실측에서 파일 중간 정의에 뒤따르는 쉼표를 넣자 오류 앞 정의와 오류가 난 정의는 만들어졌고 뒤 정의는 빠졌다. 조용히 빠지지는 않고 로그에 `UI control reference not found: 'b'`가 남았다. 중간 정의의 타입이 없는 타입(`no_such_type`)이면 앞뒤 정의가 모두 로드되고 로그에 `Type 'no_such_type' not ...`가 남았다([주장 실측](../design/json-ui-claims.mdx)).",
+        "sources": "CN, 2026-11-18 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "UI files are read with jsoncpp rules. Comments and leading zeros are fine, but **trailing commas and unquoted keys are errors.** When an error occurs, only the definitions read up to that point are loaded and the rest silently drop out. If the first file at the same path fails, overrides from later packs are not accepted either. Measured on Windows 1.26.65.1, a trailing comma in a definition in the middle of a file let the definitions before the error and the erroring definition load, and the definition after it dropped out. It did not drop silently: the log showed `UI control reference not found: 'b'`. When the middle definition had an unknown type (`no_such_type`), the definitions before and after both loaded and the log showed `Type 'no_such_type' not ...` ([claim measurements](../design/json-ui-claims.mdx)).",
+        "sources": "CN, 2026-11-18 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "FILE-31",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "`_ui_defs.json`의 경로는 정렬된 순서로 한 번씩 읽힌다. 여러 파일이 같은 정의를 재정의하면 경로 이름순으로 마지막이 이긴다.",
+        "sources": "CN"
+      },
+      "en": {
+        "text": "The paths in `_ui_defs.json` are read once each in sorted order. If several files redefine the same definition, the last by path name wins.",
+        "sources": "CN"
+      }
+    },
+    {
+      "id": "FILE-32",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "`@`가 없는 키에 점이 있으면 점 앞이 namespace로 읽힌다(`\"spacer_9.5\"` → namespace `spacer_9`, 이름 `5`). 컨트롤 이름에 점을 쓰지 않는다. `\"@.이름\"`은 같은 파일의 namespace다.",
+        "sources": "CN, CN 회귀 시험 Lifeboat"
+      },
+      "en": {
+        "text": "If a key without `@` has a dot, what is before the dot is read as the namespace (`\"spacer_9.5\"` -> namespace `spacer_9`, name `5`). Do not use dots in control names. `\"@.name\"` is the same file's namespace.",
+        "sources": "CN, CN regression test Lifeboat"
+      }
+    },
+    {
+      "id": "FILE-33",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "`$변수` 조회는 확정값을 먼저 찾는다. 바깥 어디에든 `\"$x\": 값`이 있으면 안쪽의 `\"$x|default\"`보다 이기고, 확정값이 없을 때만 가장 가까운 `|default`를 쓴다. null은 미설정이다.",
+        "sources": "CN, CN-run"
+      },
+      "en": {
+        "text": "`$variable` lookup finds a fixed value first. If there is a `\"$x\": value` anywhere outside, it beats the inner `\"$x|default\"`, and only when there is no fixed value is the nearest `|default` used. null means unset.",
+        "sources": "CN, CN-run"
+      }
+    },
+    {
+      "id": "FILE-34",
+      "level": [
+        "code",
+        "vanilla",
+        "measured"
+      ],
+      "ko": {
+        "text": "**`ignored`는 그 컨트롤 자신의 `$` 선언을 보지 않는다.** 정의 안의 `$x|default`도, 참조 지점에서 넘긴 `\"$x\": true`도 자기 `ignored`에는 닿지 않고, 부모(바깥) 스코프의 값만 읽는다. 게이트 변수는 부모에 넘기고 `ignored`는 그 자식에 단다(바닐라 `focus_border`의 `hover_slot`, AP `category_tab_icon`의 자식이 이 형태). 엔진은 `ignored`를 그 컨트롤의 `variables`보다 먼저 평가한다(FILE-43). Windows 1.26.65.1 실측에서 정의 최상위에 `\"ignored\": \"$hide\"`와 `\"$hide|default\": false`를 두고 참조 지점에서 `\"$hide\"`를 true, false, 생략으로 주자 셋 다 컨트롤이 만들어졌고, 매번 `Expected variable not found in ancestor tree: '$hide'` 경고가 남았다([주장 실측](../design/json-ui-claims.mdx)).",
+        "sources": "NB-10, CN·CN-run(`$x|default`·참조 지점 값), VN 146개 참조 지점 중 변수 전달 2곳, AP-samples, 2026-11-18 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "**`ignored` does not see that control's own `$` declarations.** Neither the `$x|default` inside the definition nor the `\"$x\": true` passed at the reference point reaches its own `ignored`, and it reads only the value of the parent (outer) scope. Pass the gate variable to the parent and put `ignored` on that child (the `hover_slot` of vanilla `focus_border` and the child of AP `category_tab_icon` have this form). The engine evaluates `ignored` before that control's `variables` (FILE-43). Measured on Windows 1.26.65.1, with top-level `\"ignored\": \"$hide\"` and `\"$hide|default\": false` in the definition and `\"$hide\"` given as true, false or omitted at the reference point, all three controls were created and each time the log warned `Expected variable not found in ancestor tree: '$hide'` ([claim measurements](../design/json-ui-claims.mdx)).",
+        "sources": "NB-10, CN and CN-run (`$x|default` and reference-point values), 2 of 146 VN reference points pass variables, AP-samples, 2026-11-18 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "FILE-35",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "`ignored`의 결과가 불리언이면 그대로, 정수면 0이 아닐 때 생성 안 함, 문자열이면 생성한다. 미설정 `$변수`는 식 안에서는 null이지만 `\"ignored\": \"$x\"`처럼 통째 값이면 글자 `$x`로 남아 생성된다.",
+        "sources": "CN"
+      },
+      "en": {
+        "text": "If the result of `ignored` is a boolean it is used as is, an integer is \"not created if not 0\", and a string is created. An unset `$variable` is null inside an expression, but when the whole value is like `\"ignored\": \"$x\"` it stays as the text `$x` and is created.",
+        "sources": "CN"
+      }
+    },
+    {
+      "id": "FILE-36",
+      "level": [
+        "vanilla",
+        "code"
+      ],
+      "ko": {
+        "text": "자식 키도 변수가 될 수 있다: `{ \"$slot\": { …덮을 속성… } }`에서 `$slot`이 `\"이름@ns.정의\"`면 그 이름과 정의로 만든다. `\"$name_var@ns.정의\"`처럼 인스턴스 이름만 변수로 줄 수도 있다.",
+        "sources": "VN 83회 예 ui_template_tabs.json `base_tab`, CN"
+      },
+      "en": {
+        "text": "A child key can also be a variable: in `{ \"$slot\": { …properties to override… } }`, if `$slot` is `\"name@ns.definition\"`, it is created with that name and definition. You can also give only the instance name as a variable, as in `\"$name_var@ns.definition\"`.",
+        "sources": "VN 83 uses, for example `base_tab` in ui_template_tabs.json, CN"
+      }
+    },
+    {
+      "id": "FILE-37",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "상속에서 파생 정의가 적은 속성은 **객체여도 통째로** 기반 것을 대체한다. 반면 같은 경로 파일의 재선언(FILE-21)은 객체 값을 멤버 단위로 합친다. `property_bag` 일부만 바꾸려면 재선언, 전부 바꾸려면 상속이다.",
+        "sources": "CN"
+      },
+      "en": {
+        "text": "In inheritance, a property the derived definition writes replaces the base's **wholesale, even if it is an object.** In contrast, redeclaration in a same-path file (FILE-21) merges object values member by member. To change only part of `property_bag`, redeclare, and to change all, inherit.",
+        "sources": "CN"
+      }
+    },
+    {
+      "id": "FILE-38",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "최상위 정의의 `\"속성\": null`은 기반 값을 지우지만, 컨트롤 배열 안 인라인 참조의 `null`은 기반 값을 그대로 둔다.",
+        "sources": "CN"
+      },
+      "en": {
+        "text": "A `\"property\": null` in a top-level definition erases the base value, but a `null` in an inline reference inside a control array leaves the base value as it is.",
+        "sources": "CN"
+      }
+    },
+    {
+      "id": "FILE-43",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "엔진은 컨트롤마다 **`ignored`를 가장 먼저** 평가하고, 참이면 그 컨트롤의 `variables` 적용을 포함한 나머지 처리를 하지 않는다. 그래서 자기 `variables`(조건부 변수 포함)로 정한 값은 자기 `ignored`에 닿지 않는다(FILE-34). `ignored`에 실수·배열·객체를 넣으면 `An invalid value was provided for \"ignored\" field.` 오류다. `variables`는 객체 하나 또는 객체 배열을 받고, 배열 안 객체가 아닌 항목은 건너뛴다.",
+        "sources": "NB-10"
+      },
+      "en": {
+        "text": "For each control the engine evaluates **`ignored` first**, and if true it does none of the remaining processing for that control, including applying `variables`. So values set by its own `variables` (including conditional variables) do not reach its own `ignored` (FILE-34). Putting a real number, array or object in `ignored` gives the error `An invalid value was provided for \"ignored\" field.`. `variables` accepts one object or an array of objects, and items in the array that are not objects are skipped.",
+        "sources": "NB-10"
+      }
+    },
+    {
+      "id": "FILE-44",
+      "level": [
+        "measured",
+        "code"
+      ],
+      "ko": {
+        "text": "`requires`가 없는 `variables` 블록은 적용되지 않는다. 엔진은 없는 `requires`를 null로 보고 그 블록을 건너뛴다. 늘 쓸 값은 `variables` 밖에 `$` 키로 두거나 `\"requires\": true`를 적는다. 2026-11-24에 항목 단위로 다시 쟀다: `\"$vt|default\": \"DEF\"`와 `variables: [{\"$vt\": \"NOREQ\"}]`를 둔 `text: \"$vt\"` 라벨은 `DEF`였고, `variables: [{\"$vo\": \"ONLY\"}]`만 둔 `text: \"$vo\"` 라벨은 글자 `$vo`를 그대로 그리며 `Expected variable not found in ancestor tree: '$vo'` 경고를 남겼다. 참인 변수를 `requires`에 준 항목은 적용되어 `REQ`였다.",
+        "sources": "2026-11-20 Windows 1.26.65.1, 2026-11-20 역컴파일, 2026-11-24 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "A `variables` block without `requires` is not applied. The engine treats a missing `requires` as null and skips that block. Put values that always apply outside `variables` as `$` keys, or write `\"requires\": true`. Measured again per entry on 2026-11-24: a `text: \"$vt\"` label with `\"$vt|default\": \"DEF\"` and `variables: [{\"$vt\": \"NOREQ\"}]` showed `DEF`, and a `text: \"$vo\"` label with only `variables: [{\"$vo\": \"ONLY\"}]` drew the literal `$vo` and logged the warning `Expected variable not found in ancestor tree: '$vo'`. An entry with a true variable in `requires` was applied and showed `REQ`.",
+        "sources": "2026-11-20 Windows 1.26.65.1, 2026-11-20 decompilation, 2026-11-24 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "FILE-45",
+      "level": [
+        "measured",
+        "code"
+      ],
+      "ko": {
+        "text": "`requires`와 `ignored`에는 바인딩 문맥이 없어서 `#x`는 null이 아니라 글자 `#x`로 계산된다. `\"requires\": \"(#x)\"`는 블록을 적용했고 `\"requires\": \"(not #x)\"`는 적용하지 않았다. `\"ignored\": \"(#x = '#x')\"`는 컨트롤을 만들지 않았고, `\"ignored\": \"yes\"`는 만들었다(`ignored`에서 효과가 있는 값은 불리언과 정수뿐이다, FILE-35, FILE-43). 그래서 `requires`, `ignored`로 바인딩 값을 검사할 수 없다(FILE-16).",
+        "sources": "2026-11-20 Windows 1.26.65.1, 2026-11-20 역컴파일"
+      },
+      "en": {
+        "text": "`requires` and `ignored` have no binding context, so `#x` evaluates to the text `#x`, not to null. `\"requires\": \"(#x)\"` applied the block and `\"requires\": \"(not #x)\"` did not. `\"ignored\": \"(#x = '#x')\"` left the control not created, and `\"ignored\": \"yes\"` left it created (only booleans and integers have an effect in `ignored`, FILE-35 and FILE-43). So `requires` and `ignored` cannot test binding values (FILE-16).",
+        "sources": "2026-11-20 Windows 1.26.65.1, 2026-11-20 decompilation"
+      }
+    },
+    {
+      "id": "FILE-46",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "**`variables`의 `requires`에 정의되지 않은 `$변수`를 쓰지 않는다.** Windows 1.26.65.1에서 `requires`에 어디에도 없는 `$nosuch_var`를 쓰자 콘텐츠 로그에 `Expected variable not found in ancestor tree: '$nosuch_var'`가 34만 줄 넘게 쌓이고 게임이 멈춰 강제 종료해야 했다. `requires`가 읽는 변수는 그 컨트롤이나 조상에 `|default`로라도 선언해 둔다.",
+        "sources": "2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "**Do not use an undefined `$variable` in the `requires` of `variables`.** On Windows 1.26.65.1, a `requires` with `$nosuch_var`, defined nowhere, piled up more than 340,000 lines of `Expected variable not found in ancestor tree: '$nosuch_var'` in the content log and froze the game, which had to be force quit. Declare every variable that a `requires` reads on that control or an ancestor, at least with `|default`.",
+        "sources": "2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "FILE-47",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "`requires`가 `$subtitle_text`를 비교하는 `variables` 블록으로 `property_bag`에 넣을 JSON 정수를 고를 수 있고, 64비트 정수도 된다. `{ \"requires\": \"($subtitle_text = '-8589934591')\", \"$id\": -8589934591 }`로 고른 `$id`를 `\"property_bag\": { \"actor_id\": \"$id\" }`에 넣자 `actor_portrait_renderer`가 그 엔티티를 그렸다. JSON 정수를 담은 변수는 `property_bag`에 치환될 때 정수로 남는다. 바인딩은 정수를 32비트로 자르므로(BND-38) 64비트 값은 이 길로 넣는다.",
+        "sources": "2026-11-20 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "A `variables` block whose `requires` compares `$subtitle_text` can select a JSON integer to put in the `property_bag`, 64-bit integers included. `$id` selected with `{ \"requires\": \"($subtitle_text = '-8589934591')\", \"$id\": -8589934591 }` and put in `\"property_bag\": { \"actor_id\": \"$id\" }` made `actor_portrait_renderer` draw that entity. A variable holding a JSON integer stays an integer when substituted into the `property_bag`. Bindings cut integers to 32 bits (BND-38), so put 64-bit values in this way.",
+        "sources": "2026-11-20 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "FILE-48",
+      "level": [
+        "measured",
+        "code"
+      ],
+      "ko": {
+        "text": "**라벨 글이 `(`로 시작하면 식으로 계산된다.** `text`나 `text`에 넘긴 `$변수` 값이 `(`로 시작하면 식으로 계산되었다. `(v-0)*.01`, `(20.0-15)/max`, `(.25)`는 `JSON UI parse failure - expected a string.` 경고를 남기고 글이 비었다. 코드에서도 속성값 해석 함수는 `(`로 시작하는 문자열을 상수식으로 계산한 뒤 다시 시도한다. 괄호로 시작하는 글을 그대로 보이려면 앞에 다른 글자를 둔다 `{추론}`. `__rawtext` 객체로 넘겨도 된다: 팩이 만든 `\"$raw\": {\"__string\": true, \"__rawtext\": true, \"value\": \"(1 + 2)\"}`를 받은 `text: \"$raw\"`는 `(1 + 2)`를 그렸다. 같은 객체에서 `__rawtext`를 빼면 코드에서 예측한 `3`이 아니라 빈칸이었고 같은 경고가 남았다. 이름이 `(1 + 2)`인 상자의 복사 변수도 같았다(HOST-48). 같은 해석으로 `\"$cut\": \"('%.3s' * 'abcdef')\"`를 받은 `text: \"$cut\"`은 `abc`였다(EXP-57).",
+        "sources": "2026-11-24 Windows 1.26.65.1, 2026-11-24 역컴파일, 2026-11-25 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "**Label text starting with `(` is computed as an expression.** When `text`, or a `$variable` value passed to `text`, started with `(`, it was computed as an expression. `(v-0)*.01`, `(20.0-15)/max` and `(.25)` logged the warning `JSON UI parse failure - expected a string.` and the text was empty. In the code, too, the property value resolver computes a string starting with `(` as a constant expression and tries again. To show text that starts with a parenthesis as is, put another character before it `{inferred}`. Passing it as a `__rawtext` object also works: `text: \"$raw\"` receiving the pack-made `\"$raw\": {\"__string\": true, \"__rawtext\": true, \"value\": \"(1 + 2)\"}` drew `(1 + 2)`. With `__rawtext` removed from the same object it was not the `3` the code predicted but empty, with the same warning. The copy variable of a chest named `(1 + 2)` was the same (HOST-48). By the same resolution, `text: \"$cut\"` receiving `\"$cut\": \"('%.3s' * 'abcdef')\"` was `abc` (EXP-57).",
+        "sources": "2026-11-24 Windows 1.26.65.1, 2026-11-24 decompilation, 2026-11-25 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "FILE-49",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "**숫자 화면 변수는 `text`에 바로 쓰지 못한다.** 상자 화면의 `text: \"$container_size\"`와 채팅 화면의 `text: \"$max_messages\"`, `text: \"$max_text_edit_length\"`는 `JSON UI parse failure - expected a string.` 경고를 남기고 빈칸이었고, 책 화면의 `text: \"$max_page_length\"`도 빈칸이었다. 글로 보이려면 `property_bag`에 `\"#z\": \"CS\"`처럼 문자열 키를 두고 view 바인딩 `(#z + $container_size)`를 `#text`에 넣는다(`CS27`). `#` 속성이 없는 `('CS' + $container_size)`는 로드 때 버려진다(BND-42). 불리언 전역 변수도 `text`에 쓰면 같은 경고가 났다(1.11절).",
+        "sources": "2026-11-25 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "**A number screen variable cannot be used directly in `text`.** `text: \"$container_size\"` on the chest screen and `text: \"$max_messages\"` and `text: \"$max_text_edit_length\"` on the chat screen logged the warning `JSON UI parse failure - expected a string.` and were empty, and `text: \"$max_page_length\"` on the book screen was empty too. To show it as text, put a string key such as `\"#z\": \"CS\"` in `property_bag` and put the view binding `(#z + $container_size)` into `#text` (`CS27`). `('CS' + $container_size)` without a `#` property is dropped at load (BND-42). Boolean global variables put in `text` gave the same warning (section 1.11).",
+        "sources": "2026-11-25 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "FILE-39",
+      "status": "proposed",
+      "level": [
+        "pack",
+        "vanilla",
+        "measured"
+      ],
+      "ko": {
+        "text": "같은 `controls` 배열 안의 형제 이름(`@` 앞)은 서로 다르게 짓는다. 2025년 4월 무렵 버전부터 중복 이름이 JSON UI 오류를 낸다는 보고가 있고(StarLibV2 1.0.3.3), 바닐라 1.26.50의 `controls` 배열 5,084개(재집계)에는 중복이 하나도 없다. `padding`처럼 흔한 이름은 `padding_top`, `padding_bottom`으로 나눈다.",
+        "sources": "jua-starlibv2, bedrock-samples, 2026-11-18 Windows 1.26.65.1) Windows 1.26.65.1 실측에서 같은 `controls` 배열에 `dup` 두 개를 두자 둘 다 만들어졌고 로그는 남지 않았다. 보고된 JSON UI 오류는 보이지 않았다([주장 실측](../design/json-ui-claims.mdx)). 2026-11-24에 HUD에서 `re9dup@re9.tl` 두 개로 다시 재도 같았다: 둘 다 만들어져 나란히 보였고 첫 로드의 Content Log에 그 이름에 관한 줄이 없었다. 코드도 같다: 컨트롤 생성은 `controls` 배열을 차례로 돌며 자식을 만들어 부모 자식 목록에 붙일 뿐 이름을 비교하지 않고, 실행 파일에 JSON UI 컨트롤 이름 중복을 알리는 문구가 없다. 이름으로 찾는 쪽은 첫 번째 형제만 잡는다. 2026-11-25에 HUD와 채팅 화면의 버튼에 `default_control` 이름의 형제 둘을 두자 입력이 없을 때는 둘 다 보였다. 채팅 화면의 버튼(`CD_A`, `CD_B` 순서)에 마우스를 올리자 배열 앞의 `CD_A`만 숨고 `re9ch`(hover)가 보였으며 `CD_B`는 버튼 상태와 상관없이 보인 채 남았다. 마우스를 떼자 `CD_A`가 다시 보였다. 중복 이름의 두 번째 형제는 버튼이 다루지 않는 일반 컨트롤이 된다. `{실측, 코드}` (출처: 2026-11-24 Windows 1.26.65.1, 2026-11-24 역컴파일, 2026-11-25 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "Name siblings in the same `controls` array differently (the name before `@`). There are reports that from a version around April 2025 duplicate names cause JSON UI errors (StarLibV2 1.0.3.3), and none of the 5,084 `controls` arrays of vanilla 1.26.50 (recounted) has a duplicate. Split a common name like `padding` into `padding_top` and `padding_bottom`.",
+        "sources": "jua-starlibv2, bedrock-samples, 2026-11-18 Windows 1.26.65.1) Measured on Windows 1.26.65.1, two siblings named `dup` in one `controls` array were both created and no log line appeared. The reported JSON UI error was not seen ([claim measurements](../design/json-ui-claims.mdx)). Measured again in the HUD on 2026-11-24 with two `re9dup@re9.tl`, the result was the same: both were created and shown side by side, and the Content Log of the first load had no line about that name. The code is the same: building controls walks the `controls` array in order and only appends each child to the parent's child list without comparing names, and the executable has no message reporting a duplicate JSON UI control name. A name lookup picks only the first sibling. On 2026-11-25, two siblings with the `default_control` name on a button in the HUD and on the chat screen were both shown with no input. When the mouse was placed over the chat screen button (`CD_A`, `CD_B` in that order), only `CD_A`, first in the array, was hidden and `re9ch` (hover) was shown, while `CD_B` stayed shown regardless of the button state. When the mouse left, `CD_A` was shown again. The second sibling of a duplicate name becomes an ordinary control the button does not handle. `{measured, code}` (Source: 2026-11-24 Windows 1.26.65.1, 2026-11-24 decompilation, 2026-11-25 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "FILE-40",
+      "status": "proposed",
+      "level": [
+        "code",
+        "unverified"
+      ],
+      "ko": {
+        "text": "키와 문자열 값의 `\\uXXXX` 이스케이프는 읽을 때 원래 글자로 풀린다. 이스케이프로 바꾼 파일은 크기만 커지고 의미(식의 바이트 수, 비교, 포함 검사)는 같으며 누구나 JSON 파서로 되돌릴 수 있어, 숨길 목적이면 효과가 없다. 다섯 자리 이스케이프 버그와 서로게이트 쌍 문제를 보고한 작은 팩 도구가 있다. 실측 과제: `\"type\"` 키와 `\"label\"` 값을 `\\u` 이스케이프로 적은 정의가 동작하는지, BMP 밖 이모지를 서로게이트 쌍으로 적은 라벨이 그려지는지.",
+        "sources": "jua-jsonencryptor, jua-small-packs"
+      },
+      "en": {
+        "text": "A `\\uXXXX` escape in keys and string values is decoded into the original character when read. A file converted with escapes only gets bigger and the meaning (the byte count of an expression, comparison, containment check) is the same, and anyone can revert it with a JSON parser, so it has no effect if the purpose is hiding. There is a small pack tool that reported a five-digit escape bug and a surrogate pair problem. Measurement task: whether a definition that writes the `\"type\"` key and the `\"label\"` value with `\\u` escapes works, and whether a label that writes an emoji outside the BMP as a surrogate pair is drawn.",
+        "sources": "jua-jsonencryptor, jua-small-packs"
+      }
+    },
+    {
+      "id": "FILE-41",
+      "status": "proposed",
+      "level": [
+        "vanilla",
+        "measured"
+      ],
+      "ko": {
+        "text": "바닐라 1.26.50 UI는 namespace 하나를 파일 하나에만 둔다. 한 namespace의 정의를 여러 파일로 나눠도 참조가 풀린다는 난독화기의 주장이 있다. Windows 1.26.65.1 실측에서 `juc_split.outer`(파일 1)가 `juc_split.inner`(파일 2)를 참조하자 자식이 만들어졌다([주장 실측](../design/json-ui-claims.mdx)). 나눌 이유가 없으면 namespace당 파일 하나를 유지한다.",
+        "sources": "bedrock-samples, jua-jsonencryptor, 2026-11-18 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "The vanilla 1.26.50 UI puts one namespace in only one file. An obfuscator claims that splitting the definitions of one namespace across several files still resolves references. Measured on Windows 1.26.65.1, `juc_split.outer` (file 1) referencing `juc_split.inner` (file 2) created the child ([claim measurements](../design/json-ui-claims.mdx)). If there is no reason to split, keep one file per namespace.",
+        "sources": "bedrock-samples, jua-jsonencryptor, 2026-11-18 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "FILE-42",
+      "status": "proposed",
+      "level": [
+        "vanilla",
+        "conflict"
+      ],
+      "ko": {
+        "text": "namespace 없는 `@이름`은 문맥에 따라 다른 namespace에서 찾아진다. 최상위 정의가 다른 namespace를 상속해도 그 안의 짧은 이름은 **파일 namespace**에서 찾아지는 용례가 바닐라에 43건이고(`trade_screen_pocket.json:349`), 컨트롤 배열 안에서 다른 namespace를 상속한 **인스턴스**(`\"x@common.close_button\": { \"controls\": [...] }`) 아래의 짧은 이름은 **기반 namespace**에서 찾아지는 용례가 3건이다(`command_block_screen.json:1010-1038`의 `default@close_button_panel`은 `common`에만 있다). 두 namespace에 같은 이름이 있을 때 우선순위는 알 수 없으므로 다른 namespace를 상속한 컨트롤 안에서는 항상 `ns.이름`을 적는다. FILE-06에는 이 예외를 덧붙이는 보강이 함께 제안되었다. 충돌 C-55와 연결된다.",
+        "sources": "jua-netease-docs, bedrock-samples"
+      },
+      "en": {
+        "text": "An `@name` without a namespace is looked up in different namespaces depending on context. There are 43 cases in vanilla where, even if a top-level definition inherits another namespace, the short name inside it is looked up in the **file namespace** (`trade_screen_pocket.json:349`), and 3 cases where a short name under an **instance** that inherits another namespace inside a control array (`\"x@common.close_button\": { \"controls\": [...] }`) is looked up in the **base namespace** (`default@close_button_panel` at `command_block_screen.json:1010-1038` exists only in `common`). The priority when both namespaces have the same name cannot be known, so inside a control that inherits another namespace always write `ns.name`. A reinforcement adding this exception to FILE-06 was also proposed. Connected to conflict C-55.",
+        "sources": "jua-netease-docs, bedrock-samples"
+      }
+    }
+  ]
+}

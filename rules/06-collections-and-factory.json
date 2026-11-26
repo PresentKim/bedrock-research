@@ -1,0 +1,704 @@
+{
+  "prefix": "COL",
+  "slug": "collections-and-factory",
+  "page": "json-ui/collections-and-factory",
+  "title": {
+    "ko": "컬렉션과 팩토리",
+    "en": "Collections and factories"
+  },
+  "rules": [
+    {
+      "id": "COL-01",
+      "level": [
+        "measured",
+        "vanilla"
+      ],
+      "ko": {
+        "text": "`collection_name`은 `stack_panel`, `grid`, `collection_panel`에 쓴다. `panel`, `image`에 쓰면 `Unknown property [collection_name]` 오류가 난다.",
+        "sources": "BC-facts, BC-S9, BC-S11, VN grid 66·stack_panel 25·collection_panel store_common.json:750, MJ 9장, 부록A C-01"
+      },
+      "en": {
+        "text": "`collection_name` is used on `stack_panel`, `grid` and `collection_panel`. Using it on `panel` or `image` gives an `Unknown property [collection_name]` error.",
+        "sources": "BC-facts, BC-S9, BC-S11, VN grid 66, stack_panel 25, collection_panel store_common.json:750, MJ chapter 9, Appendix A C-01"
+      }
+    },
+    {
+      "id": "COL-02",
+      "level": [
+        "measured",
+        "code"
+      ],
+      "ko": {
+        "text": "`collection_index`는 **인스턴스화 지점**(부모 `controls` 안의 항목)에서만 받는다. 최상위 정의에 쓰면 거부되고, `image`에는 어디서든 거부되며, `label`에서는 조용히 무시된다. 그런데 bedrock-core가 실제로 출력하는 텍스트 캐리어는 `label` 참조에 `collection_index`를 직접 준다. 확실히 하려면 라벨을 패널로 감싸 패널 참조에 인덱스를 준다. 엔진은 컬렉션 이름을 가진 부모의 직속 자식에서만 `collection_index`를 읽는다(COL-44). Windows 1.26.65.1에서 `collection_name` `stack_panel` 바로 아래 `label`에 `collection_index`를 주자 값(`b1`)을 읽었다. `label`에서 조용히 무시된다는 주장은 이 버전에서 맞지 않았다([실측 기록](../design/json-ui-claims.mdx)).",
+        "sources": "BC-facts, NB-07, BC 4.1-(4), 부록A C-31"
+      },
+      "en": {
+        "text": "`collection_index` is received only at the **instantiation point** (an item inside the parent's `controls`). Written in a top-level definition it is rejected, on an `image` it is rejected anywhere, and on a `label` it is silently ignored. However, the text carrier that bedrock-core actually outputs gives `collection_index` directly to a `label` reference. To be sure, wrap the label in a panel and give the index to the panel reference. The engine reads `collection_index` only on direct children of a parent that has a collection name (COL-44). On Windows 1.26.65.1, a `label` with `collection_index` directly under a `collection_name` `stack_panel` read its value (`b1`). The claim that it is silently ignored on a `label` did not hold on this version ([measurement record](../design/json-ui-claims.mdx)).",
+        "sources": "BC-facts, NB-07, BC 4.1-(4), Appendix A C-31"
+      }
+    },
+    {
+      "id": "COL-03",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "인덱스는 적용된 지점부터 **하위 트리로 상속**된다. 그래서 정의는 한 번 쓰고, 참조 N개에 인덱스와 오프셋만 다르게 주는 패턴이 성립한다. 컬렉션을 읽는 바인딩은 각자 `binding_collection_name`으로 컬렉션을 지정한다.",
+        "sources": "BC-facts"
+      },
+      "en": {
+        "text": "The index is **inherited down the subtree** from the point where it was applied. So the pattern of writing the definition once and giving N references only a different index and offset holds. Bindings that read a collection each specify the collection with `binding_collection_name`.",
+        "sources": "BC-facts"
+      }
+    },
+    {
+      "id": "COL-04",
+      "level": [
+        "measured",
+        "vanilla"
+      ],
+      "ko": {
+        "text": "서버 폼 버튼은 **버튼 자신**에 `{ \"binding_type\": \"collection_details\", \"binding_collection_name\": \"form_buttons\" }`가 있어야 눌림이 그 엔트리로 집계된다. 조상만 인덱스를 주면 눌리기는 하지만 스크립트에는 `canceled`로 와서 Esc와 구분할 수 없고 로그도 없다(사용자가 닫으면 `reason=UserClosed`가 오는데, 바인딩 누락 때의 reason으로 구분되는지는 확인되지 않았다). 바닐라 폼 버튼도 같은 구조다.",
+        "sources": "BC-S1, BC-facts, VN server_form.json:211-225"
+      },
+      "en": {
+        "text": "A server form button counts a press toward that entry only if **the button itself** has `{ \"binding_type\": \"collection_details\", \"binding_collection_name\": \"form_buttons\" }`. If only an ancestor gives the index, it can be pressed but the script receives `canceled`, which cannot be told from Esc, and there is no log (when the user closes it, `reason=UserClosed` arrives, but whether the reason for a missing binding can be told apart was not confirmed). Vanilla form buttons have the same structure.",
+        "sources": "BC-S1, BC-facts, VN server_form.json:211-225"
+      }
+    },
+    {
+      "id": "COL-05",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "인덱스 호스트가 하나도 없는 컬렉션 바인딩은 **0번** 항목을 읽는다. 바닐라 상자 라벨을 0번 슬롯 아이템으로 숨기는 데 이 성질을 썼다.",
+        "sources": "BC-facts"
+      },
+      "en": {
+        "text": "A collection binding with no index host at all reads item **0**. This property was used to hide the vanilla chest label with the slot 0 item.",
+        "sources": "BC-facts"
+      }
+    },
+    {
+      "id": "COL-06",
+      "level": [
+        "pack",
+        "code"
+      ],
+      "ko": {
+        "text": "팩토리 없이 **고정 인덱스 슬롯**을 만들 수 있다: `collection_name`을 가진 스택 안에 `collection_index`를 박은 자식을 둔다. 스크립트는 항상 같은 개수의 엔트리를 보내(빈 값 포함) 인덱스를 고정한다.",
+        "sources": "BA 5장 탭 28슬롯, BC 4.1-(3)"
+      },
+      "en": {
+        "text": "You can make **fixed-index slots** without a factory: put children with hardcoded `collection_index` in a stack that has `collection_name`. The script always sends the same number of entries (including empty values) to fix the index.",
+        "sources": "BA chapter 5 tab 28 slots, BC 4.1-(3)"
+      }
+    },
+    {
+      "id": "COL-07",
+      "level": [
+        "measured",
+        "inferred"
+      ],
+      "ko": {
+        "text": "상자 슬롯의 내구도(`#item_durability_current_amount`, `#item_durability_total_amount`)는 `collection_details` + `collection` 바인딩 쌍으로 읽으면 일반 컨트롤에서도 읽히고 비교·나눗셈이 된다. 진행 막대 렌더러 전용이라 안 읽힌다는 이전 기록은 이 쌍을 맞추지 않았던 것으로 보인다. `#item_durability_current_amount`는 남은 내구도다(피해 100인 철 검에서 `((0 + 값) > 100)`이 참). 값은 float이라 비교는 되지만 문자열에 이어 붙이면 아무것도 나오지 않는다(EXP-22). `('D ' + (0 + 값))`, `('D ' + (값 * 1))`는 바인딩 방식과 상관없이 `'D '`만 냈다. 글자로 보이려면 비교 사슬로 구간을 나눈다.",
+        "sources": "BC-S14, BC-S6, BC 6.8-7, 부록A C-12, CPR"
+      },
+      "en": {
+        "text": "The durability of chest slots (`#item_durability_current_amount`, `#item_durability_total_amount`) can be read in ordinary controls and compared and divided if read with a `collection_details` + `collection` binding pair. The earlier record that it could not be read because it is progress-bar-renderer-only appears to have been because this pair was not matched. `#item_durability_current_amount` is the remaining durability (`((0 + value) > 100)` was true for an iron sword with 100 damage). The value is a float, so comparisons work but concatenating it to a string gives nothing (EXP-22). `('D ' + (0 + value))` and `('D ' + (value * 1))` gave only `'D '` whatever the binding setup. To show it as text, split it into ranges with a comparison chain.",
+        "sources": "BC-S14, BC-S6, BC 6.8-7, Appendix A C-12, CPR"
+      }
+    },
+    {
+      "id": "COL-08",
+      "level": [
+        "vanilla"
+      ],
+      "ko": {
+        "text": "팩토리는 (가) `\"type\": \"factory\"` 컨트롤(바닐라 36회, 공식 enum에 없음)이거나 (나) 컨테이너의 `\"factory\": { … }` 속성이다. `factory` 객체의 키는 `name`, `control_name`(한 종류) 또는 `control_ids`(종류별), `max_children_size`, `factory_variables`다.",
+        "sources": "VN server_form.json:25·126, VN factory 키 집계"
+      },
+      "en": {
+        "text": "A factory is either (a) a `\"type\": \"factory\"` control (36 uses in vanilla, not in the official enum) or (b) the `\"factory\": { … }` property of a container. The keys of the `factory` object are `name`, `control_name` (one kind) or `control_ids` (per kind), `max_children_size` and `factory_variables`.",
+        "sources": "VN server_form.json:25 and 126, VN factory key tally"
+      }
+    },
+    {
+      "id": "COL-09",
+      "level": [
+        "vanilla"
+      ],
+      "ko": {
+        "text": "`control_ids`의 키는 엔진이 정한 **데이터 종류**이고, 값은 `\"@ns.정의\"`(바닐라 197회), `\"인스턴스이름@ns.정의\"`(36회), `\"ns.정의\"`(5회, 예 server_form.json:128)다. 액션 폼 행은 `button`, `label`, `header`, `divider`, 모달 행은 `label`, `toggle`, `slider`, `step_slider`, `dropdown`, `input`, `header`, `divider`, `multiselect`, HUD는 `hud_title_text`, `hud_actionbar_text`, 채팅은 `chat_item`이다.",
+        "sources": "VN server_form.json:126·283, hud_screen.json:3406·3417·1040"
+      },
+      "en": {
+        "text": "The keys of `control_ids` are **data kinds** the engine decides, and the values are `\"@ns.definition\"` (197 uses in vanilla), `\"instancename@ns.definition\"` (36 uses) and `\"ns.definition\"` (5 uses, for example server_form.json:128). The action form rows are `button`, `label`, `header` and `divider`, the modal rows are `label`, `toggle`, `slider`, `step_slider`, `dropdown`, `input`, `header`, `divider` and `multiselect`, the HUD ones are `hud_title_text` and `hud_actionbar_text`, and chat's is `chat_item`.",
+        "sources": "VN server_form.json:126 and 283, hud_screen.json:3406, 3417 and 1040"
+      }
+    },
+    {
+      "id": "COL-10",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "**`visible`은 그리기만 막고 생성과 레이아웃은 막지 못한다.** 서버 폼 아래에 붙인 화면은 `visible`로 가려도 **모든 폼을 열 때마다 전부 생성·레이아웃**된다(5,546개 컨트롤 재배치 실측). 그 안의 슬라이더처럼 생성 시 상태를 검증하는 컴포넌트는 숨겨져 있어도 assert를 낸다. 컨트롤 자신의 `binding_condition: \"visible\"`도 조상이 숨었을 때 평가를 막지 못한다.",
+        "sources": "BC-S8, BW-best"
+      },
+      "en": {
+        "text": "**`visible` only stops drawing and does not stop creation and layout.** A screen attached under the server form is **fully created and laid out every time any form is opened**, even if hidden with `visible` (measured with 5,546 controls repositioned). A component inside it that validates its state at creation, such as a slider, raises an assert even when hidden. The control's own `binding_condition: \"visible\"` also does not stop evaluation when an ancestor is hidden.",
+        "sources": "BC-S8, BW-best"
+      }
+    },
+    {
+      "id": "COL-11",
+      "level": [
+        "measured",
+        "vanilla"
+      ],
+      "ko": {
+        "text": "`#collection_length`를 바인딩하면 팩토리가 그 수만큼만 셀을 만든다. **0이면 아무것도 만들지 않는다.** `((#mode = 'on') * 1)` 같은 계산 길이로 \"필요한 화면 하나만 생성\"하는 게이트가 된다.",
+        "sources": "BC-S11, VN server_form.json:138·300"
+      },
+      "en": {
+        "text": "If you bind `#collection_length`, the factory creates only that many cells. **If 0, nothing is created.** A computed length like `((#mode = 'on') * 1)` becomes a gate that \"creates only the one screen needed\".",
+        "sources": "BC-S11, VN server_form.json:138 and 300"
+      }
+    },
+    {
+      "id": "COL-12",
+      "level": [
+        "measured",
+        "vanilla"
+      ],
+      "ko": {
+        "text": "생성을 막는 방법 비교.",
+        "sources": "BC-S8, BC-S11, VN"
+      },
+      "en": {
+        "text": "A comparison of ways to stop creation.",
+        "sources": "BC-S8, BC-S11, VN"
+      }
+    },
+    {
+      "id": "COL-13",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "행 타입 팩토리는 **매칭되는 모든 행마다** 셀을 만든다. 슬라이더 행이 셋이면 슬라이더 셀이 소켓마다 셋 생긴다. 자기 행이 아닌 셀은 `#anchored_offset_value_y`로 화면 밖으로 민다(`((not #mine) * 1000)`).",
+        "sources": "BC-S9"
+      },
+      "en": {
+        "text": "A row type factory creates a cell **for every matching row.** If there are three slider rows, three slider cells are created per socket. Cells that are not their own row are pushed off screen with `#anchored_offset_value_y` (`((not #mine) * 1000)`).",
+        "sources": "BC-S9"
+      }
+    },
+    {
+      "id": "COL-14",
+      "level": [
+        "pack",
+        "code"
+      ],
+      "ko": {
+        "text": "같은 이름의 엔진 팩토리를 **다른 위치에 한 번 더 선언**하면 같은 데이터로 두 번째 UI가 만들어진다. 세 팩이 모두 이 방법을 쓴다: `server_form_factory`(BC, BA), `hud_title_text_factory`(BA, AP), `chat_item_factory`(AP).",
+        "sources": "BC 4.1-(1), BA 2장·6장, AP 4.1·4.5, BW-form, BW-intro"
+      },
+      "en": {
+        "text": "If you **declare an engine factory of the same name once more at another location**, a second UI is created from the same data. All three packs use this method: `server_form_factory` (BC, BA), `hud_title_text_factory` (BA, AP) and `chat_item_factory` (AP).",
+        "sources": "BC 4.1-(1), BA chapters 2 and 6, AP 4.1 and 4.5, BW-form, BW-intro"
+      }
+    },
+    {
+      "id": "COL-15",
+      "level": [
+        "vanilla",
+        "code"
+      ],
+      "ko": {
+        "text": "`factory_variables: [\"$a\", \"$b\"]`는 팩토리 호스트의 변수를 만들어진 컨트롤로 넘긴다. 엔진은 각 이름을 팩토리를 선언한 스코프에서 찾아 그 값을 넘긴다(COL-41). 바닐라에서 37회(store, pdp, marketplace_sdl, realms_settings, toast_screen 등) 쓰지만 이 프로젝트 출처 중 게임에서 실측한 곳은 없다.",
+        "sources": "VN store_common.json 등 37회, NB-04"
+      },
+      "en": {
+        "text": "`factory_variables: [\"$a\", \"$b\"]` passes the factory host's variables to the created controls. The engine looks up each name in the scope that declared the factory and passes its value (COL-41). Vanilla uses it 37 times (store, pdp, marketplace_sdl, realms_settings, toast_screen, etc.), but none of this project's sources measured it in game.",
+        "sources": "VN store_common.json and others 37 uses, NB-04"
+      }
+    },
+    {
+      "id": "COL-16",
+      "level": [
+        "vanilla",
+        "pack",
+        "inferred"
+      ],
+      "ko": {
+        "text": "`max_children_size`는 팩토리가 만들 최대 개수다(바닐라 HUD 채팅 50, AP 토스트 12). 같은 데이터를 공유하는 두 번째 팩토리는 보이지 않는 항목도 한도를 소모한다.",
+        "sources": "VN hud_screen.json:1041, AP 4.5"
+      },
+      "en": {
+        "text": "`max_children_size` is the maximum number a factory creates (vanilla HUD chat 50, AP toast 12). A second factory sharing the same data uses up the limit even on invisible items.",
+        "sources": "VN hud_screen.json:1041, AP 4.5"
+      }
+    },
+    {
+      "id": "COL-17",
+      "level": [
+        "vanilla",
+        "pack"
+      ],
+      "ko": {
+        "text": "엔진 팩토리가 만든 컨트롤은 데이터를 **변수로** 받는 경우가 있다. 바닐라 액션바 라벨은 `\"text\": \"$actionbar_text\"`를 쓰고, AP는 `hud_title_text_factory`가 만든 컨트롤에서 `$title_text`를 읽어 `ignored`로 판정한다. 변수는 생성 시 한 번 정해지므로 값이 바뀌면 팩토리가 컨트롤을 다시 만든다.",
+        "sources": "VN hud_screen.json:2158, AP 4.1, 부록A C-28, BW-intro"
+      },
+      "en": {
+        "text": "Controls created by an engine factory sometimes receive data **as variables.** The vanilla actionbar label uses `\"text\": \"$actionbar_text\"`, and AP reads `$title_text` in a control created by `hud_title_text_factory` and decides with `ignored`. A variable is decided once at creation, so when the value changes the factory recreates the control.",
+        "sources": "VN hud_screen.json:2158, AP 4.1, Appendix A C-28, BW-intro"
+      }
+    },
+    {
+      "id": "COL-18",
+      "level": [
+        "pack"
+      ],
+      "ko": {
+        "text": "팩토리가 만드는 셀이 크면 화면 열기가 느려진다. BA는 노드 하나에 컨트롤 수백 개가 들어 모든 탭을 보내면 여는 데 수 초가 걸렸고, 선택된 탭의 노드만 보내도록 바꿨다. 셀 크기 × 개수를 줄이는 것이 먼저다.",
+        "sources": "BA 4장"
+      },
+      "en": {
+        "text": "If the cells a factory creates are big, opening the screen is slow. BA had hundreds of controls in one node, so opening took several seconds when all tabs were sent, and it was changed to send only the selected tab's node. Reducing cell size x count comes first.",
+        "sources": "BA chapter 4"
+      }
+    },
+    {
+      "id": "COL-19",
+      "level": [
+        "vanilla",
+        "code"
+      ],
+      "ko": {
+        "text": "1.26.50 바닐라의 액션 폼 컬렉션(`form_buttons`)에는 `button`뿐 아니라 `label`, `header`, `divider` 행도 들어온다. 응답의 `selection`은 버튼만 세므로 `label()`을 섞으면 컬렉션 인덱스와 `selection` 번호가 어긋난다. 데이터 채널로 쓸 때는 모든 엔트리를 `button()`으로 보내고, 누를 수 없는 셀은 버튼 매핑을 빼서 만든다.",
+        "sources": "VN server_form.json:126-134, BC 4.1-(3)"
+      },
+      "en": {
+        "text": "The action form collection (`form_buttons`) in 1.26.50 vanilla receives not only `button` but also `label`, `header` and `divider` rows. The `selection` of the response counts only buttons, so mixing in `label()` shifts the collection index and the `selection` number. When using it as a data channel, send every entry with `button()` and make cells that must not be pressable by removing the button mapping.",
+        "sources": "VN server_form.json:126-134, BC 4.1-(3)"
+      }
+    },
+    {
+      "id": "COL-20",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "모달 폼의 `custom_form` 행과 `formValues`는 1:1로 정렬된다. `label()`도 행이고 응답에는 그 자리에 `null`이 온다.",
+        "sources": "BC-S3"
+      },
+      "en": {
+        "text": "The `custom_form` rows of a modal form and `formValues` line up 1:1. A `label()` is also a row and `null` arrives in its place in the response.",
+        "sources": "BC-S3"
+      }
+    },
+    {
+      "id": "COL-21",
+      "level": [
+        "vanilla",
+        "code",
+        "measured"
+      ],
+      "ko": {
+        "text": "1.26.50 바닐라 `custom_form` 팩토리에 `multiselect` 행이 생겼지만 공개 Script API(`@minecraft/server-ui` 2.2.0~2.5.0-beta, `ModalFormData`와 `CustomForm` 모두)에는 이 행을 보내는 메서드가 없다. 폼 JSON을 직접 보내는 서버는 쓸 수 있다(HOST-46).",
+        "sources": "VN server_form.json:294, MJ 4.1, MS"
+      },
+      "en": {
+        "text": "A `multiselect` row was added to the `custom_form` factory in 1.26.50 vanilla, but the public Script API (`@minecraft/server-ui` 2.2.0~2.5.0-beta, both `ModalFormData` and `CustomForm`) has no method that sends this row. A server that sends the form JSON directly can use it (HOST-46).",
+        "sources": "VN server_form.json:294, MJ 4.1, MS"
+      }
+    },
+    {
+      "id": "COL-22",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "`control_ids`를 가진 팩토리에 `#collection_length`로 **문자열 배열**(그 `control_ids`의 키 목록)을 주면 배열 순서대로 그 종류의 컨트롤을 만든다. 식에서 배열을 만들 수는 없으므로 `property_bag`에 배열을 미리 두고(`\"#list1\": [\"apple\", \"label\"]`), `('#list' + #choice)`로 이름을 조립해 고른다. `control_name` 팩토리는 정수를 받는다. `#collection_length`를 `property_bag`에만 두고 바인딩하지 않으면 배열이든 정수든 아무것도 만들지 않았고, 없는 전역 바인딩을 `#collection_length`에 걸어도 같았다([실측 기록](../design/json-ui-claims.mdx#64-이름-바인딩-빈-전역-길이-나눗셈-텍스처-수-파티클-카운터)).",
+        "sources": "BW-dyn 스크린샷 2장, 2026-11-19 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "If you give a factory with `control_ids` a **string array** (the list of keys of that `control_ids`) through `#collection_length`, it creates controls of those kinds in array order. An expression cannot build an array, so put the array in `property_bag` in advance (`\"#list1\": [\"apple\", \"label\"]`) and pick it by assembling the name with `('#list' + #choice)`. A `control_name` factory takes an integer. With `#collection_length` only in `property_bag` and no binding, nothing was created, array or integer, and binding a global that does not exist to `#collection_length` gave the same ([measurement record](../design/json-ui-claims.mdx#64-named-bindings-empty-global-length-division-texture-count-particle-counter)).",
+        "sources": "BW-dyn, 2 screenshots, 2026-11-19 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "COL-23",
+      "level": [
+        "measured",
+        "code"
+      ],
+      "ko": {
+        "text": "식이 만든 `'#이름'` 문자열은 같은 컨트롤의 `property_bag`에서 그 이름의 값으로 읽힌다(사전 조회). COL-22와 bedrock-core의 화면 라우팅(HOST-06 `('#route_' + #title_text)`)이 같은 메커니즘이다. 원리: 괄호 묶음의 결과가 `#이름` 문자열이면 그 컨트롤 주머니의 값으로 바뀐다(EXP-35).",
+        "sources": "BW-dyn 스크린샷, BC 4.1-(2), CN-run"
+      },
+      "en": {
+        "text": "A `'#name'` string made by an expression is read as the value of that name in the same control's `property_bag` (dictionary lookup). COL-22 and bedrock-core's screen routing (HOST-06 `('#route_' + #title_text)`) are the same mechanism. Principle: if the result of a parenthesized group is a `#name` string, it is replaced by the value in that control's bag (EXP-35).",
+        "sources": "BW-dyn screenshot, BC 4.1-(2), CN-run"
+      }
+    },
+    {
+      "id": "COL-24",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "`#collection_length`로 직접 구동하는 팩토리는 컬렉션을 지원하는 컨테이너(`stack_panel`, `collection_panel`)의 `factory` 속성으로 둔다. 위키 예제는 `collection_name` 없이 `stack_panel` + `factory`만으로 동작했다.",
+        "sources": "BW-dyn 스크린샷"
+      },
+      "en": {
+        "text": "A factory driven directly by `#collection_length` goes in the `factory` property of a container that supports collections (`stack_panel`, `collection_panel`). The wiki example worked with only `stack_panel` + `factory` without `collection_name`.",
+        "sources": "BW-dyn screenshot"
+      }
+    },
+    {
+      "id": "COL-25",
+      "level": [
+        "code",
+        "vanilla"
+      ],
+      "ko": {
+        "text": "`\"type\": \"factory\"` 컨트롤은 **컨트롤 이름이 곧 팩토리 이름**이다(`server_form_factory`). 두 번째 팩토리는 `\"type\": \"panel\"` + `\"factory\": { \"name\": \"server_form_factory\", … }`로 만들고, 컨트롤 이름은 원본·형제와 겹치지 않게 짓는다. 엔진은 `type: factory` 컨트롤에서 팩토리 이름을 따로 읽지 않고, 다른 타입은 `factory` 객체의 `name`을 읽는다(COL-42).",
+        "sources": "NB-05, VN server_form.json, BW-form(이름 겹침 주의)"
+      },
+      "en": {
+        "text": "For a `\"type\": \"factory\"` control, **the control name is the factory name** (`server_form_factory`). Make a second factory with `\"type\": \"panel\"` + `\"factory\": { \"name\": \"server_form_factory\", … }` and name the control so it does not collide with the original or siblings. The engine does not read a factory name separately from a `type: factory` control, and other types read `name` of the `factory` object (COL-42).",
+        "sources": "NB-05, VN server_form.json, BW-form (beware of name collision)"
+      }
+    },
+    {
+      "id": "COL-26",
+      "level": [
+        "unverified"
+      ],
+      "ko": {
+        "text": "컬렉션과 함께 쓰는 팩토리·그리드는 만든 컨트롤에 인덱스를 자동으로 붙인다.",
+        "sources": "BW-dyn"
+      },
+      "en": {
+        "text": "Factories and grids used with collections automatically attach an index to the controls they create.",
+        "sources": "BW-dyn"
+      }
+    },
+    {
+      "id": "COL-27",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "`#collection_length`는 정수, 불리언(1/0), 역할 이름 배열을 받는다. 리터럴 숫자 길이는 `control_name` 템플릿 팩토리에서만 그 수만큼 만든다. 팩토리에 없는 역할 이름은 아무것도 만들지 않는다. 엔진도 상점 화면에서 역할 이름 배열(`[\"tag\", …]`)을 길이 값으로 준다(COL-46).",
+        "sources": "NB-14(역할 이름 배열), CN 테스트 N12·B41(그 밖)"
+      },
+      "en": {
+        "text": "`#collection_length` accepts an integer, a boolean (1/0) and an array of role names. A literal numeric length creates that many only in a `control_name` template factory. A role name not in the factory creates nothing. The engine also gives a role name array (`[\"tag\", …]`) as a length value on the store screen (COL-46).",
+        "sources": "NB-14 (role name array), CN tests N12 and B41 (the rest)"
+      }
+    },
+    {
+      "id": "COL-28",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "`control_name`이 있으면 `control_ids`는 읽히지 않는다. 둘을 함께 두지 않는다. `max_children_size: 0`은 무제한이다.",
+        "sources": "NB-06(`control_name` 우선), CN(`max_children_size: 0`)"
+      },
+      "en": {
+        "text": "If `control_name` exists, `control_ids` is not read. Do not put both together. `max_children_size: 0` is unlimited.",
+        "sources": "NB-06 (`control_name` first), CN (`max_children_size: 0`)"
+      }
+    },
+    {
+      "id": "COL-29",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "`control_name` 템플릿과 `grid_item_template`의 셀은 팩토리를 선언한 곳의 `$변수`를 본다. `control_ids`로 만든 컨트롤은 자기 변수와 `factory_variables`로 넘긴 변수만 본다. 엔진은 `control_name` 원형을 팩토리 해석 때 선언 스코프로 만든다(COL-45).",
+        "sources": "NB-13(`control_name` 원형), CN, COL-15 보강"
+      },
+      "en": {
+        "text": "Cells of a `control_name` template and of `grid_item_template` see the `$variables` of where the factory was declared. Controls made by `control_ids` see only their own variables and those passed with `factory_variables`. The engine builds the `control_name` prototype in the declaring scope when resolving the factory (COL-45).",
+        "sources": "NB-13 (`control_name` prototype), CN, COL-15 reinforcement"
+      }
+    },
+    {
+      "id": "COL-30",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "엔진은 그리드 칸 수를 `#grid_number_size`, 팩토리 생성 수를 `#collection_number_size`, 컬렉션 크기를 `#collection_total_items`로 주머니에 쓴다. view 바인딩으로 읽어 \"비었음\" 표시 등에 쓸 수 있다.",
+        "sources": "CN 테스트 B55·B41"
+      },
+      "en": {
+        "text": "The engine writes the grid cell count as `#grid_number_size`, the factory creation count as `#collection_number_size` and the collection size as `#collection_total_items` into the bag. A view binding can read them for use such as an \"empty\" indicator.",
+        "sources": "CN tests B55 and B41"
+      }
+    },
+    {
+      "id": "COL-34",
+      "level": [
+        "measured",
+        "conflict"
+      ],
+      "ko": {
+        "text": "클라이언트는 액션 폼의 `#form_button_length`를 지금까지 보인 **가장 큰 폼**의 버튼 수로 붙잡고 있었다(디버그 라벨 93, 재접속 뒤에도 93, `always_when_visible`로도 그대로). 이 값으로 격자 크기를 정하면 작은 폼에서 빈 칸이 이어진다. 칸 수는 본문 같은 데이터 채널로 따로 보낸다(EXP-45). Windows 1.26.65.1(2026-11-19)에서는 재현되지 않았다: 버튼 30개 폼 다음에 연 버튼 4개 폼에서 `4`였다([실측 기록](../design/json-ui-claims.mdx#65-소수-리터럴-alpha-문자열-나누기-hud-렌더링-쿼리)).",
+        "sources": "DF, 2026-11-19 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "The client held the action form's `#form_button_length` at the button count of the **largest form** seen so far (debug label 93, still 93 after reconnecting, unchanged with `always_when_visible` too). If you set the grid size from this value, empty cells continue in a smaller form. Send the cell count separately through a data channel such as the body (EXP-45). It did not reproduce on Windows 1.26.65.1 (2026-11-19): a 4-button form opened after a 30-button form gave `4` ([measurement record](../design/json-ui-claims.mdx#65-decimal-literals-alpha-string-division-hud-rendering-queries)).",
+        "sources": "DF, 2026-11-19 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "COL-35",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "줄바꿈 격자는 숨은 버튼에도 칸을 준다. 탭·뒤로·쪽 같은 표식 버튼은 칸 버튼 **뒤에** 보내고(앞에 두면 칸이 밀려 시작), 격자 크기에는 칸 버튼 수만 넣는다(넣으면 빈 줄이 하나 더 생겨 창이 몇 픽셀 스크롤됐다).",
+        "sources": "DF"
+      },
+      "en": {
+        "text": "A wrapping grid gives cells to hidden buttons too. Send marker buttons such as tab, back and page **after** the cell buttons (if placed before, the cells start shifted), and put only the number of cell buttons in the grid size (putting more made one extra empty row and the window scrolled a few pixels).",
+        "sources": "DF"
+      }
+    },
+    {
+      "id": "COL-36",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "팩토리·격자 길이는 `#form_button_length`의 식으로 계산해도 그 값을 따랐다. Windows 1.26.65.1에서 팩토리가 만든 라우터 창 안에 `collection_name: \"form_buttons\"`와 `factory`(`control_name`)를 가진 `stack_panel`을 두고 버튼 6개를 보냈다. 길이 바인딩에 `always`를 주자 `#form_button_contents`는 6개, `#form_button_length`는 6개, `(#form_button_length - 1)`은 5개, `((#form_button_length * 0) + 1)`은 1개를 만들었다. 길이 바인딩이 `binding_condition: \"visible\"`이면 바닐라 꼴인 `#form_button_contents`까지 모든 팩토리가 0개를 만들었다. `grid_rescaling_type: \"horizontal\"` 격자의 `#maximum_grid_items`는 `always_when_visible`로 `#form_button_length`를 주면 6칸, `(#form_button_length - 1)`을 주면 5칸이었다([실측 기록](../design/json-ui-claims.mdx#6-추가-항목)). 다른 구조에서 잰 DF 실측(Windows 1.26.52)은 식(`* 1`, `* (표식 일치)`)이면 팩토리가 버튼을 만들지 않고 격자는 식 자체가 된다고 기록했는데, 이 구조에서는 재현되지 않았다. 팩토리가 비면 길이 바인딩의 조건부터 본다.",
+        "sources": "DF, 2026-11-18 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "Factory and grid lengths followed the value even when computed with an expression of `#form_button_length`. On Windows 1.26.65.1, a `stack_panel` with `collection_name: \"form_buttons\"` and a `factory` (`control_name`) was placed inside a factory-created router window, and 6 buttons were sent. With `always` on the length binding, `#form_button_contents` made 6, `#form_button_length` made 6, `(#form_button_length - 1)` made 5, and `((#form_button_length * 0) + 1)` made 1. With `binding_condition: \"visible\"` on the length binding, every factory made 0, even the vanilla form `#form_button_contents`. In a grid with `grid_rescaling_type: \"horizontal\"`, `#maximum_grid_items` from `#form_button_length` (`always_when_visible`) gave 6 cells and from `(#form_button_length - 1)` gave 5 cells ([measurement log](../design/json-ui-claims.mdx#6-additional-items)). The DF measurement (Windows 1.26.52), taken in another structure, recorded that an expression (`* 1`, `* (marker match)`) made the factory create no buttons and the grid become the expression itself; this structure did not reproduce it. When a factory comes out empty, check the length binding's condition first.",
+        "sources": "DF, 2026-11-18 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "COL-37",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "줄마다 버튼 전체를 걷는 스택을 두면(48칸 격자 + 재료 줄) 화면이 여는 데 4~5초 걸렸고, 칸마다 `collection_index`로 버튼 하나만 읽는 고정 배치(COL-06)로 바꾸니 1초쯤이 됐다. 칸마다 버튼도 하나만 둔다(누르는 것·안 누르는 것을 둘 다 두면 컨트롤이 두 배다).",
+        "sources": "DF"
+      },
+      "en": {
+        "text": "With a stack that walks whole buttons per row (a 48-cell grid + a material row), the screen took 4~5 seconds to open, and switching to a fixed layout that reads only one button per cell with `collection_index` (COL-06) made it about 1 second. Also put only one button per cell (having both a pressable one and a non-pressable one doubles the controls).",
+        "sources": "DF"
+      }
+    },
+    {
+      "id": "COL-38",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "`collection_index`는 `collection_name`을 가진 `stack_panel`의 바로 아래 자식에서만 먹었다. 그 자리를 `panel`로 두면 콘텐츠 로그에 `Unknown property [collection_index]`·`[collection_name]`이 찍히고 비었다(COL-01, COL-02와 같은 결론, 상자 화면 `container_items`도 같다).",
+        "sources": "DF"
+      },
+      "en": {
+        "text": "`collection_index` took effect only on a direct child of a `stack_panel` that has `collection_name`. When that place was a `panel`, `Unknown property [collection_index]` and `[collection_name]` were printed in the content log and it was empty (the same conclusion as COL-01 and COL-02, and the same for the chest screen `container_items`).",
+        "sources": "DF"
+      }
+    },
+    {
+      "id": "COL-39",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "사전 조회 라우팅(HOST-06)은 동작했다: `stack_panel`에 `\"property_bag\": { \"#df_layout_1\": [ \"on\" ], \"#df_layout_0\": [] }`, `\"factory\": { \"control_ids\": { \"on\": \"…\" } }`, `#collection_length` ← `(('#df_layout_' + (조건 * 1)))`이면 조건이 맞을 때만 레이아웃이 만들어졌다. 멈춤·종료는 없었다(DBG-19와 다른 결과). `('#if_' + 불리언)`도 `'#if_true'`나 `'#if_false'`가 되어 `property_bag` 키를 찾았다([실측 기록](../design/json-ui-claims.mdx#65-소수-리터럴-alpha-문자열-나누기-hud-렌더링-쿼리)).",
+        "sources": "DF, 2026-11-19 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "Dictionary lookup routing (HOST-06) worked: with `\"property_bag\": { \"#df_layout_1\": [ \"on\" ], \"#df_layout_0\": [] }` on a `stack_panel`, `\"factory\": { \"control_ids\": { \"on\": \"…\" } }`, and `#collection_length` bound from `(('#df_layout_' + (condition * 1)))`, the layout was created only when the condition matched. There was no freeze or exit (a different result from DBG-19). `('#if_' + boolean)` also became `'#if_true'` or `'#if_false'` and found the `property_bag` key ([measurement record](../design/json-ui-claims.mdx#65-decimal-literals-alpha-string-division-hud-rendering-queries)).",
+        "sources": "DF, 2026-11-19 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "COL-40",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "그런데 우리 팩토리가 만든 레이아웃 **안에서는** 액션 폼 데이터가 격자(`grid` + `collection_name`)의 칸에만 닿았다. 고정 `collection_index` 칸은 비었고, `#form_button_contents`로 버튼을 만드는 안쪽 팩토리는 아무것도 만들지 않았다. `collection_panel`(`collection_name` 유무)·`stack_panel`·`control_name`·`control_ids` 모두 같았고, 칸 바인딩에 `always`를 줘도(BND-07) 그대로였다. `panel` + `factory`는 아무것도 만들지 않았다. 그래서 레이아웃이 버튼을 격자로만 읽을 때만 게이트를 쓸 수 있다. 화면 맨 위 라우터에서는 다른 결과가 나왔다(COL-47, C-65). Windows 1.26.65.1에서 `server_form`의 `main_screen_content`에 `insert_back`으로 넣은 라우터 창에서는 `always`로도 빈다는 결과가 재현되지 않았다. 고정 칸은 기본 조건이면 첫 열기에 비었고, 두 바인딩에 `always`를 주자 첫 열기부터 채워졌다([실측 기록](../design/json-ui-claims.mdx)). 같은 라우터 창 안에 1x1 grid 지연 루트(grid `[1,1]`, `#maximum_grid_items`를 `once`로 버튼 수, `visible`로 제목 검사 식)를 두고 그 칸 안 `stack_panel`에 고정 `collection_index` 0, 4, 5를 두자 바인딩이 기본 조건이어도 첫 열기부터 채워졌다(두 번째 열기도 같음, [기록](../design/json-ui-claims.mdx#63-상태-유지-지연-루트-팩-순서-렌더링)).",
+        "sources": "DF, 2026-11-19 Windows 1.26.65.1"
+      },
+      "en": {
+        "text": "However, **inside** a layout created by our factory, action form data reached only the cells of a grid (`grid` + `collection_name`). Fixed `collection_index` cells were empty, and an inner factory that creates buttons from `#form_button_contents` created nothing. `collection_panel` (with or without `collection_name`), `stack_panel`, `control_name` and `control_ids` were all the same, and giving the cell bindings `always` (BND-07) changed nothing. `panel` + `factory` created nothing. So a gate can be used only when the layout reads buttons only as a grid. A router at the very top of the screen gave a different result (COL-47, C-65). On Windows 1.26.65.1, in the window of a router inserted with `insert_back` into `main_screen_content` of `server_form`, the \"empty even with `always`\" result was not reproduced. Fixed cells were empty on first open with the default condition and filled from the first open with `always` on both bindings ([measurement record](../design/json-ui-claims.mdx)). With a 1x1 grid lazy root in the same router window (grid `[1,1]`, `#maximum_grid_items` set to the button count with `once` and to a title check expression with `visible`) and fixed `collection_index` 0, 4, 5 on a `stack_panel` inside its cell, the cells filled from the first open even with the default binding condition (same on a second open, [record](../design/json-ui-claims.mdx#63-state-holding-lazy-roots-pack-order-rendering)).",
+        "sources": "DF, 2026-11-19 Windows 1.26.65.1"
+      }
+    },
+    {
+      "id": "COL-41",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "`factory_variables`는 **배열일 때만** 읽고, 배열이 아니면 조용히 무시한다. 항목이 문자열이 아니면 `factory_variables should all be strings of json variables created higher up the tree.` 오류를 남긴다. 각 이름은 팩토리를 선언한 컨트롤의 스코프에서 찾아 그 값을 팩토리에 저장하고, 만들어진 컨트롤이 받는다(COL-15의 추론과 같다).",
+        "sources": "NB-04"
+      },
+      "en": {
+        "text": "`factory_variables` is read **only when it is an array** and silently ignored if not. If an item is not a string, it leaves the error `factory_variables should all be strings of json variables created higher up the tree.`. Each name is looked up in the scope of the control that declared the factory, and its value is stored in the factory and received by the created controls (the same as the inference in COL-15).",
+        "sources": "NB-04"
+      }
+    },
+    {
+      "id": "COL-42",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "`\"type\": \"factory\"`이고 그 컨트롤에 `control_name`이나 `control_ids`가 직접 있으면 팩토리 이름을 따로 읽지 않는다(컨트롤 이름이 팩토리 이름, COL-25). 다른 타입은 `\"factory\": { … }` 객체가 있을 때만 팩토리를 만들고, 그 `name`이 비면 `The factory name should not be empty!`를 남긴다.",
+        "sources": "NB-05"
+      },
+      "en": {
+        "text": "If it is `\"type\": \"factory\"` and that control directly has `control_name` or `control_ids`, the factory name is not read separately (the control name is the factory name, COL-25). Other types create a factory only when a `\"factory\": { … }` object exists, and if its `name` is empty it leaves `The factory name should not be empty!`.",
+        "sources": "NB-05"
+      }
+    },
+    {
+      "id": "COL-43",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "팩토리는 `control_name`을 먼저 읽고 비어 있을 때만 `control_ids`를 읽는다(COL-28). `insert_location`은 값이 정확히 `\"front\"`일 때만 앞에 넣고 그 밖은 모두 뒤다(기본 `back`).",
+        "sources": "NB-06"
+      },
+      "en": {
+        "text": "A factory reads `control_name` first and reads `control_ids` only when it is empty (COL-28). `insert_location` inserts at the front only when the value is exactly `\"front\"` and anything else is back (default `back`).",
+        "sources": "NB-06"
+      }
+    },
+    {
+      "id": "COL-44",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "컨트롤을 만들 때 **부모에 컬렉션 이름이 있는 컬렉션 컴포넌트가 있으면** 그 컨트롤은 자동으로 컬렉션 항목이 된다. `collection_index`는 이때만 읽혀(기본 -1) 인덱스를 고정한다. 그래서 `collection_index`는 컬렉션 부모의 직속 자식에서만 의미가 있다(COL-02, COL-38과 같은 결론). 직속 자식이지만 항목이 되면 안 되는 컨트롤(장식 패널 등)에는 `\"ignoreCollectionItem\": true`를 준다.",
+        "sources": "NB-07"
+      },
+      "en": {
+        "text": "When creating a control, **if the parent has a collection component with a collection name**, that control automatically becomes a collection item. `collection_index` is read only then (default -1) and fixes the index. So `collection_index` is meaningful only on a direct child of a collection parent (the same conclusion as COL-02 and COL-38). For a control that is a direct child but must not become an item (a decorative panel, etc.), give `\"ignoreCollectionItem\": true`.",
+        "sources": "NB-07"
+      }
+    },
+    {
+      "id": "COL-45",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "팩토리 해석 경로: `\"type\": \"factory\"`이면서 `control_name`·`control_ids`를 직접 가지면 이름 없이 해석하고, 그 밖에는 타입과 상관없이 `factory`가 **객체일 때만** 해석해 `name`을 읽는다(`type: factory`에 `factory` 객체를 써도 된다). 컨트롤 하나에는 팩토리가 하나만 붙는다. `control_name`은 해석할 때 선언한 컨트롤의 변수 스코프로 바로 원형을 만들고, `control_ids`는 종류와 정의 문자열만 저장한다(COL-29의 차이). `max_children_size`는 생략하면 0이다.",
+        "sources": "NB-13"
+      },
+      "en": {
+        "text": "Factory resolution path: if it is `\"type\": \"factory\"` and directly has `control_name` or `control_ids`, it resolves without a name, and otherwise, regardless of type, it resolves only when `factory` is **an object** and reads `name` (you may also write a `factory` object on a `type: factory`). Only one factory attaches to one control. `control_name` builds the prototype right away with the declaring control's variable scope at resolution, and `control_ids` stores only the kind and definition string (the COL-29 difference). `max_children_size` is 0 if omitted.",
+        "sources": "NB-13"
+      }
+    },
+    {
+      "id": "COL-46",
+      "level": [
+        "code"
+      ],
+      "ko": {
+        "text": "바닐라에 없는 `tags_factory_first_hidden_child_index`·`languages_factory_first_hidden_child_index`·`<접두어>_first_hidden_child_index`는 **상점 상세 화면 설명 컴포넌트 전용**이다. 속성 주머니의 이 정수로 몇 번째 태그·언어부터 숨기거나 다음 줄로 넘길지 정하고, 그 개수만큼 `\"tag\"`·`\"language\"`를 반복한 배열을 길이 바인딩 값으로 준다. 일반 팩토리 기능이 아니므로 서버 폼·HUD 팩토리에는 쓰지 않는다. 이 값을 누가 쓰는지는 확인하지 않았다.",
+        "sources": "NB-14"
+      },
+      "en": {
+        "text": "`tags_factory_first_hidden_child_index`, `languages_factory_first_hidden_child_index` and `<prefix>_first_hidden_child_index`, which vanilla does not have, are **exclusive to the store detail screen description component.** This integer in the property bag decides from which tag or language to hide or push to the next row, and an array repeating `\"tag\"` or `\"language\"` that many times is given as the length binding value. It is not a general factory feature, so it is not used in server form or HUD factories. Who uses this value was not checked.",
+        "sources": "NB-14"
+      }
+    },
+    {
+      "id": "COL-47",
+      "level": [
+        "measured",
+        "conflict"
+      ],
+      "ko": {
+        "text": "`third_party_server_screen`의 `$screen_content`에 둔 사전 조회 라우터(HOST-06)가 만든 창 안에서는 고정 `collection_index` 칸, 라디오 토글 칸, `#form_button_contents` 길이의 스택 팩토리가 모두 액션 폼 데이터를 받았다. 다만 칸의 컬렉션·`collection_details`·본문 바인딩이 기본 조건이면 처음 열 때 비고 탭을 한 번 바꾸면 채워졌고, 모두 `binding_condition: \"always\"`로 두자 열자마자 채워졌다. COL-40(같은 칸이 `always`로도 빔)과 다른 결과이며(C-65), 차이는 라우터가 화면 맨 위에 있다는 점으로 본다. Windows 1.26.65.1에서 `server_form`의 `main_screen_content`에 `insert_back`한 라우터로 고정 칸을 재자 COL-47과 같았다: 기본 조건이면 첫 열기에 비었고(HUD에서 연 경우와 메뉴 폼에서 넘어온 경우 모두), 두 바인딩에 `always`를 주면 첫 열기부터 채워졌다([실측 기록](../design/json-ui-claims.mdx)). 고정 칸을 라우터 `collection_panel`에 바로 두지 않고 1x1 grid 지연 루트(grid `[1,1]`, `#maximum_grid_items`를 `once`로 버튼 수, `visible`로 제목 검사 식) 칸 안에 두면 기본 조건으로도 첫 열기부터 채워졌다(2026-11-19 Windows 1.26.65.1, [기록](../design/json-ui-claims.mdx#63-상태-유지-지연-루트-팩-순서-렌더링)).",
+        "sources": "FFR"
+      },
+      "en": {
+        "text": "Inside a window created by the dictionary lookup router (HOST-06) placed in `$screen_content` of `third_party_server_screen`, the fixed `collection_index` cells, the radio toggle cells and a stack factory of length `#form_button_contents` all received action form data. But if the cells' collection, `collection_details` and body bindings had the default condition, they were empty on first open and filled after switching a tab once, and when all were set to `binding_condition: \"always\"` they were filled as soon as it opened. This differs from COL-40 (where the same cells were empty even with `always`) (C-65), and the difference is judged to be that the router is at the very top of the screen. On Windows 1.26.65.1, fixed cells measured with a router inserted with `insert_back` into `main_screen_content` of `server_form` matched COL-47: empty on first open with the default condition (both when opened from the HUD and when coming from a menu form), and filled from the first open with `always` on both bindings ([measurement record](../design/json-ui-claims.mdx)). When the fixed cells sit inside the cell of a 1x1 grid lazy root (grid `[1,1]`, `#maximum_grid_items` set to the button count with `once` and to a title check expression with `visible`) instead of directly in the router `collection_panel`, they filled from the first open even with the default condition (2026-11-19 Windows 1.26.65.1, [record](../design/json-ui-claims.mdx#63-state-holding-lazy-roots-pack-order-rendering)).",
+        "sources": "FFR"
+      }
+    },
+    {
+      "id": "COL-48",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "팩토리가 만든 칸 안에 둔 팩토리는 `#title_text`·길이 바인딩이 기본 조건이면 처음에 아무것도 만들지 않았다. 그 두 바인딩에 `always`를 주면 열자마자 만들어졌다. 안쪽을 grid로 바꿔도 됐다. 크기 애니메이션으로 레이아웃을 다시 계산하게 하거나, 길이를 바깥 데이터 소스에서 읽는 방법은 효과가 없었다.",
+        "sources": "FFR"
+      },
+      "en": {
+        "text": "A factory placed inside a cell created by a factory created nothing at first if `#title_text` and the length binding had the default condition. Giving those two bindings `always` made it created as soon as it opened. Changing the inside to a grid also worked. Having a size animation recalculate the layout, or reading the length from an outside data source, had no effect.",
+        "sources": "FFR"
+      }
+    },
+    {
+      "id": "COL-49",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "2열 grid(칸 높이 30px)에 버튼을 그리면 2000개(약 30000px)까지는 정상이고, 3000개(약 45000px) 이상에서는 스크롤 범위만 길게 잡히고 칸들이 맨 위 약 200px 안에 겹쳐 그려졌다. 원인은 확인하지 못했다. 같은 수를 `#form_button_contents` 길이의 세로 스택 팩토리 1열로 그리면 그려지지만 렉이 심했다.",
+        "sources": "FFR"
+      },
+      "en": {
+        "text": "When drawing buttons in a 2-column grid (cell height 30px), it was fine up to 2000 (about 30000px), and at 3000 (about 45000px) and above only the scroll range was long and the cells were drawn overlapping within the top 200px or so. The cause was not confirmed. Drawing the same count as a one-column vertical stack factory of length `#form_button_contents` drew but lagged heavily.",
+        "sources": "FFR"
+      }
+    },
+    {
+      "id": "COL-50",
+      "level": [
+        "measured"
+      ],
+      "ko": {
+        "text": "고정 `collection_index` 칸의 2차원 배치는 세로 `stack_panel` 안에 `collection_name`을 가진 가로 `stack_panel` 줄을 두고, 칸을 줄의 바로 아래 자식으로 둔다(COL-38, LAY-56). 칸 부모가 `panel`이면 칸마다 다른 인덱스를 줘도 모두 같은 버튼(인덱스 0)을 그렸고, 칸에 `collection_details` 바인딩이나 `toggle_grid_collection_name`을 더해도 바뀌지 않았다.",
+        "sources": "FFR"
+      },
+      "en": {
+        "text": "For a 2D layout of fixed `collection_index` cells, put horizontal `stack_panel` rows that have `collection_name` inside a vertical `stack_panel`, and put the cells as direct children of the rows (COL-38, LAY-56). If the cell parent was a `panel`, every cell drew the same button (index 0) even with different indices per cell, and adding a `collection_details` binding or `toggle_grid_collection_name` to the cells did not change it.",
+        "sources": "FFR"
+      }
+    },
+    {
+      "id": "COL-31",
+      "status": "proposed",
+      "level": [
+        "pack",
+        "measured"
+      ],
+      "ko": {
+        "text": "액션 폼 행 수는 전역 바인딩 `#form_button_length`로 읽는다. `binding_name_override`로 팩토리의 `#collection_length`나 그리드의 `#maximum_grid_items`에 넣는다. 바닐라 1.26.50 UI는 이 이름을 쓰지 않는다. Windows 1.26.65.1에서 버튼 35, `label` 4, `divider` 3, `header` 2인 폼의 값은 44로, 라벨·구분선·헤더 행도 셌다([실측 기록](../design/json-ui-claims.mdx)).",
+        "sources": "SLB 8장, EUB 예제"
+      },
+      "en": {
+        "text": "The action form row count is read through the global binding `#form_button_length`. Put it into the factory's `#collection_length` or the grid's `#maximum_grid_items` with `binding_name_override`. The vanilla 1.26.50 UI does not use this name. On Windows 1.26.65.1, a form with 35 buttons, 4 `label`, 3 `divider` and 2 `header` rows gave 44, so label, divider and header rows are counted too ([measurement record](../design/json-ui-claims.mdx)).",
+        "sources": "SLB chapter 8, EUB example"
+      }
+    }
+  ]
+}
