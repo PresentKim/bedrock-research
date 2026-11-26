@@ -78,7 +78,10 @@ export function checkPage(file, sources) {
   if (!fm.description) errs.push('missing description');
   if (fm.sidebar_position === undefined) errs.push('missing sidebar_position');
   if (!Array.isArray(fm.sources) || fm.sources.length === 0) errs.push('missing sources');
-  else for (const s of fm.sources) if (!sources[s]) errs.push(`unknown source ${s}`);
+  else {
+    for (const s of fm.sources) if (!sources[s]) errs.push(`unknown source ${s}`);
+    for (const s of new Set(fm.sources.filter((s, i) => fm.sources.indexOf(s) !== i))) errs.push(`duplicate source ${s}`);
+  }
 
   const text = stripCode(body);
   for (const m of text.matchAll(/<Excerpt\b[^>]*?\bsrc=["']([^"']+)["']/g)) {
