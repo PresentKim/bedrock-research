@@ -1,6 +1,6 @@
 ---
 title: "Factory synthesis and the StarLibV2 key layout"
-description: "A synthesis of guide rules, engine behavior analysis, community reports and vanilla tallies about factories, StarLibV2's key gates and 2D layout (6.9~6.10), how evidence is marked, and source abbreviations."
+description: "A synthesis of guide rules, engine behavior analysis, community reports and vanilla tallies about factories, StarLibV2's key gates and 2D layout, how evidence is marked, and source abbreviations."
 sidebar_position: 6.5
 sources:
   - repo-guide
@@ -9,20 +9,18 @@ sources:
   - ms-learn
   - private-research
   - bedrock-core
-  - private-research
   - advancementpack
   - cinnabar
-  - private-research
   - starlibv2
 ---
 
-This continues from [Collections and factories](./collections-and-factory.mdx). It assumes you have read the rules of sections 6.0~6.8 and 6.11 (COL-01~50), and carries a synthesis that gathers the information about factories in one place, the StarLibV2 analysis and a table of how evidence is marked.
+This continues from [Collections and factories](./collections-and-factory.mdx). It assumes you have read the rules of that page (COL-01~50), and carries a synthesis that gathers the information about factories in one place, the StarLibV2 analysis and a table of how evidence is marked.
 
-## 6.9 Factory synthesis
+## Factory synthesis
 
 Below is a summary that gathers the information about factories (`factory`) in one place (2026-10-23, based on vanilla 1.26.50.4 and Android 1.26.52.3). The evidence `(community)` is the Bedrock OSS and community reports (`private-research`), and entries with numbers such as `CN-43` are finding numbers of the Cinnabar analysis. Where the evidence is only `code` or the community, verify in game before use.
 
-### 6.9.1 At a glance
+### At a glance
 
 - A factory is a mechanism that **creates controls at runtime** as many as there is data. It has two forms: a `"type": "factory"` control and the `"factory": { … }` property of a container [COL-08].
 - What to create is decided by `control_name` (one kind) or `control_ids` (per kind), and if `control_name` exists, `control_ids` is not read [COL-28][COL-43] (NB-06).
@@ -30,9 +28,9 @@ Below is a summary that gathers the information about factories (`factory`) in o
 - **If `#collection_length` is 0, nothing is created.** So a factory can be used like an `ignored` that is switched on and off by a binding, and unlike `visible` it has no creation or layout cost [COL-10][COL-12].
 - If you place **one more factory with the same name** as an engine factory, a second UI is created from the same data. Custom server forms, HUD toasts and chat notifications all use this method [COL-14].
 - There are three ways to pass values to created controls: `factory_variables` (variables) [COL-15][COL-41], `property_bag_for_children` (property bag) [BND-28], and variables the engine provides (`$title_text`, `$actionbar_text`) [COL-17].
-- `property_bag_for_children`, which entered the stable release around 2026-05, is the most recent change on the factory side (community). `_first_hidden_child_index`, found in the binary, turned out on analysis to be a store-screen-only value (section 8.1). Chapter 8 collects candidates for recent changes.
+- `property_bag_for_children`, which entered the stable release around 2026-05, is the most recent change on the factory side (community). `_first_hidden_child_index`, found in the binary, turned out on analysis to be a store-screen-only value (`_first_hidden_child_index` analysis result). "Candidates for what changed recently and what is new" collects candidates for recent changes.
 
-### 6.9.2 The two forms of a factory
+### The two forms of a factory
 
 ```json
 // (a) A factory control: type is factory. The control name is the factory name
@@ -53,7 +51,7 @@ Below is a summary that gathers the information about factories (`factory`) in o
 - **Vanilla tally (this time, 1.26.50.4)**: 118 factories. The containers holding them are `stack_panel` 68, `type: factory` 35, `panel` 6, those whose type is decided by inheritance 6, `collection_panel` 2, and `slider` 1 (`slider_step_factory`). Counting by literal strings gives `"type": "factory"` 35 times and `"factory": {` 83 times. This differs by 1 from the "36 times" of guide COL-08, which appears to be a counting method difference and was not checked.
 - **Which form to use**: when reusing an engine factory as is, give the same name to (a) or (b). For your own factory driven directly by `#collection_length`, put (b) on a `stack_panel` or `collection_panel` [COL-24]. There is a measurement that `panel` + `factory` created nothing inside a server form layout [COL-40].
 
-### 6.9.3 Keys the engine reads
+### Keys the engine reads
 
 | Key | Where | Value | Meaning | Evidence |
 | --- | --- | --- | --- | --- |
@@ -71,9 +69,9 @@ Below is a summary that gathers the information about factories (`factory`) in o
 - Putting a variable in a `control_ids` value is uncertain. `"test@hud.$content"` gave `UI control reference not found: '$content'`, and the expression `"('test@hud.' + $content)"` was only proposed and not confirmed (community, open question).
 - There is a report that using `control_ids` where only a `control_name` factory is accepted gave `Unknown property [control_ids]`. The cause was not confirmed (community).
 
-### 6.9.4 What drives a factory
+### What drives a factory
 
-#### 6.9.4.1 Factories the engine fills by name
+#### Factories the engine fills by name
 
 The screen controller knows the factory name and puts data in directly. There is no `#collection_length` binding. In vanilla 1.26.50.4, those used without a length binding are as follows (VN tally).
 
@@ -97,7 +95,7 @@ The screen controller knows the factory name and puts data in directly. There is
 - **Engine factory names not in vanilla** (binary string search, 2026-10-23): `all_tags_factory`, `edu_permissions_factory`, `enchant_error_factory`, `joincode_popup_factory`, `joincode_share_popup_factory`, `servers_popup_factory`, `share_copy_popup_factory`, `share_link_popup_factory`, `share_popup_factory`, `teams_share_popup_factory`. Most appear to be for the Education edition and popups. Only that the names exist in the engine was confirmed, and whether data arrives if a resource pack places a factory with the same name is unknown. Short strings may not be caught by this method, so the list is not asserted to be complete (the same limit as NB-12).
 - Some values are readable only inside controls created by an engine factory: `#form_text` only inside `server_form_factory` (community, reported again 2026-10-20), `$actionbar_text` only inside the parent the actionbar factory created, and `#item_text` only inside the item name factory (community). If you choose screens with your own factory you lose `#form_text` inside, so fetch it from an outside "grabber" control with `source_control_name` (community).
 
-#### 6.9.4.2 Factories driven by `#collection_length`
+#### Factories driven by `#collection_length`
 
 - If you bind `#collection_length`, only that many are created. **If 0, none are created** [COL-11].
 - Accepted values: integer, boolean (1/0), **string array** (creates the kinds of `control_ids` in that order) [COL-22][COL-27]. A literal numeric length creates that many only in a `control_name` factory, and a kind name not in the factory creates nothing (CN-44).
@@ -118,7 +116,7 @@ The screen controller knows the factory name and puts data in directly. There is
 - With an expression of `#form_button_length` (such as `(#form_button_length - 1)`) in the length, the factory still made that many controls (Windows 1.26.65.1, length binding `always`). With a `visible` condition on the length binding, even `#form_button_contents` made 0. The DF measurement, taken in another structure, recorded that an expression made no buttons [COL-36].
 - Vanilla also takes the length as a `$variable` (`$panel_length`, `$selected_grid_dimensions`, etc.) and picks with an expression (`('#' + $icon_overlay_collection_name)`) (VN).
 
-### 6.9.5 What created controls receive
+### What created controls receive
 
 | What | How | Evidence |
 | --- | --- | --- |
@@ -132,7 +130,7 @@ The screen controller knows the factory name and puts data in directly. There is
 - **Binding timing**: a binding inside a cell can run too early and be empty. Give it `binding_condition: "always"` or read it outside and copy it [BND-07]. Conversely, `once` is re-evaluated when the factory recreates [BND-06].
 - **Recreation**: when a value received as a variable changes, the control is created anew. Animations also restart from the beginning [COL-17][ANI-12]. Resending a title with the same value also recreates it (community).
 
-### 6.9.6 Placing one more engine factory
+### Placing one more engine factory
 
 If you declare an engine factory of the same name at another location, a second UI is created from the same data [COL-14].
 
@@ -148,7 +146,7 @@ If you declare an engine factory of the same name at another location, a second 
 - To show several elements from one title, as with image overlays, one factory is needed per element (community).
 - A recent case: a pack that draws chat lines as progress bars with `chat_item_factory` (Progress-Bar-Chat, `github.com/nperma/Progress-Bar-Chat`, community 2026-10-22). It was not downloaded and checked for this document.
 
-### 6.9.7 Creation gates and performance
+### Creation gates and performance
 
 | Method | When evaluated | Condition material | Cost |
 | --- | --- | --- | --- |
@@ -163,7 +161,7 @@ If you declare an engine factory of the same name at another location, a second 
 - Reducing cell size x count comes first [COL-18]. A fixed layout that reads just one button per cell with `collection_index` was 4 to 5 times faster than a factory that walks whole buttons per row [COL-06][COL-37].
 - Community opinions: "do not use a factory for a single button distinguished only by one flag", "reduce factories".
 
-### 6.9.8 Candidates for what changed recently and what is new
+### Candidates for what changed recently and what is new
 
 It could not be settled what the story that "something new appeared in factories" points to. These are the candidates in time order.
 
@@ -173,21 +171,21 @@ It could not be settled what the story that "something new appeared in factories
 | Around 2026-05 | **`property_bag_for_children` reflected in the stable release.** It passes bag values down even to the children a factory created. The most likely candidate | Community, [BND-28], VN 10 uses |
 | 1.26.50 | A `multiselect` row in the modal form factory. The public Script API has no method that sends it, and a server that sends form JSON directly can use it (the response is an array of numbers or `null`) | [COL-21], [HOST-46] |
 | 1.26.50 | HUD subtitles changed to `subtitle_container_factory` | [HOST-31] |
-| 1.26.52 binary | `tags_factory_first_hidden_child_index`, `languages_factory_first_hidden_child_index`, `_first_hidden_child_index`. On analysis they were values **exclusive to the store detail screen description component.** It is not a general factory feature (8.1 below) | NB-14, [COL-46] |
-| 1.26.52 binary | 10 engine factory names not in vanilla (section 4.1) | Binary strings |
+| 1.26.52 binary | `tags_factory_first_hidden_child_index`, `languages_factory_first_hidden_child_index`, `_first_hidden_child_index`. On analysis they were values **exclusive to the store detail screen description component.** It is not a general factory feature (`_first_hidden_child_index` analysis result below) | NB-14, [COL-46] |
+| 1.26.52 binary | 10 engine factory names not in vanilla (factories the engine fills by name) | Binary strings |
 | 1.26.60 preview | `AtomicClientEntityFactory` is a C++ class on the entity side and has nothing to do with JSON UI factories | Community 26.60.24 diff report |
 
-#### 6.9.8.1 `_first_hidden_child_index` analysis result (2026-10-23)
+#### `_first_hidden_child_index` analysis result (2026-10-23)
 
 - The functions that use the three strings are all inside `store/servicecomponent/DescriptionComponent.cpp`, that is, the **description component of the store and marketplace detail screen.**
 - The tag and language functions read `tags_factory_first_hidden_child_index` (or `languages_…`) from the control's property bag as an integer, and if absent use the number of tags of that product. They give an array repeating `"tag"` that many times (`["tag", "tag", …]`) as the length binding value. This matches the `tags_factory` and `languages_factory` controls of vanilla `pdp_screen.json` and the `tag` and `language` kinds of `control_ids`.
 - The generic function reads a key made by appending `_first_hidden_child_index` after `"tag_row"` or `"language_row"` and pushes the items from that number onward to the next row. It is used to show tags folded into several rows.
 - In summary it is a store-internal value that decides "from which tag to hide when the description is folded". **It is not a feature to use in server form, HUD or chat factories.** Who writes this value into the bag was not found (0 uses in vanilla JSON).
-- As a bonus, it was confirmed in the binary that the engine directly gives a factory's length binding an **array of kind names** (section 4.2, [COL-27]).
+- As a bonus, it was confirmed in the binary that the engine directly gives a factory's length binding an **array of kind names** (factories driven by `#collection_length`, [COL-27]).
 
 The same analysis also confirmed details of the factory resolution function (NB-13, [COL-45]): `type: factory` can also be resolved on the `factory` object side, and there is one factory per control. `control_name` builds the prototype right at resolution with the declaring scope, and `control_ids` stores only the kind and definition string. The `max_children_size` default is 0.
 
-### 6.9.9 Known problems and pitfalls
+### Known problems and pitfalls
 
 - **A factory inside a server form layout**: inside a layout our factory created, action form data reached only the grid cells, and inner factories and fixed index cells were empty [COL-40]. In a window created by the router at the very top of `$screen_content`, setting the bindings to `always` filled both [COL-47]. A factory inside a cell created by a factory was also created when `#title_text` and the length binding were given `always` [COL-48]. The community also reports that "a child factory under a server form is not filled until input or resize (a grid is fine)".
 - **`#form_button_length` holds the largest form's value**: send the cell count through a separate channel such as the body [COL-34].
@@ -198,7 +196,7 @@ The same analysis also confirmed details of the factory resolution function (NB-
 - There is a report that the **item renderer** does not work inside a factory (community, unconfirmed).
 - Expressions that can hit the problems above must be safe even for wrong input. There is a record of the client freezing in a setup that contained factory cells [DBG-19].
 
-### 6.9.10 Error messages
+### Error messages
 
 | Message | Cause | Evidence |
 | --- | --- | --- |
@@ -209,17 +207,17 @@ The same analysis also confirmed details of the factory resolution function (NB-
 | `Unknown property [control_ids]` | `control_ids` was used where only `control_name` is accepted (cause unconfirmed) | Community |
 | `Unknown property [collection_name]` | `collection_name` was used on `panel` or `image` | [COL-01] |
 
-### 6.9.11 What is still unknown
+### What is still unknown
 
-- Who writes the `_first_hidden_child_index` value into the property bag (section 8.1). It is store-screen-only so the priority is low.
-- Whether data arrives if you place a factory with an engine factory name that vanilla lacks (section 4.1).
-- Whether expressions or variables can be used in `control_ids` values (chapter 3).
+- Who writes the `_first_hidden_child_index` value into the property bag (`_first_hidden_child_index` analysis result). It is store-screen-only so the priority is low.
+- Whether data arrives if you place a factory with an engine factory name that vanilla lacks (factories the engine fills by name).
+- Whether expressions or variables can be used in `control_ids` values (keys the engine reads).
 - The game behavior of `insert_location: "front"` (0 uses in vanilla, only confirmed in the engine).
 - Whether exceeding `max_children_size` erases the oldest first or discards the new. The report on the chat limit of 50 says the front ones are pushed out (community).
 - The cause of inner factories being empty inside a server form layout [COL-40].
 
 
-## 6.10 StarLibV2's key gates and 2D layout (SLB)
+## StarLibV2's key gates and 2D layout (SLB)
 
 StarLibV2 (`jb-starlibv2`, GPL-3.0) controls layout with "keys" contained in server form button strings. It is a technique that makes a vertical factory list appear in 2 or 3 columns, so it is placed in this chapter. Only the technique was rewritten in English and the code was not carried over.
 
@@ -270,13 +268,14 @@ The change in commit `6bf7875` of 1.0.3.3 only renamed the second `padding` and 
 A button factory uses `{ "binding_name": "#form_button_length", "binding_name_override": "#collection_length" }` (binding type omitted = global), and a grid puts the same value into `#maximum_grid_items`. Vanilla 1.26.50 `server_form.json` does not use this binding and builds lists only with `collection_name` and factories. The EasyUIBuilder example and the community schema (Bugrock JSON UI Schemas) also list the same name. It is a global value the engine gives for "the number of action form buttons". On Windows 1.26.65.1, an action form with 35 buttons, 4 `label`, 3 `divider` and 2 `header` rows gave 44. It counts every row, not only buttons ([measurement record](../design/json-ui-claims.mdx)).
 
 
-### 6.10.1 Proposals (not applied)
+<details>
+<summary>Proposed rules</summary>
 
-Below are the rules the StarLibV2 analysis proposed adding to the guide. They are **not yet applied** to the guide body.
+The rules below lack evidence or are not adopted yet. Check the evidence before using them.
 
-- **[PAT-13]** (proposal) **A 2D layout made with keys.** For each vertical factory item, (1) turn on the left and right spacers of a horizontal stack with keys in the button string to push the button sideways, and (2) put the picture inside a zero-height panel and let a sizer that can be turned off by a key decide the item height, and the item after one carrying a "no height" key is placed on the same row. The server sends only an ordinary button list and the `selection` numbers do not change. Give horizontal spacers together so that the press areas of overlapping items do not overlap. `{working pack, inferred}` (Source: SLB chapter 4, GrimUI key document)
-- **[FILE-39]** (proposal) Name siblings in the same `controls` array differently (the name before `@`). There are reports that from a version around April 2025 duplicate names cause JSON UI errors (StarLibV2 1.0.3.3), and none of the 5,084 `controls` arrays of vanilla 1.26.50 (recounted) has a duplicate. Split a common name like `padding` into `padding_top` and `padding_bottom`. `{working pack, vanilla, measured}` (Source: jua-starlibv2, bedrock-samples, 2026-11-18 Windows 1.26.65.1) Measured on Windows 1.26.65.1, two siblings named `dup` in one `controls` array were both created and no log line appeared. The reported JSON UI error was not seen ([claim measurements](../design/json-ui-claims.mdx)). Measured again in the HUD on 2026-11-24 with two `re9dup@re9.tl`, the result was the same: both were created and shown side by side, and the Content Log of the first load had no line about that name. The code is the same: building controls walks the `controls` array in order and only appends each child to the parent's child list without comparing names, and the executable has no message reporting a duplicate JSON UI control name. A name lookup picks only the first sibling. On 2026-11-25, two siblings with the `default_control` name on a button in the HUD and on the chat screen were both shown with no input. When the mouse was placed over the chat screen button (`CD_A`, `CD_B` in that order), only `CD_A`, first in the array, was hidden and `re9ch` (hover) was shown, while `CD_B` stayed shown regardless of the button state. When the mouse left, `CD_A` was shown again. The second sibling of a duplicate name becomes an ordinary control the button does not handle. `{measured, code}` (Source: 2026-11-24 Windows 1.26.65.1, 2026-11-24 decompilation, 2026-11-25 Windows 1.26.65.1)
-- **[COL-31]** (proposal) The action form row count is read through the global binding `#form_button_length`. Put it into the factory's `#collection_length` or the grid's `#maximum_grid_items` with `binding_name_override`. The vanilla 1.26.50 UI does not use this name. On Windows 1.26.65.1, a form with 35 buttons, 4 `label`, 3 `divider` and 2 `header` rows gave 44, so label, divider and header rows are counted too ([measurement record](../design/json-ui-claims.mdx)). `{working pack, measured}` (Source: SLB chapter 8, EUB example)
+- **[PAT-13]** (proposal) **A 2D layout made with keys.** For each vertical factory item, (1) turn on the left and right spacers of a horizontal stack with keys in the button string to push the button sideways, and (2) put the picture inside a zero-height panel and let a sizer that can be turned off by a key decide the item height, and the item after one carrying a "no height" key is placed on the same row. The server sends only an ordinary button list and the `selection` numbers do not change. Give horizontal spacers together so that the press areas of overlapping items do not overlap. `{working pack, inferred}` ([Source](../reference/source-abbreviations.mdx): SLB chapter 4, GrimUI key document)
+- **[FILE-39]** (proposal) Name siblings in the same `controls` array differently (the name before `@`). There are reports that from a version around April 2025 duplicate names cause JSON UI errors (StarLibV2 1.0.3.3), and none of the 5,084 `controls` arrays of vanilla 1.26.50 has a duplicate. Split a common name like `padding` into `padding_top` and `padding_bottom`. On Windows 1.26.65.1 the reported error does not occur. Two `dup` siblings in one `controls` array and two `re9dup@re9.tl` in the HUD were all created and shown side by side, and the Content Log had no line about that name ([claim measurements](../design/json-ui-claims.mdx)). The code agrees: building controls walks the `controls` array in order and only appends each child to the parent's child list without comparing names, and the executable has no message reporting a duplicate JSON UI control name. A name lookup picks only the first sibling. So the second sibling of a duplicate name becomes an ordinary control the button does not handle. With two siblings named `default_control` (`CD_A`, `CD_B` in that order) on a button in the HUD and on the chat screen, both are shown with no input; when the mouse is over the chat screen button, only `CD_A`, first in the array, is hidden and the hover control `re9ch` is shown, while `CD_B` stays shown regardless of the button state. When the mouse leaves, `CD_A` is shown again. `{working pack, vanilla, measured, code (binary)}` ([Source](../reference/source-abbreviations.mdx): SLB, bedrock-samples, 2026-11-18, 2026-11-24, 2026-11-25 Windows 1.26.65.1, 2026-11-24 decompilation)
+- **[COL-31]** (proposal) The action form row count is read through the global binding `#form_button_length`. Put it into the factory's `#collection_length` or the grid's `#maximum_grid_items` with `binding_name_override`. The vanilla 1.26.50 UI does not use this name. On Windows 1.26.65.1, a form with 35 buttons, 4 `label`, 3 `divider` and 2 `header` rows gave 44, so label, divider and header rows are counted too ([measurement record](../design/json-ui-claims.mdx)). `{working pack, measured}` ([Source](../reference/source-abbreviations.mdx): SLB chapter 8, EUB example)
 
 **List of items needing measurement**
 
@@ -285,6 +284,8 @@ Below are the rules the StarLibV2 analysis proposed adding to the guide. They ar
 2. ~~Whether binding `#form_button_length` to a label gives the action form button count (and whether label, header and divider rows are included, COL-19).~~ -> COL-31. Measured (Windows 1.26.65.1): label, header and divider rows are counted too (35 buttons + 9 rows = 44)
 3. Whether `#item_name`, read by another control with `source_control_name` while typing in a `common.text_edit_box`, updates per character and is emptied when the form is reopened. -> INP-25. Not measured on Windows 1.26.65.1: the measurement tool's keyboard input did not reach a `common.text_edit_box` inside an ActionForm window, and the cause was not separated
 4. Whether a button that overflows a zero-height panel can be pressed (the input hit test of the overflowing area). -> PAT-13
+
+</details>
 
 ## How evidence is marked and source abbreviations
 

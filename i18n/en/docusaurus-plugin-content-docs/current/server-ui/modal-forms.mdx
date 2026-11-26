@@ -7,30 +7,34 @@ sources: [ms-learn, bedrock-wiki, bedrock-samples, repo-multiselect, private-res
 
 A server form is a feature where the server opens one window for a player and receives the response. There are three kinds of form, and the server decides only the kinds and order of text, buttons and input fields. The shape is drawn by the client's vanilla UI (`server_form.json`). This page covers how to make forms with the Script API, how to read responses, the shape of forms when server software (Dragonfly and others) sends them directly as JSON, and the structure of the vanilla screen. How to change the shape of a form is in [Reskinning server forms](./reskinning-server-forms.mdx), and the checkbox list row is in [multiselect](./multiselect.mdx).
 
+## Shortest example
+
+Using a compass opens an action form with two buttons and sends the pressed button number back in chat. It combines the API descriptions in the sections below and was not run in game by this wiki. The behavior pack manifest needs the `@minecraft/server` and `@minecraft/server-ui` dependencies (section 1).
+
+```js
+import { world } from "@minecraft/server";
+import { ActionFormData } from "@minecraft/server-ui";
+
+world.afterEvents.itemUse.subscribe(({ source, itemStack }) => {
+  if (itemStack.typeId !== "minecraft:compass") return;
+  new ActionFormData()
+    .title("Menu")
+    .body("Pick one")
+    .button("Spawn")
+    .button("Shop")
+    .show(source)
+    .then((r) => {
+      if (r.canceled) return;
+      source.sendMessage(`selected ${r.selection}`);
+    });
+});
+```
+
+`r.canceled` is true when the player closed the form or another UI kept it from opening (section 2, the conditions for a form to open). `r.selection` is the button number counted from 0 (section 3).
+
 ## 1. The `@minecraft/server-ui` module
 
-The module name is `@minecraft/server-ui` (formerly `mojang-minecraft-ui`, first appeared in 1.18.30). The list of versions at the time this page was written (MS Learn documentation commit `a9fd1c0`) is as follows (Source: ms-learn).
-
-| Version | Notes |
-| --- | --- |
-| `2.0.0` | Added `divider`, `header` and `label` to `ActionFormData`. Peer dependency `@minecraft/server@2.0.0` |
-| `2.1.0` | Added `CustomForm`, `MessageBox` and 4 `Observable*` types (DDUI), and added the enums `DataDrivenScreenClosedReason`, `FormVisibilityErrorReason` and `TextFilteringError` |
-| `2.2.0` | Added `CustomForm.image` |
-| `2.3.0` | Stable release. Added `MessageBox.button1WithOptions` and `button2WithOptions` |
-| `2.4.0-rc.1.26.70-preview.24` | Added `CustomForm.multiButtonRow` and `MessageBox.button3WithOptions` |
-| `2.5.0-beta.1.26.70-preview.24` | Added an `options` argument to the `CustomForm` constructor and to `MessageBox.body` |
-| `1.0.0`~`1.3.0` | The 1.x line. It is in a separate document |
-
-As of 2026-11-16 the npm versions are stable `2.3.0`, beta `2.4.0-beta.1.26.63-stable`, preview `2.4.0-rc.1.26.70-preview.24` and preview beta `2.5.0-beta.1.26.70-preview.24` (Source: private research).
-
-The server-ui native bindings of the Windows 1.26.65.1 client have members that the sample metadata (2.3.0-beta) does not `{code}`.
-
-- `styleId`: present on 12 options: `ButtonOptions`, `DividerOptions`, `TextOptions`, `ToggleOptions`, `TextFieldOptions`, `SliderOptions`, `DropdownOptions`, `MultiButtonRowOptions`, `CustomFormOptions`, `MessageBoxOptions`, `MessageBoxButtonOptions` and `MessageBoxBodyOptions`. All of them read a 2.4.0-family global value. From which public version they are exposed is unknown.
-- `CustomFormOptions` (the only field recovered is `styleId`), `MessageBoxOptions` (`showHorizontalButtons`, `styleId`) and `MessageBoxBodyOptions` (`styleId`).
-- `MessageBox.button3` and `button3WithOptions`. `MessageBox` in the metadata has only `button1` and `button2` (and their `WithOptions`). The call shape of `button3` (label, tooltip) is `{inferred}`.
-- The keys `minecraft:message_box`, `minecraft:custom_form`, `style_id`, `body_style_id`, `button_visible` and `row_visible` in the form payload JSON. These are keys the server sends to the client, not Script API names. `showHorizontalButtons` appears to pair with `is_horizontal` and `is_vertical` in the form JSON `{inferred}`.
-
-This client's server-ui list has both `2.4.0-beta` and `3.0.0-alpha`, so the code alone could not settle which of them turns `styleId` on ([module versions](../scripting/versions-and-beta.mdx)).
+The module name is `@minecraft/server-ui` (formerly `mojang-minecraft-ui`, first appeared in 1.18.30). The version list and the details of the client bindings are in [section 9](#9-module-versions-and-client-bindings).
 
 The manifest dependency is written like this (Source: bedrock-wiki).
 
@@ -273,3 +277,28 @@ This is the skeleton of vanilla `resource_pack/ui/server_form.json` (1.26.50.4, 
 - **Input form (`custom_form`)**: Likewise a 225x200 window. The `generated_contents` inside expands the `custom_form` collection with a factory (length `#custom_form_length`). The binding names differ per row: label and header `#custom_text`, toggle `#custom_toggle_state`, slider `#custom_slider_text` and `#custom_slider_value`, step slider `#custom_slider_step_text`, `#custom_slider_step_value` and `#custom_slider_steps`, dropdown `#custom_dropdown_length`, `#custom_radio_text` and `#custom_radio_toggled`, input field `#custom_input_text` and `#custom_placeholder_text`, tooltip `#custom_tooltip_text`. The submit button at the bottom has `$pressed_button_name` as `button.submit_custom_form` and its text is `#submit_text`.
 
 These binding names are not a channel through which the server loads data; they are values the client passes to the UI after parsing the form JSON. The only way for the server to distinguish screen types is to put a marker in the title or button text ([Reskinning](./reskinning-server-forms.mdx)).
+
+## 9. Module versions and client bindings
+
+The list of versions at the time this page was written (MS Learn documentation commit `a9fd1c0`) is as follows (Source: ms-learn).
+
+| Version | Notes |
+| --- | --- |
+| `2.0.0` | Added `divider`, `header` and `label` to `ActionFormData`. Peer dependency `@minecraft/server@2.0.0` |
+| `2.1.0` | Added `CustomForm`, `MessageBox` and 4 `Observable*` types (DDUI), and added the enums `DataDrivenScreenClosedReason`, `FormVisibilityErrorReason` and `TextFilteringError` |
+| `2.2.0` | Added `CustomForm.image` |
+| `2.3.0` | Stable release. Added `MessageBox.button1WithOptions` and `button2WithOptions` |
+| `2.4.0-rc.1.26.70-preview.24` | Added `CustomForm.multiButtonRow` and `MessageBox.button3WithOptions` |
+| `2.5.0-beta.1.26.70-preview.24` | Added an `options` argument to the `CustomForm` constructor and to `MessageBox.body` |
+| `1.0.0`~`1.3.0` | The 1.x line. It is in a separate document |
+
+As of 2026-11-16 the npm versions are stable `2.3.0`, beta `2.4.0-beta.1.26.63-stable`, preview `2.4.0-rc.1.26.70-preview.24` and preview beta `2.5.0-beta.1.26.70-preview.24` (Source: private research).
+
+The server-ui native bindings of the Windows 1.26.65.1 client have members that the sample metadata (2.3.0-beta) does not `{code}`.
+
+- `styleId`: present on 12 options: `ButtonOptions`, `DividerOptions`, `TextOptions`, `ToggleOptions`, `TextFieldOptions`, `SliderOptions`, `DropdownOptions`, `MultiButtonRowOptions`, `CustomFormOptions`, `MessageBoxOptions`, `MessageBoxButtonOptions` and `MessageBoxBodyOptions`. All of them read a 2.4.0-family global value. From which public version they are exposed is unknown.
+- `CustomFormOptions` (the only field recovered is `styleId`), `MessageBoxOptions` (`showHorizontalButtons`, `styleId`) and `MessageBoxBodyOptions` (`styleId`).
+- `MessageBox.button3` and `button3WithOptions`. `MessageBox` in the metadata has only `button1` and `button2` (and their `WithOptions`). The call shape of `button3` (label, tooltip) is `{inferred}`.
+- The keys `minecraft:message_box`, `minecraft:custom_form`, `style_id`, `body_style_id`, `button_visible` and `row_visible` in the form payload JSON. These are keys the server sends to the client, not Script API names. `showHorizontalButtons` appears to pair with `is_horizontal` and `is_vertical` in the form JSON `{inferred}`.
+
+This client's server-ui list has both `2.4.0-beta` and `3.0.0-alpha`, so the code alone could not settle which of them turns `styleId` on ([module versions](../scripting/versions-and-beta.mdx)).

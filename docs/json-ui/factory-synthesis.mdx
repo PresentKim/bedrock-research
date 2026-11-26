@@ -1,6 +1,6 @@
 ---
 title: "팩토리 종합과 StarLibV2 키 배치"
-description: "팩토리에 관한 가이드 규칙, 엔진 동작 분석, 커뮤니티 보고, 바닐라 집계의 종합과 StarLibV2의 키 게이트·2차원 배치(6.9~6.10), 근거 표기와 출처 약어."
+description: "팩토리에 관한 가이드 규칙, 엔진 동작 분석, 커뮤니티 보고, 바닐라 집계의 종합과 StarLibV2의 키 게이트·2차원 배치, 근거 표기와 출처 약어."
 sidebar_position: 6.5
 sources:
   - repo-guide
@@ -9,20 +9,18 @@ sources:
   - ms-learn
   - private-research
   - bedrock-core
-  - private-research
   - advancementpack
   - cinnabar
-  - private-research
   - starlibv2
 ---
 
-[컬렉션과 팩토리](./collections-and-factory.mdx)에서 이어진다. 6.0~6.8절과 6.11절의 규칙(COL-01~50)을 읽었다고 보고, 팩토리에 관한 정보를 한곳에 모은 종합과 StarLibV2 분석, 근거 표기 표를 싣는다.
+[컬렉션과 팩토리](./collections-and-factory.mdx)에서 이어진다. 그 페이지의 규칙(COL-01~50)을 읽었다고 보고, 팩토리에 관한 정보를 한곳에 모은 종합과 StarLibV2 분석, 근거 표기 표를 싣는다.
 
-## 6.9 팩토리 종합
+## 팩토리 종합
 
 아래는 팩토리(`factory`)에 관한 정보를 한곳에 모은 정리다(2026-10-23, 바닐라 1.26.50.4와 Android 1.26.52.3 기준). 근거 `(커뮤니티)`는 Bedrock OSS·커뮤니티 커뮤니티 보고(`private-research`)이고 `CN-43`처럼 번호가 붙은 것은 Cinnabar 분석의 발견 번호다. 근거가 `코드`나 커뮤니티뿐인 것은 쓰기 전에 게임에서 확인한다.
 
-### 6.9.1 한눈에 보기
+### 한눈에 보기
 
 - 팩토리는 데이터 개수만큼 컨트롤을 **실행 중에 만드는** 장치다. 모양은 `"type": "factory"` 컨트롤과 컨테이너의 `"factory": { … }` 속성 두 가지다 [COL-08].
 - 무엇을 만들지는 `control_name`(한 종류) 또는 `control_ids`(종류별)로 정하고, `control_name`이 있으면 `control_ids`는 읽히지 않는다 [COL-28][COL-43] (NB-06).
@@ -30,9 +28,9 @@ sources:
 - **`#collection_length`가 0이면 아무것도 만들지 않는다.** 그래서 팩토리는 바인딩으로 켜고 끄는 `ignored`처럼 쓸 수 있고, `visible`과 달리 생성·레이아웃 비용이 없다 [COL-10][COL-12].
 - 엔진 팩토리와 **같은 이름의 팩토리를 하나 더** 두면 같은 데이터로 두 번째 UI가 생긴다. 커스텀 서버 폼, HUD 토스트, 채팅 알림이 모두 이 방법이다 [COL-14].
 - 만들어진 컨트롤에 값을 넘기는 길은 세 가지다: `factory_variables`(변수) [COL-15][COL-41], `property_bag_for_children`(속성 주머니) [BND-28], 엔진이 주는 변수(`$title_text`, `$actionbar_text`) [COL-17].
-- 2026-05 무렵 정식판에 들어온 `property_bag_for_children`이 팩토리 쪽에서 가장 최근에 바뀐 것이다(커뮤니티). 바이너리에서 찾은 `_first_hidden_child_index`는 분석해 보니 상점 화면 전용 값이었다(8.1절). 8장에 최근 변화 후보를 모았다.
+- 2026-05 무렵 정식판에 들어온 `property_bag_for_children`이 팩토리 쪽에서 가장 최근에 바뀐 것이다(커뮤니티). 바이너리에서 찾은 `_first_hidden_child_index`는 분석해 보니 상점 화면 전용 값이었다(`_first_hidden_child_index` 분석 결과). 최근 변화 후보는 '최근 바뀐 것과 새로 생긴 것 후보'에 모았다.
 
-### 6.9.2 팩토리의 두 모양
+### 팩토리의 두 모양
 
 ```json
 // (가) 팩토리 컨트롤: type 이 factory. 컨트롤 이름이 곧 팩토리 이름이다
@@ -53,7 +51,7 @@ sources:
 - **바닐라 집계(이번, 1.26.50.4)**: 팩토리 118곳. 담는 컨트롤은 `stack_panel` 68, `type: factory` 35, `panel` 6, 상속으로 타입이 정해지는 것 6, `collection_panel` 2, `slider` 1(`slider_step_factory`)이다. 문자열 그대로 세면 `"type": "factory"` 35회, `"factory": {` 83회다. 가이드 COL-08의 "36회"와 1 차이가 나는데, 세는 방법 차이로 보이며 확인하지 않았다.
 - **어느 모양을 쓰나**: 엔진 팩토리를 그대로 다시 쓸 때는 (가) 또는 (나)에 같은 이름을 준다. `#collection_length`로 직접 구동하는 내 팩토리는 (나)를 `stack_panel`·`collection_panel`에 둔다 [COL-24]. `panel` + `factory`는 서버 폼 레이아웃 안에서 아무것도 만들지 않은 실측이 있다 [COL-40].
 
-### 6.9.3 엔진이 읽는 키
+### 엔진이 읽는 키
 
 | 키 | 어디에 | 값 | 뜻 | 근거 |
 | --- | --- | --- | --- | --- |
@@ -71,9 +69,9 @@ sources:
 - `control_ids` 값에 변수를 넣는 것은 불확실하다. `"test@hud.$content"`는 `UI control reference not found: '$content'`가 났고, 식 `"('test@hud.' + $content)"`는 제안만 있고 확인되지 않았다(커뮤니티, 미해결 질문).
 - `control_name` 팩토리만 받는 자리에 `control_ids`를 쓰면 `Unknown property [control_ids]`가 났다는 보고가 있다. 원인은 확인되지 않았다(커뮤니티).
 
-### 6.9.4 무엇이 팩토리를 움직이나
+### 무엇이 팩토리를 움직이나
 
-#### 6.9.4.1 엔진이 이름으로 채우는 팩토리
+#### 엔진이 이름으로 채우는 팩토리
 
 화면 컨트롤러가 팩토리 이름을 알고 직접 데이터를 넣는다. `#collection_length` 바인딩이 없다. 바닐라 1.26.50.4에서 길이 바인딩 없이 쓰이는 것은 다음과 같다(VN 집계).
 
@@ -97,7 +95,7 @@ sources:
 - **바닐라에 없는 엔진 팩토리 이름**(바이너리 문자열 검색, 2026-10-23): `all_tags_factory`, `edu_permissions_factory`, `enchant_error_factory`, `joincode_popup_factory`, `joincode_share_popup_factory`, `servers_popup_factory`, `share_copy_popup_factory`, `share_link_popup_factory`, `share_popup_factory`, `teams_share_popup_factory`. 대부분 교육판·팝업용으로 보인다. 엔진에 이름이 있다는 것까지만 확인했고, 리소스팩에서 같은 이름으로 팩토리를 두면 데이터가 오는지는 모른다. 짧은 문자열은 이 방법으로 잡히지 않을 수 있어 목록이 전부라고 단정하지 않는다(NB-12와 같은 한계).
 - 엔진 팩토리가 만든 컨트롤 안에서만 읽히는 값이 있다: `#form_text`는 `server_form_factory` 안에서만(커뮤니티, 2026-10-20 다시 보고), `$actionbar_text`는 액션바 팩토리가 만든 부모 안에서만, `#item_text`는 아이템 이름 팩토리 안에서만이다(커뮤니티). 내 팩토리로 화면을 고르면 안에서 `#form_text`를 잃으므로, 바깥 "grabber" 컨트롤에서 `source_control_name`으로 가져온다(커뮤니티).
 
-#### 6.9.4.2 `#collection_length`로 움직이는 팩토리
+#### `#collection_length`로 움직이는 팩토리
 
 - `#collection_length`를 바인딩하면 그 수만큼만 만든다. **0이면 하나도 만들지 않는다** [COL-11].
 - 받는 값: 정수, 불리언(1/0), **문자열 배열**(그 순서대로 `control_ids`의 종류를 만든다) [COL-22][COL-27]. 리터럴 숫자 길이는 `control_name` 팩토리에서만 그 수만큼 만들고, 팩토리에 없는 종류 이름은 아무것도 만들지 않는다(CN-44).
@@ -118,7 +116,7 @@ sources:
 - 길이에 `#form_button_length`의 식(`(#form_button_length - 1)` 등)을 넣어도 팩토리는 그 수만큼 만들었다(Windows 1.26.65.1, 길이 바인딩 `always`). 길이 바인딩이 `visible` 조건이면 `#form_button_contents`까지 0개였다. 다른 구조에서 잰 DF 실측은 식이면 버튼을 만들지 않았다고 기록했다 [COL-36].
 - 바닐라는 길이를 `$변수`로도 받는다(`$panel_length`, `$selected_grid_dimensions` 등)와 식(`('#' + $icon_overlay_collection_name)`)으로도 고른다(VN).
 
-### 6.9.5 만들어진 컨트롤이 받는 것
+### 만들어진 컨트롤이 받는 것
 
 | 무엇 | 어떻게 | 근거 |
 | --- | --- | --- |
@@ -132,7 +130,7 @@ sources:
 - **바인딩 시점**: 셀 안 바인딩은 너무 일찍 실행되어 비어 있을 수 있다. `binding_condition: "always"`를 주거나 바깥에서 읽어 복사한다 [BND-07]. 반대로 `once`는 팩토리가 다시 만들 때 다시 평가된다 [BND-06].
 - **다시 만들어짐**: 변수로 받은 값이 바뀌면 컨트롤을 새로 만든다. 애니메이션도 처음부터 다시 재생된다 [COL-17][ANI-12]. 같은 값의 타이틀을 다시 보내도 다시 만들어진다(커뮤니티).
 
-### 6.9.6 엔진 팩토리를 하나 더 두기
+### 엔진 팩토리를 하나 더 두기
 
 같은 이름의 엔진 팩토리를 다른 위치에 선언하면 같은 데이터로 두 번째 UI가 생긴다 [COL-14].
 
@@ -148,7 +146,7 @@ sources:
 - 이미지 오버레이처럼 타이틀 하나에 여러 요소를 띄우려면 요소마다 팩토리가 하나씩 필요하다(커뮤니티).
 - 최근 사례: `chat_item_factory`로 채팅 줄을 진행 막대로 그리는 팩(Progress-Bar-Chat, `github.com/nperma/Progress-Bar-Chat`, 커뮤니티 2026-10-22). 이 문서에서 내려받아 확인하지는 않았다.
 
-### 6.9.7 생성 게이트와 성능
+### 생성 게이트와 성능
 
 | 방법 | 평가 시점 | 조건 재료 | 비용 |
 | --- | --- | --- | --- |
@@ -163,7 +161,7 @@ sources:
 - 셀 크기 × 개수를 줄이는 것이 먼저다 [COL-18]. 칸마다 `collection_index`로 버튼 하나만 읽는 고정 배치가 줄마다 버튼 전체를 걷는 팩토리보다 4~5배 빨랐다 [COL-06][COL-37].
 - 커뮤니티의 의견: "깃발 하나로만 구분되는 단일 버튼에 팩토리를 쓰지 않는다", "팩토리를 줄인다".
 
-### 6.9.8 최근 바뀐 것과 새로 생긴 것 후보
+### 최근 바뀐 것과 새로 생긴 것 후보
 
 "팩토리에 뭔가 새로 생겼다"는 이야기가 무엇을 가리키는지는 확정하지 못했다. 시간순 후보다.
 
@@ -173,21 +171,21 @@ sources:
 | 2026-05 무렵 | **`property_bag_for_children` 정식판 반영.** 팩토리가 만든 자식에게까지 주머니 값을 내려준다. 가장 유력한 후보다 | 커뮤니티, [BND-28], VN 10회 |
 | 1.26.50 | 모달 폼 팩토리에 `multiselect` 행. 공개 Script API에는 보내는 메서드가 없고, 폼 JSON을 직접 보내는 서버는 쓸 수 있다(응답은 번호 배열 또는 `null`) | [COL-21], [HOST-46] |
 | 1.26.50 | HUD 자막이 `subtitle_container_factory`로 바뀌었다 | [HOST-31] |
-| 1.26.52 바이너리 | `tags_factory_first_hidden_child_index`, `languages_factory_first_hidden_child_index`, `_first_hidden_child_index`. 분석해 보니 **상점 상세 화면 설명 컴포넌트 전용** 값이었다. 일반 팩토리 기능이 아니다(아래 8.1) | NB-14, [COL-46] |
-| 1.26.52 바이너리 | 바닐라에 없는 엔진 팩토리 이름 10개(4.1절) | 바이너리 문자열 |
+| 1.26.52 바이너리 | `tags_factory_first_hidden_child_index`, `languages_factory_first_hidden_child_index`, `_first_hidden_child_index`. 분석해 보니 **상점 상세 화면 설명 컴포넌트 전용** 값이었다. 일반 팩토리 기능이 아니다(아래 `_first_hidden_child_index` 분석 결과) | NB-14, [COL-46] |
+| 1.26.52 바이너리 | 바닐라에 없는 엔진 팩토리 이름 10개(엔진이 이름으로 채우는 팩토리) | 바이너리 문자열 |
 | 1.26.60 프리뷰 | `AtomicClientEntityFactory`는 엔티티 쪽 C++ 클래스이고 JSON UI 팩토리와 관계없다 | 커뮤니티 26.60.24 차이 보고 |
 
-#### 6.9.8.1 `_first_hidden_child_index` 분석 결과 (2026-10-23)
+#### `_first_hidden_child_index` 분석 결과 (2026-10-23)
 
 - 세 문자열을 쓰는 함수는 모두 `store/servicecomponent/DescriptionComponent.cpp`, 곧 **상점·마켓플레이스 상세 화면의 설명 컴포넌트** 안에 있다.
 - 태그용·언어용 함수는 컨트롤 속성 주머니의 `tags_factory_first_hidden_child_index`(또는 `languages_…`)를 정수로 읽고, 없으면 그 상품의 태그 수를 쓴다. 그 수만큼 `"tag"`를 반복한 배열(`["tag", "tag", …]`)을 길이 바인딩 값으로 준다. 바닐라 `pdp_screen.json`의 `tags_factory`·`languages_factory` 컨트롤과 `control_ids`의 `tag`·`language` 종류에 맞는다.
 - 일반형 함수는 `"tag_row"`·`"language_row"` 뒤에 `_first_hidden_child_index`를 붙인 키를 읽어, 그 번호부터 뒤 항목을 다음 줄로 넘긴다. 태그를 여러 줄로 접어 보이는 데 쓰인다.
 - 정리하면 "설명을 접었을 때 몇 번째 태그부터 숨길지"를 정하는 상점 내부 값이다. **서버 폼·HUD·채팅 팩토리에서 쓸 기능이 아니다.** 이 값을 누가 주머니에 써 넣는지는 찾지 못했다(바닐라 JSON은 0회).
-- 덤으로, 엔진이 팩토리 길이 바인딩에 **종류 이름 배열**을 직접 준다는 것이 바이너리에서 확인됐다(4.2절, [COL-27]).
+- 덤으로, 엔진이 팩토리 길이 바인딩에 **종류 이름 배열**을 직접 준다는 것이 바이너리에서 확인됐다(`#collection_length`로 움직이는 팩토리, [COL-27]).
 
 같은 분석에서 팩토리 해석 함수의 세부도 확인했다(NB-13, [COL-45]): `type: factory`도 `factory` 객체 쪽으로 해석할 수 있고, 컨트롤 하나에 팩토리는 하나다. `control_name`은 해석할 때 선언 스코프로 원형을 바로 만들고 `control_ids`는 종류와 정의 문자열만 저장한다. `max_children_size` 기본값은 0이다.
 
-### 6.9.9 알려진 문제와 함정
+### 알려진 문제와 함정
 
 - **서버 폼 레이아웃 안의 팩토리**: 우리 팩토리가 만든 레이아웃 안에서는 액션 폼 데이터가 그리드 칸에만 닿았고, 안쪽 팩토리와 고정 인덱스 칸은 비었다 [COL-40]. `$screen_content` 맨 위 라우터가 만든 창에서는 바인딩을 `always`로 두자 둘 다 채워졌다 [COL-47]. 팩토리가 만든 칸 안의 팩토리도 `#title_text`·길이 바인딩에 `always`를 주면 만들어졌다 [COL-48]. 커뮤니티도 "서버 폼 아래 자식 팩토리는 입력이나 리사이즈 전까지 채워지지 않는다(그리드는 괜찮다)"고 보고한다.
 - **`#form_button_length`는 가장 큰 폼 값을 붙잡는다**: 칸 수는 본문 같은 별도 채널로 보낸다 [COL-34].
@@ -198,7 +196,7 @@ sources:
 - **아이템 렌더러**는 팩토리 안에서 안 된다는 보고가 있다(커뮤니티, 미확인).
 - 위 문제가 생길 수 있는 식은 엉뚱한 입력에서도 안전해야 한다. 팩토리 셀이 든 구성에서 클라이언트가 멈춘 기록이 있다 [DBG-19].
 
-### 6.9.10 오류 문구
+### 오류 문구
 
 | 문구 | 원인 | 근거 |
 | --- | --- | --- |
@@ -209,17 +207,17 @@ sources:
 | `Unknown property [control_ids]` | `control_name`만 받는 자리에 `control_ids`를 썼다(원인 미확인) | 커뮤니티 |
 | `Unknown property [collection_name]` | `collection_name`을 `panel`·`image`에 썼다 | [COL-01] |
 
-### 6.9.11 아직 모르는 것
+### 아직 모르는 것
 
-- `_first_hidden_child_index` 값을 누가 속성 주머니에 써 넣는지(8.1절). 상점 화면 전용이라 우선순위는 낮다.
-- 바닐라에 없는 엔진 팩토리 이름으로 팩토리를 두면 데이터가 오는지(4.1절).
-- `control_ids` 값에 식이나 변수를 쓸 수 있는지(3장).
+- `_first_hidden_child_index` 값을 누가 속성 주머니에 써 넣는지(`_first_hidden_child_index` 분석 결과). 상점 화면 전용이라 우선순위는 낮다.
+- 바닐라에 없는 엔진 팩토리 이름으로 팩토리를 두면 데이터가 오는지(엔진이 이름으로 채우는 팩토리).
+- `control_ids` 값에 식이나 변수를 쓸 수 있는지(엔진이 읽는 키).
 - `insert_location: "front"`의 게임 동작(바닐라 0회, 엔진에서 확인만 함).
 - `max_children_size`를 넘었을 때 오래된 것부터 지우는지, 새것을 버리는지. 채팅 50개 한도 보고는 앞쪽을 밀어낸다는 쪽이다(커뮤니티).
 - 서버 폼 레이아웃 안에서 안쪽 팩토리가 비는 원인 [COL-40].
 
 
-## 6.10 StarLibV2의 키 게이트와 2차원 배치(SLB)
+## StarLibV2의 키 게이트와 2차원 배치(SLB)
 
 StarLibV2(`jb-starlibv2`, GPL-3.0)는 서버 폼 버튼 문자열에 들어 있는 "키"로 레이아웃을 제어한다. 세로 팩토리 목록을 2열·3열로 보이게 하는 기법이라 이 장에 둔다. 기법만 한국어로 다시 썼고 코드는 옮기지 않았다.
 
@@ -270,13 +268,14 @@ sizer의 `controls`도 변수 슬롯이라, 크기 키마다 정해진 높이의
 버튼 팩토리는 `{ "binding_name": "#form_button_length", "binding_name_override": "#collection_length" }`(바인딩 종류 생략 = 전역), 그리드는 같은 값을 `#maximum_grid_items`에 넣는다. 바닐라 1.26.50 `server_form.json`은 이 바인딩을 쓰지 않고 `collection_name`과 팩토리로만 목록을 만든다. EasyUIBuilder 예제와 커뮤니티 스키마(Bugrock JSON UI Schemas)도 같은 이름을 적는다. 엔진이 주는 "액션 폼 버튼 수" 전역 값이다. Windows 1.26.65.1에서 버튼 35, `label` 4, `divider` 3, `header` 2인 액션 폼의 값은 44였다. 버튼만이 아니라 모든 행을 센다([실측 기록](../design/json-ui-claims.mdx)).
 
 
-### 6.10.1 반영안(미적용)
+<details>
+<summary>제안 규칙</summary>
 
-아래는 StarLibV2 분석이 가이드에 넣자고 제안한 규칙이다. 가이드 본문에는 **아직 적용되지 않았다.**
+아래는 근거가 모자라거나 아직 채택하지 않은 제안 규칙이다. 쓰기 전에 근거를 확인한다.
 
-- **[PAT-13]** (제안) **키로 짜는 2차원 배치.** 세로 팩토리 항목마다 (1) 가로 스택의 왼쪽·오른쪽 spacer를 버튼 문자열 키로 켜서 버튼을 옆으로 밀고, (2) 그림은 높이 0 패널 안에 두고 항목 높이는 키로 끌 수 있는 sizer가 정하게 하면, "높이 없음" 키가 붙은 항목 다음 항목이 같은 줄에 놓인다. 서버는 평범한 버튼 목록만 보내고 `selection` 번호는 바뀌지 않는다. 겹친 항목끼리 눌림 영역이 겹치지 않도록 가로 spacer를 같이 준다. `{작동팩, 추론}` (출처: SLB 4장, GrimUI 키 문서)
-- **[FILE-39]** (제안) 같은 `controls` 배열 안의 형제 이름(`@` 앞)은 서로 다르게 짓는다. 2025년 4월 무렵 버전부터 중복 이름이 JSON UI 오류를 낸다는 보고가 있고(StarLibV2 1.0.3.3), 바닐라 1.26.50의 `controls` 배열 5,084개(재집계)에는 중복이 하나도 없다. `padding`처럼 흔한 이름은 `padding_top`, `padding_bottom`으로 나눈다. `{작동팩, 바닐라, 실측}` (출처: jua-starlibv2, bedrock-samples, 2026-11-18 Windows 1.26.65.1) Windows 1.26.65.1 실측에서 같은 `controls` 배열에 `dup` 두 개를 두자 둘 다 만들어졌고 로그는 남지 않았다. 보고된 JSON UI 오류는 보이지 않았다([주장 실측](../design/json-ui-claims.mdx)). 2026-11-24에 HUD에서 `re9dup@re9.tl` 두 개로 다시 재도 같았다: 둘 다 만들어져 나란히 보였고 첫 로드의 Content Log에 그 이름에 관한 줄이 없었다. 코드도 같다: 컨트롤 생성은 `controls` 배열을 차례로 돌며 자식을 만들어 부모 자식 목록에 붙일 뿐 이름을 비교하지 않고, 실행 파일에 JSON UI 컨트롤 이름 중복을 알리는 문구가 없다. 이름으로 찾는 쪽은 첫 번째 형제만 잡는다. 2026-11-25에 HUD와 채팅 화면의 버튼에 `default_control` 이름의 형제 둘을 두자 입력이 없을 때는 둘 다 보였다. 채팅 화면의 버튼(`CD_A`, `CD_B` 순서)에 마우스를 올리자 배열 앞의 `CD_A`만 숨고 `re9ch`(hover)가 보였으며 `CD_B`는 버튼 상태와 상관없이 보인 채 남았다. 마우스를 떼자 `CD_A`가 다시 보였다. 중복 이름의 두 번째 형제는 버튼이 다루지 않는 일반 컨트롤이 된다. `{실측, 코드}` (출처: 2026-11-24 Windows 1.26.65.1, 2026-11-24 역컴파일, 2026-11-25 Windows 1.26.65.1)
-- **[COL-31]** (제안) 액션 폼 행 수는 전역 바인딩 `#form_button_length`로 읽는다. `binding_name_override`로 팩토리의 `#collection_length`나 그리드의 `#maximum_grid_items`에 넣는다. 바닐라 1.26.50 UI는 이 이름을 쓰지 않는다. Windows 1.26.65.1에서 버튼 35, `label` 4, `divider` 3, `header` 2인 폼의 값은 44로, 라벨·구분선·헤더 행도 셌다([실측 기록](../design/json-ui-claims.mdx)). `{작동팩, 실측}` (출처: SLB 8장, EUB 예제)
+- **[PAT-13]** (제안) **키로 짜는 2차원 배치.** 세로 팩토리 항목마다 (1) 가로 스택의 왼쪽과 오른쪽 spacer를 버튼 문자열 키로 켜서 버튼을 옆으로 밀고, (2) 그림은 높이 0 패널 안에 두고 항목 높이는 키로 끌 수 있는 sizer가 정하게 하면, "높이 없음" 키가 붙은 항목 다음 항목이 같은 줄에 놓인다. 서버는 평범한 버튼 목록만 보내고 `selection` 번호는 바뀌지 않는다. 겹친 항목끼리 눌림 영역이 겹치지 않도록 가로 spacer를 같이 준다. `{작동팩, 추론}` ([출처](../reference/source-abbreviations.mdx): SLB 4장, GrimUI 키 문서)
+- **[FILE-39]** (제안) 같은 `controls` 배열 안의 형제 이름(`@` 앞)은 서로 다르게 짓는다. 2025년 4월 무렵 버전부터 중복 이름이 JSON UI 오류를 낸다는 보고가 있고(StarLibV2 1.0.3.3), 바닐라 1.26.50의 `controls` 배열 5,084개에는 중복이 하나도 없다. `padding`처럼 흔한 이름은 `padding_top`, `padding_bottom`으로 나눈다. Windows 1.26.65.1에서는 보고된 오류가 나지 않았다. 같은 `controls` 배열의 `dup` 두 개, HUD의 `re9dup@re9.tl` 두 개가 모두 만들어져 나란히 보였고 Content Log에 그 이름에 관한 줄이 없었다([주장 실측](../design/json-ui-claims.mdx)). 코드도 같다: 컨트롤 생성은 `controls` 배열을 차례로 돌며 자식을 만들어 부모 자식 목록에 붙일 뿐 이름을 비교하지 않고, 실행 파일에 JSON UI 컨트롤 이름 중복을 알리는 문구가 없다. 이름으로 찾는 쪽은 첫 번째 형제만 잡는다. 그래서 중복 이름의 두 번째 형제는 버튼이 다루지 않는 일반 컨트롤이 된다. HUD와 채팅 화면의 버튼에 `default_control` 이름의 형제 둘(`CD_A`, `CD_B` 순서)을 두면 입력이 없을 때는 둘 다 보이고, 채팅 화면에서 마우스를 올리면 배열 앞의 `CD_A`만 숨고 hover 컨트롤 `re9ch`가 보이며 `CD_B`는 버튼 상태와 상관없이 보인 채 남는다. 마우스를 떼면 `CD_A`가 다시 보인다. `{작동팩, 바닐라, 실측, 코드(바이너리)}` ([출처](../reference/source-abbreviations.mdx): SLB, bedrock-samples, 2026-11-18, 2026-11-24, 2026-11-25 Windows 1.26.65.1, 2026-11-24 역컴파일)
+- **[COL-31]** (제안) 액션 폼 행 수는 전역 바인딩 `#form_button_length`로 읽는다. `binding_name_override`로 팩토리의 `#collection_length`나 그리드의 `#maximum_grid_items`에 넣는다. 바닐라 1.26.50 UI는 이 이름을 쓰지 않는다. Windows 1.26.65.1에서 버튼 35, `label` 4, `divider` 3, `header` 2인 폼의 값은 44로, 라벨, 구분선, 헤더 행도 셌다([실측 기록](../design/json-ui-claims.mdx)). `{작동팩, 실측}` ([출처](../reference/source-abbreviations.mdx): SLB 8장, EUB 예제)
 
 **실측 필요 목록**
 
@@ -285,6 +284,8 @@ sizer의 `controls`도 변수 슬롯이라, 크기 키마다 정해진 높이의
 2. ~~`#form_button_length`를 라벨에 바인딩해 액션 폼 버튼 수(라벨·헤더·구분선 행 포함 여부, COL-19)가 나오는지.~~ → COL-31. 실측(Windows 1.26.65.1): 라벨·헤더·구분선 행도 센다(버튼 35 + 행 9 = 44)
 3. `common.text_edit_box` 입력 중에 다른 컨트롤이 `source_control_name`으로 읽은 `#item_name`이 글자마다 갱신되는지, 폼을 다시 열면 비워지는지. → INP-25. Windows 1.26.65.1에서 재지 못했다: 측정 도구의 키 입력이 액션 폼 창 안의 `common.text_edit_box`에 들어가지 않았고, 원인은 나누지 못했다
 4. 높이 0 패널 밖으로 넘친 버튼이 눌리는지(넘친 영역의 입력 판정). → PAT-13
+
+</details>
 
 ## 근거 표기와 출처 약어
 

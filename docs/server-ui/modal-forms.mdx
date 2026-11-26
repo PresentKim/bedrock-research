@@ -7,30 +7,34 @@ sources: [ms-learn, bedrock-wiki, bedrock-samples, repo-multiselect, private-res
 
 서버 폼은 서버가 플레이어에게 창 하나를 띄우고 응답을 돌려받는 기능이다. 폼의 종류는 세 가지이고, 글·버튼·입력칸의 종류와 순서만 서버가 정한다. 모양은 클라이언트의 바닐라 UI(`server_form.json`)가 그린다. 이 페이지는 Script API로 폼을 만드는 법, 응답을 읽는 법, 서버 소프트웨어(Dragonfly 등)가 폼을 JSON으로 직접 보낼 때의 꼴, 바닐라 화면의 구조를 정리한다. 폼의 모양을 바꾸는 법은 [서버 폼 재스킨](./reskinning-server-forms.mdx), 체크박스 목록 행은 [multiselect](./multiselect.mdx)에서 다룬다.
 
+## 가장 짧은 예
+
+나침반을 쓰면 버튼 두 개짜리 액션 폼을 열고, 누른 버튼 번호를 채팅으로 돌려준다. 아래 절의 API 설명을 합친 예이고, 이 위키에서 게임으로 실행해 보지는 않았다. 행동 팩 manifest에 `@minecraft/server`와 `@minecraft/server-ui` 의존성이 있어야 한다(1절).
+
+```js
+import { world } from "@minecraft/server";
+import { ActionFormData } from "@minecraft/server-ui";
+
+world.afterEvents.itemUse.subscribe(({ source, itemStack }) => {
+  if (itemStack.typeId !== "minecraft:compass") return;
+  new ActionFormData()
+    .title("Menu")
+    .body("Pick one")
+    .button("Spawn")
+    .button("Shop")
+    .show(source)
+    .then((r) => {
+      if (r.canceled) return;
+      source.sendMessage(`selected ${r.selection}`);
+    });
+});
+```
+
+`r.canceled`는 플레이어가 닫았거나 다른 UI 때문에 폼이 뜨지 못했을 때 참이다(2절, 폼이 열리는 조건). `r.selection`은 0부터 센 버튼 번호다(3절).
+
 ## 1. `@minecraft/server-ui` 모듈
 
-모듈 이름은 `@minecraft/server-ui`다(옛 이름 `mojang-minecraft-ui`, 1.18.30에서 처음 나왔다). 이 페이지를 쓴 시점(MS Learn 문서 커밋 `a9fd1c0`)의 판 목록은 다음과 같다 (출처: ms-learn).
-
-| 판 | 비고 |
-| --- | --- |
-| `2.0.0` | `ActionFormData`에 `divider`·`header`·`label` 추가. 피어 의존성 `@minecraft/server@2.0.0` |
-| `2.1.0` | `CustomForm`·`MessageBox`·`Observable*` 4종(DDUI) 추가, `DataDrivenScreenClosedReason`·`FormVisibilityErrorReason`·`TextFilteringError` 열거형 추가 |
-| `2.2.0` | `CustomForm.image` 추가 |
-| `2.3.0` | 안정판. `MessageBox.button1WithOptions`·`button2WithOptions` 추가 |
-| `2.4.0-rc.1.26.70-preview.24` | `CustomForm.multiButtonRow`, `MessageBox.button3WithOptions` 추가 |
-| `2.5.0-beta.1.26.70-preview.24` | `CustomForm` 생성자에 `options` 인자, `MessageBox.body`에 `options` 인자 추가 |
-| `1.0.0`~`1.3.0` | 1.x 계열. 별도 문서에 있다 |
-
-2026-11-16 기준 npm 판은 stable `2.3.0`, beta `2.4.0-beta.1.26.63-stable`, preview `2.4.0-rc.1.26.70-preview.24`, preview beta `2.5.0-beta.1.26.70-preview.24`다 (출처: 비공개 조사).
-
-Windows 1.26.65.1 클라이언트의 server-ui 네이티브 바인딩에는 있고 샘플 metadata(2.3.0-beta)에는 없는 멤버가 있다 `{코드}`.
-
-- `styleId`: `ButtonOptions`, `DividerOptions`, `TextOptions`, `ToggleOptions`, `TextFieldOptions`, `SliderOptions`, `DropdownOptions`, `MultiButtonRowOptions`, `CustomFormOptions`, `MessageBoxOptions`, `MessageBoxButtonOptions`, `MessageBoxBodyOptions` 12개 옵션에 있다. 모두 2.4.0 계열 전역 값을 읽는다. 공개 버전 중 어디서부터 노출되는지는 모른다.
-- `CustomFormOptions`(회수한 필드는 `styleId`뿐), `MessageBoxOptions`(`showHorizontalButtons`, `styleId`), `MessageBoxBodyOptions`(`styleId`).
-- `MessageBox.button3`과 `button3WithOptions`. metadata의 `MessageBox`는 `button1`, `button2`(와 `WithOptions`)만 있다. `button3`의 호출 형태(라벨, 툴팁)는 `{추론}`이다.
-- 폼 페이로드 JSON의 키 `minecraft:message_box`, `minecraft:custom_form`, `style_id`, `body_style_id`, `button_visible`, `row_visible`. 서버가 클라이언트에 보내는 키이고 스크립트 API 이름이 아니다. `showHorizontalButtons`는 폼 JSON의 `is_horizontal`, `is_vertical`과 짝으로 보인다 `{추론}`.
-
-이 클라이언트의 server-ui 목록에는 `2.4.0-beta`와 `3.0.0-alpha`가 모두 있어서, `styleId`가 어느 쪽에서 켜지는지는 코드만으로 닫지 못했다([모듈 버전](../scripting/versions-and-beta.mdx)).
+모듈 이름은 `@minecraft/server-ui`다(옛 이름 `mojang-minecraft-ui`, 1.18.30에서 처음 나왔다). 판 목록과 클라이언트 바인딩의 세부는 [9절](#9-모듈-판과-클라이언트-바인딩)에 있다.
 
 manifest 의존성은 이렇게 쓴다 (출처: bedrock-wiki).
 
@@ -273,3 +277,28 @@ Dragonfly의 `form.Custom`은 `form.Element` 인터페이스가 비공개 메서
 - **입력 폼(`custom_form`)**: 마찬가지로 225×200 창이다. 안의 `generated_contents`가 `custom_form` 컬렉션을 팩토리로 펼친다(길이 `#custom_form_length`). 행마다 바인딩 이름이 다르다: 라벨·머리글 `#custom_text`, 토글 `#custom_toggle_state`, 슬라이더 `#custom_slider_text`·`#custom_slider_value`, 스텝 슬라이더 `#custom_slider_step_text`·`#custom_slider_step_value`·`#custom_slider_steps`, 드롭다운 `#custom_dropdown_length`·`#custom_radio_text`·`#custom_radio_toggled`, 입력칸 `#custom_input_text`·`#custom_placeholder_text`, 툴팁 `#custom_tooltip_text`. 맨 아래 제출 버튼은 `$pressed_button_name`이 `button.submit_custom_form`이고 글은 `#submit_text`다.
 
 이 바인딩 이름은 서버가 데이터를 싣는 채널이 아니라 클라이언트가 폼 JSON을 해석해 UI에 넘기는 값이다. 서버가 화면 종류를 구분하는 방법은 제목·버튼 글에 표식을 싣는 것뿐이다([재스킨](./reskinning-server-forms.mdx)).
+
+## 9. 모듈 판과 클라이언트 바인딩
+
+이 페이지를 쓴 시점(MS Learn 문서 커밋 `a9fd1c0`)의 판 목록은 다음과 같다 (출처: ms-learn).
+
+| 판 | 비고 |
+| --- | --- |
+| `2.0.0` | `ActionFormData`에 `divider`·`header`·`label` 추가. 피어 의존성 `@minecraft/server@2.0.0` |
+| `2.1.0` | `CustomForm`·`MessageBox`·`Observable*` 4종(DDUI) 추가, `DataDrivenScreenClosedReason`·`FormVisibilityErrorReason`·`TextFilteringError` 열거형 추가 |
+| `2.2.0` | `CustomForm.image` 추가 |
+| `2.3.0` | 안정판. `MessageBox.button1WithOptions`·`button2WithOptions` 추가 |
+| `2.4.0-rc.1.26.70-preview.24` | `CustomForm.multiButtonRow`, `MessageBox.button3WithOptions` 추가 |
+| `2.5.0-beta.1.26.70-preview.24` | `CustomForm` 생성자에 `options` 인자, `MessageBox.body`에 `options` 인자 추가 |
+| `1.0.0`~`1.3.0` | 1.x 계열. 별도 문서에 있다 |
+
+2026-11-16 기준 npm 판은 stable `2.3.0`, beta `2.4.0-beta.1.26.63-stable`, preview `2.4.0-rc.1.26.70-preview.24`, preview beta `2.5.0-beta.1.26.70-preview.24`다 (출처: 비공개 조사).
+
+Windows 1.26.65.1 클라이언트의 server-ui 네이티브 바인딩에는 있고 샘플 metadata(2.3.0-beta)에는 없는 멤버가 있다 `{코드}`.
+
+- `styleId`: `ButtonOptions`, `DividerOptions`, `TextOptions`, `ToggleOptions`, `TextFieldOptions`, `SliderOptions`, `DropdownOptions`, `MultiButtonRowOptions`, `CustomFormOptions`, `MessageBoxOptions`, `MessageBoxButtonOptions`, `MessageBoxBodyOptions` 12개 옵션에 있다. 모두 2.4.0 계열 전역 값을 읽는다. 공개 버전 중 어디서부터 노출되는지는 모른다.
+- `CustomFormOptions`(회수한 필드는 `styleId`뿐), `MessageBoxOptions`(`showHorizontalButtons`, `styleId`), `MessageBoxBodyOptions`(`styleId`).
+- `MessageBox.button3`과 `button3WithOptions`. metadata의 `MessageBox`는 `button1`, `button2`(와 `WithOptions`)만 있다. `button3`의 호출 형태(라벨, 툴팁)는 `{추론}`이다.
+- 폼 페이로드 JSON의 키 `minecraft:message_box`, `minecraft:custom_form`, `style_id`, `body_style_id`, `button_visible`, `row_visible`. 서버가 클라이언트에 보내는 키이고 스크립트 API 이름이 아니다. `showHorizontalButtons`는 폼 JSON의 `is_horizontal`, `is_vertical`과 짝으로 보인다 `{추론}`.
+
+이 클라이언트의 server-ui 목록에는 `2.4.0-beta`와 `3.0.0-alpha`가 모두 있어서, `styleId`가 어느 쪽에서 켜지는지는 코드만으로 닫지 못했다([모듈 버전](../scripting/versions-and-beta.mdx)).

@@ -9,16 +9,14 @@ sources:
   - ms-learn
   - private-research
   - bedrock-core
-  - private-research
   - advancementpack
   - cinnabar
-  - private-research
   - netease-mcdocs
 ---
 
 이미지는 `image` 컨트롤이 그린다. 텍스처 한 장을 늘리고(`fill`), 반복하고(`tiled`), 9-slice로 모서리를 보존하며 늘리고, 일부만 보이게(`clip_ratio`) 하는 것이 기본기다. 엔진이 직접 그리는 것(아이템 아이콘, 플레이어 모델, 하트)은 `custom` 타입 + `renderer`이고, 시간에 따라 변하는 것은 애니메이션(`anim_type`)이다.
 
-## 9.0 가장 작은 예제
+## 가장 작은 예제
 
 **예 1. 이미지.** `texture`는 팩 루트부터의 경로이고 확장자가 없다. `uv`, `uv_size`로 큰 텍스처의 일부만 쓸 수 있다.
 
@@ -45,7 +43,7 @@ sources:
 
 **예 4. 슬라이드 인 → 대기 → 슬라이드 아웃 애니메이션**(아래 9.3 코드 참고). 애니메이션 컨트롤은 `type` 대신 `anim_type`을 가지고, `anims`로 붙이거나 속성 값에 `@네임스페이스.이름`으로 직접 참조한다.
 
-## 9.0.1 이미지 속성표(Bedrock Wiki, MS Learn)
+## 이미지 속성표(Bedrock Wiki, MS Learn)
 
 Bedrock Wiki JSON UI Documentation의 Sprite 표와 MS Learn `ui_element` 표(둘 다 `texture`, `uv`, `tiled`, `keep_ratio`, `bilinear`, `fill`, `grayscale`, `clip_pixelperfect`, `nine_slice_*`를 적는다)에서 정리했다.
 
@@ -68,7 +66,7 @@ Bedrock Wiki JSON UI Documentation의 Sprite 표와 MS Learn `ui_element` 표(�
 
 MS Learn 표의 `nine_slice_left/right/top/bottom`(철자 `buttom` 포함)은 이 프로젝트의 바닐라 전수 검색에 나오지 않는 이름이다(중국판 문서의 이름과 비슷하며 국제판은 `.json` 파일 방식을 쓴다, DBG-27).
 
-## 9.0.2 이징과 애니메이션 타입
+## 이징과 애니메이션 타입
 
 `anim_type`의 값과 인자(Bedrock Wiki Intro): `alpha`(실수, 투명도), `offset`(`[x, y]`, 앵커 기준 위치), `size`(`[폭, 높이]`), `flip_book`(정수, 프레임을 하나씩 바꾸는 이미지), `uv`(배열, UV 위치), `color`(0.0~1.0의 RGB), `wait`(숫자, 기다림), `aseprite_flip_book`(스프라이트 시트), `clip`이다.
 
@@ -76,21 +74,33 @@ MS Learn 표의 `nine_slice_left/right/top/bottom`(철자 `buttom` 포함)은 �
 
 애니메이션 속성(위키 표): `anim_type`, `duration`(초), `next`(끝난 뒤 이어질 애니메이션), `destroy_at_end`, `play_event`, `end_event`, `start_event`, `reset_event`, `easing`, `from`, `to`, `initial_uv`, `fps`, `frame_count`, `frame_step`, `reversible`(끝난 뒤 거꾸로 실행), `resettable`, `scale_from_starting_alpha`, `activated`.
 
-## 9.1 이미지
+## 이미지
 
-- **[ANI-01]** `image`의 주요 속성(바닐라 사용 횟수): `texture`, `uv`/`uv_size`(40), `tiled`(44), `keep_ratio`(45), `bilinear`(50), `fill`(48), `color`, `alpha`, `clip_direction`(`left` 21, `down` 3, `up` 1, `right` 1), `clip_ratio`, `clip_pixelperfect`(21), `grayscale`(1), `force_texture_reload`(6), `zip_folder`(3). 그 밖에 `allow_debug_missing_texture`(4)와 `tiled`의 축 값(ANI-17)이 있다. `{바닐라}` (출처: VN, BW-doc)
-- **[ANI-02]** 텍스처 경로는 변수 식으로 조립할 수 있다: `"texture": "('textures/my/bg/' + $tab_bg)"`. 런타임에는 `#texture` 바인딩에 view 식으로 경로를 넣는다: `('textures/my/frames/' + #frame)`. `{작동팩, 바닐라}` (출처: AP 4.9, BA 3.1, VN server_form.json:173)
-- **[ANI-03]** **진행 막대**는 `#clip_ratio`(0~1)를 바인딩하고 `clip_direction`으로 잘리는 쪽을 정한다. `clip_ratio`, `clip_direction`, `clip_pixelperfect`는 공식 스키마에 없지만 바닐라가 쓰는 속성이다. 정수 값에서 0~1 소수를 만들 때는 `(#v * .01)`처럼 점으로 시작하는 실수 리터럴을 쓴다. `(#v / 100)`은 정수 나눗셈이다(EXP-18, EXP-27). Windows 1.26.65.1에서 `#v` 50의 `(#v * .01)`은 막대를 절반 그렸다. 엔진은 값을 [0, 1]로 자르고 숫자가 아닌 값은 0.0으로 읽는다(ANI-50). 바닐라는 `#clip_ratio` 바인딩에 `binding_condition`을 `always`(6) 또는 `always_when_visible`(6)로 준다. `{바닐라, 실측, 코드}` (출처: VN 33회, BC-facts, BA 3.2, BW-doc, CN, 2026-11-24 Windows 1.26.65.1 실측과 역컴파일)
-- **[ANI-04]** 9-slice는 텍스처 파일 옆에 같은 이름의 `.json`을 두고 `nineslice_size`(`[왼, 위, 오른, 아래]` 또는 한 값)와 `base_size`를 적는다. 바닐라 UI JSON은 `nineslice_size`를 리터럴 속성으로 쓰지 않고 바인딩(`#banner_nineslice_size` → `#nineslice_size`)으로 1회 쓴다(LAY-27). 반복 배경은 image에 `"tiled": true`를 준다(LAY-28, 바닐라 44회). `{작동팩, 바닐라}` (출처: BA 5장, AP 4.9, VN)
+- **[ANI-01]** `image`의 주요 속성(바닐라 사용 횟수): `texture`, `uv`/`uv_size`(40), `tiled`(44), `keep_ratio`(45), `bilinear`(50), `fill`(48), `color`, `alpha`, `clip_direction`(`left` 21, `down` 3, `up` 1, `right` 1), `clip_ratio`, `clip_pixelperfect`(21), `grayscale`(1), `force_texture_reload`(6), `zip_folder`(3). 그 밖에 `allow_debug_missing_texture`(4)와 `tiled`의 축 값(ANI-17)이 있다. `{바닐라}` ([출처](../reference/source-abbreviations.mdx): VN, BW-doc)
+- **[ANI-02]** 텍스처 경로는 변수 식으로 조립할 수 있다: `"texture": "('textures/my/bg/' + $tab_bg)"`. 런타임에는 `#texture` 바인딩에 view 식으로 경로를 넣는다: `('textures/my/frames/' + #frame)`. `{작동팩, 바닐라}` ([출처](../reference/source-abbreviations.mdx): AP 4.9, BA 3.1, VN server_form.json:173)
+- **[ANI-03]** **진행 막대**는 `#clip_ratio`(0~1)를 바인딩하고 `clip_direction`으로 잘리는 쪽을 정한다. `clip_ratio`, `clip_direction`, `clip_pixelperfect`는 공식 스키마에 없지만 바닐라가 쓰는 속성이다. 정수 값에서 0~1 소수를 만들 때는 `(#v * .01)`처럼 점으로 시작하는 실수 리터럴을 쓴다. `(#v / 100)`은 정수 나눗셈이다(EXP-18, EXP-27). Windows 1.26.65.1에서 `#v` 50의 `(#v * .01)`은 막대를 절반 그렸다. 엔진은 값을 [0, 1]로 자르고 숫자가 아닌 값은 0.0으로 읽는다(ANI-50). 바닐라는 `#clip_ratio` 바인딩에 `binding_condition`을 `always`(6) 또는 `always_when_visible`(6)로 준다. `{바닐라, 실측, 코드(소스), 코드(바이너리)}` ([출처](../reference/source-abbreviations.mdx): VN 33회, BC-facts, BA 3.2, BW-doc, CN, 2026-11-24 Windows 1.26.65.1 실측과 역컴파일)
+- **[ANI-04]** 9-slice는 텍스처 파일 옆에 같은 이름의 `.json`을 두고 `nineslice_size`(`[왼, 위, 오른, 아래]` 또는 한 값)와 `base_size`를 적는다. 바닐라 UI JSON은 `nineslice_size`를 리터럴 속성으로 쓰지 않고 바인딩(`#banner_nineslice_size` → `#nineslice_size`)으로 1회 쓴다(LAY-27). 반복 배경은 image에 `"tiled": true`를 준다(LAY-28, 바닐라 44회). `{작동팩, 바닐라}` ([출처](../reference/source-abbreviations.mdx): BA 5장, AP 4.9, VN)
+- **[ANI-17]** `tiled`는 `true`(23)뿐 아니라 한 축만 반복하는 `"x"`(8), `"y"`(12)도 받는다. 코드에서는 `"xy"`, `"yx"`도 두 축 반복이다. 반복 단위 배율은 `tiled_scale`(3). `{바닐라, 코드(바이너리)}` ([출처](../reference/source-abbreviations.mdx): BW-doc Sprite 표, VN, 2026-11-24 Windows 1.26.65.1 역컴파일)
+- **[ANI-22]** 이미지는 9-slice, `clip_ratio`, `tiled`, `fill`, `keep_ratio`, 늘리기 순서로 그리는 방식을 고른다. `clip_pixelperfect`(기본 켬)는 원본 픽셀 단위로 자른다. `color`는 `[r,g,b,a]` 외에 `#rrggbb`도 된다. `{코드(소스)}` ([출처](../reference/source-abbreviations.mdx): CN)
+- **[ANI-34]** 클라이언트는 흑백(grayscale) PNG를 반투명하게 그렸다(회색 틀 너머로 창이 비침). 텍스처 최적화 도구가 회색 그림을 흑백으로 바꾸므로 팩의 PNG는 RGB·RGBA로 둔다. `{실측}` ([출처](../reference/source-abbreviations.mdx): DF)
+- **[ANI-48]** `clip_ratio`는 `clip_direction`이 있을 때만 자른다. `clip_direction` 없이 `clip_ratio: 0.5`를 준 이미지는 잘리지 않았다. `clip_direction: "left"`만 주고 `clip_ratio`를 생략한 이미지는 기본값 1.0이라 아무것도 그리지 않았다. `clip_direction`은 `left`, `right`, `up`, `down`과 `center`를 받는다. `clip_pixelperfect: false`에서 `left` 0.25는 왼쪽 75%, `down` 0.5는 아래 절반, `center` 0.5는 가운데 50%를 보였다. 곧 남는 부분은 `clip_direction` 쪽에 있다. `{실측, 코드(바이너리)}` ([출처](../reference/source-abbreviations.mdx): 2026-11-20 Windows 1.26.65.1 실측과 역컴파일)
+- **[ANI-49]** `clip_pixelperfect`는 기본이 `true`이고 자르는 경계를 텍스처의 텍셀 단위로 내린다. 텍스처 `textures/ui/White`에서 ANI-48과 같은 이미지에 `clip_pixelperfect`를 주지 않자 `left` 0.25는 왼쪽 1 GUI 폭 조각만, `down` 0.5는 아래 1 GUI 줄만 보였고 `center` 0.5는 아무것도 보이지 않았다. 작은 텍스처를 늘려 비율을 보이는 막대에는 `clip_pixelperfect: false`를 준다(이미지와 애니메이션 장의 예 3). `{실측, 코드(바이너리)}` ([출처](../reference/source-abbreviations.mdx): 2026-11-20 Windows 1.26.65.1 실측과 역컴파일)
+- **[ANI-50]** `#clip_ratio` 값은 실수로 읽어 [0, 1]로 자른 뒤 이미지에 쓴다. 코드에서 정수와 실수는 그 값, 불리언은 참 1.0과 거짓 0.0, 없는 키와 문자열 같은 숫자가 아닌 값은 0.0이다. 그래서 2는 1.0으로 잘려 방향이 있는 이미지가 사라지고, 음수는 0이 된다. Windows 1.26.65.1에서 `textures/blocks/emerald_block` 80x5 막대(`clip_direction: "left"`, 그려진 폭 전체 320 px)에 `(#v * .01)`, `#v` 50을 주자 160 px로 절반이 그려졌다. `(((20.0 - 15) / $max) + #z)`(`"$max": 20.0`, `#z` 0), `property_bag`의 0.25, 정적 `"clip_ratio": 0.25`는 모두 240 px였다(0.25가 잘리고 75%가 남음). 비율 0은 정적 값과 바인딩 모두 막대 대신 가운데에 막대 높이만 한 정사각형 하나(20x20 px, 텍스처 전체)를 그렸다. 원인은 모른다. `textures/ui/White` 막대에서 0이 꽉 찬 막대로 보였던 기록과 다르지만, 같은 날 `White`로는 확인하지 못해 텍스처에 따른 차이인지 가리지 못했다. `#` 속성 없이 상수만 든 식(`(.25)`)은 바인딩이 버려졌다(BND-05). `{실측, 코드(바이너리)}` ([출처](../reference/source-abbreviations.mdx): 2026-11-24 Windows 1.26.65.1 실측과 역컴파일)
 
-## 9.2 렌더러(`custom`)
+ANI-46~ANI-49는 네이티브 클라이언트(Windows 1.26.65.1, 일부는 Android 1.26.52.3)를 역컴파일해 읽은 코드를 Windows 1.26.65.1 게임에서 확인한 것이다(2026-11-20). 시험 창은 애드온 `addons/json-ui-claims`의 `juc_tester.json`이다. 1 GUI는 4 클라이언트 픽셀이었다. ANI-50은 Windows 1.26.65.1 클라이언트를 역컴파일해 읽은 코드를 같은 버전 게임의 HUD에서 확인한 것이다(2026-11-24). 프로브 팩은 `addons/re9-probes`이고 측정 기록은 [주장 실측](../design/json-ui-claims.mdx) 6.8절에 있다.
 
-- **[ANI-05]** `"type": "custom"` + `"renderer": "이름"`이면 엔진이 그린다. 바닐라 1.26.50.4가 쓰는 렌더러는 43종이다(부록B). 렌더러 이름 목록을 외부 자료에서 가져올 때는 바닐라 목록과 대조한다. 한 외부 목록은 53개 중 10개가 바닐라에 없었다. 위키 렌더러 목록 41개 중 7개(`background_renderer` 등)는 바닐라 1.26.50에 없고, 바닐라의 9개(`locator_bar`, `qr_code_renderer` 등)는 위키에 없다. `{바닐라}` (출처: VN, MJ 4.2, BW-doc)
-- **[ANI-06]** 아이템 아이콘은 `inventory_item_renderer`에 `#item_id_aux`를 준다. 값은 `숫자 아이템 ID × 65536 (+ 데이터 값)`이다. 상수면 `property_bag`에 넣고, 런타임 값이면 바인딩한다. 숫자 ID는 커스텀 아이템이 등록되면 일부가 밀려 월드마다 다를 수 있다. 밀리는 경계는 출처마다 다르다(BC 기록은 256 이상, 위키의 1.26.50 표는 -1246~851 안정, 852~883만 밀림). 쓰기 전에 그 버전의 표나 게임에서 확인한다. 가능하면 텍스처 경로를 쓴다. `{작동팩, 실측, 충돌}` (출처: AP 4.7, BC-facts, BW-ids, 부록A C-33)
-- **[ANI-07]** 바닐라 HUD의 커서(`cursor_renderer`)는 1.26.50에서 HUD 루트의 인스턴스가 빠지고 `hud_crosshair_overlay.json`에서 참조된다(정의는 `hud_screen.json:608`에 남아 있다). 이것을 기준점으로 쓰던 HUD 수정은 깨진다. `{바닐라}` (출처: VN hud_crosshair_overlay.json:4, MJ 4.1)
+## 렌더러(`custom`)
+
+- **[ANI-05]** `"type": "custom"` + `"renderer": "이름"`이면 엔진이 그린다. 바닐라 1.26.50.4가 쓰는 렌더러는 43종이다(부록B). 렌더러 이름 목록을 외부 자료에서 가져올 때는 바닐라 목록과 대조한다. 한 외부 목록은 53개 중 10개가 바닐라에 없었다. 위키 렌더러 목록 41개 중 7개(`background_renderer` 등)는 바닐라 1.26.50에 없고, 바닐라의 9개(`locator_bar`, `qr_code_renderer` 등)는 위키에 없다. `{바닐라}` ([출처](../reference/source-abbreviations.mdx): VN, MJ 4.2, BW-doc)
+- **[ANI-06]** 아이템 아이콘은 `inventory_item_renderer`에 `#item_id_aux`를 준다. 값은 `숫자 아이템 ID × 65536 (+ 데이터 값)`이다. 상수면 `property_bag`에 넣고, 런타임 값이면 바인딩한다. 숫자 ID는 커스텀 아이템이 등록되면 일부가 밀려 월드마다 다를 수 있다. 밀리는 경계는 출처마다 다르다(BC 기록은 256 이상, 위키의 1.26.50 표는 -1246~851 안정, 852~883만 밀림). 쓰기 전에 그 버전의 표나 게임에서 확인한다. 가능하면 텍스처 경로를 쓴다. `{작동팩, 실측, 충돌}` ([출처](../reference/source-abbreviations.mdx): AP 4.7, BC-facts, BW-ids, 부록A C-33)
+- **[ANI-07]** 바닐라 HUD의 커서(`cursor_renderer`)는 1.26.50에서 HUD 루트의 인스턴스가 빠지고 `hud_crosshair_overlay.json`에서 참조된다(정의는 `hud_screen.json:608`에 남아 있다). 이것을 기준점으로 쓰던 HUD 수정은 깨진다. `{바닐라}` ([출처](../reference/source-abbreviations.mdx): VN hud_crosshair_overlay.json:4, MJ 4.1)
+- **[ANI-46]** 엔진이 모르는 `type`을 준 컨트롤은 만들어지지 않고 그 자식도 만들어지지 않는다. 콘텐츠 로그에 `Type 'no_such_type' not recognized for control: <컨트롤 이름>`이 남는다. 타입 이름은 대소문자까지 맞아야 해서 `Label`도 같은 오류를 냈다. 바닐라에 1회 있는 `carousel_label`도 엔진의 타입 표에 없어 같은 오류로 거부됐다. `{실측, 코드(바이너리)}` ([출처](../reference/source-abbreviations.mdx): 2026-11-20 Windows 1.26.65.1 실측과 역컴파일)
+- **[ANI-47]** `custom` 컨트롤의 `renderer`가 엔진이 모르는 이름이면 콘텐츠 로그에 `Unrecognized renderer: 'foo_renderer'`가 남고 렌더러는 붙지 않는다. 모르는 `type`(ANI-46)과 달리 컨트롤 자체는 만들어진다. `{실측, 코드(바이너리)}` ([출처](../reference/source-abbreviations.mdx): 2026-11-20 Windows 1.26.65.1 실측과 역컴파일)
+- **[ANI-38]** 엔티티 상자 화면에 `modifications`로 넣은 창에서, 창을 감싼 패널을 `layer` 50, 그 안 `input_panel`을 100에 두자 `inventory_item_renderer` 아이콘만 그려지지 않고 이름, 개수, 배경은 그려졌다. 둘 다 1로 낮추자 아이콘이 그려졌다. 아이템 렌더러를 layer 100에 두면 아이템이 숨고 4와 50은 괜찮았다는 커뮤니티 보고와 맞는다(ANI-06). 아이템 렌더러가 든 창은 높은 레이어에 두지 않는다. 경계는 컨트롤 자신의 `layer`가 아니라 조상 레이어를 더한 합에 달려 있다. 상자 화면에서 팩 안 조상까지 더한 합이 94까지는 `inventory_item_renderer`와 `live_player_renderer`가 그려지고 99부터는 둘 다 그려지지 않았다(95~98은 시험하지 않음, 바닐라 상자 패널 쪽 조상은 합에 넣지 않음). `live_horse_renderer`는 합과 상관없이 그려졌다(모바일, 2026-11-16, [InvUI](../design/invui/entity-inventory-ui.mdx) 2.2.3절). `{실측}` ([출처](../reference/source-abbreviations.mdx): E2048)
+- **[ANI-39]** `gradient_renderer`의 색은 바인딩으로 바꿀 수 없다. `property_bag`의 `[1, 0, 0, 1]`을 view 바인딩으로 `#color1`에 넣어도, `#color`에 넣어도 그라데이션은 정적인 `color1`(흰색)으로 그려졌다. 같은 바인딩을 흰 이미지의 `#color`에 걸면 빨갛게 바뀌었다. 기본 그라데이션 방향은 위(`color1`)에서 아래(`color2`)다. 색을 바꾸려면 색별 그라데이션을 미리 두고 `#visible`로 고르거나, 흰색에서 투명으로 가는 텍스처 이미지에 `#color`를 바인딩한다. `{실측}` ([출처](../reference/source-abbreviations.mdx): CPR)
 
 
-### 9.2.1 바닐라 렌더러 43종과 사용 횟수(부록B 값 사전)
+### 바닐라 렌더러 43종과 사용 횟수(부록B 값 사전)
 
 바닐라 1.26.50.4가 `renderer` 값으로 쓰는 43종이다. 아이템 아이콘은 `inventory_item_renderer`, 플레이어 모델은 `paper_doll_renderer`다. MS Learn은 `hud_player_renderer`, `inventory_item_renderer`를 예로 든다.
 
@@ -140,7 +150,7 @@ MS Learn 표의 `nine_slice_left/right/top/bottom`(철자 `buttom` 포함)은 �
 | `web_view_renderer` | 1 |
 | `splash_text_renderer` | 1 |
 
-## 9.3 애니메이션
+## 애니메이션
 
 ```json
 "anim_slide_in":  { "anim_type": "offset", "easing": "out_back", "duration": 0.5,
@@ -151,18 +161,23 @@ MS Learn 표의 `nine_slice_left/right/top/bottom`(철자 `buttom` 포함)은 �
 // 사용: "anims": [ "@my_toast.anim_slide_in" ]  또는  "alpha": "@my_toast.anim_fade"
 ```
 
-- **[ANI-08]** `anim_type` 값(바닐라 횟수): `alpha` 54, `offset` 42, `flip_book` 34, `wait` 30, `size` 7, `color` 3, `aseprite_flip_book` 2, `uv` 1. 위키와 Cinnabar(1.26.50 엔진 enum)는 `clip`도 적어 9가지다(ANI-20). 바닐라 사용은 0회다. Windows 1.26.65.1 코드에서 `clip` 애니메이션은 이미지의 `clip_ratio`에 easing 값을 쓴다(부록A C-38). 게임에서는 재지 않았다. `{바닐라, 코드}` (출처: VN, CN, 2026-11-24 Windows 1.26.65.1 역컴파일)
-- **[ANI-09]** 애니메이션 필드: `from`, `to`, `duration`, `easing`, `next`(다음 애니메이션 참조), `destroy_at_end`, `play_event`, `end_event`, `reset_event`, `reversible`, `resettable`, `looping`, 플립북용 `initial_uv`, `frame_count`, `frame_step`, `fps`. 코드에서 `initial_uv`는 `flip_book`과 `aseprite_flip_book` 속성 참조의 처음 uv다. `{바닐라, 코드}` (출처: VN 필드별 집계, 2026-11-24 Windows 1.26.65.1 역컴파일)
-- **[ANI-10]** `easing`은 바닐라가 쓰는 값을 우선한다: `linear`, `out_cubic`, `in_expo`, `in_quart`, `in_quint`, `out_expo`, `in_sine`, `in_out_back`, `out_sine`, `out_bounce`, `out_back`, `in_out_expo`, `in_out_circ`, `in_bounce`. 외부 목록의 이징 32개 중 18개는 바닐라에 없다. `in_back`은 BA가 쓴다. 이 32개는 위키 목록과 같고, 바닐라 14개는 모두 그 안에 있다. `{바닐라, 작동팩}` (출처: VN, MJ 4.2, BA 6장, BW-doc)
-- **[ANI-11]** 애니메이션은 `"anims": [ "@ns.이름" ]`로 붙이거나 속성 값에 직접 참조한다(`"alpha": "@hud.anim_title_text_alpha_in"`). **다른 namespace의 애니메이션을 바닐라 요소에 붙일 수도 있다.** `{바닐라, 작동팩}` (출처: VN hud_screen.json:2272, AP 4.5)
-- **[ANI-12]** 팩토리가 컨트롤을 새로 만들 때마다 애니메이션은 **처음부터 다시** 재생된다. 타이틀을 보낼 때마다 토스트가 슬라이드인 하는 이유다. 코드에서도 컨트롤을 만들 때 `anims` 컴포넌트를 만들고 현재 시각을 넣는다. `{작동팩, 코드}` (출처: BA 6장, BW-intro, 2026-11-24 Windows 1.26.65.1 역컴파일)
-- **[ANI-13]** 사라진 항목의 높이를 `size` 애니메이션으로 0까지 줄이면 스택 패널의 다음 항목이 부드럽게 올라온다. `{작동팩}` (출처: AP 4.5)
-- **[ANI-14]** `destroy_at_end`의 값은 바닐라에서 팩토리가 만든 컨트롤 이름(`hud_title_text`), 그 기반 정의 이름(채팅: 자식 이름 `chat_item`, 값 `chat_grid_item`), 변수(`$toast_control`)가 모두 쓰인다. HUD 타이틀 팩토리에서 실측하니 팩토리가 만든 컨트롤 이름은 `control_ids`의 키(`hud_title_text`)였고, `juc_d_inst_a@...`처럼 JSON에 적은 자식 이름(`@` 앞부분)은 무시됐다. `destroy_at_end`는 `hud_title_text`일 때만 약 1초 뒤 지웠고, 그 자식 이름과 정의 이름으로는 지우지 않았다. 지우는 애니메이션이 없는 팩토리 컨트롤은 타이틀이 끝나도 남았다([실측 기록](../design/json-ui-claims.mdx#62-hud-타이틀)). 팩토리 개수 한도(`max_children_size`)로 누적을 함께 막는다. Cinnabar 재구성에서 `destroy_at_end`는 그 컨트롤과 조상 중 엔진이 붙인 컨트롤 이름이 값과 같은 가장 가까운 것을 지우고, 채팅 컨트롤러는 만든 줄에 이름 `chat_grid_item`을 준다(ANI-21). 그렇다면 바닐라 채팅의 값과 맞는다(채팅은 재지 않음). `{바닐라, 실측, 코드, 추론}` (출처: VN hud_screen.json:949·2213, AP 4.5, 부록A C-27, CN, 2026-11-18 Windows 1.26.65.1)
-- **[ANI-15]** 플립북 아이콘은 `"uv": "@ns.anim"`(`anim_type: aseprite_flip_book`) + `"uv_size"` + 텍스처 옆 Aseprite JSON(`frames[].frame`, `duration`)으로 만든다. Aseprite에서는 JSON을 **Array** 형식으로 내보낸다(Hash는 동작하지 않는다고 한다). 코드에서 엔진은 `frames`를 배열로만 읽고(`frames[].duration`, `frame.x`, `frame.y`) Hash(객체) 형식을 읽는 코드는 없다. 프레임의 `w`, `h`는 읽지 않는다. 텍스처와 JSON은 확장자 없이 같은 이름이고, `aseprite_flip_book`은 image의 `uv`에만 건다. `{바닐라, 작동팩, 코드}` (출처: VN 2회, AP 4.7, BW-ase, 2026-11-24 Windows 1.26.65.1 역컴파일)
-- **[ANI-16]** 바닐라 타이틀 애니메이션 시간은 엔진 변수(`$title_fade_in_time`, `$title_fade_out_time`)로 들어온다. `/title times` 값이 여기에 반영되는 것으로 보인다. `{바닐라, 추론}` (출처: VN hud_screen.json:2170·2185)
+- **[ANI-08]** `anim_type` 값(바닐라 횟수): `alpha` 54, `offset` 42, `flip_book` 34, `wait` 30, `size` 7, `color` 3, `aseprite_flip_book` 2, `uv` 1. 위키와 Cinnabar(1.26.50 엔진 enum)는 `clip`도 적어 9가지다(ANI-20). 바닐라 사용은 0회다. Windows 1.26.65.1 코드에서 `clip` 애니메이션은 이미지의 `clip_ratio`에 easing 값을 쓴다(부록A C-38). 게임에서는 재지 않았다. `{바닐라, 코드(소스), 코드(바이너리)}` ([출처](../reference/source-abbreviations.mdx): VN, CN, 2026-11-24 Windows 1.26.65.1 역컴파일)
+- **[ANI-09]** 애니메이션 필드: `from`, `to`, `duration`, `easing`, `next`(다음 애니메이션 참조), `destroy_at_end`, `play_event`, `end_event`, `reset_event`, `reversible`, `resettable`, `looping`, 플립북용 `initial_uv`, `frame_count`, `frame_step`, `fps`. 코드에서 `initial_uv`는 `flip_book`과 `aseprite_flip_book` 속성 참조의 처음 uv다. `{바닐라, 코드(바이너리)}` ([출처](../reference/source-abbreviations.mdx): VN 필드별 집계, 2026-11-24 Windows 1.26.65.1 역컴파일)
+- **[ANI-10]** `easing`은 바닐라가 쓰는 값을 우선한다: `linear`, `out_cubic`, `in_expo`, `in_quart`, `in_quint`, `out_expo`, `in_sine`, `in_out_back`, `out_sine`, `out_bounce`, `out_back`, `in_out_expo`, `in_out_circ`, `in_bounce`. 외부 목록의 이징 32개 중 18개는 바닐라에 없다. `in_back`은 BA가 쓴다. 이 32개는 위키 목록과 같고, 바닐라 14개는 모두 그 안에 있다. `{바닐라, 작동팩}` ([출처](../reference/source-abbreviations.mdx): VN, MJ 4.2, BA 6장, BW-doc)
+- **[ANI-11]** 애니메이션은 `"anims": [ "@ns.이름" ]`로 붙이거나 속성 값에 직접 참조한다(`"alpha": "@hud.anim_title_text_alpha_in"`). **다른 namespace의 애니메이션을 바닐라 요소에 붙일 수도 있다.** `{바닐라, 작동팩}` ([출처](../reference/source-abbreviations.mdx): VN hud_screen.json:2272, AP 4.5)
+- **[ANI-12]** 팩토리가 컨트롤을 새로 만들 때마다 애니메이션은 **처음부터 다시** 재생된다. 타이틀을 보낼 때마다 토스트가 슬라이드인 하는 이유다. 코드에서도 컨트롤을 만들 때 `anims` 컴포넌트를 만들고 현재 시각을 넣는다. `{작동팩, 코드(바이너리)}` ([출처](../reference/source-abbreviations.mdx): BA 6장, BW-intro, 2026-11-24 Windows 1.26.65.1 역컴파일)
+- **[ANI-13]** 사라진 항목의 높이를 `size` 애니메이션으로 0까지 줄이면 스택 패널의 다음 항목이 부드럽게 올라온다. `{작동팩}` ([출처](../reference/source-abbreviations.mdx): AP 4.5)
+- **[ANI-14]** `destroy_at_end`의 값은 바닐라에서 팩토리가 만든 컨트롤 이름(`hud_title_text`), 그 기반 정의 이름(채팅: 자식 이름 `chat_item`, 값 `chat_grid_item`), 변수(`$toast_control`)가 모두 쓰인다. HUD 타이틀 팩토리에서 실측하니 팩토리가 만든 컨트롤 이름은 `control_ids`의 키(`hud_title_text`)였고, `juc_d_inst_a@...`처럼 JSON에 적은 자식 이름(`@` 앞부분)은 무시됐다. `destroy_at_end`는 `hud_title_text`일 때만 약 1초 뒤 지웠고, 그 자식 이름과 정의 이름으로는 지우지 않았다. 지우는 애니메이션이 없는 팩토리 컨트롤은 타이틀이 끝나도 남았다([실측 기록](../design/json-ui-claims.mdx#62-hud-타이틀)). 팩토리 개수 한도(`max_children_size`)로 누적을 함께 막는다. Cinnabar 재구성에서 `destroy_at_end`는 그 컨트롤과 조상 중 엔진이 붙인 컨트롤 이름이 값과 같은 가장 가까운 것을 지우고, 채팅 컨트롤러는 만든 줄에 이름 `chat_grid_item`을 준다(ANI-21). 그렇다면 바닐라 채팅의 값과 맞는다(채팅은 재지 않음). `{바닐라, 실측, 코드(소스), 추론}` ([출처](../reference/source-abbreviations.mdx): VN hud_screen.json:949·2213, AP 4.5, 부록A C-27, CN, 2026-11-18 Windows 1.26.65.1)
+- **[ANI-15]** 플립북 아이콘은 `"uv": "@ns.anim"`(`anim_type: aseprite_flip_book`) + `"uv_size"` + 텍스처 옆 Aseprite JSON(`frames[].frame`, `duration`)으로 만든다. Aseprite에서는 JSON을 **Array** 형식으로 내보낸다(Hash는 동작하지 않는다고 한다). 코드에서 엔진은 `frames`를 배열로만 읽고(`frames[].duration`, `frame.x`, `frame.y`) Hash(객체) 형식을 읽는 코드는 없다. 프레임의 `w`, `h`는 읽지 않는다. 텍스처와 JSON은 확장자 없이 같은 이름이고, `aseprite_flip_book`은 image의 `uv`에만 건다. `{바닐라, 작동팩, 코드(바이너리)}` ([출처](../reference/source-abbreviations.mdx): VN 2회, AP 4.7, BW-ase, 2026-11-24 Windows 1.26.65.1 역컴파일)
+- **[ANI-16]** 바닐라 타이틀 애니메이션 시간은 엔진 변수(`$title_fade_in_time`, `$title_fade_out_time`)로 들어온다. `/title times` 값이 여기에 반영되는 것으로 보인다. `{바닐라, 추론}` ([출처](../reference/source-abbreviations.mdx): VN hud_screen.json:2170·2185)
+- **[ANI-18]** 그리드 안의 컨트롤에서 `next`로 이은 애니메이션은 첫 애니메이션 뒤로 지속 시간이 항목 수만큼 나뉘어 빨라지는 버그가 있다(`flip_book` 제외). 그리드 항목에는 반복 애니메이션을 한 단계로 쓰거나 `looping`을 쓴다. 2026-11-24 역컴파일에서 이 가속을 일으키는 코드는 찾지 못했다. `{미검증}` ([출처](../reference/source-abbreviations.mdx): BW-dyn, 2026-11-24 Windows 1.26.65.1 역컴파일)
+- **[ANI-19]** 바닐라가 쓰는 추가 애니메이션 필드: `start_event`(1), `scale_from_starting_alpha`(4), `activated`(2). 컨트롤 쪽: `animation_reset_name`(26), `disable_anim_fast_forward`(21). 코드에서 `scale_from_starting_alpha`는 alpha 애니메이션의 불리언이고 참이면 시작값을 현재 alpha로 둔다. 애니메이션 해석 함수가 `start_event`와 `activated`를 읽는 곳은 찾지 못했다. `{바닐라, 코드(바이너리)}` ([출처](../reference/source-abbreviations.mdx): BW-doc Animations 표, VN, 2026-11-24 Windows 1.26.65.1 역컴파일)
+- **[ANI-20]** 애니메이션 타입은 `alpha`, `clip`, `color`, `flip_book`, `aseprite_flip_book`, `offset`, `size`, `uv`, `wait` 9가지다(1.26.50 enum). `{코드(소스)}` ([출처](../reference/source-abbreviations.mdx): CN, C-38)
+- **[ANI-21]** `destroy_at_end`는 그 애니메이션을 가진 컨트롤과 조상 중 엔진이 붙인 컨트롤 이름이 값과 같은 가장 가까운 것을 지운다. 이 이름은 보통 JSON에 적은 자식 이름(`@` 앞부분)이지만, 팩토리가 만든 컨트롤은 `control_ids`의 키를 이름으로 받는다(ANI-14). `{코드(소스)}` ([출처](../reference/source-abbreviations.mdx): CN, C-27)
+- **[ANI-37]** 열린 화면에서 애니메이션을 처음부터 다시 재생하려면 그 컨트롤을 새로 만들게 한다. `property_bag` 사전 조회(COL-22, COL-23)로 `#collection_length`를 정하는 `control_ids` 팩토리에서, 키가 되는 값(칸 아이템 이름)의 표식을 바꿀 때마다 컨트롤이 다시 만들어지고 `anims`가 처음부터 재생됐다. `#visible`을 껐다 켜는 것으로는 다시 재생되지 않았다. `{실측}` ([출처](../reference/source-abbreviations.mdx): E2048)
 
 
-## 9.3.1 Aseprite 스프라이트 애니메이션(Bedrock Wiki 원문)
+## Aseprite 스프라이트 애니메이션(Bedrock Wiki 원문)
 
 `aseprite_flip_book`는 Aseprite(또는 무료 대안 LibreSprite)에서 내보낸 스프라이트 시트로 애니메이션을 만든다. 아래는 위키 원문(CC BY 4.0)이다. ANI-15의 규칙(Array 형식, 같은 이름 파일)과 같은 내용이다.
 
@@ -211,49 +226,14 @@ The `uv_size` field should be set to the width and height of a single frame.
 
 </Excerpt>
 
-## 9.4 Bedrock Wiki 대조로 더한 규칙
-
-위키(BW) 문서를 바닐라 1.26.50.4와 대조해 더한 규칙이다. 위키 문장만 있는 것은 `미검증`, 위키의 게임 스크린샷이 있는 것은 `실측`(제3자 기록)으로 표시했다.
-
-- **[ANI-17]** `tiled`는 `true`(23)뿐 아니라 한 축만 반복하는 `"x"`(8), `"y"`(12)도 받는다. 코드에서는 `"xy"`, `"yx"`도 두 축 반복이다. 반복 단위 배율은 `tiled_scale`(3). `{바닐라, 코드}` (출처: BW-doc Sprite 표, VN, 2026-11-24 Windows 1.26.65.1 역컴파일)
-- **[ANI-18]** 그리드 안의 컨트롤에서 `next`로 이은 애니메이션은 첫 애니메이션 뒤로 지속 시간이 항목 수만큼 나뉘어 빨라지는 버그가 있다(`flip_book` 제외). 그리드 항목에는 반복 애니메이션을 한 단계로 쓰거나 `looping`을 쓴다. 2026-11-24 역컴파일에서 이 가속을 일으키는 코드는 찾지 못했다. `{미검증}` (출처: BW-dyn, 2026-11-24 Windows 1.26.65.1 역컴파일)
-- **[ANI-19]** 바닐라가 쓰는 추가 애니메이션 필드: `start_event`(1), `scale_from_starting_alpha`(4), `activated`(2). 컨트롤 쪽: `animation_reset_name`(26), `disable_anim_fast_forward`(21). 코드에서 `scale_from_starting_alpha`는 alpha 애니메이션의 불리언이고 참이면 시작값을 현재 alpha로 둔다. 애니메이션 해석 함수가 `start_event`와 `activated`를 읽는 곳은 찾지 못했다. `{바닐라, 코드}` (출처: BW-doc Animations 표, VN, 2026-11-24 Windows 1.26.65.1 역컴파일)
-
-## 9.5 Cinnabar 엔진 재구성으로 더한 규칙
-
-Cinnabar(`CN`)는 26.30 네이티브 클라이언트의 JSON UI 해석기를 재구성한 Rust 코드다. 수준은 `코드`이고, `CN-run`은 이 프로젝트가 그 평가기를 직접 실행한 결과다. 게임 실측과 다르면 실측을 따른다(부록A C-41~C-47).
-
-- **[ANI-20]** 애니메이션 타입은 `alpha`, `clip`, `color`, `flip_book`, `aseprite_flip_book`, `offset`, `size`, `uv`, `wait` 9가지다(1.26.50 enum). `{코드}` (출처: CN, C-38)
-- **[ANI-21]** `destroy_at_end`는 그 애니메이션을 가진 컨트롤과 조상 중 엔진이 붙인 컨트롤 이름이 값과 같은 가장 가까운 것을 지운다. 이 이름은 보통 JSON에 적은 자식 이름(`@` 앞부분)이지만, 팩토리가 만든 컨트롤은 `control_ids`의 키를 이름으로 받는다(ANI-14). `{코드}` (출처: CN, C-27)
-- **[ANI-22]** 이미지는 9-slice, `clip_ratio`, `tiled`, `fill`, `keep_ratio`, 늘리기 순서로 그리는 방식을 고른다. `clip_pixelperfect`(기본 켬)는 원본 픽셀 단위로 자른다. `color`는 `[r,g,b,a]` 외에 `#rrggbb`도 된다. `{코드}` (출처: CN)
-
-## 9.6 연구 서버 실측으로 더한 규칙
-
-연구 서버(`DF`)를 만들며 Windows 1.26.52 에서 실측한 것이다. 서버 폼 하나로 여러 화면을 그리는 구조에서 얻었다.
-
-- **[ANI-34]** 클라이언트는 흑백(grayscale) PNG를 반투명하게 그렸다(회색 틀 너머로 창이 비침). 텍스처 최적화 도구가 회색 그림을 흑백으로 바꾸므로 팩의 PNG는 RGB·RGBA로 둔다. `{실측}` (출처: DF)
-
-## 9.7 종이 인형과 NetEase 골격 모델
+## 종이 인형과 NetEase 골격 모델
 
 바닐라 `paper_doll_renderer` 13곳 전수(`VN`), 네이티브 바이너리 문자열 검색(`NB-12`), NetEase(중국판) 골격 모델·종이 인형 문서(`NE`)를 대조한 것이다.
 
-- **[ANI-35]** 국제판 `paper_doll_renderer`는 엔진이 바인딩으로 주는 **플레이어 스킨만** 그린다(`#paper_doll_skin`, `#skin_index`, `#classic_skin_index`). 바닐라가 쓰는 속성은 `use_selected_skin`(12, 모두 `false`), `rotation`(`gesture_x` 6, `auto` 1), `camera_tilt_degrees`(8, 모두 `-10`), `starting_rotation`(8, 모두 `30`), `enable_scissor_test`(4, 모두 `true`), `property_bag`의 `#skin_rotation`(2)이다. 끌어서 돌리려면 `input_panel`에 `"gesture_tracking_button": "button.turn_doll"`과 그 버튼 매핑을 두고, 종이 인형이 view 바인딩으로 그 패널의 `#gesture_delta_source`·`#gesture_mouse_delta_x`를 받는다. `{바닐라}` (출처: VN pause_screen.json:320, VN pause_screen.json:348, VN day_one_experience_screen.json:201, NB-12)
-- **[ANI-36]** NetEase 문서의 UI 3D 모델 기능, 곧 `paper_doll`의 `modelname`·`modelsize`·`animation`·`animation_looped`와 `netease_paper_doll_renderer`(`skeleton_model_name`, `entity_identifier`, `screen_scale`, `init_rot_x/y/z`, `freedom_gesture`, Python `RenderEntity`·`RenderSkeletonModel`)는 **중국판 전용**이다. 국제판 바이너리에 `netease` 문자열이 0개이고 이 속성들의 긴 이름도 없으며, 바닐라도 한 번도 쓰지 않는다. 국제판 팩은 UI에 커스텀 모델·엔티티를 그릴 수 없으므로 월드 엔티티나 파티클(ALT-01)을 쓴다. 짧은 이름은 바이너리 문자열로 판정할 수 없어(`paper_doll_renderer`도 0개) 결론은 긴 이름에 기댄다. `{코드, 바닐라, 추론}` (출처: NB-12, VN 0회, NE-30 paper_doll, NE-bone)
+- **[ANI-35]** 국제판 `paper_doll_renderer`는 엔진이 바인딩으로 주는 **플레이어 스킨만** 그린다(`#paper_doll_skin`, `#skin_index`, `#classic_skin_index`). 바닐라가 쓰는 속성은 `use_selected_skin`(12, 모두 `false`), `rotation`(`gesture_x` 6, `auto` 1), `camera_tilt_degrees`(8, 모두 `-10`), `starting_rotation`(8, 모두 `30`), `enable_scissor_test`(4, 모두 `true`), `property_bag`의 `#skin_rotation`(2)이다. 끌어서 돌리려면 `input_panel`에 `"gesture_tracking_button": "button.turn_doll"`과 그 버튼 매핑을 두고, 종이 인형이 view 바인딩으로 그 패널의 `#gesture_delta_source`·`#gesture_mouse_delta_x`를 받는다. `{바닐라}` ([출처](../reference/source-abbreviations.mdx): VN pause_screen.json:320, VN pause_screen.json:348, VN day_one_experience_screen.json:201, NB-12)
+- **[ANI-36]** NetEase 문서의 UI 3D 모델 기능, 곧 `paper_doll`의 `modelname`·`modelsize`·`animation`·`animation_looped`와 `netease_paper_doll_renderer`(`skeleton_model_name`, `entity_identifier`, `screen_scale`, `init_rot_x/y/z`, `freedom_gesture`, Python `RenderEntity`·`RenderSkeletonModel`)는 **중국판 전용**이다. 국제판 바이너리에 `netease` 문자열이 0개이고 이 속성들의 긴 이름도 없으며, 바닐라도 한 번도 쓰지 않는다. 국제판 팩은 UI에 커스텀 모델·엔티티를 그릴 수 없으므로 월드 엔티티나 파티클(ALT-01)을 쓴다. 짧은 이름은 바이너리 문자열로 판정할 수 없어(`paper_doll_renderer`도 0개) 결론은 긴 이름에 기댄다. `{코드(바이너리), 바닐라, 추론}` ([출처](../reference/source-abbreviations.mdx): NB-12, VN 0회, NE-30 paper_doll, NE-bone)
 
-## 9.8 엔티티 인벤토리 2048 실측으로 더한 규칙
-
-엔티티 인벤토리 2048 시험 팩(`E2048`)을 모바일 1.26.63에서 실측한 것이다. 구성은 [엔티티 인벤토리로 메뉴 화면 만들기](../design/invui/entity-inventory-ui.mdx) 8.2절에 있다.
-
-- **[ANI-37]** 열린 화면에서 애니메이션을 처음부터 다시 재생하려면 그 컨트롤을 새로 만들게 한다. `property_bag` 사전 조회(COL-22, COL-23)로 `#collection_length`를 정하는 `control_ids` 팩토리에서, 키가 되는 값(칸 아이템 이름)의 표식을 바꿀 때마다 컨트롤이 다시 만들어지고 `anims`가 처음부터 재생됐다. `#visible`을 껐다 켜는 것으로는 다시 재생되지 않았다. `{실측}` (출처: E2048)
-- **[ANI-38]** 엔티티 상자 화면에 `modifications`로 넣은 창에서, 창을 감싼 패널을 `layer` 50, 그 안 `input_panel`을 100에 두자 `inventory_item_renderer` 아이콘만 그려지지 않고 이름, 개수, 배경은 그려졌다. 둘 다 1로 낮추자 아이콘이 그려졌다. 아이템 렌더러를 layer 100에 두면 아이템이 숨고 4와 50은 괜찮았다는 커뮤니티 보고와 맞는다(ANI-06). 아이템 렌더러가 든 창은 높은 레이어에 두지 않는다. 경계는 컨트롤 자신의 `layer`가 아니라 조상 레이어를 더한 합에 달려 있다. 상자 화면에서 팩 안 조상까지 더한 합이 94까지는 `inventory_item_renderer`와 `live_player_renderer`가 그려지고 99부터는 둘 다 그려지지 않았다(95~98은 시험하지 않음, 바닐라 상자 패널 쪽 조상은 합에 넣지 않음). `live_horse_renderer`는 합과 상관없이 그려졌다(모바일, 2026-11-16, [InvUI](../design/invui/entity-inventory-ui.mdx) 2.2.3절). `{실측}` (출처: E2048)
-
-## 9.9 커뮤니티 보고 실측으로 더한 규칙
-
-커뮤니티 보고를 확인하려고 만든 상자 화면 시험 팩(`CPR`)을 Windows에서 실측한 것이다.
-
-- **[ANI-39]** `gradient_renderer`의 색은 바인딩으로 바꿀 수 없다. `property_bag`의 `[1, 0, 0, 1]`을 view 바인딩으로 `#color1`에 넣어도, `#color`에 넣어도 그라데이션은 정적인 `color1`(흰색)으로 그려졌다. 같은 바인딩을 흰 이미지의 `#color`에 걸면 빨갛게 바뀌었다. 기본 그라데이션 방향은 위(`color1`)에서 아래(`color2`)다. 색을 바꾸려면 색별 그라데이션을 미리 두고 `#visible`로 고르거나, 흰색에서 투명으로 가는 텍스처 이미지에 `#color`를 바인딩한다. `{실측}` (출처: CPR)
-
-## 9.10 렌더러 property_bag 실측으로 더한 규칙
+## 렌더러가 읽는 `property_bag` 키
 
 `actor_portrait_renderer`와 `progress_bar_renderer`가 `property_bag`에서 읽는 키를 HUD에 늘어놓은 시험 팩(`UKP`)으로 실측한 것이다. 초상 렌더러의 키는 바닐라 파일에도, 디스코드 기록에도 없다.
 
@@ -266,32 +246,17 @@ Cinnabar(`CN`)는 26.30 네이티브 클라이언트의 JSON UI 해석기를 재
 }
 ```
 
-- **[ANI-40]** `actor_portrait_renderer`는 `property_bag`의 정수 `actor_id`인 엔티티를 그린다. 단일 플레이어 월드에서 `"actor_id": -4294967295`(그 플레이어의 Script API `Player.id`)를 적은 HUD 컨트롤이 플레이어를 그렸다. 같은 `property_bag`의 `scale_x`·`scale_y`·`scale_z`(0.5)는 크기를, `rotate_y`(180)는 몸 방향(등이 보임)을, `rotate_x`(45)는 앞으로 기울기를 바꿨다. `translate_x` 0.5로는 눈에 띄게 움직이지 않았다. 식 `"(0 + $subtitle_text)"`로 만든 ID(부제목에 같은 ID)는 아무것도 그리지 않았다. 감정 표현, 공격, 웅크리기 애니메이션은 그대로 보였고, 걷기와 시점 방향은 따르지 않았다. `use_live_animation: true`인 칸과 없는 칸은 차이가 보이지 않았다. 엔티티 ID는 월드와 플레이어마다 다르므로 정적 ID는 시험용이다. `{실측}` (출처: UKP)
-- **[ANI-41]** `actor_portrait_renderer`의 `rotate_mode: "auto"`는 초상을 계속 돌린다. 제목 팩토리(`hud_title_text_factory`)로 만든 컨트롤은 제목을 다시 보낼 때마다 새로 만들어져 각도가 처음으로 돌아갔다(1초마다 다시 보내면 돌다가 되감긴다). 제목을 한 번만 보내고 유지 시간을 길게 두자 끊기지 않고 돌았다. ANI-12와 같은 원인이다. `{실측}` (출처: UKP)
-- **[ANI-42]** NPC 편집 화면의 외형 목록 초상(`npc_interact.skin_model`)에 리소스 팩이 `property_bag`의 `rotate_mode: "auto"`와 `scale_*` 0.6을 더해도 바뀌지 않았다. 호버한 외형만 돌았고, 초상은 실제 NPC가 고개를 돌리면 따라 돌았다. 화면이 칸마다 이 키들을 다시 써 넣는 것으로 보인다. 이 화면의 초상은 팩으로 변환할 수 없다. `{실측, 추론}` (출처: UKP)
-- **[ANI-43]** `progress_bar_renderer`는 바인딩 없이 `property_bag`의 정적 값으로도 그린다. `#progress_bar_total_amount`, `#progress_bar_current_amount`와 보이기 키 `#progress_bar_visible`, `#touch_progress_bar_visible`(둘 다 `true`)를 적은 막대가 그려졌고, 보이기 키를 빼면 그리지 않았다(터치 입력 기기). 기본 모양은 회색 바탕에 초록 채움이다. `is_durability: true`면 바탕이 검정이 되고 채움 색이 비율을 따랐다(37%는 주황, 90%는 초록). 바닐라 꾸러미 막대가 쓰는 `is_storage_bar`, 내구도 막대가 쓰는 `drop_shadow`, `round_value`는 높이 4px 막대에서 차이를 판정하지 못했다. `{실측, 바닐라}` (출처: UKP, VN ui_common.json `durability_bar`)
+- **[ANI-40]** `actor_portrait_renderer`는 `property_bag`의 정수 `actor_id`인 엔티티를 그린다. 단일 플레이어 월드에서 `"actor_id": -4294967295`(그 플레이어의 Script API `Player.id`)를 적은 HUD 컨트롤이 플레이어를 그렸다. 같은 `property_bag`의 `scale_x`·`scale_y`·`scale_z`(0.5)는 크기를, `rotate_y`(180)는 몸 방향(등이 보임)을, `rotate_x`(45)는 앞으로 기울기를 바꿨다. `translate_x` 0.5로는 눈에 띄게 움직이지 않았다. 식 `"(0 + $subtitle_text)"`로 만든 ID(부제목에 같은 ID)는 아무것도 그리지 않았다. 감정 표현, 공격, 웅크리기 애니메이션은 그대로 보였고, 걷기와 시점 방향은 따르지 않았다. `use_live_animation: true`인 칸과 없는 칸은 차이가 보이지 않았다. 엔티티 ID는 월드와 플레이어마다 다르므로 정적 ID는 시험용이다. `{실측}` ([출처](../reference/source-abbreviations.mdx): UKP)
+- **[ANI-41]** `actor_portrait_renderer`의 `rotate_mode: "auto"`는 초상을 계속 돌린다. 제목 팩토리(`hud_title_text_factory`)로 만든 컨트롤은 제목을 다시 보낼 때마다 새로 만들어져 각도가 처음으로 돌아갔다(1초마다 다시 보내면 돌다가 되감긴다). 제목을 한 번만 보내고 유지 시간을 길게 두자 끊기지 않고 돌았다. ANI-12와 같은 원인이다. `{실측}` ([출처](../reference/source-abbreviations.mdx): UKP)
+- **[ANI-42]** NPC 편집 화면의 외형 목록 초상(`npc_interact.skin_model`)에 리소스 팩이 `property_bag`의 `rotate_mode: "auto"`와 `scale_*` 0.6을 더해도 바뀌지 않았다. 호버한 외형만 돌았고, 초상은 실제 NPC가 고개를 돌리면 따라 돌았다. 화면이 칸마다 이 키들을 다시 써 넣는 것으로 보인다. 이 화면의 초상은 팩으로 변환할 수 없다. `{실측, 추론}` ([출처](../reference/source-abbreviations.mdx): UKP)
+- **[ANI-43]** `progress_bar_renderer`는 바인딩 없이 `property_bag`의 정적 값으로도 그린다. `#progress_bar_total_amount`, `#progress_bar_current_amount`와 보이기 키 `#progress_bar_visible`, `#touch_progress_bar_visible`(둘 다 `true`)를 적은 막대가 그려졌고, 보이기 키를 빼면 그리지 않았다(터치 입력 기기). 기본 모양은 회색 바탕에 초록 채움이다. `is_durability: true`면 바탕이 검정이 되고 채움 색이 비율을 따랐다(37%는 주황, 90%는 초록). 바닐라 꾸러미 막대가 쓰는 `is_storage_bar`, 내구도 막대가 쓰는 `drop_shadow`, `round_value`는 높이 4px 막대에서 차이를 판정하지 못했다. `{실측, 바닐라}` ([출처](../reference/source-abbreviations.mdx): UKP, VN ui_common.json `durability_bar`)
 
-## 9.11 아이템 트림 글로 URL 그림 그리기 실측
+## 아이템 트림 글로 URL 그림 그리기
 
 아이템의 갑옷 트림 재료에 주소 글을 넣고 칸마다 그 주소의 그림을 그리는 시험 팩(`UII`)을 Windows에서 실측한 것이다(2026-11-16, 게임 판은 기록하지 않았다). 칸 컨트롤은 `common.item_renderer`의 `controls`에 `modifications`로 넣어 인벤토리, 상자, HUD 핫바 칸이 모두 받는다.
 
-- **[ANI-44]** 아이템의 트림 재료(`Trim.Material`)에 아무 글(예: `URL:https://.../x.png`)을 넣은 아이템은 `.mcstructure` 상자로 `/structure load`해 불러와도 그 글을 지녔다. 갑옷이 아닌 검도 같았다. 상자, 인벤토리, 핫바 칸(HUD 핫바 포함)에서 컬렉션 바인딩 `#armor_trim_material`이 그 원문을 돌려줬다. 상자 화면에서 집은 아이템은 전역 `#inventory_selected_armor_trim_material`이 같은 글을 돌려줬지만, HUD에는 이 전역 값이 없어 그것을 쓰는 view 식은 빈 글조차 내지 않았다. 등록되지 않은 재료를 가진 갑옷은 바닐라 아이콘이 그려지지 않았고 검은 그려졌다. `{실측}` (출처: UII)
-- **[ANI-45]** `custom` 컨트롤 `renderer: "profile_image_renderer"`의 `#profile_image_options`에 `{"type":7,"url":"<주소>"}` 글을 주면 그 주소의 그림을 그렸다(GitHub raw PNG, Wikimedia JPEG·PNG). PNG 투명도는 유지됐다. GIF는 움직이지 않고 정지 그림으로 그려졌다. 응답이 없는 주소는 아무것도 그리지 않았다. ANI-44의 칸 값에서 표식(`URL:`) 뒤를 이 글에 넣으면, 그림을 팩에 넣지 않고도 아이템마다 다른 그림을 칸 아이콘 위에 그린다. `{실측}` (출처: UII)
-
-## 9.12 2026-11-20 역컴파일과 실측으로 더한 규칙
-
-네이티브 클라이언트(Windows 1.26.65.1, 일부는 Android 1.26.52.3)를 역컴파일해 읽은 코드를 Windows 1.26.65.1 게임에서 확인한 것이다(2026-11-20). 시험 창은 애드온 `addons/json-ui-claims`의 `juc_tester.json`이다. 1 GUI는 4 클라이언트 픽셀이었다.
-
-- **[ANI-46]** 엔진이 모르는 `type`을 준 컨트롤은 만들어지지 않고 그 자식도 만들어지지 않는다. 콘텐츠 로그에 `Type 'no_such_type' not recognized for control: <컨트롤 이름>`이 남는다. 타입 이름은 대소문자까지 맞아야 해서 `Label`도 같은 오류를 냈다. 바닐라에 1회 있는 `carousel_label`도 엔진의 타입 표에 없어 같은 오류로 거부됐다. `{실측, 코드}` (출처: 2026-11-20 Windows 1.26.65.1 실측과 역컴파일)
-- **[ANI-47]** `custom` 컨트롤의 `renderer`가 엔진이 모르는 이름이면 콘텐츠 로그에 `Unrecognized renderer: 'foo_renderer'`가 남고 렌더러는 붙지 않는다. 모르는 `type`(ANI-46)과 달리 컨트롤 자체는 만들어진다. `{실측, 코드}` (출처: 2026-11-20 Windows 1.26.65.1 실측과 역컴파일)
-- **[ANI-48]** `clip_ratio`는 `clip_direction`이 있을 때만 자른다. `clip_direction` 없이 `clip_ratio: 0.5`를 준 이미지는 잘리지 않았다. `clip_direction: "left"`만 주고 `clip_ratio`를 생략한 이미지는 기본값 1.0이라 아무것도 그리지 않았다. `clip_direction`은 `left`, `right`, `up`, `down`과 `center`를 받는다. `clip_pixelperfect: false`에서 `left` 0.25는 왼쪽 75%, `down` 0.5는 아래 절반, `center` 0.5는 가운데 50%를 보였다. 곧 남는 부분은 `clip_direction` 쪽에 있다. `{실측, 코드}` (출처: 2026-11-20 Windows 1.26.65.1 실측과 역컴파일)
-- **[ANI-49]** `clip_pixelperfect`는 기본이 `true`이고 자르는 경계를 텍스처의 텍셀 단위로 내린다. 텍스처 `textures/ui/White`에서 ANI-48과 같은 이미지에 `clip_pixelperfect`를 주지 않자 `left` 0.25는 왼쪽 1 GUI 폭 조각만, `down` 0.5는 아래 1 GUI 줄만 보였고 `center` 0.5는 아무것도 보이지 않았다. 작은 텍스처를 늘려 비율을 보이는 막대에는 `clip_pixelperfect: false`를 준다(이미지와 애니메이션 장의 예 3). `{실측, 코드}` (출처: 2026-11-20 Windows 1.26.65.1 실측과 역컴파일)
-
-## 9.13 2026-11-24 역컴파일과 실측으로 더한 규칙
-
-Windows 1.26.65.1 클라이언트를 역컴파일해 읽은 코드를 같은 버전 게임의 HUD에서 확인한 것이다(2026-11-24). 프로브 팩은 `addons/re9-probes`이고 측정 기록은 [주장 실측](../design/json-ui-claims.mdx) 6.8절에 있다.
-
-- **[ANI-50]** `#clip_ratio` 값은 실수로 읽어 [0, 1]로 자른 뒤 이미지에 쓴다. 코드에서 정수와 실수는 그 값, 불리언은 참 1.0과 거짓 0.0, 없는 키와 문자열 같은 숫자가 아닌 값은 0.0이다. 그래서 2는 1.0으로 잘려 방향이 있는 이미지가 사라지고, 음수는 0이 된다. Windows 1.26.65.1에서 `textures/blocks/emerald_block` 80x5 막대(`clip_direction: "left"`, 그려진 폭 전체 320 px)에 `(#v * .01)`, `#v` 50을 주자 160 px로 절반이 그려졌다. `(((20.0 - 15) / $max) + #z)`(`"$max": 20.0`, `#z` 0), `property_bag`의 0.25, 정적 `"clip_ratio": 0.25`는 모두 240 px였다(0.25가 잘리고 75%가 남음). 비율 0은 정적 값과 바인딩 모두 막대 대신 가운데에 막대 높이만 한 정사각형 하나(20x20 px, 텍스처 전체)를 그렸다. 원인은 모른다. `textures/ui/White` 막대에서 0이 꽉 찬 막대로 보였던 기록과 다르지만, 같은 날 `White`로는 확인하지 못해 텍스처에 따른 차이인지 가리지 못했다. `#` 속성 없이 상수만 든 식(`(.25)`)은 바인딩이 버려졌다(BND-05). `{실측, 코드}` (출처: 2026-11-24 Windows 1.26.65.1 실측과 역컴파일)
+- **[ANI-44]** 아이템의 트림 재료(`Trim.Material`)에 아무 글(예: `URL:https://.../x.png`)을 넣은 아이템은 `.mcstructure` 상자로 `/structure load`해 불러와도 그 글을 지녔다. 갑옷이 아닌 검도 같았다. 상자, 인벤토리, 핫바 칸(HUD 핫바 포함)에서 컬렉션 바인딩 `#armor_trim_material`이 그 원문을 돌려줬다. 상자 화면에서 집은 아이템은 전역 `#inventory_selected_armor_trim_material`이 같은 글을 돌려줬지만, HUD에는 이 전역 값이 없어 그것을 쓰는 view 식은 빈 글조차 내지 않았다. 등록되지 않은 재료를 가진 갑옷은 바닐라 아이콘이 그려지지 않았고 검은 그려졌다. `{실측}` ([출처](../reference/source-abbreviations.mdx): UII)
+- **[ANI-45]** `custom` 컨트롤 `renderer: "profile_image_renderer"`의 `#profile_image_options`에 `{"type":7,"url":"<주소>"}` 글을 주면 그 주소의 그림을 그렸다(GitHub raw PNG, Wikimedia JPEG·PNG). PNG 투명도는 유지됐다. GIF는 움직이지 않고 정지 그림으로 그려졌다. 응답이 없는 주소는 아무것도 그리지 않았다. ANI-44의 칸 값에서 표식(`URL:`) 뒤를 이 글에 넣으면, 그림을 팩에 넣지 않고도 아이템마다 다른 그림을 칸 아이콘 위에 그린다. `{실측}` ([출처](../reference/source-abbreviations.mdx): UII)
 
 ## 근거 표기와 출처 약어
 
@@ -305,13 +270,13 @@ Windows 1.26.65.1 클라이언트를 역컴파일해 읽은 코드를 같은 버
 | `AP` | AdvancementPack v4.2(MIT) |
 | `MJ` | mcbejsonuimasterAI(라이선스 없음, 사실만 바닐라로 재확인) |
 | `BW`, `BW-intro`, `BW-dyn`, `BW-doc`, `BW-form`, `BW-btn`, `BW-type`, `BW-best`, `BW-title`, `BW-ase`, `BW-ids` | Bedrock Wiki JSON UI 문서(CC BY 4.0). 각각 Intro to JSON UI, Dynamic Content Generation, JSON UI Documentation, Modifying Server Forms, Buttons and Toggles, Type Conversion, Best Practices, Preserve Title Texts, Aseprite Animations, Numerical Item IDs |
-| `CN`, `CN-run` | Cinnabar(26.30 네이티브 클라이언트 재구성 Rust 코드)와 이 프로젝트가 그 평가기를 실행한 결과 |
+| `CN`, `CN-run` | Cinnabar(26.30 네이티브 클라이언트 재구성 Rust 코드)와 이 프로젝트가 그 평가기를 실행한 결과. 게임 실측과 다르면 실측을 따른다(부록A C-41~C-47) |
 | `NB` | Android 1.26.52.3 네이티브 클라이언트 라이브러리 엔진 동작 분석(수준 `코드`) |
-| `DF` | 연구 서버에서 Windows 1.26.52로 한 실측 |
+| `DF` | 연구 서버에서 Windows 1.26.52로 한 실측(서버 폼 하나로 여러 화면을 그리는 구조) |
 | `ASJ`, `SLB` | AsaJS 분석, StarLibV2 분석(둘 다 GPL-3.0, 기법만 한국어로 다시 씀) |
 | `MS` | 모달 폼 multiselect 조사 |
 | `NE` | NetEase(중국판) 개발자 문서 |
-| `E2048` | 엔티티 인벤토리 2048 시험 팩의 모바일 1.26.63 실측(2026-11-15) |
-| `CPR` | 커뮤니티 보고 실측 팩(연구 저장소 `community-probe` v1.0.0)의 Windows 실측(2026-11-16) |
+| `E2048` | 엔티티 인벤토리 2048 시험 팩의 모바일 1.26.63 실측(2026-11-15). 구성은 [엔티티 인벤토리로 메뉴 화면 만들기](../design/invui/entity-inventory-ui.mdx) 8.2절 |
+| `CPR` | 커뮤니티 보고를 확인하려고 만든 상자 화면 시험 팩(연구 저장소 `community-probe` v1.0.0)의 Windows 실측(2026-11-16) |
 | `UKP` | 렌더러 property_bag 실측 팩(연구 저장소 `ui-key-probe` v1.0.0~v1.0.1)의 터치 입력 기기 실측(2026-11-17) |
 | `UII` | 아이템 트림 글 URL 그림 시험 팩(연구 저장소 `url-item-image` v1.0.1~v1.0.2)의 Windows 실측(2026-11-16) |
