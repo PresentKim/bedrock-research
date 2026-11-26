@@ -580,6 +580,126 @@
         "text": "A `#clip_ratio` value is read as a float, clamped to [0, 1] and then written to the image. In the code integers and floats give their value, booleans give 1.0 for true and 0.0 for false, and a missing key or a non-number such as a string gives 0.0. So 2 is clamped to 1.0 and an image with a direction disappears, and a negative value becomes 0. On Windows 1.26.65.1, a `textures/blocks/emerald_block` 80x5 bar (`clip_direction: \"left\"`, full drawn width 320 px) given `(#v * .01)` with `#v` 50 drew 160 px, half. `(((20.0 - 15) / $max) + #z)` (`\"$max\": 20.0`, `#z` 0), 0.25 from `property_bag` and a static `\"clip_ratio\": 0.25` were all 240 px (0.25 clipped, 75% left). A ratio of 0, static or bound, drew one square the height of the bar (20x20 px, the whole texture) at the center instead of the bar. The cause is unknown. This differs from the record where 0 looked like a full bar with `textures/ui/White`, but `White` could not be checked the same day, so whether it depends on the texture was not settled. An expression of constants only without a `#` property (`(.25)`) had its binding dropped (BND-05).",
         "sources": "2026-11-24 Windows 1.26.65.1 measurement and decompilation"
       }
+    },
+    {
+      "id": "ANI-23",
+      "status": "proposed",
+      "level": [
+        "unverified"
+      ],
+      "ko": {
+        "text": "`#item_id_aux`의 하위 16비트는 데이터 값(0~32767)이고, 여기에 32768을 더하면 인챈트 반짝임이 켜진다: `ID * 65536 + 데이터 + (인챈트 ? 32768 : 0)`. 데이터 값 표는 `-272 + (1 / 65536)`처럼 하위 16비트에 데이터 값을 넣는다(리스폰 앵커 충전 단계, 레드스톤 신호 세기, 색 막대 등). 확인하지 않은 것: +32768이 블록과 아이템에서 반짝임을 켜는지.",
+        "sources": "CU forms.js"
+      },
+      "en": {
+        "text": "The low 16 bits of `#item_id_aux` are the data value (0 to 32767), and adding 32768 turns on the enchantment glint: `ID * 65536 + data + (enchanted ? 32768 : 0)`. A data value table puts the data value in the low 16 bits, as in `-272 + (1 / 65536)` (respawn anchor charge, redstone signal strength, color bars, etc.). Not checked: whether +32768 turns on the glint for blocks and items.",
+        "sources": "CU forms.js"
+      }
+    },
+    {
+      "id": "ANI-24",
+      "status": "proposed",
+      "level": [
+        "unverified"
+      ],
+      "ko": {
+        "text": "숫자 아이템 ID가 커스텀 아이템 수만큼 밀리는 경계는 버전마다 다르다. Chest-UI의 `typeIds.js`, `forms.js` 커밋별 표에서 26.30까지는 256 이상 전부가 밀렸고, 26.40에서는 밀리는 32개(850~881)가 표 끝으로 옮겨져 나머지(다이아몬드 306 등)는 밀리지 않는다. Bedrock Wiki의 26.50 표는 852~883(32개)만 밀리고 -1246~851은 안정이다. 블록(음수 ID)은 커스텀 블록으로 밀리지 않는다. 충돌 C-33. 확인하지 않은 것: 26.40의 850, 851이 실제로 밀리는지.",
+        "sources": "CU typeIds.js, forms.js, BW-ids"
+      },
+      "en": {
+        "text": "The boundary above which numeric item IDs shift by the number of custom items differs per version. In the per-commit tables of Chest-UI `typeIds.js` and `forms.js`, every ID of 256 or more shifted up to 26.30, and in 26.40 the 32 shifting IDs (850 to 881) were moved to the end of the table so the rest (diamond 306, etc.) do not shift. The Bedrock Wiki 26.50 table shifts only 852 to 883 (32 IDs) and keeps -1246 to 851 stable. Blocks (negative IDs) do not shift with custom blocks. Conflict C-33. Not checked: whether 850 and 851 in 26.40 really shift.",
+        "sources": "CU typeIds.js, forms.js, BW-ids"
+      }
+    },
+    {
+      "id": "ANI-25",
+      "status": "proposed",
+      "level": [
+        "unverified"
+      ],
+      "ko": {
+        "text": "`gradient_renderer`의 두 색 속성은 `color1`과 `color2`다.",
+        "sources": "NE"
+      },
+      "en": {
+        "text": "The two color properties of `gradient_renderer` are `color1` and `color2`.",
+        "sources": "NE"
+      }
+    },
+    {
+      "id": "ANI-26",
+      "status": "proposed",
+      "level": [
+        "unverified"
+      ],
+      "ko": {
+        "text": "플립북은 끝나면 처음으로 돌아가 스스로 반복하고 `next`는 읽히지 않는다. 바닐라 `flip_book` 34개 중 `next`를 쓴 것은 0개이고, 멈출 때만 `looping: false`(3개)를 쓴다. upgrader는 마지막 프레임의 `duration`을 3,600,620ms(약 1시간)로 길게 주어 사실상 끝에서 멈춘다. Cinnabar의 플립북은 `ms % 전체 길이`로 항상 루프한다. 확인하지 않은 것: 마지막 프레임을 길게 주어 멈추는 방식의 상한.",
+        "sources": "NE, UP"
+      },
+      "en": {
+        "text": "A flip book returns to the start when it ends and repeats by itself, and `next` is not read. Of the 34 vanilla `flip_book` animations, 0 use `next`, and `looping: false` (3) is used only to stop. upgrader gives the last frame a long `duration` of 3,600,620 ms (about one hour) so it effectively stops at the end. The Cinnabar flip book always loops with `ms % total length`. Not checked: the upper limit of stopping by a long last frame.",
+        "sources": "NE, UP"
+      }
+    },
+    {
+      "id": "ANI-29",
+      "status": "proposed",
+      "level": [
+        "unverified"
+      ],
+      "ko": {
+        "text": "각도나 비율을 계산하는 대신 결과 수만큼 그림을 미리 그려 두고(1% 단위), 텍스처를 view 바인딩 `('textures/ui/upgrader/arc/arc_' + #upg_id)`로 고른다.",
+        "sources": "UP"
+      },
+      "en": {
+        "text": "Instead of computing an angle or ratio, draw one picture per result in advance (1% steps) and pick the texture with the view binding `('textures/ui/upgrader/arc/arc_' + #upg_id)`.",
+        "sources": "UP"
+      }
+    },
+    {
+      "id": "ANI-30",
+      "status": "proposed",
+      "level": [
+        "unverified"
+      ],
+      "ko": {
+        "text": "`uv`에 `anim_type: aseprite_flip_book` 애니메이션을 걸고 `texture`를 바인딩한 이미지는 텍스처마다 옆의 Aseprite JSON에 적힌 프레임 목록을 재생한다. 텍스처를 바꾸면 같은 컨트롤이 그 결과에 맞는 애니메이션을 재생한다. 바닐라 팁 화면(`game_tip_screen.json`)도 `\"texture\": \"#texture\"` + `aseprite_flip_book` + `disable_anim_fast_forward: true`를 쓴다. `disable_anim_fast_forward`는 폼이 열릴 때 이미 지난 시간만큼 건너뛰지 않게 한다(바닐라 21회). 확인하지 않은 것: `#texture`를 바꾸면 새 프레임 목록으로 다시 시작하는지 경과 시간을 이어 가는지.",
+        "sources": "UP, VN game_tip_screen.json"
+      },
+      "en": {
+        "text": "An image with an `anim_type: aseprite_flip_book` animation on `uv` and a bound `texture` plays the frame list in the Aseprite JSON next to each texture. Changing the texture makes the same control play the animation for that result. The vanilla tip screen (`game_tip_screen.json`) also uses `\"texture\": \"#texture\"` + `aseprite_flip_book` + `disable_anim_fast_forward: true`. `disable_anim_fast_forward` keeps the animation from skipping the time already passed when the form opens (21 uses in vanilla). Not checked: whether changing `#texture` restarts with the new frame list or keeps the elapsed time.",
+        "sources": "UP, VN game_tip_screen.json"
+      }
+    },
+    {
+      "id": "ANI-31",
+      "status": "proposed",
+      "level": [
+        "unverified"
+      ],
+      "ko": {
+        "text": "이미지의 `color`는 곱하는 틴트라 어둡게 할 뿐 흑백으로 만들지 않는다. 흑백은 바닐라에 1회 쓰이는 `grayscale`로 만든다. 확인하지 않은 것: `grayscale: true`와 `color` 틴트의 차이.",
+        "sources": "LG"
+      },
+      "en": {
+        "text": "The `color` of an image is a multiplying tint, so it only darkens and does not make the image grayscale. Make grayscale with `grayscale`, used once in vanilla. Not checked: the difference between `grayscale: true` and a `color` tint.",
+        "sources": "LG"
+      }
+    },
+    {
+      "id": "ANI-33",
+      "status": "proposed",
+      "level": [
+        "unverified"
+      ],
+      "ko": {
+        "text": "`anim_type: uv`이고 `from`과 `to`가 같은 단계 8개를 `next`로 원형으로 이으면 5프레임 시트를 왕복 재생한다. 1.20.71 시절 팩의 기법이다.",
+        "sources": "SP"
+      },
+      "en": {
+        "text": "Linking 8 `anim_type: uv` steps whose `from` equals `to` in a circle with `next` plays a 5-frame sheet back and forth. It is a technique of a pack from the 1.20.71 era.",
+        "sources": "SP"
+      }
     }
   ]
 }
