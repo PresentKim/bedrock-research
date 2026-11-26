@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { categorize, esc, renderSourcesPage } from './gen-sources-page.mjs';
+import { categorize, esc, renderSourcesPage, isPrivate } from './gen-sources-page.mjs';
 import { checkPage } from './lib.mjs';
 
 const base = { title: 'T', url: 'https://x.example/r', accessed: '2026-11-13' };
@@ -68,4 +68,12 @@ test('test_english_page_uses_english_fields', () => {
   assert.match(md, /## Material from this repository \(1\)/);
   assert.match(md, /\| `mine` \| Mine EN .*\| This project \|/);
   assert.match(md, /\| `closed` \|.*\| No \|/);
+});
+
+test('marks sources whose paths are missing as private', () => {
+  const exists = (p) => p === 'here/';
+  assert.equal(isPrivate({ path: 'gone/' }, exists), true);
+  assert.equal(isPrivate({ path: 'gone/, here/' }, exists), false);
+  assert.equal(isPrivate({ path: '-' }, exists), true);
+  assert.equal(isPrivate({ url: 'https://example.com' }, exists), false);
 });

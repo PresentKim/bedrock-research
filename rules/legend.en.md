@@ -1,16 +1,10 @@
 ## Evidence levels
 
-| Level | Meaning |
-| --- | --- |
-| measured | There is a record measured in game |
-| vanilla | Actually used in the `ui/` files of the vanilla resource pack |
-| working pack | A distributed, working pack uses it that way |
-| code | Confirmed by reading source or compiled output. Game behavior is not guaranteed |
-| inferred | Judged from the evidence above |
-| unverified | A source claimed it, but the evidence could not be confirmed |
-| conflict | Sources disagree and it is not fully resolved. The verdict is in the [conflict table](../json-ui/conflicts.mdx) |
+The meaning of the level marks (`measured`, `vanilla`, `working pack`, `code (source)`, `code (binary)`, `inferred`, `unverified`, `conflict`) and the priority of judgments are in [Verification level marks on the wiki home page](../index.mdx#verification-level-marks). The chapter tables and the topic pages use the same legend.
 
-The priority of judgments is measured, vanilla, working pack, code, inferred, in that order. When sources of the same level disagree, the later measurement wins, and if they still disagree the rule stays `conflict`.
+## Evidence environment
+
+The "Evidence environment" cell of the chapter tables is the platform and version written in the rule's measurement or binary evidence. Only what the rule text and sources state is carried over; where a source abbreviation fixes the environment (`TP` and `DF` are Windows 1.26.52, `NB` is Android 1.26.52.3, `EML`, `E2048`, `HXC` and `IUC` are mobile 1.26.63), that environment is used. A rule with measurement or binary evidence but no stated environment shows `unknown`, and a rule without such evidence shows `-`. Versions are written in the form starting with `1.`, such as `1.26.65.1`. The game's `26.65` is the same as `1.26.65` ([Version scheme](../basics/versions.mdx)).
 
 ## ID prefixes
 
@@ -24,4 +18,4 @@ The priority of judgments is measured, vanilla, working pack, code, inferred, in
 | `RV` | Claims of other sources that the binary analysis confirmed or corrected | [JSON UI engine findings](../internals/json-ui-engine-findings.mdx), [Ore UI engine findings](../internals/ore-ui-engine-findings.mdx) |
 | `CN` | Item numbers of the Cinnabar (`CN`) analysis record. This wiki has no table by number | None |
 
-Source abbreviations (`VN`, `BC`, `BW`, etc.) are in the source abbreviation table of the [JSON UI overview](../json-ui/index.mdx).
+Source abbreviations (`VN`, `BC`, `BW`, etc.) are in [Source abbreviations](./source-abbreviations.mdx).

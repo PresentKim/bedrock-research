@@ -22,6 +22,7 @@ const TEXT = {
     header: '| id | 제목 | 저작자 | 라이선스 | 커밋 | 재배포 |',
     yes: '가능',
     no: '불가',
+    private: '(비공개: 이 위키 저장소에 없는 자료라 독자가 확인할 수 없다)',
   },
   en: {
     categories: {
@@ -39,6 +40,7 @@ const TEXT = {
     header: '| id | Title | Author | License | Commit | Redistribution |',
     yes: 'Yes',
     no: 'No',
+    private: '(private: not in this wiki repository, so readers cannot check it)',
   },
 };
 
@@ -84,13 +86,20 @@ export function esc(text) {
     .join('');
 }
 
-function titleCell(e) {
-  const t = esc(e.title);
-  if (e.url && /^https?:\/\/[^\s)]+$/.test(e.url)) return `[${t}](${e.url})`;
-  return e.path ? `${t} (\`${String(e.path).replace(/`/g, '')}\`)` : t;
+export function isPrivate(e, exists) {
+  if (e.url && /^https?:\/\//.test(e.url)) return false;
+  const paths = String(e.path ?? '').split(/,\s*/).map((p) => p.trim()).filter((p) => p && p !== '-');
+  return !paths.some(exists);
 }
 
-export function renderSourcesPage(sources, lang = 'ko') {
+function titleCell(e, lang, exists) {
+  const t = esc(e.title);
+  if (e.url && /^https?:\/\/[^\s)]+$/.test(e.url)) return `[${t}](${e.url})`;
+  const cell = e.path && e.path !== '-' ? `${t} (\`${String(e.path).replace(/`/g, '')}\`)` : t;
+  return isPrivate(e, exists) ? `${cell} ${TEXT[lang].private}` : cell;
+}
+
+export function renderSourcesPage(sources, lang = 'ko', exists = () => true) {
   const t = TEXT[lang];
   const ids = Object.keys(sources).sort();
   const groups = new Map(CATEGORIES.map(([k]) => [k, []]));
@@ -113,7 +122,7 @@ export function renderSourcesPage(sources, lang = 'ko') {
     lines.push(`## ${t.categories[key]} (${list.length})`, '', t.header, '| --- | --- | --- | --- | --- | --- |');
     for (const id of list) {
       const e = localized(sources[id], lang);
-      lines.push(`| \`${id}\` | ${titleCell(e)} | ${esc(e.author ?? '')} | ${esc(e.license)} | ${esc(e.commit ?? '')} | ${e.redistribute ? t.yes : t.no} |`);
+      lines.push(`| \`${id}\` | ${titleCell(e, lang, exists)} | ${esc(e.author ?? '')} | ${esc(e.license)} | ${esc(e.commit ?? '')} | ${e.redistribute ? t.yes : t.no} |`);
     }
     lines.push('');
   }
@@ -128,7 +137,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const sources = JSON.parse(fs.readFileSync(src, 'utf8'));
   for (const [file, lang] of [[out, 'ko'], [outEn, 'en']]) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, renderSourcesPage(sources, lang));
+    fs.writeFileSync(file, renderSourcesPage(sources, lang, (p) => fs.existsSync(path.resolve(here, '..', p))));
     console.log(`wrote ${file} (${Object.keys(sources).length} sources)`);
   }
 }

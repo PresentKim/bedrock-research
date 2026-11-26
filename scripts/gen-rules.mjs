@@ -28,7 +28,8 @@ const TEXT = {
     baseline: '바닐라 기준은 bedrock-samples v1.26.50.4 (46ba6ea)이다.',
     counts: (a, p) => `규칙은 채택 ${a}개, 제안 ${p}개다. 제안 규칙은 근거가 모자라거나 아직 본문 규칙으로 합치지 않은 것이라 "(제안)"을 붙인다.`,
     topicLink: (href, t) => `설명과 예제는 주제 페이지 [${t}](${href})에 있다.`,
-    header: '| ID | 규칙 | 수준 | 출처 |',
+    header: '| ID | 규칙 | 수준 | [근거 환경](../rules.mdx#근거-환경) | [출처](../source-abbreviations.mdx) |',
+    unknownEnv: '모름',
     proposedHeading: '제안 규칙',
     proposedLead: '아직 본문 규칙으로 합치지 않은 제안이다. 쓰기 전에 근거를 확인한다.',
     proposedMark: '(제안)',
@@ -49,7 +50,8 @@ const TEXT = {
     baseline: 'The vanilla baseline is bedrock-samples v1.26.50.4 (46ba6ea).',
     counts: (a, p) => `There are ${a} adopted rules and ${p} proposed rules. A proposed rule lacks evidence or has not been merged into the adopted rules yet, so it is marked "(proposal)".`,
     topicLink: (href, t) => `Explanations and examples are on the topic page [${t}](${href}).`,
-    header: '| ID | Rule | Level | Source |',
+    header: '| ID | Rule | Level | [Evidence environment](../rules.mdx#evidence-environment) | [Source](../source-abbreviations.mdx) |',
+    unknownEnv: 'unknown',
     proposedHeading: 'Proposed rules',
     proposedLead: 'These proposals are not merged into the adopted rules yet. Check the evidence before using them.',
     proposedMark: '(proposal)',
@@ -93,18 +95,60 @@ export function validateRuleData(chapters) {
 }
 
 export const rebase = (text, depth) => (depth === 1 ? text : text.replace(/\]\(\.\.\//g, `](${depth === 0 ? './' : '../'.repeat(depth)}`));
-const levelText = (r, lang) => r.level.map((l) => LEVELS[l][lang]).join(', ');
+
+const CODE_KINDS = { source: { ko: '코드(소스)', en: 'code (source)' }, binary: { ko: '코드(바이너리)', en: 'code (binary)' } };
+const BINARY_EVIDENCE = /\bNB\b|NB-\d|역컴파일|바이너리|디컴파일/;
+const RECONSTRUCTION = /\bCN\b|CN-|Cinnabar|재구성/;
+
+export function codeKinds(r) {
+  if (!r.level.includes('code')) return [];
+  const evidence = `${r.ko.text} ${r.ko.sources}`;
+  const binary = BINARY_EVIDENCE.test(evidence);
+  const source = !binary || RECONSTRUCTION.test(evidence);
+  return [...(source ? ['source'] : []), ...(binary ? ['binary'] : [])];
+}
+
+const PLATFORMS = { Windows: { ko: 'Windows', en: 'Windows' }, Android: { ko: 'Android', en: 'Android' }, iOS: { ko: 'iOS', en: 'iOS' }, 모바일: { ko: '모바일', en: 'mobile' } };
+const ENV_RE = /(Windows|Android|iOS|모바일)\s+(?:클라이언트\s+)?((?:1\.)?26\.\d+(?:\.\d+)?)/g;
+const SOURCE_ENV = {
+  TP: ['Windows', '1.26.52'],
+  DF: ['Windows', '1.26.52'],
+  NB: ['Android', '1.26.52.3'],
+  EML: ['모바일', '1.26.63'],
+  E2048: ['모바일', '1.26.63'],
+  HXC: ['모바일', '1.26.63'],
+  IUC: ['모바일', '1.26.63'],
+};
+
+export function environments(r) {
+  const found = new Map();
+  for (const m of `${r.ko.text} ${r.ko.sources}`.matchAll(ENV_RE)) {
+    const version = m[2].startsWith('1.') ? m[2] : `1.${m[2]}`;
+    found.set(`${m[1]} ${version}`, [m[1], version]);
+  }
+  for (const [abbr, env] of Object.entries(SOURCE_ENV)) if (new RegExp(`(^|[^\\w-])${abbr}(?![\\w-])`).test(r.ko.sources ?? '')) found.set(env.join(' '), env);
+  return [...found.values()];
+}
+
+function environmentText(r, lang) {
+  if (!r.level.includes('measured') && !codeKinds(r).includes('binary')) return '-';
+  const envs = environments(r);
+  if (!envs.length) return TEXT[lang].unknownEnv;
+  return envs.map(([p, v]) => `${PLATFORMS[p][lang]} ${v}`).join(', ');
+}
+
+const levelText = (r, lang) => r.level.flatMap((l) => (l === 'code' ? codeKinds(r).map((k) => CODE_KINDS[k][lang]) : [LEVELS[l][lang]])).join(', ');
 const cell = (s) => s.replace(/\|/g, '\\|');
 const numOf = (id) => Number(id.split('-')[1]);
 
 export function renderBullet(r, lang, depth = 1) {
   const t = TEXT[lang];
   const mark = r.status === 'proposed' ? `${t.proposedMark} ` : '';
-  const src = r[lang].sources ? ` (${t.sourceLabel}: ${rebase(r[lang].sources, depth)})` : '';
+  const src = r[lang].sources ? rebase(` ([${t.sourceLabel}](../reference/source-abbreviations.mdx): ${r[lang].sources})`, depth) : '';
   return `- **[${r.id}]** ${mark}${rebase(r[lang].text, depth)} \`{${levelText(r, lang)}}\`${src}`;
 }
 
-const row = (r, lang) => `| ${r.id} | ${cell(rebase(r[lang].text, 2))} | ${levelText(r, lang)} | ${cell(rebase(r[lang].sources ?? '', 2))} |`;
+const row = (r, lang) => `| ${r.id} | ${cell(rebase(r[lang].text, 2))} | ${levelText(r, lang)} | ${environmentText(r, lang)} | ${cell(rebase(r[lang].sources ?? '', 2))} |`;
 
 function frontmatter(title, description, position) {
   return ['---', `title: ${JSON.stringify(title)}`, `description: ${JSON.stringify(description)}`, `sidebar_position: ${position}`, 'sources:', '  - repo-guide', '  - private-research', '---', ''].join('\n');
@@ -114,8 +158,8 @@ export function renderChapterPage(ch, lang) {
   const t = TEXT[lang];
   const adopted = ch.rules.filter((r) => r.status !== 'proposed');
   const proposed = ch.rules.filter((r) => r.status === 'proposed');
-  const out = [frontmatter(t.chapterTitle(ch.title[lang]), t.chapterDescription(ch.title[lang], ch.rules.length), ch.order), t.generated, '', t.topicLink(`../../${ch.page}.mdx`, ch.title[lang]), '', t.header, '| --- | --- | --- | --- |', ...adopted.map((r) => row(r, lang))];
-  if (proposed.length) out.push('', `## ${t.proposedHeading}`, '', t.proposedLead, '', t.header, '| --- | --- | --- | --- |', ...proposed.map((r) => row(r, lang)));
+  const out = [frontmatter(t.chapterTitle(ch.title[lang]), t.chapterDescription(ch.title[lang], ch.rules.length), ch.order), t.generated, '', t.topicLink(`../../${ch.page}.mdx`, ch.title[lang]), '', t.header, '| --- | --- | --- | --- | --- |', ...adopted.map((r) => row(r, lang))];
+  if (proposed.length) out.push('', `## ${t.proposedHeading}`, '', t.proposedLead, '', t.header, '| --- | --- | --- | --- | --- |', ...proposed.map((r) => row(r, lang)));
   return out.join('\n') + '\n';
 }
 
@@ -139,7 +183,7 @@ export function renderIndexPage(chapters, lang, legend) {
     out.push(`| [${ch.title[lang]}](./rules/${ch.slug}.mdx) | ${ch.prefix} | ${ch.rules.length - p} | ${p} |`);
   }
   out.push('', `## ${t.gapsHeading}`, '', t.gapsLead, '', t.gapsHeader, '| --- | --- |');
-  for (const g of gaps(chapters)) out.push(`| ${g.prefix} | ${g.missing.length ? g.missing.join(', ') : t.noGaps} |`);
+  for (const g of gaps(chapters)) out.push(`| ${g.prefix} | ${g.missing.length ? g.missing.map((id) => `\`${id}\``).join(', ') : t.noGaps} |`);
   return out.join('\n') + '\n';
 }
 
@@ -191,7 +235,7 @@ export function stale(planned) {
   return [...planned.files].filter(([f, text]) => !fs.existsSync(f) || fs.readFileSync(f, 'utf8') !== text).map(([f]) => f);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const chapters = loadRuleData();
   const errs = validateRuleData(chapters);
   const planned = plan(chapters);
