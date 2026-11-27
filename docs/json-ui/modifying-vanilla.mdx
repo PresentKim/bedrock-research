@@ -216,6 +216,47 @@ Swap the position of the existing `#example_binding_1` and `#example_binding_2` 
 4. 화면 전체를 다른 내용으로: 재선언(MOD-11), 바닐라 내용은 감싸서 보존.
 5. 템플릿 확장: 기본 꺼짐 슬롯(MOD-10).
 
+### 예제: 바닐라 HUD 요소 하나를 `remove` 없이 숨기기 `{실측 필요}`
+
+바닐라 타이틀(`hud_title_text`)을 늘 숨기는 한 파일짜리 예제다. 게임에서 실행하지 않았다 `{실측 필요}`. 의지하는 규칙은 MOD-02, MOD-04, MOD-05, MOD-08이다. MOD-08은 `{코드(소스)}` 수준이라 이 예제에서 그 부분은 코드를 읽은 근거만 있다.
+
+```text
+RP/
+  manifest.json
+  ui/
+    hud_screen.json
+```
+
+`ui/hud_screen.json`은 바닐라와 같은 경로라 `modifications`가 바닐라 정의에 적용되고(MOD-02) 이미 등록되어 있어 `_ui_defs.json`은 필요 없다(FILE-01). `manifest.json`은 [HUD와 타이틀 채널](../server-ui/hud-and-titles.mdx)의 10절 예제와 같은 리소스 모듈 하나면 된다.
+
+```json
+{
+  "hud_title_text": {
+    "modifications": [
+      {
+        "array_name": "bindings",
+        "operation": "insert_back",
+        "value": [
+          { "binding_type": "global", "binding_name": "#hud_title_text_string" },
+          {
+            "binding_type": "view",
+            "source_property_name": "(not (#hud_title_text_string = #hud_title_text_string))",
+            "target_property_name": "#visible"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+- 지우지 않고 `#visible` view 바인딩으로 숨긴다(MOD-06). 상속받은 자식 컨트롤(`title_frame` 등)을 `remove`하면 그 파일의 수정이 모두 무효가 되므로 쓰지 않는다(MOD-05). 숨김 대상은 자식이 아니라 `hud_title_text` 전체라서 부제목 틀도 함께 숨는다.
+- 바닐라 `hud_title_text`에는 원래 `bindings`가 없다. 상속만 받은 배열에 넣으면 상속 내용이 가려지지만 원래 없는 배열은 문제없다(MOD-04). 원래 `#visible` 바인딩이 없는 정의에 view 바인딩만 덧붙이는 방식이 MOD-08이다 `{코드(소스)}`.
+- 식에 `#속성`이 들어 있어야 바인딩이 버려지지 않는다(BND-05). 위 식은 늘 거짓이므로 `#visible`이 거짓이 된다. 식이 실패하면 기본값 참이 되어 보이므로(BND-09) 안 숨겨지면 식부터 본다.
+- 원래 `#visible` 바인딩이 있는 요소를 숨기고 싶다면 이 예제로는 부족하다. 그때는 MOD-07처럼 원래 바인딩을 `where`로 지정해 `remove`한 뒤 다시 합친다. 이 예제는 그 경우를 다루지 않았다.
+- 다른 요소(체력, 핫바 등)의 내부 구조는 이 위키에서 확인한 바가 없어 예제로 쓰지 않았다.
+- 타이틀을 데이터 채널로 쓰는 완성 예제는 [HUD와 타이틀 채널](../server-ui/hud-and-titles.mdx)의 10절에 있다.
+
 <details>
 <summary>제안 규칙</summary>
 

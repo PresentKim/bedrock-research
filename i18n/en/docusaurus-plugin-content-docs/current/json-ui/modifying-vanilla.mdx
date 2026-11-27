@@ -216,6 +216,47 @@ Evidence from Cinnabar (`CN`, Rust code that reconstructs the JSON UI parser of 
 4. To replace the whole screen with other content: redeclaration (MOD-11), preserving the vanilla content by wrapping it.
 5. Template extension: an off-by-default slot (MOD-10).
 
+### Example: hiding one vanilla HUD element without `remove` `{needs measurement}`
+
+A one-file example that always hides the vanilla title (`hud_title_text`). It was not run in game `{needs measurement}`. It relies on MOD-02, MOD-04, MOD-05 and MOD-08. MOD-08 is at the `{code (source)}` level, so that part of the example has only code reading behind it.
+
+```text
+RP/
+  manifest.json
+  ui/
+    hud_screen.json
+```
+
+`ui/hud_screen.json` is at the same path as vanilla, so `modifications` apply to the vanilla definition (MOD-02), and the path is already registered, so no `_ui_defs.json` is needed (FILE-01). `manifest.json` needs only a single resources module, the same as in the example in section 10 of [HUD and title channels](../server-ui/hud-and-titles.mdx).
+
+```json
+{
+  "hud_title_text": {
+    "modifications": [
+      {
+        "array_name": "bindings",
+        "operation": "insert_back",
+        "value": [
+          { "binding_type": "global", "binding_name": "#hud_title_text_string" },
+          {
+            "binding_type": "view",
+            "source_property_name": "(not (#hud_title_text_string = #hud_title_text_string))",
+            "target_property_name": "#visible"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+- It hides with a `#visible` view binding instead of deleting (MOD-06). `remove` of an inherited child control (`title_frame` and so on) would make all modifications of that file not apply, so it is not used (MOD-05). The hidden target is the whole `hud_title_text`, not a child, so the subtitle frame is hidden with it.
+- Vanilla `hud_title_text` has no `bindings` to begin with. Inserting into an array that is only inherited covers the inherited content, but an array that did not exist is fine (MOD-04). Appending only a view binding to a definition that originally has no `#visible` binding is MOD-08 `{code (source)}`.
+- The expression must contain a `#property` or the binding is discarded (BND-05). The expression above is always false, so `#visible` becomes false. If an expression fails, the value falls back to the default true and the element shows (BND-09), so check the expression first when it does not hide.
+- To hide an element that already has a `#visible` binding, this example is not enough. In that case, `remove` the original binding with `where` and merge it back as in MOD-07. This example does not cover that case.
+- The internal structure of other elements (health, hotbar and so on) was not checked in this wiki, so they are not used as examples.
+- A complete example that uses the title as a data channel is in section 10 of [HUD and title channels](../server-ui/hud-and-titles.mdx).
+
 <details>
 <summary>Proposed rules</summary>
 

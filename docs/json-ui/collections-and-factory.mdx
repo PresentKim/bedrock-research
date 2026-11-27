@@ -430,3 +430,141 @@ The format `[row, column]` indicates the placement within the grid, where the fi
 - **[COL-40]** 그런데 우리 팩토리가 만든 레이아웃 **안에서는** 액션 폼 데이터가 격자(`grid` + `collection_name`)의 칸에만 닿았다. 고정 `collection_index` 칸은 비었고, `#form_button_contents`로 버튼을 만드는 안쪽 팩토리는 아무것도 만들지 않았다. `collection_panel`(`collection_name` 유무)·`stack_panel`·`control_name`·`control_ids` 모두 같았고, 칸 바인딩에 `always`를 줘도(BND-07) 그대로였다. `panel` + `factory`는 아무것도 만들지 않았다. 그래서 레이아웃이 버튼을 격자로만 읽을 때만 게이트를 쓸 수 있다. 화면 맨 위 라우터에서는 다른 결과가 나왔다(COL-47, C-65). Windows 1.26.65.1에서 `server_form`의 `main_screen_content`에 `insert_back`으로 넣은 라우터 창에서는 `always`로도 빈다는 결과가 재현되지 않았다. 고정 칸은 기본 조건이면 첫 열기에 비었고, 두 바인딩에 `always`를 주자 첫 열기부터 채워졌다([실측 기록](../design/json-ui-claims.mdx)). 같은 라우터 창 안에 1x1 grid 지연 루트(grid `[1,1]`, `#maximum_grid_items`를 `once`로 버튼 수, `visible`로 제목 검사 식)를 두고 그 칸 안 `stack_panel`에 고정 `collection_index` 0, 4, 5를 두자 바인딩이 기본 조건이어도 첫 열기부터 채워졌다(두 번째 열기도 같음, [기록](../design/json-ui-claims.mdx#63-상태-유지-지연-루트-팩-순서-렌더링)). `{실측}` ([출처](../reference/source-abbreviations.mdx): DF, 2026-11-19 Windows 1.26.65.1)
 - **[COL-47]** `third_party_server_screen`의 `$screen_content`에 둔 사전 조회 라우터(HOST-06)가 만든 창 안에서는 고정 `collection_index` 칸, 라디오 토글 칸, `#form_button_contents` 길이의 스택 팩토리가 모두 액션 폼 데이터를 받았다. 다만 칸의 컬렉션·`collection_details`·본문 바인딩이 기본 조건이면 처음 열 때 비고 탭을 한 번 바꾸면 채워졌고, 모두 `binding_condition: "always"`로 두자 열자마자 채워졌다. COL-40(같은 칸이 `always`로도 빔)과 다른 결과이며(C-65), 차이는 라우터가 화면 맨 위에 있다는 점으로 본다. Windows 1.26.65.1에서 `server_form`의 `main_screen_content`에 `insert_back`한 라우터로 고정 칸을 재자 COL-47과 같았다: 기본 조건이면 첫 열기에 비었고(HUD에서 연 경우와 메뉴 폼에서 넘어온 경우 모두), 두 바인딩에 `always`를 주면 첫 열기부터 채워졌다([실측 기록](../design/json-ui-claims.mdx)). 고정 칸을 라우터 `collection_panel`에 바로 두지 않고 1x1 grid 지연 루트(grid `[1,1]`, `#maximum_grid_items`를 `once`로 버튼 수, `visible`로 제목 검사 식) 칸 안에 두면 기본 조건으로도 첫 열기부터 채워졌다(2026-11-19 Windows 1.26.65.1, [기록](../design/json-ui-claims.mdx#63-상태-유지-지연-루트-팩-순서-렌더링)). `{실측, 충돌}` ([출처](../reference/source-abbreviations.mdx): FFR)
 - **[COL-48]** 팩토리가 만든 칸 안에 둔 팩토리는 `#title_text`·길이 바인딩이 기본 조건이면 처음에 아무것도 만들지 않았다. 그 두 바인딩에 `always`를 주면 열자마자 만들어졌다. 안쪽을 grid로 바꿔도 됐다. 크기 애니메이션으로 레이아웃을 다시 계산하게 하거나, 길이를 바깥 데이터 소스에서 읽는 방법은 효과가 없었다. `{실측}` ([출처](../reference/source-abbreviations.mdx): FFR)
+
+## 예제: 가장 작은 컬렉션 grid `{실측 필요}`
+
+서버가 보낸 액션 폼 버튼을 2열 grid로 그리는 최소 구성이다. 이 예제는 게임에서 실행하지 않았다 `{실측 필요}`. [grid 버튼 목록](../design/json-ui-performance/grid-button-list.mdx)의 `jup.json`과 `server_form.json`을 줄여 맞춘 것이다.
+
+의지하는 규칙: COL-01, COL-02, COL-10, COL-47. 순서와 조건은 [always 없이 첫 화면 채우기](../design/json-ui-performance/collection-view-order.mdx)를 따른다(BND-37).
+
+게임에서 실측한 완성 애드온은 두 문서에서 내려받는다. [grid 버튼 목록](../design/json-ui-performance/grid-button-list.mdx)은 스크롤 영역, 아이콘, 진행 막대를 갖춘 목록이고, [always 없이 첫 화면 채우기](../design/json-ui-performance/collection-view-order.mdx)는 바인딩 조건이 다른 두 목록의 비교 애드온이다.
+
+```text
+RP/
+  manifest.json
+  ui/
+    _ui_defs.json
+    mygrid.json
+    server_form.json
+```
+
+`manifest.json`은 [HUD와 타이틀 채널](../server-ui/hud-and-titles.mdx)의 10절 예제와 같은 리소스 모듈 하나면 된다. `_ui_defs.json`은 새 파일만 등록한다. `server_form.json`은 바닐라와 같은 경로라 등록하지 않는다(FILE-01).
+
+```json
+{
+  "ui_defs": [
+    "ui/mygrid.json"
+  ]
+}
+```
+
+`ui/mygrid.json`은 칸, grid, 창, 라우터를 정의한다.
+
+```json
+{
+  "namespace": "mygrid",
+  "cell_face": {
+    "type": "panel",
+    "size": [ "100%", "100%" ],
+    "$bg_texture|default": "textures/ui/button_borderless_light",
+    "controls": [
+      { "bg": { "type": "image", "texture": "$bg_texture", "size": [ "100% - 2px", "100% - 2px" ] } },
+      {
+        "name": {
+          "type": "label",
+          "layer": 3,
+          "size": [ 90, 10 ],
+          "offset": [ 6, 10 ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left",
+          "color": [ 0.1, 0.1, 0.1 ],
+          "localize": false,
+          "text": "#text",
+          "bindings": [
+            { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text" },
+            { "binding_type": "view", "source_property_name": "('%.12s' * #form_button_text)", "target_property_name": "#text" }
+          ]
+        }
+      }
+    ]
+  },
+  "cell@common.button": {
+    "size": [ 100, 30 ],
+    "$focus_enabled": false,
+    "$pressed_button_name": "button.form_button_click",
+    "bindings": [
+      { "binding_type": "collection_details", "binding_collection_name": "form_buttons", "binding_condition": "always" }
+    ],
+    "controls": [
+      { "default@mygrid.cell_face": {} },
+      { "hover@mygrid.cell_face": { "$bg_texture": "textures/ui/button_borderless_lighthover" } },
+      { "pressed@mygrid.cell_face": { "$bg_texture": "textures/ui/button_borderless_lightpressed" } }
+    ]
+  },
+  "button_grid": {
+    "type": "grid",
+    "size": [ 200, "100%c" ],
+    "offset": [ 0, 20 ],
+    "anchor_from": "top_middle",
+    "anchor_to": "top_middle",
+    "grid_rescaling_type": "horizontal",
+    "grid_item_template": "mygrid.cell",
+    "collection_name": "form_buttons",
+    "bindings": [
+      { "binding_name": "#form_button_length", "binding_name_override": "#maximum_grid_items", "binding_condition": "always" }
+    ]
+  },
+  "list_window": {
+    "type": "image",
+    "texture": "textures/ui/dialog_background_opaque",
+    "size": [ 224, 140 ],
+    "layer": 60,
+    "controls": [
+      { "close@common.close_button": {} },
+      { "grid@mygrid.button_grid": {} }
+    ]
+  },
+  "screen_router": {
+    "type": "collection_panel",
+    "size": [ "100%", "100%" ],
+    "factory": {
+      "name": "mygrid_screen",
+      "control_ids": { "g": "@mygrid.list_window" }
+    },
+    "property_bag": { "#§b§wmg:G": [ "g" ] },
+    "bindings": [
+      { "binding_name": "#title_text" },
+      { "binding_type": "view", "source_property_name": "('#' + ('%.10s' * #title_text))", "target_property_name": "#collection_length" }
+    ]
+  }
+}
+```
+
+`ui/server_form.json`은 라우터를 `server_form_factory` 옆에 끼운다.
+
+```json
+{
+  "namespace": "server_form",
+  "main_screen_content": {
+    "size": [ "100%", "100%" ],
+    "modifications": [
+      {
+        "array_name": "controls",
+        "operation": "insert_back",
+        "value": [ { "mygrid_router@mygrid.screen_router": {} } ]
+      }
+    ]
+  }
+}
+```
+
+서버는 제목이 `§b§wmg:G`인 액션 폼에 버튼 몇 개를 담아 보낸다. 기대하는 모습은 칸이 2열로 놓이고 칸마다 버튼 글의 앞 12바이트가 보이며 칸을 누르면 그 칸의 버튼 번호가 서버로 가는 것이다. 이 동작은 게임에서 확인하지 않았다.
+
+규칙과 코드의 대응은 이렇다.
+
+- `collection_name`은 `grid`에 둔다. `panel`이나 `image`에 두면 `Unknown property` 오류가 난다(COL-01).
+- 이 예제는 `collection_index`를 쓰지 않는다. grid가 칸에 인덱스를 자동으로 주는지는 `{미검증}`(COL-26)이고, 고정 인덱스를 주는 `collection_index`는 `collection_name`을 가진 부모의 직속 자식에서만 읽힌다(COL-02, COL-38, COL-44). 고정 칸이 필요하면 라벨을 패널로 감싸 패널 참조에 인덱스를 준다(COL-02).
+- `visible`은 그리기만 막고 생성과 레이아웃은 막지 못하므로(COL-10), 이 폼이 아닌 서버 폼에서는 라우터가 창을 0개 만들게 한다. 제목 앞 10바이트로 `property_bag`을 조회해 `#collection_length`에 넣는 방식은 HOST-06, COL-22, COL-23의 것이다.
+- 라우터가 만든 창 안에서 grid 길이와 칸의 `collection_details`는 `binding_condition: "always"`로 둔다. 기본 조건이면 처음 열 때 비었다(COL-47, COL-48). 칸 안 라벨은 컬렉션 바인딩 다음 view 바인딩 순서로 두고 조건을 쓰지 않는다(BND-37).
+
+예제에서 위키에 근거가 없어 남긴 것: 스크롤 영역(버튼이 많으면 창 밖으로 넘친다, 스크롤 구성은 완성 애드온에 있다), 바닐라 폼을 이 제목에서 숨기는 바인딩(애드온의 `server_form.json`에 있다), 창과 칸의 크기. 2열 grid는 버튼 3000개 이상에서 칸이 겹쳐 그려졌다(COL-49).

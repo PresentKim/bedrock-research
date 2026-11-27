@@ -231,3 +231,141 @@ When carrying item runtime ID x 65536 in the title's subtitle to draw an icon, t
 4. Scoreboard lines with the same text are merged, so tell them apart with an invisible tail such as `§r`.
 5. When taking a value out of the subtitle, use the `$subtitle_text` variable, or, for a binding, give it a `property_bag` default and `binding_condition: "always"`. Write one-digit numeric flags as letters.
 6. Even if you hide the vanilla HUD with `SetHud`, elements the pack added remain.
+
+## 10. Example: showing a HUD label only when the prefix matches `{needs measurement}`
+
+This is a minimal resource pack that shows one HUD label only while the title the server sends starts with a fixed prefix, and draws the text after the prefix in the label. The example was not run in game `{needs measurement}`. It is Recipe 8 of [Pattern recipes (2)](../json-ui/recipes-toast-and-widgets.mdx) trimmed to fit the rules below.
+
+Rules it relies on: FILE-01, MOD-02, MOD-04, HOST-15, HOST-27, TXT-01, TXT-06, BND-05, BND-09. The rule text is in [Screen hosts and data channels](../json-ui/screen-hosts-and-data.mdx) (HOST-15, HOST-27), [Modifying vanilla screens](../json-ui/modifying-vanilla.mdx) (MOD-02, MOD-04) and [Files and definitions](../json-ui/files-and-definitions.mdx) (FILE-01). The measurement record is section 6.2 of [Claim measurements](../design/json-ui-claims.mdx#62-hud-title).
+
+```text
+hud_label_example/
+  manifest.json
+  ui/
+    _ui_defs.json
+    hud_screen.json
+    hudlabel.json
+```
+
+`manifest.json` has a single resources module. The format follows the example in [manifest.json](../basics/manifest.mdx) and the UUIDs are newly made values.
+
+```json
+{
+  "format_version": 3,
+  "header": {
+    "name": "HUD label example",
+    "description": "Shows a HUD label while the title starts with a fixed prefix",
+    "uuid": "5d1c8b0e-3f42-4a6b-9c71-0e2a7b9d4f13",
+    "version": "1.0.0",
+    "min_engine_version": "1.26.40"
+  },
+  "modules": [
+    { "type": "resources", "uuid": "b7e94a21-6c3d-4f58-8a0b-1d5e2c7f9a64", "version": "1.0.0" }
+  ],
+  "metadata": { "authors": ["Example"] }
+}
+```
+
+`ui/_ui_defs.json` registers only the new file `hudlabel.json`. `hud_screen.json` is at the same path as vanilla, so it is not registered (FILE-01).
+
+```json
+{
+  "ui_defs": [
+    "ui/hudlabel.json"
+  ]
+}
+```
+
+`ui/hudlabel.json` holds the label and animation definitions. The prefix `hudlabel_demo:` is 14 ASCII bytes, so it is cut with `'%.14s'`. The prefix must be long and unique so it does not collide with another add-on's titles (HOST-15).
+
+```json
+{
+  "namespace": "hudlabel",
+  "label_box": {
+    "type": "panel",
+    "size": [ 160, 16 ],
+    "anchor_from": "top_middle",
+    "anchor_to": "top_middle",
+    "offset": [ 0, 24 ],
+    "anims": [ "@hudlabel.stay" ],
+    "controls": [
+      {
+        "text": {
+          "type": "label",
+          "text": "#body",
+          "localize": false,
+          "bindings": [
+            { "binding_type": "global", "binding_name": "#hud_title_text_string", "binding_name_override": "#raw" },
+            { "binding_type": "view", "source_property_name": "(('%.14s' * #raw) = 'hudlabel_demo:')", "target_property_name": "#visible" },
+            { "binding_type": "view", "source_property_name": "(#raw - 'hudlabel_demo:')", "target_property_name": "#body" }
+          ]
+        }
+      }
+    ]
+  },
+  "stay": { "anim_type": "wait", "duration": 3.0, "next": "@hudlabel.leave" },
+  "leave": {
+    "anim_type": "offset",
+    "easing": "in_back",
+    "duration": 0.5,
+    "from": [ 0, 0 ],
+    "to": [ 0, -40 ],
+    "destroy_at_end": "hud_title_text"
+  }
+}
+```
+
+`ui/hud_screen.json` is a copy at the same path as vanilla, so its `modifications` apply (MOD-02). It changes two places.
+
+```json
+{
+  "hud_title_text": {
+    "modifications": [
+      {
+        "array_name": "bindings",
+        "operation": "insert_back",
+        "value": [
+          { "binding_type": "global", "binding_name": "#hud_title_text_string" },
+          {
+            "binding_type": "view",
+            "source_property_name": "(not (('%.14s' * #hud_title_text_string) = 'hudlabel_demo:'))",
+            "target_property_name": "#visible"
+          }
+        ]
+      }
+    ]
+  },
+  "root_panel": {
+    "modifications": [
+      {
+        "array_name": "controls",
+        "operation": "insert_back",
+        "value": [
+          {
+            "hudlabel_factory": {
+              "type": "panel",
+              "size": [ "100%", "100%" ],
+              "factory": {
+                "name": "hud_title_text_factory",
+                "control_ids": { "hud_title_text": "hud_title_text@hudlabel.label_box" }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The server sends the text after the prefix, for example `player.onScreenDisplay.setTitle("hudlabel_demo:Welcome")`. The expected result is that `Welcome` shows at the top center of the screen for about 3.5 seconds and disappears, and the vanilla title does not appear at the center for this prefix. A title without the prefix appears as in vanilla and the label stays hidden. None of this behavior was checked in game.
+
+How the rules map to the code:
+
+- Vanilla `hud_title_text` has no `bindings` to begin with, so `insert_back` is safe (MOD-04). The hiding binding goes on the whole `hud_title_text`, not on `title_frame` (HOST-27).
+- The label is created by a `hud_title_text_factory` in my own layer. One prefix decides both hiding the vanilla title and turning on the label (HOST-15, HOST-27).
+- A control the factory creates stays after the title ends unless an animation removes it. `destroy_at_end` must equal the `control_ids` key `hud_title_text` (measurement in 6.2). The 3 second wait and 0.5 second move are example values, and their relation to the title's `stay` time was not measured.
+- Every expression contains a `#property` (BND-05). The default of `#visible` is true, so if an expression fails the label is always visible. If hiding does not work, suspect the expression first (BND-09).
+- The label text is a literal, so it has `"localize": false` (TXT-01). `#body` is a string with the prefix removed, so the numeric drawing problem (TXT-06) does not occur. To show a number, join it to a string.
+
+Left out because the wiki has no basis: the label's position and size, the animation times, and whether hanging `anims` on a factory-created panel works in this setup. Recipe 8 has the same shape with `destroy_at_end` destroying the control and is `{working pack}`.

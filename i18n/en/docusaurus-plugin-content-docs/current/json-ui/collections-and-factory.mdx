@@ -430,3 +430,141 @@ A factory has two forms.
 - **[COL-40]** However, **inside** a layout created by our factory, action form data reached only the cells of a grid (`grid` + `collection_name`). Fixed `collection_index` cells were empty, and an inner factory that creates buttons from `#form_button_contents` created nothing. `collection_panel` (with or without `collection_name`), `stack_panel`, `control_name` and `control_ids` were all the same, and giving the cell bindings `always` (BND-07) changed nothing. `panel` + `factory` created nothing. So a gate can be used only when the layout reads buttons only as a grid. A router at the very top of the screen gave a different result (COL-47, C-65). On Windows 1.26.65.1, in the window of a router inserted with `insert_back` into `main_screen_content` of `server_form`, the "empty even with `always`" result was not reproduced. Fixed cells were empty on first open with the default condition and filled from the first open with `always` on both bindings ([measurement record](../design/json-ui-claims.mdx)). With a 1x1 grid lazy root in the same router window (grid `[1,1]`, `#maximum_grid_items` set to the button count with `once` and to a title check expression with `visible`) and fixed `collection_index` 0, 4, 5 on a `stack_panel` inside its cell, the cells filled from the first open even with the default binding condition (same on a second open, [record](../design/json-ui-claims.mdx#63-state-holding-lazy-roots-pack-order-rendering)). `{measured}` ([Source](../reference/source-abbreviations.mdx): DF, 2026-11-19 Windows 1.26.65.1)
 - **[COL-47]** Inside a window created by the dictionary lookup router (HOST-06) placed in `$screen_content` of `third_party_server_screen`, the fixed `collection_index` cells, the radio toggle cells and a stack factory of length `#form_button_contents` all received action form data. But if the cells' collection, `collection_details` and body bindings had the default condition, they were empty on first open and filled after switching a tab once, and when all were set to `binding_condition: "always"` they were filled as soon as it opened. This differs from COL-40 (where the same cells were empty even with `always`) (C-65), and the difference is judged to be that the router is at the very top of the screen. On Windows 1.26.65.1, fixed cells measured with a router inserted with `insert_back` into `main_screen_content` of `server_form` matched COL-47: empty on first open with the default condition (both when opened from the HUD and when coming from a menu form), and filled from the first open with `always` on both bindings ([measurement record](../design/json-ui-claims.mdx)). When the fixed cells sit inside the cell of a 1x1 grid lazy root (grid `[1,1]`, `#maximum_grid_items` set to the button count with `once` and to a title check expression with `visible`) instead of directly in the router `collection_panel`, they filled from the first open even with the default condition (2026-11-19 Windows 1.26.65.1, [record](../design/json-ui-claims.mdx#63-state-holding-lazy-roots-pack-order-rendering)). `{measured, conflict}` ([Source](../reference/source-abbreviations.mdx): FFR)
 - **[COL-48]** A factory placed inside a cell created by a factory created nothing at first if `#title_text` and the length binding had the default condition. Giving those two bindings `always` made it created as soon as it opened. Changing the inside to a grid also worked. Having a size animation recalculate the layout, or reading the length from an outside data source, had no effect. `{measured}` ([Source](../reference/source-abbreviations.mdx): FFR)
+
+## Example: the smallest collection grid `{needs measurement}`
+
+A minimal setup that draws the action form buttons the server sent in a 2-column grid. This example was not run in game `{needs measurement}`. It is `jup.json` and `server_form.json` of [Grid button list](../design/json-ui-performance/grid-button-list.mdx) trimmed down.
+
+Rules it relies on: COL-01, COL-02, COL-10, COL-47. The order and conditions follow [Filling the first frame without always](../design/json-ui-performance/collection-view-order.mdx) (BND-37).
+
+The complete add-ons measured in game can be downloaded from two documents. [Grid button list](../design/json-ui-performance/grid-button-list.mdx) is a list with a scroll area, icons and progress bars, and [Filling the first frame without always](../design/json-ui-performance/collection-view-order.mdx) is a comparison add-on with two lists whose binding conditions differ.
+
+```text
+RP/
+  manifest.json
+  ui/
+    _ui_defs.json
+    mygrid.json
+    server_form.json
+```
+
+`manifest.json` needs only a single resources module, the same as in the example in section 10 of [HUD and title channels](../server-ui/hud-and-titles.mdx). `_ui_defs.json` registers only the new file. `server_form.json` is at the same path as vanilla, so it is not registered (FILE-01).
+
+```json
+{
+  "ui_defs": [
+    "ui/mygrid.json"
+  ]
+}
+```
+
+`ui/mygrid.json` defines the cell, the grid, the window and the router.
+
+```json
+{
+  "namespace": "mygrid",
+  "cell_face": {
+    "type": "panel",
+    "size": [ "100%", "100%" ],
+    "$bg_texture|default": "textures/ui/button_borderless_light",
+    "controls": [
+      { "bg": { "type": "image", "texture": "$bg_texture", "size": [ "100% - 2px", "100% - 2px" ] } },
+      {
+        "name": {
+          "type": "label",
+          "layer": 3,
+          "size": [ 90, 10 ],
+          "offset": [ 6, 10 ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left",
+          "color": [ 0.1, 0.1, 0.1 ],
+          "localize": false,
+          "text": "#text",
+          "bindings": [
+            { "binding_type": "collection", "binding_collection_name": "form_buttons", "binding_name": "#form_button_text" },
+            { "binding_type": "view", "source_property_name": "('%.12s' * #form_button_text)", "target_property_name": "#text" }
+          ]
+        }
+      }
+    ]
+  },
+  "cell@common.button": {
+    "size": [ 100, 30 ],
+    "$focus_enabled": false,
+    "$pressed_button_name": "button.form_button_click",
+    "bindings": [
+      { "binding_type": "collection_details", "binding_collection_name": "form_buttons", "binding_condition": "always" }
+    ],
+    "controls": [
+      { "default@mygrid.cell_face": {} },
+      { "hover@mygrid.cell_face": { "$bg_texture": "textures/ui/button_borderless_lighthover" } },
+      { "pressed@mygrid.cell_face": { "$bg_texture": "textures/ui/button_borderless_lightpressed" } }
+    ]
+  },
+  "button_grid": {
+    "type": "grid",
+    "size": [ 200, "100%c" ],
+    "offset": [ 0, 20 ],
+    "anchor_from": "top_middle",
+    "anchor_to": "top_middle",
+    "grid_rescaling_type": "horizontal",
+    "grid_item_template": "mygrid.cell",
+    "collection_name": "form_buttons",
+    "bindings": [
+      { "binding_name": "#form_button_length", "binding_name_override": "#maximum_grid_items", "binding_condition": "always" }
+    ]
+  },
+  "list_window": {
+    "type": "image",
+    "texture": "textures/ui/dialog_background_opaque",
+    "size": [ 224, 140 ],
+    "layer": 60,
+    "controls": [
+      { "close@common.close_button": {} },
+      { "grid@mygrid.button_grid": {} }
+    ]
+  },
+  "screen_router": {
+    "type": "collection_panel",
+    "size": [ "100%", "100%" ],
+    "factory": {
+      "name": "mygrid_screen",
+      "control_ids": { "g": "@mygrid.list_window" }
+    },
+    "property_bag": { "#§b§wmg:G": [ "g" ] },
+    "bindings": [
+      { "binding_name": "#title_text" },
+      { "binding_type": "view", "source_property_name": "('#' + ('%.10s' * #title_text))", "target_property_name": "#collection_length" }
+    ]
+  }
+}
+```
+
+`ui/server_form.json` inserts the router next to `server_form_factory`.
+
+```json
+{
+  "namespace": "server_form",
+  "main_screen_content": {
+    "size": [ "100%", "100%" ],
+    "modifications": [
+      {
+        "array_name": "controls",
+        "operation": "insert_back",
+        "value": [ { "mygrid_router@mygrid.screen_router": {} } ]
+      }
+    ]
+  }
+}
+```
+
+The server sends an action form whose title is `§b§wmg:G` with a few buttons. The expected result is that the cells lie in 2 columns, each cell shows the first 12 bytes of its button text, and pressing a cell sends that cell's button number to the server. None of this behavior was checked in game.
+
+How the rules map to the code:
+
+- `collection_name` is on the `grid`. On a `panel` or `image` it gives an `Unknown property` error (COL-01).
+- This example does not use `collection_index`. Whether a grid gives cells indexes automatically is `{unverified}` (COL-26), and `collection_index`, which fixes an index, is read only on a direct child of a parent that has `collection_name` (COL-02, COL-38, COL-44). If you need fixed cells, wrap the label in a panel and give the index to the panel reference (COL-02).
+- `visible` only stops drawing and does not stop creation and layout (COL-10), so for server forms other than this one, the router makes zero windows. Looking up `property_bag` with the first 10 bytes of the title and putting the result in `#collection_length` is the mechanism of HOST-06, COL-22 and COL-23.
+- Inside the window the router creates, the grid length and the cell's `collection_details` use `binding_condition: "always"`. With the default condition they were empty on first open (COL-47, COL-48). The label inside the cell uses the order collection binding then view binding, with no condition (BND-37).
+
+Left out because the wiki has no basis: a scroll area (with many buttons the grid overflows the window, and the scrolling setup is in the complete add-ons), a binding that hides the vanilla form for this title (it is in the add-on's `server_form.json`), and the window and cell sizes. A 2-column grid drew cells overlapping at 3000 buttons and more (COL-49).
