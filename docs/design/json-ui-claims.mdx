@@ -231,7 +231,11 @@ sources:
 
 ### 6.3 상태 유지, 지연 루트, 팩 순서, 렌더링
 
-2026-11-19, 같은 버전이다. JSON UI 넷과 렌더링 셋이다.
+2026-11-19, 같은 버전이다. JSON UI가 아닌 행은 [콘텐츠와 렌더링 주장 실측](./content-rendering-claims.mdx)에 있다.
+
+- 글리프 페이지: [언어와 글꼴](./content-rendering-claims.mdx#10-언어와-글꼴)
+- 렌더 컨트롤러 텍스처 배열 넷, 내림 없는 배열 인덱스: [렌더 컨트롤러와 텍스처](./content-rendering-claims.mdx#3-렌더-컨트롤러와-텍스처)
+- 머티리얼 파일 주석: [머티리얼](./content-rendering-claims.mdx#6-머티리얼)
 
 | 항목 | 구성 | 결과 | 관련 |
 |---|---|---|---|
@@ -239,10 +243,6 @@ sources:
 | 서버 폼 안 `$touch` | 서버 폼 창에 `"ignored": "$touch"`와 `"ignored": "(not $touch)"` 패널 | 앞의 것만 만들어짐(Windows에서 `$touch`는 거짓). `Expected variable not found` 로그 없음 | D-18 |
 | 1x1 grid 지연 루트 | 라우터 창 안 grid `[1,1]`, `#maximum_grid_items`를 `once`로 버튼 수, `visible`로 제목 검사 식(`1` 또는 `0`). 칸 안 `stack_panel`에 고정 `collection_index` 0, 4, 5 | 바인딩 기본 조건(없음)인 칸과 `always`인 칸 모두 처음 열 때부터 채워짐(두 번 다시 열어도 같음) | COL-40, COL-47 |
 | 두 팩이 같은 속성 | 같은 경로 `hud_screen.json`에서 `chat_grid_item/chat_background`의 `size`를 이 애드온은 `"50%"`, 도우미 팩은 `"75%"`로. 도우미 팩이 월드 팩 목록 위 | 채팅 배경 폭 570(부모 760의 75%), 위 팩의 값. 이 애드온만 켜면 380(50%) | FILE-21, D-05 |
-| 2의 거듭제곱이 아닌 글리프 페이지 | `font/glyph_E9.png` 1056x1056, `glyph_EA.png` 512x512, 칸 0은 빨간 사각형 | 둘 다 그려짐. E9 글리프가 약 2.06배 크게(132px 대 64px, 칸 픽셀 66 대 32에 비례) | file-formats |
-| 렌더 컨트롤러 텍스처 배열 넷 | `arrays.textures`에 배열 4개, `textures`에 넷 모두 사용 | 크래시 없이 그려짐(첫 배열 값) | render-controllers |
-| 내림 없는 배열 인덱스 | 원소 5개 배열에 `Array.t[query.life_time * 2]` | 다섯 색이 차례로 돌았다(길이를 넘는 인덱스는 처음으로 돌아감) | render-controllers |
-| 머티리얼 파일 주석 | `materials/entity.material`에 `// ...` 줄을 넣고 `juc_mat:entity_alphatest` 정의, 엔티티가 `juc_mat` 사용 | 엔티티가 그려짐. 없는 머티리얼 이름(`juc_missing`)으로 바꾸면 그림자만 남아 안 보였다. 주석이 있어도 파일이 읽혔다 | 머티리얼 |
 
 - 팩 순서는 반대로 재지 못했다. 월드 팩 목록 파일에서 순서를 바꿔도 게임이 들어갈 때 자기 순서로 되돌렸다. 그래서 "위 팩이 이긴다"는 한 순서의 결과다.
 - 자기 참조 상태를 처음 넣은 날 월드에 들어가며 "오류가 발생했습니다(Block)" 화면이 한 번 났다. 같은 패널을 다시 넣고 다시 들어갔을 때는 나지 않아 원인으로 보지 않았다.
@@ -250,7 +250,10 @@ sources:
 
 ### 6.4 이름 바인딩, 빈 전역 길이, 나눗셈, 텍스처 수, 파티클 카운터
 
-2026-11-19, 같은 버전이다. 식 행은 1번 창(P1)이나 5번 창(P5)의 버튼 글자를 `#v`로 읽는다.
+2026-11-19, 같은 버전이다. 식 행은 1번 창(P1)이나 5번 창(P5)의 버튼 글자를 `#v`로 읽는다. JSON UI가 아닌 행은 [콘텐츠와 렌더링 주장 실측](./content-rendering-claims.mdx)에 있다.
+
+- 렌더 컨트롤러 `textures` 항목 수와 배열 수: [렌더 컨트롤러와 텍스처](./content-rendering-claims.mdx#3-렌더-컨트롤러와-텍스처)
+- 파티클 카운터: [파티클](./content-rendering-claims.mdx#4-파티클)
 
 | 항목 | 구성 | 결과 | 관련 |
 |---|---|---|---|
@@ -264,17 +267,18 @@ sources:
 | 미니맵 청크 식 | 같은 `x`에 `((x - ((x < 0) * 15)) / 16)`, `-37`과 `100` | 둘 다 빈 값. 멈추지 않았다 | EXP-49 |
 | 비교 곱을 더하고 나누기 | `((#v - 0) - (15 * ((#v - 0) < 0))) / 16`, `+ (((#v - 0) < 0) * -15)`, `- ((((#v - 0) < 0) * 15) - 0)` | 모두 빈 값. 따로 쓴 `(((#v - 0) < 0) * 15)`는 `15`, `((#v - 0) - 15) / 16`은 `-3` | EXP-19, EXP-49 |
 | 5번 창의 나눗셈 | P5 창 안 행에 `((#v - 0) / 16)`, `((#v - 0) / 5)`, `((x - 0) / 16)` 중 하나 | 창을 열거나 UI를 다시 읽는 순간 클라이언트가 멈췄다(응답 없음, CPU 거의 0). P1에서는 같은 식이 멈추지 않았다 | EXP-49 |
-| 렌더 컨트롤러 `textures` 항목 수 | 같은 엔티티에 `textures` 항목 5, 8, 9, 10, 11, 12, 15개(배열 원소 또는 `Texture.x`) | 11개까지 그려짐. 12개는 배열 유무와 관계없이 소환 직후 클라이언트가 멈췄고, 저장된 월드에 다시 들어갈 때도 멈췄다. 15개(배열)는 크래시 | render-controllers |
-| 렌더 컨트롤러 배열 수 | 배열 15개를 정의하고 `textures`에 하나만, 원소 15개짜리 배열 하나 | 둘 다 그려짐 | render-controllers |
-| 파티클 카운터 | `emitter_initialization`의 `creation_expression`에 `v.spawn_counter = 0;`, `per_update_expression`에 `v.size_counter = 0;`. `emitter_shape_point.offset` 식이 `v.spawn_counter`를, 빌보드 `size` 식이 `v.size_counter`를 1씩 올려 번호로 씀. 즉시 8개 | 8개가 0.6 간격으로 놓이고 크기가 차례로 커졌다. 2초 뒤에도 같은 크기 | particles |
 
 - 미니맵 식은 이 판에서 멈추지 않지만 값도 내지 않는다. 비교 결과를 곱한 항을 더하거나 뺀 뒤 나누면 빈 값이므로 음수 보정은 다른 식으로 해야 한다. 비교 항 없이 `((#v - 0) - 15) / 16`은 맞았다.
 - 5번 창의 멈춤은 원인을 나누지 못했다. 같은 식, 같은 값이 1번 창에서는 정상이었으므로 식만의 문제가 아니다. 5번 창에는 1x1 지연 grid, 없는 전역 바인딩, `$touch` 패널, 이름 있는 view 같은 다른 실험이 함께 있다.
-- 12개 텍스처 엔티티가 저장된 월드는 그 엔티티 정의를 팩에서 빼야 다시 들어갈 수 있었다. 정의를 뺀 채 들어가도 엔티티는 월드에 남아 있어서, 정의를 다시 넣자 다음 입장에서 또 멈췄다.
 
 ### 6.5 소수 리터럴, alpha, 문자열 나누기, HUD, 렌더링 쿼리
 
-2026-11-19, 같은 버전이다. 식 행은 7번 창(`§b§wjc:7`, 버튼 `50`, `7abc`, `a-b-a`, `abc|UI|def`)에서 쟀다. 막대는 `textures/ui/White` 이미지 80x5에 `clip_direction: "left"`를 주고 `#clip_ratio`를 바인딩했다. 이 창에서는 나눗셈 식이 멈추지 않았다.
+2026-11-19, 같은 버전이다. 식 행은 7번 창(`§b§wjc:7`, 버튼 `50`, `7abc`, `a-b-a`, `abc|UI|def`)에서 쟀다. 막대는 `textures/ui/White` 이미지 80x5에 `clip_direction: "left"`를 주고 `#clip_ratio`를 바인딩했다. 이 창에서는 나눗셈 식이 멈추지 않았다. JSON UI가 아닌 행은 [콘텐츠와 렌더링 주장 실측](./content-rendering-claims.mdx)에 있다.
+
+- 글리프 페이지: [언어와 글꼴](./content-rendering-claims.mdx#10-언어와-글꼴)
+- `q.client_memory_tier`, `q.graphics_mode_is_any`: [렌더 컨트롤러와 텍스처](./content-rendering-claims.mdx#3-렌더-컨트롤러와-텍스처)
+- 머티리얼 `depthFunc: "Greater"`: [머티리얼](./content-rendering-claims.mdx#6-머티리얼)
+- 파티클 속 `q.property`와 `query.can_fly`: [파티클](./content-rendering-claims.mdx#4-파티클)
 
 | 항목 | 구성 | 결과 | 관련 |
 |---|---|---|---|
@@ -300,11 +304,6 @@ sources:
 | HUD `#gui_scale` | 전역 바인딩 `#gui_scale`(`always`)을 이어 붙이기와 비교(`> 0` 등)로 읽음 | 두 줄 모두 빈 값, 로그 없음 | gui_scale |
 | 래치 없는 타이틀 | HUD 라벨이 `#hud_title_text_string`을 바로 읽음 | 타이틀이 사라진 22초 뒤에도 마지막 타이틀이 남음. 월드에 다시 들어가면 빈 값 | HOST-27 |
 | HUD `render_only_when_topmost: false` | `hud_screen`에만 넣고 서버 폼을 연 뒤 타이틀 | HUD가 그려지지 않음(월드에 다시 들어가도 같음) | HOST-44 |
-| 글리프 페이지 2560, 384, 4096 | `glyph_EB` 2560, `glyph_EC` 384, `glyph_ED` 4096, 칸 0은 빨간 사각형 | 셋 모두 그려짐. 크기는 칸 픽셀에 비례 | file-formats |
-| `q.client_memory_tier` | 렌더 컨트롤러 `Array.t[q.client_memory_tier]`, 원소 5개 | 인덱스 4(흰색) | render-controllers |
-| `q.graphics_mode_is_any` | `Array.g[q.graphics_mode_is_any('deferred') + 2 * q.graphics_mode_is_any('fancy')]` | 인덱스 2. 화려한 그래픽에서 `'fancy'` 참, `'deferred'` 거짓 | render-controllers |
-| 머티리얼 `depthFunc: "Greater"` | `entity_alphatest`를 부모로 한 머티리얼의 상자 엔티티를 빈 땅에 하나, 돌 블록 뒤에 하나 | 빈 땅의 것은 그림자만 보임. 돌 뒤의 것은 돌 옆면과 겹친 부분만 그려짐 | 머티리얼 |
-| 파티클 속 `q.property`와 `query.can_fly` | 엔티티 애니메이션이 방출하는 파티클의 크기를 `q.property('bwiki:size')`, 색을 `query.can_fly`로. 속성 8이고 `can_fly`가 없는 엔티티와 속성 2이고 `minecraft:can_fly`가 있는 엔티티 | 앞은 큰 빨강, 뒤는 작은 파랑. 방출한 엔티티의 값 | particles |
 
 - 바인딩한 `#alpha`는 이미지에 `"alpha": "#alpha"`가 있어야 적용됐다. 선언이 없으면 정수 1도 보이지 않았다. 선언이 있으면 0과 1 사이 값도 그대로 그려졌다.
 - `('#if_' + 불리언)`의 결과 문자열은 `#`로 시작하므로 속성 이름으로 다시 읽혔다(EXP-30). 그래서 `property_bag`에 키가 있으면 값이 나오고, 다른 글자와 이어 붙이면 빈 속성이 된다.
@@ -313,66 +312,27 @@ sources:
 
 ### 6.6 블록 UV, 컨트롤러 덮기, 소리, 언어, 애니메이션 가중치
 
-2026-11-19, 같은 버전이다. JSON UI 밖의 팩 파일 주장을 같은 애드온의 블록, 엔티티, 언어, 소리 파일로 쟀다. 게임 언어는 한국어, 화려한 그래픽이었다. 소리는 Windows 오디오 세션 API로 게임 프로세스 세션의 최대 피크를 9초 동안 읽었다.
+2026-11-19, 같은 버전이다. 이 절의 기록은 JSON UI 밖의 팩 파일 주장이고 [콘텐츠와 렌더링 주장 실측](./content-rendering-claims.mdx)에 있다.
 
-| 항목 | 구성 | 결과 | 관련 |
-|---|---|---|---|
-| 블록 UV, `texture_width` 1024 | 블록 지오메트리 `texture_width`/`texture_height` 1024, 모든 면 UV `[0, 0]` 크기 `[341.333, 1024]`. 텍스처는 48x18(16px 세로 띠 빨강, 초록, 파랑, 위 9줄 밝고 아래 9줄 어두움) | 빨강 띠 전체(위 밝음, 아래 어두움) | custom-items-and-blocks, models-and-geometry |
-| 같은 텍스처의 일부 | UV `[341.333, 0]` 크기 `[341.333, 512]` | 초록 띠 위 절반 | custom-items-and-blocks |
-| 160x8 텍스처 | UV `[307.2, 0]` 크기 `[102.4, 1024]`, 16px 띠 10개 | 네 번째 띠 | textures-and-atlases |
-| `texture_width` 16에 48x18 텍스처 | UV `[0, 0]` 크기 `[16, 16]` | 한 면에 텍스처 전체(띠 셋, 위아래 두 밝기)가 줄어 들어감 | custom-items-and-blocks |
-| 바닐라 플레이어 컨트롤러 ID 덮기 | RP에 `controller.animation.player.crossbow`만 다시 정의(초기 상태가 바닐라 짧은 이름 `crossbow_hold` 재생), `player.entity.json` 없음. 장전하지 않은 쇠뇌를 들고 3인칭 | 양팔을 든 조준 자세. 이 파일을 빼고 다시 들어가면 바닐라 자세(팔을 내림) | items |
-| 감싸기 없는 `sound_definitions.json` | `format_version`과 `sound_definitions` 없이 `{"juc.flat": {"category": "ui", "sounds": [{"name": "sounds/random/levelup"}]}}` | `/playsound juc.flat` 피크 0.03, 바닐라 `random.levelup`과 같음. 정의 없는 이름은 0 | file-formats, sounds |
-| 영어에만 있는 lang 키 | `en_US.lang`에 키 둘, `ko_KR.lang`에 그중 하나, `/tellraw`의 `translate` | 둘 다 있는 키는 한국어 값, 영어에만 있는 키는 영어 값, 어디에도 없는 키는 키 문자열 그대로 | file-formats |
-| 빈 값 lang | `entity.bwiki:juc_named.name=`를 `en_US`와 `ko_KR`에. 그 엔티티를 가해자로 `/damage @s 100 entity_attack entity ...`, 그리고 `/kill @e[type=!player]` | 사망 메시지 `%entity.bwiki:juc_named.name`, `/kill` 결과도 키 그대로. `ko_KR`에 줄이 없고 `en_US`만 빈 값일 때도 같음 | file-formats |
-| 컨트롤러 가중치 1 초과 | 상태 `animations`에 `{"tilt": "q.property('bwiki:w')"}`, `tilt`는 z축 20도 회전, 속성 0, 1, 2, 3 | 0도, 약 20도, 약 40도, 약 60도. 가중치에 비례 | animations-and-controllers |
-| 정수 속성 하나를 비트로 | `int` 속성 0~16383, 비트 0과 비트 13마다 `play`/`stop` 컨트롤러(`math.mod(math.floor(q.property('bwiki:bits') / 8192), 2) != 0`) | 값 1은 왼쪽 상자만, 2는 둘 다 아님, 8192는 오른쪽만, 8193은 둘 다 올라감 | entities |
-| `pre_animation` 누적 | `v.acc = v.acc + 1;`(`q.delta_time` 없음)로 한 본, `q.life_time * 60`으로 다른 본을 같은 계수로 올림 | 216fps 무렵 누적 쪽이 약 3.5배 빨리 올라감 | animations-and-controllers |
-| `creaking_eyes` 단독 | 상자 엔티티의 유일한 머티리얼을 `creaking_eyes`로. 불투명 빨강 텍스처와 알파 255/170/85/0 띠 텍스처 | 낮과 밤 모두 그림자만 보이고 상자는 그려지지 않음 | materials-and-shaders |
-| `creaking_eyes` 덧그리기 | 흰 상자(`entity_alphatest`)를 그린 뒤 같은 지오메트리를 두 번째 렌더 컨트롤러가 `creaking_eyes`, 띠 텍스처, `ignore_lighting: true`로 다시 그림 | 앞면에만 빨강이 칠해지고 옆면은 흰 본체 그대로. 밤에도 빨강 밝기가 낮과 같음. 알파 띠 넷이 구분 없이 모두 칠해짐 | materials-and-shaders |
-| VV 아닌 화면의 `texture_set` | `pbr` capability 없는 팩, 흰 텍스처에 발광 255 MER | 밤에 같은 흰 상자와 밝기가 같음 | rendering |
-
-- 블록 지오메트리의 UV는 `texture_width`/`texture_height`로 나눈 비율로 실제 텍스처에 대응됐다. 텍스처 크기를 지오메트리 값에 맞출 필요가 없다. 이 애드온의 시험 엔티티들도 64x32 지오메트리에 16x16 텍스처를 써서 정상으로 그려진다.
-- 정사각형이 아닌 48x18, 160x8 지형 텍스처는 `material_instances` 블록에서 그대로 그려졌다. 높이가 너비보다 작아 애니메이션 프레임으로 잘리지 않았다. 먼 거리의 밉맵은 보지 않았다.
-- 빈 값은 키가 없는 것과 같게 취급됐다. 원시 키를 숨기는 데 쓸 수 없다.
-- `creaking_eyes`는 단독으로 보이지 않고, 같은 지오메트리를 덧그렸을 때 본체와 깊이가 맞은 면에만 나왔다. 같은 깊이에만 그리는 머티리얼로 보이지만 머티리얼 정의는 확인하지 않았다. 바닐라 크리킹 렌더 컨트롤러 주석도 이 머티리얼이 다른 텍스처 위에 블렌드된다고 적는다.
-- 창 변수는 게임에서 재지 않고 파일로 확인했다. 바닐라 1.26.50 `player.entity.json`이 `variable.fp_melee_spear_use_attachable_rotation_z`, `tp_melee_spear_use_attachable_rotation_z`, `fp_melee_spear_attack_attachable_rotation_z`, `tp_melee_spear_attack_attachable_position_z`를 `public`으로 선언하고, 바닐라 `spear.animation_controllers.json`이 `c.owning_entity->query.ticks_since_last_kinetic_weapon_hit`를 읽는다.
+- 블록 UV: [블록](./content-rendering-claims.mdx#9-블록)
+- 플레이어 컨트롤러 덮기, 컨트롤러 가중치, 정수 속성 비트, `pre_animation` 누적: [엔티티, 속성, 애니메이션](./content-rendering-claims.mdx#2-엔티티-속성-애니메이션)
+- 감싸기 없는 `sound_definitions.json`: [소리](./content-rendering-claims.mdx#5-소리)
+- lang 키와 빈 값: [언어와 글꼴](./content-rendering-claims.mdx#10-언어와-글꼴)
+- `creaking_eyes`, VV 아닌 화면의 `texture_set`: [머티리얼](./content-rendering-claims.mdx#6-머티리얼)
+- 창 변수: [어태처블](./content-rendering-claims.mdx#8-어태처블)
 
 ### 6.7 파티클 쿼리와 카운터, 소리 정의, 머티리얼 파일, 바이옴
 
-2026-11-19, 같은 버전이다. 파티클은 `/particle`로 띄우거나 `/scriptevent bwiki:juc_particle <효과> <변수> <값>`(플레이어 시선 3블록 앞에 `MolangVariableMap`으로 띄움)으로 띄웠다. 색은 `particle_appearance_tinting`, 크기는 빌보드 `size` 식으로 값을 읽었다.
+2026-11-19, 같은 버전이다. 이 절의 기록은 [콘텐츠와 렌더링 주장 실측](./content-rendering-claims.mdx)에 있다.
 
-| 항목 | 구성 | 결과 | 관련 |
-|---|---|---|---|
-| 파티클 안 `q.camera_rotation(1)` | 색 `q.camera_rotation(1) == 0 ? 빨강 : 초록`, 크기 `0.1 + abs(값) / 180 * 0.5`. 시선 yaw 약 -45도 | 1인칭과 3인칭 모두 빨강, 최소 크기(값 0) | particles |
-| 파티클 안 `q.distance_from_camera` | 고정 크기, 색 `> 3 ? 초록 : 빨강`, 약 5블록 앞 | 초록(값이 나옴) | particles |
-| 만료식 `q.distance_from_camera > 50` | 같은 위치, 고정 크기 노랑 | 보이지 않음(바로 만료) | particles |
-| `loop()`와 `break` | `creation_expression`에 `v.s = 0; loop(5, { v.s = v.s + 1; }); v.b = 0; loop(10, { v.b = v.b + 1; (v.b >= 3) ? { break; }; });` | `v.s` 5, `v.b` 3 | particles |
-| `per_render_expression` 카운터 | 이미터 `v.n = 0;`, `particle_initialization.per_render_expression`에 `v.n = v.n + 1; v.my = v.n;`, 크기 `v.my`, 6개 즉시 방출 | 여섯 개가 늘 같은 크기로 함께 커짐. 파티클별 번호가 되지 않음 | particles |
-| `max_lifetime` 식 카운터 | 이미터 `v.index = 0;`, `max_lifetime`에 `v.index = v.index + 1; return 2 + v.index * 2;`, 크기 `v.particle_lifetime * 0.025`, 5개 | 크기 다섯 단계, 수명 짧은 것부터 사라짐 | particles |
-| `creation_expression`의 `??` 재대입 | `variable.r0 = (variable.r0 ?? 3);` | `/particle`은 3, 스크립트 `variable.r0` 1은 1, 0은 0 | particles |
-| 엔티티 변수 | 엔티티 `pre_animation`의 `v.ev = 1;`, 그 엔티티 애니메이션이 방출한 파티클이 `v.ev`를 읽음 | 콘텐츠 로그 `unhandled request for unknown variable 'variable.ev'` | particles |
-| `pre_effect_script` | 같은 방출 키프레임에 `"pre_effect_script": "v.pe = 1;"` | 파티클이 1을 읽음 | particles |
-| `sounds`를 객체 하나로 | `{"juc.obj": {"category": "ui", "sounds": {"name": "sounds/random/levelup"}}}` | 재생됨(피크 0.03) | file-formats |
-| `sounds.json` 안 `sound_definitions` | RP `sounds.json`에 `{"sound_definitions": {"juc.insounds": {...}}}`만 | 재생 안 됨(피크 0) | file-formats |
-| 머티리얼 파일 이름 | `materials/entity_1.material`에만 `juc_alt:entity_alphatest` | `Material "juc_alt" is referenced ... but not defined.` | materials-and-shaders |
-| 깊이 검사 끄기 | `entity_alphatest`에 `+states` `DisableDepthTest`, `DisableDepthWrite`. 돌 블록 뒤에 하나, 흰 엔티티 뒤에 하나 | 둘 다 앞의 블록과 엔티티 위에 그려짐(안쪽 면도 보임) | materials-and-shaders |
-| 엔티티 `uv_anim` | `+defines USE_UV_ANIM` 머티리얼, `offset` `[0, "math.mod(math.floor(q.life_time * 2), 4) / 4"]`, `scale` `[1, 0.25]`, 4프레임 세로 시트 | 0.5초마다 프레임이 바뀜 | render-controllers |
-| 본 이름 대소문자 | 어태처블 본 `Head`와 `head`(피벗 `[0, 24, 0]`)에 얼굴 앞 막대, 고개를 위아래로 | 둘 다 고개를 따라 움직임 | items |
-| 채팅 괄호 | `en_US`, `ko_KR`에 `chat.type.text=%s %s`, 로컬 월드에서 채팅 | `<플레이어 이름> hello juc`처럼 괄호가 그대로 | file-formats |
-| 클라이언트 바이옴 | `format_version` `1.21.70`, `identifier` `"plains"`(이름공간 없음), `fog_identifier`를 시작 4, 끝 16, 빨강 fog로 | 평지 월드가 붉은 안개로 바뀜(비가 그친 뒤) | biomes-and-dimensions |
-| 두 글자 lang 파일 | `texts/de.lang`에 `juc.fb.both=DE_SHORT`, 게임 옵션 `game_language`를 `de_DE`로 두고 월드에 다시 들어감 | `EN_BOTH`(영어 값). `de.lang`는 쓰이지 않음 | file-formats |
-| 그래픽 모드 옵션 | 게임 옵션 `graphics_mode`를 1(원래 값), 0, 3, 2로 바꾸며 `juc_gfx`(`deferred + 2 * fancy` 색) | 1은 fancy, 0과 3은 둘 다 거짓, 2는 deferred 참. 월드에 다시 들어가지 않아도 바로 바뀜 | render-controllers |
-| 화려한 그래픽 끔 | `graphics_mode` 0에서 `creaking_eyes` 덧그리기 엔티티 | 화려한 그래픽과 같게 앞면이 밝은 빨강 | materials-and-shaders |
-| deferred 모드 | `graphics_mode` 2(이 RP에는 `pbr` capability 없음), 밤 | 화면(밤 밝기, 구름)이 바뀜. `creaking_eyes` 덧그리기는 밝지 않은 빨강이 됨. 발광 255 MER `texture_set` 상자는 흰 상자와 밝기가 같음 | rendering, materials-and-shaders |
-
-- `q.camera_rotation`은 파티클 안에서 카메라 위치와 상관없이 0이었다. 시선 방향으로 쏘는 파티클은 이 쿼리로 만들 수 없다.
-- `q.distance_from_camera`는 색 식에서 `> 3`이 참이었고 만료식 `> 50`에서는 파티클이 바로 사라졌다. 코드에서는 이 값이 만료식을 평가하기 전에 같은 컨텍스트에서 이미 채워진다(이미터 갱신이 파티클 루프보다 먼저 값을 채운다). 그러므로 "만료식이 평가될 때 값이 비어 있다"는 읽기는 틀렸다 `{코드}`. 값이 어떤 기준점에서 잰 거리인지는 모른다(이미터 위치와 어떤 객체의 위치의 차로 읽히나 그 객체가 카메라인지 확정하지 못했다). 후속 실측(Windows 1.26.65.1, 2026-11-20)에서 색 식 `> 6 ? 0 : 1`은 거리 약 3에서 빨강, 약 12에서 초록이었고, 만료식 `< 6`은 거리 9와 13에서 살아남고 2와 5에서 사라져 실제 거리와 맞았다. 그러나 `> 6`, `> 60`, `> 6 ? 1 : 0`, `6 < q.distance_from_camera`는 거리 2에서 13까지 어디서도 파티클이 보이지 않아 `<` 결과만 설명되고 `>` 결과는 설명하지 못했다 `{실측}`.
-- `??`는 스크립트가 넘긴 0도 값으로 남겼다. `creation_expression`에서 `v.x = (v.x ?? 기본값)`으로 다시 대입해도 스크립트 값은 지워지지 않았다.
-- `max_lifetime` 식은 파티클마다 한 번 평가되어 이미터 카운터로 번호를 줄 수 있었다. `per_render_expression`은 모든 파티클이 같은 값을 읽었다.
-- 결합(`binding`)을 쓴 어태처블은 1.12.0 지오메트리에서 상자가 발밑(루트)에 그려졌다. 1.16.0으로 고친 뒤에는 `'rightitem'` 문자열 결합과 `q.item_slot_to_bone_name(c.item_slot)` 결합 모두 상자를 화면에서 찾지 못했고 로그도 없었다. 그래서 문자열 결합, 어태처블 `uv_anim`, 어태처블 `pre_animation`의 `loop`와 `slot.hotbar` 조회는 판단하지 못했고 애드온에서 뺐다.
-- 언어와 그래픽 모드는 Ore UI 설정 화면 대신 bedrock MCP의 `options_get`/`options_set`으로 게임 옵션을 바로 바꿨고, 측정 뒤 원래 값(`graphics_mode` 1, `game_language` `ko_KR`)으로 되돌렸다. 언어는 월드에 다시 들어가야 적용됐다.
-- `graphics_mode` 2는 `pbr` capability가 없는 팩이 켜진 월드에서도 deferred 쿼리를 참으로 만들었다. 옵션을 직접 쓴 것이라 설정 화면의 VV 선택지가 막히는지는 이 결과로 알 수 없다. 이 상태에서 그 팩의 `texture_set` 발광은 보이지 않았다.
+- 파티클 쿼리와 카운터, `loop()`, `??`, 엔티티 변수, `pre_effect_script`: [파티클](./content-rendering-claims.mdx#4-파티클)
+- `sounds` 객체와 `sounds.json` 안 `sound_definitions`: [소리](./content-rendering-claims.mdx#5-소리)
+- 머티리얼 파일 이름, 깊이 검사 끄기, 화려한 그래픽 끔, deferred 모드: [머티리얼](./content-rendering-claims.mdx#6-머티리얼)
+- 엔티티 `uv_anim`, 그래픽 모드 옵션: [렌더 컨트롤러와 텍스처](./content-rendering-claims.mdx#3-렌더-컨트롤러와-텍스처)
+- 본 이름 대소문자, 결합을 쓴 어태처블: [어태처블](./content-rendering-claims.mdx#8-어태처블)
+- 클라이언트 바이옴: [안개와 바이옴](./content-rendering-claims.mdx#7-안개와-바이옴)
+- 채팅 괄호, 두 글자 lang 파일: [언어와 글꼴](./content-rendering-claims.mdx#10-언어와-글꼴)
+- 파티클을 띄운 방법과 게임 옵션을 바꾼 방법: [측정 방법](./content-rendering-claims.mdx#1-측정-방법)
 
 ### 6.8 바인딩 존재, clip_ratio, alpha, 크기 식, 변수 식, 글자 크기
 

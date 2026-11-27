@@ -231,7 +231,11 @@ Measured in a panel inserted into `hud.root_panel` with `insert_front`. In the f
 
 ### 6.3 State holding, lazy roots, pack order, rendering
 
-2026-11-19, same version. Four JSON UI items and three rendering items.
+2026-11-19, same version. Rows that are not about JSON UI are in [Content and rendering claim measurements](./content-rendering-claims.mdx).
+
+- Glyph pages: [languages and fonts](./content-rendering-claims.mdx#10-languages-and-fonts)
+- Four texture arrays in one render controller, array index without floor: [render controllers and textures](./content-rendering-claims.mdx#3-render-controllers-and-textures)
+- Comment in a material file: [materials](./content-rendering-claims.mdx#6-materials)
 
 | Item | Setup | Result | Related |
 |---|---|---|---|
@@ -239,10 +243,6 @@ Measured in a panel inserted into `hud.root_panel` with `insert_front`. In the f
 | `$touch` in a server form | panels with `"ignored": "$touch"` and `"ignored": "(not $touch)"` in a server form window | only the first was created (`$touch` is false on Windows). No `Expected variable not found` log | D-18 |
 | 1x1 grid lazy root | grid `[1,1]` in the router window, `#maximum_grid_items` set to the button count with `once` and to a title check expression (`1` or `0`) with `visible`; fixed `collection_index` 0, 4, 5 on a `stack_panel` inside the cell | cells with the default (none) condition and with `always` both filled from the first open (same on a second open) | COL-40, COL-47 |
 | Two packs, same property | in the same-path `hud_screen.json`, `size` of `chat_grid_item/chat_background` is `"50%"` in this add-on and `"75%"` in a helper pack; the helper pack is higher in the world pack list | chat background width 570 (75% of the 760 parent), the higher pack's value. With this add-on alone it was 380 (50%) | FILE-21, D-05 |
-| Glyph page not a power of two | `font/glyph_E9.png` 1056x1056 and `glyph_EA.png` 512x512, cell 0 a red square | both drawn. E9 glyphs about 2.06 times larger (132px against 64px, in proportion to the 66 and 32 pixel cells) | file-formats |
-| Four texture arrays in one render controller | four arrays in `arrays.textures`, all four used in `textures` | drawn without a crash (the first array's value) | render-controllers |
-| Array index without floor | `Array.t[query.life_time * 2]` on a five-element array | the five colors cycled in turn (an index past the length wraps to the start) | render-controllers |
-| Comment in a material file | a `// ...` line in `materials/entity.material` defining `juc_mat:entity_alphatest`, used by an entity as `juc_mat` | the entity was drawn. With a material name that does not exist (`juc_missing`) only the shadow remained. The file was read despite the comment | materials |
 
 - The reverse pack order could not be measured. Reordering the world pack list file was undone by the game on world entry, so "the higher pack wins" is the result of one order.
 - On the day the self-referencing state was first added, entering the world showed an "An error occurred (Block)" screen once. Adding the same panel again and re-entering did not repeat it, so it was not taken as the cause.
@@ -250,7 +250,10 @@ Measured in a panel inserted into `hud.root_panel` with `insert_front`. In the f
 
 ### 6.4 Named bindings, empty global length, division, texture count, particle counter
 
-2026-11-19, same version. Expression rows read a button text of window 1 (P1) or window 5 (P5) as `#v`.
+2026-11-19, same version. Expression rows read a button text of window 1 (P1) or window 5 (P5) as `#v`. Rows that are not about JSON UI are in [Content and rendering claim measurements](./content-rendering-claims.mdx).
+
+- Number of render controller `textures` entries and arrays: [render controllers and textures](./content-rendering-claims.mdx#3-render-controllers-and-textures)
+- Particle counter: [particles](./content-rendering-claims.mdx#4-particles)
 
 | Item | Setup | Result | Related |
 |---|---|---|---|
@@ -264,17 +267,18 @@ Measured in a panel inserted into `hud.root_panel` with `insert_front`. In the f
 | Minimap chunk expression | `((x - ((x < 0) * 15)) / 16)` on the same `x`, for `-37` and `100` | empty for both. No freeze | EXP-49 |
 | Add a comparison product, then divide | `((#v - 0) - (15 * ((#v - 0) < 0))) / 16`, `+ (((#v - 0) < 0) * -15)`, `- ((((#v - 0) < 0) * 15) - 0)` | all empty. `(((#v - 0) < 0) * 15)` alone gave `15`, and `((#v - 0) - 15) / 16` gave `-3` | EXP-19, EXP-49 |
 | Division in window 5 | one of `((#v - 0) / 16)`, `((#v - 0) / 5)`, `((x - 0) / 16)` in a row of the P5 window | the client froze the moment the window opened or the UI was reloaded (not responding, CPU near 0). The same expressions did not freeze in P1 | EXP-49 |
-| Number of render controller `textures` entries | 5, 8, 9, 10, 11, 12 and 15 `textures` entries on one entity (array elements or `Texture.x`) | drawn up to 11. With 12, with or without arrays, the client froze right after the summon and again when re-entering the saved world. 15 (arrays) crashed | render-controllers |
-| Number of render controller arrays | 15 arrays defined with one used in `textures`; one array of 15 elements | both drawn | render-controllers |
-| Particle counter | `v.spawn_counter = 0;` in the `creation_expression` of `emitter_initialization`, `v.size_counter = 0;` in its `per_update_expression`. The `emitter_shape_point.offset` expression raises `v.spawn_counter` by 1 and the billboard `size` expression raises `v.size_counter` by 1, each used as an index. 8 at once | the 8 particles sat 0.6 apart and grew in size one by one. Same sizes 2 seconds later | particles |
 
 - The minimap expression does not freeze on this build, but it does not give a value either. Adding or subtracting a term that multiplies a comparison and then dividing gives empty, so the negative correction needs another expression. Without the comparison term, `((#v - 0) - 15) / 16` was right.
 - The cause of the window 5 freeze was not separated. The same expression with the same value was normal in window 1, so the expression alone is not the cause. Window 5 also holds other experiments: a 1x1 lazy grid, a global binding that does not exist, `$touch` panels and named views.
-- A world saved with the 12-texture entity could be entered again only after that entity definition was taken out of the pack. Entering without the definition still left the entity in the world, so putting the definition back froze the next entry again.
 
 ### 6.5 Decimal literals, alpha, string division, HUD, rendering queries
 
-2026-11-19, same version. Expression rows were measured in window 7 (`§b§wjc:7`, buttons `50`, `7abc`, `a-b-a`, `abc|UI|def`). Bars are an 80x5 `textures/ui/White` image with `clip_direction: "left"` and a bound `#clip_ratio`. Division expressions did not freeze in this window.
+2026-11-19, same version. Expression rows were measured in window 7 (`§b§wjc:7`, buttons `50`, `7abc`, `a-b-a`, `abc|UI|def`). Bars are an 80x5 `textures/ui/White` image with `clip_direction: "left"` and a bound `#clip_ratio`. Division expressions did not freeze in this window. Rows that are not about JSON UI are in [Content and rendering claim measurements](./content-rendering-claims.mdx).
+
+- Glyph pages: [languages and fonts](./content-rendering-claims.mdx#10-languages-and-fonts)
+- `q.client_memory_tier`, `q.graphics_mode_is_any`: [render controllers and textures](./content-rendering-claims.mdx#3-render-controllers-and-textures)
+- Material `depthFunc: "Greater"`: [materials](./content-rendering-claims.mdx#6-materials)
+- `q.property` and `query.can_fly` in a particle: [particles](./content-rendering-claims.mdx#4-particles)
 
 | Item | Setup | Result | Related |
 |---|---|---|---|
@@ -300,11 +304,6 @@ Measured in a panel inserted into `hud.root_panel` with `insert_front`. In the f
 | HUD `#gui_scale` | global binding `#gui_scale` (`always`) read by concatenation and by comparisons (`> 0` and so on) | both lines empty, no log | gui_scale |
 | Title without a latch | a HUD label reads `#hud_title_text_string` directly | the last title stayed 22 seconds after the title disappeared. Empty after re-entering the world | HOST-27 |
 | HUD `render_only_when_topmost: false` | only on `hud_screen`, then a title after opening a server form | the HUD was not drawn (same after re-entering the world) | HOST-44 |
-| Glyph pages 2560, 384, 4096 | `glyph_EB` 2560, `glyph_EC` 384, `glyph_ED` 4096, cell 0 a red square | all three drawn. Size in proportion to the cell pixels | file-formats |
-| `q.client_memory_tier` | render controller `Array.t[q.client_memory_tier]`, 5 elements | index 4 (white) | render-controllers |
-| `q.graphics_mode_is_any` | `Array.g[q.graphics_mode_is_any('deferred') + 2 * q.graphics_mode_is_any('fancy')]` | index 2. With fancy graphics `'fancy'` true, `'deferred'` false | render-controllers |
-| Material `depthFunc: "Greater"` | box entities with a material whose parent is `entity_alphatest`, one on open ground and one behind a stone block | the one on open ground showed only its shadow. The one behind the stone drew only the part overlapping the stone's side face | materials |
-| `q.property` and `query.can_fly` in a particle | a particle emitted by an entity animation takes its size from `q.property('bwiki:size')` and its color from `query.can_fly`. An entity with property 8 and no `can_fly`, and one with property 2 and `minecraft:can_fly` | large red for the first, small blue for the second. The emitting entity's values | particles |
 
 - A bound `#alpha` applied only when the image had `"alpha": "#alpha"`. Without the declaration even the integer 1 was invisible. With it, values between 0 and 1 drew as they are.
 - The result string of `('#if_' + boolean)` starts with `#`, so it was read again as a property name (EXP-30). That is why a `property_bag` key gives a value, and concatenating other text in front gives an empty property.
@@ -313,66 +312,27 @@ Measured in a panel inserted into `hud.root_panel` with `insert_front`. In the f
 
 ### 6.6 Block UV, controller override, sounds, languages, animation weight
 
-2026-11-19, same version. Claims about pack files outside JSON UI were measured with the block, entity, language and sound files of the same add-on. The game language was Korean, with fancy graphics. For sound, the Windows audio session API read the maximum peak of the game process session for 9 seconds.
+2026-11-19, same version. The records of this section are claims about pack files outside JSON UI and are in [Content and rendering claim measurements](./content-rendering-claims.mdx).
 
-| Item | Setup | Result | Related |
-|---|---|---|---|
-| Block UV, `texture_width` 1024 | block geometry `texture_width`/`texture_height` 1024, UV `[0, 0]` size `[341.333, 1024]` on every face. The texture is 48x18 (16px vertical bands red, green, blue, top 9 rows bright and bottom 9 rows dark) | the whole red band (bright top, dark bottom) | custom-items-and-blocks, models-and-geometry |
-| Part of the same texture | UV `[341.333, 0]` size `[341.333, 512]` | top half of the green band | custom-items-and-blocks |
-| 160x8 texture | UV `[307.2, 0]` size `[102.4, 1024]`, ten 16px bands | the fourth band | textures-and-atlases |
-| 48x18 texture with `texture_width` 16 | UV `[0, 0]` size `[16, 16]` | the whole texture (three bands, two brightnesses top and bottom) shrunk onto one face | custom-items-and-blocks |
-| Override of a vanilla player controller ID | only `controller.animation.player.crossbow` redefined in the RP (its initial state plays the vanilla short name `crossbow_hold`), no `player.entity.json`. Holding an unloaded crossbow in third person | aiming pose with both arms raised. After removing this file and re-entering, the vanilla pose (arms lowered) | items |
-| `sound_definitions.json` without the wrapper | no `format_version` and no `sound_definitions`, `{"juc.flat": {"category": "ui", "sounds": [{"name": "sounds/random/levelup"}]}}` | `/playsound juc.flat` peak 0.03, same as vanilla `random.levelup`. A name with no definition gave 0 | file-formats, sounds |
-| lang key only in English | two keys in `en_US.lang`, one of them in `ko_KR.lang`, `translate` in `/tellraw` | the key in both gave the Korean value, the key only in English gave the English value, a key in neither gave the key string as is | file-formats |
-| Empty lang value | `entity.bwiki:juc_named.name=` in `en_US` and `ko_KR`. `/damage @s 100 entity_attack entity ...` with that entity as the attacker, then `/kill @e[type=!player]` | death message `%entity.bwiki:juc_named.name`, and the `/kill` result also showed the key as is. Same when `ko_KR` had no line and only `en_US` had the empty value | file-formats |
-| Controller weight above 1 | `{"tilt": "q.property('bwiki:w')"}` in a state's `animations`, `tilt` is a 20 degree rotation on the z axis, property 0, 1, 2, 3 | 0 degrees, about 20, about 40, about 60. In proportion to the weight | animations-and-controllers |
-| One integer property as bits | `int` property 0 to 16383, a `play`/`stop` controller for each of bit 0 and bit 13 (`math.mod(math.floor(q.property('bwiki:bits') / 8192), 2) != 0`) | value 1 raised only the left box, 2 neither, 8192 only the right, 8193 both | entities |
-| `pre_animation` accumulation | one bone raised by `v.acc = v.acc + 1;` (no `q.delta_time`), another by `q.life_time * 60`, with the same factor | at around 216fps the accumulated one rose about 3.5 times faster | animations-and-controllers |
-| `creaking_eyes` alone | the only material of a box entity set to `creaking_eyes`. An opaque red texture and a texture with alpha 255/170/85/0 bands | in both day and night only the shadow showed and the box was not drawn | materials-and-shaders |
-| `creaking_eyes` drawn over | a white box (`entity_alphatest`) drawn, then a second render controller draws the same geometry again with `creaking_eyes`, the band texture and `ignore_lighting: true` | red painted only on the front face, the side faces kept the white body. The red was as bright at night as by day. All four alpha bands were painted with no difference | materials-and-shaders |
-| `texture_set` on a non-VV screen | a pack without the `pbr` capability, white texture with an emissive 255 MER | at night, the same brightness as a plain white box | rendering |
-
-- Block geometry UV mapped to the real texture as a ratio divided by `texture_width`/`texture_height`. The texture size does not need to match the geometry values. The test entities of this add-on also use 16x16 textures on 64x32 geometry and draw normally.
-- The non-square 48x18 and 160x8 terrain textures drew as they are on `material_instances` blocks. Their height is smaller than their width, so they were not cut into animation frames. Mipmaps at long distance were not checked.
-- An empty value was treated the same as a missing key. It cannot be used to hide the raw key.
-- `creaking_eyes` was not visible alone, and when drawn over the same geometry it showed only on faces whose depth matched the body. It looks like a material that draws only at equal depth, but the material definition was not checked. A comment in the vanilla creaking render controller also says this material is blended over another texture.
-- The spear variables were checked in the files, not measured in game. Vanilla 1.26.50 `player.entity.json` declares `variable.fp_melee_spear_use_attachable_rotation_z`, `tp_melee_spear_use_attachable_rotation_z`, `fp_melee_spear_attack_attachable_rotation_z` and `tp_melee_spear_attack_attachable_position_z` as `public`, and vanilla `spear.animation_controllers.json` reads `c.owning_entity->query.ticks_since_last_kinetic_weapon_hit`.
+- Block UV: [blocks](./content-rendering-claims.mdx#9-blocks)
+- Player controller override, controller weight, integer property bits, `pre_animation` accumulation: [entities, properties and animations](./content-rendering-claims.mdx#2-entities-properties-and-animations)
+- `sound_definitions.json` without the wrapper: [sounds](./content-rendering-claims.mdx#5-sounds)
+- lang keys and empty values: [languages and fonts](./content-rendering-claims.mdx#10-languages-and-fonts)
+- `creaking_eyes`, `texture_set` on a non-VV screen: [materials](./content-rendering-claims.mdx#6-materials)
+- Spear variables: [attachables](./content-rendering-claims.mdx#8-attachables)
 
 ### 6.7 Particle queries and counters, sound definitions, material files, biomes
 
-2026-11-19, same version. Particles were spawned with `/particle` or with `/scriptevent bwiki:juc_particle <effect> <variable> <value>` (spawns 3 blocks in front of the player's view with a `MolangVariableMap`). Values were read through the color in `particle_appearance_tinting` and the size in the billboard `size` expression.
+2026-11-19, same version. The records of this section are in [Content and rendering claim measurements](./content-rendering-claims.mdx).
 
-| Item | Setup | Result | Related |
-|---|---|---|---|
-| `q.camera_rotation(1)` in a particle | color `q.camera_rotation(1) == 0 ? red : green`, size `0.1 + abs(value) / 180 * 0.5`. View yaw about -45 degrees | red in both first and third person, minimum size (value 0) | particles |
-| `q.distance_from_camera` in a particle | fixed size, color `> 3 ? green : red`, about 5 blocks ahead | green (a value came through) | particles |
-| Expiration expression `q.distance_from_camera > 50` | same position, fixed size, yellow | not visible (expired at once) | particles |
-| `loop()` and `break` | `v.s = 0; loop(5, { v.s = v.s + 1; }); v.b = 0; loop(10, { v.b = v.b + 1; (v.b >= 3) ? { break; }; });` in `creation_expression` | `v.s` 5, `v.b` 3 | particles |
-| `per_render_expression` counter | emitter `v.n = 0;`, `v.n = v.n + 1; v.my = v.n;` in `particle_initialization.per_render_expression`, size `v.my`, 6 emitted at once | all six always had the same size and grew together. It did not become a per-particle number | particles |
-| `max_lifetime` expression counter | emitter `v.index = 0;`, `v.index = v.index + 1; return 2 + v.index * 2;` in `max_lifetime`, size `v.particle_lifetime * 0.025`, 5 particles | five size steps, the shortest-lived disappeared first | particles |
-| `??` reassignment in `creation_expression` | `variable.r0 = (variable.r0 ?? 3);` | 3 with `/particle`, script `variable.r0` 1 gave 1, 0 gave 0 | particles |
-| Entity variable | `v.ev = 1;` in the entity `pre_animation`, a particle emitted by that entity's animation reads `v.ev` | content log `unhandled request for unknown variable 'variable.ev'` | particles |
-| `pre_effect_script` | `"pre_effect_script": "v.pe = 1;"` on the same emit keyframe | the particle read 1 | particles |
-| `sounds` as a single object | `{"juc.obj": {"category": "ui", "sounds": {"name": "sounds/random/levelup"}}}` | played (peak 0.03) | file-formats |
-| `sound_definitions` inside `sounds.json` | only `{"sound_definitions": {"juc.insounds": {...}}}` in RP `sounds.json` | did not play (peak 0) | file-formats |
-| Material file name | `juc_alt:entity_alphatest` only in `materials/entity_1.material` | `Material "juc_alt" is referenced ... but not defined.` | materials-and-shaders |
-| Depth test off | `DisableDepthTest` and `DisableDepthWrite` in `+states` of `entity_alphatest`. One behind a stone block, one behind a white entity | both drawn over the block and the entity in front (inner faces also visible) | materials-and-shaders |
-| Entity `uv_anim` | material with `+defines USE_UV_ANIM`, `offset` `[0, "math.mod(math.floor(q.life_time * 2), 4) / 4"]`, `scale` `[1, 0.25]`, 4-frame vertical sheet | the frame changed every 0.5 seconds | render-controllers |
-| Bone name case | a bar in front of the face on attachable bones `Head` and `head` (pivot `[0, 24, 0]`), head moved up and down | both followed the head | items |
-| Chat brackets | `chat.type.text=%s %s` in `en_US` and `ko_KR`, chatting in a local world | brackets stayed as is, as in `<player name> hello juc` | file-formats |
-| Client biome | `format_version` `1.21.70`, `identifier` `"plains"` (no namespace), `fog_identifier` set to a red fog with start 4 and end 16 | the flat world turned to red fog (after the rain stopped) | biomes-and-dimensions |
-| Two-letter lang file | `texts/de.lang` with `juc.fb.both=DE_SHORT`, game option `game_language` set to `de_DE`, world re-entered | `EN_BOTH` (the English value). `de.lang` was not used | file-formats |
-| Graphics mode option | game option `graphics_mode` set to 1 (original value), 0, 3 and 2, read with `juc_gfx` (color from `deferred + 2 * fancy`) | 1 is fancy, 0 and 3 are both false, 2 has deferred true. The change applied at once without re-entering the world | render-controllers |
-| Fancy graphics off | `creaking_eyes` overlay entity with `graphics_mode` 0 | the front face bright red, the same as with fancy graphics | materials-and-shaders |
-| Deferred mode | `graphics_mode` 2 (this RP has no `pbr` capability), at night | the screen changed (night brightness, clouds). The `creaking_eyes` overlay became a red that is not bright. A box with an emissive 255 MER `texture_set` was as bright as a white box | rendering, materials-and-shaders |
-
-- `q.camera_rotation` was 0 in a particle regardless of the camera position. A particle shot in the view direction cannot be made with this query.
-- `q.distance_from_camera` made `> 3` true in the color expression, and with the expiration expression `> 50` the particle disappeared at once. In the code this value is already filled in the same context before the expiration expression is evaluated (the emitter update fills it before the particle loop), so the reading that the value is empty when the expiration expression is evaluated is wrong `{code}`. The reference point the distance is measured from is unknown (it reads as the difference between the emitter position and the position of some object, but it was not settled whether that object is the camera). In a follow-up measurement (Windows 1.26.65.1, 2026-11-20) the color expression `> 6 ? 0 : 1` was red at distance about 3 and green at about 12, and the expiration expression `< 6` survived at distances 9 and 13 and disappeared at 2 and 5, matching the real distance. But `> 6`, `> 60`, `> 6 ? 1 : 0` and `6 < q.distance_from_camera` showed no particle at any distance from 2 to 13, so only the `<` results are explained and the `>` results are not `{measured}`.
-- `??` kept a 0 passed by the script as a value. Reassigning with `v.x = (v.x ?? default)` in `creation_expression` did not erase the script value.
-- The `max_lifetime` expression was evaluated once per particle, so an emitter counter could give each particle a number. With `per_render_expression`, every particle read the same value.
-- Attachables using `binding` drew the box at the feet (root) with 1.12.0 geometry. After changing to 1.16.0, neither the `'rightitem'` string binding nor the `q.item_slot_to_bone_name(c.item_slot)` binding put the box anywhere on screen, and there was no log. So string binding, attachable `uv_anim`, and `loop` and `slot.hotbar` lookups in attachable `pre_animation` could not be judged and were removed from the add-on.
-- Language and graphics mode were changed through the game options with the bedrock MCP `options_get`/`options_set` tools instead of the Ore UI settings screen, and set back to the original values (`graphics_mode` 1, `game_language` `ko_KR`) after the measurement. The language applied only after re-entering the world.
-- `graphics_mode` 2 made the deferred query true even in a world with a pack that has no `pbr` capability. The option was written directly, so this result does not tell whether the VV choice on the settings screen is blocked. In this state the `texture_set` emission of that pack did not show.
+- Particle queries and counters, `loop()`, `??`, entity variables, `pre_effect_script`: [particles](./content-rendering-claims.mdx#4-particles)
+- `sounds` as an object and `sound_definitions` inside `sounds.json`: [sounds](./content-rendering-claims.mdx#5-sounds)
+- Material file name, depth test off, fancy graphics off, deferred mode: [materials](./content-rendering-claims.mdx#6-materials)
+- Entity `uv_anim`, graphics mode option: [render controllers and textures](./content-rendering-claims.mdx#3-render-controllers-and-textures)
+- Bone name case, attachables using `binding`: [attachables](./content-rendering-claims.mdx#8-attachables)
+- Client biome: [fog and biomes](./content-rendering-claims.mdx#7-fog-and-biomes)
+- Chat brackets, two-letter lang file: [languages and fonts](./content-rendering-claims.mdx#10-languages-and-fonts)
+- How particles were spawned and how the game options were changed: [method](./content-rendering-claims.mdx#1-method)
 
 ### 6.8 Binding existence, clip_ratio, alpha, size expressions, variable expressions, font size
 
