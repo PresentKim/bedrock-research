@@ -127,7 +127,7 @@ Windows 1.26.65.1 클라이언트의 모듈 type 열거값은 `invalid`, `resour
 
 - **팩 종류는 폴더가 아니라 `modules`의 type으로 결정**된다: `"type": "data"` = 행동팩, `"type": "resources"` = 리소스팩, `"type": "script"` = 스크립트 모듈. 스크립트를 쓰는 BP에는 `data`와 `script` 모듈을 함께 둔다.
 - **BP와 RP의 `header.uuid`는 서로 달라야** 하며, UUID는 유효한 v4여야 한다.
-- **스크립트 모듈 예시** *(확인됨)*:
+- **스크립트 모듈 예시** `{커뮤니티 확인}`:
 
   ```json
   {"type":"script","language":"javascript","uuid":"<uuid>","version":"1.0.0","entry":"scripts/main.js"}
@@ -147,11 +147,11 @@ Windows 1.26.65.1 클라이언트의 모듈 type 열거값은 `invalid`, `resour
 
 ### format_version 2와 3 차이
 
-- **v3은 모든 버전을 문자열로**: `"version": "1.0.0"`, `"min_engine_version": "1.26.50"`, 모듈·의존성 버전도 문자열. `format_version` 자체는 숫자 3. v3에서 배열을 쓰면 `[Packs][error] header -> version: expected an object / invalid string`. format 2 + 배열은 계속 로드된다. BP가 RP에 의존하면 두 팩을 일관되게 유지. *(확인됨)*
+- **v3은 모든 버전을 문자열로**: `"version": "1.0.0"`, `"min_engine_version": "1.26.50"`, 모듈·의존성 버전도 문자열. `format_version` 자체는 숫자 3. v3에서 배열을 쓰면 `[Packs][error] header -> version: expected an object / invalid string`. format 2 + 배열은 계속 로드된다. BP가 RP에 의존하면 두 팩을 일관되게 유지. `{커뮤니티 확인}`
 - **pack settings(`settings`)는 v3 필요**. 26.50(2026-09-15)에서 v3가 정식 사용 가능해졌고, 그 전에는 실험적/프리뷰.
 - **manifest v3 + 서브팩**이면 서브팩 슬라이더의 `Resolution: ` 접두사가 사라진다. 스키마: https://github.com/Mojang/bedrock-samples/blob/f5b651000f52b66334c968f3ccf1aca7950cd6ee/metadata/json_schemas/client_server/packaging/3.0.0/Manifest.json
 - **함수의 `execute as @e`가 업데이트 후 오류로 표시**되던 것을 manifest `format_version`을 1에서 2로 올려 해결.
-- **v3 + 코스메틱 모델이 서버에서만 보이고 월드/UI에서는 안 보인** 사례(1.26.0.02). *(single report, unanswered)*
+- **v3 + 코스메틱 모델이 서버에서만 보이고 월드/UI에서는 안 보인** 사례(1.26.0.02). `{단일 보고}` (답 없음)
 - **커스텀 음반(music disc) 예시에서는 manifest `version`이 배열 `[1,0,0]`**이어야 했다(format 2 기준).
 
 ### min_engine_version
@@ -161,8 +161,8 @@ Windows 1.26.65.1 클라이언트의 모듈 type 열거값은 `invalid`, `resour
 - **너무 낮으면** 옛 명령어 파서가 적용된다: 1.19.50 미만이면 새 `execute`가 "Unexpected @a/@e"로 파싱 실패, 1.19.0이면 `summon x ~~~ 0 0 ninja` 같은 문법도 실패(Blockception 생성 BP가 1.19.0을 사용). 최신 값 권장(예: `[1,21,110]` 이상).
 - **옛 manifest(예: 1.21.30)도 26.0 이후 계속 로드**되며, 그보다 새로운 기능만 못 쓴다.
 - **`[1,21,130]`으로 올려 몹/스폰 알 누락 항목이 해결**된 사례.
-- **반대 사례**: format 2 manifest에 `[1,26,0]`을 썼을 때 팩이 목록에 보이지 않다가 min engine 수정으로 해결된 보고. *(단일 보고)*
-- **bridge. 에디터는 `min_engine_version`으로 팩을 인식**하며, 1.26.0은 인식되지 않아 1.26.10/1.26.20을 권장받았다. *(단일 보고)*
+- **반대 사례**: format 2 manifest에 `[1,26,0]`을 썼을 때 팩이 목록에 보이지 않다가 min engine 수정으로 해결된 보고. `{단일 보고}`
+- **bridge. 에디터는 `min_engine_version`으로 팩을 인식**하며, 1.26.0은 인식되지 않아 1.26.10/1.26.20을 권장받았다. `{단일 보고}`
 - **블록 format 게이팅에는 `min_engine_version`이 영향을 주지 않는다.**
 - **핫픽스 번호는 쓰지 않는다**: 0으로 끝나는 최신 릴리스 번호(`"1.26.10"`, format 1/2는 `[1, 26, 10]`)를 쓴다. `26.1` 같은 게임 표기는 실패한다. 26.x 이후에도 `[1, 26, 0]` 형식은 그대로라는 모더레이터 답변이 있다.
 
@@ -187,8 +187,8 @@ Windows 1.26.65.1 클라이언트의 모듈 type 열거값은 `invalid`, `resour
 
 ### product_type과 업적
 
-- **1.26.50 이전**: `"metadata": {"product_type": "addon"}`을 넣으면 BP/스크립트를 써도 업적이 유지되었다(스크립트·컴포넌트를 제한하지 않음). 위키: wiki.bedrock.dev/guide/project-setup#bp-manifest. *(확인됨)*
+- **1.26.50 이전**: `"metadata": {"product_type": "addon"}`을 넣으면 BP/스크립트를 써도 업적이 유지되었다(스크립트·컴포넌트를 제한하지 않음). 위키: wiki.bedrock.dev/guide/project-setup#bp-manifest. `{커뮤니티 확인}`
 - **형식**: `product_type`은 BP manifest의 `metadata`에 문자열로만 쓴다. 객체 `{"addon": {}}`는 "Required '/metadata/product_type/product_type' element is the wrong type in pack manifest"로 거부된다. 치트나 실험 토글이 필요 없는 팩에서만 의미가 있다.
-- **1.26.50 이후** *(상충)*: 외부(비 Marketplace) 애드온은 더 이상 업적 친화적일 수 없고 의도된 제한이라는 답변이 있었다(2026-09-19). 이 변경은 변경 로그에 없었고 MCPE-242529("Considered an Exploit")와 피드백 글(https://feedback.minecraft.net/hc/en-us/community/posts/48931692849677-Revert-the-change-of-disabling-achievements-for-third-party-add-ons)이 있다. 이후 26.52에서 수정되어 업적이 다시 유지된다는 보고(2026-10-11)와, 26.60에서도 꺼질 수 있으나 UI 메시지가 깨져 판단이 어렵다는 보고(2026-10-27)가 엇갈린다. 실제 상태는 판마다 확인한다.
+- **1.26.50 이후** `{충돌}`: 외부(비 Marketplace) 애드온은 더 이상 업적 친화적일 수 없고 의도된 제한이라는 답변이 있었다(2026-09-19). 이 변경은 변경 로그에 없었고 MCPE-242529("Considered an Exploit")와 피드백 글(https://feedback.minecraft.net/hc/en-us/community/posts/48931692849677-Revert-the-change-of-disabling-achievements-for-third-party-add-ons)이 있다. 이후 26.52에서 수정되어 업적이 다시 유지된다는 보고(2026-10-11)와, 26.60에서도 꺼질 수 있으나 UI 메시지가 깨져 판단이 어렵다는 보고(2026-10-27)가 엇갈린다. 실제 상태는 판마다 확인한다.
 - **Marketplace 버튼을 지우는 팩**도 업적을 끈다.
 - 그 이전에도 "BP를 켜면 업적이 꺼지고 우회 불가"라는 답변이 있었으나 이는 `product_type` 이전 관행에 대한 것이다. *(대체됨)*

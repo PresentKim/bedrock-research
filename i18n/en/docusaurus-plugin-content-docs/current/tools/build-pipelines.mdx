@@ -111,18 +111,18 @@ Get a logger with `Logger.getLogger("main", "tag1")` and change the level with `
 
 The following covers the GDK path move, Regolith releases and bugs, the filter ecosystem, other build tools, TypeScript development tools, community libraries and Molang tools, gathered in the community survey.
 
-Terms such as `(confirmed)`, `(single report)` and `(conflicting)` are reliability markers of the reports.
+Verification level marks follow the [legend on the wiki home page](../index.mdx#verification-level-marks).
 
 ### The GDK path move and deployment
 
-- **Paths**: from 1.21.120 (2025-10) it uses `%AppData%\Minecraft Bedrock\Users\Shared\games\com.mojang` (shared) and `...\Users\<per-user number>\games\com.mojang` (per user). The old UWP LocalState path is not used. There were cases where dev packs looked erased during the move. Keep development packs in Shared. Migration docs: `https://learn.microsoft.com/en-us/minecraft/creator/documents/gdkpcprojectfolder?view=minecraft-bedrock-stable` , `https://jaylydev.github.io/posts/bedrock-gdk/#restore-your-data` (confirmed)
+- **Paths**: from 1.21.120 (2025-10) it uses `%AppData%\Minecraft Bedrock\Users\Shared\games\com.mojang` (shared) and `...\Users\<per-user number>\games\com.mojang` (per user). The old UWP LocalState path is not used. There were cases where dev packs looked erased during the move. Keep development packs in Shared. Migration docs: `https://learn.microsoft.com/en-us/minecraft/creator/documents/gdkpcprojectfolder?view=minecraft-bedrock-stable` , `https://jaylydev.github.io/posts/bedrock-gdk/#restore-your-data` `{community confirmed}`
 - **Duplicate dev packs**: there is a case where duplicate dev packs appeared in the numbered folder during migration and `/reload all` seemed unable to see new files. If a duplicate pack (an old copy) exists, changes are not reflected.
-- **Multiplayer texture cache**: after GDK it is under `%temp%/Minecraft Bedrock`. Another report says the resource pack cache is at `%LOCALAPPDATA%\Temp\minecraftpe\packcache\resource` and `AppData\Roaming\Minecraft Bedrock\premium_cache` has only skin data (**conflicting**). OneDrive can also redirect the folder. The content log accumulates in `AppData/Roaming/Minecraft Bedrock/logs` and can grow to tens of GB if left on. Vanilla game files are under `C:\XboxGames`.
+- **Multiplayer texture cache**: after GDK it is under `%temp%/Minecraft Bedrock`. Another report says the resource pack cache is at `%LOCALAPPDATA%\Temp\minecraftpe\packcache\resource` and `AppData\Roaming\Minecraft Bedrock\premium_cache` has only skin data `{conflict}`. OneDrive can also redirect the folder. The content log accumulates in `AppData/Roaming/Minecraft Bedrock/logs` and can grow to tens of GB if left on. Vanilla game files are under `C:\XboxGames`.
 - **`@minecraft/core-build-tasks` local-deploy**: raise it to ^5.5.0 (or latest), change the product in `.env` to `MINECRAFT_PRODUCT="BedrockGDK"` (the old values were MinecraftW8P/UMP), and run `npm run local-deploy -- --watch`. Creating a new starter project also works.
 - **Junction script**: LuckedCoronet's PowerShell `mc-link.ps1` gist makes a junction to com.mojang. For Linux/macOS, see minecraft-linux.github.io.
 - **Support status after the GDK switch**: MCPE-tool (jeanmajid) supports the GDK path. The bridge. compile target setting follows `https://wiki.bedrock.dev/guide/project-setup#windows` . Haze (a world file moving tool) does not work after the path change.
 - **UWP servers**: UWP is going away, but as of 2025-11 many servers still used 1.21.94 UWP.
-- **Block mismatch between platforms**: after the GDK switch, "blocks between client and server do not match" can occur between platforms. Match the versions on both sides. (single report)
+- **Block mismatch between platforms**: after the GDK switch, "blocks between client and server do not match" can occur between platforms. Match the versions on both sides. `{single report}`
 - **loopback exemption**: the loopback exemption/UPnP loopback in the BDS docs was a UWP constraint and is not needed on GDK. The old way is `CheckNetIsolation.exe LoopbackExempt -a -p=<SID>`.
 - **Running multiple instances**: on GDK you have to duplicate the installation (a duplicated exe skips the start screen).
   - gdk-version-archiver (`gdkva`, github.com/conmaster2112/gdk-version-archiver, npm, needs Bun): `gdkva archive --tag=stable`, `gdkva archive *windowsbeta* --tag=preview`, `gdkva list`, `gdkva run --tag=stable`.
@@ -132,7 +132,7 @@ Terms such as `(confirmed)`, `(single report)` and `(conflicting)` are reliabili
   - MCLauncher (`https://github.com/MCMrARM/mc-w10-version-launcher`) supports GDK builds through PR #359.
 - **Version archiving**: `urls.json` of GdkLinks (`https://raw.githubusercontent.com/MinecraftBedrockArchiver/GdkLinks/refs/heads/master/urls.json`) collects download URLs per version, and the Archiver (`https://github.com/MinecraftBedrockArchiver/Archiver`) preserves builds (the Viewer shows only metadata and the archive is about 1TB). Old preview builds become unavailable after a few weeks. The Xbox app downloads `.msixvc` from assets2.xboxlive.com.
 - **User folder names**: the `Users\<number>` folder name is the FNV-1 64 (not FNV-1a) hash of the UTF-8 bytes of the XUID decimal string. There is an explanation that the game uses fnv1_64 for palette block sorting and fnv1a_32 for block hashes.
-- **dev pack location**: there is a report that `development_*_packs` is recognized even when placed in the same folder as `Minecraft.Windows.exe` (worlds are in com.mojang). (single report)
+- **dev pack location**: there is a report that `development_*_packs` is recognized even when placed in the same folder as `Minecraft.Windows.exe` (worlds are in com.mojang). `{single report}`
 - **MCBE protocol URIs**: in the late 2025-10 GDK release, most did not work except Editor, and were restored later.
 - **Linux path**: under Wine/GDK, `development_*_pack` inside com.mojang does not work (cause unknown). mcpelauncher uses two locations, native and flatpak.
 
@@ -143,9 +143,9 @@ Terms such as `(confirmed)`, `(single report)` and `(conflicting)` are reliabili
   - Forcing Vulkan on AMD crashes while NVIDIA worked. There is a case of signing in to preview with GE-Proton (2026-04).
   - Structure export fails because of file dialog problems.
   - Settings reset in a new prefix, so back up `options.txt` or make it read-only.
-  - There is a report that the Android build on the same machine is about twice as fast on AMD. (single report)
+  - There is a report that the Android build on the same machine is about twice as fast on AMD. `{single report}`
 - **Linux launchers**: BedrockOnLinux (`https://github.com/Wyze3306/BedrockOnLinux`, installs the release and Preview from Microsoft mirrors with your own account and runs multiple instances for testing), the umu/WineGDK GE-Proton launcher, mcpelauncher-linux (`https://github.com/minecraft-linux/mcpelauncher-manifest`), mcarm.
-- **macOS**: there are macrock (`https://github.com/vincenzopio/macrock`), blockintosh.multision.dev and the nyx wrapper. A beta tester reports that Blockintosh (`https://www.blockintosh.org/docs.html`) runs Bedrock including Preview for free (*single report*). PlayCover on Apple Silicon runs the iOS version but cannot log in. Development is often done in a Windows VM, but Parallels blocks Store installs and has no arm64 build.
+- **macOS**: there are macrock (`https://github.com/vincenzopio/macrock`), blockintosh.multision.dev and the nyx wrapper. A beta tester reports that Blockintosh (`https://www.blockintosh.org/docs.html`) runs Bedrock including Preview for free `{single report}`. PlayCover on Apple Silicon runs the iOS version but cannot log in. Development is often done in a Windows VM, but Parallels blocks Store installs and has no arm64 build.
 - **Windows and Android launchers**: Amethyst, LeviLaunchroid (`docs.levimc.org/LeviLaunchroid/`, there is no Android mod loader), Bedrock Launcher (pins old versions from the UWP era). LeviLauncher (GPL-3.0) supports version isolation and .zip/.dll mods, and LeviLamina integration works only on GDK builds. Copper Golem Launcher (`https://github.com/copper-lamp/CopperGolemLauncher`) is a Rust launcher aimed at Windows, Android and Linux, still in testing.
 
 ---
@@ -164,7 +164,7 @@ Terms such as `(confirmed)`, `(single report)` and `(conflicting)` are reliabili
 - **Contribution rules**: fork and target the `develop` branch (`main` is for releases and lags behind). New features are released after the documentation (the docs repository, Bedrock-OSS/regolith-schemas) is ready. Logo and assets: `https://github.com/Bedrock-OSS/regolith-docs/tree/main/docs/_static`
 
 #### GDK path and export target
-- **Recommended method**: set the user environment variable `COM_MOJANG` to the folder that contains `development_behavior_packs` and `development_resource_packs`. Another way is to write the path in config.json with an `exact` target, but it differs per machine, so an environment variable is better for teams. (confirmed)
+- **Recommended method**: set the user environment variable `COM_MOJANG` to the folder that contains `development_behavior_packs` and `development_resource_packs`. Another way is to write the path in config.json with an `exact` target, but it differs per machine, so an environment variable is better for teams. `{community confirmed}`
 - **When environment variables take effect**: an environment variable is visible only to processes started after it is set. Close all VS Code windows, not only the integrated terminal. Most reports of "it still exports to the old path" were this case.
 - **A method that does not work**: `"COM_MOJANG": "..."` inside the profile `export` block does not work with `"target": "development"`. Use an environment variable or `"target": "local"`/`exact`.
 - **Environment variable list**: `COM_MOJANG`, `COM_MOJANG_PREVIEW`, and `COM_MOJANG_PACKS`, `COM_MOJANG_WORLDS`, `COM_MOJANG_PACKS_PREVIEW` and `COM_MOJANG_WORLDS_PREVIEW`, which take priority in each context. Usually none are set. Inside an export path, `${var}` and `$var` can be used along with `%var%` (1.6.0). Docs: `https://regolith-docs.readthedocs.io/en/stable/project-configuration/export-targets/#export-target-environment-variables` , how the path is determined: `https://regolith-docs.readthedocs.io/en/1.6.0/project-configuration/export-targets/#how-does-regolith-determine-the-com-mojang-path`
@@ -186,7 +186,7 @@ Terms such as `(confirmed)`, `(single report)` and `(conflicting)` are reliabili
   - user config `tmp_dir`
   - the Bun filter type (`"runWith": "bun"`)
   - runner executable specification (`node_runner`, `deno_runner`, `dotnet_runner`)
-  - `node_runner_override` (for example `regolith config node_runner_override *:bun`, `my_filter:node`). Only Node filters can be overridden. In an unofficial comparison Node was the fastest and Deno could slow down on CommonJS (single report).
+  - `node_runner_override` (for example `regolith config node_runner_override *:bun`, `my_filter:node`). Only Node filters can be overridden. In an unofficial comparison Node was the fastest and Deno could slow down on CommonJS `{single report}`.
   - `--unsafe` (tracking of edited export files, that is, skipping the deletion safety check. Benchmark 7.34s, then 6.64s (new safe), then 6.35s (unsafe))
   - parallelized directory sync, multiple export targets
   - `size_time_check` became the default and `symlink_export` also graduated from experiment.
@@ -360,7 +360,7 @@ Terms such as `(confirmed)`, `(single report)` and `(conflicting)` are reliabili
   - It has an add-on maker, an embedded BDS and validation. It can also be used as an npm package, a Regolith filter and for CI/CD.
   - It provides templates, npm modules, entity JSON and armor examples, and a script box add-on (runs code snippets).
   - The `.mcstructure` renderer handles only basic shapes (full cube, trapdoor).
-  - Evaluation: there is an opinion that the Add button makes you choose a template first and does not suit mobile, so it is not recommended as a long-term tool. When a basic pack was tried with Mojang's web "Add-On maker" on 2026-10-21, the export was broken and the two export buttons did the same thing. (single report)
+  - Evaluation: there is an opinion that the Add button makes you choose a template first and does not suit mobile, so it is not recommended as a long-term tool. When a basic pack was tried with Mojang's web "Add-On maker" on 2026-10-21, the export was broken and the two export buttons did the same thing. `{single report}`
 - **mccreator.tools**: Waypoint Studios, Sparks, Shapescape tools.
 - **Workspace Creator and Compiler**: for the `development_*_packs` path of 1.21.120+. A symlink is recommended as a simpler alternative.
 

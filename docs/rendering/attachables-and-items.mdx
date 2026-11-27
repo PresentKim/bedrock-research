@@ -23,7 +23,7 @@ sources: [private-research, bedrock-wiki, bedrock-samples, repo-guide]
 
 ## 바인딩
 
-- 지오메트리 루트 본에 `"binding": "q.item_slot_to_bone_name(c.item_slot)"`이 필요하다. `binding`은 지오메트리 포맷 1.16.0 이상이어야 한다(1.12.0은 무시해서 아이템이 발밑에 생긴다). `confirmed`.
+- 지오메트리 루트 본에 `"binding": "q.item_slot_to_bone_name(c.item_slot)"`이 필요하다. `binding`은 지오메트리 포맷 1.16.0 이상이어야 한다(1.12.0은 무시해서 아이템이 발밑에 생긴다). 커뮤니티 보고는 여러 사람이 확인했지만, 위키의 Windows 실측에서는 1.12.0에서 상자가 발밑에 그려졌고 1.16.0으로 고친 뒤에는 `'rightitem'` 결합과 `q.item_slot_to_bone_name(c.item_slot)` 결합 모두 상자가 화면에 보이지 않았다([실측 기록](../design/content-rendering-claims.mdx#8-어태처블)). `{충돌}`
 - 바인딩된 최상위 본은 하나만 두고 나머지는 자식으로 둔다. 플레이어 본과 같은 이름(`body`)은 바꾼다.
 - Blockbench에서는 루트 폴더 우클릭, Edit binding, item slot 순서다.
 - 바인딩이 어긋나 보이면 아이템 본들을 감싸는 루트 본을 추가한다. 어태처블 본 구조는 플레이어의 손 본을 따라야 한다. `q.item_slot_to_bone_name('leftArm')`처럼 플레이어 지오메트리(`humanoid.geo.json`)의 본 이름에 바인딩할 수도 있다.
@@ -110,7 +110,7 @@ sources: [private-research, bedrock-wiki, bedrock-samples, repo-guide]
 - 아이템 텍스처 애니메이션은 불가능하다. 본 보이기 애니메이션, 렌더 컨트롤러 텍스처 교체, 설치할 수 없는 애니메이션 블록으로 흉내 낸다.
 - 어태처블의 커스텀 머티리얼은 존중되지 않는다는 보고(2026-01)가 있다.
 - 어태처블에서 렌더 컨트롤러의 `light_color_multiplier`, `overlay_color`, `held_item_ignores_lighting` 같은 필드는 동작하지 않는다. 어태처블 색을 `color`나 `overlay_color`로 바꾸는 방법은 답이 없었다.
-- `uv_anim`은 어태처블에서 안 된다는 노트(2025-10)와, 어태처블 렌더 컨트롤러의 `uv_anim`(`offset: [0,"math.mod(math.floor(query.life_time*12),12)/12"]`, `scale:[1,"1/12"]`)이나 프레임별 텍스처 배열로 플립북이 된다는 노트(2026-06)가 어긋난다(`conflicting`, 최신 보고는 동작).
+- `uv_anim`은 어태처블에서 안 된다는 노트(2025-10)와, 어태처블 렌더 컨트롤러의 `uv_anim`(`offset: [0,"math.mod(math.floor(query.life_time*12),12)/12"]`, `scale:[1,"1/12"]`)이나 프레임별 텍스처 배열로 플립북이 된다는 노트(2026-06)가 어긋난다(`{충돌}`, 최신 보고는 동작).
 
 ## 글로우
 
@@ -118,7 +118,7 @@ sources: [private-research, bedrock-wiki, bedrock-samples, repo-guide]
 
 ## 조명 끄기
 
-- 렌더 컨트롤러 `ignore_lighting`이 어태처블에서 안 된다는 노트와, `ignores_lighting`에 머티리얼 `"-defines": ["FANCY"]`를 함께 쓰면 된다는 노트가 어긋난다(`conflicting`).
+- 렌더 컨트롤러 `ignore_lighting`이 어태처블에서 안 된다는 노트와, `ignores_lighting`에 머티리얼 `"-defines": ["FANCY"]`를 함께 쓰면 된다는 노트가 어긋난다 `{충돌}`.
 - `filter_lighting: false`는 "Value 'false' not allowed"로 거부되고 `true`만 받는다. 손에 든 아이템 글로우는 클라이언트 엔티티 `held_item_ignores_lighting`(bedrock-samples 프리뷰의 `allay.entity.json` 참고)인데, `held_item`을 참조하는 것은 모두 어태처블을 제외하므로 어태처블 자체를 발광 머티리얼로 만든다. 어태처블은 전반적으로 버그가 많다(MCPE-241087).
 
 ## 파티클과 사운드
@@ -141,10 +141,10 @@ sources: [private-research, bedrock-wiki, bedrock-samples, repo-guide]
 - `controller.render.armor`는 옛것이다. `controller.render.armor.v2`(인간형 몹)와 `controller.render.armor.player`(플레이어, 별도 파일 필요)를 쓴다.
 - 갑옷 지오메트리는 `models/entity/`에 두고 렌더 컨트롤러 part visibility가 각 본을 켜야 한다. 애니메이션 갑옷은 `.player` 식별자를 가진 어태처블에 애니메이션을 추가한다.
 - 갑옷 어태처블(포맷 1.21.130)의 빈 `pre_animation: []`이 오류를 내서 지우자 해결됐다.
-- 일부 스킨에서 커스텀 갑옷 팔 본이 따라오지 않는 문제에 폴더 이름 변경이 제안됐다(`unverified`).
+- 일부 스킨에서 커스텀 갑옷 팔 본이 따라오지 않는 문제에 폴더 이름 변경이 제안됐다 `{미검증}`.
 - 몹에 갑옷·아이템을 렌더링하려면 클라이언트 엔티티에 정확히 `"enable_attachables": true`가 있어야 한다. 철자가 틀리면 엔티티가 투명해진다. 손에 든 것과 입은 것 두 지오메트리가 겹치면 렌더 컨트롤러 조건과 쿼리로 고친다.
 - 바닐라 갑옷 어태처블에는 아기용 지오메트리가 하나 더 있다(예: `geometry.humanoid.baby.armor.helmet`). 어태처블이 `variable.use_baby_geo = query.is_baby;`를 설정하고 렌더 컨트롤러가 `variable.use_baby_geo ? Geometry.baby : Geometry.default`로 고른다. 그래서 `minecraft:is_baby`가 없는 커스텀 엔티티는 아기 갑옷을 받지 않는다.
-- 겉날개: 망토 텍스처가 겉날개 텍스처 전체를 덮어쓰고, 추가 지오메트리 텍스처는 망토와 함께 깨진다(미해결). 편집한 커스텀 겉날개 모델이 깨져 보이면, 커스텀 애니메이션을 쓰지 않는 한 피벗보다 편집 중 모델이 중심에서 밀린 것이 원인일 가능성이 크다는 답이 있다(`single report`). 멀티플레이에서 여러 플레이어의 겉날개가 같은 망토 텍스처로 보이는 버그는 `textures/models/armor/elytra` 경로를 마지막으로 불러온 망토 텍스처가 덮어써서 생긴다는 설명이 있고, 겉날개가 다른 텍스처 경로를 가리키게 하는 리소스 팩으로 플레이어마다 자기 망토가 보이게 한 사례가 있다(일부 겉날개 모습이 빠지는 부작용 보고, `single report`).
+- 겉날개: 망토 텍스처가 겉날개 텍스처 전체를 덮어쓰고, 추가 지오메트리 텍스처는 망토와 함께 깨진다(미해결). 편집한 커스텀 겉날개 모델이 깨져 보이면, 커스텀 애니메이션을 쓰지 않는 한 피벗보다 편집 중 모델이 중심에서 밀린 것이 원인일 가능성이 크다는 답이 있다 `{단일 보고}`. 멀티플레이에서 여러 플레이어의 겉날개가 같은 망토 텍스처로 보이는 버그는 `textures/models/armor/elytra` 경로를 마지막으로 불러온 망토 텍스처가 덮어써서 생긴다는 설명이 있고, 겉날개가 다른 텍스처 경로를 가리키게 하는 리소스 팩으로 플레이어마다 자기 망토가 보이게 한 사례가 있다(일부 겉날개 모습이 빠지는 부작용 보고, `{단일 보고}`).
 - VV에서 바닐라 갑옷 장식을 MERS PNG로 발광시키려 한 시도(min_engine 1.26.0, PBR·VV capability 설정)는 빛나지 않았다(미해결).
 
 ## 낚싯줄

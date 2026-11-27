@@ -68,7 +68,7 @@ MS Learn 예제는 `settings`에 `label`을 여러 개 넣어 팩과 서브팩 �
 
 - **구조**: manifest `"subpacks": [{"folder_name": "...", "name": "...", "memory_tier": 0}]`, 폴더는 `subpacks/<name>/`, 서브팩마다 manifest 불필요. 서브팩 파일이 기본 팩의 같은 경로 파일을 덮어쓴다. 월드 밖의 팩 설정에서만 선택 가능하고 월드 안에서는 바꿀 수 없다. 키 이름은 글에 따라 `memory_tier`/`memory_performance_tier`로 달랐다. 위키: https://wiki.bedrock.dev/concepts/subpacks
 - **기본 선택**: 기기가 지원하는 가장 높은 memory tier, 동률이면 배열의 마지막. `memory_tier` 1단계는 RAM 0.25GB(256MB로 계산한 설명도 있음)이고 `0`은 모든 기기가 선택할 수 있다.
-- **BP 서브팩 함정** *(상충)*: 한 사례는 RP가 BP에 의존하면 BP 서브팩 전환이 깨져 의존성을 제거해 해결. 26.13 시기 다른 보고는 BP 서브팩이 BP가 RP에 의존할 때만 적용되며, 설정을 떠나면 슬라이더가 애드온을 꺼버리고 항상 마지막 서브팩으로 돌아간다고 했다.
+- **BP 서브팩 함정** `{충돌}`: 한 사례는 RP가 BP에 의존하면 BP 서브팩 전환이 깨져 의존성을 제거해 해결. 26.13 시기 다른 보고는 BP 서브팩이 BP가 RP에 의존할 때만 적용되며, 설정을 떠나면 슬라이더가 애드온을 꺼버리고 항상 마지막 서브팩으로 돌아간다고 했다.
 - **블록 텍스처를 담은 서브팩**은 각 서브팩에 `blocks.json`/텍스처가 없으면 깨진다(미해결). 서브팩 폴더 밖 파일을 읽지 못하는 문제는 2026-07-05 베타/핫픽스의 새 버그로 의심. 루트 기본값에 이름을 붙일 수 없음.
 - **BP 서브팩은 지원되지 않고 BP 설정 기능이 계획 중**이라는 2026-01 언급이 있으나, 이후 위 BP 서브팩 사용 사례들이 있고 2026-08에는 BP와 RP 모두 `settings`를 받으며 BP 서브팩도 된다는 답변이 나왔다.
 - **CurseForge 같은 비 Marketplace 팩**은 서브팩 폴더를 바꿔 끼우는 방식으로 편집 가능.
@@ -121,7 +121,7 @@ if (settings["wiki:show_text"] === true) {
 
 - **설정 타입**: label, toggle, slider(숫자), dropdown(문자열), 그리고 프리뷰의 `multiselect`(2026-08 등장, 최대 20개 토글을 하나로 묶는다고 설명되나 실제로는 dropdown처럼 동작: 버그 또는 미완성). `multiselect`는 26.60 목록에 올랐지만 2026-10에 multiselect 설정이 든 팩의 임포트가 실패한다는 보고가 있다. 설정 개수 한도는 약 32개다(MS 문서). 텍스트 입력은 나올 가능성이 낮다.
 - **읽는 법**: RP Molang `query.is_pack_setting_enabled('ns:id')`(2025-10-29 기준 실험 아님, `get_pack_setting`보다 권장), BP 스크립트 `World.getPackSettings`(베타). 토글은 월드 안에서 attachables·애니메이션·Molang에 영향을 주고 JS 설정도 바꿀 수 있다. 사용 중인 서브팩은 BP에서 감지할 수 없다.
-- **설정 이름 로컬라이제이션**: 설정의 이름과 dropdown 선택지에 lang 키를 쓸 수 있다. 정해진 키 규칙은 없고 `pack.setting.<namespace>.<id>.name` 형식이 제안됐다. *(단일 보고)*
+- **설정 이름 로컬라이제이션**: 설정의 이름과 dropdown 선택지에 lang 키를 쓸 수 있다. 정해진 키 규칙은 없고 `pack.setting.<namespace>.<id>.name` 형식이 제안됐다. `{단일 보고}`
 - **파티클에서 설정을 실시간 반영**하려면 `emitter_lifetime_once`(시작 시 1회 평가) 대신 `emitter_lifetime_expression`을 쓴다.
 - **멀티플레이에서는 개별 설정 불가**하고 글로벌 리소스 설정이 우선한다. 클라이언트별 적용 여부는 미해결.
 - 문서: https://learn.microsoft.com/en-us/minecraft/creator/reference/content/addonsreference/packmanifest?view=minecraft-bedrock-stable#settings---manifest-version-3-experimental , https://learn.microsoft.com/en-us/minecraft/creator/documents/addons/custompacksettings?view=minecraft-bedrock-stable . Mojang은 레퍼런스 문서가 자동 갱신되지 않는다고 밝혔다.
@@ -147,8 +147,8 @@ if (settings["wiki:show_text"] === true) {
 
 > 재질, 렌더링, 셰이더 상세는 rendering 섹션이 담당한다. 여기서는 manifest와 직결된 사실만 둔다. VV와 RTX 자산은 [Vibrant Visuals와 RTX](../rendering/vibrant-visuals-and-rtx.mdx)를 본다.
 
-- **VV는 RP manifest에 최상위 `"capabilities": ["pbr"]`(배열)이 있어야 유지**된다. 없으면 Fancy로 전환되며 툴팁 "Vibrant Visuals requires a supported device and is not compatible with Marketplace Texture Packs or Worlds". manifest capability만 필요하고 MER/텍스처 세트는 점진적으로 추가 가능. "raytracing"은 RTX용, `pbr`은 VV용. 비 Marketplace 애드온 공통. 문서: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/vvresourcepacks , https://wiki.bedrock.dev/guide/project-setup#rp-manifest *(확인됨)*
-- **min_engine_version과의 관계** *(상충)*: 오래된 min_engine(예: 1.19.60, 1.21.40)의 팩은 레거시로 취급되어 capability 없이도 VV가 동작하며, `pbr`이 있는데도 min_engine 1.21.120에서 VV가 사라졌다가 1.19.60으로 내려 복구된 사례들이 있다. 반면 2026-05 보고는 VV 버튼/PBR을 켜려면 `pbr` + `min_engine_version` [1,21,120] 이상이 필요하다고 했다. 두 방법 모두 시도할 것.
+- **VV는 RP manifest에 최상위 `"capabilities": ["pbr"]`(배열)이 있어야 유지**된다. 없으면 Fancy로 전환되며 툴팁 "Vibrant Visuals requires a supported device and is not compatible with Marketplace Texture Packs or Worlds". manifest capability만 필요하고 MER/텍스처 세트는 점진적으로 추가 가능. "raytracing"은 RTX용, `pbr`은 VV용. 비 Marketplace 애드온 공통. 문서: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/vvresourcepacks , https://wiki.bedrock.dev/guide/project-setup#rp-manifest `{커뮤니티 확인}`
+- **min_engine_version과의 관계** `{충돌}`: 오래된 min_engine(예: 1.19.60, 1.21.40)의 팩은 레거시로 취급되어 capability 없이도 VV가 동작하며, `pbr`이 있는데도 min_engine 1.21.120에서 VV가 사라졌다가 1.19.60으로 내려 복구된 사례들이 있다. 반면 2026-05 보고는 VV 버튼/PBR을 켜려면 `pbr` + `min_engine_version` [1,21,120] 이상이 필요하다고 했다. 두 방법 모두 시도할 것.
 - **`pbr`을 선언한 팩이 VV를 렌더할 수 없는 기기(GPU 미지원)에서 아예 로드되지 않은** 보고(2025-10, 약 7명): VV 콘텐츠를 별도 RP로 배포 권장. 권장 min engine 1.21.90 / 1.21.120.
 - **커스텀 블록 팩에 `pbr`을 넣자 `minecraft:material_instances` 텍스처에서 `Missing referenced asset red_rod`** 오류가 났고, 제거해도 PBR 텍스처는 적용되었다(문서가 낡은 듯).
 - **Marketplace 맵/서버는 기본적으로 VV를 끈다**(제작자가 명시적으로 capability 추가 필요). 실수로 PBR 시스템 전체가 꺼져 RTX PBR도 동작하지 않는다. Marketplace에는 "최근 업데이트" 요구가 없어 오래된 팩 다수가 VV를 쓸 수 없다.

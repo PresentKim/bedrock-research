@@ -109,13 +109,13 @@ world.afterEvents.itemUse.subscribe(({ source, itemStack }) => {
 아래는 커뮤니티 조사로 모은 블록 DP, 대용량 저장, 숨은 데이터 패턴이다.
 
 
-`*confirmed*`, `*single report*`, `**conflicting**`은 보고의 신뢰도 표시다. 이 페이지의 근거는 커뮤니티 보고이며 Mojang 공식 문서와 다를 수 있다.
+검증 수준 표기는 [위키 첫 페이지의 범례](../index.mdx#검증-수준-표기)를 따른다. 이 페이지의 근거는 커뮤니티 보고이며 Mojang 공식 문서와 다를 수 있다.
 
 ### 데이터 저장
 
 #### 동적 속성 (Dynamic Properties)
 
-- **대상과 타입**: World, 모든 Entity(투사체 포함)·Player, 스택 불가(max stack 1) ItemStack. 값은 string, number, boolean, Vector3만(ItemStack·컴포넌트 객체는 불가하므로 `JSON.stringify`로 바꾼다). 선언 없이 바로 `setDynamicProperty(key, value)`, 미설정 키는 undefined(`== false`로 비교하지 말고 `typeof` 확인). 커맨드로 설정 불가. 리소스 팩·JSON UI는 DP를 읽지 못함(시각용은 `client_sync` 엔티티 속성이나 title로 미러링). *confirmed*
+- **대상과 타입**: World, 모든 Entity(투사체 포함)·Player, 스택 불가(max stack 1) ItemStack. 값은 string, number, boolean, Vector3만(ItemStack·컴포넌트 객체는 불가하므로 `JSON.stringify`로 바꾼다). 선언 없이 바로 `setDynamicProperty(key, value)`, 미설정 키는 undefined(`== false`로 비교하지 말고 `typeof` 확인). 커맨드로 설정 불가. 리소스 팩·JSON UI는 DP를 읽지 못함(시각용은 `client_sync` 엔티티 속성이나 title로 미러링). `{커뮤니티 확인}`
 - **크기 제한**: 문자열 하나당 32,767 **바이트**("Maximum string size exceeded (x/32767) bytes"; 키도 같음), 상향 불가, 키 개수 무제한이므로 큰 데이터는 여러 키로 나눈다(`id:i` 조각 + 남는 꼬리 삭제). 초기 보고의 ~65,535자는 틀림. 문자열 한도와 별개로 World DP 전체에 1 MiB(1,048,576 바이트) 한도가 있고, 넘으면 `Dynamic property size limit exceeded (현재/한도) for 'World'` 오류다. 128 KiB 한도를 받는 다른 종류도 있으나 어느 소유자인지는 미확인 `{코드}`. 아이템/블록 DP는 약 1 KB라는 보고(코드에서 이 값은 찾지 못함). 9e15 초과 수는 JSON 숫자로 저장할 수 없으니 문자열로 저장한다.
 - **쓰기량 경고**: "X MB of dynamic properties were saved during the last minute, exceeding the 10 MB threshold"(BDS에서 30초마다)는 경고일 뿐이지만 누수 신호. 사례: 블록 설치마다 DP를 기록한 클레임 애드온이 434,962개 항목을 남김(원 팩 안의 정리 스크립트로 제거, 팩 제거 후에도 경고 지속), 저장마다 덮어쓰지 않고 복제한 땅 클레임 스크립트가 1분에 32 MB. 바이트 카운트(월드, 콘솔, `getDynamicPropertyTotalByteCount`)는 서로 다르다. 총량 상한은 문서화돼 있지 않다.
 - **저장 방식과 성능**: DP는 LevelDB에 디스크 저장된다. 월드 DP는 한 NBT 태그에 묶여 있어 하나를 써도 전체를 다시 저장하며, 60초마다 33~55 KB를 자동 저장하자 수 초 렉이 생긴 사례. 대책: 더티 데이터만/덜 자주 저장, 파싱 결과를 메모리 캐시, 레코드당 키 하나(거대 배열 하나 금지), 20~30초마다 일괄 저장 + 퇴장 시 저장. 수백 개 정도의 월드 DP는 문제 없음. 매 틱 `getDynamicProperty`/`getScore`는 낭비이니 Map에 미러링한다. (월드 DP가 "그 자체로는 렉을 안 만든다"는 보고와 위 렉 사례는 데이터량 차이)
@@ -142,7 +142,7 @@ world.afterEvents.itemUse.subscribe(({ source, itemStack }) => {
 - **QIDB V4**(Quick Item Database, `https://github.com/MineCart7/QUICK-ITEM-DATABASE`): ItemStack을 NBT째 문자열화 없이 저장한다. 키에 `-`를 쓸 수 있어 `player.id`를 키로 쓸 수 있다. 저장은 `system.runJob`으로 백그라운드에서 하고 ms 한도는 `saveTime` 설정으로 정한다. `pending`, `flush(key)`, `unload(key)`, 런타임 `settings`, `QIDB.packs`가 있고, 한 월드에서 QIDB를 쓰는 애드온 둘은 서로를 감지해 네임스페이스 충돌을 경고한다. 라이선스: Marketplace에 쓰려면 작성자와 합의가 필요하고, 그 밖에는 출처 표기가 필요하다.
 - **DB 라이브러리**: `https://github.com/AutoAsteroid/script-api-database` (`world.db`, `player.db`, server-net으로 외부 JSON 지원), KinetixDB(`https://github.com/DevelopmentKinetix/KinetixDB` , 문서형 insert/find/upsert), Paradox data-hive.ts. ~5000명의 숫자 데이터면 DP DB로 충분, 외부 DB는 지연·비용, 큰 JSON 하나는 손상 위험. 외부 HTTP DB는 콜드 스토리지로만.
 - **ShulkerDB**(`https://github.com/Duskaraa/shulkerdb` , v1.2.0 2026-11-19): Map 같은 저장소로 JSON 레코드 여러 개를 DP 하나에 묶고(레코드 2,000개를 키 12개에) 1초마다 일괄 저장한다. ShulkerVault는 저장 엔티티에 실제 ItemStack을 보관한다(QIDB 대비 성능 주장은 논쟁 중). QIDB는 키 하나에 아이템을 1024개까지 담으므로 "아이템 하나씩 든 키 200개"로 비교하면 QIDB에 불리하고, 아이템 200개를 키 하나에 담으면 둘의 성능이 비슷했다. 공정한 벤치마크는 두 저장 배치를 모두 재고, `Date.now()` 앞뒤 차이로 잴 때는 실행마다 값이 흔들리므로 여러 번 돌린다.
-- **저장 엔티티 DB의 함정**(ShulkerDB 리뷰에서 정리): vault 엔티티가 제거될 때 다른 곳에 최신 사본이 있는 항목까지 지움, 청크 언로드를 엔티티 제거로 오인한 뒤 언로드 청크에 스폰해 크래시, 비운 vault 엔티티를 월드에 남기면 재시작 때 복제돼 엉뚱한 것을 집음, `BigInt` 값이 `setDynamicProperties` 일괄 저장을 깨뜨림. 스폰 위치는 stable `dimension.heightRange.max`로 정하고 스폰 전에 `dimension.isChunkLoaded(location)`을 확인한다. 엔티티 기반 DB는 Realms에서 못 쓴다는 주장은 *unverified*.
+- **저장 엔티티 DB의 함정**(ShulkerDB 리뷰에서 정리): vault 엔티티가 제거될 때 다른 곳에 최신 사본이 있는 항목까지 지움, 청크 언로드를 엔티티 제거로 오인한 뒤 언로드 청크에 스폰해 크래시, 비운 vault 엔티티를 월드에 남기면 재시작 때 복제돼 엉뚱한 것을 집음, `BigInt` 값이 `setDynamicProperties` 일괄 저장을 깨뜨림. 스폰 위치는 stable `dimension.heightRange.max`로 정하고 스폰 전에 `dimension.isChunkLoaded(location)`을 확인한다. 엔티티 기반 DB는 Realms에서 못 쓴다는 주장은 `{미검증}`.
 - **아주 큰 데이터**(수백만 블록): 아이템/책은 비현실적. 콘솔 로그 덤프, 구조물 연결, BDS면 server-net 외부 DB(외부 sqlite로 옮겨 TPS 저하 해결 사례). 파일 쓰기 API 없음. 데이터 내보내기는 DP를 가진 엔티티를 구조물로 저장하거나 콘텐츠 로그 복사.
 - **스택 가능한 아이템의 숨은 데이터**: lore에 서식 코드(`§0` 시퀀스)로 숫자를 인코딩하거나 만료 틱(`system.currentTick + N`)을 기록(다른 값이면 스택되지 않음). lore는 데이터 저장으로는 취약하다는 의견도.
 - **메모리 상태**: 모듈 스코프 Map/변수는 `/reload`·종료 시 사라짐(월드 퇴장/재로드까지 유지). 전역 `let`은 모든 플레이어가 공유(서버당 BP 하나). 플레이어 객체에 상태를 저장하지 말고 `player.id` 키 Map 사용(WeakMap도 가능).

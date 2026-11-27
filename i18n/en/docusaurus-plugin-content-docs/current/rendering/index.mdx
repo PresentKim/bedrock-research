@@ -9,7 +9,7 @@ sources: [private-research, bedrock-wiki, ms-learn, bedrock-samples, particle-je
 
 This section covers how Bedrock resource packs produce the picture and the sound. It includes entity, block and item models, client animations and controllers, render controllers, materials and shaders, particles, textures and atlases, sound, Vibrant Visuals (VV) and PBR, RTX, and the paper doll of the Chinese edition (NetEase). The source material is community research from 2025-10-22 to 2026-11-17 (88 notes from community conversations), the Bedrock Wiki, Microsoft Learn, bedrock-samples, the Particle Jester repository, and NetEase documentation.
 
-Notation: `confirmed` means several people confirmed it or it was confirmed by documentation or code, `single report` is a report from one person, and `conflicting` means the reports disagree. Version numbers are game versions, and numbers from 2026 onward (26.30 and so on) use the new numbering scheme.
+Verification level marks follow the [legend on the wiki home page](../index.mdx#verification-level-marks). Version numbers are game versions, and numbers from 2026 onward (26.30 and so on) use the new numbering scheme.
 
 ## Page map
 
@@ -31,18 +31,20 @@ Notation: `confirmed` means several people confirmed it or it was confirmed by d
 | [Paper doll and NetEase](./paper-doll-and-netease.mdx) | International `paper_doll_renderer`, Chinese-edition skeleton models and `netease_paper_doll_renderer` |
 | [Limits, changes by version, open questions](./known-limits-and-history.mdx) | Table of limits and workarounds, changes by version, tools and materials, open questions |
 
+The in-game measurement records for this section are in [Content and rendering claim measurements](../design/content-rendering-claims.mdx).
+
 ## Key summary
 
-1. **Enabling VV**: If the resource pack `manifest.json` lacks `"capabilities": ["pbr"]` at the **top level** (not inside `header`), the VV option is turned off while that pack is active. A single add-on missing it turns VV off for the whole world. Writing the game option `graphics_mode` as 2 directly, though, made `q.graphics_mode_is_any('deferred')` true and changed the screen even in a world with a pack without `pbr`. The `texture_set` emission of that pack did not show ([measurement record](../design/json-ui-claims.mdx#67-particle-queries-and-counters-sound-definitions-material-files-biomes), 2026-11-19 Windows 1.26.65.1).
+1. **Enabling VV**: If the resource pack `manifest.json` lacks `"capabilities": ["pbr"]` at the **top level** (not inside `header`), the VV option is turned off while that pack is active. A single add-on missing it turns VV off for the whole world. Writing the game option `graphics_mode` as 2 directly, though, made `q.graphics_mode_is_any('deferred')` true and changed the screen even in a world with a pack without `pbr`. The `texture_set` emission of that pack did not show ([measurement record](../design/content-rendering-claims.mdx#6-materials), 2026-11-19 Windows 1.26.65.1).
 2. **PBR**: Put `<color texture name>.texture_set.json` in the same folder as the texture, and write only file names without extensions in the values. In MER, R is metalness, G is emissive, and B is roughness (255 is fully rough); in MERS the fourth channel is SSS.
 3. **Entity emission**: Without VV, use the `entity_emissive_alpha` family (the lower the alpha, the brighter). With VV, use the MER emissive channel, texture_set and the pbr capability.
 4. **Block emission**: Without VV there is no way to make only some pixels of a custom block glow. With VV, use `"emissive": true` in `material_instances` (format 1.21.120+) or MER.
 5. **Mipmaps and atlases**: Flipbooks freezing on the first frame at a distance, stripes, and broken water or lava are mostly caused by mipmaps. Set `num_mip_levels` to 0 (or 3) and use square, power-of-two, multiple-of-16 textures. Since atlas padding was removed in 26.30, stripe bugs have increased (MCPE-240144).
 6. **Entity materials** are documented practically only by the Bedrock Wiki, and they break between versions and under VV. The file name is `materials/entity.material` (no `.json` extension), and inheritance is `"child:parent"`.
 7. **Stencil** is the key to outlines, seeing through walls and portal effects. Vanilla entity shadows use `stencilRef` 1, so use 2 or higher and do not exceed 32.
-8. In a **render controller**, `textures` is always an array and `geometry` is a string. If the shapes are wrong, the entity becomes transparent with only a collision hitbox. There is a report that more than 3 texture arrays caused crashes, so split the render controller. In a 2026-11-19 Windows 1.26.65.1 measurement, four arrays without property indexes, all used in `textures`, did not crash. The `query.property(...)` indexed arrays of the report were not measured ([record](../design/json-ui-claims.mdx#63-state-holding-lazy-roots-pack-order-rendering)).
+8. In a **render controller**, `textures` is always an array and `geometry` is a string. If the shapes are wrong, the entity becomes transparent with only a collision hitbox. There is a report that more than 3 texture arrays caused crashes, so split the render controller. In a 2026-11-19 Windows 1.26.65.1 measurement, four arrays without property indexes, all used in `textures`, did not crash. The `query.property(...)` indexed arrays of the report were not measured ([record](../design/content-rendering-claims.mdx#3-render-controllers-and-textures)).
 9. **Bone and animation names** must be lowercase with no spaces. With spaces or special characters, they appear in Blockbench but do not render in the game.
-10. **Attachables**: Put `"binding": "q.item_slot_to_bone_name(c.item_slot)"` on the root bone, and the geometry format must be 1.16.0 or higher.
+10. **Attachables**: Put `"binding": "q.item_slot_to_bone_name(c.item_slot)"` on the root bone, and community reports say the geometry format must be 1.16.0 or higher. In the wiki's Windows measurement, the 1.16.0 binding attachables did not show on screen either ([measurement record](../design/content-rendering-claims.mdx#8-attachables)). `{conflict}`
 11. **VV settings are per biome**. Defaults for all biomes are overridden with `minecraft:` identifiers such as `minecraft:default_water`.
 12. **Auto exposure, shadow resolution and reflection quality** exist only in files in the game install folder and cannot be changed by a resource pack.
 13. **Tone mapper**: In VV only generic, reinhard, reinhard_luminance, reinhard_luma, hable and aces are available.

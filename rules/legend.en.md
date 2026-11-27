@@ -1,3 +1,5 @@
+Rule IDs exist only for JSON UI rules. For other topics such as add-on content, the Script API, rendering, servers, and tools, go from the [section map](../index.mdx#section-map) to that section's first page, read its page map and summaries, and judge confidence by the [verification level marks](../index.mdx#verification-level-marks) at the end of each item on the page.
+
 ## Evidence levels
 
 The meaning of the level marks (`measured`, `vanilla`, `working pack`, `code (source)`, `code (binary)`, `inferred`, `unverified`, `conflict`) and the priority of judgments are in [Verification level marks on the wiki home page](../index.mdx#verification-level-marks). The chapter tables and the topic pages use the same legend.

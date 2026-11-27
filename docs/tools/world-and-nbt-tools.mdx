@@ -33,7 +33,7 @@ Editor 모드는 Mojang의 월드 편집 환경으로, `@minecraft/server-editor
 
 아래는 커뮤니티 조사로 모은 NBT 포맷, 구조물 export, 월드 변환, MCB 바이너리, Editor 모드 정보다.
 
-`(confirmed)`, `(single report)`, `(conflicting)` 같은 말은 보고의 신뢰도 표시다.
+검증 수준 표기는 [위키 첫 페이지의 범례](../index.mdx#검증-수준-표기)를 따른다.
 
 ### 월드, 구조물, NBT 도구
 
@@ -60,14 +60,14 @@ Editor 모드는 Mojang의 월드 편집 환경으로, `@minecraft/server-editor
   - Amulet API(Python, 오프라인 월드 편집)
 
 #### LevelDB와 옛 월드 포맷
-- **구조**: 월드 `db`는 `.ldb` 파일로 나뉜 key-value 저장소이고 `~local_player`, `player_<id>` 같은 키를 가진다. `level.dat`은 따로 있다. 쓰기 로그(WAL)는 CRC32를 쓰고, SST는 원자적 rename으로 바꾸고, MANIFEST는 덧붙여 쓴다. 손상은 대부분 compaction에서 생기며, `.ldb` 하나를 지워 70GB 월드를 살린 사례가 있다. `.mcworld`는 zip이다. 창을 닫아 월드가 손상된다는 주장은 결론이 나지 않았다. (single report)
+- **구조**: 월드 `db`는 `.ldb` 파일로 나뉜 key-value 저장소이고 `~local_player`, `player_<id>` 같은 키를 가진다. `level.dat`은 따로 있다. 쓰기 로그(WAL)는 CRC32를 쓰고, SST는 원자적 rename으로 바꾸고, MANIFEST는 덧붙여 쓴다. 손상은 대부분 compaction에서 생기며, `.ldb` 하나를 지워 70GB 월드를 살린 사례가 있다. `.mcworld`는 zip이다. 창을 닫아 월드가 손상된다는 주장은 결론이 나지 않았다. `{단일 보고}`
 - **바닐라 LevelDB로는 열 수 없다**: Bedrock은 압축 방식이 달라 바닐라 LevelDB 라이브러리로 열지 못한다. 게임의 `.ldb` 블록은 `0x78 0x9C 0xED`로 시작한다. JS 라이브러리: `@8crafter/leveldb-zlib`, npm `mcbe-leveldb`. Bedrock은 크래시 로그를 남기지 않는다.
 - **구조물 저장**: 월드에 저장한 구조물은 LevelDB 키로 들어간다.
 - **옛 월드 포맷**: 마을 데이터 키는 v0.12.0.1 `villages`, v0.15.0 `mVillages`, 지금은 `VILLAGE_<dimension>_<uuid>_<type>`이다(`_PLAYERS`는 평판). v0.12.0.1은 `SizeOnDisk`가 없으면 크래시한다. PE 0.9.0 alpha부터 beta 1.2.0.11까지 "fragile LevelDB" 버그가 있었다. 지도 데이터는 서드파티 도구 없이는 지울 수 없다.
 
 #### 구조물 export (특히 모바일)
 - **크기와 내용 제한**: 구조물 블록 하나는 64x64x64까지다. Amulet은 엔티티가 든 구조물을 export하지 못한다. 마켓플레이스/템플릿 월드는 보호돼 있어 구조물 import/export가 안 되고, NBT를 편집하면 월드가 깨진다.
-- **모바일 export 제거**: Android에서는 구조물 블록 export가 없다("Export operation not supported on this platform"). iOS는 원래 안 됐다. 1.21.130(베타)에서 export 버튼을 되살리는 RP 트릭도 막혔다("1.21.124 이후"라는 표현도 있다). Export Structures 팩(`https://mcpedl.com/export-structures-add-on-1-21/`)은 1.21.120까지만 동작한다. (confirmed)
+- **모바일 export 제거**: Android에서는 구조물 블록 export가 없다("Export operation not supported on this platform"). iOS는 원래 안 됐다. 1.21.130(베타)에서 export 버튼을 되살리는 RP 트릭도 막혔다("1.21.124 이후"라는 표현도 있다). Export Structures 팩(`https://mcpedl.com/export-structures-add-on-1-21/`)은 1.21.120까지만 동작한다. `{커뮤니티 확인}`
 - **우회법**
   - HoloPrint(`https://holoprint-mc.github.io/`): 월드를 올리면 LevelDB에서 구조물을 추출한다. 결과에 `format_version`이 빠질 수 있어 LeviLauncher에서 "format_version field is missing"이 났다.
   - 월드 export 재활성화 RP(`https://mcpedl.com/vitallis-word-exporter`, JSON UI 기반)나 Ore UI Customizer의 Android export 버튼
@@ -84,7 +84,7 @@ Editor 모드는 Mojang의 월드 편집 환경으로, `@minecraft/server-editor
   - 바닐라 feature 샘플: `https://github.com/llgava/mcbedrock-features`
 - **큰 구조물**: 64를 넘으면 지그소 조각으로 나눈다. `/fill ~~~ ~~~ structure_void replace air`로 공기를 structure void로 바꾼다. void를 유지한 채 로드하려면 NBT를 편집해야 한다. 큰 `.mcstructure`는 게임 밖에서 만든 구조물 블록으로 불러온다. 구조물 크기를 NBT로 고쳐 1.21.120에서 import하면 원래 크기로 되돌아간다.
 - **structure-to-function** (`https://jeanmajid.github.io/commands/structure-to-function/`): 명령 블록 건축을 `.mcfunction`으로 바꾼다. conditional과 impulse 블록은 손으로 옮긴다(tick.json, `/execute`).
-- **Bedrock Voxel Builder** (`https://jomvlmrs.github.io/Bedrock-Voxel-Builder/`): 브라우저에서 3D로 구조물을 짓고 `.mcstructure`와 `.mcfunction`으로 import/export한다. 큰 구조물 업로드는 최적화되어 있고, structure_void가 보인다는 보고가 있다. 커스텀 블록을 쓰는 구조물은 커스텀 블록을 먼저 import하고 구조물 파일을 불러와야 블록이 보인다. 2026-11 판에는 이전의 제한이 없고 렌더링이 최적화되어 있으며, GitHub 저장소도 같은 판이다. 무료 대안으로 Blockbench의 내장 voxel식 모델링 기능이 거론됐다. (single report)
+- **Bedrock Voxel Builder** (`https://jomvlmrs.github.io/Bedrock-Voxel-Builder/`): 브라우저에서 3D로 구조물을 짓고 `.mcstructure`와 `.mcfunction`으로 import/export한다. 큰 구조물 업로드는 최적화되어 있고, structure_void가 보인다는 보고가 있다. 커스텀 블록을 쓰는 구조물은 커스텀 블록을 먼저 import하고 구조물 파일을 불러와야 블록이 보인다. 2026-11 판에는 이전의 제한이 없고 렌더링이 최적화되어 있으며, GitHub 저장소도 같은 판이다. 무료 대안으로 Blockbench의 내장 voxel식 모델링 기능이 거론됐다. `{단일 보고}`
 - **블록 geometry 데이터베이스**: Structura, HoloPrint, Bedrock ASI, Scaffold가 블록 형태를 각자 손으로 관리한다. 공용 DB(BedrockBlockBuster) 제안과, GLB export를 큐브로 분해하는 `glb2bedrock.py` 시험이 있었다. Structura는 낡았고 Structura Lab은 월 약 20만 조회다.
 - **mcstructure 미리보기**
   - Structures Studio(`https://olivaresstudios.eu/studio`, `.mcstructure`/`.schem`/`.litematic` 3D, Java/Bedrock 충돌 검사, 홀로그램 .mcpack, 64 초과 지원, 로컬 전용)
@@ -125,7 +125,7 @@ Editor 모드는 Mojang의 월드 편집 환경으로, `@minecraft/server-editor
   - brarchive에는 유효한 UTF-8 텍스트 파일만 들어간다(스크립트는 안 된다). 모든 것이 brarchive에서 동작하지는 않으니 JSON 원본을 보관한다.
   - 로드 시간과 압축에 도움이 된다.
   - `ExperimentalPacksUpgraderConfigPath` 문자열이 보였다.
-  - Preview 26.70.26의 설정 파일은 출력 `mode`로 `brpak`(기본), `brarchive`, `unpacked`를 받는다. 예전 `unpack` 속성을 쓰면 아무 메시지 없이 종료한다. `mode`를 `brarchive`로 두면 아직 동작하지 않았다는 보고가 있다. *single report*
+  - Preview 26.70.26의 설정 파일은 출력 `mode`로 `brpak`(기본), `brarchive`, `unpacked`를 받는다. 예전 `unpack` 속성을 쓰면 아무 메시지 없이 종료한다. `mode`를 `brarchive`로 두면 아직 동작하지 않았다는 보고가 있다. `{단일 보고}`
 - **스키마 덤프**: BDS 옆에 `test_config.json`을 두고 실행하거나, `./bedrock_server.exe Document=true` 또는 `GenerateAPIMetadata=true` 활성화 인자를 쓴다(중국어 위키 `https://zh.minecraft.wiki/w/%E6%BF%80%E6%B4%BB%E5%8F%82%E6%95%B0`). 스키마는 `https://github.com/bedrock-apis/bds-docs/tree/preview` 에도 있다. 일부 작성자는 samples에 없는 스키마를 BDS에서 얻는다.
 
 ---
@@ -134,7 +134,7 @@ Editor 모드는 Mojang의 월드 편집 환경으로, `@minecraft/server-editor
 
 #### 실행과 일반
 - **기본**: Axiom 같은 내장 건축 도구로, Windows 전용이고 무료다. 설치 안내는 `https://learn.microsoft.com/en-us/minecraft/creator/documents/bedrockeditor/editorinstallation?view=minecraft-bedrock-stable` 에 있다. GDK 빌드에서 옛 바로가기가 안 되면 Preview 바로가기를 `minecraft-preview://creator/?Editor=true`로 바꾼다. Crosshair 모드는 바닐라 건축 모드라 Editor 도구를 쓸 수 없다. changelog와 피드백은 `https://github.com/Mojang/minecraft-editor/discussions` 에 있다.
-- **Java Axiom과 비교**: Axiom은 월드 안에서 Blueprint로 짓고, debug stick처럼 블록 상태를 고치며, 지형 도구와 도구 마스크가 있다. Editor 모드는 Blender에 가깝다는 평이고 mcstructure에는 크기 제한이 있다. Editor 모드도 블록 상태를 고칠 수 있지만 유효하지 않은(illegal) 상태는 만들 수 없다. (single report)
+- **Java Axiom과 비교**: Axiom은 월드 안에서 Blueprint로 짓고, debug stick처럼 블록 상태를 고치며, 지형 도구와 도구 마스크가 있다. Editor 모드는 Blender에 가깝다는 평이고 mcstructure에는 크기 제한이 있다. Editor 모드도 블록 상태를 고칠 수 있지만 유효하지 않은(illegal) 상태는 만들 수 없다. `{단일 보고}`
 - **projectbackups와 랜딩 페이지**: `projectbackups` 폴더는 첫 export 뒤에만 생긴다. 어느 월드가 Editor 전용인지 구분하기 어렵다. 랜딩 페이지는 Ore UI로 다시 만드는 중이다(2026-02).
 - **Editor 전용 해제**: `level.dat`의 `editorWorldType`을 0으로 바꾼다.
 

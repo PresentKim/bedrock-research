@@ -68,7 +68,7 @@ BP 컨트롤러는 `on_entry`와 `on_exit`에 슬래시 명령(`/say hi`), 엔�
 
 ## 클라이언트 엔티티 연결
 
-- 1.10.0 이상 클라이언트 엔티티에서는 애니메이션과 컨트롤러를 `animations`에 짧은 이름으로 두고 `scripts.animate`에서 참조한다. 목록에 없으면 실행되지 않는다. `confirmed`
+- 1.10.0 이상 클라이언트 엔티티에서는 애니메이션과 컨트롤러를 `animations`에 짧은 이름으로 두고 `scripts.animate`에서 참조한다. 목록에 없으면 실행되지 않는다. `{커뮤니티 확인}`
 - `animation_controllers` 배열은 1.8.0 전용이라 섞으면 엔티티가 사라지고 "client_entity child 'animation controllers' not valid there"가 난다.
 - `"animate": {"controller": {}}`나 `" controller "`(공백)는 "unknown child schema option type. Allowed types: 'molang'"을 낸다.
 - 애니메이션을 추가한 직후 몹과 스폰 알이 안 보이면 대개 깨진 클라이언트 엔티티 JSON이다. 콘텐츠 로그(설정, Creator, Content Log GUI)를 확인하고, 손으로 고쳤다면 Blockbench에서 다시 내보낸다. 1.8 클라이언트 엔티티는 컨트롤러를 포함해 1.10.0으로 갱신한다.
@@ -111,7 +111,7 @@ BP 컨트롤러는 `on_entry`와 `on_exit`에 슬래시 명령(`/say hi`), 엔�
 "scale": "v.size = v.size ?? math.random_integer(1,10); v.anim_time = v.anim_time ?? 0; v.scale = v.size*math.sin(math.min(v.anim_time,3)*30); v.anim_time = v.anim_time + q.delta_time; return v.scale;"
 ```
 
-- `pre_animation`은 렌더 프레임마다 실행된다. `v.acc = v.acc + 1;`처럼 `q.delta_time`을 곱하지 않고 더한 값은 216fps 무렵 `q.life_time * 60`보다 약 3.5배 빨리 커졌으므로, 시간에 맞춰 움직일 값에는 `q.delta_time`을 곱한다([실측 기록](../design/json-ui-claims.mdx#66-블록-uv-컨트롤러-덮기-소리-언어-애니메이션-가중치), 2026-11-19 Windows 1.26.65.1).
+- `pre_animation`은 렌더 프레임마다 실행된다. `v.acc = v.acc + 1;`처럼 `q.delta_time`을 곱하지 않고 더한 값은 216fps 무렵 `q.life_time * 60`보다 약 3.5배 빨리 커졌으므로, 시간에 맞춰 움직일 값에는 `q.delta_time`을 곱한다([실측 기록](../design/content-rendering-claims.mdx#2-엔티티-속성-애니메이션), 2026-11-19 Windows 1.26.65.1).
 - 컨트롤러 상태의 블렌드 가중치는 1을 넘어도 잘리지 않는다. z축 20도 애니메이션을 가중치 0, 1, 2, 3으로 재생하자 약 0, 20, 40, 60도로 기울어 진폭이 가중치에 비례했다(같은 실측).
 - 타이머가 진행되지 않으면 `q.anim_time` 대신 `q.delta_time`을 쓴다. `/playanimation`은 랜덤 크기에 거의 쓸 수 없으니 클라이언트 엔티티 `animations`와 `scripts.animate`에 정의한다.
 - 숨쉬기 대기: `math.cos(query.life_time * 120) * 10`(속도 120, 진폭 10)을 별도 루프 애니메이션으로 두고 팔다리 애니메이션과 분리한다.

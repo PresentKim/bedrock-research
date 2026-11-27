@@ -87,7 +87,7 @@ const res = await http.request(req);          // Promise<HttpResponse>
 아래는 커뮤니티 조사로 모은 DDUI, server-ui 세부, BDS 운영, IPC, GameTest, Editor 정보다.
 
 
-`*confirmed*`, `*single report*`, `**conflicting**`은 보고의 신뢰도 표시다. 이 페이지의 근거는 커뮤니티 보고이며 Mojang 공식 문서와 다를 수 있다.
+검증 수준 표기는 [위키 첫 페이지의 범례](../index.mdx#검증-수준-표기)를 따른다. 이 페이지의 근거는 커뮤니티 보고이며 Mojang 공식 문서와 다를 수 있다.
 
 ### UI: server-ui 폼, DDUI, JSON UI 연동
 
@@ -102,7 +102,7 @@ const res = await http.request(req);          // Promise<HttpResponse>
 
 #### DDUI (Data-Driven UI: `CustomForm`, `MessageBox`, `Observable*`, `uiManager`)
 
-- **연혁과 요구사항**: Preview 1.26.10.21/22(server-ui `2.1.0-beta`, server `2.7.0-beta`)에 도입(더 오래된 프리뷰는 `Could not find export 'CustomForm'`). min_engine_version [1,21,110]+, 의존성 beta. 26.10/26.11 정식판에서 Beta APIs로 사용 가능했고, 1.26.30에서 server-ui v2.1.0으로 안정화(`https://learn.microsoft.com/en-us/minecraft/creator/documents/update1.26.30?view=minecraft-bedrock-stable#released-minecraftserver-ui-v210`), 안정 API라 Marketplace에서 사용 가능. 2026-08 문법이 타입 엄격으로 변경, DDUI 레이아웃은 2026-08까지 미출시. 문서: `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/intro-to-ddui?view=minecraft-bedrock-stable` . Ore UI 소스: `https://github.com/Mojang/ore-ui` . *confirmed*
+- **연혁과 요구사항**: Preview 1.26.10.21/22(server-ui `2.1.0-beta`, server `2.7.0-beta`)에 도입(더 오래된 프리뷰는 `Could not find export 'CustomForm'`). min_engine_version [1,21,110]+, 의존성 beta. 26.10/26.11 정식판에서 Beta APIs로 사용 가능했고, 1.26.30에서 server-ui v2.1.0으로 안정화(`https://learn.microsoft.com/en-us/minecraft/creator/documents/update1.26.30?view=minecraft-bedrock-stable#released-minecraftserver-ui-v210`), 안정 API라 Marketplace에서 사용 가능. 2026-08 문법이 타입 엄격으로 변경, DDUI 레이아웃은 2026-08까지 미출시. 문서: `https://learn.microsoft.com/en-us/minecraft/creator/documents/scripting/intro-to-ddui?view=minecraft-bedrock-stable` . Ore UI 소스: `https://github.com/Mojang/ore-ui` . `{커뮤니티 확인}`
 - **BDS**: `config/default/permissions.json`의 `allowed_modules`에 `"@minecraft/server-ui"`, 월드에 Beta APIs(안정화 전). 클라이언트 월드를 복사하는 대신 BDS가 만든 월드로 해결된 사례.
 - **생성자 변화**: 초기 `CustomForm.create(player, title)`, `Observable.create(value, {clientWritable})`에서 26.30+ `new CustomForm(player, title)`로 바뀜(26.30 미만은 `.create`; 잘못 쓰면 "Invalid constructor called"/"not a function"). `Observable`은 `ObservableNumber`/`ObservableBoolean`/`ObservableString`으로 분리(`new ObservableString("", {clientWritable: true})`, `Observable` export는 사라짐). 번역/rawtext 라벨용 `ObservableUIRawMessage`(라벨만; textField 값은 문자열 관찰값). 타입 엄격: `0 === 1` 같은 불리언 식은 오류였고 `false` 리터럴은 동작한 보고. `clientWritable` 관찰값은 생성 후 변경 불가(새로 생성).
 - **기본 사용**: `new CustomForm(player, "Title").label(...).button(text, cb, opts).closeButton().show()`. `show()`는 Promise(닫힐 때 `.then`, 오류 `.catch`; `form.then`은 오류). 요소: `label`, `header`, `divider`, `spacer`(크기 인자 없음, 줄마다 필요), `button(text, cb, {visible, disabled, tooltip, imageDetails})`, `textField(label, obs, {description, disabled})`, `slider(label, obs, min, max, {step, description, disabled, visible})`(float 허용), `toggle`, `dropdown(label, obs<number>, [{label, value}])`(obs는 숫자 인덱스), `closeButton()`, `image(src, packUuid, {width: 0..1, visible})`, `multiButtonRow`(26.60 preview, server-ui 2.4.0-beta, 미안정). 제목·라벨·버튼 텍스트는 `{translate, with}` RawMessage 허용, `player.translate()` 같은 건 없다.
@@ -135,7 +135,7 @@ const res = await http.request(req);          // Promise<HttpResponse>
 #### `@minecraft/server-admin`
 
 - **기능**: `transferPlayer(player, {hostname, port})`(다른 서버/월드로 이동; beta), `kickPlayer`, `beforeEvents.asyncPlayerJoin`(playerJoin보다 일찍 발생, 핸들러는 Promise 반환 `(arg)=>Promise<void>`, `xuid`/`persistentId` 제공, player 객체가 없으므로 플랫폼 킥은 `playerSpawn` + `platformType` + `kickPlayer`), 서버 변수/비밀(BDS 전용; process env는 못 읽음).
-- **Realms**: 문서상 BDS 전용이나 `transferPlayer`는 Realms에서 동작한다는 확인이 여럿(로컬에서 동작하는 유일한 함수라는 보고도). Realms 관련 변경: `https://help.minecraft.net/hc/en-us/articles/43490711924109-Update-Changes-to-Server-Admin-Scripting-Module` . Realms/월드에선 킥에 `kick` 커맨드(`runCommand("kick @s reason")`가 다시 동작). Realm 간 플레이어 전송은 불가 보고. 반대로 Realms에서 다른 서버로의 전송 자체가 안 된다는 보고도 있다(**conflicting**). 2026-02-24 무렵 Realms에서 `@minecraft/server-admin`이 비활성화돼 매니페스트에 이 의존성이 남아 있으면 팩의 모든 스크립트가 실패했고, 의존성을 지워 해결했다.
+- **Realms**: 문서상 BDS 전용이나 `transferPlayer`는 Realms에서 동작한다는 확인이 여럿(로컬에서 동작하는 유일한 함수라는 보고도). Realms 관련 변경: `https://help.minecraft.net/hc/en-us/articles/43490711924109-Update-Changes-to-Server-Admin-Scripting-Module` . Realms/월드에선 킥에 `kick` 커맨드(`runCommand("kick @s reason")`가 다시 동작). Realm 간 플레이어 전송은 불가 보고. 반대로 Realms에서 다른 서버로의 전송 자체가 안 된다는 보고도 있다 `{충돌}`. 2026-02-24 무렵 Realms에서 `@minecraft/server-admin`이 비활성화돼 매니페스트에 이 의존성이 남아 있으면 팩의 모든 스크립트가 실패했고, 의존성을 지워 해결했다.
 
 #### BDS·Realms 운영 메모
 
@@ -152,7 +152,7 @@ const res = await http.request(req);          // Promise<HttpResponse>
 
 #### 애드온 간 통신 (IPC)
 
-- **격리**: 각 BP는 자체 JS 런타임(전역·함수 공유 불가, 서브팩도 격리), DP도 팩별. 채널은 `system.sendScriptEvent(id, message)` / `/scriptevent` + `system.afterEvents.scriptEventReceive`(1틱 지연, 순서 보장·유실 없음, 틱당 양을 고려해 한 JSON 메시지로 묶기). 스코어보드로 하지 말 것. 메시지 길이 제한 2048자는 1.21.101에서 제거(그 전엔 초과 시 조용히 버려짐). 2026-08에도 2048이라는 보고가 있으나 구정보로 보임(**conflicting**), 큰 문자열은 렉. 큰 scriptevent 하나는 나눠 보낼 때보다 약 35% 느렸다(MCBE-IPC v3.1.3 노트). scriptevent id는 팩 사이에서 겹치지 않게 네임스페이스를 붙인다.
+- **격리**: 각 BP는 자체 JS 런타임(전역·함수 공유 불가, 서브팩도 격리), DP도 팩별. 채널은 `system.sendScriptEvent(id, message)` / `/scriptevent` + `system.afterEvents.scriptEventReceive`(1틱 지연, 순서 보장·유실 없음, 틱당 양을 고려해 한 JSON 메시지로 묶기). 스코어보드로 하지 말 것. 메시지 길이 제한 2048자는 1.21.101에서 제거(그 전엔 초과 시 조용히 버려짐). 2026-08에도 2048이라는 보고가 있으나 구정보로 보임 `{충돌}`, 큰 문자열은 렉. 큰 scriptevent 하나는 나눠 보낼 때보다 약 35% 느렸다(MCBE-IPC v3.1.3 노트). scriptevent id는 팩 사이에서 겹치지 않게 네임스페이스를 붙인다.
 - **MCBE-IPC**(`https://github.com/OmniacDev/MCBE-IPC` , 단일 파일, 양쪽 모두 포함): `IPC.send`/`IPC.handle`/invoke, 타입 바이너리 직렬화 `PROTO.*`(`PROTO.Object({...})`, `Float64`, `UVarInt32`, 스프레드로 스키마 확장, `PROTO.Cached(serializer, depth)` 직렬화 LRU 캐시 2026-03-18, v3.2.1에서 `Serializer`/`Deserializer` 분리, v3.1.4부터 직렬화 타입 강제). 채널은 브로드캐스트. 바이트를 UTF-16 문자당 2개로 패킹, 헤더만 MIPS hex. 직렬화는 `system.runJob` 제너레이터(동기로 ~11 KB+ 처리 시 watchdog). async generator가 없어 `IPC.handle`은 async 함수를 받지 않음(제너레이터를 promise로 감싸는 우회). v3.3.0에서 동시 invoke가 첫 응답으로 모두 resolve되던 버그 수정(guid 상관 플래그), v3.3.1 리스너 건너뜀 수정. 문서는 비공식 DeepWiki `https://deepwiki.com/OmniacDev/MCBE-IPC/` , DirectIPC `https://github.com/OmniacDev/DirectIPC` .
 - **대안**: @mcbe-mods/ipc(`https://github.com/mcbe-mods/ipc`; JSON + LZ-string base64, 네임스페이스 채널, 런타임 검증 없는 제네릭 캐스트, 벤치마크 공정성 논쟁), Flatbuffers(TextEncoder 폴리필로 동작), AddonAPIKit(`https://github.com/ForestOfLight/AddonAPIKit` , MCBE-IPC 래퍼 `AddonAPIServer`/`AddonAPICaller`, 사용 예 `https://github.com/ForestOfLight/Construct/tree/dev/packs/BP/scripts/API`), 로드 시 `{name, uuid, semver, url, data}`를 scriptevent로 알리는 호환성 아이디어와 `https://github.com/Bedrock-OSS/add-on-registry` . 여러 팩이 같은 로직을 공유하면 IPC로 한 팩만 등록하게. DataExchange, matp도 IPC 대안으로 언급되며, 공유 인터페이스 표준을 정하자는 의견이 있다.
 

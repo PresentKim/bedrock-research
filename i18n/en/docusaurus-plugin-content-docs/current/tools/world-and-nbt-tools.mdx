@@ -33,7 +33,7 @@ Editor mode is Mojang's world editing environment, and tools are extended with t
 
 The following is information on the NBT format, structure export, world conversion, MCB binaries and Editor mode gathered in the community survey.
 
-Terms such as `(confirmed)`, `(single report)` and `(conflicting)` are reliability markers of the reports.
+Verification level marks follow the [legend on the wiki home page](../index.mdx#verification-level-marks).
 
 ### World, structure and NBT tools
 
@@ -60,14 +60,14 @@ Terms such as `(confirmed)`, `(single report)` and `(conflicting)` are reliabili
   - Amulet API (Python, offline world editing)
 
 #### LevelDB and old world formats
-- **Structure**: a world's `db` is a key-value store split into `.ldb` files and has keys such as `~local_player` and `player_<id>`. `level.dat` is separate. The write-ahead log (WAL) uses CRC32, SSTs are replaced by atomic rename, and MANIFEST is appended to. Corruption mostly arises during compaction, and there is a case where deleting one `.ldb` saved a 70GB world. `.mcworld` is a zip. The claim that closing the window corrupts the world was not settled. (single report)
+- **Structure**: a world's `db` is a key-value store split into `.ldb` files and has keys such as `~local_player` and `player_<id>`. `level.dat` is separate. The write-ahead log (WAL) uses CRC32, SSTs are replaced by atomic rename, and MANIFEST is appended to. Corruption mostly arises during compaction, and there is a case where deleting one `.ldb` saved a 70GB world. `.mcworld` is a zip. The claim that closing the window corrupts the world was not settled. `{single report}`
 - **It cannot be opened with vanilla LevelDB**: Bedrock uses a different compression, so it cannot be opened with the vanilla LevelDB library. The game's `.ldb` blocks start with `0x78 0x9C 0xED`. JS libraries: `@8crafter/leveldb-zlib`, npm `mcbe-leveldb`. Bedrock does not leave crash logs.
 - **Structure storage**: structures saved in a world go in as LevelDB keys.
 - **Old world formats**: the village data keys are `villages` in v0.12.0.1, `mVillages` in v0.15.0, and now `VILLAGE_<dimension>_<uuid>_<type>` (`_PLAYERS` is reputation). v0.12.0.1 crashes if `SizeOnDisk` is missing. From PE 0.9.0 alpha to beta 1.2.0.11 there was a "fragile LevelDB" bug. Map data cannot be erased without third-party tools.
 
 #### Structure export (especially on mobile)
 - **Size and content limits**: one structure block goes up to 64x64x64. Amulet cannot export structures that contain entities. Marketplace and template worlds are protected, so structure import/export does not work, and editing the NBT breaks the world.
-- **Removal of mobile export**: on Android there is no structure block export ("Export operation not supported on this platform"). iOS never supported it. The RP trick that revived the export button was blocked in 1.21.130 (beta) (there is also the phrasing "after 1.21.124"). The Export Structures pack (`https://mcpedl.com/export-structures-add-on-1-21/`) works only up to 1.21.120. (confirmed)
+- **Removal of mobile export**: on Android there is no structure block export ("Export operation not supported on this platform"). iOS never supported it. The RP trick that revived the export button was blocked in 1.21.130 (beta) (there is also the phrasing "after 1.21.124"). The Export Structures pack (`https://mcpedl.com/export-structures-add-on-1-21/`) works only up to 1.21.120. `{community confirmed}`
 - **Workarounds**
   - HoloPrint (`https://holoprint-mc.github.io/`): upload a world and it extracts structures from LevelDB. The result may lack `format_version`, which gave "format_version field is missing" in LeviLauncher.
   - The world export re-enabling RP (`https://mcpedl.com/vitallis-word-exporter`, JSON UI based) or the Android export button of Ore UI Customizer
@@ -84,7 +84,7 @@ Terms such as `(confirmed)`, `(single report)` and `(conflicting)` are reliabili
   - Vanilla feature samples: `https://github.com/llgava/mcbedrock-features`
 - **Large structures**: beyond 64, split into jigsaw pieces. Turn air into structure void with `/fill ~~~ ~~~ structure_void replace air`. To load while keeping the void you must edit the NBT. A large `.mcstructure` is loaded with a structure block made outside the game. If you fix the structure size in NBT and import in 1.21.120, it reverts to the original size.
 - **structure-to-function** (`https://jeanmajid.github.io/commands/structure-to-function/`): turns command block builds into `.mcfunction`. Conditional and impulse blocks are ported by hand (tick.json, `/execute`).
-- **Bedrock Voxel Builder** (`https://jomvlmrs.github.io/Bedrock-Voxel-Builder/`): builds structures in 3D in the browser and imports/exports `.mcstructure` and `.mcfunction`. Large structure upload is optimized; structure_void is reported to show. For structures with custom blocks, import the custom blocks first and then the structure file, or the blocks do not show. The 2026-11 version drops the earlier limits and has optimized rendering, and its GitHub repository holds the same version. Blockbench's built-in voxel-style modeling was named as a free alternative. (single report)
+- **Bedrock Voxel Builder** (`https://jomvlmrs.github.io/Bedrock-Voxel-Builder/`): builds structures in 3D in the browser and imports/exports `.mcstructure` and `.mcfunction`. Large structure upload is optimized; structure_void is reported to show. For structures with custom blocks, import the custom blocks first and then the structure file, or the blocks do not show. The 2026-11 version drops the earlier limits and has optimized rendering, and its GitHub repository holds the same version. Blockbench's built-in voxel-style modeling was named as a free alternative. `{single report}`
 - **Block geometry databases**: Structura, HoloPrint, Bedrock ASI and Scaffold each keep block shapes by hand. There was a proposal for a shared DB (BedrockBlockBuster) and a test of `glb2bedrock.py`, which breaks a GLB export into cubes. Structura is outdated and Structura Lab gets about 200 thousand views a month.
 - **mcstructure preview**
   - Structures Studio (`https://olivaresstudios.eu/studio`, `.mcstructure`/`.schem`/`.litematic` 3D, Java/Bedrock collision check, hologram .mcpack, support above 64, local only)
@@ -125,7 +125,7 @@ Terms such as `(confirmed)`, `(single report)` and `(conflicting)` are reliabili
   - Only valid UTF-8 text files go into a brarchive (scripts do not work). Not everything works from a brarchive, so keep the original JSON.
   - Helps with load time and compression.
   - The string `ExperimentalPacksUpgraderConfigPath` was seen.
-  - In Preview 26.70.26 the config file takes an output `mode`: `brpak` (default), `brarchive` or `unpacked`. The old `unpack` property makes it exit without any message. Setting `mode` to `brarchive` reportedly does not work yet. *single report*
+  - In Preview 26.70.26 the config file takes an output `mode`: `brpak` (default), `brarchive` or `unpacked`. The old `unpack` property makes it exit without any message. Setting `mode` to `brarchive` reportedly does not work yet. `{single report}`
 - **Schema dump**: put `test_config.json` next to BDS and run it, or use the activation arguments `./bedrock_server.exe Document=true` or `GenerateAPIMetadata=true` (the Chinese wiki `https://zh.minecraft.wiki/w/%E6%BF%80%E6%B4%BB%E5%8F%82%E6%95%B0`). The schemas are also at `https://github.com/bedrock-apis/bds-docs/tree/preview` . Some authors get schemas that are not in samples from BDS.
 
 ---
@@ -134,7 +134,7 @@ Terms such as `(confirmed)`, `(single report)` and `(conflicting)` are reliabili
 
 #### Launching and general
 - **Basics**: a built-in building tool along the lines of Axiom, Windows only and free. The install guide is at `https://learn.microsoft.com/en-us/minecraft/creator/documents/bedrockeditor/editorinstallation?view=minecraft-bedrock-stable` . If the old shortcut does not work on a GDK build, change the Preview shortcut to `minecraft-preview://creator/?Editor=true`. Crosshair mode is a vanilla building mode, so Editor tools cannot be used. The changelog and feedback are at `https://github.com/Mojang/minecraft-editor/discussions` .
-- **Compared with Java's Axiom**: Axiom builds in-world with Blueprints, edits block states like a debug stick, and has terrain tools and tool masks. Editor mode is said to feel closer to Blender, and mcstructure has size limits. Editor mode can also modify block states, but not illegal states. (single report)
+- **Compared with Java's Axiom**: Axiom builds in-world with Blueprints, edits block states like a debug stick, and has terrain tools and tool masks. Editor mode is said to feel closer to Blender, and mcstructure has size limits. Editor mode can also modify block states, but not illegal states. `{single report}`
 - **projectbackups and the landing page**: the `projectbackups` folder appears only after the first export. It is hard to tell which worlds are Editor-only. The landing page is being rebuilt with Ore UI (2026-02).
 - **Removing Editor-only**: change `editorWorldType` in `level.dat` to 0.
 

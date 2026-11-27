@@ -50,7 +50,7 @@ The example add-ons insert their own window into the vanilla chest panels (`ches
 
 With two add-ons that redeclare the same screen, only one was used, by pack order: another test add-on's `chest_screen.json` was above, and the vanilla screen came out instead of the redeclaring one (measured, HOST-49). So the examples use neither the redeclaration of `small_chest_screen` that replaces `$screen_content` (HOST-18) nor a slot 0 marker item. Slot 0 of the examples is empty. The rule for identifying a screen by a slot item's durability is HOST-17.
 
-A window that uses only `modifications` is drawn inside the chest panel that another add-on keeps on its vanilla side, even when that add-on redeclares the screen and is above it. This was checked only in the [JSON UI tester](../../tools/jsonui-tester.mdx) (jsonui-tester) static simulation (*unverified*).
+A window that uses only `modifications` is drawn inside the chest panel that another add-on keeps on its vanilla side, even when that add-on redeclares the screen and is above it. This was checked only in the [JSON UI tester](../../tools/jsonui-tester.mdx) (jsonui-tester) static simulation `{unverified}`.
 
 #### 2.2.1 Naming convention
 
@@ -64,7 +64,7 @@ The script names the menu entity's `nameTag` with the shared prefix `§b§w`, ma
 | Matchmaking (section 9) | `§b§w§m§m` |
 | Figure lobby (section 10) | `§b§w§m§f` |
 
-The menu entity's name tag was not visible in first person (measured). Whether it shows in third person or to other players was not tested (*unverified*, section 8.4).
+The menu entity's name tag was not visible in first person (measured). Whether it shows in third person or to other players was not tested `{unverified}` (section 8.4).
 
 #### 2.2.2 Hiding vanilla (shared by the examples)
 
@@ -106,8 +106,8 @@ The marker control sits inside `host` of the `overlay` in section 2.2.3.
 - On screens without the marker (ordinary chest, barrel) the binding did not hide vanilla (measured, compatibility test packs).
 - On mobile the grey background also disappeared and the window floated over the world like the classic UI, and there was no flicker while slot items changed every 0.5 s (measured, compatibility test packs).
 - When several packs insert bindings into the same vanilla control, they all read the marker of the same name and write the same value. `modifications` from several packs stack (MOD-02). So add-ons outside the wiki that follow the marker name `entity_ui_hide_vanilla` and the property `#entity_ui_vanilla_visible` can be turned on together. In a test with two test packs that know nothing of each other and the 2048 and matchmaking test packs switched to the same approach, all in one world, each opened only its own window (measured).
-- Leaving vanilla controls out with `ignored` would be lighter, since they would not be built. But `ignored` is a property that takes only `$` variables (FILE-16), so it has to be written on the vanilla definition, and that competes with other packs that write the same property (MOD-13). `modifications` cannot change properties (MOD-03). So vanilla is built and then hidden. The control count of the matchmaking test screen went from 369 to 2,375 (*unverified*, static simulation), but no slowdown was noticed in game (measured).
-- Desktop was not checked, because jsonui-tester does not apply `modifications` at a path key (*unverified*).
+- Leaving vanilla controls out with `ignored` would be lighter, since they would not be built. But `ignored` is a property that takes only `$` variables (FILE-16), so it has to be written on the vanilla definition, and that competes with other packs that write the same property (MOD-13). `modifications` cannot change properties (MOD-03). So vanilla is built and then hidden. The control count of the matchmaking test screen went from 369 to 2,375 `{unverified}` (static simulation), but no slowdown was noticed in game (measured).
+- Desktop was not checked, because jsonui-tester does not apply `modifications` at a path key `{unverified}`.
 
 #### 2.2.3 Inserting the window
 
@@ -171,7 +171,7 @@ The `overlay` is built only when the full name matches. This is the definition i
 ```
 
 - `ignored` does not see the control's own `$` declarations and is evaluated in the parent scope (FILE-34). So the copy variable goes on the parent `overlay` and the child `host` compares it. In game only the setup with the copy on the parent was tested (measured).
-- When `ignored` is true the control is not built, so a chest with another name has none of that example's controls. In jsonui-tester the control count of a mobile ordinary chest went from 3,569 when hidden only with `visible` to 2,207 (*unverified*, static simulation).
+- When `ignored` is true the control is not built, so a chest with another name has none of that example's controls. In jsonui-tester the control count of a mobile ordinary chest went from 3,569 when hidden only with `visible` to 2,207 `{unverified}` (static simulation).
 - `sync_grid` is an empty grid placed to stop flicker when slots change. With this binding-hide setup, no flicker was seen even without the grid. Item type changes and many slots changing at once were not tested, so the example keeps the grid as a precaution (section 8.3).
 - `overlay` and `cover` are at `layer` 1. With `overlay` at 50 and `cover` at 100, only the window's `inventory_item_renderer` icons were not drawn, while names, counts and backgrounds were (measured). Lowering both to 1 drew the icons (measured, ANI-38). This agrees with a community report that an item renderer at layer 100 hid items while 4 and 50 were fine.
 - The limit depends on the sum of all ancestor layers, not on the control's own `layer`. In a chest screen with an outer window at 1, a cover at 1 and a window at 2, item renderers and `live_player_renderer` controls were lined up at layers 0 to 999. Both were drawn up to a sum of 94 inside the example and neither was drawn from 99. Wrapping the same cells in a panel with 148 more layers (sums of 152 and up) drew none of them (measured, mobile, 2026-11-16). The sum leaves out the ancestor layers of the vanilla chest panel, so the exact limit can only be placed between 94 and 99. A `live_horse_renderer` in the same screen was drawn at every sum (measured). This renderer places the model at a fixed depth and draws with its own projection, so screen layers do not affect it *(code)*.
@@ -514,10 +514,10 @@ All of these are measured. Forcing a layout pass with a label whose width change
 ### 8.4 Container title and name tag
 
 - The title of an entity chest screen is the nameTag (measured, HOST-19). `minecraft:inventory` and the Script API `Container` and `EntityInventoryComponent` have no field or function that sets the title apart from the nameTag (Microsoft Learn documentation).
-- Community reports disagree on whether the language file's `entity.<id>.name` becomes the title when there is no nameTag (**conflicting**).
-- A custom block can give a title with `container.title` (a language key or text) of `minecraft:block_entity`, and opens on tap with `show_ui_on_interaction` (on by default), according to documentation and reports. A user reports it as an experimental feature in 26.50 and 26.60 (*single report*). The string `show_ui_on_interaction` is absent from the 1.26.52.3 (Android) and 1.26.63 (Windows) clients, and in 1.26.52.3 `container` reads only one key, `slot_count` *(code)*. So these builds cannot use that field or the title, and both most likely arrived in a later build (*inference*). On Windows 1.26.65 with the "Upcoming Creator Features" experiment on, a block with only `container: { "slot_count": 3 }` opened a chest UI with 3 slots and no title when used (measured).
-- `minecraft:nameable` has no field that hides the name tag (`allow_name_tag_renaming`, `always_show`, `default_trigger`, `name_actions`). There is a report that a behavior-pack-only entity with no client entity file draws no name tag (*single report*).
-- A candidate for hiding the name tag is `Entity.nameplateRenderDistance` (writable from `@minecraft/server` 2.8.0). Whether 0 hides it was not tested (*unverified*).
+- Community reports disagree on whether the language file's `entity.<id>.name` becomes the title when there is no nameTag. `{conflict}`
+- A custom block can give a title with `container.title` (a language key or text) of `minecraft:block_entity`, and opens on tap with `show_ui_on_interaction` (on by default), according to documentation and reports. A user reports it as an experimental feature in 26.50 and 26.60 `{single report}`. The string `show_ui_on_interaction` is absent from the 1.26.52.3 (Android) and 1.26.63 (Windows) clients, and in 1.26.52.3 `container` reads only one key, `slot_count` *(code)*. So these builds cannot use that field or the title, and both most likely arrived in a later build (*inference*). On Windows 1.26.65 with the "Upcoming Creator Features" experiment on, a block with only `container: { "slot_count": 3 }` opened a chest UI with 3 slots and no title when used (measured).
+- `minecraft:nameable` has no field that hides the name tag (`allow_name_tag_renaming`, `always_show`, `default_trigger`, `name_actions`). There is a report that a behavior-pack-only entity with no client entity file draws no name tag `{single report}`.
+- A candidate for hiding the name tag is `Entity.nameplateRenderDistance` (writable from `@minecraft/server` 2.8.0). Whether 0 hides it was not tested `{unverified}`.
 
 ### 8.5 Example add-on
 
@@ -616,10 +616,10 @@ Each cell has one `live_horse_renderer` that draws one entity. Several community
 | Screen value | none | global `#entity_id` | Not drawn. The chest screen does not provide it |
 
 - The example uses quoted names. Real player cells hold `p"<id>"` and simulated player cells hold `b"<id>"`. Each cell has two renderers that receive the value with `p` or `b` removed, and only the one whose value changed is visible (`#visible`).
-- A `live_player_renderer` in the same cell drew neither you nor other entities (measured). That test was inside an outer window at 50 and a cover at 100. With the layer sum lowered to 94 or less, `live_player_renderer` drew you in the chest screen too (section 2.2.3, measured). Whether it draws other entities at low layers was not tested (*unverified*).
+- A `live_player_renderer` in the same cell drew neither you nor other entities (measured). That test was inside an outer window at 50 and a cover at 100. With the layer sum lowered to 94 or less, `live_player_renderer` drew you in the chest screen too (section 2.2.3, measured). Whether it draws other entities at low layers was not tested `{unverified}`.
 - The model is about twice as tall as the renderer control and spills out of the cell, so the cell uses `clips_children: true` (measured).
 - A player's head sits at the top of the control, but a custom entity is drawn higher in the same control. Moving the control down by 1.35 times its size puts it where a player would be (measured at sizes 16, 24 and 32). With a center line drawn on a control that was not moved, the custom entity's feet sat on the control center. Comparing 1.35, 1.5 and 1.62 times at size 16 side by side, 1.35 matched the player best and the others sat lower (measured, mobile, 2026-11-16).
-- An entity out of view (10 blocks behind you) was still drawn (measured). Cells for other real players were not tested (*unverified*).
+- An entity out of view (10 blocks behind you) was still drawn (measured). Cells for other real players were not tested `{unverified}`.
 - Community reports say the renderer turns the model toward the cursor and that `#look_at_cursor: false` does not stop it. The code agrees: the only `property_bag` key this renderer reads is `#entity_id`, and the angle depends only on the input method *(code)*. Mobile has no cursor, so this report could not be checked in game. On mobile the figure was always drawn at the same default angle regardless of the entity's real facing, and a facing changed with `setRotation` did not show either (measured). Turning bones with an animation, as in section 10.3, did show in the figure (measured).
 - The renderer overwrites the entity's body and head rotation only while drawing and restores the original values afterwards. So the entity seen in the world and the server never see the changed rotation. This overwrite is also why `setRotation` did not show in the figure *(code, not tested separately in game)*.
 - With a desktop mouse, the angle follows the distance between the control center and the cursor and turns at most about 31 degrees. On a phone with no cursor, the angle is fixed: about 16 degrees looking down and about 25 degrees to the side *(code, angles not measured in game)*.
@@ -664,7 +664,7 @@ The entity has `inventory_size: 243` and the name `§b§w§m§f` (section 2.2.1)
 2. Take "Minigame Lobby" from the end of the items category of the creative inventory, or use `/give @s bwiki:entity_matchmaking_figures`.
 3. Hold the item and tap the middle of the screen to open the lobby. Pick a game and press Play to fill the figure cells.
 
-The measurements (mobile, 2026-11-15) used the test packs v1.0.0 to v1.3.0 that this example was built from. The screen and the script behavior are the same as the example add-on; only the names, identifiers and layers differ (section 2.2.3; the test packs used 50 and 100). The example add-on itself has not been run in game yet (*unverified*).
+The measurements (mobile, 2026-11-15) used the test packs v1.0.0 to v1.3.0 that this example was built from. The screen and the script behavior are the same as the example add-on; only the names, identifiers and layers differ (section 2.2.3; the test packs used 50 and 100). The example add-on itself has not been run in game yet `{unverified}`.
 
 ## Related rules
 

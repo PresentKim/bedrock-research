@@ -61,7 +61,7 @@ sources: [private-research, bedrock-wiki, ms-learn]
 
 ## 폴더와 식별자
 
-- 지오메트리는 `models/entity/*.geo.json`에 둬야 한다. `models/` 바로 아래에 두면 플레이어 지오메트리를 찾지 못한다. `models/entity/` 밖이면 안 보였다는 보고가 더 있고(2025-12), 블록 `.geo.json`은 `models/blocks`에 둔다. 반면 하위 폴더와 상관없이 식별자만 중요하다는 답(2026-02/03)도 있다. 파일 이름이 상관없다는 것은 합의이고 폴더 요구는 `conflicting`이다.
+- 지오메트리는 `models/entity/*.geo.json`에 둬야 한다. `models/` 바로 아래에 두면 플레이어 지오메트리를 찾지 못한다. `models/entity/` 밖이면 안 보였다는 보고가 더 있고(2025-12), 블록 `.geo.json`은 `models/blocks`에 둔다. 반면 하위 폴더와 상관없이 식별자만 중요하다는 답(2026-02/03)도 있다. 파일 이름이 상관없다는 것은 합의이고 폴더 요구는 `{충돌}`이다.
 - 모든 본은 루트 하나에 매달고, 로케이터를 고정하려면 부모 회전을 역회전으로 상쇄한다.
 - "geometry not found"는 잘못된 폴더나 JSON 오류(쉼표 누락, 지운 큐브)다. 클라이언트 엔티티에 갑옷 렌더 컨트롤러와 `geometry` 블록(armor.head 등)을 과하게 넣어 실패한 사례는 `render_controllers: ["controller.render.default"]`로 줄여 해결했다. geo 식별자가 `unknow` 같은 값이면 모델이 보이지 않았다.
 - 리소스 팩 엔티티 파일은 폴더 이름이 `entity`여야 로드된다.
@@ -77,7 +77,7 @@ sources: [private-research, bedrock-wiki, ms-learn]
 
 ## 투명하게 렌더링되는 엔티티
 
-- 텍스처 크기가 지오메트리의 `texture_width`·`texture_height`와 맞지 않거나 머티리얼이 틀리면 엔티티가 투명하게 렌더링될 수 있다(미해결 사례 있음). 엔티티 텍스처로 쓴 PNG가 512x512(2의 거듭제곱)로 바뀌기 전까지 잘못 보인 사례가 있다. 크기가 다른 것만으로는 투명해지지 않았다. UV는 `texture_width`/`texture_height`로 나눈 비율로 실제 텍스처에 대응되어, 64x32 지오메트리에 16x16 텍스처를 쓴 엔티티와 1024x1024 지오메트리에 48x18, 160x8 텍스처를 쓴 블록이 정상으로 그려졌다([실측 기록](../design/json-ui-claims.mdx#66-블록-uv-컨트롤러-덮기-소리-언어-애니메이션-가중치), 2026-11-19 Windows 1.26.65.1).
+- 텍스처 크기가 지오메트리의 `texture_width`·`texture_height`와 맞지 않거나 머티리얼이 틀리면 엔티티가 투명하게 렌더링될 수 있다(미해결 사례 있음). 엔티티 텍스처로 쓴 PNG가 512x512(2의 거듭제곱)로 바뀌기 전까지 잘못 보인 사례가 있다. 크기가 다른 것만으로는 투명해지지 않았다. UV는 `texture_width`/`texture_height`로 나눈 비율로 실제 텍스처에 대응되어, 64x32 지오메트리에 16x16 텍스처를 쓴 엔티티와 1024x1024 지오메트리에 48x18, 160x8 텍스처를 쓴 블록이 정상으로 그려졌다([실측 기록](../design/content-rendering-claims.mdx#9-블록), 2026-11-19 Windows 1.26.65.1).
 - 새 큐브에는 자기 텍스처가 필요하고, 크기를 바꾼 큐브는 기존 텍스처의 UV를 왜곡한다. 한 면에만 이미지를 넣으려면 면별 UV나 큐브별 텍스처가 필요하다. Blockbench에서 칠한 뒤 큐브를 추가하면 UV가 겹치므로 텍스처를 키우고 UV를 수동(auto UV 끄기)으로 정한다.
 - Blockbench에서 보이지 않거나 깨진 텍스처는 알파가 0이 아닌 거의 투명한 픽셀 때문일 수 있다. 색 선택기로 확인한다. Blockbench 렌더링은 게임과 정확히 같지 않고, 하드웨어 가속을 끄면 깜빡이는 텍스처가 고쳐진다. 애니메이션 불일치는 대개 잘못된 geo 파일이다.
 
@@ -88,7 +88,7 @@ sources: [private-research, bedrock-wiki, ms-learn]
 
 ## 먼 거리 렌더링
 
-- 큰 엔티티는 히트박스가 시야를 벗어나면 사라진다(렌더 거리가 히트박스·엔티티에 묶인다). 멀리서도 렌더링되는 것은 엔더 드래곤뿐인데 `runtime_identifier`로 된다는 주장, 안 된다는 보고, 1.17에서 패치됐다는 주장이 엇갈린다(`conflicting`).
+- 큰 엔티티는 히트박스가 시야를 벗어나면 사라진다(렌더 거리가 히트박스·엔티티에 묶인다). 멀리서도 렌더링되는 것은 엔더 드래곤뿐인데 `runtime_identifier`로 된다는 주장, 안 된다는 보고, 1.17에서 패치됐다는 주장이 엇갈린다 `{충돌}`.
 - 대안: 프록시 엔티티를 플레이어 가까이로 오프셋하는 애니메이션, 프록시 텔레포트, `minecraft:ender_dragon` 정체성과 컴포넌트 그룹. 큰 히트박스에는 상한이 있어서 아주 큰 표지판에는 연결된 엔티티 여러 개가 필요하다. `query.client_max_render_distance`는 엔티티 전용 컨텍스트 밖에서 쓸 수 없다(오류).
 - 엔티티 렌더 거리는 64블록(측정값 73)으로 제한되고 애드온으로 늘릴 수 없다. 컬링 값 확장은 네이티브 모드로만 된다. 먼 3D 모델은 파티클로 그리는 방법이 있다([파티클](./particles.mdx)의 3D 모양 파티클).
 - LOD 쿼리: `query.lod_index(d1, d2, d3, ...)`는 액터가 카메라(로컬 플레이어)로부터 어느 거리 구간에 있는지의 인덱스를 돌려준다(d1 미만이면 0, 마지막 너머면 N). 성능을 위해 저해상도 텍스처·지오메트리로 바꾸는 용도이고, 먼 엔티티를 만드는 용도가 아니다. 예: `(q.lod_index(2, 5, 10)+1)/3`. 프리뷰 1.26.70.21의 "atomic client entities" gist(gist.github.com/theaddonn/79745d88f86710003b18efc5919c0b66)도 거리별 모델 품질용 LOD 쿼리를 언급한다.
@@ -115,8 +115,8 @@ sources: [private-research, bedrock-wiki, ms-learn]
 
 - 큐브가 너무 많은 모델은 게임을 느리게 한다. 플레이어 엔티티 지오메트리 파일 합계(텍스처 제외)는 약 1.15 MB 이하로 유지한다. 넘으면 렉 스파이크가 생기고(플레이어만 해당) 렌더 컨트롤러에서 참조하지 않아도 지오메트리가 로드되어 스파이크가 난다.
 - 그룹과 본이 많을수록 느리므로 최소로 하고, 축소(minify)한 JSON이 약간 더 빨랐다.
-- **본 비용**: VV 시대부터 본마다 렌더 비용이 커졌고 큐브는 싸다. 한 본에 큐브 50개가 본 50개보다 약 200배 빠르다는 주장과, 다른 테스트에서 VV의 본당 비용이 약 30배라는 결과가 있다. `bone_visibility`나 애니메이션 스케일로 숨긴 본도 비용이 들고, 렌더 컨트롤러를 비활성화하면 비용이 없다. 버그 트래커 검색어는 "structura", "holoprint"다. 플레이어에 연결된 모델에 약 1.13 MB 한도가 있고 접속 패킷으로 전송된다는 주장은 `unverified`다.
-- **큐브 수 경험치**: Blockbench에서 500큐브 이상이면 약 20 fps, 저사양 상한은 약 250, 아이템은 50이면 충분하다는 의견이 있다(게임은 수천 개도 가능하다는 반론, `unverified`). 휴대폰에서 800큐브 엔티티 30마리가 30 fps였다. 칼날을 451에서 53, 카타나를 575에서 183큐브로 줄인 예가 있다. 크기는 536큐브 약 271 KB, 728큐브 팩 721 KB였다. 큐브가 많으면 배치가 어긋난다는 경고도 있다. 큰 모델은 Blockbench 자동 백업을 끄고 프록시 텍스처로 작업한다.
+- **본 비용**: VV 시대부터 본마다 렌더 비용이 커졌고 큐브는 싸다. 한 본에 큐브 50개가 본 50개보다 약 200배 빠르다는 주장과, 다른 테스트에서 VV의 본당 비용이 약 30배라는 결과가 있다. `bone_visibility`나 애니메이션 스케일로 숨긴 본도 비용이 들고, 렌더 컨트롤러를 비활성화하면 비용이 없다. 버그 트래커 검색어는 "structura", "holoprint"다. 플레이어에 연결된 모델에 약 1.13 MB 한도가 있고 접속 패킷으로 전송된다는 주장은 `{미검증}`다.
+- **큐브 수 경험치**: Blockbench에서 500큐브 이상이면 약 20 fps, 저사양 상한은 약 250, 아이템은 50이면 충분하다는 의견이 있다(게임은 수천 개도 가능하다는 반론, `{미검증}`). 휴대폰에서 800큐브 엔티티 30마리가 30 fps였다. 칼날을 451에서 53, 카타나를 575에서 183큐브로 줄인 예가 있다. 크기는 536큐브 약 271 KB, 728큐브 팩 721 KB였다. 큐브가 많으면 배치가 어긋난다는 경고도 있다. 큰 모델은 Blockbench 자동 백업을 끄고 프록시 텍스처로 작업한다.
 - **z-fighting과 깜빡임**: 겹치거나 같은 평면에 있는 큐브가 깜빡임과 검은 테두리의 흔한 원인이다. 약 1.0005배 스케일이나 0.01 inflate·deflate로 떼어 놓는다. Blockbench에서 숨긴 큐브는 게임에서 사라지지 않으니 지우거나, 텍스처와 지오메트리 비율을 맞춘다(48:48 사례). 큰 다중 큐브 모델의 이음매를 텍스처 해상도를 32에서 128로 올려 가린 사례가 있다. 멀리서 보는 납작한 텍스트 면은 0.01 px가 아니라 0.1 px쯤 띄워야 깜빡이지 않는다(거리가 멀수록 간격이 더 필요하다). 엔티티 상자 위에 겹치는 표시(화살표 같은 무늬)는 상자에서 0.08 px 띄워 멀리서도 깜빡이지 않게 했고, 무늬는 상자 안에 박힌 얇은 상자로 만들어 양면에 텍스처를 줬다 `{기록}`. 블록 모델 쪽 간격은 [블록 렌더링](./block-rendering.mdx)의 z-fighting 항목을 본다.
 - 블록을 엔티티로 배치하는 방법(렌더 컨트롤러당 블록 본 8개를 애니메이션으로 오프셋)은 별도 블로그에 정리돼 있다(출처: private-research에 모은 링크 theaddonn/Blogs `block_as_entities`).
 
@@ -135,7 +135,7 @@ sources: [private-research, bedrock-wiki, ms-learn]
 - 페이퍼돌(일시정지 화면)은 `player.json` 변수와 쿼리를 무시해서 추가 지오메트리·텍스처를 모두 그리거나 하나도 그리지 않는다([종이 인형과 NetEase](./paper-doll-and-netease.mdx)).
 - NPC 텍스처 교체는 팩의 `textures/entity/npc/`(74개)다.
 - 플레이어 모델 지오메트리 이름은 `mobs.json`의 `geometry.humanoid.custom`(넓은 팔)과 `geometry.humanoid.customSlim`이다.
-- player.json 예제 팩 중에는 `"min_engine_version": "1.8.0"`이 없는 것이 있어 복사하면 Marketplace 스킨이 깨진다. 기본 Steve 파일은 `C:\XboxGames\Minecraft for Windows\Content\data\skin_packs\vanilla\`(steve.png, geometry.json)에 있다. 스킨 텍스처 한도는 128x128이라는 보고가 있다(`single report`). 커스텀 엔티티는 커스텀 스킨을 쓸 수 없으니 변형으로 미리 넣는다. player.json을 고치는 애드온끼리는 충돌한다(Actions & Stuff, 총 애드온).
+- player.json 예제 팩 중에는 `"min_engine_version": "1.8.0"`이 없는 것이 있어 복사하면 Marketplace 스킨이 깨진다. 기본 Steve 파일은 `C:\XboxGames\Minecraft for Windows\Content\data\skin_packs\vanilla\`(steve.png, geometry.json)에 있다. 스킨 텍스처 한도는 128x128이라는 보고가 있다 `{단일 보고}`. 커스텀 엔티티는 커스텀 스킨을 쓸 수 없으니 변형으로 미리 넣는다. player.json을 고치는 애드온끼리는 충돌한다(Actions & Stuff, 총 애드온).
 - 슬림 스킨 감지(Molang): `v.is_slim_skin = !v.is_paperdoll && !q.is_in_ui && q.get_default_bone_pivot('rightarm', 1) < 21.75;`(rightArm 피벗 y가 custom 22, customSlim 21.5). `pre_animation`에서는 오류가 나므로 애니메이션 안에서 계산한다. Character Creator 스킨은 값이 다르고 `v.short_arm_offset_*`는 동작하지 않는다. 갑옷 장식(trim) 감지는 Molang이나 리소스 팩으로 할 수 없다.
 
 ## 기타 모델 팁

@@ -7,7 +7,7 @@ sources: [private-research, bedrock-wiki, ms-learn]
 
 # 렌더 컨트롤러
 
-게임에서 잰 기록(텍스처 배열, `textures` 항목 수, 렌더링 쿼리, `uv_anim`)은 [6.3절](../design/json-ui-claims.mdx#63-상태-유지-지연-루트-팩-순서-렌더링)부터 [6.7절](../design/json-ui-claims.mdx#67-파티클-쿼리와-카운터-소리-정의-머티리얼-파일-바이옴)까지에 있다.
+게임에서 잰 기록(텍스처 배열, `textures` 항목 수, 렌더링 쿼리, `uv_anim`)은 [콘텐츠와 렌더링 주장 실측](../design/content-rendering-claims.mdx#3-렌더-컨트롤러와-텍스처)에 있다.
 
 ## 개념
 
@@ -52,7 +52,7 @@ sources: [private-research, bedrock-wiki, ms-learn]
 
 ## 기본 형태와 오류
 
-- 렌더 컨트롤러 파일에 `geometry`, `textures`, `materials`를 두고 `Geometry.default`, `Texture.default`, `Material.default`를 쓴다. `textures`는 반드시 배열이고 `geometry`는 문자열이다. 형태가 틀리면 충돌 판정만 있는 투명 엔티티가 된다. 변형 배열은 변형 id 순서와 맞춘다. 예: `"textures": ["query.is_baby ? Array.baby[query.variant] : Array.shade[query.variant]"]`. `confirmed`
+- 렌더 컨트롤러 파일에 `geometry`, `textures`, `materials`를 두고 `Geometry.default`, `Texture.default`, `Material.default`를 쓴다. `textures`는 반드시 배열이고 `geometry`는 문자열이다. 형태가 틀리면 충돌 판정만 있는 투명 엔티티가 된다. 변형 배열은 변형 id 순서와 맞춘다. 예: `"textures": ["query.is_baby ? Array.baby[query.variant] : Array.shade[query.variant]"]`. `{커뮤니티 확인}`
 - 1.8.0식 옛 형식과 새 형식을 혼동하면 "Error parsing render Controllers"가 난다. 렌더 컨트롤러 이름은 클라이언트 엔티티의 텍스처 짧은 이름과 정확히 일치해야 한다. 렌더 컨트롤러 파일에는 `format_version`과 `render_controllers` 래퍼가 필요하다.
 - 클라이언트 엔티티에서 `"materials": {"default": "invert_culling"}`처럼 키를 정의하고 렌더 컨트롤러가 그 키를 쓴다. `materials`에 여러 머티리얼을 쓰면 그 이름들이 클라이언트 엔티티에 정의돼 있어야 하고, 아니면 "Mesh Material doesn't exist"가 난다. 모바일에서는 캐시된 팩을 지우고, 개발 폴더의 팩인지도 확인한다.
 
@@ -64,7 +64,7 @@ sources: [private-research, bedrock-wiki, ms-learn]
 - 이벤트에는 "set_variant"가 없으니 property를 설정하거나 `minecraft:variant` 컴포넌트 그룹을 추가한다.
 - 렌더 컨트롤러의 `math.random`, `math.random_integer`는 매 프레임(틱) 다시 굴려져 깜빡인다. `scripts.initialize`나 `pre_animation`에서 한 번만 정한다(예: `"variable.Xvar = query.anim_time>0 ? variable.Xvar : Math.random(0,999);"`를 인덱스로 감싼다). 클라이언트 재로드 때 리셋되므로 재접속하면 바뀐다. 지속적인 변형은 BP property(`query.property`)를 쓴다.
 - 레이어 텍스처(말 스타일): `Array.base`, `Array.overlay`에 `v.base = q.variant; v.overlay = q.mark_variant`를 쓰고 `textures`에 두 항목을 둔다. 정의되지 않은 `v.index`는 분홍 머리가 떠다니게 만들었다. 말 갑옷 같은 동적 배열은 `Array.armor[variable.armor_texture_slot]`. 첫 텍스처만 읽혀 쌓이지 않았다는 보고도 있고, 안장 레이어 `query.is_saddled ? Texture.saddle : Texture.empty`는 스레드에서 미해결이었다.
-- **텍스처 배열 3개 초과 크래시**: 한 렌더 컨트롤러에 `Array.layerN[query.property(...)]` 텍스처 배열을 3개보다 많이 쓰자 게임이 크래시했다. 여러 렌더 컨트롤러로 나눠 `render_controllers`에 나열한다. 실측(2026-11-19 Windows 1.26.65.1): 한 렌더 컨트롤러의 `arrays.textures`에 배열 4개를 두고 `textures`에 넷 모두 쓰자 크래시 없이 그려졌다(첫 배열 값). 이때 인덱스는 `query.property(...)`가 아니었고, property 인덱스 배열은 재지 않았다([기록](../design/json-ui-claims.mdx#63-상태-유지-지연-루트-팩-순서-렌더링)). 같은 날 더 재 보니 배열 개수보다 `textures` **항목 수**가 문제였다. 배열 15개를 정의하고 하나만 쓰거나 원소 15개 배열 하나를 쓰면 그려졌고, `textures` 항목은 11개까지 그려졌다. 12개는 배열을 쓰든 `Texture.x`를 나열하든 소환 직후 클라이언트가 멈췄고, 그 엔티티가 저장된 월드에 다시 들어갈 때도 멈췄다. 배열 15개를 모두 `textures`에 쓴 15개는 크래시였다([기록](../design/json-ui-claims.mdx#64-이름-바인딩-빈-전역-길이-나눗셈-텍스처-수-파티클-카운터)).
+- **텍스처 배열 3개 초과 크래시**: 한 렌더 컨트롤러에 `Array.layerN[query.property(...)]` 텍스처 배열을 3개보다 많이 쓰자 게임이 크래시했다. 여러 렌더 컨트롤러로 나눠 `render_controllers`에 나열한다. 실측(2026-11-19 Windows 1.26.65.1): 한 렌더 컨트롤러의 `arrays.textures`에 배열 4개를 두고 `textures`에 넷 모두 쓰자 크래시 없이 그려졌다(첫 배열 값). 이때 인덱스는 `query.property(...)`가 아니었고, property 인덱스 배열은 재지 않았다([기록](../design/content-rendering-claims.mdx#3-렌더-컨트롤러와-텍스처)). 같은 날 더 재 보니 배열 개수보다 `textures` **항목 수**가 문제였다. 배열 15개를 정의하고 하나만 쓰거나 원소 15개 배열 하나를 쓰면 그려졌고, `textures` 항목은 11개까지 그려졌다. 12개는 배열을 쓰든 `Texture.x`를 나열하든 소환 직후 클라이언트가 멈췄고, 그 엔티티가 저장된 월드에 다시 들어갈 때도 멈췄다. 배열 15개를 모두 `textures`에 쓴 15개는 크래시였다([기록](../design/content-rendering-claims.mdx#3-렌더-컨트롤러와-텍스처)).
 
 ### 예제: int 속성으로 텍스처 고르기
 
@@ -184,7 +184,7 @@ entity.wiki:skin_mob.name=Skin Mob
 - property가 값과 같을 때만 보이기: `"geometry":"q.property('ns:prop')==2?Geometry.default:Geometry.empty"`(빈 지오메트리).
 - 이름 기반: `query.is_name_any('alex','Alex') ? Geometry.x : Geometry.default`, `query.get_name == 'Jade' ? Texture.jade : (...)`(바닐라 토끼 RP 파일 참고). 부분 일치를 피하려면 `query.is_name_any('NAME1')`을 쓴다.
 - 죽음 텍스처 해킹: `"textures": ["Array.Textures[!q.is_alive]"]`. 클라이언트 엔티티는 로컬 플레이어가 아니라 엔티티 데이터 기준으로 렌더링한다.
-- 프레임 애니메이션 텍스처: `"textures":["Array.frames[query.life_time*24]"]`, `array.frames[Math.mod(math.floor(query.anim_time * 5), 9)]`. 내림 없는 인덱스도 된다: 원소 5개 배열에 `Array.t[query.life_time * 2]`를 쓰자 다섯 색이 차례로 돌았고, 길이를 넘는 인덱스는 처음으로 돌아갔다(2026-11-19 Windows 1.26.65.1, [기록](../design/json-ui-claims.mdx#63-상태-유지-지연-루트-팩-순서-렌더링)). 개구리 텍스처 선택에는 `query.variant` 중첩 삼항식이 쓰였다. 애니메이션 활 여러 단계: `"geometry": "array.bow_geo_frames[query.get_animation_frame]"`와 `arrays.geometries`, `arrays.textures`. 대기 플립북과 당김 프레임을 `temp` 수식으로 `textures`에서 합치는 예시는 실패했다.
+- 프레임 애니메이션 텍스처: `"textures":["Array.frames[query.life_time*24]"]`, `array.frames[Math.mod(math.floor(query.anim_time * 5), 9)]`. 내림 없는 인덱스도 된다: 원소 5개 배열에 `Array.t[query.life_time * 2]`를 쓰자 다섯 색이 차례로 돌았고, 길이를 넘는 인덱스는 처음으로 돌아갔다(2026-11-19 Windows 1.26.65.1, [기록](../design/content-rendering-claims.mdx#3-렌더-컨트롤러와-텍스처)). 개구리 텍스처 선택에는 `query.variant` 중첩 삼항식이 쓰였다. 애니메이션 활 여러 단계: `"geometry": "array.bow_geo_frames[query.get_animation_frame]"`와 `arrays.geometries`, `arrays.textures`. 대기 플립북과 당김 프레임을 `temp` 수식으로 `textures`에서 합치는 예시는 실패했다.
 
 ## uv_anim
 
@@ -258,4 +258,4 @@ entity.wiki:skin_mob.name=Skin Mob
 
 렌더 컨트롤러를 많이 쓰면(모델 75개 x RC 5개) 크래시하거나 느려진다. 1200개 대 40개의 RAM 영향 질문은 답이 없었다.
 
-기기 사양에 따라 컨트롤러나 텍스처를 고르는 쿼리도 있다. Windows 1.26.65.1(2026-11-19)에서 `Array.t[q.client_memory_tier]`는 인덱스 4를 골랐고, 화려한 그래픽에서 `q.graphics_mode_is_any('fancy')`는 참, `q.graphics_mode_is_any('deferred')`는 거짓이었다([기록](../design/json-ui-claims.mdx#65-소수-리터럴-alpha-문자열-나누기-hud-렌더링-쿼리)). 다른 등급과 그래픽 모드의 값은 재지 않았다.
+기기 사양에 따라 컨트롤러나 텍스처를 고르는 쿼리도 있다. Windows 1.26.65.1(2026-11-19)에서 `Array.t[q.client_memory_tier]`는 인덱스 4를 골랐고, 화려한 그래픽에서 `q.graphics_mode_is_any('fancy')`는 참, `q.graphics_mode_is_any('deferred')`는 거짓이었다([기록](../design/content-rendering-claims.mdx#3-렌더-컨트롤러와-텍스처)). 다른 등급과 그래픽 모드의 값은 재지 않았다.

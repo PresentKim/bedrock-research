@@ -3,8 +3,8 @@ import path from 'node:path';
 import GithubSlugger from 'github-slugger';
 
 export const MARKS = {
-  ko: ['실측', '바닐라', '작동팩', '코드', '코드(소스)', '코드(바이너리)', '추론', '미검증', '충돌', '설치본', '확인', '문서', '기록', '실측 필요'],
-  en: ['measured', 'vanilla', 'working pack', 'code', 'code (source)', 'code (binary)', 'inferred', 'unverified', 'conflict', 'installed', 'verified', 'docs', 'record', 'needs measurement'],
+  ko: ['실측', '바닐라', '작동팩', '코드', '코드(소스)', '코드(바이너리)', '추론', '미검증', '충돌', '설치본', '확인', '문서', '기록', '실측 필요', '커뮤니티 확인', '단일 보고'],
+  en: ['measured', 'vanilla', 'working pack', 'code', 'code (source)', 'code (binary)', 'inferred', 'unverified', 'conflict', 'installed', 'verified', 'docs', 'record', 'needs measurement', 'community confirmed', 'single report'],
 };
 
 const RULE_PREFIX = '(?:FILE|MOD|LAY|BND|EXP|COL|INP|TXT|ANI|HOST|PAT|ALT|DBG|C|D|NB|RV|R)';

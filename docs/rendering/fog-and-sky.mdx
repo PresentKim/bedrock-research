@@ -7,7 +7,7 @@ sources: [private-research, ms-learn, bedrock-samples]
 
 # 안개와 하늘
 
-게임에서 잰 클라이언트 바이옴 fog 기록은 [6.7절](../design/json-ui-claims.mdx#67-파티클-쿼리와-카운터-소리-정의-머티리얼-파일-바이옴)에 있다.
+게임에서 잰 클라이언트 바이옴 fog 기록은 [콘텐츠와 렌더링 주장 실측](../design/content-rendering-claims.mdx#7-안개와-바이옴)에 있다.
 
 ## 개념
 
@@ -62,19 +62,19 @@ VV 형식(format 1.21.90)은 같은 파일에 `volumetric`을 더한다.
 
 ## 레거시 fog (VV 외, 공통)
 
-- **non-VV fog의 성질**: 카메라 거리에 따라 페이드된다. 실내를 짙게 하려면 `render_distance_type: fixed`와 `fog_end` 8~20을 쓴다. format 1.21.90의 fixed fog는 카메라 근처에 쌓이고 이징이 없다. 먼 블록의 색도 커스텀 fog로 항상 또는 차원별로 바꿀 수 있다. non-VV에서는 fog가 하늘 색도 바꾼다. fog가 렌더 거리를 제한하지 않았다는 미확인 보고가 있다(`unverified`).
+- **non-VV fog의 성질**: 카메라 거리에 따라 페이드된다. 실내를 짙게 하려면 `render_distance_type: fixed`와 `fog_end` 8~20을 쓴다. format 1.21.90의 fixed fog는 카메라 근처에 쌓이고 이징이 없다. 먼 블록의 색도 커스텀 fog로 항상 또는 차원별로 바꿀 수 있다. non-VV에서는 fog가 하늘 색도 바꾼다. fog가 렌더 거리를 제한하지 않았다는 미확인 보고가 있다 `{미검증}`.
 - **fog JSON(레거시)**: `minecraft:fog_settings`(format 1.16.100)는 `distance.air/water/weather`에 `fog_start`, `fog_end`, `fog_color`, `render_distance_type`을 두고 water는 `transition_fog`를 지원한다. fog 색 밝기는 조절되지 않는다(`#FF9900`과 `#5A3600`이 같아 보임). 바닐라 fog 파일(리소스 팩 `fog/`)은 VV 없이도 수중 fog 속성을 설정할 수 있다. 실명 fog 거리는 설정할 수 없다. 커스텀 fog가 모바일에서 가끔 버벅인다.
 - **바닐라 fog 수정**: 식별자 `minecraft:...`로는 편집할 수 없으니("identifier minecraft cannot be used") 자체 식별자로 새 fog를 만들고 client biome(`fog_identifier`)을 그쪽으로 가리킨다. `biomes/`의 client biome 파일은 여전히 바이옴마다 `fog_identifier`를 쓰고 예전 `biomes_client.json`은 더 이상 쓰이지 않는다고 한다. client biome `fog_appearance`가 fog 설정 파일을 가리킨다. 비 fog 파일을 추가해 바닐라 fog를 덮어쓰는 것, client_biomes에 `weather` fog를 추가하는 것, client_biome `"minecraft:fog_appearance"`의 `fog_identifier`로 사바나 바닐라 fog를 덮어쓰는 것은 효과가 없었다(미해결). 바닐라 fog 위치: https://github.com/Mojang/bedrock-samples/tree/main/resource_pack/fogs
-- **fog 완전 제거**: `fog_start` 999, `fog_end` 1000이면 사실상 fog가 사라진다는 보고(2026-09)와, 큰 값이나 같은 값으로는 제거되지 않고(fixed든 render distance 타입이든) 셰이더가 필요하다는 보고(2026-09)가 있다. `conflicting` `default_fog`로 "air" fog가 지워지지 않을 수 있고 fog가 한 파일에만 있지 않다는 지적이 있다. fog 제거 팩 예: https://www.curseforge.com/minecraft-bedrock/texture-packs/no-fog-ultra (설정의 렌더 거리 fog 끄기는 효과가 없던 사례가 있다).
+- **fog 완전 제거**: `fog_start` 999, `fog_end` 1000이면 사실상 fog가 사라진다는 보고(2026-09)와, 큰 값이나 같은 값으로는 제거되지 않고(fixed든 render distance 타입이든) 셰이더가 필요하다는 보고(2026-09)가 있다. `{충돌}` `default_fog`로 "air" fog가 지워지지 않을 수 있고 fog가 한 파일에만 있지 않다는 지적이 있다. fog 제거 팩 예: https://www.curseforge.com/minecraft-bedrock/texture-packs/no-fog-ultra (설정의 렌더 거리 fog 끄기는 효과가 없던 사례가 있다).
 - **동적 fog**: `/fog <player> push <fog_id> <user_id>`, `pop <user_id>`, `remove <user_id>`(플레이어별 스택)로 바꾼다. 이 명령을 감싼 TS 래퍼 클래스가 공유됐다. fog를 너무 많이 push하면 "Size limit reached for fog identifier for player" 오류가 난다. fog 적용 후 하늘 색을 즉시 바꾸는 방법은 모른다(기본은 페이드 전환).
-- **스카이박스**: 커스텀 바이옴으로는 하늘 색만 바꿀 수 있다(PNG·큐브맵은 아직 안 됨, 커스텀 차원 피드백 2026-10). 스카이박스는 동적으로 바꿀 수 없고 서버에서 커스텀 차원 하늘, End 하늘, 스카이박스를 바꾸는 방법도 알려지지 않았다. VV 큐브맵은 [VV 설정 파일](./vv-settings.mdx), 머티리얼로 fog 없는 스카이박스는 [머티리얼과 셰이더](./materials-and-shaders.mdx)의 멀티패스를 본다. 비를 눈으로 바꾸는 것은 시각적으로만(텍스처) 된다. 구름 움직임 토글 질문은 답이 없었다. 구름 렌더링은 팩에서 직접 끌 수 없고, Beautiful Skies를 켠 뒤 구름과 하늘을 끄라는 답이 있었다(`single report`).
-- **커스텀 구름과 End**: 구름마다 모양이 무작위인 커스텀 구름을 리소스 팩만으로 만든 작업 중 사례가 있다. 플레이어 모델 기반이라 글로벌 리소스에서도 동작한다고 하고, RP 전용으로 유지하려면 플레이어 엔티티에 파티클을 붙이라는 제안이 있었다. End의 VV 모습을 파티클 효과만으로 개선한 사례도 있다(`single report`). `material.bin`으로 End 하늘을 바꾸는 방법은 [머티리얼과 셰이더](./materials-and-shaders.mdx)의 커스텀 셰이더 절을 본다.
+- **스카이박스**: 커스텀 바이옴으로는 하늘 색만 바꿀 수 있다(PNG·큐브맵은 아직 안 됨, 커스텀 차원 피드백 2026-10). 스카이박스는 동적으로 바꿀 수 없고 서버에서 커스텀 차원 하늘, End 하늘, 스카이박스를 바꾸는 방법도 알려지지 않았다. VV 큐브맵은 [VV 설정 파일](./vv-settings.mdx), 머티리얼로 fog 없는 스카이박스는 [머티리얼과 셰이더](./materials-and-shaders.mdx)의 멀티패스를 본다. 비를 눈으로 바꾸는 것은 시각적으로만(텍스처) 된다. 구름 움직임 토글 질문은 답이 없었다. 구름 렌더링은 팩에서 직접 끌 수 없고, Beautiful Skies를 켠 뒤 구름과 하늘을 끄라는 답이 있었다 `{단일 보고}`.
+- **커스텀 구름과 End**: 구름마다 모양이 무작위인 커스텀 구름을 리소스 팩만으로 만든 작업 중 사례가 있다. 플레이어 모델 기반이라 글로벌 리소스에서도 동작한다고 하고, RP 전용으로 유지하려면 플레이어 엔티티에 파티클을 붙이라는 제안이 있었다. End의 VV 모습을 파티클 효과만으로 개선한 사례도 있다 `{단일 보고}`. `material.bin`으로 End 하늘을 바꾸는 방법은 [머티리얼과 셰이더](./materials-and-shaders.mdx)의 커스텀 셰이더 절을 본다.
 - **큰 모델과 fog**: 큰 모델이 렌더 거리와 별개로 fog를 무시하게 하는 방법은 답이 없었다. 빛 레벨에 따라 숨기는 깔끔한 방법도 없다.
 - **카메라 페이드**: 스크립트 API `fade`는 RGB만 있고 불투명 오버레이이며 유지 시간 최대 10초이고 알파가 없다. `/camera fade`의 번쩍임은 광과민성 발작 방지 때문에 제한된다. 대안은 플레이어에 붙인 검은 파티클이나 플레이어 지오메트리에 넣은 검은 큐브다. 카메라 컷신은 Camera API(`player.camera`)를 쓴다.
 
 ## 예제: 클라이언트 바이옴으로 평지에 붉은 fog 걸기
 
-fog 파일 하나와 클라이언트 바이옴 파일 하나로 바닐라 평지 바이옴에 fog를 건다. 클라이언트 바이옴이 `minecraft:fog_appearance`의 `fog_identifier`로 fog 식별자를 가리킨다. 측정에서는 `format_version` `1.21.70`, 이름공간 없는 `"identifier": "plains"`, 시작 4, 끝 16, 빨강 fog로 평지 월드가 붉은 안개로 바뀌었다. 기록은 비가 그친 뒤의 모습이다([6.7절 기록](../design/json-ui-claims.mdx#67-파티클-쿼리와-카운터-소리-정의-머티리얼-파일-바이옴), 2026-11-19 Windows 1.26.65.1). 측정에 쓴 파일은 애드온에 넣지 않았고 기록에는 위 값만 남아 있다. 아래 코드는 그 값에 위 레거시 fog 예의 키를 맞춰 쓴 것이라 파일 그대로는 게임에서 재지 않았다 `{실측 필요}`.
+fog 파일 하나와 클라이언트 바이옴 파일 하나로 바닐라 평지 바이옴에 fog를 건다. 클라이언트 바이옴이 `minecraft:fog_appearance`의 `fog_identifier`로 fog 식별자를 가리킨다. 측정에서는 `format_version` `1.21.70`, 이름공간 없는 `"identifier": "plains"`, 시작 4, 끝 16, 빨강 fog로 평지 월드가 붉은 안개로 바뀌었다. 기록은 비가 그친 뒤의 모습이다([실측 기록](../design/content-rendering-claims.mdx#7-안개와-바이옴), 2026-11-19 Windows 1.26.65.1). 측정에 쓴 파일은 애드온에 넣지 않았고 기록에는 위 값만 남아 있다. 아래 코드는 그 값에 위 레거시 fog 예의 키를 맞춰 쓴 것이라 파일 그대로는 게임에서 재지 않았다 `{실측 필요}`.
 
 `resource_pack/fogs/red_fog.json`:
 
@@ -109,4 +109,4 @@ fog 파일 하나와 클라이언트 바이옴 파일 하나로 바닐라 평지
 ## 디더링(접근성 페이드)
 
 - GDK 릴리스(2025-10-31 무렵) 이후 카메라가 가까우면 엔티티, 어태처블, 블록이 본마다 불투명·투명 픽셀이 번갈아 나오는 디더링으로 사라진다. 설정의 접근성에서 끌 수 있고 끄자 "모델이 없다·비친다"는 보고가 해결됐다. 깊이 정렬, 비용, 무작위 투명 그리기 순서 때문에 반투명을 쓰지 않았다고 한다.
-- 디더링은 VFX를 깨뜨리고 2026-01에 손 아이템으로 확대됐으며 Poppy Playtime과 A&S 같은 팩은 막판 수정을 하거나 사용자에게 끄라고 안내해야 했다. 2025-12-15 정식판에서 `entity_alphablend`나 `entity_beam_additive`를 쓴 1인칭 어태처블이 부분 알파를 잃었다(50% 근처에서 잘림). 이런 문제에는 디더링 끄기를 가장 먼저 시도한다. GDK 업데이트 후 화면 애니메이션(설정, 비디오)이 UI 렉을 일으켰고 업데이트 때 UI 설정이 모두 리셋됐다. `confirmed`
+- 디더링은 VFX를 깨뜨리고 2026-01에 손 아이템으로 확대됐으며 Poppy Playtime과 A&S 같은 팩은 막판 수정을 하거나 사용자에게 끄라고 안내해야 했다. 2025-12-15 정식판에서 `entity_alphablend`나 `entity_beam_additive`를 쓴 1인칭 어태처블이 부분 알파를 잃었다(50% 근처에서 잘림). 이런 문제에는 디더링 끄기를 가장 먼저 시도한다. GDK 업데이트 후 화면 애니메이션(설정, 비디오)이 UI 렉을 일으켰고 업데이트 때 UI 설정이 모두 리셋됐다. `{커뮤니티 확인}`

@@ -8,7 +8,7 @@ sources:
 
 커뮤니티 보고 중 JSON UI 문법과 데이터 채널 노트다. 개발 워크플로, 파일 구조와 `modifications`, 바인딩, 표현식 언어, preserved title을 포함한 스크립트에서 UI로 가는 데이터 전달, HUD 커스터마이즈, 레이아웃·텍스트·애니메이션을 다룬다.
 
-신뢰 표시와 `` 형태의 출처 표기는 커뮤니티 보고와 대조 페이지의 머리말과 같다: *confirmed*는 여러 사람이 확인, *single report*는 한 사람의 보고, *unverified*는 추측, **conflicting**은 보고가 엇갈림이다.
+`` 형태의 출처 표기는 커뮤니티 보고와 대조 페이지의 머리말과 같고, 검증 수준 표기는 [위키 첫 페이지의 범례](../index.mdx#검증-수준-표기)를 따른다.
 
 ## 개발 워크플로와 디버깅
 
@@ -18,7 +18,7 @@ sources:
 - **학습 방법**: 공식 문서가 없으니 바닐라 ui json(bedrock-samples)을 RP `ui/`에 복사해서 값을 바꿔 보며 배운다. 파일의 진입점(`$screen_content`)부터 트리를 따라 내려가고, 참조는 namespace와 점을 뺀 이름(`main_button`)으로 검색한다. 화면을 파일에 매핑해 주는 도구는 없으니 `"ignored": true`로 하나씩 숨겨 보며 요소를 찾는다.
 - **Debug 색상**: 요소에 `"debug": "red"` 등을 주면 경계 사각형이 그려진다. 레이아웃 확인용이지만 성능 비용이 크다(2026-06-01 보고). 내용도 debug 색도 없는 패널은 화면에 보이지 않는다.
 - **오류 확인**: Content Log GUI(Creator 설정)를 켠다. 설정 > 전역 리소스 > 팩에 빨간 표시가 있으면 파일에 오류가 있는 것이다. 오류가 있는 파일은 통째로 무시된다. UI 파싱 오류는 파일과 위치를 함께 보여 준다(예: `ui/hud_screen.json: Unable to parse ... Missing ',' or ']'`). 파일 이름이 틀려도 같은 증상이 나는데, 예를 들어 `smithing_table_2_screen.json`이 맞고 `smithing_table_screen_2.json`은 틀리다.
-- **오류 로깅 개선**: 2026-09-22 preview부터 잘못된 바인딩 표현식과 view binding 루프가 content log에 더 많이 찍힌다. 크래시는 여전히 기록되지 않는다. 2026-10-13 업데이트에서 오류 타입이 또 바뀌었다. 2026-10-06 preview에서도 오류 로깅이 개선됐다는 언급이 있다. 잘못된 것 대부분은 여전히 조용히 건너뛴다. 2026-10-29에는 정식판 모바일 화면에 `[UI][error]-JSON UI parse failure: Invalid expression.`이 직접 떴다는 보고가 있다(바인딩 결과가 `/`로 시작한 경우. 버전 미상). *single report*
+- **오류 로깅 개선**: 2026-09-22 preview부터 잘못된 바인딩 표현식과 view binding 루프가 content log에 더 많이 찍힌다. 크래시는 여전히 기록되지 않는다. 2026-10-13 업데이트에서 오류 타입이 또 바뀌었다. 2026-10-06 preview에서도 오류 로깅이 개선됐다는 언급이 있다. 잘못된 것 대부분은 여전히 조용히 건너뛴다. 2026-10-29에는 정식판 모바일 화면에 `[UI][error]-JSON UI parse failure: Invalid expression.`이 직접 떴다는 보고가 있다(바인딩 결과가 `/`로 시작한 경우. 버전 미상). `{단일 보고}`
 - **에디터 자동완성**: UI 파일에 `"$schema": "https://kalmemarq.github.io/Bugrock-JSON-UI-Schemas/ui.schema.json"`을 넣는다(바인딩 목록은 26.x를 반영하지 않음). VS Code 확장 Sugger.json-ui-autocomplete도 있다.
 - **Android**: 최신 Android에서는 com.mojang이 읽기 전용이라 수정할 때마다 .mcpack을 다시 import해야 한다. LeviLauncher나 USB 테더링/데스크톱 환경이 권장된다. 파일을 ISO-8859-1로 저장하면 Android에서 `§`가 깨지므로 UTF-8로 저장한다.
 - **텍스처 문제**: preview에서 UI 텍스처가 팩 리로드나 PC 재시작 전까지 안 뜨는 경우가 있었다. 게임이 오래된 폼 레이아웃을 들고 있으면 캐시를 지운다.
@@ -44,7 +44,7 @@ sources:
 ### variables
 - **로드 시점에만 평가**: `variables`(`requires` 조건)는 화면이 로드될 때 한 번 평가되고 실시간으로 바뀌지 않는다. 변수만 검사할 수 있고 `#binding`은 리터럴 문자열로 읽힌다.
 - **변수는 바인딩 값을 담지 못한다**: `"$var": "#bind"`는 텍스트 치환일 뿐이다. 반대로 `property_bag: {"#name": "$var"}`로 변수를 바인딩으로 바꿀 수는 있다(그 요소에서만). 전역 가변 변수는 없다.
-- **바인딩으로 레이아웃 고르기(우회)**: `"bindings":[{"binding_name":"#form_text","binding_name_override":"$binding_text"}]`와 `"variables":[{"requires":"($binding_text = 'x')","$layout":"ns.layout"}]`, `controls:[{"tab_layout@$layout":{}}]`를 함께 쓰면 바인딩 값으로 레이아웃을 고를 수 있다는 보고가 있다. property_bag에 먼저 넣고 variables에서 검사하는 변형도 있다. *single report*
+- **바인딩으로 레이아웃 고르기(우회)**: `"bindings":[{"binding_name":"#form_text","binding_name_override":"$binding_text"}]`와 `"variables":[{"requires":"($binding_text = 'x')","$layout":"ns.layout"}]`, `controls:[{"tab_layout@$layout":{}}]`를 함께 쓰면 바인딩 값으로 레이아웃을 고를 수 있다는 보고가 있다. property_bag에 먼저 넣고 variables에서 검사하는 변형도 있다. `{단일 보고}`
 - **`$container_title`/`$actionbar_text` 비교**: 직접 비교하면 실패한다. 먼저 복사(`"$chest_title": "$container_title"`, `"$atext": "$actionbar_text"`)한 뒤 `variables` 밖에서 복사본을 비교한다. 문자열 비교는 `'container.chestCopper'`처럼 따옴표를 쓴다. `"requires": "default"`라는 것은 없다. `"$container_title_custom|default": "$container_title"` 같은 기본값 문법을 쓸 수 있다.
 - **`requires` 문법**: 조건은 `"($left and not ($up or $down))"`처럼 단어 연산자로 쓴다. 대상 변수명에 `$`를 빠뜨리면 조건은 통과해도 아무 일도 일어나지 않는다. requirement마다 객체 하나를 쓴다. 같은 `requires` 객체가 여러 개면 서로 덮어쓴다. actionbar factory 안에서는 동작하지 않을 수 있다. 삼항 연산자는 없다.
 - **변수 범위**: 변수는 그 요소와 자식에만 적용되고 형제에서는 보이지 않으니 공통 부모나 루트에 정의한다. 우선순위는 대상 컨트롤, 부모, 먼 조상 순이다. 같은 scope의 변수를 다른 변수에 여러 개 쓰면 "가끔" 실패한다. 이름을 바꾸면 해결되기도 한다.
@@ -57,22 +57,22 @@ sources:
 ### 바인딩 종류
 - **`global`(기본값)**: 화면마다 정해진 하드코딩 속성을 가져온다(예: hud_screen의 `#level_number`). `binding_name`과 `binding_name_override`를 쓴다. 자식에게 전달되지 않는다. global에 `source_property_name`을 쓰면 "Must define a source property name" 오류가 난다.
 - **`view`**: 다른 컨트롤의 속성을 읽거나 연산한다. `source_control_name`(이름에 `#`를 붙이지 않음), `source_property_name`(식), `target_property_name`을 쓴다. 식에 들어가는 바인딩은 먼저 `{"binding_name":"#x"}`로 선언해야 한다. 원칙: 값이나 표시 여부를 그대로 가져올 때는 global, 연산할 때는 view.
-- **`collection`과 `collection_details`**: `{"binding_name":"#form_button_text","binding_type":"collection","binding_collection_name":"form_buttons"}`처럼 쓴다. 선언하지 않으면 `"text": "#form_button_text"`에 아무것도 안 나온다. `#collection_index`를 쓰려면 `collection_details` 바인딩이 필요하다. collection 바인딩의 `binding_name`에는 연산을 넣을 수 없으니, 먼저 바인딩한 뒤 view로 계산한다는 설명이 있다. 반면 빈 hover를 숨기는 `{"binding_type":"collection","binding_collection_name":"$item_collection_name","binding_name":"(not (#hover_text = ''))","binding_name_override":"#visible"}` 예가 공유됐다. **conflicting**
+- **`collection`과 `collection_details`**: `{"binding_name":"#form_button_text","binding_type":"collection","binding_collection_name":"form_buttons"}`처럼 쓴다. 선언하지 않으면 `"text": "#form_button_text"`에 아무것도 안 나온다. `#collection_index`를 쓰려면 `collection_details` 바인딩이 필요하다. collection 바인딩의 `binding_name`에는 연산을 넣을 수 없으니, 먼저 바인딩한 뒤 view로 계산한다는 설명이 있다. 반면 빈 hover를 숨기는 `{"binding_type":"collection","binding_collection_name":"$item_collection_name","binding_name":"(not (#hover_text = ''))","binding_name_override":"#visible"}` 예가 공유됐다. `{충돌}`
 - **"Must define a binding name!"**: `binding_name`이 없는 바인딩에서 나는 오류다.
 - **불명확한 속성**: `binding_collection_prefix`와 `notify_on_ellipses`는 무엇을 하는지 알려지지 않았다.
 
 ### Scope와 다른 컨트롤 읽기
 - **부모에서 자식으로**: 부모가 `{"binding_name":"#bind"}`를 선언하고 자식이 `{"binding_type":"view","source_control_name":"parent","source_property_name":"#bind"}`로 읽는다. 바인딩은 자식에게 상속되지 않는다.
 - **형제**: `"resolve_sibling_scope": true`를 소비하는 쪽 바인딩에 둔다(data_control 쪽이 아님). 예: `{"binding_type":"view","resolve_sibling_scope":true,"source_control_name":"title_mission","source_property_name":"#text","target_property_name":"#text"}`. `source_control_name`으로 읽는 커스텀 속성은 `property_bag` 안에 있어야 한다.
-- **`resolve_sibling_scope`의 의미**: 이 플래그를 주면 탐색이 형제 범위(중첩 약 2단계)로 제한된다는 설명이 있다. 플래그 없이는 연결된 아무 컨트롤이나 읽을 수 있다는 것이다(shanewolf38). 반면 형제를 읽으려면 이 플래그가 필요하다는 보고도 있다. `container_items` factory에서 자식 index가 모두 0이 될 때 이 플래그로 해결했고, 첫 부모, 형제, 자식까지만 닿는다는 보고가 있다. **conflicting**
-- **`resolve_ancestor_scope`**: 1.21.130 changelog에서 view binding 전용 boolean으로 추가됐다. 조부모 등 조상에서 `source_control_name`에 맞는 컨트롤의 값을 가져온다. 2026-04 stable에서 동작하지 않거나 content log 오류를 낸다는 보고가 있다. 2026-07에는 이 플래그를 빼야 동작한 사례가 있다. 대신 `resolve_sibling_scope`를 체인으로 쓰는 것이 권장된다. **conflicting**
+- **`resolve_sibling_scope`의 의미**: 이 플래그를 주면 탐색이 형제 범위(중첩 약 2단계)로 제한된다는 설명이 있다. 플래그 없이는 연결된 아무 컨트롤이나 읽을 수 있다는 것이다(shanewolf38). 반면 형제를 읽으려면 이 플래그가 필요하다는 보고도 있다. `container_items` factory에서 자식 index가 모두 0이 될 때 이 플래그로 해결했고, 첫 부모, 형제, 자식까지만 닿는다는 보고가 있다. `{충돌}`
+- **`resolve_ancestor_scope`**: 1.21.130 changelog에서 view binding 전용 boolean으로 추가됐다. 조부모 등 조상에서 `source_control_name`에 맞는 컨트롤의 값을 가져온다. 2026-04 stable에서 동작하지 않거나 content log 오류를 낸다는 보고가 있다. 2026-07에는 이 플래그를 빼야 동작한 사례가 있다. 대신 `resolve_sibling_scope`를 체인으로 쓰는 것이 권장된다. `{충돌}`
 - **`source_control_name` 동적 지정**: 바인딩은 `source_control_name`에 넣을 수 없다. 변수는 된다: `"$scn": "('data_control' + $technique_slot)"`, `source_control_name: "$scn"`. 컨트롤 이름과 그 `$name` 값이 같으면 자기 자신을 찾는 충돌이 생긴다.
 - **Collection 형제 데이터**: 슬롯 0에서 슬롯 1의 `#item_id_aux`를 읽으려면 같은 collection_panel 안에 `collection_index`가 다른 요소들을 두고 `source_control_name` + `resolve_sibling_scope`를 쓴다. 중첩 collection이 index를 덮어쓴 사례는 dropdown collection, form collection, dropdown 순서로 해결했다. `property_bag`에 `#collection_index`/`#collection_name`을 넣어 특정 슬롯을 지정할 수도 있다.
 - **`property_bag_for_children`**: property_bag 값을 factory가 생성한 자식에게까지 내려준다. 2026-05-07 무렵 stable에 들어왔다.
 - **`ancestor_scope`/`factory_variables`**: factory가 조상 변수를 읽으려면 `factory_variables`가 필요하다. 없으면 "cannot find variable in ancestor tree" 오류가 난다.
 
 ### binding_condition
-- **값 목록**: `always`, `always_when_visible`, `visible`, `once`, `none`, `visibility_changed`. `visible`은 보이게 될 때, `always_when_visible`은 보이는 동안 매 프레임, `once`는 한 번만 평가한다. 개별 의미는 *unverified*다.
+- **값 목록**: `always`, `always_when_visible`, `visible`, `once`, `none`, `visibility_changed`. `visible`은 보이게 될 때, `always_when_visible`은 보이는 동안 매 프레임, `once`는 한 번만 평가한다. 개별 의미는 `{미검증}`이다.
 - **활용**: `visibility_changed`는 preserved title 트릭에 쓴다. `once`는 큰 폼의 factory/grid 바인딩에 걸어 렉과 유령 버튼을 줄인다. view 바인딩에는 `binding_condition`을 걸 수 없다고 보고됐다(편법이 있다는 소문은 확인되지 않음).
 
 ### 기타 바인딩 규칙
@@ -86,7 +86,7 @@ sources:
 ## 바인딩 표현식 언어
 
 ### 연산자
-- **쓸 수 있는 연산자**: `+ - * / > < = and or not`, 그리고 괄호. `<=`, `>=`, `==`, `!=`(실측: Windows 1.26.65.1에서 `!=`와 `>=`는 값을 내지 않았다, [기록](../design/json-ui-claims.mdx#21-연산자)), `&&`, `||`는 없다. 식 전체를 괄호로 감싸야 한다: `"((#title_text = 'a') or (#title_text = 'b'))"`. `source_property_name`에는 `{}`를 쓸 수 없다. `=><`처럼 잘못된 비교를 쓰면 요소가 사라진다. *confirmed*
+- **쓸 수 있는 연산자**: `+ - * / > < = and or not`, 그리고 괄호. `<=`, `>=`, `==`, `!=`(실측: Windows 1.26.65.1에서 `!=`와 `>=`는 값을 내지 않았다, [기록](../design/json-ui-claims.mdx#21-연산자)), `&&`, `||`는 없다. 식 전체를 괄호로 감싸야 한다: `"((#title_text = 'a') or (#title_text = 'b'))"`. `source_property_name`에는 `{}`를 쓸 수 없다. `=><`처럼 잘못된 비교를 쓰면 요소가 사라진다. `{커뮤니티 확인}`
 - **`>=` 대체**: `>=`는 없으니 `(a > b) or (a = b)`로 나눠 쓴다.
 - **Molang 불가**: `query.*`, `q.property`를 쓸 수 없다. 예외적으로 JSON UI paper doll이 영향을 주는 Molang은 `query.is_in_ui` 하나다(플레이어 모델 쪽에서 `v.is_paper_doll` 변수도 쓰임).
 - **boolean 산술**: boolean은 산술에서 1/0으로 동작한다: `(12 * #val)`, `(1 - #val)`. 대상이 `#visible`이면 결과가 boolean이어야 한다. `(#preserved_text - $update_string)`은 문자열이므로 `(#text = 'x')` 같은 비교를 쓴다.
@@ -104,19 +104,19 @@ sources:
 - **긴 식에서 깨짐**: 빼기를 추가(`- ' '`)하면 한 식 안의 문자열 곱셈이 깨지는 경우가 있다. 여러 view 바인딩으로 나눈다. 반대로 한 식에 합치라는 조언(연쇄 바인딩보다 효율적)도 있으니 상황에 따라 다르다.
 - **변수 끼워 넣기 불안정**: 바인딩 문자열 안에서 `$prefix + '1'`을 쓰면 실패한 사례가 있다. 리터럴로 쓰거나 `$var`를 단독으로 쓴다.
 - **대체(삼항처럼)**: `((':' + (#value = '§4') + 'Option 1') - ':falseOption 1' - ':true')` 같은 문자열 트릭이 있다(동적 N 방식은 1.21.130 이후 불가라는 보고가 있었지만 Windows 1.26.65.1 실측에서는 동작했다, [실측 기록](../design/json-ui-claims.mdx#23-ns-자르기)).
-- **문자열 나누기**: `#test / 'hi'`로 출현 횟수를 셀 수 있다는 보고가 있다(2026-06-03). 반면 문자열 나눗셈이 게임을 죽인다는 보고가 여럿 있다. 변수나 속성에 먼저 넣은 경우에만 된다는 보고도 있다. 따옴표 리터럴을 직접 나누면 크래시가 난다. **conflicting**, 쓰지 않는 편이 안전하다. 실측: 문자열을 숫자로 나누는 `(#text / 100)`은 Windows 1.26.65 클라이언트를 멈추게 했다(EXP-49).
+- **문자열 나누기**: `#test / 'hi'`로 출현 횟수를 셀 수 있다는 보고가 있다(2026-06-03). 반면 문자열 나눗셈이 게임을 죽인다는 보고가 여럿 있다. 변수나 속성에 먼저 넣은 경우에만 된다는 보고도 있다. 따옴표 리터럴을 직접 나누면 크래시가 난다. `{충돌}`, 쓰지 않는 편이 안전하다. 실측: 문자열을 숫자로 나누는 `(#text / 100)`은 Windows 1.26.65 클라이언트를 멈추게 했다(EXP-49).
 - **반복이나 루프**: `'abc'*2` 같은 반복은 불가능하다. 바인딩 루프 트릭(`#search` 카운터 + `('%.' + #search + 's') * #text`)이 공유됐지만 동적 N은 1.21.130 이후 막혔고 약 20회 반복 후 멈춘다. 문자열 곱셈 방식이 선호된다. 실측: Windows 1.26.65.1에서는 `(('%.' + #v + 's') * 'abcdef')`(`#v`가 `'3'`)가 `abc`를 내 동적 N이 동작했다(EXP-43, [기록](../design/json-ui-claims.mdx#23-ns-자르기)). 반복 횟수는 재지 않았다.
 - **문자 매핑과 검색**: property bag으로 문자마다 소문자 변환 매핑을 만들고 `#iterator`로 돌려 검색창을 대소문자 무시로 만든 사례가 있다. 길게 입력하거나 지울 때 렉이 난다. 서버 폼 edit box 검색은 기본적으로 대소문자를 구분하고 1바이트 문자에서만 동작한다. 권장 방법은 각 항목의 소문자 사본을 숨겨 두고 비교하는 것이다. 마지막으로 입력한 문자를 감지하는 방법은 반복 문자 때문에 실패했다.
 - **Unicode 산술 불가**: ` + level` 같은 Unicode 산술은 할 수 없고 이어 붙이기만 된다. 숫자를 glyph로 바꾸는 매핑은 property_bag으로 한다.
 
 ### 바이트 폭
-- **바이트 수**: `§` = 2바이트(3이라는 주장도 있었지만 ya_rifat과 bakedpotato가 2로 확인), `§x` 한 쌍 = 3바이트, a-z/0-9 = 1, 한글/CJK = 3, 이모지/glyph/`\eU123` = 3~4다(UTF-8 기준). 예: `§a§№` = 2+1+2+3 = 8. 그래서 glyph가 섞이면 `%.Ns` 잘라내기가 어긋난다. 오프셋 계산에는 1바이트 문자(숫자, `;`)를 쓴다. wiki: `json-ui-intro#unicode-character-width`. *confirmed*
+- **바이트 수**: `§` = 2바이트(3이라는 주장도 있었지만 ya_rifat과 bakedpotato가 2로 확인), `§x` 한 쌍 = 3바이트, a-z/0-9 = 1, 한글/CJK = 3, 이모지/glyph/`\eU123` = 3~4다(UTF-8 기준). 예: `§a§№` = 2+1+2+3 = 8. 그래서 glyph가 섞이면 `%.Ns` 잘라내기가 어긋난다. 오프셋 계산에는 1바이트 문자(숫자, `;`)를 쓴다. wiki: `json-ui-intro#unicode-character-width`. `{커뮤니티 확인}`
 - **경계 수정**: 1.21.130에서 `%.Ns`의 바이트/문자 경계 동작이 "고쳐졌다". 예전 버전은 ±1 밀릴 수 있었으므로 예전에 맞춘 split은 다시 조정해야 할 수 있다.
 - **길이 prefix 방식**: `hover_chat003abc002de001f`처럼 길이를 앞에 붙여 묶은 문자열이다. 길이는 UTF-8 바이트 기준이다. 원래 동적 `('%.' + #len + 's')`를 썼으므로 1.21.130 이후에는 동작하지 않을 가능성이 높다는 추측이 있었다. 실측: Windows 1.26.65.1에서는 바인딩에서 N을 받은 런타임 서식이 동작했다(EXP-43, [기록](../design/json-ui-claims.mdx#23-ns-자르기)). 이 길이 prefix 방식 자체는 재지 않았다.
 
 ### 문자열과 숫자 변환
 - **자동 변환**: 숫자(또는 `+`/`-`)로 시작하는 문자열은 산술에 쓰이면 정수로 바뀐다(`1asdk` = 숫자, `test1`/`§k1200` = 문자열). `foo123bar - 'foo'`는 123이 된다(뒤 텍스트 버림). `+ 0`은 빈 텍스트일 때 0을 기본값으로 준다.
-- **변환 방법의 변천**: 예전에는 `* 1`, `* 1.0`, `$one`을 곱했다. 1.21.130(2025-12)에서 `'%.Ns' * #x * 1`이 깨졌고, 2026-01 preview/업데이트에서는 `1 * ('%.1s' * x)`가 깨졌다. 1.26.30(2026-05-15 보고)에서 `(#str * 1)`도 동작을 멈췄다. 지금 권장되는 방법은 `(0 + #str)` 또는 `(#str + $zero)`(`"$zero": 0.0`)다. 2025-12 말에 `*1`을 `+0`으로 바꿔 진행바가 되살아난 사례도 있다. `* 1`이 여전히 된다는 보고가 섞여 있어 **conflicting**이고, `0 +`가 가장 안전하다. 실측: `* 1`은 문자열을 숫자로 바꾸지 않았고 `(#v - 0)`과 `(0 + #v)`는 바꿨다(EXP-16, EXP-17). Windows 1.26.65.1에서 입력 `'4'`의 `((#v + $zero) + 1)`(`$zero`는 JSON `0.0`)은 5로 숫자가 됐고 `(#v + 1)`은 `41`로 이어 붙었다. 다만 콘텐츠 로그에 `Expected variable not found in ancestor tree: '$zero'`가 남았다([기록](../design/json-ui-claims.mdx#24-숫자)).
+- **변환 방법의 변천**: 예전에는 `* 1`, `* 1.0`, `$one`을 곱했다. 1.21.130(2025-12)에서 `'%.Ns' * #x * 1`이 깨졌고, 2026-01 preview/업데이트에서는 `1 * ('%.1s' * x)`가 깨졌다. 1.26.30(2026-05-15 보고)에서 `(#str * 1)`도 동작을 멈췄다. 지금 권장되는 방법은 `(0 + #str)` 또는 `(#str + $zero)`(`"$zero": 0.0`)다. 2025-12 말에 `*1`을 `+0`으로 바꿔 진행바가 되살아난 사례도 있다. `* 1`이 여전히 된다는 보고가 섞여 있어 `{충돌}`이고, `0 +`가 가장 안전하다. 실측: `* 1`은 문자열을 숫자로 바꾸지 않았고 `(#v - 0)`과 `(0 + #v)`는 바꿨다(EXP-16, EXP-17). Windows 1.26.65.1에서 입력 `'4'`의 `((#v + $zero) + 1)`(`$zero`는 JSON `0.0`)은 5로 숫자가 됐고 `(#v + 1)`은 `41`로 이어 붙었다. 다만 콘텐츠 로그에 `Expected variable not found in ancestor tree: '$zero'`가 남았다([기록](../design/json-ui-claims.mdx#24-숫자)).
 - **prefix를 떼면 정수**: 접두 문자열을 빼면 정수가 된다: `((('%.4s' * #text) - ':') * 1)`. 숫자 변환 곱셈은 문자열 연산과 같은 식에 넣지 말고 별도 바인딩 객체에서 한다. 숫자를 문자열로 유지하려면 `:100`처럼 문자를 앞에 붙였다가 나중에 뗀다.
 - **1.21.130 aux 텍스처 복구**: 숫자 변환은 `('%.10s' * #title_text)`나 `(#title_text - ']')`처럼 문자열을 한 번 조작하면 되살아났다.
 - **숫자를 문자열로**: 이스케이프된 따옴표로 감싼다: `('\"' + #num + '\"')`. float는 읽을 수 있는 문자열로 바꿀 수 없다.
@@ -138,7 +138,7 @@ sources:
 ## 스크립트에서 UI로 데이터 넘기기
 
 ### 채널
-- **쓸 수 있는 채널**: title, subtitle, actionbar(`player.onScreenDisplay.setTitle/updateSubtitle/setActionBar`, `/title`, `/titleraw`), chat, scoreboard(sidebar/list 표시가 켜져 있어야 함), boss bar(이름과 진행률만), 인벤토리 아이템(이름, lore, 내구도), 엔티티 인벤토리, 폼의 title/body/button 텍스트가 있다. 화면에 보이는 변하는 것은 무엇이든 트리거가 될 수 있다. *confirmed*
+- **쓸 수 있는 채널**: title, subtitle, actionbar(`player.onScreenDisplay.setTitle/updateSubtitle/setActionBar`, `/title`, `/titleraw`), chat, scoreboard(sidebar/list 표시가 켜져 있어야 함), boss bar(이름과 진행률만), 인벤토리 아이템(이름, lore, 내구도), 엔티티 인벤토리, 폼의 title/body/button 텍스트가 있다. 화면에 보이는 변하는 것은 무엇이든 트리거가 될 수 있다. `{커뮤니티 확인}`
 - **반대 방향**: JSON UI에서 스크립트를 호출하거나 이벤트를 보낼 수 없다. 스크립트가 키 입력을 읽을 수도 없다. 우회법은 UI 버튼으로 채팅 메시지를 보내 `chatSend`로 받는 것, 폼 submit, 아이템 드롭(`button.drop_one`/`drop_all`), MCWSS + scriptevent다. `/scriptevent`를 직접 실행하는 버튼은 없다(해킹성 팩은 있음).
 - **화면 제한**: `#hud_title_text_string`은 hud_screen 전용이다(어디서든 쓸 수 있는 global 바인딩). pause, emote 등 다른 화면에서는 읽을 수 없다. scoreboard 바인딩은 레거시라 다른 화면에서도 된다. `debug_screen.json`은 모든 화면 위에 그려지지만 title 컨트롤이 없다.
 
@@ -157,8 +157,8 @@ sources:
     ]
   }
   ```
-  소비하는 쪽은 `source_control_name: "data_control"`, `(#preserved_text - $update_string)`으로 읽는다. 2026-07에도 동작이 확인됐다. *confirmed*
-- **배치 규칙**: data_control은 `root_panel`(또는 `hud_content`)에 `modifications` `insert_front`/`insert_back`으로 직접 넣는다. `exp_progress_bar_and_hotbar` 아래나 자기가 `#visible`을 조절하는 요소 안처럼 표시 여부가 바뀌는 부모 아래에 두면 갱신이 멈춘다. 소비자는 data_control의 자식이 아니라 별도 컨트롤로 둔다. **conflicting**: 한 튜토리얼은 반대로 `data_ctrl`을 바 이미지의 **자식**으로 두었다. 데이터 패널을 자식으로 두면 깜빡임이 없어졌다는 보고도 있다.
+  소비하는 쪽은 `source_control_name: "data_control"`, `(#preserved_text - $update_string)`으로 읽는다. 2026-07에도 동작이 확인됐다. `{커뮤니티 확인}`
+- **배치 규칙**: data_control은 `root_panel`(또는 `hud_content`)에 `modifications` `insert_front`/`insert_back`으로 직접 넣는다. `exp_progress_bar_and_hotbar` 아래나 자기가 `#visible`을 조절하는 요소 안처럼 표시 여부가 바뀌는 부모 아래에 두면 갱신이 멈춘다. 소비자는 data_control의 자식이 아니라 별도 컨트롤로 둔다. `{충돌}`: 한 튜토리얼은 반대로 `data_ctrl`을 바 이미지의 **자식**으로 두었다. 데이터 패널을 자식으로 두면 깜빡임이 없어졌다는 보고도 있다.
 - **`$update_string`**: 사용하는 요소에 직접 선언하고(자식에 선언하면 안 됨) 구분자까지 포함한다(`"overlay:"`). 식 안의 `$update_string`이 치환된다는 점은 이 위키의 실측과도 맞는다(BND-33). 값에는 따옴표를 넣지 않는다. 다른 바인딩에서 `#preserved_text`를 쓰려면 먼저 `{source_control_name:"data_control", source_property_name:"#preserved_text", target_property_name:"#preserved_text"}`로 다시 내보낸다.
 - **원리(ya_rifat)**: `#visible`은 새 타이틀이 오면 한 프레임 동안 true가 된다. 이것을 `#key`로 써서 이전 값을 보관한다: `#prev_value = (#prev_value * (1 - #key) + #changed_value * #key)`.
 - **처음엔 숨기기**: 처음에는 `#preserved_text`가 비어 있어서 `not ((x - 'k') = '0')` 같은 식이 true가 될 수 있다. 대상 요소에 `((#preserved_text - $update_string) and not (#preserved_text = ''))`를 걸거나 `= '1'`로 검사한다.
@@ -167,7 +167,7 @@ sources:
 - **한계**: title은 한 번에 하나뿐이라 새 `/title`이 이전 것을 바꾼다. title factory 하나로 여러 개를 동시에 영구 표시할 수 없으므로 actionbar, subtitle, chat 같은 다른 factory를 쓴다. 일반 타이틀이 오면 preserved 타이틀이 사라지는 것을 막을 수 없다(가짜 타이틀은 다른 factory로). `/title @s clear`로 preserved 값이 지워지지 않았다는 보고가 있다(미해결). Blurry's 같은 팩이 이미 title을 쓰고 있으면 충돌한다.
 - **서버 폼이 열리면**: 폼이 열리면 preserved 타이틀이 지워진다. `third_party_server_screen@common.base_screen`에 `render_game_behind: true`, `force_render_below: true`, `render_only_when_topmost: false`, `cache_screen: false`를 주어 유지한다.
 - **같은 값 반복**: 같은 값의 새 타이틀은 `=` 비교로 감지되지 않는다. 대신 factory가 타이틀마다 다시 생성되므로 반복 타이틀에서는 factory 없이 preserved를 쓰면 깜빡임이 없다.
-- **트리밍은 `#preserved_text`에서**: 잘라내기는 `#preserved_text`라는 이름의 바인딩에서만 됐고 `#hud_title_text_string` 사본에서는 실패했다는 보고가 있다. *single report*
+- **트리밍은 `#preserved_text`에서**: 잘라내기는 `#preserved_text`라는 이름의 바인딩에서만 됐고 `#hud_title_text_string` 사본에서는 실패했다는 보고가 있다. `{단일 보고}`
 
 ### title 보내기와 깜빡임
 - **반투명 상자 없애기**: `setTitle(text, {fadeInDuration:0, stayDuration:0, fadeOutDuration:0})` 또는 `/title @s times 0 0 0`으로 반투명 배경 깜빡임을 없앤다. 반대로 `stayDuration` 0이면 아무것도 안 보였다며 10 이상을 권하는 보고도 있다(표시용 vs 데이터용 차이로 보임). 기본 타이틀 배경은 `"hud_title_text/title_frame/title_background": {"texture":"textures/ui/transparent_background"}`로도 숨길 수 있다(진행바의 검은 깜빡임도 해결).
@@ -181,7 +181,7 @@ sources:
 - **진행바**: title `bar:50,100`을 보내고 `((#preserved_text - 'bar:') + 0)`로 첫 값을, `((#preserved_text - ('bar:' + #progress + ',')) + 0)`로 두 번째 값을 읽는다. `#clip_ratio = (max - value)/max`, 또는 `(1 - (#value * $inverse_max))`. `clip_ratio`는 0이 가득, 1이 빈 상태다(반대 방향). prefix 없는 `/title ... 80`이 모든 바를 바꾸지 않게 `('%.3s' * #text = $update_string)`로 막는다. `$multiplier` = 1/max(0.02는 max 50) 또는 `$max_value_binding`. `#progress`는 숫자만 있어야 한다(`§z` prefix 금지). 비우려면 빈 title을 보낸다.
 - **클립 정밀도**: nineslice 텍스처에 `#clip_ratio`를 쓰면 픽셀 단위로 정확하지 않다. 늘이지 않는 바는 `$texture_type: "fixed"`를 쓰고(채우는 방향 left/right/up/down), 바 크기를 텍스처 크기에 맞춘다(20x18을 40x36으로). 텍스처가 떨리면 nineslice를 0으로 하거나 `keep_ratio:false`를 주거나, 반대로 nineslice 값을 아무거나(0이 아닌 값) 주어 늘이기 채우기를 한다. 1px 줄이면(`["100%-1px","100%"]`) 잔상이 사라진다. `clip_direction`, `clip_pixelperfect`를 쓴다.
 - **XP 바 대체**: `#exp_progress`를 `#clip_ratio`로, 로딩 바는 `#loading_bar_percentage`를 `#clip_ratio`로.
-- **title로 켜는 화면 색 필터**: `/title @s title ui_invert` 같은 title로 `gradient_renderer` 패널을 보인다(layer 9998, 크기 [1000,1000], `root_panel`에 `insert_front`, `(#hud_title_text_string = 'ui_green')`을 `#visible`에 바인딩). 색은 `[0, 0.1, 0, 0.7]`처럼 낮게 준다. title/subtitle 배경은 `"hud_title_text/title_frame/title_background": {"alpha": 0}`(subtitle은 `subtitle_frame/subtitle_background`)로 지운다. *single report*
+- **title로 켜는 화면 색 필터**: `/title @s title ui_invert` 같은 title로 `gradient_renderer` 패널을 보인다(layer 9998, 크기 [1000,1000], `root_panel`에 `insert_front`, `(#hud_title_text_string = 'ui_green')`을 `#visible`에 바인딩). 색은 `[0, 0.1, 0, 0.7]`처럼 낮게 준다. title/subtitle 배경은 `"hud_title_text/title_frame/title_background": {"alpha": 0}`(subtitle은 `subtitle_frame/subtitle_background`)로 지운다. `{단일 보고}`
 - **이미지와 오버레이**: 이미지에 `#hud_title_text_string` 기반 `#visible`을 걸고, `"factory": {"name":"hud_title_text_factory","control_ids":{"hud_title_text":"img@hud.img"}}` 패널로 감싸 `root_panel`에 `insert_front`한다. 이미지마다 factory가 하나씩 필요하다. 배열 값은 항목마다 객체로 감싼다. 조건부 오버레이 예: `(#hud_title_text_string = 'camera')`를 `#visible`로.
 - **전체 화면 이미지**: preserved 라벨을 `image`로 바꾸고 `(#preserved_text - $update_string)`를 `#texture`로 바인딩하고 `"fill": true`를 준다. 그다음 `texture:textures/ui/Black`을 title로 보낸다. 텍스처 경로를 텍스트에서 만들 수도 있다: `('textures/ui/compass/' + #hud_title_text_string)`. 범위 검사 `((#x * 1) > 0) and ((#x * 1) < 360)`을 함께 건다.
 - **위치 이동**: 형식 `txt:<anchor_id>,<x>,<y>,<text>`(anchor_id 0 왼쪽 위 ~ 8 오른쪽 아래)에서 anchor-id별 표시와 offset을 정한다(1.21.123 stable / 1.21.130.26 preview에서 확인). 숨길 때는 쓰지 않는 anchor id(예: 9)를 보낸다. `(#position_x * $percentage)`를 `#anchored_offset_value_x`로.
@@ -195,7 +195,7 @@ sources:
 - **커스텀 요소**: `hud_actionbar_text_factory`에 `control_ids: {"hud_actionbar_text": "sidebar@hud.sidebar"}`처럼 커스텀 패널을 연결한다. `!` prefix 텍스트를 숨기려면 `hud_actionbar_text`에 `"visible": "(($var_actionbar_text - '!') = $var_actionbar_text)"`를 건다.
 - **의사 신호**: 스크립트가 `/title @s actionbar a<N>`을 보내고, `"$atext": "$actionbar_text"` 패널 안의 자식에 `"visible": "($atext = $tok)"`를 걸어 N번째 프레임을 보인다. 원래 actionbar는 `"visible": "($atext = ($atext - 'a'))"`로 숨긴다. `visible` 식은 actionbar가 아니라 프레임 요소에 둔다. `((($atext - 'a') * 1) = $index)`. 알파 단계를 여러 개 두면 페이드가 된다.
 - **Hive식 점수판**: `'§C' + 점수개수 + '§S§T' + 점수들`을 actionbar로 보낸다. 각 점수는 `\t`로 100자까지 채운다. 수정한 hud_screen.json이 `'%.Ns' * #text`로 파싱한다. 점수는 10개 이하로 유지하고(바인딩 렉), 식에 `'§r'` prefix를 붙이면 연산자로 시작하는 값도 표시된다. actionbar를 완전히 대체하고 위치는 고정이다. 명령으로 하려면 값 조합마다 바이트를 직접 패딩해야 한다.
-- **위치 옮기기**: actionbar와 title을 JSON UI로 옮길 수 있지만 원래 용도는 포기해야 한다. 가운데 정렬에 `\t`는 안 되고 공백으로 맞춘다. 이모지는 렌더되지 않았다는 보고가 있다. 액션바를 오른쪽 위로 옮긴 예는 namespace `hud`에서 `hud_actionbar_text`에 `anchor_from`, `anchor_to` `top_right`와 `offset` [-20, 20]을 준다. *single report*
+- **위치 옮기기**: actionbar와 title을 JSON UI로 옮길 수 있지만 원래 용도는 포기해야 한다. 가운데 정렬에 `\t`는 안 되고 공백으로 맞춘다. 이모지는 렌더되지 않았다는 보고가 있다. 액션바를 오른쪽 위로 옮긴 예는 namespace `hud`에서 `hud_actionbar_text`에 `anchor_from`, `anchor_to` `top_right`와 `offset` [-20, 20]을 준다. `{단일 보고}`
 
 ### Chat
 - **chat_screen 메시지 숨기기**: `messages_text/text`에 바인딩을 `insert_front`한다: `{"binding_type":"view","source_property_name":"(not('%.7s' * #text = '!addUI:'))","target_property_name":"#visible"}`. 또는 `('@' + #text - '!' = '@' + #text)`. 채팅 화면 밖에서도 숨기려면 hud_screen에도 똑같이 건다. `#chat_visible` + `(#chat_visible and not ('%.12s' * #text = $trigger_text))`로 만든 예도 있다.
@@ -237,23 +237,23 @@ sources:
 - **좌표 텍스트**: 아래로 밀려면 `"root_panel/chat_stack"`에 `insert_before` `player_position`으로 `{"spacer":{"type":"panel","size":[0,10]}}`를 넣는다(offset은 안 됨). `#player_position_text`는 hud와 chat 화면에서 쓸 수 있다. title prefix `coords:`로 좌표를 숨기는 팩이 있다. 좌표 강제 표시는 player geo + render controller 영역이다.
 - **기타 HUD 바인딩**: `#gamertag`(hud/pause/scoreboard), `#show_survival_ui`, `#hud_text_background_alpha`(접근성 텍스트 배경 불투명도를 `#alpha`로), `#hotbar_visible`, `#hotbar_visible_not_centered`. `#player_name`, `#player_health`, `#player_max_health`는 없다.
 - **기타 HUD 요소**: 아이템 이름 배경은 `"item_name_text_root/item_text_aligner/item_text_control/item_text_background": {"texture": "..."}`. 핫바 말줄임표는 `hotbar_elipses_panel_right_art/slot` 텍스처. 모바일 HUD 알파 페이드는 root panel 바인딩을 고쳐 막는다. 상호작용 버튼은 지울 수 없고 텍스처만 비울 수 있다. 자막 UI는 hud_screen의 `subtitle_panel`(예전엔 caption_frame)이다. 관련 요소는 `subtitle_grid_item`, `subtitle_label`, `subtitle_direction_label`, `subtitle_container_content`다. 1.21.13x 자막은 chat 레이아웃을 재사용하고 화살표가 텍스트에 하드코딩돼 있으며 표시 토글 바인딩이 없다. 체력/허기 바는 bedrock-samples hud_screen.json에 있다. 사이드바 스타일 HUD는 `/title`, `/actionbar`를 다시 그리는 팩으로 만든다.
-- **하드코딩된 HUD**: 이동 컨트롤과 오른쪽 위 버튼은 바꿀 수 없다. 디버그/F3 화면은 수정할 수 없다(debug_screen.json의 `special_render` offset으로 텍스트만 이동). 서리 오버레이(`frozen_effect` 텍스처는 교체 가능하지만 트리거 불가), spyglass, 호박, `/camera` fade, totem 애니메이션, 효과 렌더링, 파노라마, splash text도 JSON UI가 아니다. 차원 이동 배경도 고칠 수 없다는 답이 있었다. *single report*
+- **하드코딩된 HUD**: 이동 컨트롤과 오른쪽 위 버튼은 바꿀 수 없다. 디버그/F3 화면은 수정할 수 없다(debug_screen.json의 `special_render` offset으로 텍스트만 이동). 서리 오버레이(`frozen_effect` 텍스처는 교체 가능하지만 트리거 불가), spyglass, 호박, `/camera` fade, totem 애니메이션, 효과 렌더링, 파노라마, splash text도 JSON UI가 아니다. 차원 이동 배경도 고칠 수 없다는 답이 있었다. `{단일 보고}`
 - **HUD 숨기기(스크립트)**: `onScreenDisplay.setHudVisibility(HudVisibility.Hide, [HudElement.Health, ...])`. 말 타기 중 hearts 숨기기를 이용해 1인칭 카메라 offset을 흉내 낸 사례가 있다.
 
 ## 레이아웃, 컨트롤, 텍스처, 폰트, 애니메이션
 
 ### 크기
 - **크기 문법**: `"default"`, 숫자(px), `"0px"`, `"0%"`, `"0%c"`(자식 합계), `"0%cm"`(가장 큰 자식), `"0%sm"`(형제), `"0%y"`/`"0%x"`(자기 높이/너비), `"fill"`이 있다. 합산도 된다(`"75% + 12px"`). `%cm`의 의미는 "가장 큰 자식"이라는 설명과 "모든 자식 합의 최소"라는 설명이 섞여 있다. 크기 식에 단위가 없으면 "Dangling number (no % or px in Size)" 오류가 난다.
-- **크기를 안 준 컨트롤**: 가장 큰 형제의 크기를 따른다는 보고가 있다. *single report*
+- **크기를 안 준 컨트롤**: 가장 큰 형제의 크기를 따른다는 보고가 있다. `{단일 보고}`
 - **`default`의 의미**: 대부분 타입에서 `["100%","100%"]`이지만 stack_panel은 `["100%","100%c"]`, 라벨은 텍스트 크기, grid는 `["100%c","100%c"]`다.
 - **자동 맞춤**: `"size": ["100%","default"]`가 `max_size`보다 낫다(잘리던 스크롤 텍스트를 해결). 라벨에 맞춘 팝업은 `100%cm` / `100%sm + 8px`. 자식에 맞춘 버튼은 `["100%c + 5px", "100%c + 5px"]`. 자식 크기는 너비 `100%cm`, 높이 `100%c`.
-- **크기 바인딩**: `#size_binding_x/y`(부모 대비 0..1, 2.5 = 250%)와 `#size_binding_x/y_absolute`(px). 요소에 `"size":[0,0]` 같은 명시적 크기 자리표시가 반드시 있어야 하고(property_bag만으로는 부족), 값은 float여야 한다. 아니면 크래시가 난다. 예: `size: [0, 6]` + `(0 + #form_button_text)`를 `#size_binding_x_absolute`로. 크기는 화면을 다시 열어야 바뀔 수 있다. 부모 너비가 `100%c`면 0이 된다. 패턴: `property_bag {"#size_x_true":24,"#size_x_false":18}` + `('#size_x_' + #is_creative_mode)`를 `#size_binding_x_absolute`로. *confirmed*
+- **크기 바인딩**: `#size_binding_x/y`(부모 대비 0..1, 2.5 = 250%)와 `#size_binding_x/y_absolute`(px). 요소에 `"size":[0,0]` 같은 명시적 크기 자리표시가 반드시 있어야 하고(property_bag만으로는 부족), 값은 float여야 한다. 아니면 크래시가 난다. 예: `size: [0, 6]` + `(0 + #form_button_text)`를 `#size_binding_x_absolute`로. 크기는 화면을 다시 열어야 바뀔 수 있다. 부모 너비가 `100%c`면 0이 된다. 패턴: `property_bag {"#size_x_true":24,"#size_x_false":18}` + `('#size_x_' + #is_creative_mode)`를 `#size_binding_x_absolute`로. `{커뮤니티 확인}`
 - **GUI 스케일**: 고정 픽셀 크기는 GUI 스케일마다 깨지니 `%`를 쓴다. GUI 스케일은 무시할 수도 읽을 수도 없다. 우회법은 스케일 설정을 `#title_text`로 보내 모든 라벨의 `#font_scale_factor`에 넣는 것이다.
 
 ### Anchor와 offset
 - **Anchor 값**: top_left, top_middle, top_right, left_middle(`middle_left` 아님), center, right_middle, bottom_left, bottom_middle, bottom_right. anchor는 부모 기준이다. 안쪽 anchor는 건드리지 말고 부모에 anchor를 설정한다.
-- **Anchored offset 바인딩**: `use_anchored_offset: true` + `#anchored_offset_value_x/_y`(`_z`는 없음). 값은 부모 크기 대비 비율(1 = 100%)이다. `anchor_from/to`를 설정해야 하고, center가 아닌 anchor(왼쪽 위가 가장 좋음)와 크기가 고정된 부모가 필요하다. center anchor에서는 한 방향만 움직였다. 부모 크기가 0이면 offset도 0이니 1,1로 한다. `_absolute` 변형은 있다는 보고와 없다는 보고가 갈린다. **conflicting** 2026-11에도 `#anchored_offset_value_x`의 픽셀 버전은 없으니 고정 크기 부모, anchor, 퍼센트로 맞추라는 답이 있었다. 교체한 베틀 화면에서 offset이 무시된 사례도 있다.
-- **일반 offset 바인딩**: property_bag에 미리 선언한 `#offset` 배열을 쓰거나, `"offset": ["#offset_x", "#offset_y"]`에 view 바인딩을 걸었다는 보고가 있다. 반면 offset 배열 안의 `"#offset"` 문자열은 안 됐다는 보고도 있다. **conflicting**. 대안은 `"offset":"$offset"` + `variables`다. offset은 픽셀 문자열(`"40px"`)도 받는다. 세로 offset은 숫자여야 한다는 사례(타이틀)가 있다.
+- **Anchored offset 바인딩**: `use_anchored_offset: true` + `#anchored_offset_value_x/_y`(`_z`는 없음). 값은 부모 크기 대비 비율(1 = 100%)이다. `anchor_from/to`를 설정해야 하고, center가 아닌 anchor(왼쪽 위가 가장 좋음)와 크기가 고정된 부모가 필요하다. center anchor에서는 한 방향만 움직였다. 부모 크기가 0이면 offset도 0이니 1,1로 한다. `_absolute` 변형은 있다는 보고와 없다는 보고가 갈린다. `{충돌}` 2026-11에도 `#anchored_offset_value_x`의 픽셀 버전은 없으니 고정 크기 부모, anchor, 퍼센트로 맞추라는 답이 있었다. 교체한 베틀 화면에서 offset이 무시된 사례도 있다.
+- **일반 offset 바인딩**: property_bag에 미리 선언한 `#offset` 배열을 쓰거나, `"offset": ["#offset_x", "#offset_y"]`에 view 바인딩을 걸었다는 보고가 있다. 반면 offset 배열 안의 `"#offset"` 문자열은 안 됐다는 보고도 있다. `{충돌}`. 대안은 `"offset":"$offset"` + `variables`다. offset은 픽셀 문자열(`"40px"`)도 받는다. 세로 offset은 숫자여야 한다는 사례(타이틀)가 있다.
 - **Stack panel 안**: stack panel 안의 컨트롤은 anchor와 offset을 무시한다. 자식을 `panel`로 감싸거나(그 안의 이미지를 움직이거나 애니메이션) stack panel 자체를 움직인다. 아래 정렬은 첫 자식으로 `size: ["100%","fill"]` 패널을 넣는다. `orientation`은 stack_panel에만 적용된다. `use_priority` 속성이 나타났다(용도 미상).
 - **레이어**: `layer`가 높을수록 위에 그려지고 부모 기준이다. layer가 없으면 나중에 정의된 것이 대체로 위지만 보장되지 않는다.
 
@@ -273,7 +273,7 @@ sources:
 - **늘이기**: `keep_ratio: false`면 비율 고정이 풀리고, `fill: true`는 비율을 유지하며 채운다. 전체 화면 이미지는 `fill: true`/`keep_ratio: false` + 크기 100%로 하되, 고정 크기 부모 안에서는 100% 화면이 될 수 없다. `"tiled": false`면 왼쪽 위에 타일링하지 않고 전체를 보인다. 비율 스케일링 이미지 속성이 1.21.13x에 새로 생겼다. `grayscale`은 조용히 deprecated된 것으로 보인다.
 - **Nineslice**: 텍스처 옆에 `.json`을 둔다. 예: `{"base_size":10,"nineslice_size":4}`, `{"nineslice_size":1,"base_size":[4,4]}`, `{"base_size":[x,y],"nineslice_size":[l,t,r,b]}`. `base_size`는 실제 텍스처 크기로 한다. 요소의 `nineslice_size`는 사실상 deprecated다. 모서리가 늘어나지 않아 nineslice 안 라벨로 크기가 변하는 버튼을 만들 수 있다. hover 텍스처 왜곡과 전체 화면 오버레이도 nineslice로 고친다. 텍스처의 기본 크기는 읽을 수 없다.
 - **회전 불가**: 이미지 회전은 불가능하다. 미리 회전한 텍스처나 flipbook을 쓴다(nineslice 불가). 3D는 크기와 offset으로 흉내 낸다. 700x700 같은 큰 이미지를 작은 공간에 넣으면 크래시가 날 수 있다. UV 스프라이트 시트는 애니메이션 없이 `uv`, `uv_size`로 쓸 수 있다.
-- **기타 렌더 효과**: `gradient_renderer`(color1/color2는 Vec4 RGBA. 투명 페이드는 `[1,1,1,1]`에서 `[1,1,1,0]`으로)는 항상 사각형이므로 1x1을 여러 개 쌓는다. `color1`/`color2`는 바인딩으로 바꿀 수 없다(`#color1`, `#color` 모두 실측으로 듣지 않음, ANI-39). 색을 바꾸려면 흰색에서 투명으로 가는 텍스처를 `image`로 깔고 `#color`를 바인딩하거나 색별 gradient를 미리 두고 `#visible`로 고른다. 블러는 불가능하다(프레임 접근 불가). 색 반전 필터: `materials/ui.material`에 `"ui_fill_gradient:ui_base": {"blendSrc":"OneMinusDestColor","blendDst":"OneMinusSrcColor"}` + `fill: true` `gradient_renderer`. 기존 UI material만 고칠 수 있다. 반전 블렌딩으로 Java식 쿨다운 바를 클라이언트 쪽에서 title 한 번으로 만든 사례가 있다. *single report* 게임 화면 전체 필터(빨강, 풀브라이트, 색 반전, 겹쳐 쓰기 가능)는 커스텀 material 엔티티를 플레이어 위 8블록에 계속 붙여 두고 hud_screen에 숨긴 `live_horse_renderer`로 그려서 만든다(엔티티 id는 raw title로 보존. F1에서도 보임). 안티앨리어싱이 1이어야 하고, 모바일은 대각선 깨짐 때문에 가운데 정렬 렌더러를 따로 둔다. 흑백은 안 됐다. 예제: t17x xFiltersDemo.mcaddon. 이 필터는 Vibrant Visuals(VV)에서도 동작한다. 멀티플레이에서는 플레이어마다 필터 엔티티를 두고 플레이어 id를 넣은 태그로 자기 엔티티만 찾는 방식이 제안됐다(멀티플레이 실측 없음). *unverified* `server-graphics` 스크립트 모듈로도 비슷한 필터를 만들 수 있지만 VV 전용이다.
+- **기타 렌더 효과**: `gradient_renderer`(color1/color2는 Vec4 RGBA. 투명 페이드는 `[1,1,1,1]`에서 `[1,1,1,0]`으로)는 항상 사각형이므로 1x1을 여러 개 쌓는다. `color1`/`color2`는 바인딩으로 바꿀 수 없다(`#color1`, `#color` 모두 실측으로 듣지 않음, ANI-39). 색을 바꾸려면 흰색에서 투명으로 가는 텍스처를 `image`로 깔고 `#color`를 바인딩하거나 색별 gradient를 미리 두고 `#visible`로 고른다. 블러는 불가능하다(프레임 접근 불가). 색 반전 필터: `materials/ui.material`에 `"ui_fill_gradient:ui_base": {"blendSrc":"OneMinusDestColor","blendDst":"OneMinusSrcColor"}` + `fill: true` `gradient_renderer`. 기존 UI material만 고칠 수 있다. 반전 블렌딩으로 Java식 쿨다운 바를 클라이언트 쪽에서 title 한 번으로 만든 사례가 있다. `{단일 보고}` 게임 화면 전체 필터(빨강, 풀브라이트, 색 반전, 겹쳐 쓰기 가능)는 커스텀 material 엔티티를 플레이어 위 8블록에 계속 붙여 두고 hud_screen에 숨긴 `live_horse_renderer`로 그려서 만든다(엔티티 id는 raw title로 보존. F1에서도 보임). 안티앨리어싱이 1이어야 하고, 모바일은 대각선 깨짐 때문에 가운데 정렬 렌더러를 따로 둔다. 흑백은 안 됐다. 예제: t17x xFiltersDemo.mcaddon. 이 필터는 Vibrant Visuals(VV)에서도 동작한다. 멀티플레이에서는 플레이어마다 필터 엔티티를 두고 플레이어 id를 넣은 태그로 자기 엔티티만 찾는 방식이 제안됐다(멀티플레이 실측 없음). `{미검증}` `server-graphics` 스크립트 모듈로도 비슷한 필터를 만들 수 있지만 VV 전용이다.
 - **클리핑 문제**: `clips_children`은 특히 창 모드에서 서브픽셀 틈을 만든다. `"allow_clipping": false`로 스크롤 클리퍼를 벗어나게 한다. HUD 채팅 배경의 얇은 선도 창 모드에서 생긴다. 기본 chat_panel에 `clips_children: true`를 주면 채팅이 위로 밀린다. 타일 이미지 부모에서 빈 바가 렌더되지 않는 문제가 있다.
 - **요소 숨기기**: `ignored: true`는 요소를 처리하지 않아 `visible: false`(처리는 계속, FPS 비용)보다 성능이 좋다. `modifications` `remove`는 파싱한 뒤 지우는 것이라 결과는 같다. 자식은 남기고 자기만 숨기려면 `alpha: 0` + `propagate_alpha: false`. 자식 alpha는 부모 alpha와 곱해진다.
 
@@ -289,9 +289,9 @@ sources:
 
 ### 애니메이션
 - **종류**: `anim_type`: `size`(`scale` 아님), `offset`(퍼센트 값 가능), `alpha`, `color`, `wait`, `flip_book`, `aseprite_flip_book`. `play_event`/`end_event`로 button id를 발사할 수 있다(`"end_event": "button.something"`). `destroy_at_end`, 지연은 `wait` + `next`.
-- **바인딩 불가**: 애니메이션 속성(`duration`, `fps`, `frame_count`)에는 바인딩을 쓸 수 없다. 애니메이션을 속성 값으로 걸고(`"offset": "ns.offset_anim"`) 바인딩은 요소에 둔다. 경우마다 다른 애니메이션을 가진 패널을 따로 만들어 문자열로 고른다. 애니메이션 진행도는 읽을 수 없다. 애니메이션은 소리를 낼 수 없다(플레이어 엔티티 애니메이션은 가능). *confirmed*
+- **바인딩 불가**: 애니메이션 속성(`duration`, `fps`, `frame_count`)에는 바인딩을 쓸 수 없다. 애니메이션을 속성 값으로 걸고(`"offset": "ns.offset_anim"`) 바인딩은 요소에 둔다. 경우마다 다른 애니메이션을 가진 패널을 따로 만들어 문자열로 고른다. 애니메이션 진행도는 읽을 수 없다. 애니메이션은 소리를 낼 수 없다(플레이어 엔티티 애니메이션은 가능). `{커뮤니티 확인}`
 - **title 없이 트리거**: 핫바 아이템의 `#item_id_aux`/`#item_name`(give, replaceitem, clear로 바꿈), 폼 title이나 버튼 텍스트, tellraw의 `#chat_text`, `button_mappings`/toggle 이벤트를 `play_event`/`next`로 이어 애니메이션을 시작할 수 있다. 예: `{"anim_type":"flip_book","initial_uv":[0,0],"frame_count":20,"frame_step":32,"fps":20,"reversible":false}`. 패널 전체를 애니메이션하려면 부모에 걸고 자식은 퍼센트 크기로 둔다.
 - **Size 애니메이션**: 요소 `size`를 애니메이션하면 `from`/`to`가 둘 다 벡터여야 한다(예: [112.5,100]에서 [225,200]으로). 너비만 바꾸려면 `from [0,"100%"]` to `["100%","100%"]`. 타자기 효과는 크기 애니메이션이나 clips_children + offset으로 만든다. 버튼 반짝임은 flipbook이 아니라 offset 애니메이션이다.
 - **Flipbook**: `"anim_type":"flip_book"`, `frame_count`, `frame_step`(프레임 하나의 픽셀 폭/높이), `fps`, `initial_uv`, `orientation`("horizontal" 기본, "vertical". 문서에 없음). 이미지에 `uv_size` = 프레임 하나 크기, `uv: "@ns.anim"`을 주고 `disable_anim_fast_forward: true`. duration/easing/`next`를 빼야 시트 전체가 보이지 않는다. 시트는 한 줄이나 한 열이어야 한다. 멈추려면 `"looping": false`, 다시 시작하려면 마지막에 첫 프레임을 연결한다. 참조 namespace는 애니메이션 파일의 `namespace`와 같아야 한다. 큰 시트(5800x200)는 무겁고, 요소의 표시나 알파가 계속 바뀌면 다시 시작된다. 시작 때 잠깐 깜빡이는 원인은 미상이다. JSON UI flipbook은 약 30프레임이 한계라는 의견이 있다.
-- **Aseprite**: 스프라이트 시트 JSON을 Hash가 아니라 Array로 내보내 PNG 옆에 같은 이름으로 둔다. `aseprite_flip_book`은 `initial_uv`, `uv_size`를 쓴다. `initial_uv`는 1.21.114의 `hud` namespace에서 "unknown property"가 났다. nineslice와 함께 쓰는 것은 실패했다(미검증). wiki: `json-ui/aseprite-animations`.
-- **GIF와 비디오**: GIF/비디오는 Ore UI 전용이다. JSON UI에는 게임 내 파일용 `animated_gif_renderer`(전체 텍스처 경로 필요)가 있다. MP4/GIF를 메뉴 배경 mcpack으로 바꾸는 BlockMotion Studio가 있다. 컷신 같은 연출은 미리 렌더해 PNG 시퀀스로 내보내고 HUD 화면 UI에서 재생하라는 조언이 있다. *single report* 마우스로 움직이는 시차 배경은 hover 애니메이션 버튼을 많이 깐 해킹뿐이고 렉이 난다. 로딩 애니메이션 duration은 바인딩이 아니라 변수라 동적으로 바꿀 수 없다.
+- **Aseprite**: 스프라이트 시트 JSON을 Hash가 아니라 Array로 내보내 PNG 옆에 같은 이름으로 둔다. `aseprite_flip_book`은 `initial_uv`, `uv_size`를 쓴다. `initial_uv`는 1.21.114의 `hud` namespace에서 "unknown property"가 났다. nineslice와 함께 쓰는 것은 실패했다. `{미검증}` wiki: `json-ui/aseprite-animations`.
+- **GIF와 비디오**: GIF/비디오는 Ore UI 전용이다. JSON UI에는 게임 내 파일용 `animated_gif_renderer`(전체 텍스처 경로 필요)가 있다. MP4/GIF를 메뉴 배경 mcpack으로 바꾸는 BlockMotion Studio가 있다. 컷신 같은 연출은 미리 렌더해 PNG 시퀀스로 내보내고 HUD 화면 UI에서 재생하라는 조언이 있다. `{단일 보고}` 마우스로 움직이는 시차 배경은 hover 애니메이션 버튼을 많이 깐 해킹뿐이고 렉이 난다. 로딩 애니메이션 duration은 바인딩이 아니라 변수라 동적으로 바꿀 수 없다.

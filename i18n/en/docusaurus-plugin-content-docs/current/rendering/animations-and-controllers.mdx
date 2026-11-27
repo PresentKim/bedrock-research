@@ -68,7 +68,7 @@ A BP controller puts slash commands (`/say hi`), entity events (`@s wiki:transfo
 
 ## Client entity linking
 
-- In client entities of 1.10.0 and above, put animations and controllers in `animations` with short names and reference them in `scripts.animate`. If not in the list, they do not run. `confirmed`
+- In client entities of 1.10.0 and above, put animations and controllers in `animations` with short names and reference them in `scripts.animate`. If not in the list, they do not run. `{community confirmed}`
 - The `animation_controllers` array is for 1.8.0 only, so mixing them makes the entity disappear and gives "client_entity child 'animation controllers' not valid there".
 - `"animate": {"controller": {}}` or `" controller "` (with spaces) gives "unknown child schema option type. Allowed types: 'molang'".
 - If mobs and spawn eggs are not visible right after adding an animation, it is usually broken client entity JSON. Check the content log (Settings, Creator, Content Log GUI), and if you edited by hand, export again from Blockbench. Update a 1.8 client entity to 1.10.0, including its controllers.
@@ -111,7 +111,7 @@ An example that gives a random size per spawn. `??` is null coalescing and `;` s
 "scale": "v.size = v.size ?? math.random_integer(1,10); v.anim_time = v.anim_time ?? 0; v.scale = v.size*math.sin(math.min(v.anim_time,3)*30); v.anim_time = v.anim_time + q.delta_time; return v.scale;"
 ```
 
-- `pre_animation` runs every render frame. A value increased without multiplying by `q.delta_time`, as in `v.acc = v.acc + 1;`, grew about 3.5 times faster than `q.life_time * 60` at around 216fps, so multiply values that should follow time by `q.delta_time` ([measurement record](../design/json-ui-claims.mdx#66-block-uv-controller-override-sounds-languages-animation-weight), 2026-11-19 Windows 1.26.65.1).
+- `pre_animation` runs every render frame. A value increased without multiplying by `q.delta_time`, as in `v.acc = v.acc + 1;`, grew about 3.5 times faster than `q.life_time * 60` at around 216fps, so multiply values that should follow time by `q.delta_time` ([measurement record](../design/content-rendering-claims.mdx#2-entities-properties-and-animations), 2026-11-19 Windows 1.26.65.1).
 - The blend weight in a controller state is not clamped above 1. A 20 degree z-axis animation played with weights 0, 1, 2 and 3 tilted about 0, 20, 40 and 60 degrees, so the amplitude was in proportion to the weight (same measurement).
 - If the timer does not advance, use `q.delta_time` instead of `q.anim_time`. `/playanimation` is hardly usable for random sizes, so define it in the client entity's `animations` and `scripts.animate`.
 - Breathing idle: Put `math.cos(query.life_time * 120) * 10` (speed 120, amplitude 10) in a separate loop animation and separate it from the limb animations.

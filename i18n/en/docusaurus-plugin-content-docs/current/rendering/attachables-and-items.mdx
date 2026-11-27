@@ -23,7 +23,7 @@ To turn a vanilla item into a 3D model, use the vanilla attachable identifier (f
 
 ## Binding
 
-- The geometry root bone needs `"binding": "q.item_slot_to_bone_name(c.item_slot)"`. `binding` requires geometry format 1.16.0 or higher (1.12.0 ignores it and the item appears at the feet). `confirmed`.
+- The geometry root bone needs `"binding": "q.item_slot_to_bone_name(c.item_slot)"`. `binding` requires geometry format 1.16.0 or higher (1.12.0 ignores it and the item appears at the feet). Several community members confirmed this, but in the wiki's Windows measurement the box was drawn at the feet with 1.12.0, and after changing to 1.16.0 neither the `'rightitem'` binding nor the `q.item_slot_to_bone_name(c.item_slot)` binding showed the box on screen ([measurement record](../design/content-rendering-claims.mdx#8-attachables)). `{conflict}`
 - Keep only one bound top-level bone and the rest as its children. Rename anything with the same name as a player bone (`body`).
 - In Blockbench, right-click the root folder, Edit binding, item slot, in that order.
 - If the binding looks off, add a root bone that wraps the item bones. The attachable bone structure must follow the player's hand bones. You can also bind to a bone name in the player geometry (`humanoid.geo.json`) as in `q.item_slot_to_bone_name('leftArm')`.
@@ -110,7 +110,7 @@ On attachables use the `entity_alphatest_glint` material or `minecraft:glint` (a
 - Animating an item texture is impossible. Imitate it with bone visibility animation, render controller texture swaps, or an animated block that cannot be placed.
 - There is a report (2026-01) that custom materials on attachables are not respected.
 - Fields such as `light_color_multiplier`, `overlay_color` and `held_item_ignores_lighting` of a render controller do not work on attachables. There was no answer on changing an attachable's color with `color` or `overlay_color`.
-- A note (2025-10) says `uv_anim` does not work on attachables, while a note (2026-06) says a flipbook works with `uv_anim` in the attachable render controller (`offset: [0,"math.mod(math.floor(query.life_time*12),12)/12"]`, `scale:[1,"1/12"]`) or with a per-frame texture array; they disagree (`conflicting`, the latest report says it works).
+- A note (2025-10) says `uv_anim` does not work on attachables, while a note (2026-06) says a flipbook works with `uv_anim` in the attachable render controller (`offset: [0,"math.mod(math.floor(query.life_time*12),12)/12"]`, `scale:[1,"1/12"]`) or with a per-frame texture array; they disagree (`{conflict}`, the latest report says it works).
 
 ## Glow
 
@@ -118,7 +118,7 @@ Use `entity_emissive_alpha` for glowing parts and `breeze_wind_charge` for unsha
 
 ## Turning off lighting
 
-- A note says the render controller `ignore_lighting` does not work on attachables, while another note says it works if you use `ignores_lighting` together with the material `"-defines": ["FANCY"]`; they disagree (`conflicting`).
+- A note says the render controller `ignore_lighting` does not work on attachables, while another note says it works if you use `ignores_lighting` together with the material `"-defines": ["FANCY"]`; they disagree `{conflict}`.
 - `filter_lighting: false` is rejected with "Value 'false' not allowed" and only `true` is accepted. Glow of a held item is the client entity `held_item_ignores_lighting` (see `allay.entity.json` in the bedrock-samples Preview), but everything that references `held_item` excludes attachables, so make the attachable itself an emissive material. Attachables are generally buggy (MCPE-241087).
 
 ## Particles and sound
@@ -141,10 +141,10 @@ Use `entity_emissive_alpha` for glowing parts and `breeze_wind_charge` for unsha
 - `controller.render.armor` is old. Use `controller.render.armor.v2` (humanoid mobs) and `controller.render.armor.player` (players, a separate file is needed).
 - Put the armor geometry in `models/entity/`, and the render controller part visibility must turn on each bone. For animated armor, add animation to an attachable with a `.player` identifier.
 - An empty `pre_animation: []` in an armor attachable (format 1.21.130) gave an error and removing it fixed it.
-- For the problem of custom armor arm bones not following on some skins, renaming the folder was suggested (`unverified`).
+- For the problem of custom armor arm bones not following on some skins, renaming the folder was suggested `{unverified}`.
 - To render armor and items on a mob, the client entity must have exactly `"enable_attachables": true`. If misspelled, the entity becomes transparent. If the held and worn geometries overlap, fix it with render controller conditions and queries.
 - Vanilla armor attachables have a second geometry for babies (for example `geometry.humanoid.baby.armor.helmet`). The attachable sets `variable.use_baby_geo = query.is_baby;` and the render controller picks `variable.use_baby_geo ? Geometry.baby : Geometry.default`, so a custom entity without `minecraft:is_baby` does not get the baby armor.
-- Elytra: The cape texture overwrites the whole elytra texture, and an extra geometry texture breaks together with the cape (unresolved). If an edited custom elytra model looks broken, one answer says the likely cause, unless you use custom animations, is that the model was moved off center while editing rather than the pivot (`single report`). In multiplayer, several players' elytras can show the same cape texture; one explanation is that the last loaded cape texture overrides the `textures/models/armor/elytra` path, and a resource pack that points elytras at a separate texture path made each player show their own cape (with a reported side effect of some elytra visuals missing, `single report`).
+- Elytra: The cape texture overwrites the whole elytra texture, and an extra geometry texture breaks together with the cape (unresolved). If an edited custom elytra model looks broken, one answer says the likely cause, unless you use custom animations, is that the model was moved off center while editing rather than the pivot `{single report}`. In multiplayer, several players' elytras can show the same cape texture; one explanation is that the last loaded cape texture overrides the `textures/models/armor/elytra` path, and a resource pack that points elytras at a separate texture path made each player show their own cape (with a reported side effect of some elytra visuals missing, `{single report}`).
 - An attempt to make vanilla armor trims glow under VV with a MERS PNG (min_engine 1.26.0, PBR and VV capability settings) did not glow (unresolved).
 
 ## Fishing line
