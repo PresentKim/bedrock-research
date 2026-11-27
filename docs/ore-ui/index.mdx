@@ -14,7 +14,28 @@ Ore UI는 Mojang이 JSON UI를 대체하려고 새로 만든 게임 UI다. HTML�
 
 ## 한 줄 결론
 
-26.63까지는 서버가 리소스팩을 콘텐츠 키로 암호화해 보내면(또는 팩에 빈 `content.zipe`를 두면), 그 팩으로 Ore UI의 HTML·JS·CSS를 통째로 바꿀 수 있었다. 26.64에서 Mojang이 보안 문제로 리소스팩의 Ore UI 접근을 막아 지금은 이 길이 닫혔다(출처: 비공개 조사). 평문 팩으로 닿는 길은 버튼 스타일 다리, `pack://` 텍스처, DDUI 레이아웃(지금은 막힘)뿐이다.
+26.63까지는 서버가 리소스팩을 콘텐츠 키로 암호화해 보내면(또는 팩에 빈 `content.zipe`를 두면), 그 팩으로 Ore UI의 HTML·JS·CSS를 통째로 바꿀 수 있었다. 26.64에서 Mojang이 보안 문제로 리소스팩의 Ore UI 접근을 막아 지금은 이 길이 닫혔다(출처: 비공개 조사). 평문 팩으로 닿는 길은 버튼 스타일 다리, `pack://` 텍스처, DDUI 레이아웃(지금은 막힘)뿐이다. 길마다 지금 상태는 아래 표에 있다.
+
+## 지금 되는 것
+
+각 페이지가 적은 내용만 옮겼다. "다시 시험하지 않음"은 페이지가 그렇게 적은 것이고, "기록 없음"은 26.64 이후 판에서 시험한 기록이 이 위키에 없다는 뜻이다.
+
+| 방법 | 지금 판에서(위키 기준) | 마지막으로 잰 판 | 페이지 |
+| --- | --- | --- | --- |
+| Script API DDUI(`CustomForm`, `MessageBox`, `Observable*`) | 26.30부터 정식 기능이다 `{문서}`. Windows 1.26.65.1 클라이언트 바인딩에서 `styleId` 등을 읽었다 `{코드}`. 게임 실측 기록 없음 | 이 위키의 실측 없음 | [DDUI 가이드 1장](./ddui-server-guide.mdx), [모달 폼 9장](../server-ui/modal-forms.mdx#9-모듈-판과-클라이언트-바인딩) |
+| 서버가 DDUI 패킷과 데이터 저장소로 직접 만든 렌더러를 돌리기 | 26.64부터 막힘(출처: 비공개 조사). 렌더러가 `gameplay.html` 교체에 기댄다 | Windows 1.26.52, 2026-10-23 `{실측}` | [DDUI 가이드 2장](./ddui-server-guide.mdx), [운영 노트](./server-case.mdx) |
+| DDUI 패킷과 데이터 저장소 쓰기 규칙 자체 | 바닐라 DDUI의 통로라 참고할 수 있다고 적혀 있다. 기록 없음 | Windows 1.26.52 `{실측}` | [DDUI 가이드 4장, 5장](./ddui-server-guide.mdx) |
+| 평문 팩의 버튼 스타일 다리(`vanilla.resourcePackOverrides`) | 26.64에서 다시 시험하지 않음 | Windows 1.26.52 `{실측}` | [로딩 경로 3장](./loading-paths.mdx), [개요](./overview.mdx) |
+| 평문 팩의 `pack://` 텍스처 | 26.64에서 다시 시험하지 않음 | Windows 1.26.52 `{실측}` | [로딩 경로 3장](./loading-paths.mdx), [개요](./overview.mdx) |
+| 팩으로 DDUI 레이아웃(`ddui/root`) 바꾸기 | 안 됨. 내장 팩만 읽는다 `{코드}` | 실측하지 않음(분석은 Android 1.26.52.3) | [로딩 경로 4장](./loading-paths.mdx) |
+| 암호화 팩이나 `content.zipe` 팩으로 Ore UI 페이지(HTML·JS·CSS) 바꾸기 | 26.64부터 막힘(출처: 비공개 조사). 26.63까지 동작했다 | Windows 1.26.52 `{실측}` | [Ore UI 페이지 바꾸기](./modifying-pages.mdx) |
+| 로컬 전역 리소스 팩으로 메뉴 `/hbui/index.html` 바꾸기 | 26.64부터 막힘. 26.63까지 동작했다는 커뮤니티 보고 | 이 위키의 실측 없음 | [개요](./overview.mdx) |
+| 번들 이미지(`hbui/assets/*`) 바꾸기 | 26.64부터 불가. 그 전에도 평문 팩은 불가였고, 암호화 팩이면 됐을 것으로 본다 `{추론}` | 시험하지 않음 | [개요](./overview.mdx) |
+| 폰트(`hbui/fonts`) 바꾸기 | 불가. 설치 폴더에서만 읽는다 `{코드}` | 해당 없음 | [개요](./overview.mdx) |
+| 팩 `texts/*.lang`으로 Ore UI 문자열 바꾸기 | 커뮤니티 보고로는 된다. 시험하지 않음 | 시험하지 않음 | [개요](./overview.mdx) |
+| 진짜 상자·화로·인벤토리를 Ore UI로 열기 | 안 됨. 클라이언트 개발자 옵션이 켜져야 한다 `{실측, 코드}` | Windows 1.26.52 `{실측}` | [아이콘과 컨테이너](./geo-item-and-containers.mdx) |
+| 설치 폴더를 직접 패치하는 클라이언트 도구(Ore UI Customizer) | 리소스팩이 아니다. 코드만 읽었고 실행하지 않았다. 기록 없음 | 실행하지 않음(코드는 2026-10-21 클론) | [Customizer 분석](./customizer-tool.mdx) |
+| JSON UI 대안: 엔티티 상자 화면(InvUI)으로 DDUI 흉내 내기 | 1.26.63에서 된다 `{실측}`. 26.64 이후 기록 없음 | 모바일 1.26.63, 2026-11-16 | [InvUI 기반 DDUI 모방 구현](../design/invui/ddui/index.mdx) |
 
 ## 페이지 지도
 
@@ -29,6 +50,8 @@ Ore UI는 Mojang이 JSON UI를 대체하려고 새로 만든 게임 UI다. HTML�
 | [마인크래프트 UI 스타일](./style.mdx) | DDUI를 JSON UI와 같은 모양으로 그리는 규칙 |
 | [Ore UI Customizer 분석](./customizer-tool.mdx) | 설치 폴더를 직접 패치하는 8Crafter 도구 |
 | [서버 주도 Ore UI 화면 운영 노트](./server-case.mdx) | 서버가 Ore UI 화면을 운영할 때의 구조, Gameface 입력 동작, 인벤토리 클릭 규칙, 클라이언트 설정 |
+| [Ore UI 엔진 발견](../internals/ore-ui-engine-findings.mdx) | 바이너리에서 읽은 팩 조회와 신뢰 판정, 버튼 다리, DDUI 레이아웃과 데이터 통로, `geo-item://`(NB-17~22) |
+| [InvUI 기반 DDUI 모방 구현](../design/invui/ddui/index.mdx) | JSON UI 대안. 엔티티 상자 화면으로 DDUI 폼을 흉내 내는 기획과 예제 애드온 |
 
 ## 표기
 

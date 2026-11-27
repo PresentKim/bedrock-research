@@ -14,7 +14,28 @@ Ore UI is the new game UI Mojang built to replace JSON UI. It is written in HTML
 
 ## Conclusion in one line
 
-Up to 26.63, if a server sent a resource pack encrypted with a content key (or a pack had an empty `content.zipe`), that pack could replace the HTML, JS and CSS of Ore UI wholesale. In 26.64 Mojang blocked resource pack access to Ore UI for a security reason, and this route is now closed (Source: private research). The only routes a plaintext pack reaches are the button style bridge, `pack://` textures and the DDUI layout (currently blocked).
+Up to 26.63, if a server sent a resource pack encrypted with a content key (or a pack had an empty `content.zipe`), that pack could replace the HTML, JS and CSS of Ore UI wholesale. In 26.64 Mojang blocked resource pack access to Ore UI for a security reason, and this route is now closed (Source: private research). The only routes a plaintext pack reaches are the button style bridge, `pack://` textures and the DDUI layout (currently blocked). The table below gives the current state of each route.
+
+## What works today
+
+The table copies only what each page states. "Not retested" means the page says so, and "no record" means this wiki has no test on 26.64 or later.
+
+| Approach | On the current version (per the wiki) | Last version measured | Page |
+| --- | --- | --- | --- |
+| Script API DDUI (`CustomForm`, `MessageBox`, `Observable*`) | A stable feature since 26.30 `{docs}`. `styleId` and other members were read from the Windows 1.26.65.1 client bindings `{code}`. No in-game record | No measurement in this wiki | [DDUI guide chapter 1](./ddui-server-guide.mdx), [Modal forms chapter 9](../server-ui/modal-forms.mdx#9-module-versions-and-client-bindings) |
+| A server running its own renderer through DDUI packets and the data store | Blocked since 26.64 (Source: private research). The renderer depends on replacing `gameplay.html` | Windows 1.26.52, 2026-10-23 `{measured}` | [DDUI guide chapter 2](./ddui-server-guide.mdx), [Operations notes](./server-case.mdx) |
+| The DDUI packet and data store write rules themselves | The page says they remain usable as reference because they are the vanilla DDUI channel. No record | Windows 1.26.52 `{measured}` | [DDUI guide chapters 4 and 5](./ddui-server-guide.mdx) |
+| Button style bridge from a plaintext pack (`vanilla.resourcePackOverrides`) | Not retested on 26.64 | Windows 1.26.52 `{measured}` | [Loading paths chapter 3](./loading-paths.mdx), [Overview](./overview.mdx) |
+| `pack://` textures from a plaintext pack | Not retested on 26.64 | Windows 1.26.52 `{measured}` | [Loading paths chapter 3](./loading-paths.mdx), [Overview](./overview.mdx) |
+| Changing the DDUI layout (`ddui/root`) with a pack | Does not work. Only built-in packs are read `{code}` | Not measured (analysis on Android 1.26.52.3) | [Loading paths chapter 4](./loading-paths.mdx) |
+| Changing Ore UI pages (HTML, JS, CSS) with an encrypted pack or a `content.zipe` pack | Blocked since 26.64 (Source: private research). Worked up to 26.63 | Windows 1.26.52 `{measured}` | [Modifying Ore UI pages](./modifying-pages.mdx) |
+| Replacing the menu `/hbui/index.html` with a local global resource pack | Blocked since 26.64. A community report says it worked up to 26.63 | No measurement in this wiki | [Overview](./overview.mdx) |
+| Replacing bundle images (`hbui/assets/*`) | Not possible since 26.64. Plaintext packs could not do it before either, and an encrypted pack probably could `{inferred}` | Not tested | [Overview](./overview.mdx) |
+| Replacing fonts (`hbui/fonts`) | Not possible. Read only from the install folder `{code}` | Not applicable | [Overview](./overview.mdx) |
+| Changing Ore UI strings with pack `texts/*.lang` | Works according to community reports. Not tested | Not tested | [Overview](./overview.mdx) |
+| Opening real chests, furnaces and the inventory in Ore UI | Does not work. A client developer option must be on `{measured, code}` | Windows 1.26.52 `{measured}` | [Icons and containers](./geo-item-and-containers.mdx) |
+| A client tool that patches the install folder directly (Ore UI Customizer) | Not a resource pack. Only its code was read; it was not run. No record | Not run (code cloned 2026-10-21) | [Customizer analysis](./customizer-tool.mdx) |
+| JSON UI fallback: imitating DDUI with the entity chest screen (InvUI) | Works on 1.26.63 `{measured}`. No record on 26.64 or later | Mobile 1.26.63, 2026-11-16 | [Imitating DDUI with InvUI](../design/invui/ddui/index.mdx) |
 
 ## Page map
 
@@ -29,6 +50,8 @@ Up to 26.63, if a server sent a resource pack encrypted with a content key (or a
 | [Minecraft UI style](./style.mdx) | Rules for drawing DDUI to look like JSON UI |
 | [Ore UI Customizer analysis](./customizer-tool.mdx) | The 8Crafter tool that patches the install folder directly |
 | [Server-driven Ore UI screen operations notes](./server-case.mdx) | Structure when a server operates Ore UI screens, Gameface input behavior, inventory click rules, client settings |
+| [Ore UI engine findings](../internals/ore-ui-engine-findings.mdx) | Pack lookup and the trust decision, the button bridge, the DDUI layout and data channel, and `geo-item://`, read from the binary (NB-17~22) |
+| [Imitating DDUI with InvUI](../design/invui/ddui/index.mdx) | The JSON UI fallback. A plan and example addons that imitate DDUI forms with the entity chest screen |
 
 ## Notation
 

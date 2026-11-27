@@ -10,6 +10,11 @@ sources:
 
 # Server-driven DDUI guide
 
+:::info[Where to read]
+- Addon makers who show forms with the Script API (`CustomForm` and `MessageBox` in `@minecraft/server-ui`) need only chapter 1.
+- Developers of servers that send packets directly (Dragonfly, gophertunnel and so on) read from chapter 2. The renderer from chapter 2 on is blocked since 26.64, and only the packet and data store rules of chapters 4 and 5 remain usable as reference.
+:::
+
 DDUI (Data-Driven UI) is the Ore UI framework where the look of a screen is set by data. This page covers two things. First it explains the script DDUI that Mojang officially released (`CustomForm` in `@minecraft/server-ui`), and then it sorts out how a server borrows that data channel to run its own renderer. The evidence is the 2026-10-23 Windows 1.26.52 measurement (Dragonfly test server), the in-game bundle `gameplay-100751586307248a0527.js`, and the Android 1.26.52.3 analysis (rounds 11~15). (Source: repo-ore-ui-loading)
 
 ## 1. Official DDUI (script) `{docs}`
@@ -95,6 +100,7 @@ new CustomForm(player, "Entity Monitor")
 - Migration: `ActionFormData` and `ModalFormData` become `new CustomForm(player, title)`, `MessageFormData` becomes `new MessageBox(player)`, `.show(player)` becomes `.show()`, and `response.formValues[0]` becomes `observable.getData()`.
 - A script DDUI changing an open form appears to use the path update rules of chapter 5 below `{inferred}`.
 - Changing the vanilla DDUI layout (`ddui/root`) with a pack is currently blocked ([Loading paths](./loading-paths.mdx)).
+- Members added per module version (`CustomForm.image`, `CustomForm.multiButtonRow`, `MessageBox.button3WithOptions`) and `styleId`, which is missing from the sample metadata and was found in the client bindings, are in [Modal forms chapter 9](../server-ui/modal-forms.mdx#9-module-versions-and-client-bindings).
 
 ### Community notes
 
@@ -305,7 +311,7 @@ Performance rules
 
 ## 9. Test server commands
 
-Open it from `samples/ouitest` with `go run . <pack folder> <32-byte key> [extra packs to send as plaintext...]`.
+The test server is an unpublished Dragonfly test sample (`ouitest`) and is not in this wiki repository. It is opened from its folder with `go run . <pack folder> <32-byte key> [extra packs to send as plaintext...]`. The table below records that server's commands.
 
 | Command | Contents |
 | --- | --- |
@@ -316,7 +322,7 @@ Open it from `samples/ouitest` with `go run . <pack folder> <32-byte key> [extra
 | `/ddchest` | Fills the vanilla Ore UI chest root with server data and opens it (not drawn) |
 | `/die` | Death screen (Ore UI) |
 
-Grid + detail screen example: send the pack for custom textures along as plaintext.
+Grid + detail screen example: send the pack for custom textures along as plaintext. `../ddui-pack` is a private renderer pack kept next to the test server.
 
 ```bash
 go run . ../ddui-pack OreUiProbeContentKey0123456789AB <custom texture pack folder>

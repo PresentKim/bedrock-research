@@ -10,6 +10,11 @@ sources:
 
 # 서버 주도 DDUI 가이드
 
+:::info[어디를 읽을까]
+- Script API(`@minecraft/server-ui`의 `CustomForm`, `MessageBox`)로 폼을 띄우는 애드온 제작자는 1장만 읽으면 된다.
+- 직접 패킷을 보내는 서버(Dragonfly, gophertunnel 등) 개발자는 2장부터 읽는다. 2장부터의 렌더러는 26.64부터 막혔고, 4장과 5장의 패킷·데이터 저장소 규칙만 참고할 수 있다.
+:::
+
 DDUI(Data-Driven UI)는 화면의 모양을 데이터로 정하는 Ore UI 쪽 틀이다. 이 페이지는 두 가지를 다룬다. 먼저 Mojang이 공식으로 내놓은 스크립트용 DDUI(`@minecraft/server-ui`의 `CustomForm`)를 설명하고, 그다음 그 데이터 통로를 빌려 서버가 직접 렌더러를 돌리는 방법을 정리한다. 근거는 2026-10-23 Windows 1.26.52 실측(Dragonfly 시험 서버), 게임 중 번들 `gameplay-100751586307248a0527.js`, Android 1.26.52.3 분석(11~15차)이다. (출처: repo-ore-ui-loading)
 
 ## 1. 공식 DDUI(스크립트) `{문서}`
@@ -95,6 +100,7 @@ new CustomForm(player, "Entity Monitor")
 - 이전: `ActionFormData`와 `ModalFormData`는 `new CustomForm(player, title)`로, `MessageFormData`는 `new MessageBox(player)`로, `.show(player)`는 `.show()`로, `response.formValues[0]`은 `observable.getData()`로 바뀐다.
 - 스크립트 DDUI가 열린 폼을 바꾸는 것은 아래 5장의 경로 갱신 규칙을 쓰는 것으로 보인다 `{추론}`.
 - 팩으로 바닐라 DDUI 레이아웃(`ddui/root`)을 바꾸는 것은 지금 막혀 있다([로딩 경로](./loading-paths.mdx)).
+- 모듈 판마다 추가된 멤버(`CustomForm.image`, `CustomForm.multiButtonRow`, `MessageBox.button3WithOptions`)와, 샘플 metadata에는 없고 클라이언트 바인딩에서 찾은 `styleId`는 [모달 폼 9장](../server-ui/modal-forms.mdx#9-모듈-판과-클라이언트-바인딩)에 있다.
 
 ### 커뮤니티 노트
 
@@ -305,7 +311,7 @@ f.Close()
 
 ## 9. 시험 서버 명령
 
-`samples/ouitest`에서 `go run . <팩 폴더> <32바이트 키> [평문으로 보낼 추가 팩...]`로 연다.
+시험 서버는 공개하지 않은 Dragonfly 시험 샘플(`ouitest`)이고 이 위키 저장소에는 없다. 그 폴더에서 `go run . <팩 폴더> <32바이트 키> [평문으로 보낼 추가 팩...]`로 연다. 아래 표는 그 서버의 명령 기록이다.
 
 | 명령 | 내용 |
 | --- | --- |
@@ -316,7 +322,7 @@ f.Close()
 | `/ddchest` | 바닐라 Ore UI 상자 루트에 서버 데이터를 채워 연다(그려지지 않음) |
 | `/die` | 사망 화면(Ore UI) |
 
-격자 + 상세 화면 예: 커스텀 텍스처용 팩을 평문으로 같이 보낸다.
+격자 + 상세 화면 예: 커스텀 텍스처용 팩을 평문으로 같이 보낸다. `../ddui-pack`은 시험 서버 옆에 둔 비공개 렌더러 팩이다.
 
 ```bash
 go run . ../ddui-pack OreUiProbeContentKey0123456789AB <커스텀 텍스처 팩 폴더>
