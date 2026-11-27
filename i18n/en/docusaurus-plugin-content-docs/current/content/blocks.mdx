@@ -90,6 +90,8 @@ The spelling is `light_dampening` (not damping). A block that uses geometry must
 
 ## 3. Custom components (scripts)
 
+See also: the handler list, registration and parameters are in the custom components section of [Entities, items, custom components](../scripting/entities-and-components.mdx#custom-components).
+
 ### Registration
 
 In the block JSON, write `"ns:id": {}` directly in `components`, and a script registers it. The requirements are block format 1.21.90 or higher, `@minecraft/server` 2.0.0 or higher in the BP manifest, a script entry in `modules`, and importing the component file from the entry file.
@@ -131,6 +133,150 @@ system.beforeEvents.startup.subscribe(({ blockComponentRegistry }) => {
 ### Permutations and the custom component bug (MCPE-234714)
 
 Only the custom components of the last (bottom-most) matching permutation apply, and those defined elsewhere are ignored. If it is in both the root and the default permutation, only the permutation side is read. The workaround is to define every custom component in every permutation. Unresolved as of 2026-10.
+
+### Example: a block that swaps its texture with a boolean state
+
+Each time a player uses the block, it flips the state `wiki:on`, and a permutation tied to that state swaps the texture. It takes a behavior pack, a resource pack and one script. This example has not been run in game `{needs measurement}`.
+
+It relies on these facts from this page.
+
+- The block `format_version` 1.26.30 form, using `minecraft:geometry` together with `minecraft:material_instances`, and texture names being keys of `terrain_texture.json` (sections 1 and 8).
+- States are defined in `description.states` with a namespace and read with `q.block_state`, permutation components may overlap the base, and to change the look from a script you tie permutations to a state and use `block.setPermutation` (section 4).
+- The registration requirements (block format 1.21.90 or higher, `@minecraft/server` 2.0.0 or higher, a script entry in `modules`), and that `onPlayerInteract` blocks normal use and placement (section 3).
+- The door pattern that flips a boolean state with `block.permutation.withState` inside `onPlayerInteract({block, dimension})` (section 15).
+- The `data` and `script` modules in the manifest, the uuid dependency that adds the RP automatically, and the lang location ([manifest](../basics/manifest.mdx), [file formats](../basics/file-formats.mdx), [overview-and-modules](../scripting/overview-and-modules.mdx)).
+
+The `@minecraft/server` version is fixed at 2.7.0. The registration section of this page names 2.7.0 when it covers custom component loading problems (single report), and the [manifest](../basics/manifest.mdx) example also uses 2.7.0. The minimal example in [overview-and-modules](../scripting/overview-and-modules.mdx) uses 2.4.0. The registration requirement is 2.0.0 or higher, so both values meet it, but the wiki has no data on behavior differences between 2.4.0 and 2.7.0.
+
+```text
+BP/manifest.json
+BP/blocks/toggle_block.json
+BP/scripts/main.js
+RP/manifest.json
+RP/textures/terrain_texture.json
+RP/textures/blocks/toggle_off.png
+RP/textures/blocks/toggle_on.png
+RP/texts/en_US.lang
+```
+
+The UUIDs are placeholders, so generate new ones. Make the two PNGs yourself at 16x16.
+
+```json
+{
+  "format_version": 2,
+  "header": {
+    "name": "Toggle Block BP",
+    "description": "Toggle block behavior pack",
+    "uuid": "00000000-0000-4000-8000-0000000000a1",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 26, 30]
+  },
+  "modules": [
+    { "type": "data", "uuid": "00000000-0000-4000-8000-0000000000a2", "version": [1, 0, 0] },
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "00000000-0000-4000-8000-0000000000a3",
+      "version": [1, 0, 0],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    { "uuid": "00000000-0000-4000-8000-0000000000b1", "version": [1, 0, 0] },
+    { "module_name": "@minecraft/server", "version": "2.7.0" }
+  ]
+}
+```
+
+```json
+{
+  "format_version": 2,
+  "header": {
+    "name": "Toggle Block RP",
+    "description": "Toggle block resource pack",
+    "uuid": "00000000-0000-4000-8000-0000000000b1",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 26, 30]
+  },
+  "modules": [
+    { "type": "resources", "uuid": "00000000-0000-4000-8000-0000000000b2", "version": [1, 0, 0] }
+  ]
+}
+```
+
+```json
+{
+  "format_version": "1.26.30",
+  "minecraft:block": {
+    "description": {
+      "identifier": "wiki:toggle_block",
+      "menu_category": { "category": "construction" },
+      "states": { "wiki:on": [false, true] }
+    },
+    "components": {
+      "minecraft:geometry": { "identifier": "minecraft:geometry.full_block" },
+      "minecraft:material_instances": {
+        "*": { "texture": "toggle_off", "render_method": "opaque" }
+      },
+      "wiki:toggle": {}
+    },
+    "permutations": [
+      {
+        "condition": "q.block_state('wiki:on')",
+        "components": {
+          "minecraft:material_instances": {
+            "*": { "texture": "toggle_on", "render_method": "opaque" }
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "resource_pack_name": "wiki",
+  "texture_name": "atlas.terrain",
+  "texture_data": {
+    "toggle_off": { "textures": "textures/blocks/toggle_off" },
+    "toggle_on": { "textures": "textures/blocks/toggle_on" }
+  }
+}
+```
+
+```lang
+tile.wiki:toggle_block.name=Toggle Block
+```
+
+```javascript
+import { system } from "@minecraft/server";
+
+system.beforeEvents.startup.subscribe(({ blockComponentRegistry }) => {
+  blockComponentRegistry.registerCustomComponent("wiki:toggle", {
+    onPlayerInteract({ block }) {
+      const isOn = block.getState("wiki:on");
+      block.setPermutation(block.permutation.withState("wiki:on", !isOn));
+    },
+  });
+});
+```
+
+`blocks.json` is not used. For a block that uses geometry, `blocks.json` must not hold `textures`, and the texture is picked by `material_instances` with a key of `terrain_texture.json` (sections 1 and 8).
+
+Things to watch:
+
+- MCPE-234714 (unresolved) applies. This example puts the custom component `wiki:toggle` only in the base `components`, and the permutation holds only `material_instances`. If you add any custom component to a permutation, the custom components of the base disappear, so then define `wiki:toggle` again in every permutation.
+- With `onPlayerInteract` present, normal use and placement against that block are blocked. To place another block next to it, sneak.
+- Components are registered only in startup, so after editing the script or the block JSON, leave the world and re-enter. `/reload` does not run startup again.
+
+These parts have no example on the wiki and were carried over from the facts above. Do not treat them as correct before checking in game.
+
+- Defining a boolean state as the array `[false, true]`. This page shows only string arrays (`["a", "b"]`) and integer ranges.
+- Writing the permutation `condition` as `q.block_state('wiki:on')` alone. The only place a boolean state is read this way is the `bone_visibility` expression of the door pattern.
+- Reading the current value with `block.getState("wiki:on")`. The multi-block section uses `part.getState`.
+- Putting a `data` module next to the `script` module in `modules`. The minimal example in [overview-and-modules](../scripting/overview-and-modules.mdx) has only a `script` module.
+- Setting `min_engine_version` to `[1, 26, 30]`. This page says `format_version` decides block features and the manifest value affects only BP Molang and commands.
 
 ## 4. States, traits, permutations
 

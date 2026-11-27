@@ -90,6 +90,8 @@ tile.wiki:glow_block.name=Glow Block
 
 ## 3. 커스텀 컴포넌트(스크립트)
 
+함께 보기: 핸들러 목록, 등록 방식, 매개변수는 [엔티티, 아이템, 커스텀 컴포넌트](../scripting/entities-and-components.mdx#커스텀-컴포넌트)의 커스텀 컴포넌트 절에 있다.
+
 ### 등록
 
 블록 JSON에는 `"ns:id": {}`를 `components`에 직접 쓰고, 스크립트가 등록한다. 필요 조건은 블록 format 1.21.90 이상, BP manifest의 `@minecraft/server` 2.0.0 이상, `modules`의 script 항목, 그리고 엔트리 파일에서 컴포넌트 파일을 import하는 것이다.
@@ -131,6 +133,150 @@ system.beforeEvents.startup.subscribe(({ blockComponentRegistry }) => {
 ### 퍼뮤테이션과 커스텀 컴포넌트 버그(MCPE-234714)
 
 매칭되는 퍼뮤테이션 중 마지막(가장 아래) 퍼뮤테이션의 커스텀 컴포넌트만 적용되고 다른 곳에 정의한 것은 무시된다. 루트와 기본 퍼뮤테이션 양쪽에 있으면 퍼뮤테이션 쪽만 읽힌다. 우회법은 모든 퍼뮤테이션에 모든 커스텀 컴포넌트를 정의하는 것이다. 2026-10 기준 미해결이다.
+
+### 예제: 불리언 상태로 텍스처를 바꾸는 블록
+
+플레이어가 블록을 쓸 때마다 상태 `wiki:on`을 뒤집고, 그 상태에 묶인 퍼뮤테이션이 텍스처를 바꾼다. 행동 팩, 리소스 팩, 스크립트 하나로 끝난다. 이 예제는 게임에서 실행하지 않았다 `{실측 필요}`.
+
+이 페이지의 다음 사실에 기대었다.
+
+- 블록 `format_version` 1.26.30 형식, `minecraft:geometry`와 `minecraft:material_instances`를 함께 쓰는 것, 텍스처 이름은 `terrain_texture.json`의 키라는 것(1절, 8절).
+- 상태는 `description.states`에 네임스페이스를 붙여 정의하고 `q.block_state`로 읽는다는 것, 퍼뮤테이션 컴포넌트가 base와 겹쳐도 된다는 것, 스크립트로 모양을 바꿀 때는 퍼뮤테이션을 상태에 묶고 `block.setPermutation`을 쓴다는 것(4절).
+- 등록 조건(블록 format 1.21.90 이상, `@minecraft/server` 2.0.0 이상, `modules`의 script 항목)과 `onPlayerInteract`가 일반 사용과 설치를 막는다는 것(3절).
+- `onPlayerInteract({block, dimension})`에서 `block.permutation.withState`로 불리언 상태를 뒤집는 문 패턴(15절).
+- manifest의 `data`와 `script` 모듈, RP 자동 추가를 위한 uuid 의존성, lang 위치([manifest](../basics/manifest.mdx), [파일 형식](../basics/file-formats.mdx), [overview-and-modules](../scripting/overview-and-modules.mdx)).
+
+`@minecraft/server` 버전은 2.7.0으로 정한다. 이 페이지의 등록 절은 커스텀 컴포넌트 로딩 문제를 다루며 2.7.0을 쓰라고 하고(단일 보고), [manifest](../basics/manifest.mdx)의 예도 2.7.0이다. [overview-and-modules](../scripting/overview-and-modules.mdx)의 최소 예제는 2.4.0이다. 등록 필요 조건은 2.0.0 이상이라 두 값 모두 조건을 채우지만, 2.4.0과 2.7.0의 동작 차이는 이 위키에 없다.
+
+```text
+BP/manifest.json
+BP/blocks/toggle_block.json
+BP/scripts/main.js
+RP/manifest.json
+RP/textures/terrain_texture.json
+RP/textures/blocks/toggle_off.png
+RP/textures/blocks/toggle_on.png
+RP/texts/en_US.lang
+```
+
+UUID는 예시 자리표시자이니 새로 만들어 넣는다. 두 PNG는 16x16으로 직접 만든다.
+
+```json
+{
+  "format_version": 2,
+  "header": {
+    "name": "Toggle Block BP",
+    "description": "Toggle block behavior pack",
+    "uuid": "00000000-0000-4000-8000-0000000000a1",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 26, 30]
+  },
+  "modules": [
+    { "type": "data", "uuid": "00000000-0000-4000-8000-0000000000a2", "version": [1, 0, 0] },
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "00000000-0000-4000-8000-0000000000a3",
+      "version": [1, 0, 0],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    { "uuid": "00000000-0000-4000-8000-0000000000b1", "version": [1, 0, 0] },
+    { "module_name": "@minecraft/server", "version": "2.7.0" }
+  ]
+}
+```
+
+```json
+{
+  "format_version": 2,
+  "header": {
+    "name": "Toggle Block RP",
+    "description": "Toggle block resource pack",
+    "uuid": "00000000-0000-4000-8000-0000000000b1",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 26, 30]
+  },
+  "modules": [
+    { "type": "resources", "uuid": "00000000-0000-4000-8000-0000000000b2", "version": [1, 0, 0] }
+  ]
+}
+```
+
+```json
+{
+  "format_version": "1.26.30",
+  "minecraft:block": {
+    "description": {
+      "identifier": "wiki:toggle_block",
+      "menu_category": { "category": "construction" },
+      "states": { "wiki:on": [false, true] }
+    },
+    "components": {
+      "minecraft:geometry": { "identifier": "minecraft:geometry.full_block" },
+      "minecraft:material_instances": {
+        "*": { "texture": "toggle_off", "render_method": "opaque" }
+      },
+      "wiki:toggle": {}
+    },
+    "permutations": [
+      {
+        "condition": "q.block_state('wiki:on')",
+        "components": {
+          "minecraft:material_instances": {
+            "*": { "texture": "toggle_on", "render_method": "opaque" }
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "resource_pack_name": "wiki",
+  "texture_name": "atlas.terrain",
+  "texture_data": {
+    "toggle_off": { "textures": "textures/blocks/toggle_off" },
+    "toggle_on": { "textures": "textures/blocks/toggle_on" }
+  }
+}
+```
+
+```lang
+tile.wiki:toggle_block.name=Toggle Block
+```
+
+```javascript
+import { system } from "@minecraft/server";
+
+system.beforeEvents.startup.subscribe(({ blockComponentRegistry }) => {
+  blockComponentRegistry.registerCustomComponent("wiki:toggle", {
+    onPlayerInteract({ block }) {
+      const isOn = block.getState("wiki:on");
+      block.setPermutation(block.permutation.withState("wiki:on", !isOn));
+    },
+  });
+});
+```
+
+`blocks.json`은 쓰지 않는다. 지오메트리를 쓰는 블록은 `blocks.json`에 `textures`를 두면 안 되고 텍스처는 `material_instances`가 `terrain_texture.json`의 키로 고른다(1절, 8절).
+
+주의할 점은 다음과 같다.
+
+- MCPE-234714(미해결)가 걸려 있다. 이 예제는 커스텀 컴포넌트 `wiki:toggle`을 base `components`에만 두고 퍼뮤테이션에는 `material_instances`만 둔다. 퍼뮤테이션에 커스텀 컴포넌트를 하나라도 더하면 base의 커스텀 컴포넌트가 사라지므로, 그때는 모든 퍼뮤테이션에 `wiki:toggle`을 다시 정의한다.
+- `onPlayerInteract`가 있으면 그 블록에 대고 하는 일반 사용과 설치가 막힌다. 블록 곁에 다른 블록을 놓으려면 웅크려야 한다.
+- 컴포넌트 등록은 startup에서만 일어나므로 스크립트나 블록 JSON을 고친 뒤에는 월드를 나갔다 다시 들어간다. `/reload`로는 startup이 다시 실행되지 않는다.
+
+이 위키에 예가 없어 위 사실에서 옮겨 쓴 부분은 다음과 같다. 게임에서 확인하기 전에는 맞다고 보지 않는다.
+
+- 불리언 상태를 `[false, true]` 배열로 정의하는 형식. 이 페이지는 문자열 배열(`["a", "b"]`)과 정수 범위만 보여 준다.
+- 퍼뮤테이션 `condition`을 `q.block_state('wiki:on')` 하나로 쓰는 것. 문 패턴의 `bone_visibility` 식에서 불리언 상태를 이렇게 읽는 것만 보인다.
+- `block.getState("wiki:on")`으로 현재 값을 읽는 것. 멀티블록 절은 `part.getState`를 쓴다.
+- `data` 모듈을 `modules`에 함께 두는 구성. [overview-and-modules](../scripting/overview-and-modules.mdx)의 최소 예제에는 `script` 모듈만 있다.
+- `min_engine_version`을 `[1, 26, 30]`으로 맞춘 것. 이 페이지는 블록 기능을 `format_version`이 정한다고 하고, manifest 값은 BP의 Molang과 명령에만 영향이 있다고 적는다.
 
 ## 4. 상태, 트레이트, 퍼뮤테이션
 

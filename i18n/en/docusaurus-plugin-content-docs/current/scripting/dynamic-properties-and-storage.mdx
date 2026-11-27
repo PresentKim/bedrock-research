@@ -43,6 +43,63 @@ item.setDynamicProperty("my:owner", player.id);
 container.setItem(0, item);
 ```
 
+## Example: showing a per-player count in a form
+
+Each time a player uses a compass, the example adds 1 to that player's count in a player dynamic property and shows the value in an `ActionFormData` form. The second button of the form clears the count. This example has not been run in game `{needs measurement}`.
+
+It relies on these facts from this wiki.
+
+- A player is written with `setDynamicProperty(id, value)` without a declaration and read with `getDynamicProperty(id) ?? 0`, and giving the value `undefined` deletes it (the two sections above on this page). Properties live in a sandbox per pack UUID, so keep the UUID when updating.
+- `show` is a world-changing call, so it cannot be called directly from a `before` event (restricted execution), and when forms overlap it can be canceled with `UserBusy` (the form summary in [server-ui, server-net, server-admin, GameTest](./server-net-and-admin.mdx)). So the form is opened from the `after` event `world.afterEvents.itemUse`. Opening a form from `itemUse` is the same as the shortest example in [modal forms](../server-ui/modal-forms.mdx).
+- Check `r.canceled` before using the response, `selection` is the button number counted from 0, and the Promise of `show` can reject, so a `catch` is added (the response section and the `ActionFormData` section of [modal forms](../server-ui/modal-forms.mdx)).
+
+The manifest `dependencies` need two modules. The other entries are the same as the minimal example in [Script API overview](./overview-and-modules.mdx).
+
+```json
+"dependencies": [
+  { "module_name": "@minecraft/server", "version": "2.7.0" },
+  { "module_name": "@minecraft/server-ui", "version": "2.0.0" }
+]
+```
+
+```javascript
+import { world } from "@minecraft/server";
+import { ActionFormData } from "@minecraft/server-ui";
+
+const USES_KEY = "wiki:compass_uses";
+
+world.afterEvents.itemUse.subscribe(({ source, itemStack }) => {
+  if (itemStack.typeId !== "minecraft:compass") return;
+
+  const uses = (source.getDynamicProperty(USES_KEY) ?? 0) + 1;
+  source.setDynamicProperty(USES_KEY, uses);
+
+  new ActionFormData()
+    .title("Compass counter")
+    .body(`You have used the compass ${uses} times.`)
+    .button("Close")
+    .button("Reset count")
+    .show(source)
+    .then((r) => {
+      if (r.canceled) return;
+      if (r.selection === 1) source.setDynamicProperty(USES_KEY, undefined);
+    })
+    .catch((e) => {
+      console.error(e, e.stack);
+    });
+});
+```
+
+The count is raised before the form opens. So even if the form is canceled with `UserBusy` because another UI is open, the count still goes up. The retry that the modal forms page describes (an achievement add-on retries every 10 ticks up to 20 times) is not included.
+
+These parts have no example on this wiki and were carried over from the facts above.
+
+- Reading and writing a player's dynamic property directly on the `source` of `afterEvents.itemUse`. The example on this page uses a `player` variable, and the example on the modal forms page uses `source` as the form target for the same event.
+- The chained `.then(...).catch(...)` form. The modal forms page shows the same form as plain code.
+- The manifest dependency pair 2.7.0 and 2.0.0. The example in [manifest](../basics/manifest.mdx) and the blocks page list the same pair.
+
+Form types and response handling are in [Server form API and form types](../server-ui/modal-forms.mdx).
+
 ## Selection criteria
 
 For script data, it is better to use DPs than scoreboards. Scoreboards are easily cleared or edited by commands, and for large data they need many API calls and have size limits. Tags suit light flags, and large structures are split into several keys in DPs.

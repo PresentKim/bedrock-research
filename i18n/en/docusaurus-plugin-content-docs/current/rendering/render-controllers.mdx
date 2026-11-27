@@ -7,6 +7,8 @@ sources: [private-research, bedrock-wiki, ms-learn]
 
 # Render controllers
 
+The in-game measurement records (texture arrays, the number of `textures` entries, rendering queries, `uv_anim`) are in [6.3](../design/json-ui-claims.mdx#63-state-holding-lazy-roots-pack-order-rendering) through [6.7](../design/json-ui-claims.mdx#67-particle-queries-and-counters-sound-definitions-material-files-biomes).
+
 ## Concept
 
 A render controller is a bundle of logic that takes the short names (shortnames) defined by a client entity and decides "what to draw layered and how". If the entity file is the step that *imports* assets, the render controller is the step that *uses* what was imported. A controller does not know what the default texture is and only applies the name `Texture.default`. So several entities can reuse the same controller, and a simple entity with only one geometry, texture and material each does not need a custom controller (Source: bedrock-wiki, `entities/render-controllers`).
@@ -63,6 +65,118 @@ The `textures` array overlays from top to bottom. If an upper layer has alpha pi
 - `math.random` and `math.random_integer` in a render controller are rerolled every frame (tick) and flicker. Decide once in `scripts.initialize` or `pre_animation` (for example, wrap `"variable.Xvar = query.anim_time>0 ? variable.Xvar : Math.random(0,999);"` as an index). It resets on client reload, so it changes when you reconnect. For persistent variants, use a BP property (`query.property`).
 - Layer textures (horse style): Use `v.base = q.variant; v.overlay = q.mark_variant` for `Array.base` and `Array.overlay` and put two entries in `textures`. An undefined `v.index` made a pink head float around. Dynamic arrays such as horse armor use `Array.armor[variable.armor_texture_slot]`. There was also a report that only the first texture was read and they did not stack, and the saddle layer `query.is_saddled ? Texture.saddle : Texture.empty` was unresolved in the thread.
 - **Crash with more than 3 texture arrays**: Using more than 3 texture arrays of the form `Array.layerN[query.property(...)]` in one render controller crashed the game. Split them into several render controllers and list them in `render_controllers`. Measured (2026-11-19 Windows 1.26.65.1): four arrays in `arrays.textures` of one render controller, all four used in `textures`, drew without a crash (the first array's value). The indexes there were not `query.property(...)`; property-indexed arrays were not measured ([record](../design/json-ui-claims.mdx#63-state-holding-lazy-roots-pack-order-rendering)). Further measurement the same day showed that the number of `textures` **entries**, not the number of arrays, is the problem. Defining 15 arrays and using one, or using one array of 15 elements, drew, and up to 11 `textures` entries drew. With 12, whether through arrays or a list of `Texture.x`, the client froze right after the summon and again when re-entering a world where that entity was saved. 15 entries using all 15 arrays crashed ([record](../design/json-ui-claims.mdx#64-named-bindings-empty-global-length-division-texture-count-particle-counter)).
+
+### Example: choosing a texture with an int property
+
+When the entity is used (interacted with), the int property `wiki:skin` cycles through 0, 1, 2, and the render controller uses that value to pick one texture from a texture array. This example has not been run in game `{needs measurement}`.
+
+It relies on these facts from this wiki.
+
+- Define the property in BP `description.properties` with `type`, `range`, `default` and `client_sync: true`, and read it in the RP with `query.property`. Without `client_sync: true` the client cannot see it (the property section of [Entities](../content/entities.mdx#3-properties-and-variants)).
+- Change the value with the event `set_property`, and write a cycle as `math.mod(query.property('x') + 1, N)` (same section). The shape of the interact component and the event follows the first minimal example on the same page.
+- Putting `Array.skins` in `arrays.textures` of the render controller and picking with `"Array.skins[query.property('...')]"`, and an entity file that defines short names and calls the controller through `render_controllers` (the concept section of this page and the texture array section above).
+- The shape of the client entity file ([Models and geometry](./models-and-geometry.mdx)), the RP entity folder being `entity`, and the render controller file needing the `format_version` and `render_controllers` wrapper (the basic form section above).
+
+```text
+BP/entities/skin_mob.json
+RP/entity/skin_mob.entity.json
+RP/render_controllers/skin_mob.render_controllers.json
+RP/models/entity/skin_mob.geo.json
+RP/textures/entity/skin_mob_0.png
+RP/textures/entity/skin_mob_1.png
+RP/textures/entity/skin_mob_2.png
+RP/texts/en_US.lang
+```
+
+For the geometry file, take the example in [Models and geometry](./models-and-geometry.mdx) and change only the identifier to `geometry.skin_mob`. The pack manifests follow [manifest](../basics/manifest.mdx), and this example needs no script module.
+
+```json
+{
+  "format_version": "1.26.40",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "wiki:skin_mob",
+      "is_spawnable": true,
+      "is_summonable": true,
+      "properties": {
+        "wiki:skin": { "type": "int", "range": [0, 2], "default": 0, "client_sync": true }
+      }
+    },
+    "components": {
+      "minecraft:type_family": { "family": ["wiki_mob"] },
+      "minecraft:collision_box": { "width": 0.6, "height": 1.8 },
+      "minecraft:health": { "value": 20, "max": 20 },
+      "minecraft:interact": {
+        "interactions": [
+          {
+            "on_interact": {
+              "filters": { "test": "is_family", "subject": "other", "value": "player" },
+              "target": "self",
+              "event": "wiki:next_skin"
+            }
+          }
+        ]
+      }
+    },
+    "events": {
+      "wiki:next_skin": {
+        "set_property": { "wiki:skin": "math.mod(query.property('wiki:skin') + 1, 3)" }
+      }
+    }
+  }
+}
+```
+
+```json
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "wiki:skin_mob",
+      "materials": { "default": "entity_alphatest" },
+      "textures": {
+        "skin_0": "textures/entity/skin_mob_0",
+        "skin_1": "textures/entity/skin_mob_1",
+        "skin_2": "textures/entity/skin_mob_2"
+      },
+      "geometry": { "default": "geometry.skin_mob" },
+      "render_controllers": ["controller.render.skin_mob"]
+    }
+  }
+}
+```
+
+```json
+{
+  "format_version": "1.10.0",
+  "render_controllers": {
+    "controller.render.skin_mob": {
+      "arrays": {
+        "textures": {
+          "Array.skins": ["Texture.skin_0", "Texture.skin_1", "Texture.skin_2"]
+        }
+      },
+      "geometry": "Geometry.default",
+      "materials": [ { "*": "Material.default" } ],
+      "textures": [ "Array.skins[query.property('wiki:skin')]" ]
+    }
+  }
+}
+```
+
+```lang
+entity.wiki:skin_mob.name=Skin Mob
+```
+
+The array has three elements and the property range is 0 to 2, so each value matches one element. Because `default` is 0, `skin_0` is drawn at first. It uses one texture array and one `textures` entry, so it stays within the limit of the crash item above (freezing from 12 entries). A property-indexed array was not part of that measurement, though.
+
+These parts have no example on this wiki and were carried over from the facts above.
+
+- A client entity with `animations`, `scripts` and the rest left out and only up to `render_controllers` present. It was carried over from the minimal form in [format version](../basics/format-version.mdx), which has only `identifier`.
+- Putting the render controller file in `RP/render_controllers/`. It was carried over from the path of the external example link on this page.
+- Whether this minimal component list alone lets the entity be summoned and interacted with. It is the same list as the first minimal example on the entity page, but there is no record of running this combination in game.
+
+The definition, limits and setting methods of properties are in the property section of [Entities](../content/entities.mdx#3-properties-and-variants).
 
 ## Conditional geometry and textures
 
