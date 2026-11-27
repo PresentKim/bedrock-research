@@ -129,3 +129,22 @@ This page collects, by topic, the records measured with the same add-on as [Meas
 | Two-letter lang file | `texts/de.lang` with `juc.fb.both=DE_SHORT`, game option `game_language` set to `de_DE`, world re-entered | `EN_BOTH` (the English value). `de.lang` was not used | file-formats |
 
 - An empty value was treated the same as a missing key. It cannot be used to hide the raw key.
+
+## 11. Wiki example measurements
+
+These are runs of the complete examples on the topic pages, with the code copied as is into a test pack. 2026-11-27, Windows 1.26.65, a creative flat world with cheats on. The test pack was made apart from the `json-ui-claims` add-on and is not in the repository. The only additions for reading results were `/scriptevent` handlers in the script (title, form, particle, entity spawn) and lines that write results to chat.
+
+| Example | Setup | Result |
+|---|---|---|
+| [Prefix HUD label](../server-ui/hud-and-titles.mdx#10-example-showing-a-hud-label-only-when-the-prefix-matches) | `setTitle("hudlabel_demo:Welcome")`, then `setTitle("Plain")` | `Welcome` at the top middle, vanilla title hidden. Still visible at about 3.1 seconds and gone at about 4 seconds. After that `hudlabel_factory/hud_title_text` was gone from the control tree. `Plain` showed as the vanilla title with no label. The upward slide was not caught on screenshots |
+| [Minimal collection grid](../json-ui/collections-and-factory.mdx#example-the-smallest-collection-grid) | title `§b§wmg:G`, 5 buttons (`Button number N long text`) | cells in 2 columns, each showing `Button numbe` (the first 12 bytes). Pressing the fourth cell gave `selection=3`. The vanilla form stayed drawn behind. A form with another title made no grid window |
+| [Hide the title without remove](../json-ui/modifying-vanilla.mdx#example-hiding-one-vanilla-hud-element-without-remove) | a pack with only this file, two titles | neither title was drawn. A title sent without this pack in the same world was drawn |
+| [Toggle block](../content/blocks.mdx#example-a-block-that-swaps-its-texture-with-a-boolean-state) | the example as is | placed fine, but using the block gave `TypeError: not a function at onPlayerInteract`. `block.getState` does not exist. With `block.permutation.getState("wiki:on")` it went `false`, `true`, `false` and the texture followed. The boolean state array, the `q.block_state('wiki:on')` condition, the `data` and `script` modules and `@minecraft/server` 2.7.0 loaded as written |
+| [Pick a texture with an int property](../rendering/render-controllers.mdx#example-choosing-a-texture-with-an-int-property) | the three textures red, green and blue, three interactions | red, green, blue, red |
+| [Per-player count in a form](../scripting/dynamic-properties-and-storage.mdx#example-showing-a-per-player-count-in-a-form) | use the compass, Close, use, Reset count, use | 1, 2, then 1 after the reset |
+| [Pass a value to an entity particle](../rendering/particles.mdx#example-passing-a-value-to-a-particle-emitted-by-an-entity-animation) | two entities with property 8 and 2 (`setProperty` after spawning) | 8 gave a large particle and 2 a small one, both red (`v.pe` arrived). Right after killing the entities, `query.property does not have an actor` was logged once. The example has no lang line, so the death message showed `entity.wiki:size_emitter.name` as is |
+| [Red fog on plains](../rendering/fog-and-sky.mdx#example-red-fog-on-plains-through-a-client-biome) | flat world, clear weather | the sky and far ground turned red |
+| `MolangVariableMap.setFloat` name | particle size `0.1 + v.r0 * 0.5`, red channel `v.r0`. `setFloat("r0", 1)`, `setFloat("variable.r0", 1)`, and `/particle` without variables | the first two gave the same large red particle (`v.r0` = 1). `/particle` gave `unhandled request for unknown variable 'variable.r0'` |
+
+- On re-entering the world during the runs, the game showed "one or more resource or behavior packs failed to load". The content log file was not being written at the time, so which pack is unknown. All the examples above loaded and ran.
+- The Go examples for [Dragonfly fake blocks](../server/fake-blocks-and-chunks.mdx) and [embedded pack delivery](../server/resource-pack-delivery.mdx) were not run.

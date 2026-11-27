@@ -145,7 +145,7 @@ sources: [private-research, bedrock-wiki, ms-learn, particle-jester, bedrock-sam
 ## Script API로 파티클 띄우기
 
 - `Dimension.spawnParticle(id, location, MolangVariableMap)`은 **고정된 월드 위치**에 방출기를 만든다. 핸들을 돌려주지 않고 엔티티에 붙지도 않는다. 엔티티를 따라가는 효과는 클라이언트 엔티티의 애니메이션 로케이터나 컨트롤러 상태로 만든다(출처: particle-jester).
-- `MolangVariableMap`의 펼침 규칙: `setVector3`는 `.x/.y/.z`, `setColorRGBA`는 `.r/.g/.b/.a`, `setSpeedAndDirection`은 `.speed/.direction_x/.direction_y/.direction_z`다. `new MolangVariableMap().setFloat("name", v)`로 설정한 변수는 파티클 JSON에서 `v.name`이나 `variable.name`으로 쓴다. `emitter_initialization.creation_expression`에서 다시 대입하면 0으로 리셋되니 하지 않는다. 다만 `variable.r0 = (variable.r0 ?? 3);`처럼 `??`로 다시 대입하면 스크립트가 넘긴 1과 0은 그대로 남았고, `/particle`로 띄울 때만 3이 됐다([실측 기록](../design/content-rendering-claims.mdx#4-파티클), 2026-11-19 Windows 1.26.65.1). 파티클 초기화가 Molang 초기화 뒤에 실행되므로 MolangVariableMap 변수는 파티클 안에서 정의할 수 없다.
+- `MolangVariableMap`의 펼침 규칙: `setVector3`는 `.x/.y/.z`, `setColorRGBA`는 `.r/.g/.b/.a`, `setSpeedAndDirection`은 `.speed/.direction_x/.direction_y/.direction_z`다. `new MolangVariableMap().setFloat("name", v)`로 설정한 변수는 파티클 JSON에서 `v.name`이나 `variable.name`으로 쓴다. `setFloat("r0", 1)`과 `setFloat("variable.r0", 1)`은 둘 다 파티클에서 `v.r0` = 1로 읽혔고, 변수 없이 `/particle`로 띄우면 `unhandled request for unknown variable 'variable.r0'`가 났다 `{실측}`([예제 실측 기록](../design/content-rendering-claims.mdx#11-위키-예제-실측), 2026-11-27 Windows 1.26.65). `emitter_initialization.creation_expression`에서 다시 대입하면 0으로 리셋되니 하지 않는다. 다만 `variable.r0 = (variable.r0 ?? 3);`처럼 `??`로 다시 대입하면 스크립트가 넘긴 1과 0은 그대로 남았고, `/particle`로 띄울 때만 3이 됐다([실측 기록](../design/content-rendering-claims.mdx#4-파티클), 2026-11-19 Windows 1.26.65.1). 파티클 초기화가 Molang 초기화 뒤에 실행되므로 MolangVariableMap 변수는 파티클 안에서 정의할 수 없다.
 - 커스텀 서버는 `SpawnParticleEffect` 패킷의 MoLang 변수 JSON으로 같은 변수를 넘긴다. 항목은 `{"name": "variable.speed", "value": {"type": "float", "value": 2.0}}` 꼴이고, 벡터와 색은 `type: "member_array"` 아래에 `.x/.y/.z`, `.r/.g/.b/.a` 이름의 float 항목을 둔다(스크립트 `setVector3`, `setColorRGBA`와 같은 펼침). 매 틱 다시 보내면 도는 칼날을 따라 베기 자국을 눕히거나 추적선을 목표까지 늘릴 수 있다 `{코드}`. `EntityUniqueID`가 -1이 아니면 `Position`은 그 엔티티 기준 상대 위치다.
 - 예제 BP는 `/scriptevent pm:vfx` 뒤에 `portal`, `blizzard`, `explosion`, `boss` 중 하나를 받아 시작 위치를 복사해 두고, 단계마다 `system.runTimeout`을 건 다음 실행 직전에 엔티티 유효성·차원·`isChunkLoaded`를 다시 확인한다. 플레이어가 나가거나 엔티티가 죽으면 남은 예약을 지운다. 이미 뿌린 입자는 자기 수명대로 사라진다.
 - 품질 입력 `variable.quality`(0.4~1.5)를 `setFloat`로 넘기고 파티클 JSON은 `rate * (variable.quality ?? 1)`로 받는다. `/particle`로 띄우면 값이 없어서 1이 된다. `??` 연산자는 Windows 1.26.65.1에서 동작했다(위 `creation_expression` 재대입 실측).
@@ -222,7 +222,7 @@ sources: [private-research, bedrock-wiki, ms-learn, particle-jester, bedrock-sam
 
 ## 예제: 엔티티 애니메이션이 방출한 파티클에 값 넘기기
 
-BP 엔티티의 property를 파티클이 `q.property`로 읽고, 방출 키프레임의 `pre_effect_script`로 변수 `v.pe`를 넘기는 한 벌이다. 애니메이션이 방출한 파티클 안의 `q.property('...')`는 방출한 엔티티의 값이었고([실측 기록](../design/content-rendering-claims.mdx#4-파티클)), `pre_effect_script`로 넣은 `v.pe`는 파티클에 닿았지만 엔티티 `pre_animation`의 `v.ev`는 닿지 않았다([실측 기록](../design/content-rendering-claims.mdx#4-파티클)). 아래 파일은 그 측정에 쓴 파일(`juc_emit`, `juc_prop`, `juc_pvars`, `juc_pfx`, `juc.animation.json`)을 한 벌로 합쳐 이름을 바꾼 것이라 이 조합 그대로는 게임에서 재지 않았다 `{실측 필요}`. 파일마다 쓰는 경로는 다음과 같다.
+BP 엔티티의 property를 파티클이 `q.property`로 읽고, 방출 키프레임의 `pre_effect_script`로 변수 `v.pe`를 넘기는 한 벌이다. 애니메이션이 방출한 파티클 안의 `q.property('...')`는 방출한 엔티티의 값이었고([실측 기록](../design/content-rendering-claims.mdx#4-파티클)), `pre_effect_script`로 넣은 `v.pe`는 파티클에 닿았지만 엔티티 `pre_animation`의 `v.ev`는 닿지 않았다([실측 기록](../design/content-rendering-claims.mdx#4-파티클)). 아래 파일은 그 측정에 쓴 파일(`juc_emit`, `juc_prop`, `juc_pvars`, `juc_pfx`, `juc.animation.json`)을 한 벌로 합쳐 이름을 바꾼 것이고, 이 조합 그대로도 같은 결과가 났다 `{실측}`([예제 실측 기록](../design/content-rendering-claims.mdx#11-위키-예제-실측), 2026-11-27 Windows 1.26.65). 파일마다 쓰는 경로는 다음과 같다.
 
 `behavior_pack/entities/size_emitter.json`:
 
@@ -353,7 +353,7 @@ BP 엔티티의 property를 파티클이 `q.property`로 읽고, 방출 키프�
 }
 ```
 
-`textures/entity/wiki/white.png`는 아무 16x16 흰색 PNG를 쓴다. `/summon wiki:size_emitter ~ ~ ~3`으로 부른다. 측정에서는 property 값이 8인 엔티티가 큰 파티클을, 2인 엔티티가 작은 파티클을 냈다. 색의 빨강 채널은 `v.pe`가 1일 때 1, 아니면 0.15다.
+`textures/entity/wiki/white.png`는 아무 16x16 흰색 PNG를 쓴다. `/summon wiki:size_emitter ~ ~ ~3`으로 부른다. 측정에서는 property 값이 8인 엔티티가 큰 파티클을, 2인 엔티티가 작은 파티클을 냈다. 색의 빨강 채널은 `v.pe`가 1일 때 1, 아니면 0.15다. 이 예제에는 lang 줄이 없어 엔티티 이름이 `entity.wiki:size_emitter.name` 키 그대로 보이고, 엔티티를 죽인 직후 마지막 방출에서 `query.property does not have an actor` 오류가 한 번 남는다 `{실측}`.
 
 ## Particle Jester 저장소 (도구와 검증)
 

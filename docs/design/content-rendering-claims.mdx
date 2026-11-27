@@ -129,3 +129,22 @@ sources:
 | 두 글자 lang 파일 | `texts/de.lang`에 `juc.fb.both=DE_SHORT`, 게임 옵션 `game_language`를 `de_DE`로 두고 월드에 다시 들어감 | `EN_BOTH`(영어 값). `de.lang`는 쓰이지 않음 | file-formats |
 
 - 빈 값은 키가 없는 것과 같게 취급됐다. 원시 키를 숨기는 데 쓸 수 없다.
+
+## 11. 위키 예제 실측
+
+주제 페이지의 완성 예제를 코드 그대로 옮긴 시험 팩으로 돌린 기록이다. 2026-11-27, Windows 1.26.65, 크리에이티브 평지 월드(치트 켬). 이 시험 팩은 `json-ui-claims` 애드온과 따로 만들었고 저장소에 넣지 않았다. 결과를 읽는 데 덧붙인 것은 스크립트의 `/scriptevent` 처리기(타이틀, 폼, 파티클, 엔티티 소환)와 결과를 채팅에 적는 줄뿐이다.
+
+| 예제 | 구성 | 결과 |
+|---|---|---|
+| [접두사 HUD 라벨](../server-ui/hud-and-titles.mdx#10-예제-접두사가-맞을-때만-hud-라벨-보이기) | `setTitle("hudlabel_demo:Welcome")`, 그다음 `setTitle("Plain")` | 위쪽 가운데에 `Welcome`, 바닐라 타이틀 숨김. 약 3.1초에 아직 보이고 약 4초에 사라짐. 그 뒤 컨트롤 트리에서 `hudlabel_factory/hud_title_text`가 없어짐. `Plain`은 바닐라 타이틀로 뜨고 라벨은 안 보임. 위로 미끄러지는 모습은 스크린샷에 잡지 못함 |
+| [최소 컬렉션 grid](../json-ui/collections-and-factory.mdx#예제-가장-작은-컬렉션-grid) | 제목 `§b§wmg:G`, 버튼 5개(`Button number N long text`) | 칸 2열, 칸마다 `Button numbe`(앞 12바이트). 네 번째 칸을 누르자 `selection=3`. 바닐라 폼은 뒤에 그대로 그려짐. 제목이 다른 폼에서는 grid 창이 생기지 않음 |
+| [remove 없이 타이틀 숨기기](../json-ui/modifying-vanilla.mdx#예제-바닐라-hud-요소-하나를-remove-없이-숨기기) | 이 파일만 든 팩, 타이틀 두 번 | 두 번 모두 타이틀이 그려지지 않음. 같은 월드에서 이 팩 없이 보낸 타이틀은 그려짐 |
+| [토글 블록](../content/blocks.mdx#예제-불리언-상태로-텍스처를-바꾸는-블록) | 예제 그대로 | 설치는 됐지만 블록을 쓰자 `TypeError: not a function at onPlayerInteract`. `block.getState`가 없다. `block.permutation.getState("wiki:on")`으로 바꾸자 `false`, `true`, `false`로 바뀌고 텍스처가 따라 바뀜. 불리언 상태 배열, `q.block_state('wiki:on')` 조건, `data`와 `script` 모듈, `@minecraft/server` 2.7.0은 그대로 로드됨 |
+| [int 속성으로 텍스처 고르기](../rendering/render-controllers.mdx#예제-int-속성으로-텍스처-고르기) | 텍스처 셋을 빨강, 초록, 파랑으로, 상호작용 세 번 | 빨강, 초록, 파랑, 빨강 |
+| [플레이어 횟수 폼](../scripting/dynamic-properties-and-storage.mdx#예제-플레이어별-횟수를-폼에-보이기) | 나침반 사용, Close, 사용, Reset count, 사용 | 1, 2, 그리고 지운 뒤 1 |
+| [엔티티 파티클에 값 넘기기](../rendering/particles.mdx#예제-엔티티-애니메이션이-방출한-파티클에-값-넘기기) | 속성 8과 2인 엔티티 둘(소환 뒤 `setProperty`) | 8은 큰 파티클, 2는 작은 파티클, 둘 다 빨강(`v.pe` 전달). 엔티티를 죽인 직후 `query.property does not have an actor` 오류가 한 번 남. 예제에 lang 줄이 없어 사망 메시지에 `entity.wiki:size_emitter.name`이 그대로 보임 |
+| [평지 붉은 fog](../rendering/fog-and-sky.mdx#예제-클라이언트-바이옴으로-평지에-붉은-fog-걸기) | 평지 월드, 맑은 날 | 하늘과 먼 땅이 빨강으로 바뀜 |
+| `MolangVariableMap.setFloat` 이름 | 파티클 크기 `0.1 + v.r0 * 0.5`, 색 빨강 `v.r0`. `setFloat("r0", 1)`, `setFloat("variable.r0", 1)`, 변수 없이 `/particle` | 앞의 둘은 같은 큰 빨강 파티클(`v.r0` = 1). `/particle`은 `unhandled request for unknown variable 'variable.r0'` |
+
+- 측정 중 월드에 다시 들어갈 때 "하나 이상의 리소스 팩 또는 행동 팩을 불러오지 못했습니다"가 떴다. 콘텐츠 로그 파일이 기록되지 않던 때라 어느 팩인지는 모른다. 위 예제는 모두 로드되어 실행됐다.
+- [Dragonfly 가짜 블록](../server/fake-blocks-and-chunks.mdx)과 [내장 팩 전송](../server/resource-pack-delivery.mdx) Go 예제는 돌리지 않았다.

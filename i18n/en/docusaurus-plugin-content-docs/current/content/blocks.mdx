@@ -138,7 +138,7 @@ Only the custom components of the last (bottom-most) matching permutation apply,
 
 ### Example: a block that swaps its texture with a boolean state
 
-Each time a player uses the block, it flips the state `wiki:on`, and a permutation tied to that state swaps the texture. It takes a behavior pack, a resource pack and one script. This example has not been run in game `{needs measurement}`.
+Each time a player uses the block, it flips the state `wiki:on`, and a permutation tied to that state swaps the texture. It takes a behavior pack, a resource pack and one script. With the code below, each use of the block switched the state `false`, `true`, `false` and the texture followed `{measured}` ([example measurement record](../design/content-rendering-claims.mdx#11-wiki-example-measurements), 2026-11-27 Windows 1.26.65).
 
 It relies on these facts from this page.
 
@@ -257,7 +257,7 @@ import { system } from "@minecraft/server";
 system.beforeEvents.startup.subscribe(({ blockComponentRegistry }) => {
   blockComponentRegistry.registerCustomComponent("wiki:toggle", {
     onPlayerInteract({ block }) {
-      const isOn = block.getState("wiki:on");
+      const isOn = block.permutation.getState("wiki:on");
       block.setPermutation(block.permutation.withState("wiki:on", !isOn));
     },
   });
@@ -272,11 +272,11 @@ Things to watch:
 - With `onPlayerInteract` present, normal use and placement against that block are blocked. To place another block next to it, sneak.
 - Components are registered only in startup, so after editing the script or the block JSON, leave the world and re-enter. `/reload` does not run startup again.
 
-These parts have no example on the wiki and were carried over from the facts above. Do not treat them as correct before checking in game.
+These parts have no example elsewhere on the wiki and were carried over from the facts above. All of them worked in game with this example `{measured}`.
 
-- Defining a boolean state as the array `[false, true]`. This page shows only string arrays (`["a", "b"]`) and integer ranges.
-- Writing the permutation `condition` as `q.block_state('wiki:on')` alone. The only place a boolean state is read this way is the `bone_visibility` expression of the door pattern.
-- Reading the current value with `block.getState("wiki:on")`. The multi-block section uses `part.getState`.
+- Defining a boolean state as the array `[false, true]`. The other examples on this page show only string arrays (`["a", "b"]`) and integer ranges.
+- Writing the permutation `condition` as `q.block_state('wiki:on')` alone.
+- Reading the current value with `block.permutation.getState("wiki:on")`. `Block` has no `getState`, and `block.getState("wiki:on")` gave `TypeError: not a function`.
 - Putting a `data` module next to the `script` module in `modules`. The minimal example in [overview-and-modules](../scripting/overview-and-modules.mdx) has only a `script` module.
 - Setting `min_engine_version` to `[1, 26, 30]`. This page says `format_version` decides block features and the manifest value affects only BP Molang and commands.
 

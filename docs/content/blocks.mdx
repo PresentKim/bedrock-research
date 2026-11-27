@@ -138,7 +138,7 @@ system.beforeEvents.startup.subscribe(({ blockComponentRegistry }) => {
 
 ### 예제: 불리언 상태로 텍스처를 바꾸는 블록
 
-플레이어가 블록을 쓸 때마다 상태 `wiki:on`을 뒤집고, 그 상태에 묶인 퍼뮤테이션이 텍스처를 바꾼다. 행동 팩, 리소스 팩, 스크립트 하나로 끝난다. 이 예제는 게임에서 실행하지 않았다 `{실측 필요}`.
+플레이어가 블록을 쓸 때마다 상태 `wiki:on`을 뒤집고, 그 상태에 묶인 퍼뮤테이션이 텍스처를 바꾼다. 행동 팩, 리소스 팩, 스크립트 하나로 끝난다. 아래 코드로 블록을 쓸 때마다 상태가 `false`, `true`, `false`로 바뀌고 텍스처가 따라 바뀌었다 `{실측}`([예제 실측 기록](../design/content-rendering-claims.mdx#11-위키-예제-실측), 2026-11-27 Windows 1.26.65).
 
 이 페이지의 다음 사실에 기대었다.
 
@@ -257,7 +257,7 @@ import { system } from "@minecraft/server";
 system.beforeEvents.startup.subscribe(({ blockComponentRegistry }) => {
   blockComponentRegistry.registerCustomComponent("wiki:toggle", {
     onPlayerInteract({ block }) {
-      const isOn = block.getState("wiki:on");
+      const isOn = block.permutation.getState("wiki:on");
       block.setPermutation(block.permutation.withState("wiki:on", !isOn));
     },
   });
@@ -272,11 +272,11 @@ system.beforeEvents.startup.subscribe(({ blockComponentRegistry }) => {
 - `onPlayerInteract`가 있으면 그 블록에 대고 하는 일반 사용과 설치가 막힌다. 블록 곁에 다른 블록을 놓으려면 웅크려야 한다.
 - 컴포넌트 등록은 startup에서만 일어나므로 스크립트나 블록 JSON을 고친 뒤에는 월드를 나갔다 다시 들어간다. `/reload`로는 startup이 다시 실행되지 않는다.
 
-이 위키에 예가 없어 위 사실에서 옮겨 쓴 부분은 다음과 같다. 게임에서 확인하기 전에는 맞다고 보지 않는다.
+이 위키에 예가 없어 위 사실에서 옮겨 쓴 부분은 다음과 같고, 모두 이 예제로 게임에서 동작했다 `{실측}`.
 
-- 불리언 상태를 `[false, true]` 배열로 정의하는 형식. 이 페이지는 문자열 배열(`["a", "b"]`)과 정수 범위만 보여 준다.
-- 퍼뮤테이션 `condition`을 `q.block_state('wiki:on')` 하나로 쓰는 것. 문 패턴의 `bone_visibility` 식에서 불리언 상태를 이렇게 읽는 것만 보인다.
-- `block.getState("wiki:on")`으로 현재 값을 읽는 것. 멀티블록 절은 `part.getState`를 쓴다.
+- 불리언 상태를 `[false, true]` 배열로 정의하는 형식. 이 페이지의 다른 예는 문자열 배열(`["a", "b"]`)과 정수 범위만 보여 준다.
+- 퍼뮤테이션 `condition`을 `q.block_state('wiki:on')` 하나로 쓰는 것.
+- 현재 값을 `block.permutation.getState("wiki:on")`으로 읽는 것. `Block`에는 `getState`가 없어 `block.getState("wiki:on")`은 `TypeError: not a function`을 냈다.
 - `data` 모듈을 `modules`에 함께 두는 구성. [overview-and-modules](../scripting/overview-and-modules.mdx)의 최소 예제에는 `script` 모듈만 있다.
 - `min_engine_version`을 `[1, 26, 30]`으로 맞춘 것. 이 페이지는 블록 기능을 `format_version`이 정한다고 하고, manifest 값은 BP의 Molang과 명령에만 영향이 있다고 적는다.
 
