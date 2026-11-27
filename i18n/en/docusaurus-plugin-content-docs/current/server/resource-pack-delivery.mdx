@@ -50,7 +50,109 @@ A custom server can embed the resource pack in its executable (`go:embed` in Go)
    - Encrypted files barely compress, so an encrypted pack's transfer size is close to its uncompressed size `{inferred}`. Storing encrypted entries in the zip without compression (Store) therefore loses nothing, while without encryption Deflate shrinks large JSON well. Measured values `{measured}`: the main pack was 636 KB unencrypted and 2,507 KB encrypted before optimization, and 554 KB and 846 KB after. The total of six packs went from 764 KB to 666 KB unencrypted and from 2,961 KB to 1,260 KB encrypted. Each zip entry has about 150 B of header, so the file count also counts toward the size. Join times for the smaller packs are in "Measuring join time" in [performance.mdx](performance.mdx).
 4. **Limits**: Encryption only makes picking up the files inconvenient. Because the key is given to the client, any connecting client can decrypt it, and a tool (`bedrockpack steal`) decrypts everything at once. It is deterrence, not real protection. Do not put anything that must not be seen in the pack.
 
-In Dragonfly, the server setting `Resources.Required = true` forces the client to apply the pack at join.
+In Dragonfly, `Resources.Required = true` in `server.UserConfig` (the config-file form) forces the client to apply the pack at join. The value is copied to `ResourcesRequired` in `server.Config` (the code form), so the two names are the same setting `{code}` ([chest-ui.mdx](../server-ui/chest-ui.mdx) writes `ResourcesRequired`).
+
+### Example: sending an embedded pack with a content-hash version (Go)
+
+The `pack/` folder embedded in the executable with `go:embed` is processed in memory when the server starts. The first 3 bytes of the SHA-256 of the file names and contents become `header.version` in `manifest.json` (cutting to 3 bytes is a choice of this example), and the processed zip is read with `resource.Read`. `NewServer` turns on `Resources.Required` and gives the pack to a Dragonfly server. `ListenConfig` is the same setting for listening directly with a gophertunnel `ListenConfig`, with the default values written out for the chunk size and send delay.
+
+```go
+package packdelivery
+
+import (
+	"archive/zip"
+	"bytes"
+	"crypto/sha256"
+	"embed"
+	"encoding/json"
+	"io/fs"
+	"log/slog"
+	"strings"
+
+	"github.com/df-mc/dragonfly/server"
+	"github.com/sandertv/gophertunnel/minecraft"
+	"github.com/sandertv/gophertunnel/minecraft/resource"
+)
+
+//go:embed all:pack
+var packFS embed.FS
+
+func hashedPack() (*resource.Pack, error) {
+	hash := sha256.New()
+	files := map[string][]byte{}
+	err := fs.WalkDir(packFS, "pack", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		data, err := packFS.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		name := strings.TrimPrefix(path, "pack/")
+		files[name] = data
+		hash.Write([]byte(name))
+		hash.Write(data)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var manifest map[string]any
+	if err := json.Unmarshal(files["manifest.json"], &manifest); err != nil {
+		return nil, err
+	}
+	sum := hash.Sum(nil)
+	manifest["header"].(map[string]any)["version"] = []int{int(sum[0]), int(sum[1]), int(sum[2])}
+	if files["manifest.json"], err = json.Marshal(manifest); err != nil {
+		return nil, err
+	}
+
+	var archive bytes.Buffer
+	zw := zip.NewWriter(&archive)
+	for name, data := range files {
+		w, err := zw.Create(name)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := w.Write(data); err != nil {
+			return nil, err
+		}
+	}
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	return resource.Read(&archive)
+}
+
+func NewServer(log *slog.Logger) (*server.Server, error) {
+	pack, err := hashedPack()
+	if err != nil {
+		return nil, err
+	}
+	user := server.DefaultConfig()
+	user.Resources.Required = true
+	conf, err := user.Config(log)
+	if err != nil {
+		return nil, err
+	}
+	conf.Resources = append(conf.Resources, pack)
+	return conf.New(), nil
+}
+
+func ListenConfig(pack *resource.Pack) minecraft.ListenConfig {
+	return minecraft.ListenConfig{
+		ResourcePacks:        []*resource.Pack{pack},
+		TexturePacksRequired: true,
+		ResourcePackDelivery: minecraft.ResourcePackDeliveryConfig{
+			ChunkSize:      minecraft.DefaultResourcePackChunkSize,
+			ChunkSendDelay: minecraft.DefaultResourcePackChunkSendDelay,
+		},
+	}
+}
+```
+
+It was only compiled, against Dragonfly v0.11.7-0.20261107232451-0f9a3a573626 and gophertunnel v1.63.0, and was not run in game `{code}`. When that Dragonfly's `server.Config` builds the listen settings it does not pass `ResourcePackDelivery`, so the chunk send delay of `NewServer` is the gophertunnel default (200ms) `{code}`. No `server.Config` field that changes this delay was found. Whether putting a listener built from the `ListenConfig` above into `Config.Listeners` is a way to change it was not checked `{needs measurement}`. The version computation above and pack acceptance at join were not checked in game `{needs measurement}`.
 
 The evidence that an encrypted pack was trusted in Ore UI file lookup up to 26.63, and what `content.zipe` is, are in [../basics/pack-delivery-and-encryption.mdx](../basics/pack-delivery-and-encryption.mdx) (Source: repo-ore-ui-loading).
 

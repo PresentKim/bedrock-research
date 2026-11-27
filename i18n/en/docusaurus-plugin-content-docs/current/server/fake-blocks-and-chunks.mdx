@@ -23,6 +23,47 @@ Send `UpdateBlock` (position, block runtime ID, layer 0 block or layer 1 liquid)
 - Vanilla stained glass sent on layer 1 of a cell whose layer 0 is a solid block is drawn by the client, so it can tint a real block. Whether a custom block sent on layer 1 is drawn too was not checked `{measured}`.
 - The client aims at, clicks and mines a fake block on layer 0 as if it were real. A display-only custom block with no collision or selection box on layer 0 lets clicks reach the face behind it `{measured}`.
 
+### Example: sending and restoring a fake block (Go)
+
+Send `UpdateBlock` to that player only, through the connection the packet hook holds (the `WritePacket` of the gophertunnel connection). `Show` sends the fake layer 0 block, and `Restore` sends the real layer 1 value first and the real layer 0 value after it. This order follows the `{measured}` (2026-11-10) item above. How a hook wraps the connection is in section 5.1 of [chest-ui.mdx](../server-ui/chest-ui.mdx).
+
+```go
+package fakeblock
+
+import (
+	"github.com/df-mc/dragonfly/server/block/cube"
+	"github.com/df-mc/dragonfly/server/world"
+	"github.com/sandertv/gophertunnel/minecraft/protocol"
+	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
+)
+
+type packetWriter interface {
+	WritePacket(pk packet.Packet) error
+}
+
+func updateBlock(w packetWriter, pos cube.Pos, layer uint32, b world.Block) error {
+	return w.WritePacket(&packet.UpdateBlock{
+		Position:          protocol.BlockPos{int32(pos.X()), int32(pos.Y()), int32(pos.Z())},
+		NewBlockRuntimeID: world.BlockRuntimeID(b),
+		Flags:             packet.BlockUpdateNetwork,
+		Layer:             layer,
+	})
+}
+
+func Show(w packetWriter, pos cube.Pos, fake world.Block) error {
+	return updateBlock(w, pos, 0, fake)
+}
+
+func Restore(w packetWriter, pos cube.Pos, real0, real1 world.Block) error {
+	if err := updateBlock(w, pos, 1, real1); err != nil {
+		return err
+	}
+	return updateBlock(w, pos, 0, real0)
+}
+```
+
+It was only compiled, against Dragonfly v0.11.7-0.20261107232451-0f9a3a573626 and gophertunnel v1.63.0, and was not run in game `{code}`. The `BlockUpdateNetwork` used for `Flags` follows the gophertunnel source comment on `UpdateBlock`, which says sending only that flag is typically sufficient, and this wiki has not checked it in game `{needs measurement}`. A block with block entity data needs that data sent separately, which this example does not do.
+
 ## Fake chunks
 
 Dragonfly has no chunk visible to only one player, so the fork adds it to the session. While a fake chunk is shown, world block updates for that chunk are not sent to that player, and chunk resends or subchunk requests are answered with the fake chunk. If you cache subchunk data, keep fake chunks out of the cache.
@@ -47,9 +88,7 @@ Floating text is sent as a `minecraft:falling_block` entity with a name tag (spe
 
 ## Entity chest: a chest window with a chosen slot count
 
-This works the same way as PocketMine's CustomSizedInvMenu, Muqsit/InvMenu and bedrock-gophers/inv. Only the client behavior that server implementations rely on is written here. (Source: private research)
-
-This works the same way as PocketMine's CustomSizedInvMenu, Muqsit/InvMenu and bedrock-gophers/inv. Only the client behavior that server implementations rely on is written here [record].
+This works the same way as PocketMine's CustomSizedInvMenu, Muqsit/InvMenu and bedrock-gophers/inv. Only the client behavior that server implementations rely on is written here [record]. (Source: private research)
 
 - Send an invisible client-only entity with `AddActor`. The metadata is transparent and NoAI, `ContainerType` = INVENTORY(-1), `ContainerSize` = slot count, and the name = window title. The identifier can be appended to the `AvailableActorIdentifiers` sent at join, and no entity definition file is needed.
 - Then sending `ContainerOpen` (`ContainerTypeContainer` + `ContainerEntityUniqueID`) and the contents opens the chest window.

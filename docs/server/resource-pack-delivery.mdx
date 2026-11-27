@@ -50,7 +50,109 @@ const (
    - 암호화한 파일은 압축이 거의 되지 않아 암호화 팩의 전송 크기는 압축 전 크기에 가깝다 `{추론}`. 그래서 암호화 항목은 zip에 압축 없이(Store) 넣어도 손해가 없고, 암호화하지 않으면 Deflate가 큰 JSON을 잘 줄인다. 잰 값 `{실측}`: 주 팩이 최적화 전 암호화 없이 636 KB, 암호화 2,507 KB였고 최적화 뒤 554 KB와 846 KB였다. 팩 6개 합계는 암호화 없이 764 KB에서 666 KB, 암호화 2,961 KB에서 1,260 KB였다. zip 항목마다 머리가 약 150 B이므로 파일 수도 크기에 든다. 줄인 크기에 따른 접속 시간은 [performance.mdx](performance.mdx)의 "접속 시간 측정"에 있다.
 4. **한계**: 암호화는 파일을 줍는 것을 번거롭게 할 뿐이다. 키를 클라이언트에 주므로 접속하는 클라이언트는 풀 수 있고 도구(`bedrockpack steal`)로 한 번에 풀린다. 실질적 보호가 아니라 억제다. 보이면 안 되는 것은 팩에 두지 않는다.
 
-Dragonfly에서는 서버 설정 `Resources.Required = true`로 접속 시 팩 적용을 강제한다.
+Dragonfly에서는 설정 파일용 `server.UserConfig`의 `Resources.Required = true`로 접속 시 팩 적용을 강제한다. 이 값은 코드용 `server.Config`의 `ResourcesRequired`로 옮겨지며, 두 이름은 같은 설정이다 `{코드}`([chest-ui.mdx](../server-ui/chest-ui.mdx)는 `ResourcesRequired`로 적는다).
+
+### 예: 내장 팩을 내용 해시 버전으로 보내기 (Go)
+
+`go:embed`로 실행 파일에 넣은 `pack/` 폴더를 서버를 켤 때 메모리에서 가공한다. 파일 이름과 내용의 SHA-256 앞 3바이트를 `manifest.json`의 `header.version`으로 쓰고(3바이트로 자르는 것은 이 예의 선택이다), 가공한 zip을 `resource.Read`로 읽는다. `NewServer`는 `Resources.Required`를 켜 Dragonfly 서버로 보낸다. `ListenConfig`는 gophertunnel `ListenConfig`로 직접 듣는 경우의 같은 설정이고, 청크 크기와 전송 지연에 기본값을 그대로 적었다.
+
+```go
+package packdelivery
+
+import (
+	"archive/zip"
+	"bytes"
+	"crypto/sha256"
+	"embed"
+	"encoding/json"
+	"io/fs"
+	"log/slog"
+	"strings"
+
+	"github.com/df-mc/dragonfly/server"
+	"github.com/sandertv/gophertunnel/minecraft"
+	"github.com/sandertv/gophertunnel/minecraft/resource"
+)
+
+//go:embed all:pack
+var packFS embed.FS
+
+func hashedPack() (*resource.Pack, error) {
+	hash := sha256.New()
+	files := map[string][]byte{}
+	err := fs.WalkDir(packFS, "pack", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		data, err := packFS.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		name := strings.TrimPrefix(path, "pack/")
+		files[name] = data
+		hash.Write([]byte(name))
+		hash.Write(data)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var manifest map[string]any
+	if err := json.Unmarshal(files["manifest.json"], &manifest); err != nil {
+		return nil, err
+	}
+	sum := hash.Sum(nil)
+	manifest["header"].(map[string]any)["version"] = []int{int(sum[0]), int(sum[1]), int(sum[2])}
+	if files["manifest.json"], err = json.Marshal(manifest); err != nil {
+		return nil, err
+	}
+
+	var archive bytes.Buffer
+	zw := zip.NewWriter(&archive)
+	for name, data := range files {
+		w, err := zw.Create(name)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := w.Write(data); err != nil {
+			return nil, err
+		}
+	}
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	return resource.Read(&archive)
+}
+
+func NewServer(log *slog.Logger) (*server.Server, error) {
+	pack, err := hashedPack()
+	if err != nil {
+		return nil, err
+	}
+	user := server.DefaultConfig()
+	user.Resources.Required = true
+	conf, err := user.Config(log)
+	if err != nil {
+		return nil, err
+	}
+	conf.Resources = append(conf.Resources, pack)
+	return conf.New(), nil
+}
+
+func ListenConfig(pack *resource.Pack) minecraft.ListenConfig {
+	return minecraft.ListenConfig{
+		ResourcePacks:        []*resource.Pack{pack},
+		TexturePacksRequired: true,
+		ResourcePackDelivery: minecraft.ResourcePackDeliveryConfig{
+			ChunkSize:      minecraft.DefaultResourcePackChunkSize,
+			ChunkSendDelay: minecraft.DefaultResourcePackChunkSendDelay,
+		},
+	}
+}
+```
+
+Dragonfly v0.11.7-0.20261107232451-0f9a3a573626과 gophertunnel v1.63.0에 대해 컴파일만 확인했고 게임에서 실행하지 않았다 `{코드}`. 그 Dragonfly의 `server.Config`는 듣기 설정을 만들 때 `ResourcePackDelivery`를 넘기지 않으므로 `NewServer`의 청크 전송 지연은 gophertunnel 기본값(200ms)이다 `{코드}`. `server.Config`에서 이 지연을 바꾸는 항목은 찾지 못했다. `Config.Listeners`에 위 `ListenConfig`로 만든 리스너를 꽂아 바꾸는 길이 있는지는 확인하지 않았다 `{실측 필요}`. 위 예의 버전 계산과 접속 시 팩 수락은 게임에서 확인하지 않았다 `{실측 필요}`.
 
 26.63까지 암호화 팩이 Ore UI 파일 조회에서 신뢰되던 근거와 `content.zipe`의 정체는 [../basics/pack-delivery-and-encryption.mdx](../basics/pack-delivery-and-encryption.mdx)에 있다(출처: repo-ore-ui-loading).
 
