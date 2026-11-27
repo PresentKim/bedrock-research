@@ -7,6 +7,8 @@ sources: [private-research, ms-learn, bedrock-samples]
 
 # Fog and sky
 
+The in-game measurement record for client biome fog is in [6.7](../design/json-ui-claims.mdx#67-particle-queries-and-counters-sound-definitions-material-files-biomes).
+
 ## Concept
 
 A Bedrock fog file is a `minecraft:fog_settings` JSON in the resource pack's `fogs/`. The identifier (`description.identifier`) must include a namespace, and a client biome points to that identifier to apply it to the biome. The settings have two branches. **Distance fog** gives `fog_start`, `fog_end` and `fog_color` per medium the camera is in (air `air`, water `water`, lava `lava`, `lava_resistance` during the lava resistance effect, powder snow `powder_snow`, `weather` during weather), and if `render_distance_type` is `fixed` it is read as a distance in blocks, and if `render` as a value multiplied by the current render distance. `transition_fog` (`init_fog`) is extra fog that slowly transitions to the biome's distance fog when entering another medium. **Volumetric fog** (VV only) makes light shafts (god rays) with density, medium coefficients (scattering, absorption) and the phase function asymmetry `henyey_greenstein_g` (Source: ms-learn, `minecraft:fogs` reference).
@@ -69,6 +71,40 @@ The vanilla fog samples are in bedrock-samples `resource_pack/fogs`. Below are r
 - **Custom clouds and the End**: There is a work-in-progress case of custom clouds with a random shape per cloud made with a resource pack alone. It is said to be based on the player model and so to work from global resources too, and to keep it RP-only, attaching particles to the player entity was suggested. There is also a case that improved the VV look of the End with particle effects only (`single report`). For changing the End sky with `material.bin`, see the custom shader section of [Materials and shaders](./materials-and-shaders.mdx).
 - **Large models and fog**: There was no answer on making a large model ignore fog independently of render distance. There is also no clean way to hide it by light level.
 - **Camera fade**: The script API `fade` has only RGB, is an opaque overlay with a maximum duration of 10 seconds, and has no alpha. The flashing of `/camera fade` is limited to prevent photosensitive seizures. Alternatives are a black particle attached to the player or a black cube in the player geometry. For camera cutscenes use the Camera API (`player.camera`).
+
+## Example: red fog on plains through a client biome
+
+One fog file and one client biome file put fog on the vanilla plains biome. The client biome points to the fog identifier with `fog_identifier` in `minecraft:fog_appearance`. In the measurement, a client biome with `format_version` `1.21.70`, an unnamespaced `"identifier": "plains"`, and a red fog with start 4 and end 16 turned a plains world into red haze. The record is the view after the rain stopped ([record 6.7](../design/json-ui-claims.mdx#67-particle-queries-and-counters-sound-definitions-material-files-biomes), 2026-11-19 Windows 1.26.65.1). The files used in the measurement are not in the add-on, and the record keeps only the values above. The code below fits the keys of the legacy fog example above to those values, so the files themselves were not measured in game `{needs measuring}`.
+
+`resource_pack/fogs/red_fog.json`:
+
+```json
+{
+  "format_version": "1.16.100",
+  "minecraft:fog_settings": {
+    "description": { "identifier": "wiki:red_fog" },
+    "distance": {
+      "air": { "fog_start": 4, "fog_end": 16, "fog_color": "#ff0000", "render_distance_type": "fixed" }
+    }
+  }
+}
+```
+
+`resource_pack/biomes/plains.client_biome.json`:
+
+```json
+{
+  "format_version": "1.21.70",
+  "minecraft:client_biome": {
+    "description": { "identifier": "plains" },
+    "components": {
+      "minecraft:fog_appearance": { "fog_identifier": "wiki:red_fog" }
+    }
+  }
+}
+```
+
+Enter a plains world and check that the fog changes. The measurement record did not set fog for the `weather` medium, so the view during rain is unknown. For where sources disagree on the client biome `format_version` and namespace rules, see [Biomes and custom dimensions](../content/biomes-and-dimensions.mdx#format-and-concept).
 
 ## Dithering (accessibility fade)
 

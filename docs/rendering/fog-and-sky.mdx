@@ -7,6 +7,8 @@ sources: [private-research, ms-learn, bedrock-samples]
 
 # 안개와 하늘
 
+게임에서 잰 클라이언트 바이옴 fog 기록은 [6.7절](../design/json-ui-claims.mdx#67-파티클-쿼리와-카운터-소리-정의-머티리얼-파일-바이옴)에 있다.
+
 ## 개념
 
 Bedrock의 fog 파일은 리소스 팩 `fogs/`의 `minecraft:fog_settings` JSON이다. 식별자(`description.identifier`)는 네임스페이스를 포함해야 하고, 클라이언트 바이옴(client biome)이 그 식별자를 가리켜 바이옴에 적용한다. 설정은 두 갈래다. **distance fog**는 카메라가 있는 매질(공기 `air`, 물 `water`, 용암 `lava`, 용암 저항 효과 중 `lava_resistance`, 가루눈 `powder_snow`, 날씨 중 `weather`)별로 `fog_start`, `fog_end`, `fog_color`를 주고, `render_distance_type`이 `fixed`면 블록 단위 거리, `render`면 현재 렌더 거리에 곱한 값으로 해석한다. `transition_fog`(`init_fog`)는 다른 매질에 들어갈 때 바이옴의 distance fog로 천천히 전환하는 추가 fog다. **volumetric fog**(VV 전용)는 밀도, 매질 계수(scattering, absorption), 위상 함수 비대칭 `henyey_greenstein_g`로 빛줄기(god ray)를 만든다(출처: ms-learn, `minecraft:fogs` 레퍼런스).
@@ -69,6 +71,40 @@ VV 형식(format 1.21.90)은 같은 파일에 `volumetric`을 더한다.
 - **커스텀 구름과 End**: 구름마다 모양이 무작위인 커스텀 구름을 리소스 팩만으로 만든 작업 중 사례가 있다. 플레이어 모델 기반이라 글로벌 리소스에서도 동작한다고 하고, RP 전용으로 유지하려면 플레이어 엔티티에 파티클을 붙이라는 제안이 있었다. End의 VV 모습을 파티클 효과만으로 개선한 사례도 있다(`single report`). `material.bin`으로 End 하늘을 바꾸는 방법은 [머티리얼과 셰이더](./materials-and-shaders.mdx)의 커스텀 셰이더 절을 본다.
 - **큰 모델과 fog**: 큰 모델이 렌더 거리와 별개로 fog를 무시하게 하는 방법은 답이 없었다. 빛 레벨에 따라 숨기는 깔끔한 방법도 없다.
 - **카메라 페이드**: 스크립트 API `fade`는 RGB만 있고 불투명 오버레이이며 유지 시간 최대 10초이고 알파가 없다. `/camera fade`의 번쩍임은 광과민성 발작 방지 때문에 제한된다. 대안은 플레이어에 붙인 검은 파티클이나 플레이어 지오메트리에 넣은 검은 큐브다. 카메라 컷신은 Camera API(`player.camera`)를 쓴다.
+
+## 예제: 클라이언트 바이옴으로 평지에 붉은 fog 걸기
+
+fog 파일 하나와 클라이언트 바이옴 파일 하나로 바닐라 평지 바이옴에 fog를 건다. 클라이언트 바이옴이 `minecraft:fog_appearance`의 `fog_identifier`로 fog 식별자를 가리킨다. 측정에서는 `format_version` `1.21.70`, 이름공간 없는 `"identifier": "plains"`, 시작 4, 끝 16, 빨강 fog로 평지 월드가 붉은 안개로 바뀌었다. 기록은 비가 그친 뒤의 모습이다([6.7절 기록](../design/json-ui-claims.mdx#67-파티클-쿼리와-카운터-소리-정의-머티리얼-파일-바이옴), 2026-11-19 Windows 1.26.65.1). 측정에 쓴 파일은 애드온에 넣지 않았고 기록에는 위 값만 남아 있다. 아래 코드는 그 값에 위 레거시 fog 예의 키를 맞춰 쓴 것이라 파일 그대로는 게임에서 재지 않았다 `{실측 필요}`.
+
+`resource_pack/fogs/red_fog.json`:
+
+```json
+{
+  "format_version": "1.16.100",
+  "minecraft:fog_settings": {
+    "description": { "identifier": "wiki:red_fog" },
+    "distance": {
+      "air": { "fog_start": 4, "fog_end": 16, "fog_color": "#ff0000", "render_distance_type": "fixed" }
+    }
+  }
+}
+```
+
+`resource_pack/biomes/plains.client_biome.json`:
+
+```json
+{
+  "format_version": "1.21.70",
+  "minecraft:client_biome": {
+    "description": { "identifier": "plains" },
+    "components": {
+      "minecraft:fog_appearance": { "fog_identifier": "wiki:red_fog" }
+    }
+  }
+}
+```
+
+평지 월드에 들어가 fog가 바뀌는지 본다. 측정 기록은 `weather` 매질 fog를 정하지 않았으므로 비가 오는 동안의 모습은 알 수 없다. 클라이언트 바이옴 `format_version`과 이름공간 규칙이 출처마다 다른 점은 [바이옴과 커스텀 차원](../content/biomes-and-dimensions.mdx#형식과-개념)을 본다.
 
 ## 디더링(접근성 페이드)
 
