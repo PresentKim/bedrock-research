@@ -364,9 +364,11 @@ Using `q.block_state('minecraft:block_face')` without the trait gives `making us
 ```javascript
 part.setPermutation(BlockPermutation.resolve(part.typeId, {
   ...states,
-  "minecraft:multi_block_part": part.getState("minecraft:multi_block_part"),
+  "minecraft:multi_block_part": part.permutation.getState("minecraft:multi_block_part"),
 }));
 ```
+
+  `getParts()` returned part 0, then part 1, and this code changed the state of both parts together. Writing `part.getState(...)` gives `TypeError: not a function` because `Block` has no `getState` `{measured}` ([record](../design/content-rendering-claims.mdx#11-wiki-example-measurements)).
 
   In a random tick, read `minecraft:multi_block_part` and skip if it is not 0. The vanilla door is a legacy method that changes only the upper state.
 - Block entities and inventory: each part gets a separate block entity and they are not synced (the vanilla double chest is also 2 linked entities). There is no way to detect inventory changes, so there is a duplication risk when two players use different parts.

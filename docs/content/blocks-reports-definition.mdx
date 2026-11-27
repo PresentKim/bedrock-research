@@ -137,7 +137,7 @@ sources:
 - **상태 변경(시기별 변화)**: 2026-04에는 part 0의 상태를 바꾸면 다른 부품도 맞춰졌고 다른 부품을 바꾸면 파괴되며 "failed to set property"가 났다. 2026-05(1.26.20 무렵)부터는 같은 틱에 모든 부품의 상태를 바꿔야 하며, part 0만 바꾸면 블록이 깨진다. Mojang(brozef92)은 스크립트/명령으로 부품 하나씩 설정하는 것은 의도적으로 막았다고 했다. `beforeOnPlayerPlace`의 `permutationToPlace`는 모든 부품을 갱신한다.
 - **스크립트**: `block.setType(typeId)`는 기본 퍼뮤테이션(첫 부품)을 놓아 전체를 만든다. `setPermutation()`은 한 부품만 놓고, part 0에 쓰면 클라이언트에 유령 부품만 생긴다. 상태를 바꾸려면 `block.getParts()`(순서 보장)로 각 부품에 설정한다:
   ```js
-  part.setPermutation(BlockPermutation.resolve(part.typeId, {...states, "minecraft:multi_block_part": part.getState("minecraft:multi_block_part")}));
+  part.setPermutation(BlockPermutation.resolve(part.typeId, {...states, "minecraft:multi_block_part": part.permutation.getState("minecraft:multi_block_part")}));
   ```
   랜덤 틱에서는 `minecraft:multi_block_part`를 읽어 0이 아니면 건너뛰는 식으로 쓴다. 바닐라 문은 위쪽 상태만 바꾸는 레거시 방식이다.
 - **블록 엔티티와 인벤토리**: 부품마다 별도 블록 엔티티가 붙고 동기화되지 않는다(바닐라 겹상자도 연결된 엔티티 2개). 인벤토리 변경을 감지할 방법이 없어 두 플레이어가 다른 부품을 쓰면 복제 위험이 있다. 비루트 부품에서 `PlayerBreakBlockBeforeEvent`를 취소하면 상태가 어긋난다. 비루트 부품에 block_entity 컨테이너를 두면 26.50에서는 사용 시 블록이 부서졌고 26.70에서는 그렇지 않았다.

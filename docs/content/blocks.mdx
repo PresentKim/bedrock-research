@@ -364,9 +364,11 @@ system.beforeEvents.startup.subscribe(({ blockComponentRegistry }) => {
 ```javascript
 part.setPermutation(BlockPermutation.resolve(part.typeId, {
   ...states,
-  "minecraft:multi_block_part": part.getState("minecraft:multi_block_part"),
+  "minecraft:multi_block_part": part.permutation.getState("minecraft:multi_block_part"),
 }));
 ```
+
+  `getParts()`는 part 0, part 1 순서로 돌려줬고, 이 코드로 두 부품의 상태가 함께 바뀌었다. `part.getState(...)`로 쓰면 `Block`에 `getState`가 없어 `TypeError: not a function`이 난다 `{실측}`([기록](../design/content-rendering-claims.mdx#11-위키-예제-실측)).
 
   랜덤 틱에서는 `minecraft:multi_block_part`를 읽어 0이 아니면 건너뛴다. 바닐라 문은 위쪽 상태만 바꾸는 레거시 방식이다.
 - 블록 엔티티와 인벤토리: 부품마다 별도 블록 엔티티가 붙고 동기화되지 않는다(바닐라 겹상자도 연결된 엔티티 2개). 인벤토리 변경을 감지할 방법이 없어 두 플레이어가 다른 부품을 쓰면 복제 위험이 있다.
