@@ -149,3 +149,26 @@ sources:
 
 - 측정 중 월드에 다시 들어갈 때 "하나 이상의 리소스 팩 또는 행동 팩을 불러오지 못했습니다"가 떴다. 콘텐츠 로그 파일이 기록되지 않던 때라 어느 팩인지는 모른다. 위 예제는 모두 로드되어 실행됐다.
 - [Dragonfly 가짜 블록](../server/fake-blocks-and-chunks.mdx)과 [내장 팩 전송](../server/resource-pack-delivery.mdx) Go 예제는 돌리지 않았다.
+
+## 12. 바닐라 팩에만 나오는 블록과 아이템 컴포넌트
+
+2026-11-28, Windows 1.26.65, 11절과 같은 평지 월드. 바닐라 행동 팩(설치 폴더 `data/behavior_packs`의 `vanilla*`, `experimental_*`)에서 `items.brarchive`와 `blocks.brarchive`를 풀어 컴포넌트 이름을 모으고, [블록 컴포넌트 색인](../content/reference/block-components-index.mdx)과 [아이템 컴포넌트 색인](../content/reference/item-components-index.mdx)에 없는 이름을 골랐다.
+
+- 아카이브 형식: 앞 16바이트 헤더(12바이트째부터 파일 수, u32 LE), 파일마다 256바이트 항목(1바이트 이름 길이, 이름, 끝 8바이트에 데이터 오프셋과 크기 u32 LE), 그 뒤 데이터. 데이터는 대부분 평문 JSON이고 일부(새 아이템과 번들 등)는 `\x7fMCB`로 시작하는 MCB다. MCB 안의 키는 이름의 FNV-1a 32비트 해시로 저장되어 있었다(`minecraft:display_name`이 `0x2c7281aa`). 게임 실행 파일의 `minecraft:` 문자열을 해시해 맞춰 보았다.
+- 색인에 없는 이름은 블록 1개, 아이템 4개였다. 블록 `minecraft:tags`(format 1.26.50 바닐라 블록 96개), 아이템 `minecraft:foil`(황금 사과 둘), `minecraft:max_damage`(물고기 6개, 값 0), `minecraft:block`과 `minecraft:camera`(카메라). 아이템 넷은 모두 format 1.10 파일에만 있다. MCB 파일에서 나온 이름(`block_placer`, `compostable`, `projectile`, `throwable` 등)은 모두 색인에 있었다.
+
+| 구성 | 결과 | 관련 |
+|---|---|---|
+| 블록 format 1.26.50, `"minecraft:tags": ["minecraft:is_pickaxe_item_destructible", "wiki:probe"]` | 로드됨. `getTags()`가 두 태그를 돌려줌 | blocks |
+| 블록 format 1.26.50, `"tag:minecraft:is_pickaxe_item_destructible": {}`, `"tag:wiki:probe": {}` | 블록 등록 안 됨(`BlockTypes.get`이 undefined, `setType`은 `Block type ... not found`) | blocks |
+| 블록 format 1.21.90, `minecraft:tags` 배열 | 등록 안 됨. 화면 로그 `child 'minecraft:tags' not valid here`, `Block definition parsing failed` | blocks |
+| 블록 format 1.21.90, `tag:` 컴포넌트 | 로드됨. `getTags()`가 두 태그를 돌려줌 | blocks |
+| 커스텀 아이템 format 1.21.90에 `minecraft:foil`, `minecraft:max_damage`, `minecraft:block`, `minecraft:camera` 하나씩 | 넷 다 아이템은 등록됨. 반짝임 없음, 내구도 컴포넌트 없음, 손에 든 모양 바뀌지 않음, 우클릭해도 아무 일 없음. 대조로 둔 `minecraft:glint`는 반짝임 | items |
+| 바닐라 `apple` 1.10 파일에 `"minecraft:foil": true` | 사과가 반짝임 | items |
+| 바닐라 `bread` 1.10 파일에 `"minecraft:max_damage": 20` | 스크립트가 본 컴포넌트에 `minecraft:durability`가 생김. 최대 개수는 64 그대로 | items |
+| 바닐라 `beef` 1.10 파일에 `"minecraft:block": "minecraft:stone"` | 손에 든 소고기가 돌 블록 모양으로 그려짐. 땅에 우클릭 두 번으로는 돌이 놓이지 않음 | items |
+| 바닐라 `cookie` 1.10 파일에 카메라와 같은 `minecraft:camera` 객체 | 땅에 우클릭하자 삼각대 카메라 엔티티가 놓임 | items |
+
+- `minecraft:foil`, `minecraft:max_damage`, `minecraft:block`, `minecraft:camera`는 바닐라 아이템을 format 1.10으로 덮어쓸 때만 효과가 있었다. 커스텀 아이템에서는 아이템은 등록되고 컴포넌트의 효과만 보이지 않았다. 콘텐츠 로그 파일이 기록되지 않아 경고가 났는지는 모른다. 커스텀 아이템의 반짝임은 `minecraft:glint`로 한다.
+- 블록 태그는 format으로 갈린다. 1.21.90에서는 `tag:` 컴포넌트만, 1.26.50에서는 `minecraft:tags` 배열만 로드됐다. 경계가 1.26.20인지는 재지 않았다.
+- 채굴 속도(도구 태그의 효과)와 아이템 오버라이드의 세부 값(카메라 타이밍, 내구도 감소)은 재지 않았다. 측정 중 게임 입력이 몇 초씩 밀려 소고기 설치 결과는 두 번만 확인했다.

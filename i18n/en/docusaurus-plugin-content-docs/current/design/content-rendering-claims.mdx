@@ -149,3 +149,26 @@ These are runs of the complete examples on the topic pages, with the code copied
 
 - On re-entering the world during the runs, the game showed "one or more resource or behavior packs failed to load". The content log file was not being written at the time, so which pack is unknown. All the examples above loaded and ran.
 - The Go examples for [Dragonfly fake blocks](../server/fake-blocks-and-chunks.mdx) and [embedded pack delivery](../server/resource-pack-delivery.mdx) were not run.
+
+## 12. Block and item components found only in vanilla packs
+
+2026-11-28, Windows 1.26.65, the same flat world as section 11. `items.brarchive` and `blocks.brarchive` were unpacked from the vanilla behavior packs (`vanilla*` and `experimental_*` in the install folder's `data/behavior_packs`), the component names were collected, and the names missing from the [block component index](../content/reference/block-components-index.mdx) and the [item component index](../content/reference/item-components-index.mdx) were picked.
+
+- Archive layout: a 16-byte header (file count as u32 LE at byte 8), one 256-byte entry per file (1-byte name length, the name, and the data offset and size as u32 LE in the last 8 bytes), then the data. Most data is plain JSON; some (newer items, bundles and others) is MCB, starting with `\x7fMCB`. Keys inside MCB were stored as the FNV-1a 32-bit hash of the name (`minecraft:display_name` is `0x2c7281aa`). They were matched by hashing the `minecraft:` strings in the game executable.
+- The names missing from the indexes were 1 block component and 4 item components: block `minecraft:tags` (96 vanilla blocks at format 1.26.50), item `minecraft:foil` (the two golden apples), `minecraft:max_damage` (6 fish, value 0), and `minecraft:block` and `minecraft:camera` (the camera). All four item components appear only in format 1.10 files. The names found in MCB files (`block_placer`, `compostable`, `projectile`, `throwable` and others) were all in the indexes.
+
+| Setup | Result | Related |
+|---|---|---|
+| Block at format 1.26.50, `"minecraft:tags": ["minecraft:is_pickaxe_item_destructible", "wiki:probe"]` | loaded. `getTags()` returned both tags | blocks |
+| Block at format 1.26.50, `"tag:minecraft:is_pickaxe_item_destructible": {}`, `"tag:wiki:probe": {}` | block not registered (`BlockTypes.get` undefined, `setType` gave `Block type ... not found`) | blocks |
+| Block at format 1.21.90, `minecraft:tags` array | not registered. On-screen log: `child 'minecraft:tags' not valid here`, `Block definition parsing failed` | blocks |
+| Block at format 1.21.90, `tag:` components | loaded. `getTags()` returned both tags | blocks |
+| Custom items at format 1.21.90 with one of `minecraft:foil`, `minecraft:max_damage`, `minecraft:block`, `minecraft:camera` each | all four items registered. No glint, no durability component, held model unchanged, nothing on right-click. The `minecraft:glint` control item had the glint | items |
+| `"minecraft:foil": true` in a 1.10 file for vanilla `apple` | the apple had the glint | items |
+| `"minecraft:max_damage": 20` in a 1.10 file for vanilla `bread` | the components seen by script gained `minecraft:durability`. Max stack stayed 64 | items |
+| `"minecraft:block": "minecraft:stone"` in a 1.10 file for vanilla `beef` | the held beef rendered as a stone block. Two right-clicks on the ground did not place stone | items |
+| The camera's `minecraft:camera` object in a 1.10 file for vanilla `cookie` | right-clicking the ground placed a tripod camera entity | items |
+
+- `minecraft:foil`, `minecraft:max_damage`, `minecraft:block` and `minecraft:camera` had an effect only when overriding a vanilla item with format 1.10. On custom items the item registered and only the component's effect was missing. The content log file was not being written, so whether a warning was raised is unknown. Use `minecraft:glint` for glint on custom items.
+- Block tags depend on the format. At 1.21.90 only `tag:` components loaded, and at 1.26.50 only the `minecraft:tags` array loaded. Whether the boundary is 1.26.20 was not measured.
+- Mining speed (the effect of the tool tag) and the detailed values of the item overrides (camera timing, durability loss) were not measured. Game input lagged by several seconds during the run, so the beef placement was checked only twice.
