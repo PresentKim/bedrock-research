@@ -172,3 +172,30 @@ These are runs of the complete examples on the topic pages, with the code copied
 - `minecraft:foil`, `minecraft:max_damage`, `minecraft:block` and `minecraft:camera` had an effect only when overriding a vanilla item with format 1.10. On custom items the item registered and only the component's effect was missing. The content log file was not being written, so whether a warning was raised is unknown. Use `minecraft:glint` for glint on custom items.
 - Block tags depend on the format. At 1.21.90 only `tag:` components loaded, and at 1.26.50 only the `minecraft:tags` array loaded. Whether the boundary is 1.26.20 was not measured.
 - Mining speed (the effect of the tool tag) and the detailed values of the item overrides (camera timing, durability loss) were not measured. Game input lagged by several seconds during the run, so the beef placement was checked only twice.
+
+## 13. "Hardcoded, so impossible for add-ons" claims
+
+2026-11-28, Windows 1.26.65 (the pack requested script module 2.7.0 and the log shows it promoted to 2.11.0), the same flat world as section 12, no experiment toggles. Claims marked "hardcoded" or "impossible" on the block and item pages were picked where a small pack could check them. Blocks used format 1.26.60 and items 1.26.30. Mining was done in survival; drops were read from item entities in `entitySpawn` and durability from the before and after `ItemStack` in `playerBreakBlock`. Result strings were written to the content log file with `console.warn`.
+
+| Claim | Setup | Result | Verdict |
+|---|---|---|---|
+| Silk touch ignores the loot table | block whose loot is a diamond, broken once with a silk touch diamond pickaxe and once with a plain one | silk touch dropped the block itself, the plain pickaxe dropped a diamond | true |
+| Tier destructible tags have no effect | tags `minecraft:iron_tier_destructible` and `is_pickaxe_item_destructible`, no loot, broken with a wooden pickaxe | the block dropped | true (drops even with a wooden pickaxe) |
+| `match_tool_filter_none` cannot express "empty hand" | loot emerald with `match_tool` `{"minecraft:match_tool_filter_none": ["minecraft:is_tool"]}`; empty hand, stick, diamond pickaxe | empty hand: no drop; stick: emerald; pickaxe: no drop | true (the empty hand does not match) |
+| `requires_correct_tool_for_drops` is not available to custom blocks | `description.internal_vanilla_data.requires_correct_tool_for_drops: true` | block failed to register: `internal_vanilla_data: this member was found in the input, but is not present in the Schema` | true |
+| Vanilla block drops cannot be changed except for data-driven blocks | copy of the vanilla `minecraft:black_wool_slab` definition with only `minecraft:loot` changed | definition rejected: `identifier: string has invalid namespace (minecraft)` | a behavior pack cannot change even the data-driven blocks |
+| An eternally burning block is impossible | `flammable` `{catch 5, destroy 0, lava_flammable "never"}` with fire on top; control with destroy 20 | block and fire stayed for 240 seconds; the control burned away within 120 seconds | false (destroy 0 burns forever) |
+| A flammable block immune to lava is impossible | the same block with lava one block away | still there after 240 seconds; no `"always"` control in the same layout | inconclusive |
+| No vertical connections | `connection` trait with `enabled_states: ["minecraft:vertical_connections"]` | block failed to register: `expects one of the following strings: 'minecraft:cardinal_connections'` | true (the name is in the executable but the schema rejects it) |
+| No neighbor change event | custom component with `onNeighborChanged`; stone placed above and sand beside. A second block added `minecraft:neighbor_change {neighbor_directions: ["all"]}` | the hook registered without an error but was never called. The block with the component failed with `To use 'minecraft:neighbor_change', experimental creator features are required` | true on stable (needs the experiment toggle) |
+| Mining with `minecraft:digger` does not reduce durability | `digger` (speed 6 on pickaxe-tagged blocks), `durability` 20, stone mined twice; diamond pickaxe as control | digger `damage` 0, 0; diamond pickaxe 0 to 1 | true |
+| `can_always_eat: false` is ignored | `food {nutrition 2, can_always_eat false}`, `use_modifiers {use_duration 1.6}`, used at hunger 20/20 | eaten twice (`itemCompleteUse` fired twice). The vanilla apple control was not done because of input lag | true |
+| `durability` has a beta `unbreakable` option | iron pickaxe with script `ItemDurabilityComponent.unbreakable = true`, stone mined twice | the property exists; `damage` 0, 0 | a script property, not a JSON option; works on the stable API |
+| Enchantment max levels are hardcoded | `addEnchantment({type: sharpness, level: 10})`, control level 5 | 10 threw `EnchantmentLevelOutOfBoundsError ... range for type sharpness is [0 - 5]`; 5 worked | true |
+| Vanilla items have no `minecraft:dyeable` | `new ItemStack("minecraft:leather_chestplate").getComponent("minecraft:dyeable")` | undefined | true |
+| Shulker box item contents are not exposed | `new ItemStack("minecraft:shulker_box").getComponent("minecraft:inventory")` | undefined (checked on an empty box only) | true |
+| Block hardness is not readable from script | `/hard|destroy|resist|time/` on the `BlockType` and `BlockPermutation` prototypes | none on `BlockType`; only `canBeDestroyedByLiquidSpread` on `BlockPermutation` | true |
+| A swing cannot be triggered from script | `/swing|anim/` on the `Player` and `Entity` prototypes | none on `Player`; only `playAnimation` on `Entity` | no dedicated method; whether `playAnimation` can stand in was not measured |
+
+- The verdicts hold for this setup (stable, experiments off). `onNeighborChanged` may behave differently with "Upcoming Creator Features" on, which was not measured.
+- An item with `menu_category` `"none"` registered and could be given by script. Whether it was hidden from the creative menu was not checked.

@@ -172,3 +172,30 @@ sources:
 - `minecraft:foil`, `minecraft:max_damage`, `minecraft:block`, `minecraft:camera`는 바닐라 아이템을 format 1.10으로 덮어쓸 때만 효과가 있었다. 커스텀 아이템에서는 아이템은 등록되고 컴포넌트의 효과만 보이지 않았다. 콘텐츠 로그 파일이 기록되지 않아 경고가 났는지는 모른다. 커스텀 아이템의 반짝임은 `minecraft:glint`로 한다.
 - 블록 태그는 format으로 갈린다. 1.21.90에서는 `tag:` 컴포넌트만, 1.26.50에서는 `minecraft:tags` 배열만 로드됐다. 경계가 1.26.20인지는 재지 않았다.
 - 채굴 속도(도구 태그의 효과)와 아이템 오버라이드의 세부 값(카메라 타이밍, 내구도 감소)은 재지 않았다. 측정 중 게임 입력이 몇 초씩 밀려 소고기 설치 결과는 두 번만 확인했다.
+
+## 13. "하드코딩이라 애드온으로는 불가능" 주장
+
+2026-11-28, Windows 1.26.65(스크립트 모듈은 2.7.0을 요청했고 로그상 2.11.0으로 올려 로드됨), 12절과 같은 평지 월드, 실험 토글 없음. 블록과 아이템 페이지의 "하드코딩", "불가능" 주장 가운데 작은 팩으로 확인할 수 있는 것을 골랐다. 블록은 format 1.26.60, 아이템은 1.26.30. 채굴은 서바이벌에서 했고 드롭은 `entitySpawn`의 아이템 엔티티로, 내구도는 `playerBreakBlock`의 앞뒤 `ItemStack`으로 읽었다. 결과 문자열은 `console.warn`으로 콘텐츠 로그 파일에 남겼다.
+
+| 주장 | 구성 | 결과 | 판정 |
+|---|---|---|---|
+| 실크터치가 루트 테이블을 무시한다 | 루트가 다이아몬드인 블록, 실크터치 다이아몬드 곡괭이와 일반 다이아몬드 곡괭이로 하나씩 | 실크터치는 블록 자체, 일반 곡괭이는 다이아몬드 | 맞음 |
+| 등급 파괴 태그는 효과가 없다 | 태그 `minecraft:iron_tier_destructible`, `is_pickaxe_item_destructible`, 루트 없음. 나무 곡괭이로 캠 | 블록이 떨어짐 | 맞음(나무 곡괭이로도 드롭) |
+| `match_tool_filter_none`으로 빈손 조건을 못 쓴다 | 루트 에메랄드, 조건 `match_tool` `{"minecraft:match_tool_filter_none": ["minecraft:is_tool"]}`. 빈손, 막대기, 다이아몬드 곡괭이 | 빈손은 드롭 없음, 막대기는 에메랄드, 곡괭이는 드롭 없음 | 맞음(빈손은 매칭되지 않음) |
+| `requires_correct_tool_for_drops`는 커스텀 블록에서 못 쓴다 | `description.internal_vanilla_data.requires_correct_tool_for_drops: true` | 블록 등록 실패. `internal_vanilla_data: this member was found in the input, but is not present in the Schema` | 맞음 |
+| 바닐라 블록 드롭은 데이터 드리븐 블록 외에는 못 바꾼다 | 바닐라 `minecraft:black_wool_slab` 정의를 복사해 `minecraft:loot`만 바꿈 | 정의 거부. `identifier: string has invalid namespace (minecraft)` | 행동 팩으로는 데이터 드리븐 블록도 못 바꿈 |
+| 영원히 타는 블록을 만들 수 없다 | `flammable` `{catch 5, destroy 0, lava_flammable "never"}` 위에 불. 대조는 destroy 20 | 240초 동안 블록과 불이 그대로. 대조 블록은 120초 안에 타서 사라짐 | 틀림(destroy 0이면 계속 탐) |
+| 용암에 면역인 가연 블록을 만들 수 없다 | 위 블록 옆 한 칸 띄워 용암 | 240초 동안 남음. 같은 배치의 `"always"` 대조는 두지 않았음 | 미확정 |
+| 상하 연결은 없다 | `connection` 트레이트 `enabled_states: ["minecraft:vertical_connections"]` | 블록 등록 실패. `expects one of the following strings: 'minecraft:cardinal_connections'` | 맞음(실행 파일에 이름은 있으나 스키마가 거부) |
+| 이웃 변경 이벤트가 없다 | 커스텀 컴포넌트에 `onNeighborChanged`. 위에 돌, 옆에 모래를 놓음. 둘째 블록은 `minecraft:neighbor_change {neighbor_directions: ["all"]}`를 더함 | 훅 등록은 오류 없이 됐지만 호출되지 않음. 컴포넌트를 둔 블록은 `To use 'minecraft:neighbor_change', experimental creator features are required`로 등록 실패 | 안정판에서는 맞음(실험 토글이 필요) |
+| `minecraft:digger`로 캐면 내구도가 줄지 않는다 | `digger`(곡괭이 태그 블록 속도 6), `durability` 20. 돌을 두 번 캠. 대조는 다이아몬드 곡괭이 | digger `damage` 0, 0. 다이아몬드 곡괭이는 0에서 1 | 맞음 |
+| `can_always_eat: false`가 무시된다 | `food {nutrition 2, can_always_eat false}`, `use_modifiers {use_duration 1.6}`. 허기 20/20에서 사용 | 두 번 먹힘(`itemCompleteUse` 두 번 발생). 바닐라 사과 대조는 입력 지연으로 하지 못함 | 맞음 |
+| `durability`에 베타 `unbreakable`이 있다 | 스크립트 `ItemDurabilityComponent.unbreakable = true`인 철 곡괭이로 돌 두 번 | 속성이 있고 `damage` 0, 0 | JSON 옵션이 아니라 스크립트 속성. 안정 API에서 동작 |
+| 인챈트 최대 레벨은 하드코딩이다 | `addEnchantment({type: sharpness, level: 10})`, 대조 level 5 | 10은 `EnchantmentLevelOutOfBoundsError ... range for type sharpness is [0 - 5]`, 5는 됨 | 맞음 |
+| 바닐라 아이템에는 `minecraft:dyeable`이 없다 | `new ItemStack("minecraft:leather_chestplate").getComponent("minecraft:dyeable")` | undefined | 맞음 |
+| 셜커 상자 아이템 내용물은 스크립트에 없다 | `new ItemStack("minecraft:shulker_box").getComponent("minecraft:inventory")` | undefined(빈 상자로만 확인) | 맞음 |
+| 블록 경도를 스크립트로 읽을 수 없다 | `BlockType`, `BlockPermutation` 프로토타입에서 `/hard|destroy|resist|time/` 검색 | `BlockType` 없음, `BlockPermutation`은 `canBeDestroyedByLiquidSpread`뿐 | 맞음 |
+| 휘두르기를 스크립트로 트리거할 수 없다 | `Player`, `Entity` 프로토타입에서 `/swing|anim/` 검색 | `Player` 없음, `Entity`는 `playAnimation`뿐 | 전용 메서드는 없음. `playAnimation`으로 대신할 수 있는지는 재지 않음 |
+
+- 판정은 이 환경(안정판, 실험 끔)에서의 결과다. `onNeighborChanged`는 "Upcoming Creator Features"를 켜면 달라질 수 있으나 켜서 재지는 않았다.
+- `menu_category` `"none"` 아이템은 등록되고 스크립트로 줄 수 있었다. 크리에이티브 메뉴에서 숨었는지는 확인하지 않았다.

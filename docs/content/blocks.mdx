@@ -536,7 +536,7 @@ blocks.json의 `sound`는 여전히 유효하다. `default`는 음높이만 다�
 - 실크터치는 하드코딩되어 루트 테이블을 무시하고 빈 루트 테이블로도 막을 수 없다. 우회법은 `world.beforeEvents.playerBreakBlock`을 취소하고 `system.run`에서 `block.setType("minecraft:air")`와 소리 재생, 기본 드롭 제거, 실크터치 확인 후 아이템 생성, 또는 `onBreak`에서 공기로 교체다. 포춘은 루트 테이블로 바닐라 공식을 재현할 수 없으니 스크립트를 쓴다.
 - 루트 함수 `explosion_decay`는 폭발로 부서질 때 스택 전체를 떨굴지를 정하는 오래된 함수다(콘크리트, 양털 계단과 반 블록에서 처음 쓰였다). 맞지 않는 도구로 캐면 아무것도 떨어지지 않는 동작은 `internal_vanilla_data`에서 `requires_correct_tool_for_drops`가 빠진 뒤에도 하드코딩으로 남아 있고 커스텀 블록은 쓸 수 없다. `{단일 보고}`
 - 광석 XP는 루트로 줄 수 없으니 `onPlayerBreak`에서 실크터치가 아니면 `minecraft:xp_orb`를 생성한다. 합의안은 아이템은 루트 테이블, XP만 스크립트다. 스크립트에서는 `getLootTableManager()`로 블록 + 도구 루트를 읽을 수 있다.
-- 바닐라 블록 드롭은 26.50의 새 "데이터 드리븐" 바닐라 블록 외에는 바꿀 수 없다. 드롭을 지우고 스크립트로 생성하는 방식만 있다. 떨어진 아이템 텍스처는 상태별로 바뀌지 않으니 별도 아이템이 필요하고, 낙엽 더미식 블록은 상태마다 루트 테이블을 두는 것이 쉽다.
+- 바닐라 블록 드롭은 26.50의 새 "데이터 드리븐" 바닐라 블록 외에는 바꿀 수 없다. 데이터 드리븐 블록도 행동 팩에서 `minecraft:` 식별자로 다시 정의하면 `string has invalid namespace (minecraft)`로 거부됐다 `{실측}`([기록](../design/content-rendering-claims.mdx#13-하드코딩이라-애드온으로는-불가능-주장)). 드롭을 지우고 스크립트로 생성하는 방식만 있다. 떨어진 아이템 텍스처는 상태별로 바뀌지 않으니 별도 아이템이 필요하고, 낙엽 더미식 블록은 상태마다 루트 테이블을 두는 것이 쉽다.
 - 행동 팩이 있어도 업적을 유지하려면 manifest에 `"metadata": {"product_type": "addon"}`를 둔다.
 
 ## 12. 배치, 지지, 액체
@@ -578,7 +578,7 @@ blocks.json의 `sound`는 여전히 유효하다. `default`는 음높이만 다�
 ## 14. 기타 컴포넌트
 
 - `minecraft:friction` `{충돌}`: 기본값이 0.4라 위키의 0.6은 틀렸다는 보고가 있다. 방향은 의견이 갈린다(높을수록 더 미끄럽다는 쪽과 낮을수록 마찰이 크다는 쪽). 한 값이 내부의 두 가지를 같이 바꿔 영혼 모래식 블록은 불가능하다. 기본값을 원하면 생략한다.
-- `minecraft:flammable`의 값은 객체다(`catch_chance_modifier`, `destroy_chance_modifier`, `lava_flammable`). `lava_flammable`은 format 1.26.20 이상에서 동작한다. 기본값은 `"never"`(MCPE-240718, 의도된 동작)다. 영원히 타는 블록이나 용암에 면역인 가연 블록은 만들 수 없다. 불과 영혼불은 하드코딩이다.
+- `minecraft:flammable`의 값은 객체다(`catch_chance_modifier`, `destroy_chance_modifier`, `lava_flammable`). `lava_flammable`은 format 1.26.20 이상에서 동작한다. 기본값은 `"never"`(MCPE-240718, 의도된 동작)다. `destroy_chance_modifier: 0`이면 불이 붙은 채 블록이 사라지지 않아 계속 타는 블록이 된다 `{실측}`([기록](../design/content-rendering-claims.mdx#13-하드코딩이라-애드온으로는-불가능-주장)). 용암 면역(`lava_flammable: "never"`)은 대조 없이 한 번만 봤다. 불과 영혼불은 하드코딩이다.
 - `minecraft:replaceable`은 `{}`만 받으며 블록을 잔디처럼 교체 가능하게 만든다. `minecraft:crafting_table`은 커스텀 조합 UI를 준다(화로 컴포넌트는 없음).
 - `minecraft:map_color`는 블록 지도 색을 지정한다(바닐라 블록 지도 색은 바꿀 수 없음). `BlockMapColorComponent`는 바닐라 블록에서 동작하지 않는다(MCPE-240722).
 - `minecraft:flower_pottable` + `minecraft:embedded_visual`은 format 1.21.124 이상이 필요하다. 모든 퍼뮤테이션에 지오메트리 + material_instances가 있어도 root에 따로 있어야 하고(MCPE-237910) 1.26.20부터 퍼뮤테이션에서는 금지된다.

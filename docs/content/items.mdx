@@ -196,7 +196,7 @@ system.beforeEvents.startup.subscribe(({ itemComponentRegistry }) => {
 `saturation_modifier`는 숫자여야 한다(문자열은 옛 format에서만 되고 1.26.13에서는 `invalid numeric value`). 그 숫자는 바닐라의 saturation과 같다. `cooldown_type`/`cooldown_time`은 food의 멤버가 아니다(MS 문서가 틀림). 마시는 소리는 `use_animation: "drink"`로 낸다.
 
 - 음식 효과: 옛 방식은 format 1.10의 `minecraft:food.effects` 배열(name/chance/duration/amplifier)이며 스크립트 없이 아직 동작한다(바닐라 황금 사과 복사). 현대 방식은 format 1.21.90 이상 + `onConsume`에서 `player.addEffect(effect, durationTicks, {amplifier})`를 호출하는 커스텀 컴포넌트다. 초는 `*20`으로 틱으로 바꾸고 컴포넌트 하나를 여러 아이템에 재사용한다. 무작위 효과는 효과 배열에서 무작위 개수만큼 돈다. 새 format에는 food effects가 없다. 바닐라 음식을 먹을 때 효과를 주려면 `itemCompleteUse` 이벤트를 쓴다(2026-10 기준 답).
-- `can_always_eat: false`가 무시된다. 배가 불러도 먹을 수 있는 게임 버그다(MCPE-178647) `{커뮤니티 확인}`. 2026-02-11에 고쳐졌다는 보고와 2026-05-25에도 여전히 안 된다는 보고가 엇갈린다 `{충돌}`. 유일한 우회법은 format `1.20.40` 아이템에 `minecraft:food`(`can_always_eat:false`, `nutrition`, `saturation_modifier`) + `minecraft:use_duration` + `minecraft:use_animation: "eat"`을 쓰는 것인데 커스텀 컴포넌트와 퇴비화가 꺼진다(퇴비화는 스크립트로).
+- `can_always_eat: false`가 무시된다. 배가 불러도 먹을 수 있는 게임 버그다(MCPE-178647) `{커뮤니티 확인}`. 2026-02-11에 고쳐졌다는 보고와 2026-05-25에도 여전히 안 된다는 보고가 엇갈렸다. 1.26.65에서 format 1.26.30 아이템은 허기 20/20에서도 먹혔다 `{실측}`([기록](../design/content-rendering-claims.mdx#13-하드코딩이라-애드온으로는-불가능-주장)). 유일한 우회법은 format `1.20.40` 아이템에 `minecraft:food`(`can_always_eat:false`, `nutrition`, `saturation_modifier`) + `minecraft:use_duration` + `minecraft:use_animation: "eat"`을 쓰는 것인데 커스텀 컴포넌트와 퇴비화가 꺼진다(퇴비화는 스크립트로).
 - 트림 소리는 끌 수 없다(씹기/마시기 소리는 `minecraft:use_animation`이 정한다). block_placer와 `minecraft:food`를 한 아이템에 넣으면 텍스처가 보이지 않았다(답 없음).
 
 ### 쿨다운
@@ -230,7 +230,7 @@ system.beforeEvents.startup.subscribe(({ itemComponentRegistry }) => {
 
 - digger로 채굴해도 내구도가 줄지 않는다(2025-11-05 관찰, 검은 정상적으로 줄어듦). 스크립트로 처리하되 블록 경도를 읽을 수 없어 정확한 재현은 불가능하다. 엔티티를 때리면 기본으로 줄어든다(타격당 2). `shooter`는 발사 때 내구도를 줄인다. 커스텀 컴포넌트 내구도 훅으로 제어할 수 있다. 커뮤니티 라이브러리 "Equipments Durability"(CurseForge, `DurabilityManager.js`)는 정식 API로 아이템 format 1.21.110 이상이 필요하다. 사용할 때 줄이기는 커스텀 `onUse` + durability 컴포넌트를 설정해 되돌린다. `{커뮤니티 확인}`
 - 엘리트라처럼 부서진 아이템 메커니즘은 부서지기 전에 스크립트가 도구를 교체한다. 어태처블에서 `query.item_remaining_durability`를 쓴 사례가 있지만 어태처블 내구도 쿼리가 고장 났다는 보고도 있다.
-- 파괴되지 않게 하기 `{충돌}`: 방어구는 `minecraft:durability`가 없으면 부서지지 않는다는 보고가 있지만 도구에서 durability를 빼니 도구가 게임에서 사라졌다는 보고도 있다. `minecraft:durability`에 베타 `unbreakable` 옵션이 있다는 말이 있다. `damage_chance`는 백분율이며 내구 인챈트를 따르는 바닐라식 값은 `{"min":0,"max":100}`이다. 무한 내구도 곡괭이는 스크립트가 필요했고 2026-11에도 Equipment Durability 애드온이 동작한다. 크리에이티브에서 내구도를 깎지 않으려면 `player.getGameMode()`를 확인한다.
+- 파괴되지 않게 하기 `{충돌}`: 방어구는 `minecraft:durability`가 없으면 부서지지 않는다는 보고가 있지만 도구에서 durability를 빼니 도구가 게임에서 사라졌다는 보고도 있다. `unbreakable`은 JSON 옵션이 아니라 스크립트 `ItemDurabilityComponent.unbreakable`이고, 안정 API에서 `true`로 둔 곡괭이는 돌을 캐도 `damage`가 0으로 남았다 `{실측}`([기록](../design/content-rendering-claims.mdx#13-하드코딩이라-애드온으로는-불가능-주장)). `damage_chance`는 백분율이며 내구 인챈트를 따르는 바닐라식 값은 `{"min":0,"max":100}`이다. 무한 내구도 곡괭이는 스크립트가 필요했고 2026-11에도 Equipment Durability 애드온이 동작한다. 크리에이티브에서 내구도를 깎지 않으려면 `player.getGameMode()`를 확인한다.
 - 파괴되지 않는 커스텀 방어구는 durability 컴포넌트를 제거한다. 제작으로 A를 B로 바꿀 때 내구도를 유지하려면 내구도 값마다 레시피를 하나씩 두는 방법뿐이다.
 
 ### 수리와 모루
